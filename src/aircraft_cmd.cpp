@@ -122,7 +122,7 @@ void Aircraft::GetImage(Direction direction, EngineImageType image_type, Vehicle
 		GetCustomVehicleSprite(this, direction, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = this->GetEngine()->original_image_index;
+		spritenum = this->GetEngine()->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_AIRCRAFT>(spritenum));
@@ -152,7 +152,7 @@ static void GetAircraftIcon(EngineID engine, EngineImageType image_type, Vehicle
 		GetCustomVehicleIcon(engine, DIR_W, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = e->original_image_index;
+		spritenum = e->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_AIRCRAFT>(spritenum));

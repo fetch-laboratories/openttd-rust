@@ -18,11 +18,8 @@ static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGI
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept
 {
 	static const OpenTTDTypeAvailabilityServices services{
+		.shared = &GetRustSharedServices(),
 		.next = Engine_next,
-		.rail_availability = RustEngineRailAvailability,
-		.road_availability = RustEngineRoadAvailability,
-		.engine_railtypes = RustEngineRailTypes,
-		.engine_roadtype = RustEngineRoadType,
 		.rail_introduction = RustRailTypeIntroduction,
 		.road_introduction = RustRoadTypeIntroduction,
 		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },
@@ -47,40 +44,10 @@ static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 	 * only at the original startup-seed/retirement/new-month branches. */
 	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = 0, .type = RustEngineType(RustEngine(e))};
 }
-static OpenTTDEngineSyncVariant Engine_sync_variant(const OpenTTDEngine *e) noexcept
-{
-	const auto &info = EngineOf(e)->info;
-	return {.parent = RustEngineVariant(e), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
-}
-static OpenTTDEngineDisplayVariant Engine_display_variant(const OpenTTDEngine *shell) noexcept
+static uint16_t Engine_display_variant(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *e = EngineOf(shell);
-	return {.parent = RustEngineVariant(e), .display = e->display_last_variant.base()};
-}
-static OpenTTDEnginePreviewVariant Engine_preview_variant(const OpenTTDEngine *e) noexcept
-{
-	const auto &info = EngineOf(e)->info;
-	return {.parent = RustEngineVariant(e), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
-}
-static OpenTTDEngineReliability Engine_reliability(const OpenTTDEngine *shell) noexcept
-{
-	const auto &info = EngineOf(shell)->info;
-	return {.base_life = info.base_life.base(), .retire_early = info.retire_early};
-}
-static OpenTTDEngineStartup Engine_startup(const OpenTTDEngine *shell) noexcept
-{
-	const Engine *e = EngineOf(shell); const auto &info = e->info;
-	return {.base_intro = RustEngineBaseIntro(shell), .base_life = info.base_life.base(), .decay_speed = info.decay_speed, .climate = RustEngineClimate(shell)};
-}
-static OpenTTDEngineSeed Engine_seed_config(const OpenTTDEngine *e) noexcept
-{
-	const auto &info = EngineOf(e)->info;
-	return {.base_intro = RustEngineBaseIntro(e), .lifelength = info.lifelength.base(), .decay_speed = info.decay_speed, .retire_early = info.retire_early};
-}
-static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
-{
-	const Engine *e = EngineOf(shell);
-	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->info.lifelength.base()};
+	return e->display_last_variant.base();
 }
 
 static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
@@ -89,7 +56,7 @@ static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.st
 static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *removed = EngineOf(shell);
-	for (Engine *e : Engine::IterateType(removed->type)) {
+	for (Engine *e : Engine::IterateType(removed->Record().type)) {
 		if (e->display_last_variant == removed->index) e->display_last_variant = EngineID::Invalid();
 	}
 }
@@ -147,16 +114,8 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.types = &GetRustTypeAvailabilityServices(),
 		.next = Engine_next,
 		.resolve = Engine_resolve,
-		.sync_variant = Engine_sync_variant,
 		.display_variant = Engine_display_variant,
-		.preview_variant = Engine_preview_variant,
-		.extra_flags = RustEngineExtraFlags,
 		.engine_id = RustEngineID,
-		.reliability = Engine_reliability,
-		.startup = Engine_startup,
-		.seed_config = Engine_seed_config,
-		.base_intro = RustEngineBaseIntro,
-		.aging_year = Engine_aging_year,
 		.start_settings = Engine_start_settings,
 		.train_limit = RustTrainLimit,
 		.road_limit = RustRoadVehicleLimit,
@@ -166,8 +125,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.ai_road_disabled = RustAIRoadDisabled,
 		.ai_ship_disabled = RustAIShipDisabled,
 		.ai_aircraft_disabled = RustAIAircraftDisabled,
-		.climate = RustEngineClimate,
-		.rail_kind = Engine_rail_kind,
 		.clear_last_variant = Engine_clear_last_variant,
 		.refresh_type = Engine_refresh_type,
 		.refresh_lists = Engine_refresh_lists,
@@ -177,8 +134,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.company_valid = GetRustSharedServices().company_valid,
-		.compatible_railtypes = Engine_compatible_railtypes,
-		.powered_roadtypes = Engine_powered_roadtypes,
 		.company_railtypes = RustCompanyRailTypes,
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,

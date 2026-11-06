@@ -59,9 +59,6 @@ pub struct Services {
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
     pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
-    pub(crate) engine_kind:
-        extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> crate::vehicle::VehicleType,
-    pub(crate) engine_subtype: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u8,
     pub(crate) fta_flags: extern "C" fn(*const c_void) -> u8,
     /// Immutable native spec rows; the returned view borrows with zero capacity.
     pub(crate) depots:
@@ -733,7 +730,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, depots, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, check, engine_if_valid, engine_id, fta_flags, depots, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

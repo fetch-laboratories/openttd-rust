@@ -413,6 +413,7 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
@@ -457,6 +458,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.other_tunnel_end = RustOtherTunnelBridgeEnd,
 	.plane_crashes = SharedPlaneCrashes,
 	.plane_speed = SharedPlaneSpeed,
+	.powered_roadtypes = RustRoadTypePoweredRoadTypes,
 	.random = SharedRandom,
 	.road_bits = Shared_road_bits,
 	.road_cost_multiplier = RustRoadCostMultiplier,
@@ -535,13 +537,13 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		return reinterpret_cast<const uint8_t *>(str.data());
 	},
 	.terrain_type = RustTerrainType,
+	.copyable_badges = RustCopyableBadges,
 	.grf_file_version = RustGRFFileVersion,
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_boolean_callback = OpenTTDConvertBooleanCallback,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
 	.grf_file_name = RustGRFFileName,
-	.engine_local_id = RustEngineLocalID,
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,

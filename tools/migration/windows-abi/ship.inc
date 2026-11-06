@@ -67,12 +67,11 @@ static void ShipBoundary()
 		.depot_invalidate = ShipProbeUnused<void, uint32_t>, .ships_dirty = ShipProbeUnused<void>,
 		.check_orders = ShipProbeUnused<void, uint32_t>,
 		.cost_divisor = ShipProbeUnused<uint32_t>,
-		.pay_running = ShipProbeUnused<void, uint32_t, int64_t>, .speed_default = ShipProbeUnused<uint32_t, uint32_t>,
-		.age_default = ShipProbeUnused<uint32_t, uint32_t>, .speed_frac = ShipProbeUnused<uint32_t, uint32_t, bool>,
+		.pay_running = ShipProbeUnused<void, uint32_t, int64_t>,
 		.cache_invalidate = ShipProbeUnused<void, uint32_t>,
 		.capabilities = &capabilities, .sprite_direction = ShipProbeUnused<void, uint32_t>,
 		.tile_x = ShipProbeUnused<uint32_t, uint32_t>, .tile_y = ShipProbeUnused<uint32_t, uint32_t>,
-		.build_flag = ShipProbeUnused<bool, uint32_t>, .build_random = ShipProbeUnused<void, uint32_t, uint16_t>,
+		.build_random = ShipProbeUnused<void, uint32_t, uint16_t>,
 		.new_position = ShipProbeUnused<OpenTTDShipPosition, uint32_t>, .exit_dir = ShipProbeUnused<uint32_t, uint32_t, uint32_t>,
 		.track_direction = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .tracks_reach = ShipProbeUnused<uint32_t, uint32_t>,
 		.path_size = ShipProbeUnused<size_t, uint32_t>,
@@ -84,7 +83,7 @@ static void ShipBoundary()
 		.yapf_reverse = ShipProbeUnused<OpenTTDShipReverseResult, uint32_t, bool>, .yapf_choose = ShipProbeUnused<OpenTTDShipTrackResult, uint32_t, uint32_t>,
 		.update_delta = ShipProbeUnused<void, uint32_t>, .build_owner = ShipProbeUnused<void, uint32_t>,
 		.build_z = ShipProbeUnused<void, uint32_t>, .build_properties = ShipProbeUnused<void, uint32_t, uint32_t>,
-		.build_dates = ShipProbeUnused<void, uint32_t>, .build_acceleration = ShipProbeUnused<void, uint32_t, uint32_t>,
+		.build_dates = ShipProbeUnused<void, uint32_t>,
 		.build_prototype = ShipProbeUnused<void, uint32_t>, .build_interval_percent = ShipProbeUnused<void, uint32_t>,
 
 

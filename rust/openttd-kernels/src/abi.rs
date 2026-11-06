@@ -30,7 +30,7 @@ macro_rules! layouts {
 }
 pub(crate) use layouts;
 
-/// Records both languages access in place. `tools/generate-abi.py` emits each C++
+/// Records and unions both languages access in place. `tools/generate-abi.py` emits each C++
 /// declaration from this field list; the layout lists size, alignment, then each
 /// field's offset and size. Field types are primitives, transparent newtypes of
 /// primitives, fixed arrays of those, same-group shared records, extern-C callback pointers, or raw pointers
@@ -47,13 +47,13 @@ pub(crate) use layouts;
 /// its opaque native handle.
 #[allow(unused_macros)] // Test-only users are feature-gated.
 macro_rules! shared_records {
-    (fn $function:ident; $( $(#[$meta:meta])* $cpp:literal [$group:literal] => pub struct $name:ident {
+    (fn $function:ident; $( $(#[$meta:meta])* $cpp:literal [$group:literal] => pub $kind:ident $name:ident {
         $($(#[$field_meta:meta])* pub $field:ident : $type:ty $(=> $pointee_tag:tt $($pointee_name:ident)?)?),* $(,)?
     } )*) => {
         $(
             $(#[$meta])*
             #[repr(C)]
-            pub struct $name {
+            pub $kind $name {
                 $($(#[$field_meta])* pub $field: $type,)*
             }
         )*

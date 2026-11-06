@@ -1576,15 +1576,15 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					const Engine *e = Engine::GetIfValid(static_cast<EngineID>(arg));
 					if (e == nullptr) break;
 
-					if (!e->name.empty() && e->IsEnabled()) {
+					if (!e->Name().empty() && e->IsEnabled()) {
 						auto tmp_params = MakeParameters(
-							e->name.View()
+							e->Name()
 						);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 						break;
 					}
 
-					if (e->info.callback_mask.Test(VehicleCallbackMask::Name)) {
+					if (e->Record().info.callback_mask.Test(VehicleCallbackMask::Name)) {
 						std::array<int32_t, 16> regs100;
 						uint16_t callback = GetVehicleCallback(CBID_VEHICLE_NAME, static_cast<uint32_t>(arg >> 32), 0, e->index, nullptr, regs100);
 						/* Not calling ErrorUnknownCallbackResult due to being inside string processing. */
@@ -1603,7 +1603,7 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						}
 					}
 
-					GetStringWithArgs(builder, e->info.string_id, {});
+					GetStringWithArgs(builder, e->Record().info.string_id, {});
 					break;
 				}
 

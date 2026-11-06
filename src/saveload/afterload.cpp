@@ -1466,7 +1466,7 @@ bool AfterLoadGame()
 
 		for (Station *st : Station::Iterate())   st->SetBuildDate(st->GetBuildDate() + (CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR));
 		for (Waypoint *wp : Waypoint::Iterate()) wp->SetBuildDate(wp->GetBuildDate() + (CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR));
-		for (Engine *e : Engine::Iterate())      e->intro_date       += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
+		for (Engine *e : Engine::Iterate())      e->Record().intro_date       += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 		for (Company *c : Company::Iterate())    c->inaugurated_year += EconomyTime::ORIGINAL_BASE_YEAR;
 		for (Industry *i : Industry::Iterate())  i->last_prod_year   += EconomyTime::ORIGINAL_BASE_YEAR;
 
@@ -2099,7 +2099,7 @@ bool AfterLoadGame()
 		}
 
 		for (Engine *e : Engine::Iterate()) {
-			if (e->company_avail.base() == 0xFF) e->company_avail.Set();
+			if (e->Record().company_avail.base() == 0xFF) e->Record().company_avail.Set();
 		}
 
 		for (Town *t : Town::Iterate()) {
@@ -2924,7 +2924,7 @@ bool AfterLoadGame()
 	}
 
 	/* When any NewGRF has been changed the availability of some vehicles might
-	 * have been changed too. e->company_avail must be set to 0 in that case
+	 * have been changed too. e->Record().company_avail must be set to 0 in that case
 	 * which is done by StartupEngines(). */
 	if (gcf_res != GLC_ALL_GOOD) StartupEngines();
 
@@ -3355,9 +3355,9 @@ bool AfterLoadGame()
 		 * on when the save was started, this may or may not affect existing engines. Here we try to detect invalid flags
 		 * and reset them to what they should be. */
 		for (Engine *e : Engine::Iterate()) {
-			if (e->flags.Test(EngineFlag::Available)) continue;
-			if (e->flags.Test(EngineFlag{2}) || (e->flags.Test(EngineFlag::ExclusivePreview) && e->preview_asked.None())) {
-				e->flags = EngineFlags(e->flags.base() >> 1U);
+			if (e->Record().flags.Test(EngineFlag::Available)) continue;
+			if (e->Record().flags.Test(EngineFlag{2}) || (e->Record().flags.Test(EngineFlag::ExclusivePreview) && e->Record().preview_asked.None())) {
+				e->Record().flags = EngineFlags(e->Record().flags.base() >> 1U);
 			}
 		}
 	}

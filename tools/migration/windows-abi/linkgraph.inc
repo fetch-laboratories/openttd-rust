@@ -5,16 +5,36 @@
 static void LinkGraphJob()
 {
 	static const OpenTTDVehicleResolverServices resolver{
+		.vehicle = nullptr,
+		.shared = nullptr,
+		.capabilities = nullptr,
 		.cargo_classes = [](uint8_t cargo) noexcept -> uint16_t { CHECK(cargo == 0); return 1; },
 	};
 	static const OpenTTDVehicleServices vehicle{
+		.assertions = false,
 		.newgrf = []() noexcept { return &resolver; },
+		.maintenance = nullptr,
 	};
 	static const OpenTTDSharedServices shared{
+		.clear_square_services = {},
+		.context = nullptr,
 		.map_max_x = []() noexcept -> uint32_t { return 127; },
 		.map_max_y = []() noexcept -> uint32_t { return 127; },
+		.snow_line_support = {},
 	};
-	static const OpenTTDScheduleServices services{.shared = &shared, .vehicle = &vehicle};
+	static const OpenTTDScheduleServices services{
+		.allocation_failure = nullptr,
+		.assert_graph = nullptr,
+		.begin_measurement = nullptr,
+		.can_allocate = nullptr,
+		.destroy_job = nullptr,
+		.graph_pool = nullptr,
+		.job_pool = nullptr,
+		.new_job = nullptr,
+		.shared = &shared,
+		.start_thread = nullptr,
+		.vehicle = &vehicle,
+	};
 	auto *graph = openttd_rust_live_graph_new(0);
 	graph->last_compression = 0;
 	openttd_rust_live_graph_init(graph, 2);

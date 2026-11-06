@@ -138,7 +138,7 @@ impl TrainFacts {
         let head = crate::train::Handle::from_record(v.0.as_ptr());
         let tail = crate::train::Handle::from_record(rear.0.as_ptr());
         let compatible = head.get_compatible_railtypes();
-        let all_compatible = (pbs.0.all_compatible)(head.get_railtypes());
+        let all_compatible = (pbs.shared().all_compatible_railtypes)(head.get_railtypes());
         let tile = v.tile();
         let rear_tile = rear.tile();
         let map = crate::map_func::Map::from_log_x(input.map_x.trailing_zeros());

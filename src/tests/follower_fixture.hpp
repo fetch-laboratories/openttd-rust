@@ -68,7 +68,7 @@ struct FollowerFixture {
 		pbs.shared = &shared; pbs.rail = &rail; pbs.train = &train;
 		pbs.handle = [](const ::Train *) noexcept -> OpenTTDTrainHandle { return {&active->record, active->state.get()}; };
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };
-		pbs.all_compatible = [](uint64_t types) noexcept { return types; };
+		shared.all_compatible_railtypes = [](uint64_t types) noexcept { return types; };
 		pbs.compatible = [](uint8_t type) noexcept -> uint64_t { return uint64_t{1} << type; };
 		pbs.show_reservation = []() noexcept { return false; };
 		(state.get())->compatible_railtypes = 1;

@@ -109,7 +109,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*unique_backup_name)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(unique_backup_name);
 	uint64_t (*review_setting)() noexcept OPENTTD_SERVICE_DEFAULT(review_setting);
 	uint64_t (*local_owner)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(local_owner);
-	uint64_t (*fast_aircraft)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(fast_aircraft);
 	uint64_t (*no_jet_crash)() noexcept OPENTTD_SERVICE_DEFAULT(no_jet_crash);
 	void (*append_station)(void *ctx, uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(append_station);
 	const OpenTTDStationCommandServices *station_commands;
@@ -260,7 +259,6 @@ uint64_t openttd_orders_vehicle_group(void *ctx) noexcept;
 uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept;
 uint64_t openttd_orders_review_setting() noexcept;
 uint64_t openttd_orders_local_owner(void *ctx) noexcept;
-uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept;
 uint64_t openttd_orders_no_jet_crash() noexcept;
 void openttd_orders_append_station(void *ctx, uint16_t station) noexcept;
 void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept;

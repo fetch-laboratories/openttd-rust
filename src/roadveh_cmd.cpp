@@ -121,7 +121,7 @@ static void GetRoadVehIcon(EngineID engine, EngineImageType image_type, VehicleS
 		GetCustomVehicleIcon(engine, DIR_W, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = e->original_image_index;
+		spritenum = e->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_ROAD>(spritenum));
@@ -137,7 +137,7 @@ void RoadVehicle::GetImage(Direction direction, EngineImageType image_type, Vehi
 		GetCustomVehicleSprite(this, direction, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = this->GetEngine()->original_image_index;
+		spritenum = this->GetEngine()->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_ROAD>(spritenum));

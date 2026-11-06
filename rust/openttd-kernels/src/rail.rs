@@ -75,8 +75,9 @@ fn engine_types(s: &Services, company: Option<u8>, introduces: bool) -> u64 {
         if e.kind != VehicleType::TRAIN {
             continue;
         }
-        let info = unsafe { (s.rail_availability)(e.shell) };
-        if !info.climate {
+        let engine = crate::vehicle::EngineRef::of(e.shell);
+        let climate = unsafe { (&*s.shared).settings().climate.read() };
+        if !engine.climate(climate) {
             continue;
         }
         if let Some(company) = company
@@ -84,10 +85,10 @@ fn engine_types(s: &Services, company: Option<u8>, introduces: bool) -> u64 {
         {
             continue;
         }
-        if info.kind == RailVehicleTypes::WAGON {
+        if engine.rail_kind() == RailVehicleTypes::WAGON {
             continue;
         }
-        let rails = info.railtypes;
+        let rails = engine.railtypes();
         if s.assertions {
             assert_ne!(rails, 0);
         }

@@ -5,20 +5,10 @@
 #include "vehicle_ffi.h"
 #include "services_ffi.h"
 enum RailVehicleTypes : uint8_t;
-struct OpenTTDVisualEngine {
-	const OpenTTDEngine *engine;
-	VehicleType kind;
-	uint8_t visual;
-	bool callback;
-};
-struct OpenTTDVisualDefaults { RailVehicleTypes rail_kind; uint8_t engclass; };
 struct OpenTTDVisualServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
 	uint8_t (*smoke)() noexcept OPENTTD_SERVICE_DEFAULT(smoke);
-	OpenTTDVisualEngine (*engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	OpenTTDVisualDefaults (*defaults)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(defaults);
-	uint8_t (*grf_version)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
 	void (*power_error)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(power_error);
 	bool (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	bool (*depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);

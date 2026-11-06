@@ -21,8 +21,8 @@ use crate::linkgraph::live;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
 use crate::timer_game_common::INVALID_DATE;
+use crate::vehicle::VehicleRef;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
-use crate::vehicle::{EngineRef, VehicleRef};
 use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -267,11 +267,6 @@ impl CargoCapacity {
         // callers obtain a new observation after refit/reservation mutations.
         unsafe { crate::cargo_storage::openttd_rust_cargo_list_remaining(self.owner) }
     }
-}
-#[repr(C)]
-pub struct LoadEngine {
-    pub(crate) engine: EngineRef,
-    pub(crate) amount: u8,
 }
 #[repr(C)]
 pub struct LoadingControl {
@@ -1241,10 +1236,6 @@ pub struct Loading {
     pub(crate) control: extern "C" fn(VehicleRef) -> LoadingControl,
     pub(crate) part: extern "C" fn(VehicleRef) -> LoadingPart,
     pub(crate) wait_observation: extern "C" fn(VehicleRef) -> LoadingWait,
-    pub(crate) load_engine: extern "C" fn(VehicleRef) -> LoadEngine,
-    pub(crate) grf_version: extern "C" fn(EngineRef) -> u8,
-    pub(crate) engine_load_callback: extern "C" fn(EngineRef) -> bool,
-    pub(crate) engine_no_multiplier: extern "C" fn(EngineRef) -> bool,
     pub(crate) cargo_capacity: extern "C" fn(VehicleRef) -> CargoCapacity,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) stored_count: extern "C" fn(VehicleRef) -> u32,
@@ -1262,13 +1253,11 @@ pub struct Loading {
     pub(crate) current_company: extern "C" fn() -> u8,
     pub(crate) vehicle: *const crate::vehicle::VehicleServices,
     pub(crate) total_count: extern "C" fn(VehicleRef) -> u32,
-    pub(crate) refit_mask: extern "C" fn(VehicleRef) -> u64,
     pub(crate) set_cargo_unloading: extern "C" fn(VehicleRef, bool),
     pub(crate) set_loading_finished: extern "C" fn(VehicleRef, bool),
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
     pub(crate) set_load_ticks: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
-    pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
@@ -1371,18 +1360,22 @@ fn reserve_consist(
         current = v.next();
     }
 }
-fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
+fn load_amount(
+    v: VehicleRef,
+    gradual: bool,
+    l: &Loading,
+    shared: &crate::services::Services,
+) -> u32 {
     // SAFETY: the static base services outlive this synchronous call.
     let vehicle = unsafe { &*l.vehicle };
-    let observed = (l.load_engine)(v);
-    let engine = observed.engine;
-    let mut amount = u32::from(observed.amount);
+    let engine = (vehicle.engine)(v);
+    let mut amount = u32::from(engine.load_amount());
     let mail = v.vehicle_type() == 3 && !crate::aircraft::is_normal_aircraft(v.subtype());
     if mail {
         amount = amount.wrapping_add(3) / 4;
     }
     if gradual {
-        let version = (l.grf_version)(engine);
+        let version = engine.grf_version(shared);
         let mut cb = 0xffff;
         if version >= 8 {
             cb = (vehicle.property)(
@@ -1391,7 +1384,7 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
                 crate::newgrf_properties::PROP_VEHICLE_LOAD_AMOUNT,
                 i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
             ) as u16;
-        } else if (l.engine_load_callback)(engine) {
+        } else if engine.callbacks() & crate::newgrf_callbacks::VEHICLE_LOAD_AMOUNT != 0 {
             cb = (vehicle.callback)(
                 (vehicle.newgrf)(),
                 v,
@@ -1399,17 +1392,21 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
             );
         }
         if cb != 0xffff {
-            if (l.grf_version)(engine) < 8 {
+            if engine.grf_version(shared) < 8 {
                 cb &= 255;
             }
             if cb >= 256 {
-                (l.unknown_load_result)(v, cb);
+                vehicle.unknown_callback_result(
+                    engine,
+                    crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                    cb,
+                );
             } else if cb != 0 {
                 amount = u32::from(cb);
             }
         }
     }
-    if (l.engine_no_multiplier)(engine) && !mail {
+    if engine.misc() & crate::engine_type::NO_DEFAULT_CARGO_MULTIPLIER != 0 && !mail {
         amount = amount
             .wrapping_mul(u32::from((l.cargo_multiplier)(v)))
             .wrapping_add(255)
@@ -1478,7 +1475,7 @@ fn refit_vehicle(
     }
     let old_company = (l.current_company)();
     (l.set_current_company)(v.owner());
-    let mut mask = (l.refit_mask)(v);
+    let mut mask = (unsafe { &*l.vehicle }.engine)(v).refit_mask();
     parts(start, |part| {
         let observed = (l.cargo_capacity)(part);
         let cargo = usize::from(observed.cargo);
@@ -1486,7 +1483,7 @@ fn refit_vehicle(
             unsafe { crate::cargo_storage::openttd_rust_cargo_list_reserved(observed.owner) };
         capleft[cargo] =
             capleft[cargo].wrapping_sub(u32::from(part.cargo_cap()).wrapping_sub(reserved));
-        mask |= (l.refit_mask)(part);
+        mask |= (unsafe { &*l.vehicle }.engine)(part).refit_mask();
         true
     });
     let auto = new_cargo == 253;
@@ -1670,7 +1667,7 @@ unsafe fn load_vehicle(
                     if count > 0 {
                         crate::witness::hit(crate::witness::STATION_GRADUAL_UNLOAD);
                     }
-                    count.min(load_amount(v, control.gradual, l))
+                    count.min(load_amount(v, control.gradual, l, unsafe { &*w.shared }))
                 } else {
                     count
                 };
@@ -1768,7 +1765,7 @@ unsafe fn load_vehicle(
                         };
                     }
                     if control.gradual {
-                        cap = cap.min(load_amount(v, control.gradual, l));
+                        cap = cap.min(load_amount(v, control.gradual, l, unsafe { &*w.shared }));
                     }
                     let loaded = (l.load_cargo)(st.native, v, cap, next);
                     if (l.load_count)(v) > 0 {
@@ -2003,10 +2000,6 @@ crate::abi::layouts! {
         owner,
         cargo,
     };
-    "OpenTTDLoadEngine" ["probe"] => LoadEngine {
-        engine,
-        amount,
-    };
     "OpenTTDLoadingWait" ["probe"] => LoadingWait {
         lateness,
         wait,
@@ -2071,10 +2064,6 @@ crate::abi::layouts! {
         control,
         part,
         wait_observation,
-        load_engine,
-        grf_version,
-        engine_load_callback,
-        engine_no_multiplier,
         cargo_capacity,
         cargo_type,
         stored_count,
@@ -2092,13 +2081,11 @@ crate::abi::layouts! {
         current_company,
         vehicle,
         total_count,
-        refit_mask,
         set_cargo_unloading,
         set_loading_finished,
         set_stop,
         set_load_ticks,
         subtract_profit,
-        unknown_load_result,
         vehicle_dirty,
         indicator,
         show_indicator,

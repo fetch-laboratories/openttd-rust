@@ -9,6 +9,7 @@
     clippy::too_many_lines
 )]
 use crate::debug::{Bytes, grf_msg};
+use crate::raw_field::{read_field, write_field};
 use crate::{
     cargo_registry::{
         openttd_rust_cargo_by_label, openttd_rust_cargo_is_default_abi, openttd_rust_cargo_mask,
@@ -240,9 +241,6 @@ pub struct Services {
     resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
     pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
-    engine_file: extern "C" fn(E) -> File,
-    has_file: extern "C" fn(E) -> bool,
-    set_file: extern "C" fn(E, File),
     mapping_log: extern "C" fn(u32, u32, bool),
     can_allocate: extern "C" fn() -> bool,
     pool_size: extern "C" fn() -> usize,
@@ -250,38 +248,16 @@ pub struct Services {
     construct_at: extern "C" fn(u8, u16, u16),
     close_previews: extern "C" fn(),
     clean_pool: extern "C" fn(),
-    railtypes: extern "C" fn(E) -> u64,
-    refit_inputs: extern "C" fn(E) -> RefitInputs,
-    cargo_label: extern "C" fn(E) -> CargoLabel,
-    train_cargo: extern "C" fn(E) -> TrainCargo,
-    set_cargo: extern "C" fn(E, u8),
-    set_refit: extern "C" fn(E, u64),
-    disable: extern "C" fn(E),
-    old_refittable: extern "C" fn(E) -> bool,
-    set_old_refittable: extern "C" fn(E, bool),
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_list_size: extern "C" fn(File) -> usize,
     pub(crate) unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,
-    variant: extern "C" fn(E) -> u16,
-    set_variant: extern "C" fn(E, u16),
-    invalid_string: extern "C" fn(E),
-    engine_climate: extern "C" fn(E) -> bool,
-    rail_badges: extern "C" fn(E, u8),
-    road_badges: extern "C" fn(E),
-    rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
-    is_tram: extern "C" fn(E) -> bool,
-    set_road_speed: extern "C" fn(E, u16),
-    set_roadtype: extern "C" fn(E, u8),
-    set_railtypes: extern "C" fn(E, u64),
     override_log: extern "C" fn(u32, u32),
     vehicle_next: extern "C" fn(u32) -> LoadingVehicle,
     reload: extern "C" fn(),
     default_counts: extern "C" fn() -> *const u8,
-    set_position: extern "C" fn(E, u16),
-    order_source: extern "C" fn(E, u16) -> OrderSource,
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
 }
@@ -304,8 +280,8 @@ pub unsafe extern "C" fn openttd_rust_engine_new_id(
 ) -> u16 {
     unsafe { openttd_rust_engine_mapping_get(kind, local, scope(s, file, (s.dynamic)())) }
 }
-unsafe fn initialize_rail_labels(s: &Services, engine: EngineRef) {
-    let railtypes = (s.railtypes)(engine.shell);
+unsafe fn initialize_rail_labels(engine: EngineRef) {
+    let railtypes = read_field!(OpenTTDEngine::rail(engine.shell), railtypes);
     unsafe {
         openttd_rust_engine_temp_labels_clear(engine.id);
     }
@@ -337,8 +313,10 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         let id = unsafe { openttd_rust_engine_mapping_get(kind, local, scope) };
         if id != INVALID_ENGINE {
             let engine = (s.resolve)(id);
-            if !(s.has_file)(engine.shell) {
-                (s.set_file)(engine.shell, file);
+            if crate::raw_field::read_field!(engine.shell, bindings.grf_prop.grffile).is_null() {
+                unsafe {
+                    crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+                }
             }
             return engine.shell;
         }
@@ -346,8 +324,10 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     let id = unsafe { openttd_rust_engine_mapping_use(kind, local, scope, static_access) };
     if id != INVALID_ENGINE {
         let engine = (s.resolve)(id);
-        if !(s.has_file)(engine.shell) {
-            (s.set_file)(engine.shell, file);
+        if crate::raw_field::read_field!(engine.shell, bindings.grf_prop.grffile).is_null() {
+            unsafe {
+                crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+            }
             grf_msg!(
                 5,
                 "Replaced engine at index {} for GRFID {:x}, type {}, index {}",
@@ -368,7 +348,9 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     }
     let size = (s.pool_size)();
     let engine = (s.construct)(kind, local);
-    (s.set_file)(engine.shell, file);
+    unsafe {
+        crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+    }
     unsafe {
         openttd_rust_engine_mapping_set(
             kind,
@@ -385,7 +367,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     }
     if kind == VEH_TRAIN {
         unsafe {
-            initialize_rail_labels(s, engine);
+            initialize_rail_labels(engine);
         }
     }
     grf_msg!(
@@ -427,7 +409,7 @@ pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
         from = u32::from(engine.id) + 1;
         if engine.kind.0 == VEH_TRAIN {
             unsafe {
-                initialize_rail_labels(s, engine);
+                initialize_rail_labels(engine);
             }
         }
     }
@@ -435,7 +417,6 @@ pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDEngineOrderSource" ["engine_loading"] => OrderSource { local, kind => type, grfid };
     "OpenTTDEngineLoadingVehicle" ["engine_loading"] => LoadingVehicle { id, kind => type };
     "OpenTTDEngineLoadingServices" ["engine_loading"] => Services {
         identity,
@@ -445,9 +426,6 @@ crate::abi::layouts! {
         resolve,
         dynamic,
         find_file,
-        engine_file,
-        has_file,
-        set_file,
         mapping_log,
         can_allocate,
         pool_size,
@@ -455,61 +433,24 @@ crate::abi::layouts! {
         construct_at,
         close_previews,
         clean_pool,
-        railtypes,
-        refit_inputs,
-        cargo_label,
-        train_cargo,
-        set_cargo,
-        set_refit,
-        disable,
-        old_refittable,
-        set_old_refittable,
         cargo_next,
         cargo_list_size,
         unknown_refit,
         climate,
-        variant,
-        set_variant,
-        invalid_string,
-        engine_climate,
-        rail_badges,
-        road_badges,
-        rail_kind,
         use_livery,
         variant_flags,
-        is_tram,
-        set_road_speed,
-        set_roadtype,
-        set_railtypes,
         override_log,
         vehicle_next,
         reload,
         default_counts,
-        set_position,
-        order_source,
         order_sort,
         order_count,
-
-
     };
     "EngineIDMapping" ["engine_loading"] => Mapping { grfid, internal_id, kind => type, substitute_id, engine };
     "OpenTTDEngineMappingView" ["engine_loading"] => MappingView { data, size };
     "OpenTTDNewGRFCargoLabel" ["engine_loading"] => CargoLabel { value, mixed };
-    "OpenTTDEngineRefitInputs" ["engine_loading"] => RefitInputs { mask, cargo, custom };
-    "OpenTTDEngineTrainCargo" ["engine_loading"] => TrainCargo { capacity, kind };
     "OpenTTDEngineCargoClass" ["engine_loading"] => CargoClass { classes, cargo };
 
-}
-#[repr(C)]
-pub struct RefitInputs {
-    mask: u64,
-    cargo: u8,
-    custom: bool,
-}
-#[repr(C)]
-pub struct TrainCargo {
-    capacity: u8,
-    kind: crate::vehicle::RailVehicleTypes,
 }
 #[repr(C)]
 pub struct CargoClass {
@@ -541,8 +482,8 @@ pub extern "C" fn openttd_rust_engine_translate_refit(mask: u32, file: File) -> 
     }
     result
 }
-fn engine_label(s: &Services, shell: E) -> u32 {
-    get_active_cargo_label((s.cargo_label)(shell), |label| {
+fn engine_label(shell: E) -> u32 {
+    get_active_cargo_label(read_field!(shell, info.cargo_label), |label| {
         openttd_rust_cargo_by_label(label)
     })
 }
@@ -562,7 +503,9 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 CC_LIQUID | PASSENGERS,
             ),
         }
-    } else if kind == VEH_TRAIN && (s.train_cargo)(shell).kind != RailVehicleTypes::WAGON {
+    } else if kind == VEH_TRAIN
+        && crate::vehicle::EngineRef::of(shell).rail_kind() != RailVehicleTypes::WAGON
+    {
         (
             PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
             0,
@@ -625,21 +568,22 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        let mut input = (s.refit_inputs)(e.shell);
-        if !is_valid_cargo_type(input.cargo) {
-            input.cargo = openttd_rust_cargo_by_label(engine_label(s, e.shell));
-            (s.set_cargo)(e.shell, input.cargo);
+        let mut cargo = read_field!(e.shell, info.cargo_type);
+        if !is_valid_cargo_type(cargo) {
+            cargo = openttd_rust_cargo_by_label(engine_label(e.shell));
+            write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
         }
         let fields = unsafe { openttd_rust_engine_temp_fields(e.id) };
         if unsafe { (*fields).defaultcargo_grf.is_null() } {
-            if e.kind.0 != VEH_TRAIN || (s.train_cargo)(e.shell).capacity != 0 {
+            if e.kind.0 != VEH_TRAIN || read_field!(OpenTTDEngine::rail(e.shell), capacity) != 0 {
                 let label = if e.kind.0 == VEH_AIRCRAFT
                     || (e.kind.0 == VEH_TRAIN
-                        && (s.train_cargo)(e.shell).kind != RailVehicleTypes::WAGON)
+                        && crate::vehicle::EngineRef::of(e.shell).rail_kind()
+                            != RailVehicleTypes::WAGON)
                 {
                     CT_INVALID
                 } else {
-                    engine_label(s, e.shell)
+                    engine_label(e.shell)
                 };
                 let (allowed, disallowed) = default_masks(s, e.kind.0, e.shell, e.id, label);
                 unsafe {
@@ -647,10 +591,11 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                     (*fields).cargo_disallowed = disallowed;
                 }
                 if e.kind.0 == VEH_SHIP {
-                    (s.set_old_refittable)(e.shell, true);
+                    write_field!(OpenTTDEngine::ship(e.shell), old_refittable, true);
                 } else if e.kind.0 != VEH_AIRCRAFT
                     && (e.kind.0 != VEH_TRAIN
-                        || (s.train_cargo)(e.shell).kind == RailVehicleTypes::WAGON)
+                        || crate::vehicle::EngineRef::of(e.shell).rail_kind()
+                            == RailVehicleTypes::WAGON)
                 {
                     unsafe {
                         (*fields).ctt_exclude_mask = original_known_cargoes;
@@ -659,8 +604,8 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
             }
             unsafe {
                 openttd_rust_engine_temp_refittability(fields, (*fields).cargo_allowed != 0);
-                if is_valid_cargo_type(input.cargo) {
-                    (*fields).ctt_exclude_mask &= !(1_u64 << input.cargo);
+                if is_valid_cargo_type(cargo) {
+                    (*fields).ctt_exclude_mask &= !(1_u64 << cargo);
                 }
             }
         }
@@ -675,6 +620,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                 (*fields).defaultcargo_grf,
             )
         };
+        let original_mask = read_field!(e.shell, info.refit_mask);
         let mut mask = 0;
         let mut not_mask = 0;
         if allowed != 0 {
@@ -693,17 +639,21 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                 }
             }
         }
-        input.mask = (((mask & !not_mask) ^ input.mask)
+        let mut refit_mask = (((mask & !not_mask) ^ original_mask)
             & unsafe { openttd_rust_cargo_mask().read() }
             | include)
             & !exclude;
-        (s.set_refit)(e.shell, input.mask);
+        write_field!(e.shell.cast_mut(), info.refit_mask, refit_mask);
         let file = if default_file.is_null() {
-            (s.engine_file)(e.shell)
+            unsafe { (*e.shell).bindings.grf_prop.grffile }
         } else {
             default_file
         };
-        if !file.is_null() && input.custom {
+        if !file.is_null()
+            && read_field!(e.shell, info.callback_mask)
+                & crate::newgrf_callbacks::VEHICLE_CUSTOM_REFIT
+                != 0
+        {
             let mut cargo_from = 0;
             loop {
                 let cs = (s.cargo_next)(cargo_from);
@@ -729,12 +679,12 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                 match callback {
                     CALLBACK_FAILED | 0 => (),
                     1 => {
-                        input.mask |= 1_u64 << cs.cargo;
-                        (s.set_refit)(e.shell, input.mask);
+                        refit_mask |= 1_u64 << cs.cargo;
+                        write_field!(e.shell.cast_mut(), info.refit_mask, refit_mask);
                     }
                     2 => {
-                        input.mask &= !(1_u64 << cs.cargo);
-                        (s.set_refit)(e.shell, input.mask);
+                        refit_mask &= !(1_u64 << cs.cargo);
+                        write_field!(e.shell.cast_mut(), info.refit_mask, refit_mask);
                     }
                     _ => {
                         (s.unknown_refit)(
@@ -746,23 +696,23 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                 }
             }
         }
-        if is_valid_cargo_type(input.cargo)
-            && unsafe { openttd_rust_cargo_mask().read() } & (1_u64 << input.cargo) == 0
+        if is_valid_cargo_type(cargo)
+            && unsafe { openttd_rust_cargo_mask().read() } & (1_u64 << cargo) == 0
         {
-            input.cargo = INVALID_CARGO;
-            (s.set_cargo)(e.shell, input.cargo);
+            cargo = INVALID_CARGO;
+            write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
         }
         if !only_default
-            && (e.kind.0 != VEH_SHIP || (s.old_refittable)(e.shell))
-            && is_valid_cargo_type(input.cargo)
-            && input.mask & (1_u64 << input.cargo) == 0
+            && (e.kind.0 != VEH_SHIP || read_field!(OpenTTDEngine::ship(e.shell), old_refittable))
+            && is_valid_cargo_type(cargo)
+            && refit_mask & (1_u64 << cargo) == 0
         {
-            input.cargo = INVALID_CARGO;
-            (s.set_cargo)(e.shell, input.cargo);
+            cargo = INVALID_CARGO;
+            write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
         }
-        if !is_valid_cargo_type(input.cargo) && input.mask != 0 {
+        if !is_valid_cargo_type(cargo) && refit_mask != 0 {
             let file = if default_file.is_null() {
-                (s.engine_file)(e.shell)
+                unsafe { (*e.shell).bindings.grf_prop.grffile }
             } else {
                 default_file
             };
@@ -771,40 +721,39 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                 && (s.cargo_list_size)(file) != 0
             {
                 let mut best_local_slot = u8::MAX;
-                for cargo in 0..NUM_CARGO {
-                    if input.mask & (1_u64 << cargo) == 0 {
+                for candidate_cargo in 0..NUM_CARGO {
+                    if refit_mask & (1_u64 << candidate_cargo) == 0 {
                         continue;
                     }
-                    let local = (unsafe { &*s.shared }.grf_cargo_map)(file, cargo);
+                    let local = (unsafe { &*s.shared }.grf_cargo_map)(file, candidate_cargo);
                     if local < best_local_slot {
                         best_local_slot = local;
-                        input.cargo = cargo;
-                        (s.set_cargo)(e.shell, input.cargo);
+                        cargo = candidate_cargo;
+                        write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
                     }
                 }
             }
-            if !is_valid_cargo_type(input.cargo) {
-                input.cargo = crate::bitmath_func::find_first_bit(input.mask);
-                (s.set_cargo)(e.shell, input.cargo);
+            if !is_valid_cargo_type(cargo) {
+                cargo = crate::bitmath_func::find_first_bit(refit_mask);
+                write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
             }
         }
-        if !is_valid_cargo_type(input.cargo) && e.kind.0 == VEH_TRAIN {
-            let train = (s.train_cargo)(e.shell);
-            if train.kind != RailVehicleTypes::WAGON
-                && train.capacity == 0
-                && engine_label(s, e.shell) != CT_INVALID
-            {
-                input.cargo = crate::bitmath_func::find_first_bit(unsafe {
-                    openttd_rust_standard_cargo_mask().read()
-                });
-                (s.set_cargo)(e.shell, input.cargo);
-            }
+        if !is_valid_cargo_type(cargo)
+            && e.kind.0 == VEH_TRAIN
+            && crate::vehicle::EngineRef::of(e.shell).rail_kind() != RailVehicleTypes::WAGON
+            && read_field!(OpenTTDEngine::rail(e.shell), capacity) == 0
+            && engine_label(e.shell) != CT_INVALID
+        {
+            cargo = crate::bitmath_func::find_first_bit(unsafe {
+                openttd_rust_standard_cargo_mask().read()
+            });
+            write_field!(e.shell.cast_mut(), info.cargo_type, cargo);
         }
-        if !is_valid_cargo_type(input.cargo) {
-            (s.disable)(e.shell);
+        if !is_valid_cargo_type(cargo) {
+            write_field!(e.shell.cast_mut(), info.climates, 0);
         }
-        if e.kind.0 == VEH_SHIP && !(s.old_refittable)(e.shell) {
-            (s.set_refit)(e.shell, 0);
+        if e.kind.0 == VEH_SHIP && !read_field!(OpenTTDEngine::ship(e.shell), old_refittable) {
+            write_field!(e.shell.cast_mut(), info.refit_mask, 0);
         }
     }
 }
@@ -837,7 +786,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if (s.engine_file)(e.shell).is_null() {
+        if unsafe { (*e.shell).bindings.grf_prop.grffile }.is_null() {
             let invalid = unsafe {
                 (&*MAPPINGS.get())[usize::from(e.kind.0)]
                     .iter()
@@ -847,32 +796,60 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                     })
             };
             if invalid {
-                (s.invalid_string)(e.shell);
+                write_field!(e.shell.cast_mut(), info.string_id, unsafe {
+                    (*s.resolver).capabilities.invalid_string_id
+                });
             }
         }
-        let variant = (s.variant)(e.shell);
+        let variant = read_field!(e.shell, info.variant_id).0;
         if variant != INVALID_ENGINE {
             let id = unsafe {
-                openttd_rust_engine_new_id(s, (s.engine_file)(e.shell), e.kind.0, variant)
+                openttd_rust_engine_new_id(
+                    s,
+                    (*e.shell).bindings.grf_prop.grffile,
+                    e.kind.0,
+                    variant,
+                )
             };
-            (s.set_variant)(e.shell, id);
+            write_field!(
+                e.shell.cast_mut(),
+                info.variant_id,
+                crate::engine_type::EngineID(id)
+            );
         }
-        if !(s.engine_climate)(e.shell) {
+        if !crate::vehicle::EngineRef::of(e.shell).climate((s.climate)()) {
             continue;
         }
         match e.kind.0 {
             VEH_TRAIN => {
-                let railtypes = (s.railtypes)(e.shell);
+                let railtypes = read_field!(OpenTTDEngine::rail(e.shell), railtypes);
                 for rt in 0_u8..64 {
                     if railtypes & (1_u64 << rt) != 0 {
-                        (s.rail_badges)(e.shell, rt);
+                        unsafe {
+                            crate::engine::bindings::append_copyable_badges(
+                                &*s.shared,
+                                e.shell,
+                                ((*s.resolver).rail_badge)(crate::services::RailType(rt)),
+                                crate::newgrf::GSF_TRAINS,
+                            );
+                        }
                     }
                 }
             }
-            VEH_ROAD => (s.road_badges)(e.shell),
+            VEH_ROAD => unsafe {
+                let rt = (*OpenTTDEngine::road(e.shell)).roadtype;
+                crate::engine::bindings::append_copyable_badges(
+                    &*s.shared,
+                    e.shell,
+                    ((*s.resolver).road_badge)(crate::services::RoadType(rt)),
+                    crate::newgrf::GSF_ROADVEHICLES,
+                );
+            },
             _ => (),
         }
-        if e.kind.0 != VEH_TRAIN || (s.rail_kind)(e.shell) != RailVehicleTypes::WAGON {
+        if e.kind.0 != VEH_TRAIN
+            || crate::vehicle::EngineRef::of(e.shell).rail_kind() != RailVehicleTypes::WAGON
+        {
             let ls = crate::company_identity::engine_livery(
                 s.identity,
                 crate::engine_type::EngineID(e.id),
@@ -899,29 +876,35 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        let mut parent = (s.variant)(e.shell);
+        let mut parent = read_field!(e.shell, info.variant_id).0;
         let mut parent_slow = parent;
         let mut update_slow = false;
         while parent != INVALID_ENGINE {
-            parent = (s.variant)((s.resolve)(parent).shell);
+            parent = read_field!((s.resolve)(parent).shell, info.variant_id).0;
             if update_slow {
-                parent_slow = (s.variant)((s.resolve)(parent_slow).shell);
+                parent_slow = read_field!((s.resolve)(parent_slow).shell, info.variant_id).0;
             }
             update_slow = !update_slow;
             if parent != e.id && parent != parent_slow {
                 continue;
             }
-            (s.set_variant)(e.shell, INVALID_ENGINE);
+            write_field!(
+                e.shell.cast_mut(),
+                info.variant_id,
+                crate::engine_type::EngineID(INVALID_ENGINE)
+            );
             let shared = unsafe { &*s.shared };
             grf_msg!(
                 1,
                 "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself",
-                (shared.engine_local_id)(e.shell),
-                Bytes(unsafe { (shared.grf_file_name)((s.engine_file)(e.shell).cast()).bytes() })
+                crate::raw_field::read_field!(e.shell, bindings.grf_prop.local_id),
+                Bytes(unsafe {
+                    (shared.grf_file_name)((*e.shell).bindings.grf_prop.grffile.cast()).bytes()
+                })
             );
             break;
         }
-        let parent = (s.variant)(e.shell);
+        let parent = read_field!(e.shell, info.variant_id).0;
         if parent != INVALID_ENGINE {
             (s.variant_flags)((s.resolve)(parent).shell);
         }
@@ -941,12 +924,20 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
         let fields = unsafe { openttd_rust_engine_temp_fields(e.id) };
         let speed = unsafe { (*fields).rv_max_speed };
         if speed != 0 {
-            (s.set_road_speed)(e.shell, u16::from(speed) * 4);
+            write_field!(
+                OpenTTDEngine::road(e.shell),
+                max_speed,
+                u16::from(speed) * 4
+            );
         }
-        let tram = (s.is_tram)(e.shell);
-        let file = (s.engine_file)(e.shell);
+        let tram = (read_field!(e.shell, info.misc_flags) & crate::engine_type::ROAD_IS_TRAM != 0);
+        let file = unsafe { (*e.shell).bindings.grf_prop.grffile };
         if file.is_null() || unsafe { (*fields).roadtramtype == 0 } {
-            (s.set_roadtype)(e.shell, if tram { ROADTYPE_TRAM } else { ROADTYPE_ROAD });
+            write_field!(
+                OpenTTDEngine::road(e.shell),
+                roadtype,
+                if tram { ROADTYPE_TRAM } else { ROADTYPE_ROAD }
+            );
             continue;
         }
         let slot = unsafe {
@@ -959,10 +950,10 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
             file,
         );
         if rt != INVALID_ROADTYPE {
-            (s.set_roadtype)(e.shell, rt);
+            write_field!(OpenTTDEngine::road(e.shell), roadtype, rt);
             continue;
         }
-        (s.disable)(e.shell);
+        write_field!(e.shell.cast_mut(), info.climates, 0);
     }
     let mut from = 0;
     loop {
@@ -984,9 +975,13 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
             }
         }
         if types != 0 {
-            (s.set_railtypes)(e.shell, types);
+            {
+                let rail = unsafe { OpenTTDEngine::rail(e.shell) };
+                write_field!(rail, railtypes, types);
+                write_field!(rail, intended_railtypes, types);
+            };
         } else {
-            (s.disable)(e.shell);
+            write_field!(e.shell.cast_mut(), info.climates, 0);
         }
     }
 }
@@ -1017,12 +1012,6 @@ pub struct LoadingVehicle {
     kind: u8,
 }
 
-#[repr(C)]
-pub struct OrderSource {
-    local: u16,
-    kind: u8,
-    grfid: u32,
-}
 #[derive(Clone, Copy)]
 struct ListOrderChange {
     engine: u16,
@@ -1039,12 +1028,12 @@ pub(crate) unsafe fn openttd_rust_vehicle_order_commit(s: &Services) {
     for index in 0..count {
         let change = unsafe { (&*LIST_ORDER_CHANGES.get())[index] };
         let engine = (s.resolve)(change.engine);
-        let source = (s.order_source)(engine.shell, change.target);
-        if source.local == change.target {
+        if read_field!(engine.shell, bindings.grf_prop.local_id) == change.target {
             continue;
         }
-        let target =
-            unsafe { openttd_rust_engine_mapping_get(source.kind, change.target, source.grfid) };
+        let kind = read_field!(engine.shell, r#type).0;
+        let grfid = read_field!(engine.shell, bindings.grf_prop.grfid);
+        let target = unsafe { openttd_rust_engine_mapping_get(kind, change.target, grfid) };
         if target == INVALID_ENGINE {
             continue;
         }
@@ -1058,10 +1047,41 @@ pub(crate) unsafe fn openttd_rust_vehicle_order_commit(s: &Services) {
         crate::container_func::slide(&mut ordering, from, from + 1, to);
     }
     for (index, id) in ordering.into_iter().enumerate() {
-        (s.set_position)((s.resolve)(id).shell, index as u16);
+        write_field!(
+            (s.resolve)(id).shell.cast_mut(),
+            list_position,
+            index as u16
+        );
     }
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.clear();
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.shrink_to_fit();
+}
+
+/// Native badge owner consumes the feature mask immediately; only pure pool lookup
+/// occurs between ordered appends, and no record view survives that lookup.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_file_badge(
+    s: &Services,
+    file: File,
+    badge: u32,
+) -> u32 {
+    let mut features = 0;
+    let mut from = 0;
+    loop {
+        let e = (s.next)(from);
+        if e.shell.is_null() {
+            break;
+        }
+        from = u32::from(e.id) + 1;
+        if crate::raw_field::read_field!(e.shell, bindings.grf_prop.grffile) != file {
+            continue;
+        }
+        unsafe {
+            (*e.shell.cast_mut()).bindings.badges.push(badge);
+        }
+        features |= 1 << e.kind.0;
+    }
+    features
 }
 
 #[cfg(test)]

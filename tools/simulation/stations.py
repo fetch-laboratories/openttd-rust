@@ -444,6 +444,7 @@ COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
 #include "vehicle-record-fixture.hpp"
+#include "engine-record-fixture.hpp"
 // TYPE_RESERVE_FIXTURE
 #include "clear_map.h"
 #include "order_cmd.h"
@@ -1190,7 +1191,7 @@ static bool StationCommands(std::span<std::string_view> args)
 			StationNeed(Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, tile(4, 4), ROADTYPE_ROAD, DIAGDIR_NE).Succeeded(), __LINE__);
 			EngineID engine = EngineID::Invalid();
 			for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
-				if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, company->index) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !e->info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
+				if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, company->index) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !EngineFields(e).info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
 			}
 			StationNeed(engine != EngineID::Invalid(), __LINE__);
 			std::vector<RoadVehicle *> buses;

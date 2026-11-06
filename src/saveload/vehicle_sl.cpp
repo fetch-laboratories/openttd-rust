@@ -239,7 +239,7 @@ static void CheckValidVehicles()
 			case VEH_ROAD:
 			case VEH_SHIP:
 			case VEH_AIRCRAFT:
-				if (v->GetEngineType() >= total_engines || v->GetType() != v->GetEngine()->type) {
+				if (v->GetEngineType() >= total_engines || v->GetType() != v->GetEngine()->Record().type) {
 					v->SetEngineType(first_engine[v->GetType()]);
 				}
 				break;
