@@ -208,7 +208,11 @@ impl Node {
         }
     }
     pub(crate) fn remove_edge(&mut self, to: u16) {
-        self.edges.retain(|edge| edge.dest_node != to);
+        let first = self.edges.partition_point(|edge| edge.before(to));
+        let last = self.edges.partition_point(|edge| !edge.after(to));
+        self.edges.edit(|edges| {
+            edges.drain(first..last);
+        });
     }
 }
 

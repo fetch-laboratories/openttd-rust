@@ -42,18 +42,10 @@ void LinkGraphJob::JoinThread()
 
 /** Call-scoped native leaves; no owned graph query reenters Rust from a leaf. */
 struct CargoFlowContext { LinkGraphJob *job; CargoType cargo; };
-static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, [[maybe_unused]] uint16_t edge_index) noexcept
+static bool CargoDataIsEmpty(void *context, uint16_t node) noexcept
 {
 	const auto &ctx = *static_cast<CargoFlowContext *>(context);
-	auto &job = *ctx.job;
-	switch (op) {
-		case 3: return Station::IsValidID(StationID(job.Graph()->nodes[node].station));
-		case 8: return _settings_game.linkgraph.GetDistributionType(ctx.cargo) == DT_MANUAL;
-		case 9: return Station::Get(StationID(job.Graph()->nodes[node].station))->goods[ctx.cargo].GetData().IsEmpty();
-		case 10: return RustStationLinkGraphIndex(Station::Get(StationID(job.Graph()->nodes[node].station)), ctx.cargo);
-		case 11: return Station::Get(StationID(job.Graph()->nodes[node].station))->goods[ctx.cargo].node;
-		default: NOT_REACHED();
-	}
+	return Station::Get(StationID(ctx.job->Graph()->nodes[node].station))->goods[ctx.cargo].GetData().IsEmpty();
 }
 
 static OpenTTDCargoFlowMap *CargoLiveFlows(void *context, uint16_t node) noexcept
@@ -89,7 +81,9 @@ static OpenTTDCargoFlowServices CargoFlowServices(CargoFlowContext *context)
 		.job = job == nullptr ? nullptr : &job->Record(),
 		.live_graph = live,
 		.context = context,
-		.read = ReadCargoFlowJob,
+		.stations = &GetRustStationServices(),
+		.links = &GetRustStationLinks(),
+		.data_is_empty = CargoDataIsEmpty,
 		.live_flows = CargoLiveFlows,
 		.reroute = CargoFlowReroute,
 		.finish = CargoFlowFinish,

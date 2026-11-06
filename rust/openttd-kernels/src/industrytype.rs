@@ -94,9 +94,6 @@ impl<T> NativeVec<T> {
     pub(crate) fn resize_with(&mut self, size: usize, make: impl FnMut() -> T) {
         self.edit(|vec| vec.resize_with(size, make));
     }
-    pub(crate) fn retain(&mut self, keep: impl FnMut(&T) -> bool) {
-        self.edit(|vec| vec.retain(keep));
-    }
     pub fn push(&mut self, value: T) {
         self.edit(|vec| vec.push(value));
     }

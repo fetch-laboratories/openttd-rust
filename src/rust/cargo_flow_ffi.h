@@ -26,13 +26,17 @@ typedef struct {
 	uint16_t origin;
 	uint8_t found;
 } OpenTTDCargoOrigin;
+struct OpenTTDStationServices;
+struct OpenTTDStationLinks;
 struct OpenTTDLiveGraph;
 struct OpenTTDLinkGraphJobRecord;
 typedef struct OpenTTDCargoFlowServices {
 	OpenTTDLinkGraphJobRecord *job;
 	const OpenTTDLiveGraph *live_graph;
 	void *context;
-	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(read);
+	const OpenTTDStationServices *stations;
+	const OpenTTDStationLinks *links;
+	bool (*data_is_empty)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(data_is_empty);
 	OpenTTDCargoFlowMap *(*live_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(live_flows);
 	void (*reroute)(void *, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(reroute);
 	void (*finish)(void *, uint16_t, uint8_t) OPENTTD_SERVICE_DEFAULT(finish);
@@ -45,8 +49,8 @@ typedef struct OpenTTDCargoFlowServices {
  * yield the game-state mutex. Live raw map/entry pointers therefore remain valid across
  * this audited leaf, as in the pinned native iterator loop; no Rust owner borrow crosses it.
  * All station/data/flow handles end before finish, which may clear the attachment.
- * Station read selectors: 3 valid, 8 manual distribution, 9 live data empty,
- * 10 live graph ID, 11 live node ID. Job snapshots/results are read directly.
+ * Station validity, membership and live distribution use the existing station/graph services.
+ * Only native-owned data emptiness remains a typed field leaf; job snapshots/results are direct.
  * finish clears data when requested, then invalidates the station window, after the thread join.
  * Calls are serial; clone and insertion copy into independent owners, destroyed once. Graph owners
  * stay live under the game-state mutex during application, and callbacks retain no owner references. */
