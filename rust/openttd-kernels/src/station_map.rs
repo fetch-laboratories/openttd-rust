@@ -213,7 +213,7 @@ impl crate::map_func::World<'_> {
     }
     /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
     pub(crate) fn buoy(&self, t: u32) -> bool {
-        self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::BUOY
+        self.asserted(|m| is_buoy(m, TileIndex(t)))
     }
     /// `IsAnyRoadStopTile`.
     pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {

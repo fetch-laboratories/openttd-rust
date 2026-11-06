@@ -166,18 +166,7 @@ fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailS
         reverse: false,
     };
     if r.signals {
-        // `TrackBitsToTrack`, including its single-track assertion.
-        let check = |ok| view.check(ok);
-        let mask = masked_tracks & crate::track_type::TRACK_BIT_MASK;
-        check(
-            masked_tracks == crate::track_type::INVALID_TRACK_BIT
-                || (masked_tracks != 0 && mask & mask.wrapping_sub(1) == 0),
-        );
-        let track = if masked_tracks == crate::track_type::INVALID_TRACK_BIT {
-            crate::track_type::INVALID_TRACK
-        } else {
-            crate::bitmath_func::find_first_bit(u64::from(mask))
-        };
+        let track = crate::track_func::track_bits_to_track(masked_tracks, |ok| view.check(ok));
         let present = view.present_signals(tile);
         r.track = present & crate::signal_func::signal_on_track(track) != 0;
         if r.track {

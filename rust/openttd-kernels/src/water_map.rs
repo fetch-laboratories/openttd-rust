@@ -16,10 +16,6 @@ pub(crate) const WATER_TILE_LOCK: u8 = 2;
 pub(crate) const WATER_TILE_DEPOT: u8 = 3;
 /// `WaterTileType::Coast`.
 const COAST: u8 = 1;
-/// `WaterTileType::Lock`.
-const LOCK: u8 = 2;
-/// `WaterTileType::Depot`.
-const DEPOT: u8 = 3;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
@@ -120,12 +116,12 @@ impl crate::map_func::World<'_> {
     }
     /// `GetLockDirection`, with its `IsLock` assertion.
     pub(crate) fn lock_direction(&self, t: u32) -> u8 {
-        self.check(self.water_tile_type(t) == LOCK);
+        self.check(self.water_tile_type(t) == WATER_TILE_LOCK);
         Self::byte(self.types.m5(t)) & 3
     }
     /// `GetShipDepotAxis`, with its `IsShipDepotTile` assertion.
     pub(crate) fn ship_depot_axis(&self, t: u32) -> u8 {
-        self.check(self.kind(t) == MP_WATER && self.water_tile_type(t) == DEPOT);
+        self.check(self.kind(t) == MP_WATER && self.water_tile_type(t) == WATER_TILE_DEPOT);
         (Self::byte(self.types.m5(t)) >> 1) & 1
     }
 }

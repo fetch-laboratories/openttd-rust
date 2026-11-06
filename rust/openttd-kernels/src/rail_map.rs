@@ -71,7 +71,7 @@ impl crate::map_func::World<'_> {
     }
     /// `GetRailGroundType`.
     pub(crate) fn rail_ground(&self, t: u32) -> u8 {
-        Self::byte(self.types.m4(t)) & 15
+        self.asserted(|m| get_rail_ground_type(m, t))
     }
     /// `GetPresentSignals`.
     pub(crate) fn present_signals(&self, t: u32) -> u8 {
