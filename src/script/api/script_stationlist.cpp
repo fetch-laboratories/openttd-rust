@@ -122,19 +122,20 @@ public:
 		/* Preserve validation order, error state and null goods early returns. */
 		if (!ScriptStation::IsValidStation(station_id)) return;
 		if (!ScriptCargo::IsValidCargo(cargo)) return;
-		this->ge = Station::Get(station_id)->GetGoods(cargo);
+		this->ge = &this->goods.emplace(Station::Get(station_id)->GetGoods(cargo));
 	}
 	~CargoCollector() { openttd_rust_cargo_finish(&this->state, this->list); }
 	CargoCollector(const CargoCollector &) = delete;
 	CargoCollector &operator=(const CargoCollector &) = delete;
-	const GoodsEntry *GE() const { return &this->ge; }
+	const GoodsEntry *GE() const { return this->ge; }
 	void Packet(StationID from, StationID via, uint amount) { openttd_rust_cargo_packet(&this->state, this->list, from.base(), via.base(), amount); }
 	void Origin(StationID origin) { openttd_rust_cargo_origin(&this->state, origin.base()); }
 	void Share(StationID via, uint32_t cumulative) { openttd_rust_cargo_share(&this->state, this->list, via.base(), cumulative); }
 private:
 	OpenTTDCargoCollector state;
 	OpenTTDScriptList *list;
-	GoodsEntry ge{nullptr};
+	std::optional<GoodsEntry> goods; ///< View of the validated goods slot.
+	const GoodsEntry *ge = nullptr;
 };
 
 void ScriptStationList_Cargo::AddCargo(CargoMode mode, CargoSelector selector, StationID station_id, CargoType cargo, StationID other_station)

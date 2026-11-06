@@ -66,6 +66,11 @@ def main() -> None:
         validation.index("{") + 1 : validation.rfind("}")
     ].strip()
     active_station = candidate_station
+    # The candidate reads the goods slot through the station record's view (#634).
+    validation_body = validation_body.replace(
+        "this->ge = &(Station::Get(station_id)->goods[cargo]);",
+        "this->ge = &this->goods.emplace(Station::Get(station_id)->GetGoods(cargo));",
+    )
     if validation_body.replace("\n\t", "\n\t\t") not in active_station:
         raise RuntimeError("Station-before-cargo validation body/order changed")
     guards = "if (collector.GE() == nullptr) return;\n\tif (!collector.GE()->HasData()) return;"
