@@ -24,7 +24,7 @@
 
 /*** NewGRF Vehicles ***/
 
-#define NICV(cb_id, bit) NIC(cb_id, Engine, info.callback_mask, bit)
+#define NICV(cb_id, bit) NIC(cb_id, Engine, Record().info.callback_mask, bit)
 static const NICallback _nic_vehicles[] = {
 	NICV(CBID_VEHICLE_VISUAL_EFFECT,         VehicleCallbackMask::VisualEffect),
 	NICV(CBID_VEHICLE_LENGTH,                VehicleCallbackMask::Length),
