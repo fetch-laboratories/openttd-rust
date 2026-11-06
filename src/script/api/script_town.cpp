@@ -69,21 +69,21 @@
 {
 	if (!IsValidTown(town_id)) return -1;
 	const Town *t = ::Town::Get(town_id);
-	return t->cache.population;
+	return t->Record().population;
 }
 
 /* static */ SQInteger ScriptTown::GetHouseCount(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return -1;
 	const Town *t = ::Town::Get(town_id);
-	return t->cache.num_houses;
+	return t->Record().num_houses;
 }
 
 /* static */ TileIndex ScriptTown::GetLocation(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return INVALID_TILE;
 	const Town *t = ::Town::Get(town_id);
-	return t->xy;
+	return t->Record().xy;
 }
 
 /* static */ SQInteger ScriptTown::GetLastMonthProduction(TownID town_id, CargoType cargo_type)
@@ -128,7 +128,7 @@
 
 	const Town *t = ::Town::Get(town_id);
 
-	return t->received[towneffect_id].old_act;
+	return t->Record().received[towneffect_id].old_act;
 }
 
 /* static */ bool ScriptTown::SetCargoGoal(TownID town_id, ScriptCargo::TownEffect towneffect_id, SQInteger goal)
@@ -149,16 +149,16 @@
 
 	const Town *t = ::Town::Get(town_id);
 
-	switch (t->goal[towneffect_id]) {
+	switch (t->Record().goal[towneffect_id]) {
 		case TOWN_GROWTH_WINTER:
-			if (TileHeight(t->xy) >= GetSnowLine() && t->cache.population > 90) return 1;
+			if (TileHeight(t->Record().xy) >= GetSnowLine() && t->Record().population > 90) return 1;
 			return 0;
 
 		case TOWN_GROWTH_DESERT:
-			if (GetTropicZone(t->xy) == TROPICZONE_DESERT && t->cache.population > 60) return 1;
+			if (GetTropicZone(t->Record().xy) == TROPICZONE_DESERT && t->Record().population > 60) return 1;
 			return 0;
 
-		default: return t->goal[towneffect_id];
+		default: return t->Record().goal[towneffect_id];
 	}
 }
 
@@ -192,9 +192,9 @@
 
 	const Town *t = ::Town::Get(town_id);
 
-	if (t->growth_rate == TOWN_GROWTH_RATE_NONE) return TOWN_GROWTH_NONE;
+	if (t->Record().growth_rate == TOWN_GROWTH_RATE_NONE) return TOWN_GROWTH_NONE;
 
-	return RoundDivSU(t->growth_rate + 1, ::Ticks::DAY_TICKS);
+	return RoundDivSU(t->Record().growth_rate + 1, ::Ticks::DAY_TICKS);
 }
 
 /* static */ SQInteger ScriptTown::GetDistanceManhattanToTile(TownID town_id, TileIndex tile)
@@ -212,7 +212,7 @@
 	if (!IsValidTown(town_id)) return false;
 
 	const Town *t = ::Town::Get(town_id);
-	return ((uint32_t)GetDistanceSquareToTile(town_id, tile) <= t->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]);
+	return ((uint32_t)GetDistanceSquareToTile(town_id, tile) <= t->Record().squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]);
 }
 
 /* static */ bool ScriptTown::HasStatue(TownID town_id)
@@ -220,28 +220,28 @@
 	EnforceCompanyModeValid(false);
 	if (!IsValidTown(town_id)) return false;
 
-	return ::Town::Get(town_id)->statues.Test(ScriptObject::GetCompany());
+	return ::Town::Get(town_id)->Record().statues.Test(ScriptObject::GetCompany());
 }
 
 /* static */ bool ScriptTown::IsCity(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return false;
 
-	return ::Town::Get(town_id)->larger_town;
+	return ::Town::Get(town_id)->Record().larger_town;
 }
 
 /* static */ SQInteger ScriptTown::GetRoadReworkDuration(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return -1;
 
-	return ::Town::Get(town_id)->road_build_months;
+	return ::Town::Get(town_id)->Record().road_build_months;
 }
 
 /* static */ SQInteger ScriptTown::GetFundBuildingsDuration(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return -1;
 
-	return ::Town::Get(town_id)->fund_buildings_months;
+	return ::Town::Get(town_id)->Record().fund_buildings_months;
 }
 
 /* static */ ScriptCompany::CompanyID ScriptTown::GetExclusiveRightsCompany(TownID town_id)
@@ -249,14 +249,14 @@
 	EnforceCompanyModeValid(ScriptCompany::COMPANY_INVALID);
 	if (!IsValidTown(town_id)) return ScriptCompany::COMPANY_INVALID;
 
-	return ScriptCompany::ToScriptCompanyID(::Town::Get(town_id)->exclusivity);
+	return ScriptCompany::ToScriptCompanyID(::Town::Get(town_id)->Record().exclusivity);
 }
 
 /* static */ SQInteger ScriptTown::GetExclusiveRightsDuration(TownID town_id)
 {
 	if (!IsValidTown(town_id)) return -1;
 
-	return ::Town::Get(town_id)->exclusive_counter;
+	return ::Town::Get(town_id)->Record().exclusive_counter;
 }
 
 /* static */ bool ScriptTown::IsActionAvailable(TownID town_id, TownAction town_action)
@@ -325,21 +325,21 @@
 
 	::CompanyID c = ScriptCompany::FromScriptCompanyID(company);
 	const Town *t = ::Town::Get(town_id);
-	if (!t->have_ratings.Test(c)) {
+	if (!t->Record().have_ratings.Test(c)) {
 		return TOWN_RATING_NONE;
-	} else if (t->ratings[c] <= RATING_APPALLING) {
+	} else if (t->Record().ratings[c] <= RATING_APPALLING) {
 		return TOWN_RATING_APPALLING;
-	} else if (t->ratings[c] <= RATING_VERYPOOR) {
+	} else if (t->Record().ratings[c] <= RATING_VERYPOOR) {
 		return TOWN_RATING_VERY_POOR;
-	} else if (t->ratings[c] <= RATING_POOR) {
+	} else if (t->Record().ratings[c] <= RATING_POOR) {
 		return TOWN_RATING_POOR;
-	} else if (t->ratings[c] <= RATING_MEDIOCRE) {
+	} else if (t->Record().ratings[c] <= RATING_MEDIOCRE) {
 		return TOWN_RATING_MEDIOCRE;
-	} else if (t->ratings[c] <= RATING_GOOD) {
+	} else if (t->Record().ratings[c] <= RATING_GOOD) {
 		return TOWN_RATING_GOOD;
-	} else if (t->ratings[c] <= RATING_VERYGOOD) {
+	} else if (t->Record().ratings[c] <= RATING_VERYGOOD) {
 		return TOWN_RATING_VERY_GOOD;
-	} else if (t->ratings[c] <= RATING_EXCELLENT) {
+	} else if (t->Record().ratings[c] <= RATING_EXCELLENT) {
 		return TOWN_RATING_EXCELLENT;
 	} else {
 		return TOWN_RATING_OUTSTANDING;
@@ -353,7 +353,7 @@
 	if (company == ScriptCompany::COMPANY_INVALID) return TOWN_RATING_INVALID;
 
 	const Town *t = ::Town::Get(town_id);
-	return t->ratings[ScriptCompany::FromScriptCompanyID(company)];
+	return t->Record().ratings[ScriptCompany::FromScriptCompanyID(company)];
 }
 
 /* static */ bool ScriptTown::ChangeRating(TownID town_id, ScriptCompany::CompanyID company, SQInteger delta)
@@ -365,8 +365,8 @@
 
 	::CompanyID c = ScriptCompany::FromScriptCompanyID(company);
 	const Town *t = ::Town::Get(town_id);
-	int16_t new_rating = Clamp(t->ratings[c] + delta, RATING_MINIMUM, RATING_MAXIMUM);
-	if (new_rating == t->ratings[c]) return false;
+	int16_t new_rating = Clamp(t->Record().ratings[c] + delta, RATING_MINIMUM, RATING_MAXIMUM);
+	if (new_rating == t->Record().ratings[c]) return false;
 
 	return ScriptObject::Command<CMD_TOWN_RATING>::Do(town_id, c, new_rating);
 }
@@ -377,7 +377,7 @@
 
 	const Town *t = ::Town::Get(town_id);
 	if (_settings_game.economy.station_noise_level) {
-		return t->MaxTownNoise() - t->noise_reached;
+		return t->MaxTownNoise() - t->Record().noise_reached;
 	}
 
 	int num = 0;
@@ -391,5 +391,5 @@
 {
 	if (!IsValidTown(town_id)) return ROAD_LAYOUT_INVALID;
 
-	return (ScriptTown::RoadLayout)((TownLayout)::Town::Get(town_id)->layout);
+	return (ScriptTown::RoadLayout)((TownLayout)::Town::Get(town_id)->Record().layout);
 }

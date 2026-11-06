@@ -115,42 +115,42 @@ bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const 
 static void SubsidyOfferedNews(uint16_t id) noexcept
 {
 	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_OFFERED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+	const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_OFFERED, cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id, _settings_game.difficulty.subsidy_duration);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->Record().src.GetNewsReference(), s->Record().dst.GetNewsReference());
 }
 static void SubsidyAwardedNews(uint16_t id) noexcept
 {
 	const Subsidy *s = Subsidy::Get(id);
-	std::string company_name = GetString(STR_COMPANY_NAME, s->awarded);
+	std::string company_name = GetString(STR_COMPANY_NAME, s->Record().awarded);
 
 	/* Add a news item */
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF + _settings_game.difficulty.subsidy_multiplier, std::move(company_name), cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+	const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF + _settings_game.difficulty.subsidy_multiplier, std::move(company_name), cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id, _settings_game.difficulty.subsidy_duration);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->Record().src.GetNewsReference(), s->Record().dst.GetNewsReference());
 }
 static void SubsidyOfferExpiredNews(uint16_t id) noexcept
 {
 	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+	const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->Record().src.GetNewsReference(), s->Record().dst.GetNewsReference());
 }
 static void SubsidyWithdrawnNews(uint16_t id) noexcept
 {
 	const Subsidy *s = Subsidy::Get(id);
-	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
-	EncodedString headline = GetEncodedString(STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
-	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+	const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE, cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->Record().src.GetNewsReference(), s->Record().dst.GetNewsReference());
 }
 const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 {
 	static const OpenTTDSubsidyServices services = {
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
 		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID<void *>, .next_industry = RustIndustryNextID,
-		.has_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: return Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(part); case SourceType::Industry: return Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(part); default: NOT_REACHED(); } },
-		.set_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->cache.part_of_subsidy.Set(part); return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->part_of_subsidy.Set(part); return; default: NOT_REACHED(); } },
-		.clear_source_flags = [](Source source) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->cache.part_of_subsidy = {}; return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->part_of_subsidy = {}; return; default: NOT_REACHED(); } },
+		.has_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: return Town::Get(source.ToTownID())->Record().part_of_subsidy.Test(part); case SourceType::Industry: return Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Test(part); default: NOT_REACHED(); } },
+		.set_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->Record().part_of_subsidy.Set(part); return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Set(part); return; default: NOT_REACHED(); } },
+		.clear_source_flags = [](Source source) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->Record().part_of_subsidy = {}; return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->Record().part_of_subsidy = {}; return; default: NOT_REACHED(); } },
 		.valid_source = [](Source source) noexcept { return source.type == SourceType::Town ? Town::IsValidID(source.ToTownID()) : source.type == SourceType::Industry && Industry::IsValidID(source.ToIndustryID()); },
 		.can_allocate = []() noexcept { return Subsidy::CanAllocateItem(); },
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
@@ -169,7 +169,7 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
 		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
 		.station = RustStationGet<const Station *>,
-		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
+		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->Record().part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
 	};
 	return services;
 }

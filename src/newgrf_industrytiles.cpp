@@ -68,7 +68,7 @@ IndustryTileResolverObject::IndustryTileResolverObject(IndustryGfx gfx, TileInde
 			CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
 	: SpecializedResolverObject<IndustryRandomTriggers>(GetIndTileGrffile(gfx), callback, callback_param1, callback_param2),
 	indtile_scope(*this, indus, tile),
-	ind_scope(*this, tile, indus, indus->type),
+	ind_scope(*this, tile, indus, indus->Record().type),
 	gfx(gfx)
 {
 	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx);
@@ -136,7 +136,7 @@ bool DrawNewIndustryTile(TileInfo *ti, Industry *i, IndustryGfx gfx, const Indus
 	uint8_t stage = GetIndustryConstructionStage(ti->tile);
 	auto processor = group->ProcessRegisters(object, &stage);
 	auto dts = processor.GetLayout();
-	IndustryDrawTileLayout(ti, dts, i->random_colour, stage);
+	IndustryDrawTileLayout(ti, dts, i->Record().random_colour, stage);
 	return true;
 }
 
@@ -244,7 +244,7 @@ OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept
 }
 
 IndustryTileScopeResolver::IndustryTileScopeResolver(ResolverObject &ro, Industry *industry, TileIndex tile)
-	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), 0, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), 0}
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->Record().town, tile.base(), 0, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), 0}
 {
 }
 ScopeResolver *IndustryTileResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)

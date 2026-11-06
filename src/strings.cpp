@@ -1630,13 +1630,13 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					if (_scan_for_gender_data) {
 						/* Gender is defined by the industry type.
 						 * STR_FORMAT_INDUSTRY_NAME may have the town first, so it would result in the gender of the town name */
-						FormatString(builder, GetStringPtr(GetIndustrySpec(i->type)->name), {}, next_substr_case_index);
+						FormatString(builder, GetStringPtr(GetIndustrySpec(i->Record().type)->name), {}, next_substr_case_index);
 					} else if (use_cache) { // Use cached version if first call
 						AutoRestoreBackup cache_backup(use_cache, false);
 						builder += i->GetCachedName();
 					} else {
 						/* First print the town name and the industry type name. */
-						auto tmp_params = MakeParameters(i->town->index, GetIndustrySpec(i->type)->name);
+						auto tmp_params = MakeParameters(i->Record().town->index, GetIndustrySpec(i->Record().type)->name);
 						FormatString(builder, GetStringPtr(STR_FORMAT_INDUSTRY_NAME), tmp_params, next_substr_case_index);
 					}
 					next_substr_case_index = 0;

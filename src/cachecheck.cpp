@@ -50,7 +50,7 @@ void CheckCaches()
 
 	uint i = 0;
 	for (Town *t : Town::Iterate()) {
-		if (old_town_caches[i] != t->cache) {
+		if (old_town_caches[i] != t->CopyTownCache()) {
 			Debug(desync, 2, "warning: town cache mismatch: town {}", t->index);
 		}
 		i++;

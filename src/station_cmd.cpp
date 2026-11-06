@@ -270,7 +270,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
 		const Town *town = OpenTTDBaseStationTown(static_cast<BaseStation *>(handle));
 		return {
-			town->exclusive_counter, town->exclusivity.base()
+			town->Record().exclusive_counter, town->Record().exclusivity.base()
 		};
 	},
 	.rating_counts = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDRatingCounts {
@@ -296,7 +296,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
 	},
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->owner);
+		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->Record().statues.Test(static_cast<BaseStation *>(handle)->owner);
 	},
 	.select_goods = []() noexcept -> bool {
 		return _settings_game.order.selectgoods;
@@ -1344,8 +1344,8 @@ static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 		case StationType::Bus:      str = STR_LAI_STATION_DESCRIPTION_BUS_STATION; break;
 		case StationType::Oilrig: {
 			const Industry *i = Station::GetByTile(tile)->industry;
-			const IndustrySpec *is = GetIndustrySpec(i->type);
-			td.owner[0] = i->owner;
+			const IndustrySpec *is = GetIndustrySpec(i->Record().type);
+			td.owner[0] = i->Record().owner;
 			str = is->name;
 			if (is->grf_prop.HasGrfFile()) td.grf = GetGRFConfig(is->grf_prop.grfid)->GetName();
 			break;

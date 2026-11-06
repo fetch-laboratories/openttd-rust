@@ -16,7 +16,7 @@
 struct Kdtree_TownXYFunc {
 	inline uint16_t operator()(TownID tid, int dim)
 	{
-		return (dim == 0) ? TileX(Town::Get(tid)->xy) : TileY(Town::Get(tid)->xy);
+		return (dim == 0) ? TileX(Town::Get(tid)->Record().xy) : TileY(Town::Get(tid)->Record().xy);
 	}
 };
 

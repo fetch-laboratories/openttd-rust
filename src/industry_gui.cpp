@@ -100,7 +100,7 @@ static void GetCargoSuffix(uint cargo, CargoSuffixType cst, const Industry *ind,
 	suffix.display = CSD_CARGO_AMOUNT;
 
 	if (indspec->callback_mask.Test(IndustryCallbackMask::CargoSuffix)) {
-		TileIndex t = (cst != CST_FUND) ? ind->location.tile : INVALID_TILE;
+		TileIndex t = (cst != CST_FUND) ? ind->Record().location.tile : INVALID_TILE;
 		std::array<int32_t, 16> regs100;
 		uint16_t callback = GetIndustryCallback(CBID_INDUSTRY_CARGO_SUFFIX, 0, (cst << 8) | cargo, const_cast<Industry *>(ind), ind_type, t, regs100);
 		if (callback == CALLBACK_FAILED) return;
@@ -773,7 +773,7 @@ static void UpdateIndustryProduction(Industry *i);
 
 static inline bool IsProductionAlterable(const Industry *i)
 {
-	const IndustrySpec *is = GetIndustrySpec(i->type);
+	const IndustrySpec *is = GetIndustrySpec(i->Record().type);
 	bool has_prod = std::any_of(std::begin(is->production_rate), std::end(is->production_rate), [](auto rate) { return rate != 0; });
 	return ((_game_mode == GM_EDITOR || _cheats.setup_prod.value) &&
 			(has_prod || IsRawIndustry(is)) &&
@@ -814,7 +814,7 @@ public:
 
 		this->InitNested(window_number);
 		NWidgetViewport *nvp = this->GetWidget<NWidgetViewport>(WID_IV_VIEWPORT);
-		nvp->InitializeViewport(this, Industry::Get(window_number)->location.GetCenterTile(), ScaleZoomGUI(ZoomLevel::Industry));
+		nvp->InitializeViewport(this, Industry::Get(window_number)->Record().location.GetCenterTile(), ScaleZoomGUI(ZoomLevel::Industry));
 
 		const Industry *i = Industry::Get(window_number);
 		if (!i->IsCargoProduced() && !i->IsCargoAccepted()) this->DisableWidget(WID_IV_GRAPH);
@@ -879,7 +879,7 @@ public:
 	{
 		bool rtl = _current_text_dir == TD_RTL;
 		Industry *i = Industry::Get(this->window_number);
-		const IndustrySpec *ind = GetIndustrySpec(i->type);
+		const IndustrySpec *ind = GetIndustrySpec(i->Record().type);
 		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
 		bool first = true;
 		bool has_accept = false;
@@ -887,7 +887,7 @@ public:
 		/* Use all the available space past the rect, so that we can enlarge the window if needed. */
 		ir.bottom = INT_MAX;
 
-		if (i->prod_level == PRODLEVEL_CLOSURE) {
+		if (i->Record().prod_level == PRODLEVEL_CLOSURE) {
 			DrawString(ir, STR_INDUSTRY_VIEW_INDUSTRY_ANNOUNCED_CLOSURE);
 			ir.top += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_wide;
 		}
@@ -907,7 +907,7 @@ public:
 			DrawCargoIcon(ir, a.cargo);
 
 			CargoSuffix suffix;
-			GetCargoSuffix(CARGOSUFFIX_IN, CST_VIEW, i, i->type, ind, a.cargo, &a - i->accepted.data(), suffix);
+			GetCargoSuffix(CARGOSUFFIX_IN, CST_VIEW, i, i->Record().type, ind, a.cargo, &a - i->accepted.data(), suffix);
 			/* if the industry is not stockpiling then don't show amount in the acceptance display. */
 			if (!stockpiling && suffix.display == CSD_CARGO_AMOUNT_TEXT) suffix.display = CSD_CARGO_TEXT;
 			if (!stockpiling && suffix.display == CSD_CARGO_AMOUNT) suffix.display = CSD_CARGO;
@@ -933,7 +933,7 @@ public:
 			DrawCargoIcon(ir, p.cargo);
 
 			CargoSuffix suffix;
-			GetCargoSuffix(CARGOSUFFIX_OUT, CST_VIEW, i, i->type, ind, p.cargo, &p - i->produced.data(), suffix);
+			GetCargoSuffix(CARGOSUFFIX_OUT, CST_VIEW, i, i->Record().type, ind, p.cargo, &p - i->produced.data(), suffix);
 
 			DrawString(ir.Indent(label_indent + (this->editable == EA_RATE ? SETTING_BUTTON_WIDTH + WidgetDimensions::scaled.hsep_normal : 0), rtl).Translate(0, text_y_offset),
 				GetString(STR_INDUSTRY_VIEW_TRANSPORTED, p.cargo, p.history[LAST_MONTH].production, suffix.text, ToPercent8(p.history[LAST_MONTH].PctTransported())));
@@ -953,16 +953,16 @@ public:
 			ir.top += WidgetDimensions::scaled.vsep_wide;
 			this->production_offset_y = ir.top;
 			DrawString(ir.Indent(label_indent + SETTING_BUTTON_WIDTH + WidgetDimensions::scaled.hsep_normal, rtl).Translate(0, text_y_offset),
-					GetString(STR_INDUSTRY_VIEW_PRODUCTION_LEVEL, RoundDivSU(i->prod_level * 100, PRODLEVEL_DEFAULT)));
+					GetString(STR_INDUSTRY_VIEW_PRODUCTION_LEVEL, RoundDivSU(i->Record().prod_level * 100, PRODLEVEL_DEFAULT)));
 			DrawArrowButtons(ir.Indent(label_indent, rtl).WithWidth(SETTING_BUTTON_WIDTH, rtl).left, ir.top + button_y_offset, COLOUR_YELLOW, (this->clicked_line == IL_MULTIPLIER) ? this->clicked_button : 0,
-					i->prod_level > PRODLEVEL_MINIMUM, i->prod_level < PRODLEVEL_MAXIMUM);
+					i->Record().prod_level > PRODLEVEL_MINIMUM, i->Record().prod_level < PRODLEVEL_MAXIMUM);
 			ir.top += line_height;
 		}
 
 		/* Get the extra message for the GUI */
 		if (ind->callback_mask.Test(IndustryCallbackMask::WindowMoreText)) {
 			std::array<int32_t, 16> regs100;
-			uint16_t callback_res = GetIndustryCallback(CBID_INDUSTRY_WINDOW_MORE_TEXT, 0, 0, i, i->type, i->location.tile, regs100);
+			uint16_t callback_res = GetIndustryCallback(CBID_INDUSTRY_WINDOW_MORE_TEXT, 0, 0, i, i->Record().type, i->Record().location.tile, regs100);
 			if (callback_res != CALLBACK_FAILED && callback_res != 0x400) {
 				std::string str;
 				if (callback_res == 0x40F) {
@@ -1039,11 +1039,11 @@ public:
 					switch (this->editable) {
 						case EA_MULTIPLIER:
 							if (decrease) {
-								if (i->prod_level <= PRODLEVEL_MINIMUM) return;
-								i->prod_level = static_cast<uint8_t>(std::max<uint>(i->prod_level / 2, PRODLEVEL_MINIMUM));
+								if (i->Record().prod_level <= PRODLEVEL_MINIMUM) return;
+								i->Record().prod_level = static_cast<uint8_t>(std::max<uint>(i->Record().prod_level / 2, PRODLEVEL_MINIMUM));
 							} else {
-								if (i->prod_level >= PRODLEVEL_MAXIMUM) return;
-								i->prod_level = static_cast<uint8_t>(std::min<uint>(i->prod_level * 2, PRODLEVEL_MAXIMUM));
+								if (i->Record().prod_level >= PRODLEVEL_MAXIMUM) return;
+								i->Record().prod_level = static_cast<uint8_t>(std::min<uint>(i->Record().prod_level * 2, PRODLEVEL_MAXIMUM));
 							}
 							break;
 
@@ -1072,7 +1072,7 @@ public:
 					this->editbox_line = line;
 					switch (this->editable) {
 						case EA_MULTIPLIER:
-							ShowQueryString(GetString(STR_JUST_INT, RoundDivSU(i->prod_level * 100, PRODLEVEL_DEFAULT)), STR_CONFIG_GAME_PRODUCTION_LEVEL, 10, this, CS_ALPHANUMERAL, {});
+							ShowQueryString(GetString(STR_JUST_INT, RoundDivSU(i->Record().prod_level * 100, PRODLEVEL_DEFAULT)), STR_CONFIG_GAME_PRODUCTION_LEVEL, 10, this, CS_ALPHANUMERAL, {});
 							break;
 
 						case EA_RATE:
@@ -1088,16 +1088,16 @@ public:
 			case WID_IV_GOTO: {
 				Industry *i = Industry::Get(this->window_number);
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow(i->location.GetCenterTile());
+					ShowExtraViewportWindow(i->Record().location.GetCenterTile());
 				} else {
-					ScrollMainWindowToTile(i->location.GetCenterTile());
+					ScrollMainWindowToTile(i->Record().location.GetCenterTile());
 				}
 				break;
 			}
 
 			case WID_IV_DISPLAY: {
 				Industry *i = Industry::Get(this->window_number);
-				ShowIndustryCargoesWindow(i->type);
+				ShowIndustryCargoesWindow(i->Record().type);
 				break;
 			}
 
@@ -1120,7 +1120,7 @@ public:
 			NWidgetViewport *nvp = this->GetWidget<NWidgetViewport>(WID_IV_VIEWPORT);
 			nvp->UpdateViewportCoordinates(this);
 
-			ScrollWindowToTile(Industry::Get(this->window_number)->location.GetCenterTile(), this, true); // Re-center viewport.
+			ScrollWindowToTile(Industry::Get(this->window_number)->Record().location.GetCenterTile(), this, true); // Re-center viewport.
 		}
 	}
 
@@ -1143,7 +1143,7 @@ public:
 			case IL_NONE: NOT_REACHED();
 
 			case IL_MULTIPLIER:
-				i->prod_level = ClampU(RoundDivSU(*value * PRODLEVEL_DEFAULT, 100), PRODLEVEL_MINIMUM, PRODLEVEL_MAXIMUM);
+				i->Record().prod_level = ClampU(RoundDivSU(*value * PRODLEVEL_DEFAULT, 100), PRODLEVEL_MINIMUM, PRODLEVEL_MAXIMUM);
 				break;
 
 			default:
@@ -1164,7 +1164,7 @@ public:
 		if (!gui_scope) return;
 		const Industry *i = Industry::Get(this->window_number);
 		if (IsProductionAlterable(i)) {
-			const IndustrySpec *ind = GetIndustrySpec(i->type);
+			const IndustrySpec *ind = GetIndustrySpec(i->Record().type);
 			this->editable = UsesOriginalEconomy(ind) ? EA_MULTIPLIER : EA_RATE;
 		} else {
 			this->editable = EA_NONE;
@@ -1184,7 +1184,7 @@ public:
 
 static void UpdateIndustryProduction(Industry *i)
 {
-	const IndustrySpec *indspec = GetIndustrySpec(i->type);
+	const IndustrySpec *indspec = GetIndustrySpec(i->Record().type);
 	if (UsesOriginalEconomy(indspec)) i->RecomputeProductionMultipliers();
 
 	for (auto &p : i->produced) {
@@ -1511,9 +1511,9 @@ protected:
 	static bool IndustryTypeSorter(const Industry * const &a, const Industry * const &b, const CargoType &filter)
 	{
 		int it_a = 0;
-		while (it_a != NUM_INDUSTRYTYPES && a->type != _sorted_industry_types[it_a]) it_a++;
+		while (it_a != NUM_INDUSTRYTYPES && a->Record().type != _sorted_industry_types[it_a]) it_a++;
 		int it_b = 0;
-		while (it_b != NUM_INDUSTRYTYPES && b->type != _sorted_industry_types[it_b]) it_b++;
+		while (it_b != NUM_INDUSTRYTYPES && b->Record().type != _sorted_industry_types[it_b]) it_b++;
 		int r = it_a - it_b;
 		return (r == 0) ? IndustryNameSorter(a, b, filter) : r < 0;
 	}
@@ -1565,7 +1565,7 @@ protected:
 	 */
 	std::string GetIndustryString(const Industry *i) const
 	{
-		const IndustrySpec *indsp = GetIndustrySpec(i->type);
+		const IndustrySpec *indsp = GetIndustrySpec(i->Record().type);
 
 		/* Get industry productions (CargoType, production, suffix, transported) */
 		struct CargoInfo {
@@ -1581,7 +1581,7 @@ protected:
 		for (auto itp = std::begin(i->produced); itp != std::end(i->produced); ++itp) {
 			if (!IsValidCargoType(itp->cargo)) continue;
 			CargoSuffix cargo_suffix;
-			GetCargoSuffix(CARGOSUFFIX_OUT, CST_DIR, i, i->type, indsp, itp->cargo, itp - std::begin(i->produced), cargo_suffix);
+			GetCargoSuffix(CARGOSUFFIX_OUT, CST_DIR, i, i->Record().type, indsp, itp->cargo, itp - std::begin(i->produced), cargo_suffix);
 			cargos.emplace_back(itp->cargo, itp->history[LAST_MONTH].production, ToPercent8(itp->history[LAST_MONTH].PctTransported()), std::move(cargo_suffix.text));
 		}
 
@@ -1804,9 +1804,9 @@ public:
 				auto it = this->vscroll->GetScrolledItemFromWidget(this->industries, pt.y, this, WID_ID_INDUSTRY_LIST, WidgetDimensions::scaled.framerect.top);
 				if (it != this->industries.end()) {
 					if (_ctrl_pressed) {
-						ShowExtraViewportWindow((*it)->location.tile);
+						ShowExtraViewportWindow((*it)->Record().location.tile);
 					} else {
-						ScrollMainWindowToTile((*it)->location.tile);
+						ScrollMainWindowToTile((*it)->Record().location.tile);
 					}
 				}
 				break;

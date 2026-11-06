@@ -273,24 +273,24 @@ static void Co_clients_to_spectators(uint8_t id) noexcept { NetworkClientsToSpec
 static uint32_t Co_town_next(uint32_t from, uint8_t old, OpenTTDCompanyTownRights *out) noexcept
 {
 	for (const Town *t : Town::Iterate(from)) {
-		*out = {t->ratings[CompanyID(old)], t->have_ratings.base(), t->exclusive_counter, t->exclusivity.base()};
+		*out = {t->Record().ratings[CompanyID(old)], t->Record().have_ratings.base(), t->Record().exclusive_counter, t->Record().exclusivity.base()};
 		return t->index.base();
 	}
 	return UINT32_MAX;
 }
-static int16_t Co_town_rating(uint32_t id, uint8_t owner) noexcept { return Town::Get(id)->ratings[CompanyID(owner)]; }
+static int16_t Co_town_rating(uint32_t id, uint8_t owner) noexcept { return Town::Get(id)->Record().ratings[CompanyID(owner)]; }
 static void Co_set_town_rating(uint32_t id, uint8_t owner, int16_t rating, bool have) noexcept
 {
 	Town *t = Town::Get(id);
-	if (have) t->have_ratings.Set(CompanyID(owner));
-	t->ratings[CompanyID(owner)] = rating;
-	if (!have) t->have_ratings.Reset(CompanyID(owner));
+	if (have) t->Record().have_ratings.Set(CompanyID(owner));
+	t->Record().ratings[CompanyID(owner)] = rating;
+	if (!have) t->Record().have_ratings.Reset(CompanyID(owner));
 }
 static void Co_set_town_exclusivity(uint32_t id, uint8_t owner, uint8_t counter) noexcept
 {
 	Town *t = Town::Get(id);
-	t->exclusive_counter = counter;
-	t->exclusivity = CompanyID(owner);
+	t->Record().exclusive_counter = counter;
+	t->Record().exclusivity = CompanyID(owner);
 }
 static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *type) noexcept
 {

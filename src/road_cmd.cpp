@@ -1027,7 +1027,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.town_valid = [](uint16_t town) noexcept { return Town::IsValidID(TownID(town)); },
 		.town_edge = [](const OpenTTDTownHandle *handle) noexcept -> OpenTTDRoadTownEdge {
 			const Town *town = reinterpret_cast<const Town *>(handle);
-			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
+			return {.tile = town->Record().xy.base(), .radius = town->Record().squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
 		},
 		.set_town = RustSetTownIndex,
 

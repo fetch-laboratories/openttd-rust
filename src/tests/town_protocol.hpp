@@ -198,7 +198,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 0);
 	/* Source quirks: first-road execute failure still returns success; a failed
 	 * expansion tries 25 times; reentry mutates the canonical owner's flags. */
-	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
+	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(nullptr), openttd_rust_town_destroy);
 	auto regions = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>(openttd_rust_water_new(64, 64), openttd_rust_water_destroy);
 	/* Preserve the process-wide game counters around the isolated fixture. */
 	const auto global_ids = openttd_rust_town_global_id_counts();

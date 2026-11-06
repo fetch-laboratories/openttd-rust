@@ -115,12 +115,12 @@ struct GoalListWindow : public Window {
 
 			case GT_INDUSTRY:
 				if (!Industry::IsValidID(s->dst)) return;
-				xy = Industry::Get(s->dst)->location.tile;
+				xy = Industry::Get(s->dst)->Record().location.tile;
 				break;
 
 			case GT_TOWN:
 				if (!Town::IsValidID(s->dst)) return;
-				xy = Town::Get(s->dst)->xy;
+				xy = Town::Get(s->dst)->Record().xy;
 				break;
 
 			case GT_STORY_PAGE: {

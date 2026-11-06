@@ -150,9 +150,9 @@ static void FixOldTowns()
 {
 	/* Convert town-names if needed */
 	for (Town *town : Town::Iterate()) {
-		if (IsInsideMM(town->townnametype, 0x20C1, 0x20C3)) {
-			town->townnametype = SPECSTR_TOWNNAME_START + _settings_game.game_creation.town_name;
-			town->townnameparts = RemapOldTownName(town->townnameparts, _settings_game.game_creation.town_name);
+		if (IsInsideMM(town->Record().townnametype, 0x20C1, 0x20C3)) {
+			town->Record().townnametype = SPECSTR_TOWNNAME_START + _settings_game.game_creation.town_name;
+			town->Record().townnameparts = RemapOldTownName(town->Record().townnameparts, _settings_game.game_creation.town_name);
 		}
 	}
 }
@@ -588,31 +588,31 @@ static std::array<Town::SuppliedHistory, 2> _old_pass_supplied{};
 static std::array<Town::SuppliedHistory, 2> _old_mail_supplied{};
 
 static const OldChunks town_chunk[] = {
-	OCL_SVAR(   OC_TILE, Town, xy ),
+	OCL_SVAR(   OC_TILE, Town, Record().xy ),
 	OCL_NULL( 2 ),         ///< population,        no longer in use
-	OCL_SVAR( OC_UINT16, Town, townnametype ),
-	OCL_SVAR( OC_UINT32, Town, townnameparts ),
-	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, grow_counter ),
+	OCL_SVAR( OC_UINT16, Town, Record().townnametype ),
+	OCL_SVAR( OC_UINT32, Town, Record().townnameparts ),
+	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, Record().grow_counter ),
 	OCL_NULL( 1 ),         ///< sort_index,        no longer in use
 	OCL_NULL( 4 ),         ///< sign-coordinates,  no longer in use
 	OCL_NULL( 2 ),         ///< namewidth,         no longer in use
-	OCL_SVAR( OC_FILE_U16 |  OC_VAR_U8, Town, flags ),
+	OCL_SVAR( OC_FILE_U16 |  OC_VAR_U8, Town, Record().flags ),
 	OCL_NULL( 10 ),        ///< radius,            no longer in use
 
-	OCL_SVAR( OC_INT16, Town, ratings[0] ),
-	OCL_SVAR( OC_INT16, Town, ratings[1] ),
-	OCL_SVAR( OC_INT16, Town, ratings[2] ),
-	OCL_SVAR( OC_INT16, Town, ratings[3] ),
-	OCL_SVAR( OC_INT16, Town, ratings[4] ),
-	OCL_SVAR( OC_INT16, Town, ratings[5] ),
-	OCL_SVAR( OC_INT16, Town, ratings[6] ),
-	OCL_SVAR( OC_INT16, Town, ratings[7] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[0] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[1] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[2] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[3] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[4] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[5] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[6] ),
+	OCL_SVAR( OC_INT16, Town, Record().ratings[7] ),
 
-	OCL_SVAR( OC_FILE_U32 | OC_VAR_U16, Town, have_ratings ),
-	OCL_SVAR( OC_FILE_U32 | OC_VAR_U16, Town, statues ),
+	OCL_SVAR( OC_FILE_U32 | OC_VAR_U16, Town, Record().have_ratings ),
+	OCL_SVAR( OC_FILE_U32 | OC_VAR_U16, Town, Record().statues ),
 	OCL_NULL( 2 ),         ///< num_houses,        no longer in use
-	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, time_until_rebuild ),
-	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, growth_rate ),
+	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, Record().time_until_rebuild ),
+	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Town, Record().growth_rate ),
 
 	/* Slots 0 and 2 are passengers and mail respectively for old saves. */
 	OCL_VAR( OC_FILE_U16 | OC_VAR_U32, 1, &_old_pass_supplied[THIS_MONTH].production ),
@@ -626,12 +626,12 @@ static const OldChunks town_chunk[] = {
 
 	OCL_NULL( 2 ),         ///< pct_pass_transported / pct_mail_transported, now computed on the fly
 
-	OCL_SVAR( OC_TTD | OC_UINT16, Town, received[TAE_FOOD].new_act ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Town, received[TAE_WATER].new_act ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Town, received[TAE_FOOD].old_act ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Town, received[TAE_WATER].old_act ),
-	OCL_SVAR(  OC_UINT8, Town, road_build_months ),
-	OCL_SVAR(  OC_UINT8, Town, fund_buildings_months ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Town, Record().received[TAE_FOOD].new_act ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Town, Record().received[TAE_WATER].new_act ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Town, Record().received[TAE_FOOD].old_act ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Town, Record().received[TAE_WATER].old_act ),
+	OCL_SVAR(  OC_UINT8, Town, Record().road_build_months ),
+	OCL_SVAR(  OC_UINT8, Town, Record().fund_buildings_months ),
 
 	OCL_CNULL( OC_TTD, 8 ),         ///< some junk at the end of the record
 
@@ -645,10 +645,10 @@ static bool LoadOldTown(LoadgameState &ls, int num)
 		if (!LoadChunk(ls, t, town_chunk)) return false;
 	}
 
-	if (t->xy != 0) {
+	if (t->Record().xy != 0) {
 		if (_savegame_type == SGT_TTO) {
 			/* 0x10B6 is auto-generated name, others are custom names */
-			t->townnametype = t->townnametype == 0x10B6 ? 0x20C1 : t->townnametype + 0x2A00;
+			t->Record().townnametype = t->Record().townnametype == 0x10B6 ? 0x20C1 : t->Record().townnametype + 0x2A00;
 		}
 		/* Passengers and mail were always treated as slots 0 and 2 in older saves. */
 		auto &pass = t->supplied.emplace_back(0);
@@ -839,10 +839,10 @@ static std::array<Industry::AcceptedCargo, INDUSTRY_ORIGINAL_NUM_INPUTS> _old_ac
 static std::array<Industry::ProducedCargo, INDUSTRY_ORIGINAL_NUM_OUTPUTS> _old_produced{};
 
 static const OldChunks industry_chunk[] = {
-	OCL_SVAR(   OC_TILE, Industry, location.tile ),
+	OCL_SVAR(   OC_TILE, Industry, Record().location.tile ),
 	OCL_VAR ( OC_UINT32,   1, &_old_town_index ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Industry, location.w ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Industry, location.h ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Industry, Record().location.w ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Industry, Record().location.h ),
 	OCL_NULL( 2 ),  ///< used to be industry's produced_cargo
 
 	OCL_VAR( OC_TTD | OC_UINT16, 1, &_old_produced[0].waiting ),
@@ -855,7 +855,7 @@ static const OldChunks industry_chunk[] = {
 
 	OCL_NULL( 3 ),  ///< used to be industry's accepts_cargo
 
-	OCL_SVAR(  OC_UINT8, Industry, prod_level ),
+	OCL_SVAR(  OC_UINT8, Industry, Record().prod_level ),
 
 	OCL_VAR( OC_UINT16, 1, &_old_produced[0].history[THIS_MONTH].production ),
 	OCL_VAR( OC_UINT16, 1, &_old_produced[1].history[THIS_MONTH].production ),
@@ -869,13 +869,13 @@ static const OldChunks industry_chunk[] = {
 	OCL_VAR( OC_UINT16, 1, &_old_produced[0].history[LAST_MONTH].transported ),
 	OCL_VAR( OC_UINT16, 1, &_old_produced[1].history[LAST_MONTH].transported ),
 
-	OCL_SVAR(  OC_UINT8, Industry, type ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Industry, counter ),
-	OCL_SVAR(  OC_UINT8, Industry, owner ),
-	OCL_SVAR(  OC_UINT8, Industry, random_colour ),
-	OCL_SVAR( OC_TTD | OC_FILE_U8 | OC_VAR_I32, Industry, last_prod_year ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Industry, counter ),
-	OCL_SVAR( OC_TTD | OC_UINT8, Industry, was_cargo_delivered ),
+	OCL_SVAR(  OC_UINT8, Industry, Record().type ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Industry, Record().counter ),
+	OCL_SVAR(  OC_UINT8, Industry, Record().owner ),
+	OCL_SVAR(  OC_UINT8, Industry, Record().random_colour ),
+	OCL_SVAR( OC_TTD | OC_FILE_U8 | OC_VAR_I32, Industry, Record().last_prod_year ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Industry, Record().counter ),
+	OCL_SVAR( OC_TTD | OC_UINT8, Industry, Record().was_cargo_delivered ),
 
 	OCL_CNULL( OC_TTD, 9 ), ///< Random junk at the end of this chunk
 
@@ -887,24 +887,24 @@ static bool LoadOldIndustry(LoadgameState &ls, int num)
 	Industry *i = new (IndustryID(num)) Industry();
 	if (!LoadChunk(ls, i, industry_chunk)) return false;
 
-	if (i->location.tile != 0) {
+	if (i->Record().location.tile != 0) {
 		/* Copy data from old fixed arrays to industry. */
 		std::move(std::begin(_old_accepted), std::end(_old_accepted), std::back_inserter(i->accepted));
 		std::copy(std::begin(_old_produced), std::end(_old_produced), std::back_inserter(i->produced));
 
-		i->town = RemapTown(i->location.tile);
+		i->Record().town = RemapTown(i->Record().location.tile);
 
 		if (_savegame_type == SGT_TTO) {
-			if (i->type > 0x06) i->type++; // Printing Works were added
-			if (i->type == 0x0A) i->type = 0x12; // Iron Ore Mine has different ID
+			if (i->Record().type > 0x06) i->Record().type++; // Printing Works were added
+			if (i->Record().type == 0x0A) i->Record().type = 0x12; // Iron Ore Mine has different ID
 
 			TimerGameEconomy::YearMonthDay ymd = TimerGameEconomy::ConvertDateToYMD(TimerGameEconomy::date);
-			i->last_prod_year = ymd.year;
+			i->Record().last_prod_year = ymd.year;
 
-			i->random_colour = RemapTTOColour(i->random_colour);
+			i->Record().random_colour = RemapTTOColour(i->Record().random_colour);
 		}
 
-		Industry::industries[i->type].insert(i->index);
+		Industry::industries[i->Record().type].insert(i->index);
 	} else {
 		delete i;
 	}
@@ -1513,10 +1513,10 @@ static bool LoadOldEngineName(LoadgameState &ls, int num)
 }
 
 static const OldChunks subsidy_chunk[] = {
-	OCL_SVAR(  OC_UINT8, Subsidy, cargo_type ),
-	OCL_SVAR(  OC_UINT8, Subsidy, remaining ),
-	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Subsidy, src ),
-	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Subsidy, dst ),
+	OCL_SVAR(  OC_UINT8, Subsidy, Record().cargo_type ),
+	OCL_SVAR(  OC_UINT8, Subsidy, Record().remaining ),
+	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Subsidy, Record().src ),
+	OCL_SVAR(  OC_FILE_U8 | OC_VAR_U16, Subsidy, Record().dst ),
 
 	OCL_END()
 };
@@ -1525,7 +1525,7 @@ static bool LoadOldSubsidy(LoadgameState &ls, int num)
 {
 	Subsidy *s = new (SubsidyID(num)) Subsidy();
 	bool ret = LoadChunk(ls, s, subsidy_chunk);
-	if (!IsValidCargoType(s->cargo_type)) delete s;
+	if (!IsValidCargoType(s->Record().cargo_type)) delete s;
 	return ret;
 }
 

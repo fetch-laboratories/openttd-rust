@@ -129,7 +129,7 @@ public:
 	void Save([[maybe_unused]] Town *t) const override
 	{
 		SlSetStructListLength(NUM_TAE);
-		for (auto &received : t->received) {
+		for (auto &received : t->Record().received) {
 			SlObject(&received, this->GetDescription());
 		}
 	}
@@ -138,7 +138,7 @@ public:
 	{
 		size_t length = IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH) ? static_cast<size_t>(TAE_END) : SlGetStructListLength(TAE_END);
 		for (size_t i = 0; i < length; i++) {
-			SlObject(&t->received[i], this->GetLoadDescription());
+			SlObject(&t->Record().received[i], this->GetLoadDescription());
 		}
 	}
 };
@@ -191,24 +191,24 @@ struct TownNameSaveScope {
 };
 
 static const SaveLoad _town_desc[] = {
-	SLE_CONDVAR(Town, xy,                    SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
-	SLE_CONDVAR(Town, xy,                    SLE_UINT32,                 SLV_6, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().xy, "xy",                    SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
+	SLE_CONDVARNAME(Town, Record().xy, "xy",                    SLE_UINT32,                 SLV_6, SL_MAX_VERSION),
 
-	SLE_CONDVAR(Town, townnamegrfid,         SLE_UINT32, SLV_66, SL_MAX_VERSION),
-	    SLE_VAR(Town, townnametype,          SLE_UINT16),
-	    SLE_VAR(Town, townnameparts,         SLE_UINT32),
+	SLE_CONDVARNAME(Town, Record().townnamegrfid, "townnamegrfid",         SLE_UINT32, SLV_66, SL_MAX_VERSION),
+	    SLE_VARNAME(Town, Record().townnametype, "townnametype",          SLE_UINT16),
+	    SLE_VARNAME(Town, Record().townnameparts, "townnameparts",         SLE_UINT32),
 	SLEG_CONDSSTR("name", TownNameSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION),
 
-	    SLE_VAR(Town, flags,                 SLE_UINT8),
-	SLE_CONDVAR(Town, statues,               SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_104),
-	SLE_CONDVAR(Town, statues,               SLE_UINT16,               SLV_104, SL_MAX_VERSION),
+	    SLE_VARNAME(Town, Record().flags, "flags",                 SLE_UINT8),
+	SLE_CONDVARNAME(Town, Record().statues, "statues",               SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_104),
+	SLE_CONDVARNAME(Town, Record().statues, "statues",               SLE_UINT16,               SLV_104, SL_MAX_VERSION),
 
-	SLE_CONDVAR(Town, have_ratings,          SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_104),
-	SLE_CONDVAR(Town, have_ratings,          SLE_UINT16,               SLV_104, SL_MAX_VERSION),
-	SLE_CONDARR(Town, ratings,               SLE_INT16, 8,               SL_MIN_VERSION, SLV_104),
-	SLE_CONDARR(Town, ratings,               SLE_INT16, MAX_COMPANIES, SLV_104, SL_MAX_VERSION),
-	SLE_CONDARR(Town, unwanted,              SLE_INT8,  8,               SLV_4, SLV_104),
-	SLE_CONDARR(Town, unwanted,              SLE_INT8,  MAX_COMPANIES, SLV_104, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().have_ratings, "have_ratings",          SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_104),
+	SLE_CONDVARNAME(Town, Record().have_ratings, "have_ratings",          SLE_UINT16,               SLV_104, SL_MAX_VERSION),
+	SLE_CONDARRNAME(Town, Record().ratings, "ratings",               SLE_INT16, 8,               SL_MIN_VERSION, SLV_104),
+	SLE_CONDARRNAME(Town, Record().ratings, "ratings",               SLE_INT16, MAX_COMPANIES, SLV_104, SL_MAX_VERSION),
+	SLE_CONDARRNAME(Town, Record().unwanted, "unwanted",              SLE_INT8,  8,               SLV_4, SLV_104),
+	SLE_CONDARRNAME(Town, Record().unwanted, "unwanted",              SLE_INT8,  MAX_COMPANIES, SLV_104, SL_MAX_VERSION),
 
 	/* Slots 0 and 2 are passengers and mail respectively for old saves. */
 	SLEG_CONDVAR("supplied[CT_PASSENGERS].old_max", _old_pass_supplied[LAST_MONTH].production, SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_9),
@@ -228,32 +228,32 @@ static const SaveLoad _town_desc[] = {
 	SLEG_CONDVAR(      "supplied[CT_MAIL].new_act", _old_mail_supplied[THIS_MONTH].transported, SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_9),
 	SLEG_CONDVAR(      "supplied[CT_MAIL].new_act", _old_mail_supplied[THIS_MONTH].transported, SLE_UINT32,                 SLV_9, SLV_165),
 
-	SLE_CONDVARNAME(Town, received[TAE_FOOD].old_act,  "received[TE_FOOD].old_act",  SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
-	SLE_CONDVARNAME(Town, received[TAE_WATER].old_act, "received[TE_WATER].old_act", SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
-	SLE_CONDVARNAME(Town, received[TAE_FOOD].new_act,  "received[TE_FOOD].new_act",  SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
-	SLE_CONDVARNAME(Town, received[TAE_WATER].new_act, "received[TE_WATER].new_act", SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
+	SLE_CONDVARNAME(Town, Record().received[TAE_FOOD].old_act,  "received[TE_FOOD].old_act",  SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
+	SLE_CONDVARNAME(Town, Record().received[TAE_WATER].old_act, "received[TE_WATER].old_act", SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
+	SLE_CONDVARNAME(Town, Record().received[TAE_FOOD].new_act,  "received[TE_FOOD].new_act",  SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
+	SLE_CONDVARNAME(Town, Record().received[TAE_WATER].new_act, "received[TE_WATER].new_act", SLE_UINT16,                 SL_MIN_VERSION, SLV_165),
 
-	SLE_CONDARR(Town, goal, SLE_UINT32, NUM_TAE, SLV_165, SL_MAX_VERSION),
+	SLE_CONDARRNAME(Town, Record().goal, "goal", SLE_UINT32, NUM_TAE, SLV_165, SL_MAX_VERSION),
 
 	SLEG_CONDSSTR("text", TownTextSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_168, SL_MAX_VERSION),
 
-	SLE_CONDVAR(Town, time_until_rebuild,    SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
-	SLE_CONDVAR(Town, time_until_rebuild,    SLE_UINT16,                SLV_54, SL_MAX_VERSION),
-	SLE_CONDVAR(Town, grow_counter,          SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
-	SLE_CONDVAR(Town, grow_counter,          SLE_UINT16,                SLV_54, SL_MAX_VERSION),
-	SLE_CONDVAR(Town, growth_rate,           SLE_FILE_U8 | SLE_VAR_I16,  SL_MIN_VERSION, SLV_54),
-	SLE_CONDVAR(Town, growth_rate,           SLE_FILE_I16 | SLE_VAR_U16, SLV_54, SLV_165),
-	SLE_CONDVAR(Town, growth_rate,           SLE_UINT16,                 SLV_165, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().time_until_rebuild, "time_until_rebuild",    SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
+	SLE_CONDVARNAME(Town, Record().time_until_rebuild, "time_until_rebuild",    SLE_UINT16,                SLV_54, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().grow_counter, "grow_counter",          SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
+	SLE_CONDVARNAME(Town, Record().grow_counter, "grow_counter",          SLE_UINT16,                SLV_54, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().growth_rate, "growth_rate",           SLE_FILE_U8 | SLE_VAR_I16,  SL_MIN_VERSION, SLV_54),
+	SLE_CONDVARNAME(Town, Record().growth_rate, "growth_rate",           SLE_FILE_I16 | SLE_VAR_U16, SLV_54, SLV_165),
+	SLE_CONDVARNAME(Town, Record().growth_rate, "growth_rate",           SLE_UINT16,                 SLV_165, SL_MAX_VERSION),
 
-	    SLE_VAR(Town, fund_buildings_months, SLE_UINT8),
-	    SLE_VAR(Town, road_build_months,     SLE_UINT8),
+	    SLE_VARNAME(Town, Record().fund_buildings_months, "fund_buildings_months", SLE_UINT8),
+	    SLE_VARNAME(Town, Record().road_build_months, "road_build_months",     SLE_UINT8),
 
-	SLE_CONDVAR(Town, exclusivity,           SLE_UINT8,                  SLV_2, SL_MAX_VERSION),
-	SLE_CONDVAR(Town, exclusive_counter,     SLE_UINT8,                  SLV_2, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().exclusivity, "exclusivity",           SLE_UINT8,                  SLV_2, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().exclusive_counter, "exclusive_counter",     SLE_UINT8,                  SLV_2, SL_MAX_VERSION),
 
-	SLE_CONDVAR(Town, larger_town,           SLE_BOOL,                  SLV_56, SL_MAX_VERSION),
-	SLE_CONDVAR(Town, layout,                SLE_UINT8,                SLV_113, SL_MAX_VERSION),
-	SLE_CONDVAR(Town, valid_history, SLE_UINT64, SLV_TOWN_SUPPLY_HISTORY, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().larger_town, "larger_town",           SLE_BOOL,                  SLV_56, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().layout, "layout",                SLE_UINT8,                SLV_113, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Town, Record().valid_history, "valid_history", SLE_UINT64, SLV_TOWN_SUPPLY_HISTORY, SL_MAX_VERSION),
 
 	SLE_CONDREFVECTOR(Town, psa_list,        REF_STORAGE,              SLV_161, SL_MAX_VERSION),
 
@@ -307,10 +307,10 @@ struct CITYChunkHandler : ChunkHandler {
 			}
 
 			if (IsSavegameVersionBefore(SLV_TOWN_SUPPLY_HISTORY)) {
-				t->valid_history = 1U << LAST_MONTH;
+				t->Record().valid_history = 1U << LAST_MONTH;
 			}
 
-			if (t->townnamegrfid == 0 && !IsInsideMM(t->townnametype, SPECSTR_TOWNNAME_START, SPECSTR_TOWNNAME_END) && GetStringTab(t->townnametype) != TEXT_TAB_OLD_CUSTOM) {
+			if (t->Record().townnamegrfid == 0 && !IsInsideMM(t->Record().townnametype, SPECSTR_TOWNNAME_START, SPECSTR_TOWNNAME_END) && GetStringTab(t->Record().townnametype) != TEXT_TAB_OLD_CUSTOM) {
 				SlErrorCorrupt("Invalid town name generator");
 			}
 		}

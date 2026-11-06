@@ -180,14 +180,14 @@ public:
 
 		/* Draw list of companies */
 		for (const Company *c : Company::Iterate()) {
-			if ((this->town->have_ratings.Test(c->index) || this->town->exclusivity == c->index)) {
+			if ((this->town->Record().have_ratings.Test(c->index) || this->town->Record().exclusivity == c->index)) {
 				DrawCompanyIcon(c->index, icon.left, text.top + icon_y_offset);
 
-				if (this->town->exclusivity == c->index) {
+				if (this->town->Record().exclusivity == c->index) {
 					DrawSprite(SPR_EXCLUSIVE_TRANSPORT, GetCompanyPalette(c->index), exclusive.left, text.top + exclusive_y_offset);
 				}
 
-				int rating = this->town->ratings[c->index];
+				int rating = this->town->Record().ratings[c->index];
 				DrawString(text.left, text.right, text.top + text_y_offset, GetString(STR_LOCAL_AUTHORITY_COMPANY_RATING, c->index, c->index, GetRatingString(rating)));
 				text.top += this->resize.step_height;
 			}
@@ -309,7 +309,7 @@ public:
 			}
 
 			case WID_TA_EXECUTE:
-				Command<CMD_DO_TOWN_ACTION>::Post(STR_ERROR_CAN_T_DO_THIS, this->town->xy, static_cast<TownID>(this->window_number), this->sel_action);
+				Command<CMD_DO_TOWN_ACTION>::Post(STR_ERROR_CAN_T_DO_THIS, this->town->Record().xy, static_cast<TownID>(this->window_number), this->sel_action);
 				break;
 		}
 	}
@@ -361,7 +361,7 @@ public:
 
 		this->flags.Set(WindowFlag::DisableVpScroll);
 		NWidgetViewport *nvp = this->GetWidget<NWidgetViewport>(WID_TV_VIEWPORT);
-		nvp->InitializeViewport(this, this->town->xy, ScaleZoomGUI(ZoomLevel::Town));
+		nvp->InitializeViewport(this, this->town->Record().xy, ScaleZoomGUI(ZoomLevel::Town));
 
 		/* disable renaming town in network games if you are not the server */
 		this->SetWidgetDisabledState(WID_TV_CHANGE_NAME, _networking && !_network_server);
@@ -375,7 +375,7 @@ public:
 
 	std::string GetWidgetString(WidgetID widget, StringID stringid) const override
 	{
-		if (widget == WID_TV_CAPTION) return GetString(this->town->larger_town ? STR_TOWN_VIEW_CITY_CAPTION : STR_TOWN_VIEW_TOWN_CAPTION, this->town->index);
+		if (widget == WID_TV_CAPTION) return GetString(this->town->Record().larger_town ? STR_TOWN_VIEW_CITY_CAPTION : STR_TOWN_VIEW_TOWN_CAPTION, this->town->index);
 
 		return this->Window::GetWidgetString(widget, stringid);
 	}
@@ -394,7 +394,7 @@ public:
 
 		Rect tr = r.Shrink(WidgetDimensions::scaled.framerect);
 
-		DrawString(tr, GetString(STR_TOWN_VIEW_POPULATION_HOUSES, this->town->cache.population, this->town->cache.num_houses));
+		DrawString(tr, GetString(STR_TOWN_VIEW_POPULATION_HOUSES, this->town->Record().population, this->town->Record().num_houses));
 		tr.top += GetCharacterHeight(FS_NORMAL);
 
 		StringID str_last_period = TimerGameEconomy::UsingWallclockUnits() ? STR_TOWN_VIEW_CARGO_LAST_MINUTE_MAX : STR_TOWN_VIEW_CARGO_LAST_MONTH_MAX;
@@ -414,9 +414,9 @@ public:
 
 		bool first = true;
 		for (int i = TAE_BEGIN; i < TAE_END; i++) {
-			if (this->town->goal[i] == 0) continue;
-			if (this->town->goal[i] == TOWN_GROWTH_WINTER && (TileHeight(this->town->xy) < LowestSnowLine() || this->town->cache.population <= 90)) continue;
-			if (this->town->goal[i] == TOWN_GROWTH_DESERT && (GetTropicZone(this->town->xy) != TROPICZONE_DESERT || this->town->cache.population <= 60)) continue;
+			if (this->town->Record().goal[i] == 0) continue;
+			if (this->town->Record().goal[i] == TOWN_GROWTH_WINTER && (TileHeight(this->town->Record().xy) < LowestSnowLine() || this->town->Record().population <= 90)) continue;
+			if (this->town->Record().goal[i] == TOWN_GROWTH_DESERT && (GetTropicZone(this->town->Record().xy) != TROPICZONE_DESERT || this->town->Record().population <= 60)) continue;
 
 			if (first) {
 				DrawString(tr, STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH);
@@ -431,13 +431,13 @@ public:
 
 			StringID string;
 
-			if (this->town->goal[i] == TOWN_GROWTH_DESERT || this->town->goal[i] == TOWN_GROWTH_WINTER) {
+			if (this->town->Record().goal[i] == TOWN_GROWTH_DESERT || this->town->Record().goal[i] == TOWN_GROWTH_WINTER) {
 				/* For 'original' gameplay, don't show the amount required (you need 1 or more ..) */
 				string = STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED_GENERAL;
-				if (this->town->received[i].old_act == 0) {
+				if (this->town->Record().received[i].old_act == 0) {
 					string = STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED_GENERAL;
 
-					if (this->town->goal[i] == TOWN_GROWTH_WINTER && TileHeight(this->town->xy) < GetSnowLine()) {
+					if (this->town->Record().goal[i] == TOWN_GROWTH_WINTER && TileHeight(this->town->Record().xy) < GetSnowLine()) {
 						string = STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED_WINTER;
 					}
 				}
@@ -445,16 +445,16 @@ public:
 				DrawString(tr.Indent(20, rtl), GetString(string, cargo->name));
 			} else {
 				string = STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED;
-				if (this->town->received[i].old_act < this->town->goal[i]) {
+				if (this->town->Record().received[i].old_act < this->town->Record().goal[i]) {
 					string = STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED;
 				}
-				DrawString(tr.Indent(20, rtl), GetString(string, cargo->Index(), this->town->received[i].old_act, cargo->Index(), this->town->goal[i]));
+				DrawString(tr.Indent(20, rtl), GetString(string, cargo->Index(), this->town->Record().received[i].old_act, cargo->Index(), this->town->Record().goal[i]));
 			}
 			tr.top += GetCharacterHeight(FS_NORMAL);
 		}
 
-		if (this->town->flags.Test(TownFlag::IsGrowing)) {
-			DrawString(tr, GetString(this->town->fund_buildings_months == 0 ? STR_TOWN_VIEW_TOWN_GROWS_EVERY : STR_TOWN_VIEW_TOWN_GROWS_EVERY_FUNDED, RoundDivSU(this->town->growth_rate + 1, Ticks::DAY_TICKS)));
+		if (this->town->Record().flags.Test(TownFlag::IsGrowing)) {
+			DrawString(tr, GetString(this->town->Record().fund_buildings_months == 0 ? STR_TOWN_VIEW_TOWN_GROWS_EVERY : STR_TOWN_VIEW_TOWN_GROWS_EVERY_FUNDED, RoundDivSU(this->town->Record().growth_rate + 1, Ticks::DAY_TICKS)));
 			tr.top += GetCharacterHeight(FS_NORMAL);
 		} else {
 			DrawString(tr, STR_TOWN_VIEW_TOWN_GROW_STOPPED);
@@ -463,7 +463,7 @@ public:
 
 		/* only show the town noise, if the noise option is activated. */
 		if (_settings_game.economy.station_noise_level) {
-			DrawString(tr, GetString(STR_TOWN_VIEW_NOISE_IN_TOWN, this->town->noise_reached, this->town->MaxTownNoise()));
+			DrawString(tr, GetString(STR_TOWN_VIEW_NOISE_IN_TOWN, this->town->Record().noise_reached, this->town->MaxTownNoise()));
 			tr.top += GetCharacterHeight(FS_NORMAL);
 		}
 
@@ -477,9 +477,9 @@ public:
 		switch (widget) {
 			case WID_TV_CENTER_VIEW: // scroll to location
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow(this->town->xy);
+					ShowExtraViewportWindow(this->town->Record().xy);
 				} else {
-					ScrollMainWindowToTile(this->town->xy);
+					ScrollMainWindowToTile(this->town->Record().xy);
 				}
 				break;
 
@@ -537,9 +537,9 @@ public:
 
 		bool first = true;
 		for (int i = TAE_BEGIN; i < TAE_END; i++) {
-			if (this->town->goal[i] == 0) continue;
-			if (this->town->goal[i] == TOWN_GROWTH_WINTER && (TileHeight(this->town->xy) < LowestSnowLine() || this->town->cache.population <= 90)) continue;
-			if (this->town->goal[i] == TOWN_GROWTH_DESERT && (GetTropicZone(this->town->xy) != TROPICZONE_DESERT || this->town->cache.population <= 60)) continue;
+			if (this->town->Record().goal[i] == 0) continue;
+			if (this->town->Record().goal[i] == TOWN_GROWTH_WINTER && (TileHeight(this->town->Record().xy) < LowestSnowLine() || this->town->Record().population <= 90)) continue;
+			if (this->town->Record().goal[i] == TOWN_GROWTH_DESERT && (GetTropicZone(this->town->Record().xy) != TROPICZONE_DESERT || this->town->Record().population <= 60)) continue;
 
 			if (first) {
 				aimed_height += GetCharacterHeight(FS_NORMAL);
@@ -573,7 +573,7 @@ public:
 			NWidgetViewport *nvp = this->GetWidget<NWidgetViewport>(WID_TV_VIEWPORT);
 			nvp->UpdateViewportCoordinates(this);
 
-			ScrollWindowToTile(this->town->xy, this, true); // Re-center viewport.
+			ScrollWindowToTile(this->town->Record().xy, this, true); // Re-center viewport.
 		}
 	}
 
@@ -768,8 +768,8 @@ private:
 	/** Sort by population (default descending, as big towns are of the most interest). */
 	static bool TownPopulationSorter(const Town * const &a, const Town * const &b, const bool &order)
 	{
-		uint32_t a_population = a->cache.population;
-		uint32_t b_population = b->cache.population;
+		uint32_t a_population = a->Record().population;
+		uint32_t b_population = b->Record().population;
 		if (a_population == b_population) return TownDirectoryWindow::TownNameSorter(a, b, order);
 		return a_population < b_population;
 	}
@@ -780,16 +780,16 @@ private:
 		bool before = !order; // Value to get 'a' before 'b'.
 
 		/* Towns without rating are always after towns with rating. */
-		if (a->have_ratings.Test(_local_company)) {
-			if (b->have_ratings.Test(_local_company)) {
-				int16_t a_rating = a->ratings[_local_company];
-				int16_t b_rating = b->ratings[_local_company];
+		if (a->Record().have_ratings.Test(_local_company)) {
+			if (b->Record().have_ratings.Test(_local_company)) {
+				int16_t a_rating = a->Record().ratings[_local_company];
+				int16_t b_rating = b->Record().ratings[_local_company];
 				if (a_rating == b_rating) return TownDirectoryWindow::TownNameSorter(a, b, order);
 				return a_rating < b_rating;
 			}
 			return before;
 		}
-		if (b->have_ratings.Test(_local_company)) return !before;
+		if (b->Record().have_ratings.Test(_local_company)) return !before;
 
 		/* Sort unrated towns always on ascending town name. */
 		if (before) return TownDirectoryWindow::TownNameSorter(a, b, order);
@@ -838,7 +838,7 @@ public:
 	 */
 	static std::string GetTownString(const Town *t, uint64_t population)
 	{
-		return GetString(t->larger_town ? STR_TOWN_DIRECTORY_CITY : STR_TOWN_DIRECTORY_TOWN, t->index, population);
+		return GetString(t->Record().larger_town ? STR_TOWN_DIRECTORY_CITY : STR_TOWN_DIRECTORY_TOWN, t->index, population);
 	}
 
 	void DrawWidget(const Rect &r, WidgetID widget) const override
@@ -864,19 +864,19 @@ public:
 				auto [first, last] = this->vscroll->GetVisibleRangeIterators(this->towns);
 				for (auto it = first; it != last; ++it) {
 					const Town *t = *it;
-					assert(t->xy != INVALID_TILE);
+					assert(t->Record().xy != INVALID_TILE);
 
 					/* Draw rating icon. */
-					if (_game_mode == GM_EDITOR || !t->have_ratings.Test(_local_company)) {
+					if (_game_mode == GM_EDITOR || !t->Record().have_ratings.Test(_local_company)) {
 						DrawSprite(SPR_TOWN_RATING_NA, PAL_NONE, icon_x, tr.top + (this->resize.step_height - icon_size.height) / 2);
 					} else {
 						SpriteID icon = SPR_TOWN_RATING_APPALLING;
-						if (t->ratings[_local_company] > RATING_VERYPOOR) icon = SPR_TOWN_RATING_MEDIOCRE;
-						if (t->ratings[_local_company] > RATING_GOOD)     icon = SPR_TOWN_RATING_GOOD;
+						if (t->Record().ratings[_local_company] > RATING_VERYPOOR) icon = SPR_TOWN_RATING_MEDIOCRE;
+						if (t->Record().ratings[_local_company] > RATING_GOOD)     icon = SPR_TOWN_RATING_GOOD;
 						DrawSprite(icon, PAL_NONE, icon_x, tr.top + (this->resize.step_height - icon_size.height) / 2);
 					}
 
-					DrawString(tr.left, tr.right, tr.top + (this->resize.step_height - GetCharacterHeight(FS_NORMAL)) / 2, GetTownString(t, t->cache.population));
+					DrawString(tr.left, tr.right, tr.top + (this->resize.step_height - GetCharacterHeight(FS_NORMAL)) / 2, GetTownString(t, t->Record().population));
 
 					tr.top += this->resize.step_height;
 				}
@@ -960,9 +960,9 @@ public:
 				const Town *t = *it;
 				assert(t != nullptr);
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow(t->xy);
+					ShowExtraViewportWindow(t->Record().xy);
 				} else {
-					ScrollMainWindowToTile(t->xy);
+					ScrollMainWindowToTile(t->Record().xy);
 				}
 				break;
 			}
@@ -1065,7 +1065,7 @@ void CcFoundTown(Commands, const CommandCost &result, TileIndex tile)
 
 void CcFoundRandomTown(Commands, const CommandCost &result, Money, TownID town_id)
 {
-	if (result.Succeeded()) ScrollMainWindowToTile(Town::Get(town_id)->xy);
+	if (result.Succeeded()) ScrollMainWindowToTile(Town::Get(town_id)->Record().xy);
 }
 
 static constexpr std::initializer_list<NWidgetPart> _nested_found_town_widgets = {

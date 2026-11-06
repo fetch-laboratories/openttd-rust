@@ -216,12 +216,12 @@ static void HandleLinkClick(Link link)
 
 		case LT_INDUSTRY:
 			if (!Industry::IsValidID(link.target)) return;
-			xy = Industry::Get(link.target)->location.tile;
+			xy = Industry::Get(link.target)->Record().location.tile;
 			break;
 
 		case LT_TOWN:
 			if (!Town::IsValidID(link.target)) return;
-			xy = Town::Get(link.target)->xy;
+			xy = Town::Get(link.target)->Record().xy;
 			break;
 
 		case LT_COMPANY:

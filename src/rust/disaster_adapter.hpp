@@ -85,7 +85,7 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
-	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i), .kind = i == nullptr ? IT_INVALID : i->type};
+	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i), .kind = i == nullptr ? IT_INVALID : i->Record().type};
 }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }

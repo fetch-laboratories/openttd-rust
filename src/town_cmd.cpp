@@ -188,20 +188,20 @@ static void DrawTile_Town(TileInfo *ti)
 /** Resize the sign (label) of the town after it changes population. */
 void Town::UpdateVirtCoord()
 {
-	Point pt = RemapCoords2(TileX(this->xy) * TILE_SIZE, TileY(this->xy) * TILE_SIZE);
+	Point pt = RemapCoords2(TileX(this->Record().xy) * TILE_SIZE, TileY(this->Record().xy) * TILE_SIZE);
 
 	if (this->cache.sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeTown(this->index));
 
 	std::string town_string;
-	if (this->larger_town) {
-		town_string = GetString(_settings_client.gui.population_in_label ? STR_VIEWPORT_TOWN_CITY_POP : STR_VIEWPORT_TOWN_CITY, this->index, this->cache.population);
+	if (this->Record().larger_town) {
+		town_string = GetString(_settings_client.gui.population_in_label ? STR_VIEWPORT_TOWN_CITY_POP : STR_VIEWPORT_TOWN_CITY, this->index, this->Record().population);
 	} else {
-		town_string = GetString(_settings_client.gui.population_in_label ? STR_VIEWPORT_TOWN_POP : STR_TOWN_NAME, this->index, this->cache.population);
+		town_string = GetString(_settings_client.gui.population_in_label ? STR_VIEWPORT_TOWN_POP : STR_TOWN_NAME, this->index, this->Record().population);
 	}
 
 	this->cache.sign.UpdatePosition(pt.x, pt.y - 24 * ZOOM_BASE,
 		town_string,
-		GetString(STR_TOWN_NAME, this->index, this->cache.population)
+		GetString(STR_TOWN_NAME, this->index, this->Record().population)
 );
 
 	_viewport_sign_kdtree.Insert(ViewportSignKdtreeItem::MakeTown(this->index));

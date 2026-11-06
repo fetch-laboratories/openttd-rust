@@ -82,9 +82,9 @@ struct SubsidyListWindow : Window {
 	{
 		/* determine src coordinate for subsidy and try to scroll to it */
 		TileIndex xy;
-		switch (s->src.type) {
-			case SourceType::Industry: xy = Industry::Get(s->src.ToIndustryID())->location.tile; break;
-			case SourceType::Town:     xy =     Town::Get(s->src.ToTownID())->xy; break;
+		switch (s->Record().src.type) {
+			case SourceType::Industry: xy = Industry::Get(s->Record().src.ToIndustryID())->location.tile; break;
+			case SourceType::Town:     xy =     Town::Get(s->Record().src.ToTownID())->xy; break;
 			default: NOT_REACHED();
 		}
 
@@ -92,9 +92,9 @@ struct SubsidyListWindow : Window {
 			if (_ctrl_pressed) ShowExtraViewportWindow(xy);
 
 			/* otherwise determine dst coordinate for subsidy and scroll to it */
-			switch (s->dst.type) {
-				case SourceType::Industry: xy = Industry::Get(s->dst.ToIndustryID())->location.tile; break;
-				case SourceType::Town:     xy =     Town::Get(s->dst.ToTownID())->xy; break;
+			switch (s->Record().dst.type) {
+				case SourceType::Industry: xy = Industry::Get(s->Record().dst.ToIndustryID())->location.tile; break;
+				case SourceType::Town:     xy =     Town::Get(s->Record().dst.ToTownID())->xy; break;
 				default: NOT_REACHED();
 			}
 
@@ -174,23 +174,23 @@ struct SubsidyListWindow : Window {
 			if (!s->IsAwarded()) {
 				if (IsInsideMM(pos, 0, cap)) {
 					/* Displays the two offered towns */
-					const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+					const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
 					std::string text;
 
 					/* If using wallclock units, show minutes remaining. Otherwise show the date when the subsidy ends. */
 					if (TimerGameEconomy::UsingWallclockUnits()) {
 						text = GetString(STR_SUBSIDIES_OFFERED_FROM_TO,
-							cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id,
+							cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id,
 							STR_SUBSIDIES_OFFERED_EXPIRY_TIME,
-							s->remaining + 1); // We get the rest of the current economy month for free, since the expiration is checked on each new month.
+							s->Record().remaining + 1); // We get the rest of the current economy month for free, since the expiration is checked on each new month.
 					} else {
 						text = GetString(STR_SUBSIDIES_OFFERED_FROM_TO,
-							cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id,
+							cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id,
 							STR_SUBSIDIES_OFFERED_EXPIRY_DATE,
-							TimerGameEconomy::date.base() - ymd.day + s->remaining * 32);
+							TimerGameEconomy::date.base() - ymd.day + s->Record().remaining * 32);
 					}
 
-					DrawCargoIcon(tr, pos * GetCharacterHeight(FS_NORMAL), s->cargo_type);
+					DrawCargoIcon(tr, pos * GetCharacterHeight(FS_NORMAL), s->Record().cargo_type);
 					DrawString(sr.left, sr.right, sr.top + pos * GetCharacterHeight(FS_NORMAL), text);
 				}
 				pos++;
@@ -212,26 +212,26 @@ struct SubsidyListWindow : Window {
 		for (const Subsidy *s : Subsidy::Iterate()) {
 			if (s->IsAwarded()) {
 				if (IsInsideMM(pos, 0, cap)) {
-					const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+					const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
 					std::string text;
 
 					/* If using wallclock units, show minutes remaining. Otherwise show the date when the subsidy ends. */
 					if (TimerGameEconomy::UsingWallclockUnits()) {
 						text = GetString(STR_SUBSIDIES_SUBSIDISED_FROM_TO,
-							cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id,
-							s->awarded,
+							cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id,
+							s->Record().awarded,
 							STR_SUBSIDIES_SUBSIDISED_EXPIRY_TIME,
-							s->remaining + 1); // We get the rest of the current economy month for free, since the expiration is checked on each new month.
+							s->Record().remaining + 1); // We get the rest of the current economy month for free, since the expiration is checked on each new month.
 					} else {
 						text = GetString(STR_SUBSIDIES_SUBSIDISED_FROM_TO,
-							cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id,
-							s->awarded,
+							cs->name, s->Record().src.GetFormat(), s->Record().src.id, s->Record().dst.GetFormat(), s->Record().dst.id,
+							s->Record().awarded,
 							STR_SUBSIDIES_SUBSIDISED_EXPIRY_DATE,
-							TimerGameEconomy::date.base() - ymd.day + s->remaining * 32);
+							TimerGameEconomy::date.base() - ymd.day + s->Record().remaining * 32);
 					}
 
 					/* Displays the two connected stations */
-					DrawCargoIcon(tr, pos * GetCharacterHeight(FS_NORMAL), s->cargo_type);
+					DrawCargoIcon(tr, pos * GetCharacterHeight(FS_NORMAL), s->Record().cargo_type);
 					DrawString(sr.left, sr.right, sr.top + pos * GetCharacterHeight(FS_NORMAL), text);
 				}
 				pos++;

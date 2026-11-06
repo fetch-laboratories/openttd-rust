@@ -93,8 +93,8 @@ static TileIndex GetReferenceTile(const NewsReference &reference)
 		TileIndex operator()(const TileIndex &t) { return t; }
 		TileIndex operator()(const VehicleID) { return INVALID_TILE; }
 		TileIndex operator()(const StationID s) { return Station::Get(s)->xy; }
-		TileIndex operator()(const IndustryID i) { return Industry::Get(i)->location.tile + TileDiffXY(1, 1); }
-		TileIndex operator()(const TownID t) { return Town::Get(t)->xy; }
+		TileIndex operator()(const IndustryID i) { return Industry::Get(i)->Record().location.tile + TileDiffXY(1, 1); }
+		TileIndex operator()(const TownID t) { return Town::Get(t)->Record().xy; }
 		TileIndex operator()(const EngineID) { return INVALID_TILE; }
 	};
 

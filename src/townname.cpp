@@ -73,7 +73,7 @@ std::string GetTownName(const TownNameParams *par, uint32_t townnameparts)
 void GetTownName(StringBuilder &builder, const Town *t)
 {
 	TownNameParams par(t);
-	GetTownName(builder, &par, t->townnameparts);
+	GetTownName(builder, &par, t->Record().townnameparts);
 }
 
 /**
@@ -84,7 +84,7 @@ void GetTownName(StringBuilder &builder, const Town *t)
 std::string GetTownName(const Town *t)
 {
 	TownNameParams par(t);
-	return GetTownName(&par, t->townnameparts);
+	return GetTownName(&par, t->Record().townnameparts);
 }
 
 

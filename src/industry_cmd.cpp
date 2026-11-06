@@ -130,7 +130,7 @@ IndustryType GetIndustryType(Tile tile)
 
 	const Industry *ind = Industry::GetByTile(tile);
 	assert(ind != nullptr);
-	return ind->type;
+	return ind->Record().type;
 }
 
 /**
@@ -303,7 +303,7 @@ static void DrawTile_Industry(TileInfo *ti)
 	if (image == SPR_FLAT_WATER_TILE && IsTileOnWater(ti->tile)) {
 		DrawWaterClassGround(ti);
 	} else {
-		DrawGroundSprite(image, GroundSpritePaletteTransform(image, dits->ground.pal, GetColourPalette(ind->random_colour)));
+		DrawGroundSprite(image, GroundSpritePaletteTransform(image, dits->ground.pal, GetColourPalette(ind->Record().random_colour)));
 	}
 
 	/* If industries are transparent and invisible, do not draw the upper part */
@@ -312,7 +312,7 @@ static void DrawTile_Industry(TileInfo *ti)
 	/* Add industry on top of the ground? */
 	image = dits->building.sprite;
 	if (image != 0) {
-		AddSortableSpriteToDraw(image, SpriteLayoutPaletteTransform(image, dits->building.pal, GetColourPalette(ind->random_colour)),
+		AddSortableSpriteToDraw(image, SpriteLayoutPaletteTransform(image, dits->building.pal, GetColourPalette(ind->Record().random_colour)),
 			*ti, *dits, IsTransparencySet(TO_INDUSTRIES));
 
 		if (IsTransparencySet(TO_INDUSTRIES)) return;
@@ -333,9 +333,9 @@ static void AddAcceptedCargo_Industry(TileIndex tile, CargoArray &acceptance, Ca
 static void GetTileDesc_Industry(TileIndex tile, TileDesc &td)
 {
 	const Industry *i = Industry::GetByTile(tile);
-	const IndustrySpec *is = GetIndustrySpec(i->type);
+	const IndustrySpec *is = GetIndustrySpec(i->Record().type);
 
-	td.owner[0] = i->owner;
+	td.owner[0] = i->Record().owner;
 	td.str = is->name;
 	if (!IsIndustryCompleted(tile)) {
 		td.dparam = td.str;
@@ -356,7 +356,7 @@ static void GetTileDesc_Industry(TileIndex tile, TileDesc &td)
 static bool TransportIndustryGoods(TileIndex tile)
 {
 	Industry *i = Industry::GetByTile(tile);
-	return openttd_rust_industry_transport(i, i->production_owner.get(), GetIndustrySpec(i->type)->minimal_cargo, EconomyIsInRecession(), &GetIndustryRustServices());
+	return openttd_rust_industry_transport(i, i->production_owner.get(), GetIndustrySpec(i->Record().type)->minimal_cargo, EconomyIsInRecession(), &GetIndustryRustServices());
 }
 
 
@@ -418,12 +418,12 @@ bool IsSlopeRefused(Slope current, Slope refused)
 
 static void RustIndustryOpeningNews(const Industry *ind) noexcept
 {
-	const IndustrySpec *ind_spc = GetIndustrySpec(ind->type);
+	const IndustrySpec *ind_spc = GetIndustrySpec(ind->Record().type);
 	EncodedString headline;
 	if (ind_spc->new_industry_text > STR_LAST_STRINGID) {
-		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, STR_TOWN_NAME, ind->town->index);
+		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, STR_TOWN_NAME, ind->Record().town->index);
 	} else {
-		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, ind->town->index);
+		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, ind->Record().town->index);
 	}
 	AddIndustryNewsItem(std::move(headline), NewsType::IndustryOpen, ind->index);
 }
@@ -569,7 +569,7 @@ Industry::AcceptedHistory SumHistory(std::span<const Industry::AcceptedHistory> 
 
 void Industry::RecomputeProductionMultipliers()
 {
-	assert(UsesOriginalEconomy(GetIndustrySpec(this->type)));
+	assert(UsesOriginalEconomy(GetIndustrySpec(this->Record().type)));
 	openttd_rust_industry_recompute(this->production_owner.get());
 }
 
@@ -766,15 +766,15 @@ static void RustIndustryNews(Industry *i, StringID str, bool close, OpenTTDIndus
 	/* Set parameters of news string */
 	EncodedString headline;
 	if (str > STR_LAST_STRINGID) {
-		headline = GetEncodedString(str, STR_TOWN_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_TOWN_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->Record().type)->name);
 	} else if (close) {
-		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->Record().type)->name);
 	} else {
 		headline = GetEncodedString(str, i->index);
 	}
 	/* and report the news to the user */
 	if (close) {
-		AddTileNewsItem(std::move(headline), nt, i->location.tile + TileDiffXY(1, 1));
+		AddTileNewsItem(std::move(headline), nt, i->Record().location.tile + TileDiffXY(1, 1));
 	} else {
 		AddIndustryNewsItem(std::move(headline), nt, i->index);
 	}
@@ -792,16 +792,16 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
 		const Industry *i = RustIndustry(handle);
-		return {RustIndustryTile(handle), i->location.w, i->location.h};
+		return {RustIndustryTile(handle), i->Record().location.w, i->Record().location.h};
 	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
-		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->type)->random_sounds[index]);
+		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->Record().type)->random_sounds[index]);
 	},
 	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
 		Industry *i = RustIndustry(handle);
-		return GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->type, i->location.tile);
+		return GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->Record().type, i->Record().location.tile);
 	},
 	.tick_trigger = [](void *handle) noexcept {
 		Industry *i = RustIndustry(handle);
@@ -843,7 +843,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.change_callback = [](void *handle, bool monthly, uint32_t random) noexcept -> OpenTTDIndustryChange {
 		Industry *i = RustIndustry(handle);
 		std::array<int32_t, 1> reg{};
-		uint16_t result = GetIndustryCallback(monthly ? CBID_INDUSTRY_MONTHLYPROD_CHANGE : CBID_INDUSTRY_PRODUCTION_CHANGE, 0, random, i, i->type, i->location.tile, reg);
+		uint16_t result = GetIndustryCallback(monthly ? CBID_INDUSTRY_MONTHLYPROD_CHANGE : CBID_INDUSTRY_PRODUCTION_CHANGE, 0, random, i, i->Record().type, i->Record().location.tile, reg);
 		return {result, reg[0]};
 	},
 	.text = &GetRustGrfTextServices(),
@@ -851,9 +851,9 @@ static const OpenTTDIndustryServices _industry_services = {
 	.production_news = [](void *i, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) noexcept { RustIndustryProductionNews(RustIndustry(i), cargo, percent, servicing); },
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {
 		Industry *i = RustIndustry(handle);
-		const IndustrySpec *spec = GetIndustrySpec(i->type);
+		const IndustrySpec *spec = GetIndustrySpec(i->Record().type);
 		auto detail = !invalid_cargo ? GetEncodedString(STR_NEWGRF_BUGGY_ENDLESS_PRODUCTION_CALLBACK, std::monostate{}, spec->name)
-			: GetEncodedString(STR_NEWGRF_BUGGY_INVALID_CARGO_PRODUCTION_CALLBACK, std::monostate{}, spec->name, i->location.tile);
+			: GetEncodedString(STR_NEWGRF_BUGGY_INVALID_CARGO_PRODUCTION_CALLBACK, std::monostate{}, spec->name, i->Record().location.tile);
 		ShowErrorMessage(GetEncodedString(STR_NEWGRF_BUGGY, spec->grf_prop.grffile->filename), std::move(detail), WL_WARNING);
 	},
 	.set_dirty = [](void *i) noexcept { SetWindowDirty(WC_INDUSTRY_VIEW, RustIndustry(i)->index); },
@@ -947,11 +947,11 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
-		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
+		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->Record().town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);
-			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);
+			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->Record().type, INVALID_TILE);
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.water_class = [](uint32_t tile) noexcept -> uint8_t { return IsWaterTile(TileIndex(tile)) ? to_underlying(RustWaterClass(tile)) : to_underlying(WaterClass::Invalid); },
@@ -1037,7 +1037,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
 		.town = OpenTTDIndustryTownHandle,
-		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
+		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->Record().population; },
 		.town_position = OpenTTDTownTile,
 		.industry = RustIndustryByID<uint16_t>,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },

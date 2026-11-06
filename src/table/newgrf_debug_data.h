@@ -357,18 +357,18 @@ static const NIVariable _niv_industries[] = {
 };
 
 class NIHIndustry : public NIHelper {
-	bool IsInspectable(uint index) const override        { return GetIndustrySpec(Industry::Get(index)->type)->grf_prop.HasGrfFile(); }
-	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Industry::Get(index)->town->index); }
+	bool IsInspectable(uint index) const override        { return GetIndustrySpec(Industry::Get(index)->Record().type)->grf_prop.HasGrfFile(); }
+	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Industry::Get(index)->Record().town->index); }
 	const void *GetInstance(uint index)const override    { return Industry::Get(index); }
-	const void *GetSpec(uint index) const override       { return GetIndustrySpec(Industry::Get(index)->type); }
+	const void *GetSpec(uint index) const override       { return GetIndustrySpec(Industry::Get(index)->Record().type); }
 	std::string GetName(uint index) const override       { return GetString(STR_INDUSTRY_NAME, index); }
-	uint32_t GetGRFID(uint index) const override           { return (this->IsInspectable(index)) ? GetIndustrySpec(Industry::Get(index)->type)->grf_prop.grfid : 0; }
-	std::span<const BadgeID> GetBadges(uint index) const override { return GetIndustrySpec(Industry::Get(index)->type)->badges; }
+	uint32_t GetGRFID(uint index) const override           { return (this->IsInspectable(index)) ? GetIndustrySpec(Industry::Get(index)->Record().type)->grf_prop.grfid : 0; }
+	std::span<const BadgeID> GetBadges(uint index) const override { return GetIndustrySpec(Industry::Get(index)->Record().type)->badges; }
 
 	uint Resolve(uint index, uint var, uint param, bool &avail) const override
 	{
 		Industry *i = Industry::Get(index);
-		IndustriesResolverObject ro(i->location.tile, i, i->type);
+		IndustriesResolverObject ro(i->Record().location.tile, i, i->Record().type);
 		return ro.GetScope(VSG_SCOPE_SELF)->GetVariable(var, param, avail);
 	}
 

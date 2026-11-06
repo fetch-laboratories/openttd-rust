@@ -989,7 +989,7 @@ protected:
 	{
 		for (const Town *t : Town::Iterate()) {
 			/* Remap the town coordinate */
-			Point pt = this->RemapTile(TileX(t->xy), TileY(t->xy));
+			Point pt = this->RemapTile(TileX(t->Record().xy), TileY(t->Record().xy));
 			int x = pt.x - this->subscroll - (t->cache.sign.width_small >> 1);
 			int y = pt.y + vertical_padding;
 
@@ -1013,20 +1013,20 @@ protected:
 		if (this->map_type != SMT_INDUSTRY) return;
 
 		for (const Industry *i : Industry::Iterate()) {
-			const LegendAndColour &tbl = _legend_from_industries[_industry_to_list_pos[i->type]];
+			const LegendAndColour &tbl = _legend_from_industries[_industry_to_list_pos[i->Record().type]];
 			if (!tbl.show_on_map) continue;
 
 			/* Industry names blink together with their blobs in the smallmap. */
-			const bool is_blinking = i->type == _smallmap_industry_highlight && !_smallmap_industry_highlight_state;
+			const bool is_blinking = i->Record().type == _smallmap_industry_highlight && !_smallmap_industry_highlight_state;
 			if (is_blinking) continue;
 
-			if (_industry_to_name_string_width[i->type] == 0) {
-				_industry_to_name_string_width[i->type] = GetStringBoundingBox(tbl.legend, FS_SMALL).width;
+			if (_industry_to_name_string_width[i->Record().type] == 0) {
+				_industry_to_name_string_width[i->Record().type] = GetStringBoundingBox(tbl.legend, FS_SMALL).width;
 			}
-			const uint16_t &legend_text_width = _industry_to_name_string_width[i->type];
+			const uint16_t &legend_text_width = _industry_to_name_string_width[i->Record().type];
 
 			/* Remap the industry coordinate */
-			const TileIndex &tile = i->location.GetCenterTile();
+			const TileIndex &tile = i->Record().location.GetCenterTile();
 			const Point pt = this->RemapTile(TileX(tile), TileY(tile));
 			const int x = pt.x - this->subscroll - (legend_text_width / 2);
 			const int y = pt.y + vertical_padding;
@@ -1343,7 +1343,7 @@ protected:
 					if (this->map_type == SMT_INDUSTRY) {
 						/* If industry is allowed to be seen, use its colour on the map.
 						 * This has the highest priority above any value in _tiletype_importance. */
-						IndustryType type = Industry::GetByTile(ti)->type;
+						IndustryType type = Industry::GetByTile(ti)->Record().type;
 						if (_legend_from_industries[_industry_to_list_pos[type]].show_on_map) {
 							if (type == _smallmap_industry_highlight) {
 								if (_smallmap_industry_highlight_state) return MKCOLOUR_XXXX(PC_WHITE);

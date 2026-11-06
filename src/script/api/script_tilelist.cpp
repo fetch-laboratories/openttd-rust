@@ -38,7 +38,7 @@ ScriptObject *ScriptTileList::CloneObject()
  */
 static void FillIndustryCatchment(const Industry *i, SQInteger radius, BitmapTileArea &bta)
 {
-	for (TileIndex cur_tile : i->location) {
+	for (TileIndex cur_tile : i->Record().location) {
 		if (!::IsTileType(cur_tile, MP_INDUSTRY) || ::GetIndustryIndex(cur_tile) != i->index) continue;
 
 		int tx = TileX(cur_tile);
@@ -63,14 +63,14 @@ ScriptTileList_IndustryAccepting::ScriptTileList_IndustryAccepting(IndustryID in
 	const Industry *i = ::Industry::Get(industry_id);
 
 	/* Check if this industry is only served by its neutral station */
-	if (i->neutral_station != nullptr && !_settings_game.station.serve_neutral_industries) return;
+	if (i->Record().neutral_station != nullptr && !_settings_game.station.serve_neutral_industries) return;
 
 	/* Check if this industry accepts anything */
 	if (!i->IsCargoAccepted()) return;
 
 	if (!_settings_game.station.modified_catchment) radius = CA_UNMODIFIED;
 
-	BitmapTileArea bta(TileArea(i->location).Expand(radius));
+	BitmapTileArea bta(TileArea(i->Record().location).Expand(radius));
 	FillIndustryCatchment(i, radius, bta);
 
 	BitmapTileIterator it(bta);
@@ -91,14 +91,14 @@ ScriptTileList_IndustryProducing::ScriptTileList_IndustryProducing(IndustryID in
 	const Industry *i = ::Industry::Get(industry_id);
 
 	/* Check if this industry is only served by its neutral station */
-	if (i->neutral_station != nullptr && !_settings_game.station.serve_neutral_industries) return;
+	if (i->Record().neutral_station != nullptr && !_settings_game.station.serve_neutral_industries) return;
 
 	/* Check if this industry produces anything */
 	if (!i->IsCargoProduced()) return;
 
 	if (!_settings_game.station.modified_catchment) radius = CA_UNMODIFIED;
 
-	BitmapTileArea bta(TileArea(i->location).Expand(radius));
+	BitmapTileArea bta(TileArea(i->Record().location).Expand(radius));
 	FillIndustryCatchment(i, radius, bta);
 
 	BitmapTileIterator it(bta);

@@ -1774,7 +1774,7 @@ struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
 			transported.range_bit = 1;
 			transported.dash = 2;
 
-			FillFromHistory<GRAPH_NUM_MONTHS>(p.history, i->valid_history, *this->scales[this->selected_scale].history_range,
+			FillFromHistory<GRAPH_NUM_MONTHS>(p.history, i->Record().valid_history, *this->scales[this->selected_scale].history_range,
 				Filler{{produced}, &Industry::ProducedHistory::production},
 				Filler{{transported}, &Industry::ProducedHistory::transported});
 		}
@@ -1797,7 +1797,7 @@ struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
 			waiting.range_bit = 3;
 			waiting.dash = 4;
 
-			FillFromHistory<GRAPH_NUM_MONTHS>(a.history.get(), i->valid_history, *this->scales[this->selected_scale].history_range,
+			FillFromHistory<GRAPH_NUM_MONTHS>(a.history.get(), i->Record().valid_history, *this->scales[this->selected_scale].history_range,
 				Filler{{accepted}, &Industry::AcceptedHistory::accepted},
 				Filler{{waiting}, &Industry::AcceptedHistory::waiting});
 		}
@@ -1940,7 +1940,7 @@ struct TownCargoGraphWindow : BaseCargoGraphWindow {
 			transported.range_bit = 1;
 			transported.dash = 2;
 
-			FillFromHistory<GRAPH_NUM_MONTHS>(s.history, t->valid_history, *this->scales[this->selected_scale].history_range,
+			FillFromHistory<GRAPH_NUM_MONTHS>(s.history, t->Record().valid_history, *this->scales[this->selected_scale].history_range,
 				Filler{{produced}, &Town::SuppliedHistory::production},
 				Filler{{transported}, &Town::SuppliedHistory::transported});
 		}

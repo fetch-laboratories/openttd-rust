@@ -33,10 +33,6 @@ extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
-static_assert(alignof(TileArea) == alignof(OpenTTDIndustryMetadata));
-static_assert(offsetof(TileArea, tile) == offsetof(OpenTTDIndustryMetadata, tile));
-static_assert(offsetof(TileArea, w) == offsetof(OpenTTDIndustryMetadata, width));
-static_assert(offsetof(TileArea, h) == offsetof(OpenTTDIndustryMetadata, height));
 static_assert(sizeof(IndustryID) == sizeof(uint16_t) && alignof(IndustryID) == alignof(uint16_t));
 static_assert(sizeof(Owner) == sizeof(uint8_t) && alignof(Owner) == alignof(uint8_t));
 static_assert(sizeof(Colours) == sizeof(uint8_t));
@@ -117,7 +113,7 @@ TEST_CASE("NewGRF - industry tile manager retains virtual allocation")
 }
 static uint32_t IndustryMappingCount(uint8_t local, bool &available)
 {
-	RustIndustryOwner owner{openttd_rust_industry_new(), openttd_rust_industry_destroy};
+	RustIndustryOwner owner{openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy};
 	RustIndustryBuilderOwner builder{openttd_rust_industry_builder_new(), openttd_rust_industry_builder_destroy};
 	openttd_rust_industry_registry_insert(builder.get(), NUM_INDUSTRYTYPES - 1, 0);
 	const OpenTTDIndustryResolverContext context{.owner = owner.get(), .industry = nullptr, .town = nullptr, .tile = INVALID_TILE.base(), .random_bits = 0, .id = 0, .type = 0};
@@ -196,7 +192,7 @@ TEST_CASE("NewGRF - industry mapping is shared across serialized threads")
 }
 TEST_CASE("Industry - canonical allocation and history lifetime")
 {
-	RustIndustryOwner owner(openttd_rust_industry_new(), openttd_rust_industry_destroy);
+	RustIndustryOwner owner(openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy);
 	RustIndustryVector<Industry::AcceptedCargo, false> accepted(owner.get());
 	RustIndustryVector<Industry::ProducedCargo, true> produced(owner.get());
 	accepted.emplace_back().waiting = 65535;
@@ -220,7 +216,7 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 }
 TEST_CASE("Industry - construction owner and ascending type registry")
 {
-	RustIndustryOwner owner{openttd_rust_industry_new(), openttd_rust_industry_destroy};
+	RustIndustryOwner owner{openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy};
 	auto *metadata = openttd_rust_industry_metadata(owner.get());
 	CHECK(metadata->tile == INVALID_TILE.base());
 	CHECK(metadata->width == 0);
@@ -395,11 +391,11 @@ static OpenTTDIndustryLocationResult Observe(Industry *shell)
 {
 	CHECK(shell->production_owner.get() == active_owner);
 	CHECK(shell->index == IndustryID::Invalid());
-	CHECK(shell->location.tile == TileIndex(123));
-	CHECK(shell->location.w == 0);
-	CHECK(shell->type == 7);
-	CHECK(shell->random == 0xABCD);
-	CHECK(shell->founder == Owner(2));
+	CHECK(shell->Record().location.tile == TileIndex(123));
+	CHECK(shell->Record().location.w == 0);
+	CHECK(shell->Record().type == 7);
+	CHECK(shell->Record().random == 0xABCD);
+	CHECK(shell->Record().founder == Owner(2));
 	CHECK(shell->accepted.empty());
 	CHECK(shell->produced.empty());
 	trace.push_back(3);
@@ -427,7 +423,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	errors.site = 1234;
 	tile_spec.grf_prop.grffile = &tile_file;
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
-	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
+	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->Record().town = nullptr; };
 	const OpenTTDFixtureMap map{Map::LogX()};
 	shared.map = &map.statics;
 	static const OpenTTDMovementServices movement{};
@@ -443,8 +439,8 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		CHECK(openttd_rust_industry_metadata(owner)->width == 0);
 		active_owner = nullptr;
 	};
-	transaction.resolve_location = [](Industry *shell, uint32_t tile, uint8_t kind, uint32_t seed, uint8_t creation) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 123); CHECK(kind == 7); CHECK(seed == 0x12345678); CHECK(creation == 2); CHECK(shell->selected_layout == 2); return Observe(shell); };
-	transaction.resolve_shape = [](Industry *shell, uint32_t tile, uint16_t gfx, uint32_t parameter) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 456); CHECK(gfx == 8); CHECK(parameter == 0x302); CHECK(shell->selected_layout == 0); return Observe(shell); };
+	transaction.resolve_location = [](Industry *shell, uint32_t tile, uint8_t kind, uint32_t seed, uint8_t creation) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 123); CHECK(kind == 7); CHECK(seed == 0x12345678); CHECK(creation == 2); CHECK(shell->Record().selected_layout == 2); return Observe(shell); };
+	transaction.resolve_shape = [](Industry *shell, uint32_t tile, uint16_t gfx, uint32_t parameter) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 456); CHECK(gfx == 8); CHECK(parameter == 0x302); CHECK(shell->Record().selected_layout == 0); return Observe(shell); };
 	transaction.location_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const OpenTTDIndustrySpecHandle *spec) noexcept { CHECK(reinterpret_cast<const IndustrySpec *>(spec) == GetIndustrySpec(7)); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
 	transaction.shape_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const IndustryTileSpec *spec) noexcept { CHECK(spec == &tile_spec); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
 	shared.grf_file_version = [](const GRFFile *file) noexcept -> uint8_t { CHECK(file == &tile_file); trace.push_back(6); return version; };

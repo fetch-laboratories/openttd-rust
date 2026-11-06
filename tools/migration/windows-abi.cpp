@@ -124,7 +124,7 @@ static void Layouts()
 static void Calls()
 {
 	{
-		static OpenTTDTownState *owner = openttd_rust_town_new();
+		static OpenTTDTownState *owner = openttd_rust_town_new(nullptr);
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};
 		founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs; founding.close_error = 0x87654321;
 		costs.error = [](OpenTTDCommandCost *cost, uint32_t error) noexcept { *reinterpret_cast<uint32_t *>(cost) = error; };

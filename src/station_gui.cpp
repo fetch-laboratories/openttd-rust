@@ -1892,8 +1892,8 @@ struct StationViewWindow : public Window {
 		bool rtl = _current_text_dir == TD_RTL;
 		Rect tr = r.Shrink(WidgetDimensions::scaled.framerect);
 
-		if (st->town->exclusive_counter > 0) {
-			tr.top = DrawStringMultiLine(tr, GetString(st->town->exclusivity == st->owner ? STR_STATION_VIEW_EXCLUSIVE_RIGHTS_SELF : STR_STATION_VIEW_EXCLUSIVE_RIGHTS_COMPANY, st->town->exclusivity));
+		if (st->town->Record().exclusive_counter > 0) {
+			tr.top = DrawStringMultiLine(tr, GetString(st->town->Record().exclusivity == st->owner ? STR_STATION_VIEW_EXCLUSIVE_RIGHTS_SELF : STR_STATION_VIEW_EXCLUSIVE_RIGHTS_COMPANY, st->town->Record().exclusivity));
 			tr.top += WidgetDimensions::scaled.vsep_wide;
 		}
 

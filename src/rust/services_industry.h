@@ -14,7 +14,7 @@ inline void RustIndustryTileRandomCheck([[maybe_unused]] const OpenTTDIndustryRe
 template <typename ID> inline Industry *RustIndustryByID(ID id) noexcept { return Industry::Get(id); }
 inline Industry *RustIndustryByTile(uint32_t tile) noexcept { return Industry::GetByTile(TileIndex{tile}); }
 inline Industry *OpenTTDNextIndustry(uint32_t from) noexcept { auto range = Industry::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
-inline Town *OpenTTDIndustryTown(const Industry *industry) noexcept { return industry->town; }
+inline Town *OpenTTDIndustryTown(const Industry *industry) noexcept { return industry->Record().town; }
 inline const OpenTTDTownHandle *OpenTTDIndustryTownHandle(Industry *industry) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDIndustryTown(industry)); }
 inline Town *OpenTTDIndustryTownByTile(uint32_t tile) noexcept { return OpenTTDIndustryTown(RustIndustryByTile(tile)); }
 inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t parameter1, uint32_t parameter2) noexcept
@@ -22,7 +22,7 @@ inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_
 	return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, RustIndustryByTile(tile), TileIndex(tile));
 }
 template <class Handle> inline uint16_t RustIndustryID(Handle industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
-inline uint32_t RustIndustryTile(void *industry) noexcept { return static_cast<Industry *>(industry)->location.tile.base(); }
+inline uint32_t RustIndustryTile(void *industry) noexcept { return static_cast<Industry *>(industry)->Record().location.tile.base(); }
 inline uint16_t RustIndustryTileIndex(uint32_t tile) noexcept { return GetIndustryIndex(TileIndex{tile}).base(); }
 inline bool RustIndustryTileBelongs(void *industry, uint32_t tile) noexcept { return static_cast<Industry *>(industry)->TileBelongsToIndustry(TileIndex{tile}); }
 inline void RustResetIndustryConstruction(uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex{tile}); }

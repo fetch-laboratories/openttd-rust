@@ -50,7 +50,7 @@
 {
 	if (!IsAwarded(subsidy_id)) return ScriptCompany::COMPANY_INVALID;
 
-	return ScriptCompany::ToScriptCompanyID(::Subsidy::Get(subsidy_id)->awarded);
+	return ScriptCompany::ToScriptCompanyID(::Subsidy::Get(subsidy_id)->Record().awarded);
 }
 
 /* static */ ScriptDate::Date ScriptSubsidy::GetExpireDate(SubsidyID subsidy_id)
@@ -59,7 +59,7 @@
 
 	TimerGameEconomy::YearMonthDay ymd = TimerGameEconomy::ConvertDateToYMD(TimerGameEconomy::date);
 	ymd.day = 1;
-	auto m = ymd.month + ::Subsidy::Get(subsidy_id)->remaining;
+	auto m = ymd.month + ::Subsidy::Get(subsidy_id)->Record().remaining;
 	ymd.month = m % 12;
 	ymd.year += TimerGameEconomy::Year{m / 12};
 
@@ -70,33 +70,33 @@
 {
 	if (!IsValidSubsidy(subsidy_id)) return INVALID_CARGO;
 
-	return ::Subsidy::Get(subsidy_id)->cargo_type;
+	return ::Subsidy::Get(subsidy_id)->Record().cargo_type;
 }
 
 /* static */ ScriptSubsidy::SubsidyParticipantType ScriptSubsidy::GetSourceType(SubsidyID subsidy_id)
 {
 	if (!IsValidSubsidy(subsidy_id)) return SPT_INVALID;
 
-	return static_cast<SubsidyParticipantType>(::Subsidy::Get(subsidy_id)->src.type);
+	return static_cast<SubsidyParticipantType>(::Subsidy::Get(subsidy_id)->Record().src.type);
 }
 
 /* static */ SQInteger ScriptSubsidy::GetSourceIndex(SubsidyID subsidy_id)
 {
 	if (!IsValidSubsidy(subsidy_id)) return Source::Invalid;
 
-	return ::Subsidy::Get(subsidy_id)->src.id;
+	return ::Subsidy::Get(subsidy_id)->Record().src.id;
 }
 
 /* static */ ScriptSubsidy::SubsidyParticipantType ScriptSubsidy::GetDestinationType(SubsidyID subsidy_id)
 {
 	if (!IsValidSubsidy(subsidy_id)) return SPT_INVALID;
 
-	return static_cast<SubsidyParticipantType>(::Subsidy::Get(subsidy_id)->dst.type);
+	return static_cast<SubsidyParticipantType>(::Subsidy::Get(subsidy_id)->Record().dst.type);
 }
 
 /* static */ SQInteger ScriptSubsidy::GetDestinationIndex(SubsidyID subsidy_id)
 {
 	if (!IsValidSubsidy(subsidy_id)) return Source::Invalid;
 
-	return ::Subsidy::Get(subsidy_id)->dst.id;
+	return ::Subsidy::Get(subsidy_id)->Record().dst.id;
 }

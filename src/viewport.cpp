@@ -1101,7 +1101,7 @@ static void HighlightTownLocalAuthorityTiles(const TileInfo *ti)
 	TownID tid = _town_local_authority_kdtree.FindNearest(TileX(ti->tile), TileY(ti->tile));
 	Town *closest_highlighted_town = Town::Get(tid);
 
-	if (DistanceManhattan(ti->tile, closest_highlighted_town->xy) >= _settings_game.economy.dist_local_authority) return;
+	if (DistanceManhattan(ti->tile, closest_highlighted_town->Record().xy) >= _settings_game.economy.dist_local_authority) return;
 
 	/* Tile is inside of the local autrhority distance of a highlighted town,
 	   but it is possible that a non-highlighted town is even closer. */
@@ -1384,10 +1384,10 @@ static void ViewportAddTownStrings(DrawPixelInfo *dpi, const std::vector<const T
 		std::string *str = ViewportAddString(dpi, &t->cache.sign, flags, INVALID_COLOUR);
 		if (str == nullptr) continue;
 
-		if (t->larger_town) {
-			*str = GetString(stringid_town_city, t->index, t->cache.population);
+		if (t->Record().larger_town) {
+			*str = GetString(stringid_town_city, t->index, t->Record().population);
 		} else {
-			*str = GetString(stringid_town, t->index, t->cache.population);
+			*str = GetString(stringid_town, t->index, t->Record().population);
 		}
 	}
 }

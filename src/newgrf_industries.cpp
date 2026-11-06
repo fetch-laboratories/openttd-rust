@@ -191,7 +191,7 @@ const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept
 	static_assert(alignof(IndustriesResolverObject) <= alignof(OpenTTDIndustryProductionStorage));
 	static const OpenTTDIndustryDeliveryServices services = {
 		.construct = [](OpenTTDIndustryProductionStorage *storage, Industry *ind) noexcept {
-			auto *object = std::construct_at(reinterpret_cast<IndustriesResolverObject *>(storage), ind->location.tile, ind, ind->type);
+			auto *object = std::construct_at(reinterpret_cast<IndustriesResolverObject *>(storage), ind->Record().location.tile, ind, ind->Record().type);
 			return reinterpret_cast<OpenTTDIndustryProductionContext *>(object);
 		},
 		.destroy = [](OpenTTDIndustryProductionContext *context) noexcept { reinterpret_cast<IndustriesResolverObject *>(context)->~IndustriesResolverObject(); },
@@ -207,8 +207,8 @@ const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept
  */
 void IndustryProductionCallback(Industry *ind, int reason)
 {
-	const IndustrySpec *spec = GetIndustrySpec(ind->type);
-	IndustriesResolverObject object(ind->location.tile, ind, ind->type);
+	const IndustrySpec *spec = GetIndustrySpec(ind->Record().type);
+	IndustriesResolverObject object(ind->Record().location.tile, ind, ind->Record().type);
 	/* Resolution is bounded and does not run scripts/commands. Rust owns random,
 	 * repeat limit, version policy and all slot mutations; this leaf only resolves
 	 * and copies register values while the native resolver context is live. */
@@ -230,7 +230,7 @@ bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 }
 
 IndustriesScopeResolver::IndustriesScopeResolver(ResolverObject &ro, TileIndex tile, Industry *industry, IndustryType type, uint32_t random_bits)
-	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), random_bits, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), type}
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->Record().town, tile.base(), random_bits, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), type}
 {
 }
 ScopeResolver *IndustriesResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)

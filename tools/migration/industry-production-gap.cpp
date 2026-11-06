@@ -10,6 +10,7 @@
 #include "core/math_func.hpp"
 #include "core/bitmath_func.hpp"
 #include "rust/industry_ffi.h"
+#include "rust/abi_ffi.h"
 #include <variant>
 using CargoType = uint8_t;
 static constexpr uint16_t CALLBACK_FAILED = 0xFFFF;
@@ -105,8 +106,9 @@ int main()
 				rng = 0x12345678; errors = dirty = 0; parameters.clear();
 				IndustryProductionCallback(&reference, reason);
 				auto expected = parameters; auto expected_rng = rng; auto expected_errors = errors; auto expected_dirty = dirty;
-				Industry candidate{openttd_rust_industry_new(), {}, {}, level};
-				auto *fields = openttd_rust_industry_fields(candidate.owner); fields->prod_level = level;
+				Industry candidate{openttd_rust_industry_new(nullptr), {}, {}, level};
+				/* The owner starts with its record; prod_level is record field 17, at layout item 2 + 2 * 17. */
+				reinterpret_cast<uint8_t *>(candidate.owner)[openttd_rust_abi_layout_named("OpenTTDIndustryRecord", 36)] = level;
 				openttd_rust_industry_accepted_resize(candidate.owner, 3);
 				openttd_rust_industry_produced_resize(candidate.owner, 3);
 				auto a = openttd_rust_industry_accepted_view(candidate.owner);

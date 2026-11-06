@@ -53,7 +53,7 @@
 {
 	const Industry *i = Industry::GetIfValid(industry_id);
 	if (i == nullptr) return ScriptDate::DATE_INVALID;
-	return (ScriptDate::Date)i->construction_date.base();
+	return (ScriptDate::Date)i->Record().construction_date.base();
 }
 
 /* static */ bool ScriptIndustry::SetText(IndustryID industry_id, Text *text)
@@ -136,7 +136,7 @@
 {
 	if (!IsValidIndustry(industry_id)) return INVALID_TILE;
 
-	return ::Industry::Get(industry_id)->location.tile;
+	return ::Industry::Get(industry_id)->Record().location.tile;
 }
 
 /* static */ SQInteger ScriptIndustry::GetAmountOfStationsAround(IndustryID industry_id)
@@ -165,14 +165,14 @@
 {
 	if (!IsValidIndustry(industry_id)) return false;
 
-	return ::GetIndustrySpec(::Industry::Get(industry_id)->type)->behaviour.Test(IndustryBehaviour::BuiltOnWater);
+	return ::GetIndustrySpec(::Industry::Get(industry_id)->Record().type)->behaviour.Test(IndustryBehaviour::BuiltOnWater);
 }
 
 /* static */ bool ScriptIndustry::HasHeliport(IndustryID industry_id)
 {
 	if (!IsValidIndustry(industry_id)) return false;
 
-	return ::GetIndustrySpec(::Industry::Get(industry_id)->type)->behaviour.Test(IndustryBehaviour::AIAirShipRoutes);
+	return ::GetIndustrySpec(::Industry::Get(industry_id)->Record().type)->behaviour.Test(IndustryBehaviour::AIAirShipRoutes);
 }
 
 /* static */ TileIndex ScriptIndustry::GetHeliportLocation(IndustryID industry_id)
@@ -181,7 +181,7 @@
 	if (!HasHeliport(industry_id)) return INVALID_TILE;
 
 	const Industry *ind = ::Industry::Get(industry_id);
-	for (TileIndex tile_cur : ind->location) {
+	for (TileIndex tile_cur : ind->Record().location) {
 		if (IsTileType(tile_cur, MP_STATION) && IsOilRig(tile_cur)) {
 			return tile_cur;
 		}
@@ -194,7 +194,7 @@
 {
 	if (!IsValidIndustry(industry_id)) return false;
 
-	return ::GetIndustrySpec(::Industry::Get(industry_id)->type)->behaviour.Test(IndustryBehaviour::AIAirShipRoutes);
+	return ::GetIndustrySpec(::Industry::Get(industry_id)->Record().type)->behaviour.Test(IndustryBehaviour::AIAirShipRoutes);
 }
 
 /* static */ TileIndex ScriptIndustry::GetDockLocation(IndustryID industry_id)
@@ -203,7 +203,7 @@
 	if (!HasDock(industry_id)) return INVALID_TILE;
 
 	const Industry *ind = ::Industry::Get(industry_id);
-	for (TileIndex tile_cur : ind->location) {
+	for (TileIndex tile_cur : ind->Record().location) {
 		if (IsTileType(tile_cur, MP_STATION) && IsOilRig(tile_cur)) {
 			return tile_cur;
 		}
@@ -216,14 +216,14 @@
 {
 	if (!IsValidIndustry(industry_id)) return IT_INVALID;
 
-	return ::Industry::Get(industry_id)->type;
+	return ::Industry::Get(industry_id)->Record().type;
 }
 
 /* static */ SQInteger ScriptIndustry::GetLastProductionYear(IndustryID industry_id)
 {
 	const Industry *i = Industry::GetIfValid(industry_id);
 	if (i == nullptr) return 0;
-	return i->last_prod_year.base();
+	return i->Record().last_prod_year.base();
 }
 
 /* static */ ScriptDate::Date ScriptIndustry::GetCargoLastAcceptedDate(IndustryID industry_id, CargoType cargo_type)
@@ -245,7 +245,7 @@
 {
 	const Industry *i = Industry::GetIfValid(industry_id);
 	if (i == nullptr) return 0;
-	return i->ctlflags.base();
+	return i->Record().ctlflags.base();
 }
 
 /* static */ bool ScriptIndustry::SetControlFlags(IndustryID industry_id, SQInteger control_flags)
@@ -260,7 +260,7 @@
 {
 	if (!IsValidIndustry(industry_id)) return ScriptCompany::COMPANY_INVALID;
 
-	auto company_id = ::Industry::Get(industry_id)->exclusive_supplier;
+	auto company_id = ::Industry::Get(industry_id)->Record().exclusive_supplier;
 	if (!::Company::IsValidID(company_id)) return ScriptCompany::COMPANY_INVALID;
 
 	return ScriptCompany::ToScriptCompanyID(company_id);
@@ -280,7 +280,7 @@
 {
 	if (!IsValidIndustry(industry_id)) return ScriptCompany::COMPANY_INVALID;
 
-	auto company_id = ::Industry::Get(industry_id)->exclusive_consumer;
+	auto company_id = ::Industry::Get(industry_id)->Record().exclusive_consumer;
 	if (!::Company::IsValidID(company_id)) return ScriptCompany::COMPANY_INVALID;
 
 	return ScriptCompany::ToScriptCompanyID(company_id);
@@ -300,7 +300,7 @@
 {
 	const Industry *i = Industry::GetIfValid(industry_id);
 	if (i == nullptr) return 0;
-	return i->prod_level;
+	return i->Record().prod_level;
 }
 
 /* static */ bool ScriptIndustry::SetProductionLevel(IndustryID industry_id, SQInteger prod_level, bool show_news, Text *custom_news)

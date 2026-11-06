@@ -187,7 +187,7 @@ static void ConvertTownOwner()
 static void UpdateExclusiveRights()
 {
 	for (Town *t : Town::Iterate()) {
-		t->exclusivity = CompanyID::Invalid();
+		t->Record().exclusivity = CompanyID::Invalid();
 	}
 }
 
@@ -276,7 +276,7 @@ static void InitializeWindowsAndCaches()
 	for (Industry *i : Industry::Iterate()) {
 		if (i->psa != nullptr) {
 			i->psa->feature = GSF_INDUSTRIES;
-			i->psa->tile = i->location.tile;
+			i->psa->tile = i->Record().location.tile;
 		}
 	}
 	for (Station *s : Station::Iterate()) {
@@ -288,7 +288,7 @@ static void InitializeWindowsAndCaches()
 	for (Town *t : Town::Iterate()) {
 		for (auto &it : t->psa_list) {
 			it->feature = GSF_FAKE_TOWNS;
-			it->tile = t->xy;
+			it->tile = t->Record().xy;
 		}
 	}
 	for (RoadVehicle *rv : RoadVehicle::Iterate()) {
@@ -680,8 +680,8 @@ bool AfterLoadGame()
 		}
 
 		for (Town *t : Town::Iterate()) {
-			t->name = CopyFromOldName(t->townnametype);
-			if (!t->name.empty()) t->townnametype = SPECSTR_TOWNNAME_START + _settings_game.game_creation.town_name;
+			t->name = CopyFromOldName(t->Record().townnametype);
+			if (!t->name.empty()) t->Record().townnametype = SPECSTR_TOWNNAME_START + _settings_game.game_creation.town_name;
 		}
 	}
 
@@ -1466,7 +1466,7 @@ bool AfterLoadGame()
 		for (Waypoint *wp : Waypoint::Iterate()) wp->build_date      += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 		for (Engine *e : Engine::Iterate())      e->intro_date       += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 		for (Company *c : Company::Iterate())    c->inaugurated_year += EconomyTime::ORIGINAL_BASE_YEAR;
-		for (Industry *i : Industry::Iterate())  i->last_prod_year   += EconomyTime::ORIGINAL_BASE_YEAR;
+		for (Industry *i : Industry::Iterate())  i->Record().last_prod_year   += EconomyTime::ORIGINAL_BASE_YEAR;
 
 		for (Vehicle *v : Vehicle::Iterate()) {
 			v->date_of_last_service += EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
@@ -1488,7 +1488,7 @@ bool AfterLoadGame()
 		for (Industry *i : Industry::Iterate()) {
 			uint j;
 
-			if (GetIndustrySpec(i->type)->behaviour.Test(IndustryBehaviour::PlantOnBuild)) {
+			if (GetIndustrySpec(i->Record().type)->behaviour.Test(IndustryBehaviour::PlantOnBuild)) {
 				for (j = 0; j != 50; j++) PlantRandomFarmField(i);
 			}
 		}
@@ -1669,7 +1669,7 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_56)) {
 		for (Town *t : Town::Iterate()) {
 			if (_settings_game.economy.larger_towns != 0 && (t->index % _settings_game.economy.larger_towns) == 0) {
-				t->larger_town = true;
+				t->Record().larger_town = true;
 			}
 		}
 	}
@@ -1738,7 +1738,7 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_70)) {
 		/* Added variables to support newindustries */
-		for (Industry *i : Industry::Iterate()) i->founder = OWNER_NONE;
+		for (Industry *i : Industry::Iterate()) i->Record().founder = OWNER_NONE;
 	}
 
 	/* From version 82, old style canals (above sealevel (0), WATER owner) are no longer supported.
@@ -1781,7 +1781,7 @@ bool AfterLoadGame()
 	 * copy the IndustrySpec's cargo types over to the Industry. */
 	if (IsSavegameVersionBefore(SLV_78)) {
 		for (Industry *i : Industry::Iterate()) {
-			const IndustrySpec *indsp = GetIndustrySpec(i->type);
+			const IndustrySpec *indsp = GetIndustrySpec(i->Record().type);
 			for (uint j = 0; j < std::size(i->produced); j++) {
 				i->produced[j].cargo = indsp->produced_cargo[j];
 			}
@@ -2101,8 +2101,8 @@ bool AfterLoadGame()
 		}
 
 		for (Town *t : Town::Iterate()) {
-			if (t->have_ratings.base() == 0xFF) t->have_ratings.Set();
-			for (uint i = 8; i != MAX_COMPANIES; i++) t->ratings[i] = RATING_INITIAL;
+			if (t->Record().have_ratings.base() == 0xFF) t->Record().have_ratings.Set();
+			for (uint i = 8; i != MAX_COMPANIES; i++) t->Record().ratings[i] = RATING_INITIAL;
 		}
 	}
 
@@ -2191,18 +2191,18 @@ bool AfterLoadGame()
 		 * generator for random town layout, use it if needed. */
 		for (Town *t : Town::Iterate()) {
 			if (_settings_game.economy.town_layout != TL_RANDOM) {
-				t->layout = _settings_game.economy.town_layout;
+				t->Record().layout = _settings_game.economy.town_layout;
 				continue;
 			}
 
 			/* Use old layout randomizer code */
-			uint8_t layout = TileHash(TileX(t->xy), TileY(t->xy)) % 6;
+			uint8_t layout = TileHash(TileX(t->Record().xy), TileY(t->Record().xy)) % 6;
 			switch (layout) {
 				default: break;
 				case 5: layout = 1; break;
 				case 0: layout = 2; break;
 			}
-			t->layout = static_cast<TownLayout>(layout - 1);
+			t->Record().layout = static_cast<TownLayout>(layout - 1);
 		}
 	}
 
@@ -2292,49 +2292,49 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_125)) {
 		/* Convert old subsidies */
 		for (Subsidy *s : Subsidy::Iterate()) {
-			if (s->remaining < 12) {
+			if (s->Record().remaining < 12) {
 				/* Converting nonawarded subsidy */
-				s->remaining = 12 - s->remaining; // convert "age" to "remaining"
-				s->awarded = CompanyID::Invalid(); // not awarded to anyone
-				const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+				s->Record().remaining = 12 - s->Record().remaining; // convert "age" to "remaining"
+				s->Record().awarded = CompanyID::Invalid(); // not awarded to anyone
+				const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
 				switch (cs->town_acceptance_effect) {
 					case TAE_PASSENGERS:
 					case TAE_MAIL:
 						/* Town -> Town */
-						s->src.type = s->dst.type = SourceType::Town;
-						if (Town::IsValidID(s->src.ToTownID()) && Town::IsValidID(s->dst.ToTownID())) continue;
+						s->Record().src.type = s->Record().dst.type = SourceType::Town;
+						if (Town::IsValidID(s->Record().src.ToTownID()) && Town::IsValidID(s->Record().dst.ToTownID())) continue;
 						break;
 					case TAE_GOODS:
 					case TAE_FOOD:
 						/* Industry -> Town */
-						s->src.type = SourceType::Industry;
-						s->dst.type = SourceType::Town;
-						if (Industry::IsValidID(s->src.ToIndustryID()) && Town::IsValidID(s->dst.ToTownID())) continue;
+						s->Record().src.type = SourceType::Industry;
+						s->Record().dst.type = SourceType::Town;
+						if (Industry::IsValidID(s->Record().src.ToIndustryID()) && Town::IsValidID(s->Record().dst.ToTownID())) continue;
 						break;
 					default:
 						/* Industry -> Industry */
-						s->src.type = s->dst.type = SourceType::Industry;
-						if (Industry::IsValidID(s->src.ToIndustryID()) && Industry::IsValidID(s->dst.ToIndustryID())) continue;
+						s->Record().src.type = s->Record().dst.type = SourceType::Industry;
+						if (Industry::IsValidID(s->Record().src.ToIndustryID()) && Industry::IsValidID(s->Record().dst.ToIndustryID())) continue;
 						break;
 				}
 			} else {
 				/* Do our best for awarded subsidies. The original source or destination industry
 				 * can't be determined anymore for awarded subsidies, so invalidate them.
 				 * Town -> Town subsidies are converted using simple heuristic */
-				s->remaining = 24 - s->remaining; // convert "age of awarded subsidy" to "remaining"
-				const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+				s->Record().remaining = 24 - s->Record().remaining; // convert "age of awarded subsidy" to "remaining"
+				const CargoSpec *cs = CargoSpec::Get(s->Record().cargo_type);
 				switch (cs->town_acceptance_effect) {
 					case TAE_PASSENGERS:
 					case TAE_MAIL: {
 						/* Town -> Town */
-						const Station *ss = Station::GetIfValid(s->src.id);
-						const Station *sd = Station::GetIfValid(s->dst.id);
+						const Station *ss = Station::GetIfValid(s->Record().src.id);
+						const Station *sd = Station::GetIfValid(s->Record().dst.id);
 						if (ss != nullptr && sd != nullptr && ss->owner == sd->owner &&
 								Company::IsValidID(ss->owner)) {
-							s->src.type = s->dst.type = SourceType::Town;
-							s->src.SetIndex(ss->town->index);
-							s->dst.SetIndex(sd->town->index);
-							s->awarded = ss->owner;
+							s->Record().src.type = s->Record().dst.type = SourceType::Town;
+							s->Record().src.SetIndex(ss->town->index);
+							s->Record().dst.SetIndex(sd->town->index);
+							s->Record().awarded = ss->owner;
 							continue;
 						}
 						break;
@@ -2839,7 +2839,7 @@ bool AfterLoadGame()
 				}
 
 				if (!is_empty) {
-					ind->psa->grfid = _industry_mngr.GetGRFID(ind->type);
+					ind->psa->grfid = _industry_mngr.GetGRFID(ind->Record().type);
 				} else {
 					delete ind->psa;
 					ind->psa = nullptr;
@@ -2900,12 +2900,12 @@ bool AfterLoadGame()
 			/* Set the default cargo requirement for town growth */
 			switch (_settings_game.game_creation.landscape) {
 				case LandscapeType::Arctic:
-					if (FindFirstCargoWithTownAcceptanceEffect(TAE_FOOD) != nullptr) t->goal[TAE_FOOD] = TOWN_GROWTH_WINTER;
+					if (FindFirstCargoWithTownAcceptanceEffect(TAE_FOOD) != nullptr) t->Record().goal[TAE_FOOD] = TOWN_GROWTH_WINTER;
 					break;
 
 				case LandscapeType::Tropic:
-					if (FindFirstCargoWithTownAcceptanceEffect(TAE_FOOD) != nullptr) t->goal[TAE_FOOD] = TOWN_GROWTH_DESERT;
-					if (FindFirstCargoWithTownAcceptanceEffect(TAE_WATER) != nullptr) t->goal[TAE_WATER] = TOWN_GROWTH_DESERT;
+					if (FindFirstCargoWithTownAcceptanceEffect(TAE_FOOD) != nullptr) t->Record().goal[TAE_FOOD] = TOWN_GROWTH_DESERT;
+					if (FindFirstCargoWithTownAcceptanceEffect(TAE_WATER) != nullptr) t->Record().goal[TAE_WATER] = TOWN_GROWTH_DESERT;
 					break;
 
 				default:
@@ -3098,12 +3098,12 @@ bool AfterLoadGame()
 		/* Convert towns growth_rate and grow_counter to ticks */
 		for (Town *t : Town::Iterate()) {
 			/* 0x8000 = TOWN_GROWTH_RATE_CUSTOM previously */
-			if (t->growth_rate & 0x8000) t->flags.Set(TownFlag::CustomGrowth);
-			if (t->growth_rate != TOWN_GROWTH_RATE_NONE) {
-				t->growth_rate = TownTicksToGameTicks(t->growth_rate & ~0x8000);
+			if (t->Record().growth_rate & 0x8000) t->Record().flags.Set(TownFlag::CustomGrowth);
+			if (t->Record().growth_rate != TOWN_GROWTH_RATE_NONE) {
+				t->Record().growth_rate = TownTicksToGameTicks(t->Record().growth_rate & ~0x8000);
 			}
 			/* Add t->index % TOWN_GROWTH_TICKS to spread growth across ticks. */
-			t->grow_counter = TownTicksToGameTicks(t->grow_counter) + t->index % Ticks::TOWN_GROWTH_TICKS;
+			t->Record().grow_counter = TownTicksToGameTicks(t->Record().grow_counter) + t->index % Ticks::TOWN_GROWTH_TICKS;
 		}
 	}
 
@@ -3171,12 +3171,12 @@ bool AfterLoadGame()
 			if (IsTileType(st->xy, MP_STATION) && IsOilRig(st->xy)) {
 				/* Industry tile is always adjacent during construction by TileDiffXY(0, 1) */
 				st->industry = Industry::GetByTile(st->xy + TileDiffXY(0, 1));
-				st->industry->neutral_station = st;
+				st->industry->Record().neutral_station = st;
 			}
 		}
 	} else {
 		/* Link neutral station back to industry, as this is not saved. */
-		for (Industry *ind : Industry::Iterate()) if (ind->neutral_station != nullptr) ind->neutral_station->industry = ind;
+		for (Industry *ind : Industry::Iterate()) if (ind->Record().neutral_station != nullptr) ind->Record().neutral_station->industry = ind;
 	}
 
 	if (IsSavegameVersionBefore(SLV_TREES_WATER_CLASS)) {
@@ -3211,8 +3211,8 @@ bool AfterLoadGame()
 	/* Make sure all industries exclusive supplier/consumer set correctly. */
 	if (IsSavegameVersionBefore(SLV_GS_INDUSTRY_CONTROL)) {
 		for (Industry *i : Industry::Iterate()) {
-			i->exclusive_supplier = INVALID_OWNER;
-			i->exclusive_consumer = INVALID_OWNER;
+			i->Record().exclusive_supplier = INVALID_OWNER;
+			i->Record().exclusive_consumer = INVALID_OWNER;
 		}
 	}
 

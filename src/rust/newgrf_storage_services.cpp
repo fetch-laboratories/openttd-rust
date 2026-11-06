@@ -21,9 +21,9 @@ static OpenTTDIndustryStorage StorageIndustry(Industry *industry) noexcept
 }
 static OpenTTDStorage256 *StorageCreateIndustry(Industry *industry) noexcept
 {
-	const IndustrySpec *spec = GetIndustrySpec(industry->type);
+	const IndustrySpec *spec = GetIndustrySpec(industry->Record().type);
 	assert(PersistentStorage::CanAllocateItem());
-	industry->psa = new PersistentStorage(spec->grf_prop.grfid, GSF_INDUSTRIES, industry->location.tile);
+	industry->psa = new PersistentStorage(spec->grf_prop.grfid, GSF_INDUSTRIES, industry->Record().location.tile);
 	return industry->psa->rust_storage;
 }
 static OpenTTDStorage256 *StorageAirport(Station *station) noexcept { return station->airport.psa == nullptr ? nullptr : station->airport.psa->rust_storage; }
@@ -41,7 +41,7 @@ static OpenTTDStorageReference StorageTown(const Town *town, size_t index) noexc
 static OpenTTDStorage256 *StorageCreateTown(Town *town, uint32_t grfid) noexcept
 {
 	assert(PersistentStorage::CanAllocateItem());
-	return (new PersistentStorage(grfid, GSF_FAKE_TOWNS, town->xy))->rust_storage;
+	return (new PersistentStorage(grfid, GSF_FAKE_TOWNS, town->Record().xy))->rust_storage;
 }
 static void StorageAppendTown(Town *town, BasePersistentStorageArray *storage) noexcept { town->psa_list.push_back(static_cast<PersistentStorage *>(storage)); }
 const OpenTTDStorageServices &GetRustStorageServices() noexcept
