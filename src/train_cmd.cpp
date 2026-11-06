@@ -1161,8 +1161,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.start_stop = TrainReservationStartStop,
 		.station = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::station_index>,
-		.station_train = TrainReservationStationTrain,
-		.station_xy = TrainReservationStationXy,
 		.stuck = TrainReservationStuck,
 		.tile_add = OpenTTDLegacyContextMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset = TrainReservationTileOffset,

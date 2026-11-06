@@ -120,8 +120,6 @@ pub struct Leaves {
     pub shared: *const crate::services::Services,
     pub start_stop: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub station_train: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
-    pub station_xy: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub stuck: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub tile_add: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -1042,11 +1040,15 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     if station == id.vehicle().last_station() {
         id.vehicle().write_last_station(u16::MAX);
     }
-    if (g.leaves.station_train)(g.context, id, station) == 0 {
+    let record =
+        crate::station_record::get_record(g.shared(), crate::station_type::StationID(station));
+    // SAFETY: Station::Get's live destination precondition; no callback overlaps this read.
+    if unsafe { (*record).facilities } & crate::station_type::FACILITY_TRAIN == 0 {
         (g.leaves.increment_order)(g.context, id);
         0
     } else {
-        (g.leaves.station_xy)(g.context, id, station) as u32
+        // SAFETY: No effect intervenes after the facility branch; copy only the original xy field.
+        unsafe { (*record).xy.0 }
     }
 }
 
@@ -1151,8 +1153,6 @@ crate::abi::layouts! {
         shared,
         start_stop,
         station,
-        station_train,
-        station_xy,
         stuck,
         tile_add,
         tile_offset,
@@ -1266,8 +1266,6 @@ pub(crate) mod tests {
             shared: std::ptr::null(),
             start_stop: unused(),
             station: unused(),
-            station_train: unused(),
-            station_xy: unused(),
             stuck: unused(),
             tile_add: unused(),
             tile_offset: unused(),

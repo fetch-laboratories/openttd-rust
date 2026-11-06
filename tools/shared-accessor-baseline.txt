@@ -62,8 +62,6 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
-src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 814d2e3c64d9257f | 1
-src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 37c1dff2d9f24802 | 1
 src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
 src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
 src/rust/train_services.h | TrainMapSize(OpenTTDTrainHandle) noexcept | b49ebe1aff917479 | 1
