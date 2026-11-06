@@ -18,21 +18,32 @@ import unittest.mock
 from collections.abc import Sequence
 from functools import partial
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 from unittest.mock import patch
 
 from code_lines import without_comments
 from simulation import (
+    cli as simulation_cli,
+)
+from simulation import (
     community_ai,
     community_newgrf,
+    configuration,
     engines,
     newgrf_loading,
     newgrf_sets,
     platform_subset,
+    registry,
     runtime,
+    savegame,
+    scenario_runner,
     stations,
 )
 from simulation import core as simulate
+from simulation import (
+    game as game_module,
+)
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
 
@@ -267,9 +278,9 @@ class SimulationDeterminismTests(unittest.TestCase):
                 with (
                     self.subTest(scenario=scenario),
                     patch.object(
-                        simulate, "game_slot", return_value=contextlib.nullcontext()
+                        game_module, "game_slot", return_value=contextlib.nullcontext()
                     ),
-                    patch.object(simulate.subprocess, "run") as launch,
+                    patch.object(game_module.subprocess, "run") as launch,
                 ):
                     launch.return_value.returncode = 0
                     run = simulate.run_game(
@@ -354,7 +365,9 @@ class SimulationDeterminismTests(unittest.TestCase):
     def test_each_requested_selector_must_match_before_any_run(self) -> None:
         stderr = io.StringIO()
         with (
-            patch.object(simulate, "scenario_list", return_value=[{"name": "valid"}]),
+            patch.object(
+                simulation_cli, "scenario_list", return_value=[{"name": "valid"}]
+            ),
             patch.object(sys, "argv", ["simulate.py", "valid", "misspelled", "--list"]),
             contextlib.redirect_stderr(stderr),
         ):
@@ -367,7 +380,7 @@ class SimulationDeterminismTests(unittest.TestCase):
         output = io.StringIO()
         with (
             patch.object(
-                simulate,
+                simulation_cli,
                 "scenario_list",
                 return_value=[
                     {"name": "valid"},
@@ -409,15 +422,15 @@ class SimulationDeterminismTests(unittest.TestCase):
             }
 
         with (
-            patch.object(simulate, "scenario_modules", return_value=[]),
-            patch.object(simulate, "run_game", side_effect=run),
+            patch.object(registry, "scenario_modules", return_value=[]),
+            patch.object(scenario_runner, "run_game", side_effect=run),
             patch.object(
-                simulate,
+                scenario_runner,
                 "save_moment",
                 side_effect=lambda p: (1, 0, 2 if "candidate" in p.parts else 1),
             ),
             patch.object(
-                simulate,
+                scenario_runner,
                 "compare_saves",
                 side_effect=lambda a, b, *args: compared.append(a) or [],
             ),
@@ -516,6 +529,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "from pathlib import Path\n"
                 "ROOT = Path(__file__).resolve().parents[1]\n"
                 "LOCAL = COMMON_LOCAL = ROOT / '.local'\n"
+                "REFERENCE = ROOT / 'reference-source'\n"
                 "REFERENCE_BUILD = ROOT / 'reference'\n"
                 "CANDIDATE_BUILD = ROOT / 'build-rust'\n"
                 "SANITIZE = False\n"
@@ -524,6 +538,9 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "def git(*args):\n"
                 "    return (ROOT / ('head' if args[0] == 'rev-parse' else 'status')).read_text()\n"
             )
+            driver = ModuleType("fixture_driver")
+            driver.__file__ = str(root / "tools/migration.py")
+            exec((root / "tools/migration.py").read_text(), vars(driver))
             ai_initial: dict[str, str] = {}
             for folder in ("town-name-observer", "tree-scenario-ai"):
                 ai = root / "tools" / folder
@@ -617,28 +634,29 @@ class SimulationRuntimeTests(unittest.TestCase):
             elif custom:
                 argv += ["--candidate", str(originals["candidate"])]
             with (
-                patch.object(simulate, "ROOT", root),
+                patch.object(simulation_cli, "ROOT", root),
                 patch.object(
-                    simulate,
+                    simulation_cli,
                     "scenario_list",
                     return_value=[
                         {"name": "a", "town_style": 0},
                         {"name": "b", "trees": "commands"},
                     ],
                 ),
-                patch.object(simulate, "run_scenario", side_effect=run),
+                patch.object(simulation_cli, "run_scenario", side_effect=run),
                 patch.object(sys, "argv", argv),
+                patch.object(configuration, "_current", configuration.configuration()),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
                 if crash:
                     with self.assertRaisesRegex(RuntimeError, "scenario failed"):
-                        simulate.main()
+                        simulate.main(driver)
                     run = cast(Any, next((root / ".local/simulation").iterdir()))
                     self.assertFalse((run / "reference-runtime").exists())
                     self.assertFalse((run / "candidate-runtime").exists())
                     self.assertFalse((run / "report.json").exists())
                     return
-                self.assertEqual(simulate.main(), 0 if passed else 1)
+                self.assertEqual(simulate.main(driver), 0 if passed else 1)
             report_path = next((root / ".local/simulation").glob("*/report.json"))
             report = json.loads(report_path.read_text())
             self.assertEqual(report["passed"], passed)
@@ -682,7 +700,12 @@ class SimulationRuntimeTests(unittest.TestCase):
                             "from pathlib import Path\n"
                             "LOCAL = COMMON_LOCAL = Path(__file__).resolve().parents[1] / '.local'\n"
                             "SANITIZE = False\n"
+                            "REFERENCE = REFERENCE_BUILD = CANDIDATE_BUILD = LOCAL\n"
                         )
+
+                        driver = ModuleType("fixture_driver")
+                        driver.__file__ = str(root / "tools/migration.py")
+                        exec((root / "tools/migration.py").read_text(), vars(driver))
 
                         def prepare(*args: object, crash: bool = crash) -> None:
                             out = cast(Path, args[-2])
@@ -692,9 +715,11 @@ class SimulationRuntimeTests(unittest.TestCase):
                                 raise RuntimeError("fixture preparation failed")
 
                         with (
-                            patch.object(simulate, "ROOT", root),
+                            patch.object(simulation_cli, "ROOT", root),
                             patch.object(
-                                simulate, "scenario_list", return_value=[{"name": "a"}]
+                                simulation_cli,
+                                "scenario_list",
+                                return_value=[{"name": "a"}],
                             ),
                             patch.object(module, name, side_effect=prepare),
                             patch.object(sys, "argv", ["simulate.py", *arguments]),
@@ -703,9 +728,9 @@ class SimulationRuntimeTests(unittest.TestCase):
                                 with self.assertRaisesRegex(
                                     RuntimeError, "preparation failed"
                                 ):
-                                    simulate.main()
+                                    simulate.main(driver)
                             else:
-                                self.assertEqual(simulate.main(), 0)
+                                self.assertEqual(simulate.main(driver), 0)
                         run = next((root / ".local/simulation").iterdir())
                         self.assertFalse((run / "reference-runtime").exists())
                         self.assertEqual(
@@ -881,10 +906,10 @@ class SimulationSpeedTests(unittest.TestCase):
                     )
                 self.assertEqual(command, ["reference"])  # Actual reference cache hit.
             with (
-                patch.object(simulate, "scenario_modules", return_value=()),
-                patch.object(simulate, "run_game", side_effect=runs * 3) as game,
+                patch.object(registry, "scenario_modules", return_value=()),
+                patch.object(scenario_runner, "run_game", side_effect=runs * 3) as game,
                 patch.object(
-                    simulate,
+                    scenario_runner,
                     "save_moment",
                     side_effect=[(1, 0, 74), (1, 0, 75)] * 3
                     if failure.get("moment")
@@ -892,7 +917,7 @@ class SimulationSpeedTests(unittest.TestCase):
                     return_value=(1, 0, 74),
                 ),
                 patch.object(
-                    simulate,
+                    scenario_runner,
                     "compare_saves",
                     return_value=[{"field": "world"}]
                     if failure.get("difference")
@@ -1076,8 +1101,8 @@ class InstructionSpeedTests(unittest.TestCase):
 
             cli = ["sim", "--instructions", f"--frozen-runtimes={root / 'bundle'}"]
             with (
-                patch.object(simulate, "scenario_list", return_value=[scenario]),
-                patch.object(simulate, "run_scenario", side_effect=collect),
+                patch.object(simulation_cli, "scenario_list", return_value=[scenario]),
+                patch.object(simulation_cli, "run_scenario", side_effect=collect),
                 patch.object(sys, "argv", cli),
                 self.assertRaisesRegex(RuntimeError, "collected frozen profiles"),
             ):
@@ -1263,6 +1288,103 @@ class InstructionSpeedTests(unittest.TestCase):
                 settings = json.loads((build / "instruction-build.json").read_text())
             self.assertTrue(settings["settings"].startswith(anchored + "ct"))
 
+    def test_pkg_config_scratch_keeps_real_build_inputs_distinct(self) -> None:
+        settings = (
+            "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++\n"
+            "CMAKE_CXX_FLAGS:STRING=-O2\n"
+            "CURL_LIBRARY_RELEASE:FILEPATH=/usr/lib/libcurl.so\n"
+            "CURL_PREFIX:INTERNAL=/usr\n"
+            "FIND_PACKAGE_MESSAGE_DETAILS_CURL:INTERNAL=[libcurl][8.5]\n"
+            "prefix_result:INTERNAL=AsynchDNS;GSS-API;HSTS;HTTP2;HTTPS-proxy;IDN;"
+            "IPv6;Kerberos;Largefile;NTLM;PSL;SPNEGO;SSL;TLS-SRP;UnixSockets;alt-svc;"
+            "brotli;libz;threadsafe;zstd\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            build, run, tools = (root / name for name in ("build", "run", "tools"))
+            for folder in (build, run, tools):
+                folder.mkdir()
+            binary = build / "openttd-rust"
+            binary.write_bytes(b"game")
+            valgrind = tools / "valgrind"
+            valgrind.write_bytes(b"dispatcher")
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                (tools / name).write_bytes(b"tool")
+            metadata = build / "instruction-build.json"
+            library = root / "libcurl.so"
+            library.write_bytes(b"runtime library")
+            env = {"VALGRIND_LIB": str(tools)}
+            scenario = cast(simulate.Scenario, dict(kind="generate", ticks=1))
+
+            def measured(
+                text: str,
+                reference: bool = False,
+                details: ir.IdentityDetails | None = None,
+            ) -> dict[str, Any]:
+                metadata.write_text(
+                    json.dumps(dict(settings=text, executable=ir.digest(b"game")))
+                )
+                return ir.identity(
+                    scenario, binary, build, run, env, valgrind, reference, details
+                )
+
+            def output(command: list[str], **kwargs: object) -> str:
+                return f"{library} (0x123)" if command[0] == "ldd" else "tool-v1"
+
+            with patch.object(ir.subprocess, "check_output", side_effect=output):
+                anchored = measured(settings)
+                details = cast(ir.IdentityDetails, {})
+                self.assertEqual(measured(settings, details=details), anchored)
+                self.assertEqual(details["tool"][:2], (str(valgrind), "tool-v1"))
+                self.assertEqual(
+                    details["tool_files"],
+                    [
+                        str(tools / name)
+                        for name in ("callgrind-test", "vgpreload_core-test.so")
+                    ],
+                )
+                self.assertEqual(details["configuration"], settings)
+                changed = cast(ir.IdentityDetails, {})
+                measured(settings.replace("-O2", "-O3"), details=changed)
+                self.assertIn("CMAKE_CXX_FLAGS:STRING=-O3", changed["configuration"])
+                self.assertNotEqual(changed["configuration"], details["configuration"])
+                self.assertEqual(
+                    measured(settings, True)["compatible"], anchored["compatible"]
+                )
+                drifted = settings.replace(ir.ANCHORED_PREFIX_RESULT, "/usr")
+                self.assertEqual(measured(drifted), anchored)
+                self.assertNotEqual(measured(drifted, True), measured(settings, True))
+                for before, after in (
+                    ("/usr/bin/c++", "/usr/bin/clang++"),
+                    ("-O2", "-O3"),
+                    ("/usr/lib/libcurl.so", "/other/libcurl.so"),
+                    ("CURL_PREFIX:INTERNAL=/usr", "CURL_PREFIX:INTERNAL=/other"),
+                    ("[8.5]", "[8.6]"),
+                    ("prefix_result:INTERNAL", "prefix_result:STRING"),
+                ):
+                    with self.subTest(input=before):
+                        self.assertNotEqual(
+                            measured(drifted.replace(before, after)), anchored
+                        )
+                for name in ("callgrind-test", "vgpreload_core-test.so"):
+                    path = tools / name
+                    path.write_bytes(b"different tool")
+                    self.assertNotEqual(measured(drifted), anchored)
+                    path.write_bytes(b"tool")
+                library.write_bytes(b"changed runtime library")
+                self.assertNotEqual(measured(drifted), anchored)
+                library.write_bytes(b"runtime library")
+                (run / "script").write_text("changed input")
+                self.assertNotEqual(measured(drifted), anchored)
+                (run / "script").unlink()
+                with patch.object(
+                    ir.subprocess, "check_output", return_value="tool-v2"
+                ):
+                    self.assertNotEqual(measured(drifted), anchored)
+                binary.write_bytes(b"changed executable")
+                with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                    measured(drifted)
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1322,6 +1444,83 @@ class InstructionSpeedTests(unittest.TestCase):
 
 
 class SpeedPassTests(unittest.TestCase):
+    def test_preparation_diagnoses_anchor_before_games(self) -> None:
+        from simulation import speed
+
+        name = "play-test"
+        identities = {name: {"candidate": {"compatible": "current"}}}
+        fields = cast(
+            ir.IdentityDetails,
+            dict(
+                configuration="CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++\nCMAKE_CXX_FLAGS:STRING=-O3\n",
+                tool=(
+                    "/selected/valgrind",
+                    "valgrind-3.22",
+                    "dispatcher-hash",
+                    ["core-hash"],
+                ),
+                tool_files=["/selected/vgpreload_core-test.so"],
+            ),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+
+            def copy_runtime(
+                build: Path, binary: Path, target: Path, **kwargs: object
+            ) -> None:
+                target.mkdir()
+                (target / "instruction-build.json").write_text("{}")
+
+            def prepare_inputs(
+                out: Path,
+                binaries: dict[str, Path],
+                builds: dict[str, Path],
+                env: dict[str, str],
+                details: dict[str, dict[str, ir.IdentityDetails]],
+            ) -> tuple[list[simulate.Scenario], dict[str, dict[str, Any]]]:
+                details[name] = {"candidate": fields}
+                return [], identities
+
+            with (
+                patch.object(migration, "git", side_effect=["head", ""]),
+                patch.object(
+                    migration, "reference_lock", return_value=contextlib.nullcontext()
+                ),
+                patch.object(speed.core, "copy_runtime", side_effect=copy_runtime),
+                patch.object(speed.core, "adapter_modules", return_value=[]),
+                patch.object(speed, "prepare_inputs", side_effect=prepare_inputs),
+                patch.object(
+                    ir,
+                    "SPEED_ANCHORS",
+                    {name: {"anchor": {"identity": {"compatible": "anchor"}}}},
+                ),
+                patch.object(speed.core, "run_game") as game,
+                contextlib.redirect_stdout(io.StringIO()) as printed,
+            ):
+                self.assertEqual(speed.prepare(out, None, migration), 0)
+            game.assert_not_called()
+            self.assertIn("current current, anchor anchor", printed.getvalue())
+            self.assertIn("before profiling", printed.getvalue())
+            for diagnostic in (
+                "mismatch cause is unknown",
+                "/selected/valgrind",
+                "reported version=valgrind-3.22",
+                "/selected/vgpreload_core-test.so: sha256=core-hash",
+                "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++",
+                "CMAKE_CXX_FLAGS:STRING=-O3",
+            ):
+                self.assertIn(diagnostic, printed.getvalue())
+            self.assertEqual(
+                json.loads((out / "manifest.json").read_text())["identity_details"][
+                    name
+                ]["candidate"]["configuration"],
+                fields["configuration"],
+            )
+            self.assertEqual(
+                json.loads((out / "manifest.json").read_text())["runtime_identities"],
+                identities,
+            )
+
     def test_collection_prepares_before_hold_and_compares_after_release(self) -> None:
         from simulation import speed
 
@@ -1385,12 +1584,12 @@ class SpeedPassTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "Hold", Hold),
-            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(registry, "scenario_modules", return_value=[]),
             patch.object(simulate, "prepare_game", side_effect=prepare),
             patch.object(simulate, "execute_game", side_effect=execute),
             patch.object(simulate, "read_game", side_effect=read),
-            patch.object(simulate, "save_moment", return_value=(1, 0, 74)),
-            patch.object(simulate, "compare_saves", side_effect=compare),
+            patch.object(scenario_runner, "save_moment", return_value=(1, 0, 74)),
+            patch.object(scenario_runner, "compare_saves", side_effect=compare),
         ):
             out = Path(directory)
             roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
@@ -1540,8 +1739,11 @@ class SpeedPassTests(unittest.TestCase):
             folder: Path,
             env: dict[str, str],
             reference: bool,
+            details: ir.IdentityDetails | None = None,
         ) -> tuple[list[str], dict[str, Any]]:
             calls.append((binary, reference))
+            if details is not None:
+                details["configuration"] = binary
             identity: dict[str, Any] = {"compatible": binary, "executable": binary}
             if not reference:
                 identity["entries"] = ["candidate"]
@@ -1549,16 +1751,29 @@ class SpeedPassTests(unittest.TestCase):
 
         scenario = {"name": "play-a", "kind": "play"}
         roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
+        diagnostics: dict[str, dict[str, ir.IdentityDetails]] = {}
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "speed_scenarios", return_value=[scenario]),
-            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(registry, "scenario_modules", return_value=[]),
             patch.object(simulate, "prepare_scenario", return_value=scenario),
             patch.object(simulate, "prepare_run_dir"),
             patch.object(speed.instructions, "prepare", side_effect=prepare),
         ):
             _, identities = speed.prepare_inputs(Path(directory), roles, roles, {})
-        self.assertEqual(sorted(calls), [("candidate", False), ("reference", True)])
+            _, diagnosed = speed.prepare_inputs(
+                Path(directory), roles, roles, {}, diagnostics
+            )
+        self.assertEqual(diagnosed, identities)
+        self.assertEqual(
+            diagnostics["play-a"]["candidate"]["configuration"], "candidate"
+        )
+        self.assertEqual(
+            diagnostics["play-a"]["reference"]["configuration"], "reference"
+        )
+        self.assertEqual(
+            sorted(calls), [("candidate", False)] * 2 + [("reference", True)] * 2
+        )
         self.assertNotIn("entries", identities["play-a"]["reference"])
         self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
 
@@ -2063,6 +2278,7 @@ class CommunityInputTests(unittest.TestCase):
             with (
                 self.subTest(replaced=replaced),
                 patch.object(simulate, "read_save", return_value=chunks),
+                patch.object(savegame, "read_save", return_value=chunks),
             ):
                 if replaced:
                     with self.assertRaisesRegex(RuntimeError, "AI 0 was replaced"):

@@ -6,11 +6,12 @@ import hashlib
 import io
 import json
 import re
-import subprocess
 import tokenize
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
+
+import vcs
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/shared-accessor-baseline.txt"
@@ -31,7 +32,7 @@ TABLE = r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(?!\s*\})(.*?)\n\s*};
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
+    return vcs.git(*args, cwd=ROOT)
 
 
 def definitions(

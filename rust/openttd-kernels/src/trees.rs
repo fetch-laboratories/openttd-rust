@@ -1595,7 +1595,6 @@ mod tests {
         fences: unused_clear1,
         field: unused_clear1,
         set_field: unused_clear2,
-        water_class: unused_clear1,
     };
     extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
         log(Event::Write("clear_square"));

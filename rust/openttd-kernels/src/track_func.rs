@@ -59,6 +59,15 @@ pub fn has_track(bits: u8, track: u8, check: impl Fn(bool) + Copy) -> bool {
     crate::bitmath_func::has_bit(bits, track)
 }
 
+/// `TrackBitsToTrack`, including its single-track assertion and masked lookup.
+pub fn track_bits_to_track(tracks: u8, check: impl Fn(bool) + Copy) -> u8 {
+    let masked = tracks & crate::track_type::TRACK_BIT_MASK;
+    check(
+        tracks != crate::track_type::TRACK_BIT_NONE
+            && crate::bitmath_func::kill_first_bit(masked) == crate::track_type::TRACK_BIT_NONE,
+    );
+    crate::bitmath_func::find_first_bit(u64::from(masked))
+}
 /// `TrackToTrackBits`.
 pub fn track_to_track_bits(track: u8, check: impl Fn(bool) + Copy) -> u8 {
     if !is_valid_track(track) {
@@ -226,5 +235,28 @@ mod tests {
         assert_eq!(diag_dir_to_diag_track(4, disabled), 0);
         assert!(is_reversing_road_trackdir(22, disabled));
         assert_eq!(failures.get(), 5);
+    }
+}
+
+#[cfg(test)]
+mod track_bits_conversion_tests {
+    #[test]
+    fn native_mask_and_single_track_assertion() {
+        use std::cell::Cell;
+        for (bits, track, failed) in [
+            (0, 0, true),
+            (255, 0, true),
+            (128, 0, false),
+            (65, 0, false),
+            (2, 1, false),
+            (3, 0, true),
+        ] {
+            let failures = Cell::new(0);
+            assert_eq!(
+                super::track_bits_to_track(bits, |ok| failures.set(failures.get() + u8::from(!ok))),
+                track
+            );
+            assert_eq!(failures.get(), u8::from(failed));
+        }
     }
 }

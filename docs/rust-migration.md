@@ -161,12 +161,26 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | `python3 tools/ffi-bool-returns.py` | Reject Rust-defined C `bool` returns, including callbacks, macro templates and visible simple aliases (#644). Rust-only `cfg(test)` service mocks are excluded. |
 | `python3 tools/orphan-exports.py --base-ref origin/rust-migration` | Check Rust exports and C++ declarations for production use. `tools/orphan-export-baseline.txt` can shrink, not grow. Macros and arbitrary conditional compilation need review; reviewers also check orphan `WITH_RUST` bodies. |
 | `python3 tools/port-metrics.py` | Report code lines with Pygments 2.19.2, using `uv` if needed. Original retirement may be negative; removing fork glue does not retire original C++. |
-| `python3 tools/port-metrics.py --whole-fork` | Report whole-fork and simulation retirement, per-area original, retired, remaining, glue and compiled C++ lines, Rust exports and boundary function pointers. |
+| `python3 tools/port-metrics.py --whole-fork` | Report source-area and simulation retirement, C++ evidence/dependency inventory, Rust exports and boundary function pointers. |
 | `python3 tools/port-metrics.py --functions [AREA ...]` | Add the whole-fork report's remaining original code lines per baseline file and top-level function, plus file scope. Rows sum to each area's remaining count. `facade` marks rows whose remaining lines are only a signature and braces. Function detection is a brace heuristic; macro-headed blocks show as `?`. |
 
 The `tools/test-ffi-bool-returns.py`, `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
 
-Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. The whole-fork report inventories source and `WITH_RUST` guards rather than preprocessing all build defines. Compiled C++ means remaining original plus compiled fork glue; it is not a claim of behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
+Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. `compiled_cpp` and the area totals retain the comparable `src/` plus generated-record inventory and the 284,355-line original denominator. `evidence_cpp` adds tracked C++ outside `src/` and generated non-record fragments, each source identity once. `fork_cpp` is their combined source census, not a preprocessed executable size. Records remain only in the area series. Historical `--head` runs archive each revision's generator and Rust/header/probe inputs; mutable build output is never read.
+
+Evidence rows identify direct Rust/dual-build dependencies as candidate/shared. The pinned-original Monocypher vector generator's documented reference-only compile recipe places it separately; fixtures with reference-like names can still exercise candidate Rust. Other sources stay unresolved and count toward `candidate_cpp_upper_bound`. This conservative bound includes all source-area C++ and unresolved evidence; it is not an exact build graph. Reference-only fork adapters still must retire. Only the separate pinned original is outside the fork inventory.
+
+JSON records the metric version, implementation hash, head, baseline and scope. Recount historical endpoints with the same implementation and report inventory corrections separately from deletion. No line metric claims behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
+
+### Read-only retrospective facts
+
+| Command | Output |
+| --- | --- |
+| `python3 tools/retrospective.py readiness 705 704 --json` | Observed head, PR base (its last sync point), current base-branch tip, mergeability, report SHAs/links, Full status including carry description, and changed-file intersections between the supplied PRs. |
+| `python3 tools/retrospective.py latency 705 704 --json` | Available PR/review/Full-run milestones and completed created-to-merge intervals, with both summed per-PR seconds and their elapsed union. |
+| `python3 tools/retrospective.py stocktake START END` | Same-version whole-fork endpoint delta table; `--json` retains both full metric endpoints and scope metadata. |
+
+These commands read through the existing CI/`gh` helpers and metric. A matching report SHA is a text fact, not an inferred independent approval under shared credentials. Readiness is an observation, not merge authorization; `stable_snapshot` flags a head, PR-base or base-tip change during collection. Absent milestones remain absent and causes remain unknown. Full workflow `updated_at` is labeled as its last update, not a precise completion timestamp; a dispatch run's Git head belongs to the workflow branch, so it is never substituted for the PR head. Edited report text uses the latest edit time. Issue placement remains `python3 docs/skills/steer/issues.py`.
 
 ## Rust-only source sweep
 

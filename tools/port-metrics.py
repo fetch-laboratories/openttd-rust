@@ -6,7 +6,7 @@ lines), then physical-line totals for comparison with historical metrics.
 --whole-fork adds original/retired/remaining/glue by area, compiled C++ distance,
 whole-fork and simulation shares, and Rust exports/service callback slots.
 --functions [AREA ...] adds the remaining lines per file and top-level function.
-Glue includes the C++ record declarations tools/generate-abi.py generates.
+Glue includes generated records; evidence_cpp adds other generated and tracked C++.
 This is a source/guard inventory, not full preprocessing or behavioral coverage.
 
 Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
@@ -14,6 +14,7 @@ Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
 """
 
 import argparse
+import hashlib
 import io
 import json
 import re
@@ -27,6 +28,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+import vcs
 from code_lines import (
     RUST_EXPORT,
     Comment,
@@ -37,6 +39,8 @@ from code_lines import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+METRIC_VERSION = 2
+METRIC_SCOPE = "src-and-records; tracked-outside-src-and-generated-nonrecord-evidence"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
 # World-state owners and their commands/accessors; excludes GUI, platform, vendor
 # and generic support. Match complete family names, not arbitrary substrings.
@@ -80,7 +84,27 @@ class FunctionRow(TypedDict):
     facade: bool
 
 
+class EvidenceRow(TypedDict):
+    path: str
+    lines: int
+    dependency: str
+    reason: str
+
+
+class EvidenceMetrics(TypedDict):
+    tracked: int
+    generated: int
+    candidate_shared: int
+    reference_only: int
+    unresolved: int
+    total: int
+    files: list[EvidenceRow]
+
+
 class Metrics(TypedDict, total=False):
+    evidence_cpp: EvidenceMetrics
+    fork_cpp: int
+    candidate_cpp_upper_bound: int
     rust: int
     tooling: int
     glue: int
@@ -108,9 +132,7 @@ Guard = tuple[str | None, bool]
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(
-        ["git", *args], cwd=ROOT, text=True, errors="replace"
-    )
+    return vcs.git(*args, cwd=ROOT, errors="replace")
 
 
 def classify(text: str) -> list[str]:
@@ -429,23 +451,94 @@ GENERATED_AREA = "Boundary layer"
 
 
 @lru_cache(maxsize=8)
-def generated_records(rev: str) -> dict[str, str]:
-    """C++ record headers tools/generate-abi.py emits at `rev`."""
-    paths = ["rust/openttd-kernels/src", "tools/generate-abi.py"]
-    listed = git("ls-tree", "--name-only", rev, "--", *paths).split()
-    if len(listed) != len(paths):
+def generated_fragments(rev: str) -> dict[str, str]:
+    """Run the revision's generator with its tracked inputs, never build output."""
+    required = ["rust/openttd-kernels/src", "tools/generate-abi.py"]
+    optional = ["src/rust", "tools/migration/windows-abi"]
+    listed = git("ls-tree", "--name-only", rev, "--", *required, *optional).splitlines()
+    if not set(required) <= set(listed):
         return {}
-    archive = subprocess.check_output(["git", "archive", rev, "--", *paths], cwd=ROOT)
+    archive = subprocess.check_output(["git", "archive", rev, "--", *listed], cwd=ROOT)
     with tempfile.TemporaryDirectory() as directory:
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
             tar.extractall(directory, filter="data")
         generator = runpy.run_path(str(Path(directory) / "tools/generate-abi.py"))
-        if "shared_records" not in generator:
-            return {}
-        fragments = generator["generate"](Path(directory))
+        return generator["generate"](Path(directory))
+
+
+def generated_records(rev: str) -> dict[str, str]:
+    """Record declarations belong only to the historical src/area series."""
     return {
-        name: text for name, text in fragments.items() if name.startswith("abi-record-")
+        name: text
+        for name, text in generated_fragments(rev).items()
+        if name.startswith("abi-record-")
     }
+
+
+# Its compile recipe links only pinned Monocypher; other fixtures also exercise Rust.
+REFERENCE_ONLY_CPP = {"tools/migration/crypto-vectors.cpp"}
+
+
+def evidence_cpp(head: str, all_lines: bool = False) -> EvidenceMetrics:
+    """Count source identities once; unresolved dependencies stay in the upper bound."""
+    rows: list[EvidenceRow] = []
+    for path in git("ls-tree", "-r", "--name-only", head).splitlines():
+        if path.startswith("src/") or not path.endswith(SOURCES):
+            continue
+        text = show(head, path)
+        dependency, reason = (
+            "unresolved",
+            "Conservatively included in candidate distance; dependency not established",
+        )
+        if path in REFERENCE_ONLY_CPP and "openttd_rust_" not in text:
+            dependency, reason = (
+                "reference_only",
+                "Pinned-original Monocypher vector generator; compile recipe in source",
+            )
+        elif re.search(
+            r"\b(?:openttd_rust_\w+|WITH_RUST)\b",
+            without_comments(text, path, strings=True),
+        ):
+            dependency, reason = (
+                "candidate_shared",
+                "Source directly uses Rust linkage or the dual-build define",
+            )
+        rows.append(
+            EvidenceRow(
+                path=path,
+                lines=len(classify(text)) if all_lines else len(code_lines(text, path)),
+                dependency=dependency,
+                reason=reason,
+            )
+        )
+    tracked = sum(row["lines"] for row in rows)
+    for name, text in generated_fragments(head).items():
+        if name.startswith("abi-record-") or not name.endswith(SOURCES):
+            continue
+        rows.append(
+            EvidenceRow(
+                path="generated/" + name,
+                lines=len(classify(text)) if all_lines else len(code_lines(text, name)),
+                dependency="candidate_shared",
+                reason="Generated ABI checks consumed by candidate native tests",
+            )
+        )
+    total = sum(row["lines"] for row in rows)
+    return EvidenceMetrics(
+        tracked=tracked,
+        generated=total - tracked,
+        total=total,
+        files=rows,
+        candidate_shared=sum(
+            row["lines"] for row in rows if row["dependency"] == "candidate_shared"
+        ),
+        reference_only=sum(
+            row["lines"] for row in rows if row["dependency"] == "reference_only"
+        ),
+        unresolved=sum(
+            row["lines"] for row in rows if row["dependency"] == "unresolved"
+        ),
+    )
 
 
 def generated_glue(rev: str, all_lines: bool = False) -> int:
@@ -541,7 +634,13 @@ def metrics(
             row["remaining"] = row["original"] - row["retired"]
             row["compiled"] = row["remaining"] + row["glue"]
         compiled = sum(row["compiled"] for row in areas.values())
+        evidence = evidence_cpp(head, all_lines)
         result.update(
+            evidence_cpp=evidence,
+            fork_cpp=compiled + evidence["total"],
+            candidate_cpp_upper_bound=compiled
+            + evidence["total"]
+            - evidence["reference_only"],
             original_total=total,
             whole_fork_retired=after["retired"],
             whole_fork_percent=100 * after["retired"] / total if total else 0,
@@ -713,7 +812,22 @@ def main() -> None:
         result["functions"] = function_rows(args.functions or AREAS, retired)
     result["all_lines"] = metrics(base, args.head, args.whole_fork, all_lines=True)
     if args.json:
-        print(json.dumps(dict(result, base=base)))
+        print(
+            json.dumps(
+                dict(
+                    result,
+                    base=base,
+                    head=git("rev-parse", args.head).strip(),
+                    metric_version=METRIC_VERSION,
+                    metric_implementation=hashlib.sha256(
+                        Path(__file__).read_bytes()
+                        + Path(__file__).with_name("code_lines.py").read_bytes()
+                    ).hexdigest(),
+                    metric_scope=METRIC_SCOPE,
+                    baseline=BASELINE,
+                )
+            )
+        )
     else:
         print(
             f"Code lines (Pygments 2.19.2): Rust added: {result['rust']} | tooling added: {result['tooling']} | "
@@ -761,6 +875,13 @@ def main() -> None:
                 )
             print(
                 f"Compiled C++: {result['compiled_cpp']} / {result['original_total']} ({result['compiled_percent']:.2f}%)"
+            )
+            evidence = result["evidence_cpp"]
+            print(
+                f"Evidence C++: tracked {evidence['tracked']} | generated non-record {evidence['generated']} | candidate/shared {evidence['candidate_shared']} | reference-only {evidence['reference_only']} | unresolved {evidence['unresolved']}"
+            )
+            print(
+                f"Fork C++ source census: {result['fork_cpp']} | candidate dependency upper bound (includes unresolved): {result['candidate_cpp_upper_bound']}"
             )
             print(
                 f"Boundary: {result['boundary']['exports']} exports | {result['boundary']['callback_slots']} callback slots"

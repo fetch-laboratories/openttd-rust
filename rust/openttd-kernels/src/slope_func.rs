@@ -151,14 +151,17 @@ pub const FOUNDATION_STEEP_LOWER: u8 = 4;
 pub const FOUNDATION_STEEP_BOTH: u8 = 5;
 /// `FOUNDATION_INVALID`.
 pub const FOUNDATION_INVALID: u8 = 255;
-/// `GetHighestSlopeCorner`, on the native helper's reachable domain.
-pub fn get_highest_slope_corner(s: u8) -> u8 {
+/// `GetHighestSlopeCorner`; the caller supplies its non-returning failure operation.
+pub fn get_highest_slope_corner(s: u8, not_reached: impl FnOnce()) -> u8 {
     match remove_halftile_slope(s) {
         1 | 27 => 0,
         2 | 23 => 1,
         4 | 30 => 2,
         8 | 29 => 3,
-        _ => unreachable!("native highest slope corner"),
+        _ => {
+            not_reached();
+            std::process::abort()
+        }
     }
 }
 /// `IsValidCorner`: `CORNER_W` to `CORNER_N`.

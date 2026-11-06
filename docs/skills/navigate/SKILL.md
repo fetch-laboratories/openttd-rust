@@ -21,6 +21,7 @@ Measure the code before reading the course.
 
 - Count original C++ code lines retired and still compiled, excluding comments, blank and preprocessor lines. Count the whole fork and each area: simulation logic, simulation storage (object classes, pools, map accessors), save/load, script API, network, NewGRF, support, GUI and drawing, platform and vendored.
 - Use `python3 tools/port-metrics.py --whole-fork` where it reports these; count the rest.
+- State the metric's source and build-target scope. Count candidate evidence/tooling and generated C++ omitted by it, keeping reference-only oracle support separate. Recount historical endpoints with the same metric version and report inventory corrections separately from code retirement.
 - Measure retired code lines per day across the fork's history and each of the last several steering periods. Use `--head` for a past commit and `git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'` to list periods.
 - Find the last navigation with `git log --format='%h %ad %s' | grep 'Doc: Navigate'`. Its figures are in the roadmap's "Phases".
 

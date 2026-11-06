@@ -95,8 +95,9 @@ def scheduler_reference(out: Path) -> str:
     build = ROOT / "build-rust"
     binary = out / "scheduler-reference"
     command = [
-        "c++",
+        probe.compiler(build),
         "-std=c++20",
+        *probe.target_flags(build),
         "-O2",
         "-I" + str(ROOT / "src"),
         "-I" + str(build / "generated-abi"),
@@ -112,17 +113,15 @@ def scheduler_reference(out: Path) -> str:
         "-o",
         str(binary),
     ]
-    subprocess.run(
-        command, env=migration.environment(), check=True, capture_output=True
-    )
-    run = subprocess.run([str(binary)], check=True, capture_output=True, text=True)
+    probe.compile(command, out / "compile.log", env=migration.environment())
+    output = probe.execute([binary], binary, stderr="allowed").decode()
     if (
-        not run.stdout.startswith("PASS ")
-        or not run.stdout.endswith(" unchanged-reference scheduler observations\n")
-        or int(run.stdout.split()[1]) == 0
+        not output.startswith("PASS ")
+        or not output.endswith(" unchanged-reference scheduler observations\n")
+        or int(output.split()[1]) == 0
     ):
         raise RuntimeError("scheduler reference fixture omitted completion marker")
-    return run.stdout.strip()
+    return output.strip()
 
 
 def scenarios(soak: bool) -> list[Scenario]:

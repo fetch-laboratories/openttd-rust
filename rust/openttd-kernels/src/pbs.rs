@@ -70,7 +70,7 @@ impl<'a> Pbs<'a> {
         let r = self.rail();
         match (s.tile_type)(tile) {
             MP_RAILWAY => {
-                if (r.is_rail_depot)(tile) {
+                if crate::map_func::World::new(s).is_rail_depot(tile) {
                     return (self.0.depot_bits)(tile).0;
                 }
                 if (s.is_plain_rail)(tile) {
@@ -83,12 +83,12 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_STATION => {
-                if (r.has_station_rail)(tile) {
+                if crate::map_func::World::new(s).station_has_rail(tile) {
                     return (self.0.station_bits)(tile).0;
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL {
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL {
                     return (self.0.wormhole_bits)(tile).0;
                 }
             }
@@ -158,7 +158,7 @@ impl<'a> Pbs<'a> {
                 if (s.is_plain_rail)(tile) {
                     return (self.0.try_track)(tile, track);
                 }
-                if (r.is_rail_depot)(tile) && !(r.depot_reserved)(tile) {
+                if crate::map_func::World::new(s).is_rail_depot(tile) && !(r.depot_reserved)(tile) {
                     (self.0.set_depot)(tile, true);
                     (s.mark_dirty)(tile);
                     return true;
@@ -172,7 +172,9 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_STATION => {
-                if (r.has_station_rail)(tile) && !World::new(s).station_reserved(tile) {
+                if crate::map_func::World::new(s).station_has_rail(tile)
+                    && !World::new(s).station_reserved(tile)
+                {
                     (self.0.set_station)(tile, true);
                     if trigger {
                         let station = (self.0.station)(tile);
@@ -194,7 +196,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL
                     && (self.0.wormhole_bits)(tile).0 == 0
                 {
                     (self.0.set_wormhole)(tile, true);
@@ -209,10 +211,9 @@ impl<'a> Pbs<'a> {
         self.assert_track(tile, track);
         self.dirty(tile);
         let s = self.shared();
-        let r = self.rail();
         match (s.tile_type)(tile) {
             MP_RAILWAY => {
-                if (r.is_rail_depot)(tile) {
+                if crate::map_func::World::new(s).is_rail_depot(tile) {
                     (self.0.set_depot)(tile, false);
                     (s.mark_dirty)(tile);
                 } else if (s.is_plain_rail)(tile) {
@@ -226,13 +227,13 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_STATION => {
-                if (r.has_station_rail)(tile) {
+                if crate::map_func::World::new(s).station_has_rail(tile) {
                     (self.0.set_station)(tile, false);
                     (s.mark_dirty)(tile);
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL {
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL {
                     (self.0.set_wormhole)(tile, false);
                 }
             }
@@ -296,9 +297,9 @@ impl<'a> Pbs<'a> {
     }
     fn block_signal(self, tile: u32, td: u8) -> bool {
         (self.shared().tile_type)(tile) == MP_RAILWAY
-            && (self.rail().has_signal_trackdir)(tile, td)
+            && crate::map_func::World::new(self.shared()).has_signal_on_trackdir(tile, td)
             && !crate::rail_map::is_pbs_signal(
-                (self.rail().signal_type)(tile, trackdir_to_track(td)).0,
+                crate::map_func::World::new(self.shared()).signal_type(tile, trackdir_to_track(td)),
             )
     }
     pub(crate) fn map(self) -> crate::map_func::Map {
@@ -471,7 +472,9 @@ impl<'a> Pbs<'a> {
             if !best.record.is_null() {
                 other.write(best.first());
             }
-            if other.read().record.is_null() && (self.rail().is_rail_station)(res.tile) {
+            if other.read().record.is_null()
+                && crate::map_func::World::new(self.shared()).rail_station(res.tile)
+            {
                 let diff = self
                     .map()
                     .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
@@ -530,7 +533,7 @@ impl<'a> Pbs<'a> {
             if !best.record.is_null() {
                 return best;
             }
-            if (self.rail().is_rail_station)(res.tile) {
+            if crate::map_func::World::new(self.shared()).rail_station(res.tile) {
                 let diff = self
                     .map()
                     .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
@@ -594,8 +597,10 @@ impl<'a> Pbs<'a> {
                 return true;
             }
             if (self.shared().tile_type)(ft.new_tile.0) == MP_RAILWAY
-                && (self.rail().has_signal_trackdir)(ft.new_tile.0, reverse_trackdir(next_td))
-                && (self.rail().signal_type)(ft.new_tile.0, trackdir_to_track(next_td)).0
+                && crate::map_func::World::new(self.shared())
+                    .has_signal_on_trackdir(ft.new_tile.0, reverse_trackdir(next_td))
+                && crate::map_func::World::new(self.shared())
+                    .signal_type(ft.new_tile.0, trackdir_to_track(next_td))
                     == crate::signal_type::SIGTYPE_PBS_ONEWAY
             {
                 crate::witness::hit(crate::witness::PBS_SAFE_OPPOSING_PBS);

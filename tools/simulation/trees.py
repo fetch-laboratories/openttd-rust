@@ -2,7 +2,6 @@
 
 import hashlib
 import re
-import shutil
 import struct
 from collections import Counter
 from pathlib import Path
@@ -426,10 +425,11 @@ def check(
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("trees") == "commands":
-        ai = run_dir / "ai/tree-scenarios"
-        shutil.copytree(scenario["scenario_ai"], ai)
-        (ai / "parameters.nut").write_text(
-            f"TREE_ANCHOR <- {scenario['tree_anchor']};\nTREE_WATER <- {scenario['tree_water']};\n"
+        core.install_ai(
+            scenario,
+            run_dir,
+            "tree-scenarios",
+            f"TREE_ANCHOR <- {scenario['tree_anchor']};\nTREE_WATER <- {scenario['tree_water']};\n",
         )
 
 

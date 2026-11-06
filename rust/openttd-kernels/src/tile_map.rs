@@ -203,6 +203,23 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
     ))
 }
 
+impl TileTypeAccess {
+    /// Run a header helper whose `None` is a failed precondition. The failure
+    /// retries with each source assertion dispatched to the native handler.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn asserted<T>(
+        &self,
+        shared: &crate::services::Services,
+        read: impl Fn(&TileTypeAccess) -> Option<T>,
+    ) -> T {
+        read(self).unwrap_or_else(|| {
+            self.with_native_assert(crate::movement::table(shared).native_assert, read)
+                .expect("live map scalar")
+        })
+    }
+}
+
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
@@ -229,11 +246,9 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
-        read(&self.types.without_native_assert()).unwrap_or_else(|| {
-            self.types
-                .with_native_assert(crate::movement::table(self.shared).native_assert, read)
-                .expect("live map scalar")
-        })
+        self.types
+            .without_native_assert()
+            .asserted(self.shared, read)
     }
     /// `GetTilePixelSlope`.
     #[allow(clippy::inline_always)]
@@ -248,6 +263,51 @@ impl crate::map_func::World<'_> {
     pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
         let (width, height) = self.size();
         self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
+    }
+    /// `GetTileSlopeZ`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_slope_z(&self, t: u32) -> (u8, i32) {
+        let (_, size_y) = self.size();
+        if t < self.types.count() {
+            // Clamped corners of an in-range tile are in range: no `TileHeight` assertion fails.
+            let map = self.dimensions;
+            let (x1, y1) = (map.tile_x(t), map.tile_y(t));
+            let x2 = (x1 + 1).min(map.max_x());
+            let y2 = (y1 + 1).min(crate::map_func::Map::max_y(size_y));
+            let height = |c: u32| {
+                self.types
+                    .require_range(c)
+                    .map_or(0, |f| i32::from(f.height()))
+            };
+            return get_tile_slope_given_height([
+                height(t),
+                height(map.tile_xy(x2, y1)),
+                height(map.tile_xy(x1, y2)),
+                height(map.tile_xy(x2, y2)),
+            ]);
+        }
+        self.tile_slope_z_outside(t)
+    }
+    // An out-of-range tile keeps the native assertion policy of each `TileHeight`.
+    #[cold]
+    #[inline(never)]
+    fn tile_slope_z_outside(&self, t: u32) -> (u8, i32) {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_slope_z(m, t, x, y))
+    }
+    /// `GetTileSlope`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_slope(&self, t: u32) -> u8 {
+        self.tile_slope_z(t).0
+    }
+    /// `IsTileFlat` without the height output.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_flat(&self, t: u32) -> bool {
+        let (x, y) = self.size();
+        self.asserted(|m| is_tile_flat(m, t, x, y))
     }
     /// `GetTileMaxPixelZ`.
     #[allow(clippy::inline_always)]
@@ -441,7 +501,16 @@ mod tests {
     fn failed_world_preconditions_assert_then_read_raw_bits() {
         use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
         let (base, extended) = tiles();
-        let height_cases: [(&str, Read, [i32; 2], u32); 3] = [
+        let height_cases: [(&str, Read, [i32; 2], u32); 4] = [
+            (
+                "GetTileSlopeZ",
+                |w, t| {
+                    let (slope, z) = w.tile_slope_z(t);
+                    [slope.into(), z]
+                },
+                [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 3],
+                2,
+            ),
             (
                 "GetTilePixelSlope",
                 |w, t| {

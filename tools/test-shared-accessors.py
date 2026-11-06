@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory() as directory:
         '{"commit":"%s"}' % git("rev-parse", "HEAD")
     )
     (root / "tools/shared-accessors.py").write_text(SCRIPT.read_text())
+    (root / "tools/vcs.py").write_text(SCRIPT.with_name("vcs.py").read_text())
     canonical = "int Canonical(Vehicle *v) { return v->owner; }"
     for shared in ["services.h", "engine_services.h", "presentation_services.h"]:
         (root / "src/rust" / shared).write_text(canonical)

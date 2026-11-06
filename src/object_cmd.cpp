@@ -365,7 +365,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_OBJECT); }); },
 		.normal = RustNormalGame,
 		.bulldozer = GetRustTownAuthorityServices().bulldozer,
-		.water_class = GetRustClearServices().water_class,
 		.restoration = &GetRustWaterRestorationServices(),
 		.set_owner = GetRustSharedServices().set_tile_owner,
 		.scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d,
