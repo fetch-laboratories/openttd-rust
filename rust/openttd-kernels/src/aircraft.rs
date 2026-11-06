@@ -591,7 +591,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             result
         }
     }
-    fn geometry(&self, s: *const Station) -> Geometry {
+    fn geometry(s: *const Station) -> Geometry {
         crate::station_record::read(s.cast(), |r| {
             if r.airport.area.tile.0 == INVALID_TILE {
                 Geometry {
@@ -1007,7 +1007,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let mut sy = 1;
         let mut has_airport = false;
         if valid {
-            let geometry = self.geometry(s);
+            let geometry = Self::geometry(s);
             tile = geometry.tile;
             rotation = i64::from(geometry.rotation);
             sx = i64::from(geometry.width);
