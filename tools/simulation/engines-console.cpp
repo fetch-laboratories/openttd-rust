@@ -6,8 +6,8 @@
  */
 
 /** @file engines-console.cpp Identical typed lifecycle inputs for both game bodies. */
-#include "engine-record-fixture.hpp"
 #include "stdafx.h"
+#include "engine-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"

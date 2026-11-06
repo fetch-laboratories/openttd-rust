@@ -6,8 +6,8 @@
  */
 
 /** @file fleet-console.cpp Identical command inputs for unchanged-reference fleet witnesses. */
-#include "engine-record-fixture.hpp"
 #include "stdafx.h"
+#include "engine-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
