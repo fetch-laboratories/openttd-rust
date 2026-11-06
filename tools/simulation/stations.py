@@ -571,7 +571,10 @@ static void RoadResolverState(const char *label, BaseStation *st)
 {
 	fmt::print(stderr, "STCMD resolver-state {} {} {} {} {} {} rng {} {}\n", label, st->index.base(), st->roadstop_speclist.size(), FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers), FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
 	for (size_t i = 0; i < st->roadstop_speclist.size(); i++) { const auto &slot = st->roadstop_speclist[i]; fmt::print(stderr, "STCMD resolver-slot {} {} {} {} {}\n", label, i, slot.spec != nullptr, slot.grfid, slot.localidx); }
-	for (const auto &data : st->custom_roadstop_tile_data) fmt::print(stderr, "STCMD resolver-tile {} {} {} {} {}\n", label, data.tile.base(), GetCustomRoadStopSpecIndex(data.tile), st->GetRoadStopRandomBits(data.tile), st->GetRoadStopAnimationFrame(data.tile));
+	for (const auto &data : FIXTURE_FIELD(st, custom_roadstop_tile_data)) {
+		TileIndex tile{data.tile};
+		fmt::print(stderr, "STCMD resolver-tile {} {} {} {} {}\n", label, tile.base(), GetCustomRoadStopSpecIndex(tile), st->GetRoadStopRandomBits(tile), st->GetRoadStopAnimationFrame(tile));
+	}
 }
 static void RoadResolverQueries(BaseStation *st, TileIndex tile, bool waypoint)
 {
@@ -620,8 +623,9 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 		publication->default_result.group = mask == 1 ? lower : upper;
 		spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, publication);
 		FIXTURE_SET(st, WaitingRandomTriggers, waiting_random_triggers, StationRandomTriggers{}); FIXTURE_FIELD(st, random_bits) = 0xA55A;
-		StationNeed(std::ranges::any_of(st->custom_roadstop_tile_data, [tile](const auto &data) { return data.tile == tile; }), __LINE__);
-		for (auto &data : st->custom_roadstop_tile_data) if (data.tile == tile) data.random_bits = 0x69;
+		StationNeed(std::ranges::any_of(FIXTURE_FIELD(st, custom_roadstop_tile_data), [tile](const auto &data) { return TileIndex{data.tile} == tile; }), __LINE__);
+		/* Fixture setup writes existing rows without allocation or setter observations. */
+		for (auto &data : FIXTURE_FIELD(st, custom_roadstop_tile_data)) if (TileIndex{data.tile} == tile) const_cast<RoadStopTileData &>(data).random_bits = 0x69;
 		RoadStopUpdateCachedTriggers(st);
 		RoadStopResolverObject object(spec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile), CBID_RANDOM_TRIGGER); object.SetWaitingRandomTriggers(StationRandomTriggers(1 << to_underlying(trigger))); object.ResolveRerandomisation();
 		uint32_t expected_mask = (mask & 1 ? 8 : 0) | (mask & 2 ? 1 << 18 : 0);
@@ -691,7 +695,7 @@ static void StationRoadResolverReload(bool waypoint)
 	RoadResolverState("missing-reload", st);
 	auto &f = RoadResolverSpecs(waypoint); AssignSpecToRoadStop(&f.specs[0], st, 1); RoadStopUpdateCachedTriggers(st);
 	StationNeed(FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).Test(StationAnimationTrigger::Built) && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 3, __LINE__);
-	RoadResolverState("reattached-cache", st); RoadResolverQueries(st, st->custom_roadstop_tile_data.front().tile, waypoint);
+	RoadResolverState("reattached-cache", st); RoadResolverQueries(st, TileIndex{FIXTURE_FIELD(st, custom_roadstop_tile_data)[0].tile}, waypoint);
 	fmt::print(stderr, "STCMD resolver-reload {} missing reattached cache\n", waypoint);
 }
 
