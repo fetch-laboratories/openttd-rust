@@ -2,8 +2,9 @@
 /** @file services_assert.h Canonical native invariant-failure operation. */
 #ifndef RUST_SERVICES_ASSERT_H
 #define RUST_SERVICES_ASSERT_H
-extern "C" inline void RustAssertCondition([[maybe_unused]] bool condition) noexcept { assert(condition); }
+inline void RustAssertCondition([[maybe_unused]] bool condition) noexcept { assert(condition); }
 inline void RustNotReached() noexcept { NOT_REACHED(); }
 template <typename Owner>
 inline void RustNotReachedWithUnusedOwner(Owner) noexcept { RustNotReached(); }
+extern "C" void openttd_rust_assert_bind(void (*check)(bool) noexcept);
 #endif /* RUST_SERVICES_ASSERT_H */

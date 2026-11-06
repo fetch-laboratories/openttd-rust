@@ -15,8 +15,8 @@ use crate::network_config::TCP_MTU;
 use crate::network_tcp::{self as tcp, NetworkTCPSocketHandler, Packet};
 use crate::packet::{self, State as PacketState};
 use crate::services::ByteSpan;
-use crate::services_assert::RustAssertCondition as check;
-use crate::string_services::RustStringAppend;
+use crate::services_assert::check;
+use crate::string_services::append;
 use crate::tcp_content_type::{self as ct, ContentInfo, state};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
@@ -226,7 +226,7 @@ fn send_packet(s: &Services, mut p: PacketState) {
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
     unsafe {
         packet::recv_string_into(p, s.tcp.packet, check, length, settings, |bytes| {
-            RustStringAppend(text, bytes.as_ptr(), bytes.len());
+            append(text, bytes.as_ptr(), bytes.len());
         });
     }
 }
@@ -893,7 +893,7 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
             filename = &filename[..pos];
         }
 
-        unsafe { RustStringAppend((s.filename)(ci), filename.as_ptr(), filename.len()) };
+        unsafe { append((s.filename)(ci), filename.as_ptr(), filename.len()) };
 
         // Request the next file.
         if !before_download(s) {
