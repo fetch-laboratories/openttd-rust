@@ -6,6 +6,7 @@
  */
 
 /** @file roads-console.cpp Road-command inputs, included by the shared signal fixture. */
+#include "pool-record-fixture.hpp"
 #include "town.h"
 #include "vehicle-record-fixture.hpp"
 #include "tunnelbridge.h"
@@ -263,9 +264,9 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 	RoadRun<CMD_BUILD_BRIDGE>("tb-town-downgrade", t(8, 15), t(2, 15), TRANSPORT_ROAD, 0, ROADTYPE_ROAD);
 	Town *nearest = ClosestTownFromTile(t(2, 15), UINT_MAX);
 	if (nearest == nullptr) SignalFixtureAbort(__LINE__);
-	nearest->ratings[owner] = RATING_MINIMUM;
+	FIXTURE_POOL_RECORD(nearest).ratings[owner] = RATING_MINIMUM;
 	RoadRun<CMD_LANDSCAPE_CLEAR>("tb-town-refuse", t(2, 15));
-	nearest->ratings[owner] = RATING_MAXIMUM;
+	FIXTURE_POOL_RECORD(nearest).ratings[owner] = RATING_MAXIMUM;
 	RoadRun<CMD_LANDSCAPE_CLEAR>("tb-town-clear", t(2, 15));
 	{
 		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
@@ -515,17 +516,17 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	SignalRichCompany(owner);
 	/* Town inner/edge removal in the real rating test mode; no RNG is consumed. */
 	Town *town = *Town::Iterate().begin();
-	town->ratings[owner] = 800;
+	FIXTURE_POOL_RECORD(town).ratings[owner] = 800;
 	Backup<bool> dynamite(_settings_game.construction.extra_dynamite, true);
 	for (uint x = 15; x <= 17; ++x) {
 		Backup<CompanyID> town_company(_current_company, OWNER_TOWN);
 		RoadRun<CMD_BUILD_ROAD>("town-road", t(x, 20), ROAD_X, ROADTYPE_ROAD, DRD_NONE, town->index);
 		town_company.Restore();
 	}
-	town->ratings[owner] = RATING_MINIMUM;
+	FIXTURE_POOL_RECORD(town).ratings[owner] = RATING_MINIMUM;
 	RoadRun<CMD_REMOVE_LONG_ROAD>("town-rating", t(15, 20), t(15, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	RoadRun<CMD_CONVERT_ROAD>("town-convert-rating", t(17, 20), t(15, 20), alternate, false);
-	town->ratings[owner] = 800;
+	FIXTURE_POOL_RECORD(town).ratings[owner] = 800;
 	RoadRun<CMD_CONVERT_ROAD>("town-convert", t(17, 20), t(15, 20), alternate, false);
 	Backup<RoadTypes> town_power(_roadtypes[ROADTYPE_ROAD].powered_roadtypes);
 	_roadtypes[ROADTYPE_ROAD].powered_roadtypes.Set(alternate);
