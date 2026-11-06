@@ -1288,7 +1288,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationID airport = GetStationIndex(tile(20, 1));
 		Backup<bool> noise_setting(_settings_game.economy.station_noise_level, true);
 		uint distance; Town *nearest = AirportGetNearestTown(AirportSpec::Get(AT_SMALL), Station::Get(airport)->airport.rotation, tile(20, 1), AirportTileIterator(Station::Get(airport)), distance);
-		Backup<uint16_t> noise(nearest->noise_reached, UINT16_MAX);
+		Backup<uint16_t> noise(FIXTURE_POOL_RECORD(nearest).noise_reached, UINT16_MAX);
 		auto noisy = Command<CMD_BUILD_AIRPORT>::Do(test, tile(20, 1), AT_SMALL, 0, NEW_STATION, true);
 		StationCost("airport-noise-limit", noisy); StationNeed(noisy.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__);
 		noise.Restore(); noise_setting.Restore();

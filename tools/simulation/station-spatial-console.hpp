@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-spatial-console.hpp Unsorted station observations and actual query consumers. */
-#ifdef WITH_RUST
 #include "pool-record-fixture.hpp"
+#ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #else
 #include "station602-town-original.hpp"

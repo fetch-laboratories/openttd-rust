@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file airport-resolver-console.hpp Actual transient Action2 programs on both games. */
 #include "newgrf_airporttiles.h"
+#include "pool-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 static AirportSpec *AirportFixtureBaseSpec(uint8_t type)
 {
@@ -261,9 +262,9 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	if (!reload) {
 		TileIndex at = origin + TileDiffXY(2, 2), destination = origin + TileDiffXY(18, 18);
 		_settings_game.economy.station_noise_level = true;
-		Town *town = ClosestTownFromTile(at, UINT_MAX); auto old_noise = town->noise_reached; town->noise_reached = town->MaxTownNoise();
+		Town *town = ClosestTownFromTile(at, UINT_MAX); auto old_noise = FIXTURE_POOL_RECORD(town).noise_reached; FIXTURE_POOL_RECORD(town).noise_reached = town->MaxTownNoise();
 		auto refused = Command<CMD_BUILD_AIRPORT>::Do(test, at, type, 0, NEW_STATION, true); StationCost("airport-def-noise", refused);
-		StationNeed(refused.Failed() && refused.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__); town->noise_reached = old_noise;
+		StationNeed(refused.Failed() && refused.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__); FIXTURE_POOL_RECORD(town).noise_reached = old_noise;
 		_settings_game.economy.station_noise_level = false;
 		auto build = [&](DoCommandFlags flags, TileIndex t) { return Command<CMD_BUILD_AIRPORT>::Do(flags, t, type, 0, NEW_STATION, true); };
 		auto price = build(test, at); StationCost("airport-def-test", price); auto cost = build(exec, at); StationCost("airport-def-exec", cost);

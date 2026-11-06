@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-lifecycle-console.hpp Station naming, waypoint ground and destruction fixtures. */
-#ifdef WITH_RUST
 #include "pool-record-fixture.hpp"
+#ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #endif
 #include "vehicle-record-fixture.hpp"
@@ -134,11 +134,11 @@ static void Station562Waypoints(TileIndex tile, DoCommandFlags exec, bool arctic
 	if (IsRoadWaypointOnSnowOrDesert(tile)) ToggleRoadWaypointOnSnowOrDesert(tile);
 	SetTropicZone(tile, TROPICZONE_DESERT); SetRoadWaypointRoadside(tile, Roadside::Paved);
 	const Town *town = ClosestTownFromTile(tile, UINT_MAX);
-	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(const_cast<Town *>(town)->cache.squared_town_zone_radius);
-	const_cast<Town *>(town)->cache.squared_town_zone_radius.fill(0);
+	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(FIXTURE_TOWN_CACHE(const_cast<Town *>(town)).squared_town_zone_radius);
+	FIXTURE_TOWN_CACHE(const_cast<Town *>(town)).squared_town_zone_radius.fill(0);
 	for (int phase = 0; phase < 6; ++phase) {
 		if (phase == 2) { _settings_game.game_creation.snow_line_height = 2; SetTropicZone(tile, TROPICZONE_NORMAL); }
-		if (phase == 4) const_cast<Town *>(town)->cache.squared_town_zone_radius.fill(UINT32_MAX);
+		if (phase == 4) FIXTURE_TOWN_CACHE(const_cast<Town *>(town)).squared_town_zone_radius.fill(UINT32_MAX);
 		Station562TileLoop(tile);
 		StationNeed(IsRoadWaypointOnSnowOrDesert(tile) == (!arctic || phase < 2), __LINE__);
 		StationNeed(GetRoadWaypointRoadside(tile) == (phase == 0 || phase == 4 ? Roadside::Barren : phase == 5 ? Roadside::Paved : Roadside::Grass), __LINE__);
