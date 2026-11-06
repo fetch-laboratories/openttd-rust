@@ -88,7 +88,7 @@ void openttd_rust_station_acceptance_around(uint32_t, int32_t, int32_t, int32_t,
  */
 template <class TStation>
 class RustStationList {
-	OpenTTDStationList *list;
+	const OpenTTDStationList *list;
 	const RustVector<OpenTTDStationListEntry> &View() const { return this->list->entries; }
 public:
 	class const_iterator {
@@ -106,7 +106,7 @@ public:
 		bool operator==(const const_iterator &other) const = default;
 		uint16_t Id() const { return this->entry->id; }
 	};
-	explicit RustStationList(OpenTTDStationList *list) : list(list) {}
+	explicit RustStationList(const OpenTTDStationList *list) : list(list) {}
 	RustStationList(const RustStationList &) = delete;
 	RustStationList &operator=(const RustStationList &) = delete;
 	const_iterator begin() const { return const_iterator(this->View().begin()); }
