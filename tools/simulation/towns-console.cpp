@@ -215,7 +215,7 @@ static void TownStatueSearch(Town *town, Company *company)
 			fmt::print(stderr, "TOWN statue-rng {} {} {} {} {} {} {}\n", open, execute, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
 			save(execute ? "after" : "test");
 		}
-		bool placed = IsObjectTypeTile(last, OBJECT_STATUE) && GetTileOwner(last) == company->index && Object::GetByTile(last)->town == town;
+		bool placed = IsObjectTypeTile(last, OBJECT_STATUE) && GetTileOwner(last) == company->index && FIXTURE_FIELD(Object::GetByTile(last), town) == town;
 		uint statues = 0;
 		for (TileIndex tile : tiles) statues += IsObjectTypeTile(tile, OBJECT_STATUE);
 		fmt::print(stderr, "TOWN statue-state {} {} {} {}\n", open, placed, statues, town->statues.Test(company->index));
@@ -611,7 +611,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	CommandCost deleted = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-exec", deleted);
 	TownSpatialQueries("deleted", deleted_xy);
 	fmt::print(stderr, "TOWN deleted-dependencies {} {} {}\n", !PersistentStorage::IsValidID(storage_id), !Subsidy::IsValidID(subsidy_id), !packet->GetSource().IsValid()); delete packet;
-	fmt::print(stderr, "TOWN deletion {} {} {}\n", deleted.Succeeded(), !Town::IsValidID(removed), detached->town != nullptr && detached->town != target);
+	fmt::print(stderr, "TOWN deletion {} {} {}\n", deleted.Succeeded(), !Town::IsValidID(removed), FIXTURE_FIELD(detached, town) != nullptr && FIXTURE_FIELD(detached, town) != target);
 	/* Reuse the released ID through the actual founding command. */
 	auto [reused, extra, reused_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Reused town");
 	Cost("delete-reuse", reused, extra, reused_id); fmt::print(stderr, "TOWN deletion-reuse {}\n", reused.Succeeded() && reused_id == removed);
