@@ -233,7 +233,9 @@ pub struct Slots {
 }
 /// Allocate a canonical owner. Allocation failure aborts.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_new(shell: *mut crate::industry_type::Industry) -> *mut Industry {
+pub extern "C" fn openttd_rust_industry_new(
+    shell: *mut crate::industry_type::Industry,
+) -> *mut Industry {
     let mut owner = Box::<Industry>::default();
     owner.record.shell = shell;
     Box::into_raw(owner)

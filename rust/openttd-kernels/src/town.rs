@@ -2262,9 +2262,7 @@ impl Engine<'_> {
                 if range.total_division == 1 {
                     supplied.history[first] = supplied.history[first - 1];
                     supplied.history[0] = SuppliedHistory::default();
-                } else if state.record.valid_history & (1 << (range.first - range.division))
-                    != 0
-                {
+                } else if state.record.valid_history & (1 << (range.first - range.division)) != 0 {
                     supplied.history[first] =
                         sum_history(&supplied.history[first - usize::from(range.division)..first]);
                 }

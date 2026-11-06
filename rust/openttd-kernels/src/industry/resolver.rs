@@ -215,8 +215,9 @@ fn count_and_distance(
             if (layout == 0 || unsafe { (*other.owner).record.selected_layout } == layout)
                 && (!town || other.town == current.town)
             {
-                distance = distance
-                    .min(map.distance_manhattan(tile, unsafe { (*other.owner).record.location.tile }));
+                distance = distance.min(
+                    map.distance_manhattan(tile, unsafe { (*other.owner).record.location.tile }),
+                );
                 count = count.wrapping_add(1);
             }
         }

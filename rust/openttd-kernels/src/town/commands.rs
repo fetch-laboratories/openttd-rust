@@ -167,8 +167,7 @@ impl<'a> Commands<'a> {
     fn mask(&self, cid: u8, t: TownRef) -> u8 {
         let mut buttons = 0;
         if cid != crate::company_type::COMPANY_SPECTATOR
-            && !((self.s.bribe)()
-                && unsafe { (*t.state).record.unwanted[usize::from(cid)] } != 0)
+            && !((self.s.bribe)() && unsafe { (*t.state).record.unwanted[usize::from(cid)] } != 0)
         {
             // SAFETY: Canonical resolver returns a live owner or null as GetAvailableMoney permits.
             let c = unsafe { &*self.f.command };
@@ -328,8 +327,7 @@ impl<'a> Commands<'a> {
                 > RATING_BRIBE_DOWN_TO
             {
                 unsafe {
-                    (*t.state).record.ratings[usize::from(company)] =
-                        RATING_BRIBE_DOWN_TO as i16;
+                    (*t.state).record.ratings[usize::from(company)] = RATING_BRIBE_DOWN_TO as i16;
                 }
                 (unsafe { &*self.f.growth }.dirty_authority)(u32::from(t.id.0));
             }
@@ -720,8 +718,7 @@ pub unsafe extern "C" fn openttd_rust_town_action(
             }
         }
         6 => {
-            if !(s.exclusive_rights)()
-                || unsafe { (*t.state).record.exclusivity } != INVALID_OWNER
+            if !(s.exclusive_rights)() || unsafe { (*t.state).record.exclusivity } != INVALID_OWNER
             {
                 c.error(out);
                 return;

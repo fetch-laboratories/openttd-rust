@@ -884,8 +884,7 @@ impl<'a> House<'a> {
                 return;
             }
             // SAFETY: Valid company; immediate canonical (not scratch) rating read.
-            let current =
-                i32::from(unsafe { (*town.state).record.ratings[usize::from(company)] });
+            let current = i32::from(unsafe { (*town.state).record.ratings[usize::from(company)] });
             if rating > current && (authority.council_tolerance)() != 3 {
                 witness::hit(W_CLEAR_REFUSED);
                 (c.error_param)(result, self.h.errors.refuses, u64::from(town.id.0));
