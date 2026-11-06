@@ -75,14 +75,6 @@ extern "C" uint64_t openttd_orders_last_station(void *ctx) noexcept
 	return v->GetLastStationVisited().base();
 }
 
-extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t if_valid) noexcept
-{
-	{
-			BaseStation *bs = if_valid != 0 ? BaseStation::GetIfValid(StationID(station)) : BaseStation::Get(StationID(station));
-			return bs != nullptr && bs->GetOwner() == OWNER_NONE;
-		}
-}
-
 extern "C" uint64_t openttd_orders_vehicle_type(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -158,21 +150,6 @@ extern "C" uint64_t openttd_orders_needs_service(void *ctx) noexcept
 	return v->NeedsServicing();
 }
 
-extern "C" uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept
-{
-	return RustStationAirportTile(Station::Get(StationID(destination)));
-}
-
-extern "C" uint64_t openttd_orders_base_station_tile(uint16_t destination) noexcept
-{
-	return BaseStation::Get(StationID(destination))->GetXY().base();
-}
-
-extern "C" uint64_t openttd_orders_station_tile(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->GetXY().base();
-}
-
 extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
 {
 	return Depot::Get(DepotID(destination))->xy.base();
@@ -196,27 +173,11 @@ extern "C" uint64_t openttd_orders_target_airport(void *ctx) noexcept
 	return Aircraft::From(v)->targetairport.base();
 }
 
-extern "C" uint64_t openttd_orders_waypoint_tile(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->GetXY().base();
-}
-
 extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return IsTileType(v->GetTile(), MP_STATION);
 }
-
-extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
-{
-	return RustStationIfValid<Station *>(destination) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->GetOwner().base();
-}
-
 
 extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
 {
@@ -248,21 +209,6 @@ extern "C" uint64_t openttd_orders_road_depot(uint16_t destination) noexcept
 extern "C" uint64_t openttd_orders_ship_depot(uint16_t destination) noexcept
 {
 	return IsShipDepotTile(Depot::Get(DepotID(destination))->xy);
-}
-
-extern "C" uint64_t openttd_orders_valid_waypoint(uint16_t destination) noexcept
-{
-	return Waypoint::GetIfValid(StationID(destination)) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_waypoint_facilities(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->GetFacilities().base();
-}
-
-extern "C" uint64_t openttd_orders_waypoint_owner(uint16_t destination) noexcept
-{
-	return Waypoint::Get(StationID(destination))->GetOwner().base();
 }
 
 extern "C" uint64_t openttd_orders_list_capacity() noexcept
@@ -534,7 +480,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.backup_consist = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->rust_orders.get(); },
 	.first_vehicle = RustVehicleFirstOpaque,
 	.last_station = openttd_orders_last_station,
-	.ownerless_station = openttd_orders_ownerless_station,
 	.vehicle_type = openttd_orders_vehicle_type,
 	.vehicle_status = openttd_orders_vehicle_status,
 	.tick_counter = openttd_orders_tick_counter,
@@ -554,30 +499,20 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.age_years = openttd_orders_age_years,
 	.needs_service = openttd_orders_needs_service,
 	.remaining_years = openttd_orders_remaining_years,
-	.airport_tile = openttd_orders_airport_tile,
-	.base_station_tile = openttd_orders_base_station_tile,
-	.station_tile = openttd_orders_station_tile,
 	.depot_tile = openttd_orders_depot_tile,
 	.distance = OpenTTDLegacyOrderDistance,
 	.station_location = RustVehicleLegacyOrderStationLocation,
 	.destination_tile = openttd_orders_destination_tile,
 	.aircraft_flying = openttd_orders_aircraft_flying,
 	.target_airport = openttd_orders_target_airport,
-	.waypoint_tile = openttd_orders_waypoint_tile,
 	.at_station = openttd_orders_at_station,
 	.tile_station = RustOpaqueVehicleTileRead<uint64_t, MapSvcStationIndex>,
-	.ship_station_tile = openttd_orders_ship_station_tile,
-	.valid_station = openttd_orders_valid_station,
-	.station_owner = openttd_orders_station_owner,
 	.station_error = openttd_orders_station_error,
 	.valid_depot = openttd_orders_valid_depot,
 	.depot_owner = openttd_orders_depot_owner,
 	.rail_depot = openttd_orders_rail_depot,
 	.road_depot = openttd_orders_road_depot,
 	.ship_depot = openttd_orders_ship_depot,
-	.valid_waypoint = openttd_orders_valid_waypoint,
-	.waypoint_facilities = openttd_orders_waypoint_facilities,
-	.waypoint_owner = openttd_orders_waypoint_owner,
 	.list_capacity = openttd_orders_list_capacity,
 	.next_backup = openttd_orders_next_backup,
 	.next_vehicle = openttd_orders_next_vehicle,

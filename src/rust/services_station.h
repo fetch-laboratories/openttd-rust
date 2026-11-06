@@ -81,7 +81,6 @@ template <typename Pointer> inline Pointer RustAirportSpec(uint16_t type) noexce
 template <typename Pointer> inline Pointer RustAirportTileSpec(uint8_t gfx) noexcept { return const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); }
 inline const AirportFTAClass *RustAirportSpecFTA(const AirportSpec *spec) noexcept { return spec->fsm; }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
-inline uint32_t RustStationShipTile(const BaseStation *s) noexcept { return Station::From(s)->GetShipStation().tile.base(); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->GetAirport().GetTile().base(); }
 inline uint32_t RustStationLocation(const BaseStation *s) noexcept { return s->GetXY().base(); }
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->Record().town; }

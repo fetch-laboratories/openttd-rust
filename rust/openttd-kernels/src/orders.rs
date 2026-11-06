@@ -501,7 +501,6 @@ pub struct Leaves {
     pub backup_consist: unsafe extern "C" fn(*mut c_void) -> *mut Consist,
     pub first_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> *mut c_void,
     pub last_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub ownerless_station: unsafe extern "C" fn(station: u16, if_valid: u8) -> u64,
     pub vehicle_type: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub vehicle_status: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub tick_counter: extern "C" fn() -> u64,
@@ -521,30 +520,20 @@ pub struct Leaves {
     pub age_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub needs_service: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub remaining_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub airport_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub base_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub depot_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub distance: unsafe extern "C" fn(first: u32, second: u32, square: u8) -> u64,
     pub station_location: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
     pub destination_tile: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub aircraft_flying: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub target_airport: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub waypoint_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub at_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub tile_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub ship_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub valid_station: extern "C" fn(destination: u16) -> u64,
-    pub station_owner: unsafe extern "C" fn(destination: u16) -> u64,
     pub station_error: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
     pub valid_depot: extern "C" fn(destination: u16) -> u64,
     pub depot_owner: unsafe extern "C" fn(destination: u16) -> u64,
     pub rail_depot: unsafe extern "C" fn(destination: u16) -> u64,
     pub road_depot: unsafe extern "C" fn(destination: u16) -> u64,
     pub ship_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub valid_waypoint: extern "C" fn(destination: u16) -> u64,
-    pub waypoint_facilities: unsafe extern "C" fn(destination: u16) -> u64,
-    pub waypoint_owner: unsafe extern "C" fn(destination: u16) -> u64,
     pub list_capacity: extern "C" fn() -> u64,
     pub next_backup: unsafe extern "C" fn(cursor: *mut u32) -> *mut c_void,
     pub next_vehicle: extern "C" fn(first: u32) -> *mut c_void,
@@ -625,7 +614,6 @@ macro_rules! leaves {
 leaves! {
     fn first_vehicle(ctx: *mut c_void) -> *mut c_void;
     fn last_station(ctx: *mut c_void) -> u64;
-    fn ownerless_station(station: u16, if_valid: u8) -> u64;
     fn vehicle_type(ctx: *mut c_void) -> u64;
     fn vehicle_status(ctx: *mut c_void) -> u64;
     fn primary_vehicle(ctx: *mut c_void) -> u64;
@@ -639,26 +627,18 @@ leaves! {
     fn age_years(ctx: *mut c_void) -> u64;
     fn needs_service(ctx: *mut c_void) -> u64;
     fn remaining_years(ctx: *mut c_void) -> u64;
-    fn airport_tile(destination: u16) -> u64;
-    fn base_station_tile(destination: u16) -> u64;
-    fn station_tile(destination: u16) -> u64;
     fn depot_tile(destination: u16) -> u64;
     fn station_location(ctx: *mut c_void, destination: u16) -> u64;
     fn destination_tile(ctx: *mut c_void) -> u64;
     fn aircraft_flying(ctx: *mut c_void) -> u64;
     fn target_airport(ctx: *mut c_void) -> u64;
-    fn waypoint_tile(destination: u16) -> u64;
     fn at_station(ctx: *mut c_void) -> u64;
     fn tile_station(ctx: *mut c_void) -> u64;
-    fn ship_station_tile(destination: u16) -> u64;
-    fn station_owner(destination: u16) -> u64;
     fn station_error(ctx: *mut c_void, destination: u16) -> u64;
     fn depot_owner(destination: u16) -> u64;
     fn rail_depot(destination: u16) -> u64;
     fn road_depot(destination: u16) -> u64;
     fn ship_depot(destination: u16) -> u64;
-    fn waypoint_facilities(destination: u16) -> u64;
-    fn waypoint_owner(destination: u16) -> u64;
     fn aircraft_range_square(ctx: *mut c_void) -> u64;
     fn create_backup(ctx: *mut c_void, user: u32) -> *mut c_void;
     fn vehicle_tile(ctx: *mut c_void) -> u64;
@@ -694,6 +674,65 @@ leaves! {
 }
 
 impl Game {
+    fn station_record(
+        self,
+        destination: u16,
+        if_valid: bool,
+    ) -> *mut crate::station_record::StationRecord {
+        // SAFETY: The canonical maintenance table supplies the shared live pool descriptor.
+        let shared = unsafe { &*self.maintenance().shared };
+        let id = crate::station_type::StationID(destination);
+        if if_valid {
+            crate::station_record::get_record_if_valid(shared, id)
+        } else {
+            crate::station_record::get_record(shared, id)
+        }
+    }
+    fn ownerless_station(self, destination: u16, if_valid: u8) -> u64 {
+        let record = self.station_record(destination, if_valid != 0);
+        u64::from(!record.is_null() && read_field!(record, owner).0 == OWNER_NONE)
+    }
+    fn airport_tile(self, destination: u16) -> u64 {
+        u64::from(read_field!(self.station_record(destination, false), airport.area.tile).0)
+    }
+    fn base_station_tile(self, destination: u16) -> u64 {
+        u64::from(read_field!(self.station_record(destination, false), xy).0)
+    }
+    fn station_tile(self, destination: u16) -> u64 {
+        self.base_station_tile(destination)
+    }
+    fn waypoint_tile(self, destination: u16) -> u64 {
+        self.base_station_tile(destination)
+    }
+    fn ship_station_tile(self, destination: u16) -> u64 {
+        u64::from(read_field!(self.station_record(destination, false), ship_station.tile).0)
+    }
+    fn valid_station(self, destination: u16) -> u64 {
+        let record = self.station_record(destination, true);
+        u64::from(
+            !record.is_null()
+                && read_field!(record, facilities) & crate::station_record::FACILITY_WAYPOINT == 0,
+        )
+    }
+    fn station_owner(self, destination: u16) -> u64 {
+        u64::from(read_field!(self.station_record(destination, false), owner).0)
+    }
+    fn valid_waypoint(self, destination: u16) -> u64 {
+        let record = self.station_record(destination, true);
+        u64::from(
+            !record.is_null()
+                && read_field!(record, facilities) & crate::station_record::FACILITY_WAYPOINT != 0,
+        )
+    }
+    fn waypoint_facilities(self, destination: u16) -> u64 {
+        u64::from(read_field!(
+            self.station_record(destination, false),
+            facilities
+        ))
+    }
+    fn waypoint_owner(self, destination: u16) -> u64 {
+        self.station_owner(destination)
+    }
     fn bus(self, vehicle: *mut c_void) -> bool {
         // SAFETY: The immutable maintenance table supplies the shared world services.
         let shared = unsafe { &*self.maintenance().shared };
@@ -3213,12 +3252,12 @@ impl Control {
         let order = order.unwrap();
         // After update_real and order_ptr, valid only inspects the list.
         // From order_ptr to materialization, vehicle_type,
-        // destination_tile and ship_station_tile are read-only native leaves;
+        // destination_tile and the station-record lookup only read live fields;
         // none reenters or mutates orders. Thus the raw handle stays live, with
         // no owner/storage borrow crossing any callback. Earlier implicit-order
         // mutations have already reacquired vehicle and order storage above.
         // SAFETY: Equality only reads the canonical orders and calls no service;
-        // both shared borrows end before destination_tile or ship_station_tile.
+        // both shared borrows end before the native destination_tile call.
         if unsafe { (&*order).equals(&*(*vehicle).current.as_ptr()) }
             && (kind == u64::from(VEH_AIRCRAFT) || g.destination_tile(v) != 0)
             && (kind != u64::from(VEH_SHIP)
@@ -3283,7 +3322,7 @@ impl Control {
         let destination = u64::from(order.destination);
         match order.kind() {
             OT_GOTO_STATION => {
-                if (g.0.valid_station)(destination as u16) == 0 {
+                if g.valid_station(destination as u16) == 0 {
                     return self.g.error(output, 0);
                 }
                 let owner = g.station_owner(destination as u16);
@@ -3334,7 +3373,7 @@ impl Control {
             OT_GOTO_DEPOT => {
                 if order.action() & 2 == 0 {
                     if kind == u64::from(VEH_AIRCRAFT) {
-                        if (g.0.valid_station)(destination as u16) == 0 {
+                        if g.valid_station(destination as u16) == 0 {
                             return self.g.error(output, 0);
                         }
                         if !self
@@ -3404,7 +3443,7 @@ impl Control {
                 }
             }
             OT_GOTO_WAYPOINT => {
-                if (g.0.valid_waypoint)(destination as u16) == 0 {
+                if g.valid_waypoint(destination as u16) == 0 {
                     return self.g.error(output, 0);
                 }
                 let facilities = g.waypoint_facilities(destination as u16);
@@ -4670,7 +4709,6 @@ crate::abi::layouts! {
         backup_consist,
         first_vehicle,
         last_station,
-        ownerless_station,
         vehicle_type,
         vehicle_status,
         tick_counter,
@@ -4690,30 +4728,20 @@ crate::abi::layouts! {
         age_years,
         needs_service,
         remaining_years,
-        airport_tile,
-        base_station_tile,
-        station_tile,
         depot_tile,
         distance,
         station_location,
         destination_tile,
         aircraft_flying,
         target_airport,
-        waypoint_tile,
         at_station,
         tile_station,
-        ship_station_tile,
-        valid_station,
-        station_owner,
         station_error,
         valid_depot,
         depot_owner,
         rail_depot,
         road_depot,
         ship_depot,
-        valid_waypoint,
-        waypoint_facilities,
-        waypoint_owner,
         list_capacity,
         next_backup,
         next_vehicle,

@@ -14,6 +14,8 @@
 #include "../rust/services_ffi.h"
 #include "../rust/command_services.h"
 #include "../rust/station_command_ffi.h"
+#include "../rust/station_record_ffi.h"
+#include "../rust/vehicle_maintenance_ffi.h"
 #include "../rust/vehicle_ffi.h"
 #include "../rust/vehicle_record_ffi.h"
 #include "../company_func.h"
@@ -50,6 +52,7 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 	CHECK(orders[1].Equals(Order{}));
 }
 namespace {
+const RustPoolDescriptor *order_station_pool = nullptr;
 struct TimetableDateFixture {
 	OpenTTDVehicle record{};
 	OpenTTDVehicleOrderState vehicle{};
@@ -100,6 +103,16 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 	auto base = GetRustVehicleServices();
 	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
 
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> destination_record{
+		openttd_rust_station_record_new(nullptr, 0, 0), openttd_rust_station_record_delete};
+	destination_record->owner = OWNER_WATER.base();
+	RustPoolSlot slot{&fixture, destination_record.get()};
+	RustPoolDescriptor pool{}; pool.slots = {&slot, 1, 0}; pool.first_unused = 1;
+	AutoRestoreBackup<const RustPoolDescriptor *> station_pool_scope(order_station_pool, &pool);
+	auto shared = GetRustSharedServices();
+	shared.station_pool = []() noexcept { return order_station_pool; };
+	auto maintenance = *base.maintenance; maintenance.shared = &shared; base.maintenance = &maintenance;
+
 	OpenTTDStationCommandServices station{};
 	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
 	leaves.base = &base; leaves.station_commands = &station;
@@ -119,8 +132,6 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 		for (bool destination : {false, true}) {
 			fixture.record.owner = destination ? 0 : OWNER_NONE.base();
 			leaves.vehicle_type = destination ? +[](void *) noexcept -> uint64_t { return VEH_ROAD; } : OpenTTDOrdersLeaves{}.vehicle_type;
-			leaves.valid_station = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return 1; };
-			leaves.station_owner = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return OWNER_WATER.base(); };
 			for (bool timetable : {false, true}) {
 				if (timetable && destination) continue;
 				CommandCost result;
