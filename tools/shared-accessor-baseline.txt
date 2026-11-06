@@ -1,5 +1,5 @@
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
-src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
+src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | a7095d80cf1f24dd | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
@@ -33,28 +33,26 @@ src/industry_cmd.cpp | []() noexcept -> uint8_t | bf71454f2d308e6c | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | eb526c61b6569eeb | 1
 src/order_cmd.cpp | [](void *v) noexcept | 3ad12ea0c58a2761 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 5e35106910478995 | 1
-src/order_cmd.cpp | openttd_orders_base_station_tile(uint16_t destination) noexcept | f52aefaf0d9f0408 | 1
+src/order_cmd.cpp | openttd_orders_base_station_tile(uint16_t destination) noexcept | 3e1f2e66edd87845 | 1
 src/order_cmd.cpp | openttd_orders_change_timetable_command(void *ctx, uint8_t index, uint8_t field, uint16_t value) noexcept | cf29f5653494b2b0 | 1
 src/order_cmd.cpp | openttd_orders_delete_order_news(void *ctx) noexcept | c1738e0dbc9d4eb4 | 1
 src/order_cmd.cpp | openttd_orders_economy_fraction() noexcept | 1d0bc137e6e8cdeb | 1
 src/order_cmd.cpp | openttd_orders_reverse_train(void *ctx) noexcept | 23ee8c2c4d232dff | 1
 src/order_cmd.cpp | openttd_orders_review_setting() noexcept | 1419e52784b2f36e | 1
-src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept | c181e3b70687df7f | 1
-src/order_cmd.cpp | openttd_orders_station_tile(uint16_t destination) noexcept | 6bd6189b29cba5aa | 1
+src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept | 3ac3886c98134d73 | 1
+src/order_cmd.cpp | openttd_orders_station_tile(uint16_t destination) noexcept | 7aa27426ff462d77 | 1
 src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5322c3c04a | 1
 src/order_cmd.cpp | openttd_orders_timetable_year_limit() noexcept | 65f1171d2d4fe3ef | 1
 src/order_cmd.cpp | openttd_orders_vehicle_group(void *ctx) noexcept | d932fd412582f2de | 1
 src/order_cmd.cpp | openttd_orders_vehicle_id(void *ctx) noexcept | 8a72932b898fb672 | 1
 src/pathfinder/water_regions.cpp | CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch) | 43ab4b50224ccf7a | 1
-src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
-src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 19b651266161c5ee | 1
+src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 921332810b5ff304 | 1
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1
-src/rust/company_adapter.cpp | [](const Station *st) | 7599e8780f547b28 | 1
+src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | 2a81c63893ed9224 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1
@@ -68,26 +66,26 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) 
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1
-src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept | 7734a2705170a665 | 1
-src/rust/ship_control_services.h | Ship_station_visits(uint32_t station) noexcept | d145d1722eb9a141 | 1
-src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | efc252da0f94199f | 1
+src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept | 489877863abe3c08 | 1
+src/rust/ship_control_services.h | Ship_station_visits(uint32_t station) noexcept | 21882d147461024e | 1
+src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | d1c57365722298b4 | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
-src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | def73589acac5540 | 1
-src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 30f910a9db971102 | 1
+src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 814d2e3c64d9257f | 1
+src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 37c1dff2d9f24802 | 1
 src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
 src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
 src/rust/train_services.h | TrainMapSize(OpenTTDTrainHandle) noexcept | b49ebe1aff917479 | 1
 src/rust/train_services.h | TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept | b7492fcfee760201 | 1
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
-src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1
+src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 2595b3bac8a6457a | 1
 src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac10cb2f2f467c | 1
 src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e790d4250a | 1
 src/rust/train_services.h | TrainWaitTwoway(OpenTTDTrainHandle) noexcept | 508c48d22dab543e | 1
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
 src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
+src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 8b38f736ee5f59af | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
 src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
 src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
@@ -97,10 +95,7 @@ binding | IndustryCommandDeity | 2
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1
 write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1
 write | src/rust/company_adapter.cpp | Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept | d8f0ad7c93f2f046 | 1
-write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | b1bc0135df3a7a84 | 1
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
-write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1
-write | src/rust/train_services.h | TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | aebb225d48856496 | 1
 src/order_cmd.cpp | openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept | 7555d996b4dac6a0 | 1
 src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept | 4cbabab054f97649 | 1
 src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | dfa9c3318c4343db | 1

@@ -133,7 +133,9 @@ def shared_records(
             )
             if not match:
                 raise ValueError(f"invalid record field: {cpp}: {field}")
-            element = re.fullmatch(r"\[\s*(.+?)\s*;\s*(\d+)\s*\]", match[2].strip(), re.S)
+            element = re.fullmatch(
+                r"\[\s*(.+?)\s*;\s*(\d+)\s*\]", match[2].strip(), re.S
+            )
             extent = int(element[2]) if element else None
             cpp_type = native(element[1] if element else match[2])
             if extent is not None and cpp_type.endswith(" *"):
