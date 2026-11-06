@@ -1949,6 +1949,7 @@ pub extern "C" fn openttd_rust_object_scope_init(
 ) -> ObjectScope {
     ObjectScope {
         object,
+        spec,
         parent: ptr::null(),
         tile,
         view,
