@@ -79,7 +79,7 @@ Cache build outputs when the key covers what determines them; never cache test r
 - Worktrees share the main checkout's reference, build, bootstrapped dependencies and `.local/compiler-cache/`. No symlinks are needed.
 - Install ccache or use `tools/bootstrap-local.py`. `migration/ccache.conf` uses compiler-content checks, direct mode and no sloppiness. `--no-ccache` enables an ordinary PCH build; `--ccache-bypass` keeps no-PCH flags without reuse.
 - The driver skips CMake configure when the cache has all requested `-D` values; Ninja still responds to CMake input changes. For changed configure-time environment such as a dependency prefix, use a fresh build directory or configure manually.
-- CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH; MSVC uses `/Z7` (CMP0141). Emscripten builds without PCH and wraps emcc's clang with the container's ccache through `EM_COMPILER_WRAPPER`.
+- CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH. Windows vcpkg keys are per commit and restore the newest prefix match; a job saves only when it built missing packages, pruned to its own ABIs, and requested runs save under a `candidate` namespace that protected runs never restore (#699); MSVC uses `/Z7` (CMP0141). Emscripten builds without PCH and wraps emcc's clang with the container's ccache through `EM_COMPILER_WRAPPER`.
 
 ## Output disk
 
