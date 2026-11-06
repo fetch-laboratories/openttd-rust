@@ -24,14 +24,8 @@ static bool armed, held_map, saved, awaiting_key;
 static uint connections;
 static uint64_t stop_tick;
 
-static void ObservePacket(NetworkTCPSocketHandler *socket, Packet *packet)
+static void ObservePayload(NetworkGameSocketHandler *game, std::span<const uint8_t> payload)
 {
-	if (packet == nullptr) return;
-	auto *game = dynamic_cast<NetworkGameSocketHandler *>(socket);
-	if (game == nullptr) return;
-	Packet copy(*packet);
-	std::vector<uint8_t> payload(copy.RemainingBytesToTransfer());
-	copy.Recv_bytes(payload);
 	if (payload.empty() || payload[0] == PACKET_SERVER_MAP_DATA) return;
 	std::string hex;
 	for (auto byte : payload) fmt::format_to(std::back_inserter(hex), "{:02x}", byte);
@@ -53,10 +47,39 @@ extern "C" const OpenTTDNetworkTcpServices &__wrap__Z25GetRustNetworkTcpServices
 	static const auto &original = __real__Z25GetRustNetworkTcpServicesv();
 	static const auto services = [] {
 		auto result = original;
-		result.receive_take = [](NetworkTCPSocketHandler *socket) noexcept {
-			auto *packet = original.receive_take(socket);
-			ObservePacket(socket, packet);
-			return packet;
+		/* The I/O leaf identifies a completed packet. The dispatch clock leaf runs
+		 * after production decryption and type consumption, before handler effects. */
+		static thread_local OpenTTDNetworkTcpSocket *receiving;
+		static thread_local Packet *completed;
+		result.receive_bytes = [](OpenTTDNetworkTcpSocket *socket, uint8_t *data, size_t size) noexcept {
+			auto count = original.receive_bytes(socket, data, size);
+			auto *state = reinterpret_cast<OpenTTDPacketState *>(socket->receive);
+			if (count > 0 && state->size > Packet::EncodedLengthOfPacketSize() && state->position + static_cast<size_t>(count) == state->size) {
+				receiving = socket;
+				completed = socket->receive;
+			}
+			return count;
+		};
+		result.packet_delete_shell = [](Packet *packet) noexcept {
+			if (completed == packet) completed = nullptr;
+			original.packet_delete_shell(packet);
+		};
+		result.now = []() noexcept {
+			if (completed != nullptr && receiving->receive == nullptr) {
+				auto *packet = std::exchange(completed, nullptr);
+				NetworkGameSocketHandler *game = nullptr;
+				if (auto *client = ClientNetworkGameSocketHandler::my_client; client != nullptr && client->TcpRecord() == receiving) game = client;
+				for (auto *client : NetworkClientSocket::Iterate()) {
+					if (client->TcpRecord() == receiving) game = client;
+				}
+				if (game != nullptr) {
+					auto *state = reinterpret_cast<const OpenTTDPacketState *>(packet);
+					/* HandlePacket consumed only the type before requesting its timestamp. */
+					size_t position = state->position - Packet::EncodedLengthOfPacketType();
+					ObservePayload(game, {state->data + position, state->size - position});
+				}
+			}
+			return original.now();
 		};
 		return result;
 	}();
@@ -67,7 +90,12 @@ extern "C" std::unique_ptr<Packet> __real__ZN23NetworkTCPSocketHandler13ReceiveP
 extern "C" std::unique_ptr<Packet> __wrap__ZN23NetworkTCPSocketHandler13ReceivePacketEv(NetworkTCPSocketHandler *socket)
 {
 	auto packet = __real__ZN23NetworkTCPSocketHandler13ReceivePacketEv(socket);
-	ObservePacket(socket, packet.get());
+	if (auto *game = dynamic_cast<NetworkGameSocketHandler *>(socket); game != nullptr && packet != nullptr) {
+		Packet copy(*packet);
+		std::vector<uint8_t> payload(copy.RemainingBytesToTransfer());
+		copy.Recv_bytes(payload);
+		ObservePayload(game, payload);
+	}
 	return packet;
 }
 #endif
