@@ -77,7 +77,7 @@ static void AircraftDirectBoundary()
 	const OpenTTDEngineDefaults defaults{};
 	openttd_rust_engine_construct(engine_record, &defaults, VEH_AIRCRAFT, UINT16_MAX);
 	engine_record->vehicle_info.aircraft.max_range = 41;
-	vehicle.engine = [](OpenTTDVehicle *) noexcept { return engine_record; };
+	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
 	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{71}; };
 	p.record.subtype = 2;
