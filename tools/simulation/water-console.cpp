@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file water-console.cpp Identical real-map water command and restoration inputs. */
 #include "stdafx.h"
+#include "pool-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "console_func.h"
@@ -255,7 +256,7 @@ static void OwnerState(const char *phase, TileIndex base, uint industry)
 	}
 	for (uint id = industry; id < industry + 2; ++id) {
 		const Industry *i = Industry::Get(id);
-		fmt::print(stderr, "WATER-CMD owner-industry {} {} {} {} {}\n", phase, id, i->founder.base(), i->exclusive_supplier.base(), i->exclusive_consumer.base());
+		fmt::print(stderr, "WATER-CMD owner-industry {} {} {} {} {}\n", phase, id, FIXTURE_POOL_RECORD(i).founder.base(), FIXTURE_POOL_RECORD(i).exclusive_supplier.base(), FIXTURE_POOL_RECORD(i).exclusive_consumer.base());
 	}
 	fmt::print(stderr, "WATER-CMD rng {} {}\n", _random.state[0], _random.state[1]);
 }
@@ -293,8 +294,8 @@ static void OwnerBuild(TileIndex base, uint industry)
 	WaterCost("owner-tunnel", Command<CMD_BUILD_TUNNEL>::Do(exec, at(9, 13), TRANSPORT_ROAD, ROADTYPE_ROAD));
 	/* The first industry has every role; the second only supplies exclusively. */
 	Industry *i = Industry::Get(industry);
-	i->founder = i->exclusive_supplier = i->exclusive_consumer = _current_company;
-	Industry::Get(industry + 1)->exclusive_supplier = _current_company;
+	FIXTURE_POOL_RECORD(i).founder = FIXTURE_POOL_RECORD(i).exclusive_supplier = FIXTURE_POOL_RECORD(i).exclusive_consumer = _current_company;
+	FIXTURE_POOL_RECORD(Industry::Get(industry + 1)).exclusive_supplier = _current_company;
 	UpdateSignalsInBuffer(); // as after each top-level command; Do() leaves the buffer filled
 }
 static bool OwnerScenario([[maybe_unused]] std::span<std::string_view> args)
