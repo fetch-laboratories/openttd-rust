@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file signs-console.cpp Production sign and depot-name command results and records. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -41,8 +42,8 @@ template <Commands C, typename... Args> static auto Observe(std::string_view nam
 }
 static void State(bool interactive)
 {
-	for (const Sign *si : Sign::Iterate()) fmt::print(stderr, "SIGNS sign {} {} {} {} {} {}\n", si->index, si->owner, si->x, si->y, si->z, Hex(si->name));
-	for (const Depot *d : Depot::Iterate()) fmt::print(stderr, "SIGNS depot {} {} {} {} {}\n", d->index, d->xy, d->town == nullptr ? -1 : static_cast<int>(d->town->index.base()), d->town_cn, Hex(d->name));
+	for (const Sign *si : Sign::Iterate()) fmt::print(stderr, "SIGNS sign {} {} {} {} {} {}\n", si->index, FIXTURE_FIELD(si, owner), FIXTURE_FIELD(si, x), FIXTURE_FIELD(si, y), FIXTURE_FIELD(si, z), Hex(FIXTURE_POOL_NAME(si)));
+	for (const Depot *d : Depot::Iterate()) fmt::print(stderr, "SIGNS depot {} {} {} {} {}\n", d->index, FIXTURE_FIELD(d, xy), FIXTURE_FIELD(d, town) == nullptr ? -1 : static_cast<int>(FIXTURE_FIELD(d, town)->index.base()), FIXTURE_FIELD(d, town_cn), Hex(FIXTURE_POOL_NAME(d)));
 	fmt::print(stderr, "SIGNS rng {} {}\n", _random.state[0], _random.state[1]);
 	/* Saves omit the interactive stream; each process seeds it afresh. */
 	if (interactive) fmt::print(stderr, "SIGNS interactive-rng {} {}\n", _interactive_random.state[0], _interactive_random.state[1]);
@@ -98,27 +99,27 @@ static void DepotCommands()
 {
 	const auto run = DoCommandFlag::Execute;
 	std::map<VehicleType, std::vector<Depot *>> kinds;
-	for (Depot *d : Depot::Iterate()) kinds[GetDepotVehicleType(d->xy)].push_back(d);
+	for (Depot *d : Depot::Iterate()) kinds[GetDepotVehicleType(FIXTURE_FIELD(d, xy))].push_back(d);
 	fmt::print(stderr, "SIGNS depot-kinds {}\n", kinds.size());
 	Depot *first = kinds.begin()->second.front();
 	Observe<CMD_RENAME_DEPOT>("depot-invalid", run, DepotID::Invalid(), std::string("X"));
 	for (auto &[type, depots] : kinds) {
 		Depot *d = depots.front();
-		_current_company = GetTileOwner(d->xy);
+		_current_company = GetTileOwner(FIXTURE_FIELD(d, xy));
 		const std::string label = fmt::format("depot-{}", to_underlying(type));
 		Observe<CMD_RENAME_DEPOT>(label + "-test", {}, d->index, std::string("Shed"));
 		Observe<CMD_RENAME_DEPOT>(label + (d == first ? "-name" : "-duplicate"), run, d->index, std::string("Shed"));
 		Observe<CMD_RENAME_DEPOT>(label + "-utf8-31", {}, d->index, Utf8(31));
 		Observe<CMD_RENAME_DEPOT>(label + "-utf8-32", {}, d->index, Utf8(32));
-		_current_company = GetTileOwner(d->xy) == CompanyID::Begin() ? CompanyID(1) : CompanyID::Begin();
+		_current_company = GetTileOwner(FIXTURE_FIELD(d, xy)) == CompanyID::Begin() ? CompanyID(1) : CompanyID::Begin();
 		Observe<CMD_RENAME_DEPOT>(label + "-foreign", run, d->index, std::string("Theirs"));
-		_current_company = GetTileOwner(d->xy);
+		_current_company = GetTileOwner(FIXTURE_FIELD(d, xy));
 		/* Resetting the newest depot of a town takes its lowest free default number. */
 		Depot *last = depots.back();
 		Observe<CMD_RENAME_DEPOT>(label + "-reset", run, last->index, std::string());
-		fmt::print(stderr, "SIGNS reset {} {} {}\n", label, last->index, last->town_cn);
+		fmt::print(stderr, "SIGNS reset {} {} {}\n", label, last->index, FIXTURE_FIELD(last, town_cn));
 	}
-	_current_company = GetTileOwner(first->xy);
+	_current_company = GetTileOwner(FIXTURE_FIELD(first, xy));
 	Observe<CMD_RENAME_DEPOT>("depot-reset-named", run, first->index, std::string());
 	Observe<CMD_RENAME_DEPOT>("depot-name-freed", run, first->index, std::string("Shed"));
 }

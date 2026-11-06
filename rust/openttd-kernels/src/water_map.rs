@@ -98,6 +98,11 @@ pub(crate) fn is_canal(m: &TileTypeAccess, tile: u32) -> Option<bool> {
 }
 
 impl crate::map_func::World<'_> {
+    /// `IsShipDepotTile`.
+    pub(crate) fn ship_depot(&self, t: u32) -> bool {
+        self.kind(t) == MP_WATER && self.water_tile_type(t) == WATER_TILE_DEPOT
+    }
+
     /// `GetWaterTileType`.
     #[allow(clippy::inline_always)]
     #[inline(always)]

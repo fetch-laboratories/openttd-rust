@@ -173,11 +173,6 @@ extern "C" uint64_t openttd_orders_station_tile(uint16_t destination) noexcept
 	return Station::Get(StationID(destination))->xy.base();
 }
 
-extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
-{
-	return Depot::Get(DepotID(destination))->xy.base();
-}
-
 extern "C" uint64_t openttd_orders_destination_tile(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -224,31 +219,6 @@ extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination
 	return GetVehicleCannotUseStationReason(v, Station::Get(StationID(destination)));
 }
 
-
-extern "C" uint64_t openttd_orders_valid_depot(uint16_t destination) noexcept
-{
-	return Depot::GetIfValid(DepotID(destination)) != nullptr;
-}
-
-extern "C" uint64_t openttd_orders_depot_owner(uint16_t destination) noexcept
-{
-	return GetTileOwner(Depot::Get(DepotID(destination))->xy).base();
-}
-
-extern "C" uint64_t openttd_orders_rail_depot(uint16_t destination) noexcept
-{
-	return IsRailDepotTile(Depot::Get(DepotID(destination))->xy);
-}
-
-extern "C" uint64_t openttd_orders_road_depot(uint16_t destination) noexcept
-{
-	return Shared_is_road_depot(Depot::Get(DepotID(destination))->xy.base());
-}
-
-extern "C" uint64_t openttd_orders_ship_depot(uint16_t destination) noexcept
-{
-	return IsShipDepotTile(Depot::Get(DepotID(destination))->xy);
-}
 
 extern "C" uint64_t openttd_orders_valid_waypoint(uint16_t destination) noexcept
 {
@@ -557,7 +527,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.airport_tile = openttd_orders_airport_tile,
 	.base_station_tile = openttd_orders_base_station_tile,
 	.station_tile = openttd_orders_station_tile,
-	.depot_tile = openttd_orders_depot_tile,
 	.distance = OpenTTDLegacyOrderDistance,
 	.station_location = RustVehicleLegacyOrderStationLocation,
 	.destination_tile = openttd_orders_destination_tile,
@@ -570,11 +539,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.valid_station = openttd_orders_valid_station,
 	.station_owner = openttd_orders_station_owner,
 	.station_error = openttd_orders_station_error,
-	.valid_depot = openttd_orders_valid_depot,
-	.depot_owner = openttd_orders_depot_owner,
-	.rail_depot = openttd_orders_rail_depot,
-	.road_depot = openttd_orders_road_depot,
-	.ship_depot = openttd_orders_ship_depot,
 	.valid_waypoint = openttd_orders_valid_waypoint,
 	.waypoint_facilities = openttd_orders_waypoint_facilities,
 	.waypoint_owner = openttd_orders_waypoint_owner,

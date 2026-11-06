@@ -17,7 +17,6 @@ struct OpenTTDVehicleServices;
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDShipState;
-struct OpenTTDShipDepot { uint32_t id, tile, owner, ship; };
 struct OpenTTDShipPosition { int32_t x, y; uint32_t old_tile, new_tile; };
 struct OpenTTDShipReverseResult { bool reverse; uint8_t trackdir; };
 struct OpenTTDShipTrackResult { uint8_t track; bool found; };
@@ -105,7 +104,6 @@ struct OpenTTDShipLeaves {
 	OpenTTDShipState *(*state_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state_owner);
 	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);
 	size_t (*neighbours)(OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(neighbours);
-	bool (*next_depot)(uint32_t, OpenTTDShipDepot *) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 };
 struct OpenTTDShipLeaves;

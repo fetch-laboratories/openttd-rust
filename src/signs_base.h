@@ -12,24 +12,42 @@
 
 #include "signs_type.h"
 #include "viewport_type.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
+#include "rust/owned_bytes.h"
 #include "company_type.h"
 
-typedef Pool<Sign, SignID, 16> SignPool;
+#include "rust/abi-record-signs_type.h"
+extern "C" {
+void openttd_rust_sign_pool_bind(RustPoolCore *);
+OpenTTDSignRecord *openttd_rust_sign_record_new(Sign *, SignID);
+void openttd_rust_sign_record_delete(OpenTTDSignRecord *);
+}
+struct SignPool : RustPool<Sign, SignID, 16> {
+	explicit SignPool(std::string_view name) : RustPool(name) { openttd_rust_sign_pool_bind(this->owner); }
+};
 extern SignPool _sign_pool;
 
 struct Sign : SignPool::PoolItem<&_sign_pool> {
-	std::string name{};
+	struct RecordDeleter {
+		void operator()(OpenTTDSignRecord *record) const
+		{
+			_sign_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_sign_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDSignRecord, RecordDeleter> record{openttd_rust_sign_record_new(this, this->index)};
 	TrackedViewportSign sign{};
-	int32_t x = 0;
-	int32_t y = 0;
-	int32_t z = 0;
-	Owner owner = INVALID_OWNER; // placed by this company. Anyone can delete them though. OWNER_NONE for gray signs from old games.
-
-	Sign() {}
-	Sign(Owner owner, int32_t x, int32_t y, int32_t z, std::string_view name) : name(name), x(x), y(y), z(z), owner(owner) {}
+	OpenTTDSignRecord &Record() { return *this->record; }
+	const OpenTTDSignRecord &Record() const { return *this->record; }
+	std::string_view Name() const { return RustBytesView(this->record->name); }
+	void SetName(std::string_view name) { RustBytesAssign(this->record->name, name); }
+	Sign() { _sign_pool.BindRecord(this->index.base(), this, this->record.get()); }
+	Sign(Owner owner, int32_t x, int32_t y, int32_t z, std::string_view name) : Sign()
+	{
+		this->SetName(name);
+		this->Record().x = x; this->Record().y = y; this->Record().z = z; this->Record().owner = owner;
+	}
 	~Sign();
-
 	void UpdateVirtCoord();
 };
 

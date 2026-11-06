@@ -43,7 +43,6 @@ struct OpenTTDTownCommandServices {
 	bool (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*bribe_error)() noexcept OPENTTD_SERVICE_DEFAULT(bribe_error);
 	OpenTTDTownPoolRelation (*next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
-	OpenTTDTownPoolRelation (*next_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
 	void (*set_object_town)(Object *, Town *) noexcept OPENTTD_SERVICE_DEFAULT(set_object_town);
 	Town *(*industry_town_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_town_by_tile);

@@ -44,6 +44,6 @@ ScriptDepotList::ScriptDepotList(ScriptTile::TransportType transport_type)
 	bool is_deity = ScriptCompanyMode::IsDeity();
 	::CompanyID owner = ScriptObject::GetCompany();
 	for (const Depot *depot : Depot::Iterate()) {
-		if ((is_deity || ::GetTileOwner(depot->xy) == owner) && ::IsTileType(depot->xy, tile_type)) this->AddItem(depot->xy.base());
+		if ((is_deity || ::GetTileOwner(depot->Record().xy) == owner) && ::IsTileType(depot->Record().xy, tile_type)) this->AddItem(depot->Record().xy.base());
 	}
 }

@@ -266,8 +266,8 @@ static void LoadingBuild(uint16_t local = 300)
 			for (Station *station : Station::Iterate()) if (station->owner == company->index && station->airport.GetNumHangars() != 0) { tile = station->airport.GetHangarTile(0); break; }
 		} else {
 			for (Depot *depot : Depot::Iterate()) {
-				if (GetTileOwner(depot->xy) != company->index) continue;
-				if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_ROAD && IsRoadDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy))) { tile = depot->xy; break; }
+				if (GetTileOwner(FIXTURE_FIELD(depot, xy)) != company->index) continue;
+				if ((type == VEH_TRAIN && IsRailDepotTile(FIXTURE_FIELD(depot, xy))) || (type == VEH_ROAD && IsRoadDepotTile(FIXTURE_FIELD(depot, xy))) || (type == VEH_SHIP && IsShipDepotTile(FIXTURE_FIELD(depot, xy)))) { tile = FIXTURE_FIELD(depot, xy); break; }
 			}
 		}
 		LoadingRequire(tile != INVALID_TILE, "depot");

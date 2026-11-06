@@ -255,14 +255,6 @@ static size_t Ship_neighbours(OpenTTDWaterPatch patch, OpenTTDWaterPatch *out) n
 	VisitWaterRegionPatchNeighbours({patch.x, patch.y, WaterRegionPatchLabel(patch.label)}, visitor);
 	return count;
 }
-static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
-{
-	for (const Depot *d : Depot::Iterate(first)) {
-		*out = {d->index.base(), d->xy.base(), IsShipDepotTile(d->xy) ? GetRustSharedServices().tile_owner(d->xy.base()) : UINT32_MAX, static_cast<uint32_t>(IsShipDepotTile(d->xy))};
-		return true;
-	}
-	return false;
-}
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
@@ -318,7 +310,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.order_max_speed = Ship_order_max_speed,
 		.state_owner = Ship_state_owner,
 		.patch = Ship_patch, .neighbours = Ship_neighbours,
-		.next_depot = Ship_next_depot, .vehicle = &GetRustVehicleServices(),
+		 .vehicle = &GetRustVehicleServices(),
 	};
 	return leaves;
 }

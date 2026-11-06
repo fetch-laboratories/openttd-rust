@@ -1508,7 +1508,9 @@ impl<'a> Ctx<'a> {
             } else {
                 let depot = (self.r.new_depot)(tile);
                 (self.s.make_depot)(tile, (self.shared.current_company)(), depot, dir, rt);
-                (self.r.depot_name)(depot);
+                unsafe {
+                    crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(depot))
+                };
                 self.infrastructure(
                     rt,
                     (self.shared.current_company)(),

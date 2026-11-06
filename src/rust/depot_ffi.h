@@ -14,16 +14,11 @@ struct OpenTTDDepotServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandServices *command;
 	const OpenTTDCommandCostServices *costs;
-	const OpenTTDRailCommandServices *rail;
-	Depot *(*depot)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
-	uint32_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
-	uint32_t (*xy)(const Depot *) noexcept OPENTTD_SERVICE_DEFAULT(xy);
-	OpenTTDByteSpan (*name)(const Depot *) noexcept OPENTTD_SERVICE_DEFAULT(name);
-	void (*set_name)(Depot *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*renamed)(Depot *) noexcept OPENTTD_SERVICE_DEFAULT(renamed);
 	uint32_t name_unique;
 };
 extern "C" {
+void openttd_rust_depot_default_name(const OpenTTDSharedServices *, uint16_t);
 void openttd_rust_depot_rename(const OpenTTDDepotServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 }
 #endif /* RUST_DEPOT_FFI_H */

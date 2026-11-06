@@ -60,7 +60,6 @@ pub struct CommandServices {
     pub local_company: extern "C" fn() -> bool,
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
-    pub next_depot: extern "C" fn(u32) -> Relation,
     pub next_industry: extern "C" fn(u32) -> Relation,
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
@@ -416,7 +415,7 @@ impl<'a> Commands<'a> {
                 }
             }
         }
-        for next in [self.s.next_waypoint, self.s.next_depot] {
+        for next in [self.s.next_waypoint] {
             from = 0;
             loop {
                 let item = next(from);
@@ -428,6 +427,18 @@ impl<'a> Commands<'a> {
                     self.error(out);
                     return;
                 }
+            }
+        }
+        unsafe {
+            let pool = crate::depot_type::pool();
+            let mut index = pool.next_index(0, 64000);
+            while index < 64000 {
+                let record = pool.record(crate::depot_type::DepotID(index as u16));
+                if (*record).town == t.shell.cast_mut() {
+                    self.error(out);
+                    return;
+                }
+                index = pool.next_index(index + 1, 64000);
             }
         }
         for tile in 0..self.map_size() {
@@ -878,7 +889,6 @@ crate::abi::layouts! {
         local_company,
         bribe_error,
         next_waypoint,
-        next_depot,
         next_industry,
         set_object_town,
         industry_town_by_tile,

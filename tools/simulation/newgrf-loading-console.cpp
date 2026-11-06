@@ -495,9 +495,9 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	EngineID id = GetNewEngineID(GetFileByGRFID(ID("R471")), VEH_ROAD, 0);
 	bool built = false;
 	for (const Depot *depot : Depot::Iterate()) {
-		if (GetDepotVehicleType(depot->xy) != VEH_ROAD) continue;
-		AutoRestoreBackup company(_current_company, GetTileOwner(depot->xy));
-		auto [cost, vehicle, capacity, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, depot->xy, id, false, INVALID_CARGO, INVALID_CLIENT_ID);
+		if (GetDepotVehicleType(FIXTURE_FIELD(depot, xy)) != VEH_ROAD) continue;
+		AutoRestoreBackup company(_current_company, GetTileOwner(FIXTURE_FIELD(depot, xy)));
+		auto [cost, vehicle, capacity, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, FIXTURE_FIELD(depot, xy), id, false, INVALID_CARGO, INVALID_CLIENT_ID);
 		if (!cost.Succeeded()) continue;
 		fmt::print(stderr, "LOADING build {} {} {}\n", cost.Succeeded(), vehicle.base(), capacity);
 		Require(capacity == 55 && FIXTURE_FIELD(Vehicle::Get(vehicle), cargo_cap) == 55, "action2-build-capacity");

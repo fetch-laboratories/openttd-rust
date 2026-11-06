@@ -80,8 +80,8 @@ struct SignList {
 		 * a lot of them. Therefore a worthwhile performance gain can be made by
 		 * directly comparing Sign::name instead of going through the string
 		 * system for each comparison. */
-		const std::string &a_name = a->name.empty() ? SignList::default_name : a->name;
-		const std::string &b_name = b->name.empty() ? SignList::default_name : b->name;
+		const std::string_view a_name = a->Name().empty() ? std::string_view(SignList::default_name) : a->Name();
+		const std::string_view b_name = b->Name().empty() ? std::string_view(SignList::default_name) : b->Name();
 
 		int r = StrNaturalCompare(a_name, b_name); // Sort by name (natural sorting).
 
@@ -97,7 +97,7 @@ struct SignList {
 	static bool SignNameFilter(const Sign * const *a, StringFilter &filter)
 	{
 		/* Same performance benefit as above for sorting. */
-		const std::string &a_name = (*a)->name.empty() ? SignList::default_name : (*a)->name;
+		const std::string_view a_name = (*a)->Name().empty() ? std::string_view(SignList::default_name) : (*a)->Name();
 
 		filter.ResetState();
 		filter.AddLine(a_name);
@@ -108,7 +108,7 @@ struct SignList {
 	static bool OwnerDeityFilter(const Sign * const *a, StringFilter &)
 	{
 		/* You should never be able to edit signs of owner DEITY */
-		return (*a)->owner != OWNER_DEITY;
+		return (*a)->Record().owner != OWNER_DEITY;
 	}
 
 	/** Filter sign list by owner */
@@ -116,7 +116,7 @@ struct SignList {
 	{
 		assert(!HasBit(_display_opt, DO_SHOW_COMPETITOR_SIGNS));
 		/* Hide sign if non-own signs are hidden in the viewport */
-		return (*a)->owner == _local_company || (*a)->owner == OWNER_DEITY;
+		return (*a)->Record().owner == _local_company || (*a)->Record().owner == OWNER_DEITY;
 	}
 
 	/** Filter out signs from the sign list that does not match the name filter */
@@ -211,7 +211,7 @@ struct SignListWindow : Window, SignList {
 				for (auto it = first; it != last; ++it) {
 					const Sign *si = *it;
 
-					if (si->owner != OWNER_NONE) DrawCompanyIcon(si->owner, icon_left, tr.top + sprite_offset_y);
+					if (si->Record().owner != OWNER_NONE) DrawCompanyIcon(si->Record().owner, icon_left, tr.top + sprite_offset_y);
 
 					DrawString(tr.left, tr.right, tr.top + text_offset_y, GetString(STR_SIGN_NAME, si->index), TC_YELLOW);
 					tr.top += this->resize.step_height;
@@ -236,7 +236,7 @@ struct SignListWindow : Window, SignList {
 				if (it == this->signs.end()) return;
 
 				const Sign *si = *it;
-				ScrollMainWindowToTile(TileVirtXY(si->x, si->y));
+				ScrollMainWindowToTile(TileVirtXY(si->Record().x, si->Record().y));
 				break;
 			}
 
@@ -419,7 +419,7 @@ struct SignWindow : Window, SignList {
 	void UpdateSignEditWindow(const Sign *si)
 	{
 		/* Display an empty string when the sign hasn't been edited yet */
-		if (!si->name.empty()) {
+		if (!si->Name().empty()) {
 			this->name_editbox.text.Assign(GetString(STR_SIGN_NAME, si->index));
 		} else {
 			this->name_editbox.text.DeleteAll();
@@ -474,7 +474,7 @@ struct SignWindow : Window, SignList {
 		switch (widget) {
 			case WID_QES_LOCATION: {
 				const Sign *si = Sign::Get(this->cur_sign);
-				TileIndex tile = TileVirtXY(si->x, si->y);
+				TileIndex tile = TileVirtXY(si->Record().x, si->Record().y);
 				if (_ctrl_pressed) {
 					ShowExtraViewportWindow(tile);
 				} else {
@@ -494,7 +494,7 @@ struct SignWindow : Window, SignList {
 				this->SortSignsList();
 
 				/* Scroll to sign and reopen window */
-				ScrollMainWindowToTile(TileVirtXY(si->x, si->y));
+				ScrollMainWindowToTile(TileVirtXY(si->Record().x, si->Record().y));
 				UpdateSignEditWindow(si);
 				break;
 			}
@@ -574,7 +574,7 @@ void HandleClickOnSign(const Sign *si)
 	/* If we can't edit the sign, don't even open the rename GUI. */
 	if (!CompanyCanEditSign(si)) return;
 
-	if (_ctrl_pressed && (si->owner == _local_company || (si->owner == OWNER_DEITY && _game_mode == GM_EDITOR))) {
+	if (_ctrl_pressed && (si->Record().owner == _local_company || (si->Record().owner == OWNER_DEITY && _game_mode == GM_EDITOR))) {
 		RenameSign(si->index, "");
 		return;
 	}

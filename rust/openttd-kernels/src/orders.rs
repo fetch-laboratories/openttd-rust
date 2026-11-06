@@ -524,7 +524,6 @@ pub struct Leaves {
     pub airport_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub base_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub station_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub depot_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub distance: unsafe extern "C" fn(first: u32, second: u32, square: u8) -> u64,
     pub station_location: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
     pub destination_tile: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -537,11 +536,6 @@ pub struct Leaves {
     pub valid_station: extern "C" fn(destination: u16) -> u64,
     pub station_owner: unsafe extern "C" fn(destination: u16) -> u64,
     pub station_error: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
-    pub valid_depot: extern "C" fn(destination: u16) -> u64,
-    pub depot_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub rail_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub road_depot: unsafe extern "C" fn(destination: u16) -> u64,
-    pub ship_depot: unsafe extern "C" fn(destination: u16) -> u64,
     pub valid_waypoint: extern "C" fn(destination: u16) -> u64,
     pub waypoint_facilities: unsafe extern "C" fn(destination: u16) -> u64,
     pub waypoint_owner: unsafe extern "C" fn(destination: u16) -> u64,
@@ -609,6 +603,51 @@ fn native_vehicle(v: *mut c_void, base: &VehicleServices) -> VehicleRef {
     unsafe { VehicleRef::from_shell(v, base) }
 }
 
+impl Game {
+    fn depot_tile(self, id: u16) -> u64 {
+        unsafe {
+            u64::from(
+                (*crate::depot_type::pool().record(crate::depot_type::DepotID(id)))
+                    .xy
+                    .0,
+            )
+        }
+    }
+    fn valid_depot(self, id: u16) -> u64 {
+        unsafe {
+            u64::from(
+                !crate::depot_type::pool()
+                    .record(crate::depot_type::DepotID(id))
+                    .is_null(),
+            )
+        }
+    }
+    fn depot_owner(self, id: u16) -> u64 {
+        u64::from(
+            crate::map_func::World::new(crate::newgrf_airport::runtime())
+                .owner(self.depot_tile(id) as u32),
+        )
+    }
+    fn rail_depot(self, id: u16) -> u64 {
+        u64::from(
+            crate::map_func::World::new(crate::newgrf_airport::runtime())
+                .rail_depot(self.depot_tile(id) as u32),
+        )
+    }
+    fn road_depot(self, id: u16) -> u64 {
+        u64::from(
+            crate::map_func::World::new(crate::newgrf_airport::runtime())
+                .road_depot(self.depot_tile(id) as u32),
+        )
+    }
+    fn ship_depot(self, id: u16) -> u64 {
+        u64::from(
+            crate::map_func::World::new(crate::newgrf_airport::runtime())
+                .ship_depot(self.depot_tile(id) as u32),
+        )
+    }
+}
+
 /// Typed calls into the `Leaves` table. Callers pass the live native pointees and
 /// destination types the table contract requires.
 macro_rules! leaves {
@@ -642,7 +681,6 @@ leaves! {
     fn airport_tile(destination: u16) -> u64;
     fn base_station_tile(destination: u16) -> u64;
     fn station_tile(destination: u16) -> u64;
-    fn depot_tile(destination: u16) -> u64;
     fn station_location(ctx: *mut c_void, destination: u16) -> u64;
     fn destination_tile(ctx: *mut c_void) -> u64;
     fn aircraft_flying(ctx: *mut c_void) -> u64;
@@ -653,10 +691,6 @@ leaves! {
     fn ship_station_tile(destination: u16) -> u64;
     fn station_owner(destination: u16) -> u64;
     fn station_error(ctx: *mut c_void, destination: u16) -> u64;
-    fn depot_owner(destination: u16) -> u64;
-    fn rail_depot(destination: u16) -> u64;
-    fn road_depot(destination: u16) -> u64;
-    fn ship_depot(destination: u16) -> u64;
     fn waypoint_facilities(destination: u16) -> u64;
     fn waypoint_owner(destination: u16) -> u64;
     fn aircraft_range_square(ctx: *mut c_void) -> u64;
@@ -3355,7 +3389,7 @@ impl Control {
                             return self.g.error(output, 0);
                         }
                     } else {
-                        if (g.0.valid_depot)(destination as u16) == 0 {
+                        if g.valid_depot(destination as u16) == 0 {
                             return self.g.error(output, 0);
                         }
                         if !self
@@ -4693,7 +4727,6 @@ crate::abi::layouts! {
         airport_tile,
         base_station_tile,
         station_tile,
-        depot_tile,
         distance,
         station_location,
         destination_tile,
@@ -4706,11 +4739,6 @@ crate::abi::layouts! {
         valid_station,
         station_owner,
         station_error,
-        valid_depot,
-        depot_owner,
-        rail_depot,
-        road_depot,
-        ship_depot,
         valid_waypoint,
         waypoint_facilities,
         waypoint_owner,

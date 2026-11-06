@@ -7,16 +7,14 @@
 #include "command_cost_ffi.h"
 struct OpenTTDSharedServices;
 struct Sign;
+struct OpenTTDSignRecord;
 /** Each operation is one whole native operation; pointers die with their sign. */
 struct OpenTTDSignServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandCostServices *costs;
-	Sign *(*sign)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sign);
-	uint8_t (*owner)(const Sign *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
-	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	uint16_t (*place)(uint8_t, int32_t, int32_t, int32_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(place);
-	void (*rename)(Sign *, uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(rename);
-	void (*relocate)(Sign *, uint8_t, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(relocate);
+	OpenTTDSignRecord *(*create)() noexcept OPENTTD_SERVICE_DEFAULT(create);
+	void (*position)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(position);
+	void (*list_changed)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(list_changed);
 	void (*remove)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(remove);
 	uint32_t too_many_signs;
 };
@@ -25,7 +23,7 @@ extern "C" {
 uint16_t openttd_rust_sign_place(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint32_t, OpenTTDByteSpan);
 void openttd_rust_sign_rename(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 void openttd_rust_sign_move(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);
-uint8_t openttd_rust_company_can_edit_sign_abi(const OpenTTDSignServices *, const Sign *);
-extern "C++" inline bool openttd_rust_company_can_edit_sign(const OpenTTDSignServices *a0, const Sign *a1) { return openttd_rust_company_can_edit_sign_abi(a0, a1) != 0; }
+uint8_t openttd_rust_company_can_edit_sign_abi(const OpenTTDSignServices *, const OpenTTDSignRecord *);
+extern "C++" inline bool openttd_rust_company_can_edit_sign(const OpenTTDSignServices *a0, const OpenTTDSignRecord *a1) { return openttd_rust_company_can_edit_sign_abi(a0, a1) != 0; }
 }
 #endif /* RUST_SIGNS_FFI_H */

@@ -324,8 +324,6 @@ pub struct Services {
     pub set_station_owner: extern "C" fn(u32, u8),
     pub waypoint_next_owned: extern "C" fn(u8, u32) -> u32,
     pub set_waypoint_owner: extern "C" fn(u32, u8),
-    pub sign_next_owned: extern "C" fn(u8, u32) -> u32,
-    pub set_sign_owner: extern "C" fn(u32, u8),
     pub goal_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_goal: extern "C" fn(u32),
     pub story_page_next_owned: extern "C" fn(u8, u32) -> u32,
@@ -1381,10 +1379,17 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         |from| (s.waypoint_next_owned)(old, from),
         |id| (s.set_waypoint_owner)(id, owner),
     );
-    each(
-        |from| (s.sign_next_owned)(old, from),
-        |id| (s.set_sign_owner)(id, owner),
-    );
+    unsafe {
+        let pool = crate::signs_type::pool();
+        let mut index = pool.next_index(0, 64000);
+        while index < 64000 {
+            let record = pool.record(crate::signs_type::SignID(index as u16));
+            if (*record).owner.0 == old {
+                (*record).owner = crate::company_type::CompanyID(owner);
+            }
+            index = pool.next_index(index + 1, 64000);
+        }
+    }
     each(
         |from| (s.goal_next_owned)(old, from),
         |id| (s.delete_goal)(id),
@@ -2294,8 +2299,6 @@ crate::abi::layouts! {
         set_station_owner,
         waypoint_next_owned,
         set_waypoint_owner,
-        sign_next_owned,
-        set_sign_owner,
         goal_next_owned,
         delete_goal,
         story_page_next_owned,

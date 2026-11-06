@@ -211,8 +211,6 @@ pub struct RailCommandServices {
     pub depot_available: extern "C" fn() -> bool,
     /// `new Depot(tile)`, returning its ID.
     pub new_depot: extern "C" fn(u32) -> u16,
-    /// `MakeDefaultName(Depot::Get(id))`.
-    pub depot_name: extern "C" fn(u16),
     /// `delete Depot::GetByTile(tile)`.
     pub delete_depot: extern "C" fn(u32),
     /// `InvalidateWindowData` of the depot and build-vehicle windows.
@@ -1157,7 +1155,9 @@ impl<'a> Ctx<'a> {
                 w::hit(w::RAIL_CMD_DEPOT_BUILD);
                 let depot = (self.s.new_depot)(tile);
                 (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
-                (self.s.depot_name)(depot);
+                unsafe {
+                    crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(depot))
+                };
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());
             }
@@ -2596,7 +2596,6 @@ crate::abi::layouts! {
         make_road,
         depot_available,
         new_depot,
-        depot_name,
         delete_depot,
         depot_windows,
         close_inspect,

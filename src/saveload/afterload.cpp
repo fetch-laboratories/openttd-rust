@@ -78,6 +78,8 @@
 #include "../rust/tile_loop_cursor.h"
 
 #include "../rust/animation_ffi.h"
+#include "../rust/depot_ffi.h"
+
 #include "../safeguards.h"
 
 extern Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid());
@@ -2073,7 +2075,7 @@ bool AfterLoadGame()
 
 		/* signs with invalid owner left from older savegames */
 		for (Sign *si : Sign::Iterate()) {
-			if (si->owner != OWNER_NONE && !Company::IsValidID(si->owner)) si->owner = OWNER_NONE;
+			if (si->Record().owner != OWNER_NONE && !Company::IsValidID(si->Record().owner)) si->Record().owner = OWNER_NONE;
 		}
 
 		/* Station can get named based on an industry type, but the current ones
@@ -2368,11 +2370,11 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_128)) {
 		for (const Depot *d : Depot::Iterate()) {
-			Tile tile = d->xy;
+			Tile tile = d->Record().xy;
 			/* At some point, invalid depots were saved into the game (possibly those removed in the past?)
 			 * Remove them here, so they don't cause issues further down the line */
 			if (!IsDepotTile(tile)) {
-				Debug(sl, 0, "Removing invalid depot {} at {}, {}", d->index, TileX(d->xy), TileY(d->xy));
+				Debug(sl, 0, "Removing invalid depot {} at {}, {}", d->index, TileX(d->Record().xy), TileY(d->Record().xy));
 				delete d;
 				d = nullptr;
 				continue;
@@ -2487,13 +2489,13 @@ bool AfterLoadGame()
 		/* We need to properly number/name the depots.
 		 * The first step is making sure none of the depots uses the
 		 * 'default' names, after that we can assign the names. */
-		for (Depot *d : Depot::Iterate()) d->town_cn = UINT16_MAX;
+		for (Depot *d : Depot::Iterate()) d->Record().town_cn = UINT16_MAX;
 
-		for (Depot *d : Depot::Iterate()) MakeDefaultName(d);
+		for (Depot *d : Depot::Iterate()) openttd_rust_depot_default_name(&GetRustSharedServices(), d->index.base());
 	}
 
 	if (IsSavegameVersionBefore(SLV_142)) {
-		for (Depot *d : Depot::Iterate()) d->build_date = TimerGameCalendar::date;
+		for (Depot *d : Depot::Iterate()) d->Record().build_date = TimerGameCalendar::date;
 	}
 
 	if (IsSavegameVersionBefore(SLV_145)) {

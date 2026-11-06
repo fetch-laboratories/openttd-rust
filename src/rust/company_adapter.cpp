@@ -363,8 +363,6 @@ static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
 static void Co_set_station_owner(uint32_t id, uint8_t owner) noexcept { Station::Get(id)->owner = CompanyID(owner); }
 static uint32_t Co_waypoint_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Waypoint>(owner, from, [](const Waypoint *wp) { return wp->owner; }); }
 static void Co_set_waypoint_owner(uint32_t id, uint8_t owner) noexcept { Waypoint::Get(id)->owner = CompanyID(owner); }
-static uint32_t Co_sign_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Sign>(owner, from, [](const Sign *si) { return si->owner; }); }
-static void Co_set_sign_owner(uint32_t id, uint8_t owner) noexcept { Sign::Get(id)->owner = CompanyID(owner); }
 static uint32_t Co_goal_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Goal>(owner, from, [](const Goal *g) { return g->company; }); }
 static void Co_delete_goal(uint32_t id) noexcept { delete Goal::Get(id); }
 static uint32_t Co_story_page_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<StoryPage>(owner, from, [](const StoryPage *sp) { return sp->company; }); }
@@ -464,7 +462,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.station_next_owned = Co_station_next_owned, .station_facility_count = Co_station_facility_count,
 		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
 		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,
-		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,
 		.goal_next_owned = Co_goal_next_owned, .delete_goal = Co_delete_goal,
 		.story_page_next_owned = Co_story_page_next_owned, .delete_story_page = Co_delete_story_page,
 		.change_window_owner = Co_change_window_owner,

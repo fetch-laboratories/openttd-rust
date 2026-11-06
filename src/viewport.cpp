@@ -1408,8 +1408,8 @@ static void ViewportAddSignStrings(DrawPixelInfo *dpi, const std::vector<const S
 	flags.Set(IsTransparencySet(TO_SIGNS) ? ViewportStringFlag::TransparentRect : ViewportStringFlag::ColourRect);
 
 	for (const Sign *si : signs) {
-		std::string *str = ViewportAddString(dpi, &si->sign, (si->owner == OWNER_DEITY) ? deity_flags : flags,
-			(si->owner == OWNER_NONE) ? COLOUR_GREY : (si->owner == OWNER_DEITY ? INVALID_COLOUR : _company_colours[si->owner]));
+		std::string *str = ViewportAddString(dpi, &si->sign, (si->Record().owner == OWNER_DEITY) ? deity_flags : flags,
+			(si->Record().owner == OWNER_NONE) ? COLOUR_GREY : (si->Record().owner == OWNER_DEITY ? INVALID_COLOUR : _company_colours[si->Record().owner]));
 		if (str == nullptr) continue;
 
 		*str = GetString(STR_SIGN_NAME, si->index);
@@ -1498,7 +1498,7 @@ static void ViewportAddKdtreeSigns(DrawPixelInfo *dpi)
 				/* Don't draw if sign is owned by another company and competitor signs should be hidden.
 				 * Note: It is intentional that also signs owned by OWNER_NONE are hidden. Bankrupt
 				 * companies can leave OWNER_NONE signs after them. */
-				if (!show_competitors && _local_company != si->owner && si->owner != OWNER_DEITY) break;
+				if (!show_competitors && _local_company != si->Record().owner && si->Record().owner != OWNER_DEITY) break;
 
 				signs.push_back(si);
 				break;
@@ -2338,7 +2338,7 @@ static bool CheckClickOnViewportSign(const Viewport &vp, int x, int y)
 			case ViewportSignKdtreeItem::VKI_SIGN:
 				if (!show_signs) break;
 				si = Sign::Get(std::get<SignID>(item.id));
-				if (!show_competitors && _local_company != si->owner && si->owner != OWNER_DEITY) break;
+				if (!show_competitors && _local_company != si->Record().owner && si->Record().owner != OWNER_DEITY) break;
 				if (CheckClickOnViewportSign(vp, x, y, &si->sign)) last_si = si;
 				break;
 

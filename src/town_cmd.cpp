@@ -775,7 +775,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.local_company = RustIsLocalCompany,
 		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
 		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = RustBaseStationID(wp) + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
-		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { if (const Industry *i = OpenTTDNextIndustry(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.set_object_town = OpenTTDSetObjectTown,
 		.industry_town_by_tile = OpenTTDIndustryTownByTile,

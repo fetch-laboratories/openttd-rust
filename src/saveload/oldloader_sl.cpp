@@ -106,7 +106,7 @@ static void FixTTDMapArray()
 static void FixTTDDepots()
 {
 	for (const Depot *d : Depot::Iterate(252)) {
-		if (!IsDepotTile(d->xy) || GetDepotIndex(d->xy) != d->index) {
+		if (!IsDepotTile(d->Record().xy) || GetDepotIndex(d->Record().xy) != d->index) {
 			/** Workaround for SVXConverter bug, depots 252-255 could be invalid */
 			delete d;
 		}
@@ -707,7 +707,7 @@ static bool LoadOldAnimTileList(LoadgameState &ls, int)
 }
 
 static const OldChunks depot_chunk[] = {
-	OCL_SVAR(   OC_TILE, Depot, xy ),
+	OCL_SVAR(   OC_TILE, Depot, Record().xy ),
 	OCL_VAR ( OC_UINT32,                1, &_old_town_index ),
 	OCL_END()
 };
@@ -717,8 +717,8 @@ static bool LoadOldDepot(LoadgameState &ls, int num)
 	Depot *d = new (DepotID(num)) Depot();
 	if (!LoadChunk(ls, d, depot_chunk)) return false;
 
-	if (d->xy != 0) {
-		d->town = RemapTown(d->xy);
+	if (d->Record().xy != 0) {
+		d->Record().town = RemapTown(d->Record().xy);
 	} else {
 		delete d;
 	}
@@ -1447,9 +1447,9 @@ bool LoadOldCustomString(LoadgameState &ls, int index)
 
 static const OldChunks sign_chunk[] = {
 	OCL_VAR ( OC_UINT16, 1, &_old_string_id ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Sign, x ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Sign, y ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I8, Sign, z ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Sign, Record().x ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Sign, Record().y ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I8, Sign, Record().z ),
 
 	OCL_NULL( 6 ),         ///< Width of sign, no longer in use
 
@@ -1463,11 +1463,11 @@ static bool LoadOldSign(LoadgameState &ls, int num)
 
 	if (_old_string_id != 0) {
 		if (_savegame_type == SGT_TTO) {
-			if (_old_string_id != 0x140A) si->name = CopyFromOldName(_old_string_id + 0x2A00);
+			if (_old_string_id != 0x140A) si->SetName(CopyFromOldName(_old_string_id + 0x2A00));
 		} else {
-			si->name = CopyFromOldName(RemapOldStringID(_old_string_id));
+			si->SetName(CopyFromOldName(RemapOldStringID(_old_string_id)));
 		}
-		si->owner = OWNER_NONE;
+		si->Record().owner = OWNER_NONE;
 	} else {
 		delete si;
 	}

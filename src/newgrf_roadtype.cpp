@@ -88,12 +88,12 @@ uint32_t GetTrackTypes(TileIndex tile, const GRFFile *grffile)
 		case 0x41: return 0;
 		case 0x42: return IsLevelCrossingTile(this->tile) && IsCrossingBarred(this->tile);
 		case 0x43:
-			if (IsRoadDepotTile(this->tile)) return Depot::GetByTile(this->tile)->build_date.base();
+			if (IsRoadDepotTile(this->tile)) return Depot::GetByTile(this->tile)->Record().build_date.base();
 			return TimerGameCalendar::date.base();
 		case 0x44: {
 			const Town *t = nullptr;
 			if (IsRoadDepotTile(this->tile)) {
-				t = Depot::GetByTile(this->tile)->town;
+				t = Depot::GetByTile(this->tile)->Record().town;
 			} else {
 				t = ClosestTownFromTile(this->tile, UINT_MAX);
 			}

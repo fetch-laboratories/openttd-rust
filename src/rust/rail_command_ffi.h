@@ -65,7 +65,6 @@ struct OpenTTDRailCommandServices {
 	void (*make_road)(uint32_t, OpenTTDCrossingRoad) noexcept OPENTTD_SERVICE_DEFAULT(make_road);
 	bool (*depot_available)() noexcept OPENTTD_SERVICE_DEFAULT(depot_available);
 	uint16_t (*new_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_depot);
-	void (*depot_name)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_name);
 	void (*delete_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_depot);
 	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
 	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);

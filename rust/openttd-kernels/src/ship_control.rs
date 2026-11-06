@@ -122,8 +122,6 @@ pub unsafe extern "C" fn openttd_rust_ship_set_rotation_y(state: *mut State, val
 pub struct Depot {
     pub id: u32,
     pub tile: u32,
-    pub owner: u32,
-    pub ship: u32,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -238,7 +236,6 @@ pub struct Leaves {
     pub state_owner: extern "C" fn(u32) -> *mut State,
     pub patch: extern "C" fn(u32) -> Patch,
     pub neighbours: extern "C" fn(Patch, *mut Patch) -> usize,
-    pub next_depot: extern "C" fn(u32, *mut Depot) -> bool,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
@@ -391,21 +388,26 @@ impl Game<'_> {
         }
         let mut best = None;
         let mut best_distance = u32::MAX;
-        let mut first = 0;
-        let mut depot = Depot::default();
-        while (self.leaves.next_depot)(first, &raw mut depot) {
-            first = depot.id + 1;
-            if depot.ship == 0 || depot.owner != observed_owner {
+        let pool = unsafe { crate::depot_type::pool() };
+        let mut index = unsafe { pool.next_index(0, 64000) };
+        while index < 64000 {
+            let record = unsafe { pool.record(crate::depot_type::DepotID(index as u16)) };
+            let tile = unsafe { (*record).xy.0 };
+            index = unsafe { pool.next_index(index + 1, 64000) };
+            let world = crate::map_func::World::new(self.services);
+            if !world.ship_depot(tile) || u32::from(world.owner(tile)) != observed_owner {
                 continue;
             }
-            let distance = (self.leaves.dist_square)(depot.tile, observed_tile);
+            let distance = (self.leaves.dist_square)(tile, observed_tile);
             if distance < best_distance && distance <= max_distance.wrapping_mul(max_distance) && {
-                let patch = (self.leaves.patch)(depot.tile);
-                // SAFETY: The callback has returned before taking this short scratch borrow.
+                let patch = (self.leaves.patch)(tile);
                 unsafe { (*scratch).visited.contains(&key(patch)) }
             } {
                 best_distance = distance;
-                best = Some(depot);
+                best = Some(Depot {
+                    id: u32::from(unsafe { (*record).index.0 }),
+                    tile,
+                });
             }
         }
         best
@@ -1233,18 +1235,11 @@ crate::abi::layouts! {
         state_owner,
         patch,
         neighbours,
-        next_depot,
         vehicle,
     };
     "OpenTTDShipReverseResult" ["probe"] => ReverseResult {
         reverse,
         trackdir,
-    };
-    "OpenTTDShipDepot" ["probe"] => Depot {
-        id,
-        tile,
-        owner,
-        ship,
     };
     "OpenTTDShipTrackResult" ["probe"] => TrackResult {
         track,

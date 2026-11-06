@@ -23,7 +23,7 @@
 
 /** Initialize the sign-pool */
 SignPool _sign_pool("Sign");
-INSTANTIATE_POOL_METHODS(Sign)
+
 
 /** Destroy the sign */
 Sign::~Sign()
@@ -38,7 +38,7 @@ Sign::~Sign()
  */
 void Sign::UpdateVirtCoord()
 {
-	Point pt = RemapCoords(this->x, this->y, this->z);
+	Point pt = RemapCoords(this->Record().x, this->Record().y, this->Record().z);
 
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeSign(this->index));
 
@@ -62,5 +62,5 @@ void UpdateAllSignVirtCoords()
  */
 bool CompanyCanEditSign(const Sign *si)
 {
-	return openttd_rust_company_can_edit_sign(&GetRustSignServices(), si);
+	return openttd_rust_company_can_edit_sign(&GetRustSignServices(), &si->Record());
 }

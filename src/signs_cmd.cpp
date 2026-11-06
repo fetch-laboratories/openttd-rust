@@ -29,36 +29,6 @@
 
 static_assert(MAX_LENGTH_SIGN_NAME_CHARS == 32);
 
-static std::string_view RustText(OpenTTDByteSpan text) noexcept { return {reinterpret_cast<const char *>(text.data), text.size}; }
-
-static uint16_t RustSignPlace(uint8_t owner, int32_t x, int32_t y, int32_t z, OpenTTDByteSpan text) noexcept
-{
-	Sign *si = new Sign(CompanyID(owner), x, y, z, RustText(text));
-
-	si->UpdateVirtCoord();
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
-	return si->index.base();
-}
-
-static void RustSignRename(Sign *si, uint8_t owner, OpenTTDByteSpan text) noexcept
-{
-	si->name = RustText(text);
-	si->owner = CompanyID(owner);
-
-	si->UpdateVirtCoord();
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 1);
-}
-
-static void RustSignRelocate(Sign *si, uint8_t owner, int32_t x, int32_t y, int32_t z) noexcept
-{
-	si->x = x;
-	si->y = y;
-	si->z = z;
-	si->owner = CompanyID(owner);
-
-	si->UpdateVirtCoord();
-}
-
 static void RustSignRemove(Sign *si) noexcept
 {
 	si->sign.MarkDirty();
@@ -73,12 +43,9 @@ const OpenTTDSignServices &GetRustSignServices() noexcept
 	static const OpenTTDSignServices services{
 		.shared = &GetRustSharedServices(),
 		.costs = &GetRustCommandCostServices(),
-		.sign = [](uint16_t id) noexcept { return Sign::GetIfValid(SignID(id)); },
-		.owner = [](const Sign *si) noexcept { return si->owner.base(); },
-		.can_allocate = []() noexcept { return Sign::CanAllocateItem(); },
-		.place = RustSignPlace,
-		.rename = RustSignRename,
-		.relocate = RustSignRelocate,
+		.create = []() noexcept { return (new Sign())->record.get(); },
+		.position = [](Sign *si) noexcept { si->UpdateVirtCoord(); },
+		.list_changed = [](int32_t data) noexcept { GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, data); },
 		.remove = RustSignRemove,
 		.too_many_signs = STR_ERROR_TOO_MANY_SIGNS,
 	};

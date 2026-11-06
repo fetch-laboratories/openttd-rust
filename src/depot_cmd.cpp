@@ -35,11 +35,11 @@ static void RustDepotRenamed(Depot *d) noexcept
 {
 	/* Update the orders and depot */
 	GetRustStationCommandServices().orders_dirty();
-	SetWindowDirty(WC_VEHICLE_DEPOT, d->xy);
+	SetWindowDirty(WC_VEHICLE_DEPOT, d->Record().xy);
 
 	/* Update the depot list */
-	VehicleType vt = GetRustVehicleBuildServices().depot_kind(d->xy.base());
-	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->xy.base())), d->index).ToWindowNumber());
+	VehicleType vt = GetRustVehicleBuildServices().depot_kind(d->Record().xy.base());
+	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->Record().xy.base())), d->index).ToWindowNumber());
 }
 
 static const OpenTTDDepotServices &GetRustDepotServices() noexcept
@@ -48,12 +48,6 @@ static const OpenTTDDepotServices &GetRustDepotServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.command = &GetRustCommandServices(),
 		.costs = &GetRustCommandCostServices(),
-		.rail = &GetRustRailCommandServices(),
-		.depot = [](uint16_t id) noexcept { return Depot::GetIfValid(DepotID(id)); },
-		.pool_size = []() noexcept { return static_cast<uint32_t>(Depot::GetPoolSize()); },
-		.xy = [](const Depot *d) noexcept { return d->xy.base(); },
-		.name = [](const Depot *d) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(d->name.data()), d->name.size()}; },
-		.set_name = [](Depot *d, OpenTTDByteSpan text) noexcept { d->name.assign(reinterpret_cast<const char *>(text.data), text.size); },
 		.renamed = RustDepotRenamed,
 		.name_unique = STR_ERROR_NAME_MUST_BE_UNIQUE,
 	};

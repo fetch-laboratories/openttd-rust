@@ -277,7 +277,7 @@ impl World<'_> {
             self.check_docking(tile2);
             (self.s.mark_dirty)(tile);
             (self.s.mark_dirty)(tile2);
-            (self.rail().depot_name)(id);
+            unsafe { crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(id)) };
             w::hit(w::WATER_CMD_DEPOT);
         }
     }

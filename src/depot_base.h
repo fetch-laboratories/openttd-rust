@@ -11,39 +11,40 @@
 #define DEPOT_BASE_H
 
 #include "depot_map.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
+#include "rust/owned_bytes.h"
 #include "timer/timer_game_calendar.h"
 
-typedef Pool<Depot, DepotID, 64> DepotPool;
+#include "rust/abi-record-depot_type.h"
+extern "C" {
+void openttd_rust_depot_pool_bind(RustPoolCore *);
+OpenTTDDepotRecord *openttd_rust_depot_record_new(Depot *, DepotID);
+void openttd_rust_depot_record_delete(OpenTTDDepotRecord *);
+}
+struct DepotPool : RustPool<Depot, DepotID, 64> {
+	explicit DepotPool(std::string_view name) : RustPool(name) { openttd_rust_depot_pool_bind(this->owner); }
+};
 extern DepotPool _depot_pool;
 
 struct Depot : DepotPool::PoolItem<&_depot_pool> {
-	/* DepotID index member of DepotPool is 2 bytes. */
-	uint16_t town_cn = 0; ///< The N-1th depot for this town (consecutive number)
-	TileIndex xy = INVALID_TILE;
-	Town *town = nullptr;
-	std::string name{};
-	TimerGameCalendar::Date build_date{}; ///< Date of construction
-
-	Depot() {}
-	Depot(TileIndex xy) : xy(xy), build_date(TimerGameCalendar::date) {}
+	struct RecordDeleter {
+		void operator()(OpenTTDDepotRecord *record) const
+		{
+			_depot_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_depot_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDDepotRecord, RecordDeleter> record{openttd_rust_depot_record_new(this, this->index)};
+	OpenTTDDepotRecord &Record() { return *this->record; }
+	const OpenTTDDepotRecord &Record() const { return *this->record; }
+	std::string_view Name() const { return RustBytesView(this->record->name); }
+	void SetName(std::string_view name) { RustBytesAssign(this->record->name, name); }
+	Depot() { _depot_pool.BindRecord(this->index.base(), this, this->record.get()); }
+	Depot(TileIndex xy) : Depot() { this->Record().xy = xy; this->Record().build_date = TimerGameCalendar::date; }
 	~Depot();
 
-	static inline Depot *GetByTile(TileIndex tile)
-	{
-		return Depot::Get(GetDepotIndex(tile));
-	}
-
-	/**
-	 * Is the "type" of depot the same as the given depot,
-	 * i.e. are both a rail, road or ship depots?
-	 * @param d The depot to compare to.
-	 * @return true iff their types are equal.
-	 */
-	inline bool IsOfType(const Depot *d) const
-	{
-		return GetTileType(d->xy) == GetTileType(this->xy);
-	}
+	static inline Depot *GetByTile(TileIndex tile) { return Depot::Get(GetDepotIndex(tile)); }
+	inline bool IsOfType(const Depot *d) const { return GetTileType(d->Record().xy) == GetTileType(this->Record().xy); }
 };
 
 #endif /* DEPOT_BASE_H */

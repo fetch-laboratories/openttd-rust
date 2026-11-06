@@ -251,7 +251,7 @@ static ScriptOrder::OrderPosition RealOrderPositionToScriptOrderPosition(Vehicle
 			/* We don't know where the nearest depot is... (yet) */
 			if (order->GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)) return INVALID_TILE;
 
-			if (v->GetType() != VEH_AIRCRAFT) return ::Depot::Get(order->GetDestination().ToDepotID())->xy;
+			if (v->GetType() != VEH_AIRCRAFT) return ::Depot::Get(order->GetDestination().ToDepotID())->Record().xy;
 			/* Aircraft's hangars are referenced by StationID, not DepotID */
 			const Station *st = ::Station::Get(order->GetDestination().ToStationID());
 			if (!st->airport.HasHangar()) return INVALID_TILE;

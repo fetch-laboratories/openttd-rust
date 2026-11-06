@@ -24,14 +24,14 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Sign *si = ::Sign::GetIfValid(sign_id);
-	return si != nullptr && (si->owner == ScriptObject::GetCompany() || si->owner == OWNER_DEITY);
+	return si != nullptr && (si->Record().owner == ScriptObject::GetCompany() || si->Record().owner == OWNER_DEITY);
 }
 
 /* static */ ScriptCompany::CompanyID ScriptSign::GetOwner(SignID sign_id)
 {
 	if (!IsValidSign(sign_id)) return ScriptCompany::COMPANY_INVALID;
 
-	return ScriptCompany::ToScriptCompanyID(::Sign::Get(sign_id)->owner);
+	return ScriptCompany::ToScriptCompanyID(::Sign::Get(sign_id)->Record().owner);
 }
 
 /* static */ bool ScriptSign::SetName(SignID sign_id, Text *name)
@@ -60,7 +60,7 @@
 	if (!IsValidSign(sign_id)) return INVALID_TILE;
 
 	const Sign *sign = ::Sign::Get(sign_id);
-	return ::TileVirtXY(sign->x, sign->y);
+	return ::TileVirtXY(sign->Record().x, sign->Record().y);
 }
 
 /* static */ bool ScriptSign::RemoveSign(SignID sign_id)

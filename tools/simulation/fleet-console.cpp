@@ -207,8 +207,8 @@ static Vehicle *BuildFixture(VehicleType type)
 		for (Station *st : Station::Iterate()) if (st->owner == _current_company && st->airport.GetNumHangars() != 0) { tile = st->airport.GetHangarTile(0); break; }
 	} else {
 		for (Depot *depot : Depot::Iterate()) {
-			if (GetTileOwner(depot->xy) != _current_company) continue;
-			if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy)) || (type == VEH_ROAD && IsRoadDepotTile(depot->xy))) { tile = depot->xy; break; }
+			if (GetTileOwner(FIXTURE_FIELD(depot, xy)) != _current_company) continue;
+			if ((type == VEH_TRAIN && IsRailDepotTile(FIXTURE_FIELD(depot, xy))) || (type == VEH_SHIP && IsShipDepotTile(FIXTURE_FIELD(depot, xy))) || (type == VEH_ROAD && IsRoadDepotTile(FIXTURE_FIELD(depot, xy)))) { tile = FIXTURE_FIELD(depot, xy); break; }
 		}
 	}
 	if (tile == INVALID_TILE) FixtureAbort(__LINE__);

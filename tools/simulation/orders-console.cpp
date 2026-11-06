@@ -129,8 +129,8 @@ static bool VisitsScenario(std::span<std::string_view> args)
 		TileIndex from = Station::Get(u->GetOrder(0)->GetDestination().ToStationID())->xy;
 		const Depot *best = nullptr;
 		for (const Depot *d : Depot::Iterate()) {
-			if (GetTileOwner(d->xy) != FIXTURE_GET(u, Owner, owner) || !(FIXTURE_GET(u, Type, type) == VEH_TRAIN ? IsRailDepotTile(d->xy) : IsRoadDepotTile(d->xy))) continue;
-			if (best == nullptr || DistanceManhattan(from, d->xy) < DistanceManhattan(from, best->xy)) best = d;
+			if (GetTileOwner(FIXTURE_FIELD(d, xy)) != FIXTURE_GET(u, Owner, owner) || !(FIXTURE_GET(u, Type, type) == VEH_TRAIN ? IsRailDepotTile(FIXTURE_FIELD(d, xy)) : IsRoadDepotTile(FIXTURE_FIELD(d, xy)))) continue;
+			if (best == nullptr || DistanceManhattan(from, FIXTURE_FIELD(d, xy)) < DistanceManhattan(from, FIXTURE_FIELD(best, xy))) best = d;
 		}
 		if (best == nullptr) std::abort();
 		Order order;
@@ -246,7 +246,7 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		CheckCommand("group-start", Command<CMD_SET_TIMETABLE_START>::Do(DoCommandFlag::Execute, v->index, true, TimerGameTick::counter + 200));
 		CheckCommand("on-time", Command<CMD_SET_VEHICLE_ON_TIME>::Do(DoCommandFlag::Execute, v->index, true));
 		const Depot *depot = nullptr;
-		for (Depot *candidate : Depot::Iterate()) if (candidate->xy == FIXTURE_GET(v, Tile, tile)) depot = candidate;
+		for (Depot *candidate : Depot::Iterate()) if (FIXTURE_FIELD(candidate, xy) == FIXTURE_GET(v, Tile, tile)) depot = candidate;
 		if (depot == nullptr) std::abort();
 		Order order;
 		order.MakeGoToDepot(depot->index, OrderDepotTypeFlag::PartOfOrders, {}, OrderDepotActionFlag::Unbunch, CARGO_NO_REFIT);

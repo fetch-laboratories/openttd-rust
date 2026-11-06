@@ -518,7 +518,7 @@ static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
 		case WaterTileType::Lock : td.str = STR_LAI_WATER_DESCRIPTION_LOCK;               break;
 		case WaterTileType::Depot:
 			td.str = STR_LAI_WATER_DESCRIPTION_SHIP_DEPOT;
-			td.build_date = Depot::GetByTile(tile)->build_date;
+			td.build_date = Depot::GetByTile(tile)->Record().build_date;
 			break;
 		default: NOT_REACHED();
 	}

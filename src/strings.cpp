@@ -1561,12 +1561,12 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					}
 
 					const Depot *d = Depot::Get(args.GetNextParameter<DepotID>());
-					if (!d->name.empty()) {
-						auto tmp_params = MakeParameters(d->name);
+					if (!d->Name().empty()) {
+						auto tmp_params = MakeParameters(d->Name());
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
-						auto tmp_params = MakeParameters(d->town->index, d->town_cn + 1);
-						GetStringWithArgs(builder, STR_FORMAT_DEPOT_NAME_TRAIN + 2 * vt + (d->town_cn == 0 ? 0 : 1), tmp_params);
+						auto tmp_params = MakeParameters(d->Record().town->index, d->Record().town_cn + 1);
+						GetStringWithArgs(builder, STR_FORMAT_DEPOT_NAME_TRAIN + 2 * vt + (d->Record().town_cn == 0 ? 0 : 1), tmp_params);
 					}
 					break;
 				}
@@ -1763,8 +1763,8 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					const Sign *si = Sign::GetIfValid(args.GetNextParameter<SignID>());
 					if (si == nullptr) break;
 
-					if (!si->name.empty()) {
-						auto tmp_params = MakeParameters(si->name);
+					if (!si->Name().empty()) {
+						auto tmp_params = MakeParameters(si->Name());
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
 						GetStringWithArgs(builder, STR_DEFAULT_SIGN_NAME, {});

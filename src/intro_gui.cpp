@@ -125,7 +125,8 @@ struct SelectGameWindow : public Window {
 
 		for (const Sign *sign : Sign::Iterate()) {
 			std::smatch match;
-			if (!std::regex_search(sign->name, match, re)) continue;
+			const std::string name(sign->Name());
+			if (!std::regex_search(name, match, re)) continue;
 
 			IntroGameViewportCommand vc;
 			/* Sequence index from the first matching group. */
@@ -135,7 +136,7 @@ struct SelectGameWindow : public Window {
 				continue;
 			}
 			/* Sign coordinates for positioning. */
-			vc.position = RemapCoords(sign->x, sign->y, sign->z);
+			vc.position = RemapCoords(sign->Record().x, sign->Record().y, sign->Record().z);
 			/* Delay from the third matching group. */
 			if (auto value = ParseInteger<uint>(match[3].str()); value.has_value()) {
 				vc.delay = *value * 1000; // milliseconds

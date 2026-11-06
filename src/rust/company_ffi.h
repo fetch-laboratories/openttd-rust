@@ -185,8 +185,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *set_station_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
 	uint32_t (OPENTTD_RUST_CALL *waypoint_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_next_owned);
 	void (OPENTTD_RUST_CALL *set_waypoint_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waypoint_owner);
-	uint32_t (OPENTTD_RUST_CALL *sign_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sign_next_owned);
-	void (OPENTTD_RUST_CALL *set_sign_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_sign_owner);
 	uint32_t (OPENTTD_RUST_CALL *goal_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(goal_next_owned);
 	void (OPENTTD_RUST_CALL *delete_goal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_goal);
 	uint32_t (OPENTTD_RUST_CALL *story_page_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(story_page_next_owned);

@@ -20,7 +20,7 @@
 
 /** All our depots tucked away in a pool. */
 DepotPool _depot_pool("Depot");
-INSTANTIATE_POOL_METHODS(Depot)
+
 
 /**
  * Clean up a depot
@@ -29,21 +29,21 @@ Depot::~Depot()
 {
 	if (CleaningPool()) return;
 
-	if (!IsDepotTile(this->xy) || GetDepotIndex(this->xy) != this->index) {
+	if (!IsDepotTile(this->Record().xy) || GetDepotIndex(this->Record().xy) != this->index) {
 		/* It can happen there is no depot here anymore (TTO/TTD savegames) */
 		return;
 	}
 
 	/* Clear the order backup. */
-	OrderBackup::Reset(this->xy, false);
+	OrderBackup::Reset(this->Record().xy, false);
 
 	/* Clear the depot from all order-lists */
 	RemoveOrderFromAllVehicles(OT_GOTO_DEPOT, this->index);
 
 	/* Delete the depot-window */
-	CloseWindowById(WC_VEHICLE_DEPOT, this->xy);
+	CloseWindowById(WC_VEHICLE_DEPOT, this->Record().xy);
 
 	/* Delete the depot list */
-	VehicleType vt = GetDepotVehicleType(this->xy);
-	CloseWindowById(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, GetTileOwner(this->xy), this->index).ToWindowNumber());
+	VehicleType vt = GetDepotVehicleType(this->Record().xy);
+	CloseWindowById(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, GetTileOwner(this->Record().xy), this->index).ToWindowNumber());
 }

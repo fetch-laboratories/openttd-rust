@@ -938,7 +938,7 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
 
 		case RoadTileType::Depot:
 			td.str = STR_LAI_ROAD_DESCRIPTION_ROAD_VEHICLE_DEPOT;
-			td.build_date = Depot::GetByTile(tile)->build_date;
+			td.build_date = Depot::GetByTile(tile)->Record().build_date;
 			break;
 
 		default: {

@@ -48,6 +48,7 @@
 #include "rust/type_registry_ffi.h"
 #include "rust/type_availability_services.h"
 
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of trains */
@@ -1073,7 +1074,7 @@ static void GetTileDesc_Track(TileIndex tile, TileDesc &td)
 					td.rail_speed = 61;
 				}
 			}
-			td.build_date = Depot::GetByTile(tile)->build_date;
+			td.build_date = Depot::GetByTile(tile)->Record().build_date;
 			break;
 
 		default:
@@ -1228,7 +1229,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.make_road = RailMakeRoad,
 		.depot_available = []() noexcept { return Depot::CanAllocateItem(); },
 		.new_depot = [](uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); },
-		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
 		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,
 		.close_inspect = OpenTTDDeleteRailInspect,
