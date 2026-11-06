@@ -129,7 +129,12 @@ EncodedString EncodedString::ReplaceParam(size_t param, StringParameter &&data) 
  */
 std::string EncodedString::GetDecodedString() const
 {
-	return GetString(STR_JUST_RAW_STRING, this->string);
+	return GetDecodedString(this->string);
+}
+
+std::string EncodedString::GetDecodedString(std::string_view bytes)
+{
+	return GetString(STR_JUST_RAW_STRING, bytes);
 }
 
 /**

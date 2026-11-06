@@ -16,13 +16,20 @@
 
 #include "../safeguards.h"
 
+static EncodedString _goal_text;
+static EncodedString _goal_progress;
+struct GoalText {
+	Goal *item;
+	~GoalText() { this->item->Record().text = _goal_text; this->item->Record().progress = _goal_progress; }
+};
+
 static const SaveLoad _goals_desc[] = {
-	     SLE_VAR(Goal, company,   SLE_FILE_U16 | SLE_VAR_U8),
-	     SLE_VAR(Goal, type,      SLE_FILE_U16 | SLE_VAR_U8),
-	     SLE_VAR(Goal, dst,       SLE_UINT32),
-	    SLE_SSTR(Goal, text,      SLE_STR | SLF_ALLOW_CONTROL),
-	SLE_CONDSSTR(Goal, progress,  SLE_STR | SLF_ALLOW_CONTROL, SLV_182, SL_MAX_VERSION),
-	 SLE_CONDVAR(Goal, completed, SLE_BOOL, SLV_182, SL_MAX_VERSION),
+	     SLE_VARNAME(Goal, Record().company, "company",   SLE_FILE_U16 | SLE_VAR_U8),
+	     SLE_VARNAME(Goal, Record().type, "type",      SLE_FILE_U16 | SLE_VAR_U8),
+	     SLE_VARNAME(Goal, Record().dst, "dst",       SLE_UINT32),
+	    SLEG_SSTR("text", _goal_text,      SLE_STR | SLF_ALLOW_CONTROL),
+	SLEG_CONDSSTR("progress", _goal_progress,  SLE_STR | SLF_ALLOW_CONTROL, SLV_182, SL_MAX_VERSION),
+	 SLE_CONDVARNAME(Goal, Record().completed, "completed", SLE_BOOL, SLV_182, SL_MAX_VERSION),
 };
 
 struct GOALChunkHandler : ChunkHandler {
@@ -34,6 +41,8 @@ struct GOALChunkHandler : ChunkHandler {
 
 		for (Goal *s : Goal::Iterate()) {
 			SlSetArrayIndex(s->index);
+			_goal_text = s->Record().text;
+			_goal_progress = s->Record().progress;
 			SlObject(s, _goals_desc);
 		}
 	}
@@ -45,6 +54,8 @@ struct GOALChunkHandler : ChunkHandler {
 		int index;
 		while ((index = SlIterateArray()) != -1) {
 			Goal *s = new (GoalID(index)) Goal();
+			_goal_text.clear(); _goal_progress.clear();
+			GoalText staged{s};
 			SlObject(s, slt);
 		}
 	}

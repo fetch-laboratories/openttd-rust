@@ -17,6 +17,8 @@ pub const VL_STATION_LIST: u8 = 2;
 pub const VL_DEPOT_LIST: u8 = 3;
 /// `VL_GROUP_LIST`.
 pub const VL_GROUP_LIST: u8 = 4;
+/// `VLT_END`.
+pub const VLT_END: u8 = 5;
 
 /// `VehicleListIdentifier::ToWindowNumber`.
 pub(crate) fn window_number(
@@ -34,6 +36,6 @@ pub(crate) fn window_number(
     crate::movement::native_assert(shared, company < 1 << 4);
     crate::movement::native_assert(shared, vehicle < 1 << 2);
     crate::movement::native_assert(shared, index < 1 << 20);
-    crate::movement::native_assert(shared, kind < VL_GROUP_LIST + 1);
+    crate::movement::native_assert(shared, kind < VLT_END);
     u32::from(company) << 28 | u32::from(kind) << 23 | u32::from(vehicle) << 26 | index
 }

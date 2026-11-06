@@ -15,15 +15,22 @@
 
 #include "../safeguards.h"
 
+static EncodedString _leaguetableelement_text;
+static EncodedString _leaguetableelement_score;
+struct LeagueTableElementText {
+	LeagueTableElement *item;
+	~LeagueTableElementText() { this->item->Record().text = _leaguetableelement_text; this->item->Record().score = _leaguetableelement_score; }
+};
+
 static const SaveLoad _league_table_elements_desc[] = {
-	    SLE_VAR(LeagueTableElement, table,       SLE_UINT8),
-	SLE_CONDVAR(LeagueTableElement, rating,      SLE_FILE_U64 | SLE_VAR_I64, SL_MIN_VERSION, SLV_LINKGRAPH_EDGES),
-	SLE_CONDVAR(LeagueTableElement, rating,      SLE_INT64,                  SLV_LINKGRAPH_EDGES, SL_MAX_VERSION),
-	    SLE_VAR(LeagueTableElement, company,     SLE_UINT8),
-	   SLE_SSTR(LeagueTableElement, text,        SLE_STR | SLF_ALLOW_CONTROL),
-	   SLE_SSTR(LeagueTableElement, score,       SLE_STR | SLF_ALLOW_CONTROL),
-	    SLE_VAR(LeagueTableElement, link.type,   SLE_UINT8),
-	    SLE_VAR(LeagueTableElement, link.target, SLE_UINT32),
+	    SLE_VARNAME(LeagueTableElement, Record().table, "table",       SLE_UINT8),
+	SLE_CONDVARNAME(LeagueTableElement, Record().rating, "rating",      SLE_FILE_U64 | SLE_VAR_I64, SL_MIN_VERSION, SLV_LINKGRAPH_EDGES),
+	SLE_CONDVARNAME(LeagueTableElement, Record().rating, "rating",      SLE_INT64,                  SLV_LINKGRAPH_EDGES, SL_MAX_VERSION),
+	    SLE_VARNAME(LeagueTableElement, Record().company, "company",     SLE_UINT8),
+	   SLEG_SSTR("text", _leaguetableelement_text,        SLE_STR | SLF_ALLOW_CONTROL),
+	   SLEG_SSTR("score", _leaguetableelement_score,       SLE_STR | SLF_ALLOW_CONTROL),
+	    SLE_VARNAME(LeagueTableElement, Record().link_type, "link.type",   SLE_UINT8),
+	    SLE_VARNAME(LeagueTableElement, Record().link_target, "link.target", SLE_UINT32),
 };
 
 struct LEAEChunkHandler : ChunkHandler {
@@ -35,6 +42,8 @@ struct LEAEChunkHandler : ChunkHandler {
 
 		for (LeagueTableElement *lte : LeagueTableElement::Iterate()) {
 			SlSetArrayIndex(lte->index);
+			_leaguetableelement_text = lte->Record().text;
+			_leaguetableelement_score = lte->Record().score;
 			SlObject(lte, _league_table_elements_desc);
 		}
 	}
@@ -46,15 +55,25 @@ struct LEAEChunkHandler : ChunkHandler {
 		int index;
 		while ((index = SlIterateArray()) != -1) {
 			LeagueTableElement *lte = new (LeagueTableElementID(index)) LeagueTableElement();
+			_leaguetableelement_text.clear(); _leaguetableelement_score.clear();
+			LeagueTableElementText staged{lte};
 			SlObject(lte, slt);
 		}
 	}
 };
 
+static EncodedString _leaguetable_title;
+static EncodedString _leaguetable_header;
+static EncodedString _leaguetable_footer;
+struct LeagueTableText {
+	LeagueTable *item;
+	~LeagueTableText() { this->item->Record().title = _leaguetable_title; this->item->Record().header = _leaguetable_header; this->item->Record().footer = _leaguetable_footer; }
+};
+
 static const SaveLoad _league_tables_desc[] = {
-	SLE_SSTR(LeagueTable, title, SLE_STR | SLF_ALLOW_CONTROL),
-	SLE_SSTR(LeagueTable, header, SLE_STR | SLF_ALLOW_CONTROL),
-	SLE_SSTR(LeagueTable, footer, SLE_STR | SLF_ALLOW_CONTROL),
+	SLEG_SSTR("title", _leaguetable_title, SLE_STR | SLF_ALLOW_CONTROL),
+	SLEG_SSTR("header", _leaguetable_header, SLE_STR | SLF_ALLOW_CONTROL),
+	SLEG_SSTR("footer", _leaguetable_footer, SLE_STR | SLF_ALLOW_CONTROL),
 };
 
 struct LEATChunkHandler : ChunkHandler {
@@ -66,6 +85,9 @@ struct LEATChunkHandler : ChunkHandler {
 
 		for (LeagueTable *lt : LeagueTable::Iterate()) {
 			SlSetArrayIndex(lt->index);
+			_leaguetable_title = lt->Record().title;
+			_leaguetable_header = lt->Record().header;
+			_leaguetable_footer = lt->Record().footer;
 			SlObject(lt, _league_tables_desc);
 		}
 	}
@@ -77,6 +99,8 @@ struct LEATChunkHandler : ChunkHandler {
 		int index;
 		while ((index = SlIterateArray()) != -1) {
 			LeagueTable *lt = new (LeagueTableID(index)) LeagueTable();
+			_leaguetable_title.clear(); _leaguetable_header.clear(); _leaguetable_footer.clear();
+			LeagueTableText staged{lt};
 			SlObject(lt, slt);
 		}
 	}

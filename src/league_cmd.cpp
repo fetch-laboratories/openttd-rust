@@ -16,17 +16,16 @@
 #include "story_base.h"
 #include "town.h"
 #include "window_func.h"
-#include "core/pool_func.hpp"
 
 #include "rust/services_objectives.h"
 
 #include "safeguards.h"
 
 LeagueTableElementPool _league_table_element_pool("LeagueTableElement");
-INSTANTIATE_POOL_METHODS(LeagueTableElement)
+[[maybe_unused]] static const int _league_table_element_pool_binding = (openttd_rust_league_table_element_pool_bind(_league_table_element_pool.owner), 0);
 
 LeagueTablePool _league_table_pool("LeagueTable");
-INSTANTIATE_POOL_METHODS(LeagueTable)
+[[maybe_unused]] static const int _league_table_pool_binding = (openttd_rust_league_table_pool_bind(_league_table_pool.owner), 0);
 
 /**
  * Checks whether a link is valid, i.e. has a valid target.

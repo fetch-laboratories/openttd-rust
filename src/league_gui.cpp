@@ -230,7 +230,7 @@ static void HandleLinkClick(Link link)
 
 		case LT_STORY_PAGE: {
 			if (!StoryPage::IsValidID(link.target)) return;
-			CompanyID story_company = StoryPage::Get(link.target)->company;
+			CompanyID story_company = StoryPage::Get(link.target)->Record().company;
 			ShowStoryBook(story_company, static_cast<StoryPageID>(link.target));
 			return;
 		}
@@ -270,20 +270,20 @@ private:
 		if (lt == nullptr) return;
 
 		/* We store title in the window class so we can safely reference the string later */
-		this->title = lt->title;
+		this->title = lt->Record().title;
 
 		std::vector<const LeagueTableElement *> elements;
 		for (const LeagueTableElement *lte : LeagueTableElement::Iterate()) {
-			if (lte->table != this->table) continue;
+			if (lte->Record().table != this->table) continue;
 			elements.push_back(lte);
 		}
-		std::ranges::sort(elements, [](const LeagueTableElement *a, const LeagueTableElement *b) { return a->rating > b->rating; });
+		std::ranges::sort(elements, [](const LeagueTableElement *a, const LeagueTableElement *b) { return a->Record().rating > b->Record().rating; });
 
 		/* Calculate rank, companies with the same rating share the ranks */
 		uint rank = 0;
 		for (uint i = 0; i != elements.size(); i++) {
 			const LeagueTableElement *lte = elements[i];
-			if (i > 0 && elements[i - 1]->rating != lte->rating) rank = i;
+			if (i > 0 && elements[i - 1]->Record().rating != lte->Record().rating) rank = i;
 			this->rows.emplace_back(rank, lte);
 		}
 	}
@@ -316,8 +316,8 @@ public:
 
 		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
 
-		if (!lt->header.empty()) {
-			ir.top = DrawStringMultiLine(ir, lt->header.GetDecodedString(), TC_BLACK) + WidgetDimensions::scaled.vsep_wide;
+		if (!lt->Record().header.empty()) {
+			ir.top = DrawStringMultiLine(ir, lt->Record().header.GetDecodedString(), TC_BLACK) + WidgetDimensions::scaled.vsep_wide;
 		}
 
 		int icon_y_offset = (this->line_height - this->icon_size.height) / 2;
@@ -333,15 +333,15 @@ public:
 
 		for (const auto &[rank, lte] : this->rows) {
 			DrawString(rank_rect.left, rank_rect.right, ir.top + text_y_offset, GetString(STR_COMPANY_LEAGUE_COMPANY_RANK, rank + 1));
-			if (this->icon_size.width > 0 && lte->company != CompanyID::Invalid()) DrawCompanyIcon(lte->company, icon_rect.left, ir.top + icon_y_offset);
-			DrawString(text_rect.left, text_rect.right, ir.top + text_y_offset, lte->text.GetDecodedString(), TC_BLACK);
-			DrawString(score_rect.left, score_rect.right, ir.top + text_y_offset, lte->score.GetDecodedString(), TC_BLACK, SA_RIGHT | SA_FORCE);
+			if (this->icon_size.width > 0 && lte->Record().company != CompanyID::Invalid()) DrawCompanyIcon(lte->Record().company, icon_rect.left, ir.top + icon_y_offset);
+			DrawString(text_rect.left, text_rect.right, ir.top + text_y_offset, lte->Record().text.GetDecodedString(), TC_BLACK);
+			DrawString(score_rect.left, score_rect.right, ir.top + text_y_offset, lte->Record().score.GetDecodedString(), TC_BLACK, SA_RIGHT | SA_FORCE);
 			ir.top += this->line_height;
 		}
 
-		if (!lt->footer.empty()) {
+		if (!lt->Record().footer.empty()) {
 			ir.top += WidgetDimensions::scaled.vsep_wide;
-			ir.top = DrawStringMultiLine(ir, lt->footer.GetDecodedString(), TC_BLACK);
+			ir.top = DrawStringMultiLine(ir, lt->Record().footer.GetDecodedString(), TC_BLACK);
 		}
 	}
 
@@ -360,9 +360,9 @@ public:
 		bool show_icon_column = false;
 		for (const auto &[rank, lte] : this->rows) {
 			this->rank_width = std::max(this->rank_width, GetStringBoundingBox(GetString(STR_COMPANY_LEAGUE_COMPANY_RANK, rank + 1)).width);
-			this->text_width = std::max(this->text_width, GetStringBoundingBox(lte->text.GetDecodedString()).width);
-			this->score_width = std::max(this->score_width, GetStringBoundingBox(lte->score.GetDecodedString()).width);
-			if (lte->company != CompanyID::Invalid()) show_icon_column = true;
+			this->text_width = std::max(this->text_width, GetStringBoundingBox(lte->Record().text.GetDecodedString()).width);
+			this->score_width = std::max(this->score_width, GetStringBoundingBox(lte->Record().score.GetDecodedString()).width);
+			if (lte->Record().company != CompanyID::Invalid()) show_icon_column = true;
 		}
 
 		if (!show_icon_column) {
@@ -378,15 +378,15 @@ public:
 		/* Adjust text_width to fill any space left over if the preset minimal width is larger than our calculated width. */
 		this->text_width = size.width - non_text_width;
 
-		if (!lt->header.empty()) {
-			this->header_height = GetStringHeight(lt->header.GetDecodedString(), size.width - WidgetDimensions::scaled.framerect.Horizontal()) + WidgetDimensions::scaled.vsep_wide;
+		if (!lt->Record().header.empty()) {
+			this->header_height = GetStringHeight(lt->Record().header.GetDecodedString(), size.width - WidgetDimensions::scaled.framerect.Horizontal()) + WidgetDimensions::scaled.vsep_wide;
 		} else {
 			this->header_height = 0;
 		}
 		used_height += this->header_height;
 
-		if (!lt->footer.empty()) {
-			used_height += GetStringHeight(lt->footer.GetDecodedString(), size.width - WidgetDimensions::scaled.framerect.Horizontal()) + WidgetDimensions::scaled.vsep_wide;
+		if (!lt->Record().footer.empty()) {
+			used_height += GetStringHeight(lt->Record().footer.GetDecodedString(), size.width - WidgetDimensions::scaled.framerect.Horizontal()) + WidgetDimensions::scaled.vsep_wide;
 		}
 
 		size.height = std::max(size.height, used_height);
@@ -400,7 +400,7 @@ public:
 		int index = (pt.y - WidgetDimensions::scaled.framerect.top - wid->pos_y - this->header_height) / this->line_height;
 		if (index >= 0 && static_cast<uint>(index) < this->rows.size()) {
 			const LeagueTableElement *lte = this->rows[index].second;
-			HandleLinkClick(lte->link);
+			HandleLinkClick(lte->GetLink());
 		}
 	}
 

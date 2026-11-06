@@ -16,10 +16,11 @@
 #include "timer/timer_game_calendar.h"
 #include "gfx_type.h"
 #include "vehicle_type.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
+#include "rust/encoded_string.h"
 
-using StoryPageElementPool = Pool<StoryPageElement, StoryPageElementID, 64>;
-using StoryPagePool = Pool<StoryPage, StoryPageID, 64>;
+using StoryPageElementPool = RustPool<StoryPageElement, StoryPageElementID, 64>;
+using StoryPagePool = RustPool<StoryPage, StoryPageID, 64>;
 extern StoryPageElementPool _story_page_element_pool;
 extern StoryPagePool _story_page_pool;
 #include "rust/story_state.h"
@@ -143,41 +144,47 @@ struct StoryPageButtonData {
  * Each StoryPage is composed of one or more page elements that provide
  * page content. Each element only contain one type of content.
  **/
+
+#include "abi-record-story_type.h"
+extern "C" {
+void OPENTTD_RUST_CALL openttd_rust_story_page_element_pool_bind(RustPoolCore *);
+OpenTTDStoryPageElementRecord *OPENTTD_RUST_CALL openttd_rust_story_page_element_record_new(StoryPageElement *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_story_page_element_record_delete(OpenTTDStoryPageElementRecord *);
+void OPENTTD_RUST_CALL openttd_rust_story_page_pool_bind(RustPoolCore *);
+OpenTTDStoryPageRecord *OPENTTD_RUST_CALL openttd_rust_story_page_record_new(StoryPage *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_story_page_record_delete(OpenTTDStoryPageRecord *);
+}
+
 struct StoryPageElement : StoryPageElementPool::PoolItem<&_story_page_element_pool> {
-	uint32_t sort_value = 0; ///< A number that increases for every created story page element. Used for sorting. The id of a story page element is the pool index.
-	StoryPageID page{}; ///< Id of the page which the page element belongs to
-	StoryPageElementType type{}; ///< Type of page element
+	struct RecordDeleter {
+		void operator()(OpenTTDStoryPageElementRecord *record) const
+		{
+			_story_page_element_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_story_page_element_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDStoryPageElementRecord, RecordDeleter> record{openttd_rust_story_page_element_record_new(this, this->index.base())};
+	OpenTTDStoryPageElementRecord &Record() { return *this->record; }
+	const OpenTTDStoryPageElementRecord &Record() const { return *this->record; }
+	StoryPageElement() { _story_page_element_pool.BindRecord(this->index.base(), this, this->record.get()); }
 
-	uint32_t referenced_id = 0; ///< Id of referenced object (location, goal etc.)
-	EncodedString text{}; ///< Static content text of page element
-
-	/**
-	 * We need an (empty) constructor so struct isn't zeroed (as C++ standard states)
-	 */
-	StoryPageElement() { }
-	StoryPageElement(uint32_t sort_value, StoryPageElementType type, StoryPageID page) :
-		sort_value(sort_value), page(page), type(type) { }
-
-	/**
-	 * (Empty) destructor has to be defined else operator delete might be called with nullptr parameter
-	 */
-	~StoryPageElement() { }
 };
 
 /** Struct about stories, current and completed */
 struct StoryPage : StoryPagePool::PoolItem<&_story_page_pool> {
-	uint32_t sort_value = 0; ///< A number that increases for every created story page. Used for sorting. The id of a story page is the pool index.
-	TimerGameCalendar::Date date{}; ///< Date when the page was created.
-	CompanyID company = CompanyID::Invalid(); ///< StoryPage is for a specific company; CompanyID::Invalid() if it is global
+	struct RecordDeleter {
+		void operator()(OpenTTDStoryPageRecord *record) const
+		{
+			_story_page_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_story_page_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDStoryPageRecord, RecordDeleter> record{openttd_rust_story_page_record_new(this, this->index.base())};
+	OpenTTDStoryPageRecord &Record() { return *this->record; }
+	const OpenTTDStoryPageRecord &Record() const { return *this->record; }
+	StoryPage() { _story_page_pool.BindRecord(this->index.base(), this, this->record.get()); }
+	~StoryPage();
 
-	EncodedString title; ///< Title of story page
-
-	/**
-	 * We need an (empty) constructor so struct isn't zeroed (as C++ standard states)
-	 */
-	StoryPage() { }
-	StoryPage(uint32_t sort_value, TimerGameCalendar::Date date, CompanyID company, const EncodedString &title) :
-		sort_value(sort_value), date(date), company(company), title(title) {}
 };
 
 #endif /* STORY_BASE_H */

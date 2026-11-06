@@ -75,7 +75,7 @@ struct GoalListWindow : public Window {
 			case WID_GOAL_LIST: {
 				int y = this->vscroll->GetScrolledRowFromWidget(pt.y, this, WID_GOAL_LIST, WidgetDimensions::scaled.framerect.top);
 				for (const Goal *s : Goal::Iterate()) {
-					if (s->company == this->window_number) {
+					if (s->Record().company == this->window_number) {
 						if (y == 0) {
 							this->HandleClick(s);
 							return;
@@ -99,42 +99,42 @@ struct GoalListWindow : public Window {
 	{
 		/* Determine dst coordinate for goal and try to scroll to it. */
 		TileIndex xy;
-		switch (s->type) {
+		switch (s->Record().type) {
 			case GT_NONE: return;
 
 			case GT_COMPANY:
-				/* s->dst here is not a tile, but a CompanyID.
+				/* s->Record().dst here is not a tile, but a CompanyID.
 				 * Show the window with the overview of the company instead. */
-				ShowCompany((CompanyID)s->dst);
+				ShowCompany((CompanyID)s->Record().dst);
 				return;
 
 			case GT_TILE:
-				if (!IsValidTile(s->dst)) return;
-				xy = TileIndex{s->dst};
+				if (!IsValidTile(s->Record().dst)) return;
+				xy = TileIndex{s->Record().dst};
 				break;
 
 			case GT_INDUSTRY:
-				if (!Industry::IsValidID(s->dst)) return;
-				xy = Industry::Get(s->dst)->location.tile;
+				if (!Industry::IsValidID(s->Record().dst)) return;
+				xy = Industry::Get(s->Record().dst)->location.tile;
 				break;
 
 			case GT_TOWN:
-				if (!Town::IsValidID(s->dst)) return;
-				xy = Town::Get(s->dst)->xy;
+				if (!Town::IsValidID(s->Record().dst)) return;
+				xy = Town::Get(s->Record().dst)->xy;
 				break;
 
 			case GT_STORY_PAGE: {
-				if (!StoryPage::IsValidID(s->dst)) return;
+				if (!StoryPage::IsValidID(s->Record().dst)) return;
 
 				/* Verify that:
 				 * - if global goal: story page must be global.
 				 * - if company goal: story page must be global or of the same company.
 				 */
-				CompanyID goal_company = s->company;
-				CompanyID story_company = StoryPage::Get(s->dst)->company;
+				CompanyID goal_company = s->Record().company;
+				CompanyID story_company = StoryPage::Get(s->Record().dst)->Record().company;
 				if (goal_company == CompanyID::Invalid() ? story_company != CompanyID::Invalid() : story_company != CompanyID::Invalid() && story_company != goal_company) return;
 
-				ShowStoryBook(static_cast<CompanyID>(this->window_number), static_cast<StoryPageID>(s->dst));
+				ShowStoryBook(static_cast<CompanyID>(this->window_number), static_cast<StoryPageID>(s->Record().dst));
 				return;
 			}
 
@@ -157,7 +157,7 @@ struct GoalListWindow : public Window {
 		/* Count number of (non) awarded goals. */
 		uint num = 0;
 		for (const Goal *s : Goal::Iterate()) {
-			if (s->company == this->window_number) num++;
+			if (s->Record().company == this->window_number) num++;
 		}
 
 		/* Count the 'none' lines. */
@@ -198,20 +198,20 @@ struct GoalListWindow : public Window {
 
 		uint num = 0;
 		for (const Goal *s : Goal::Iterate()) {
-			if (s->company == this->window_number) {
+			if (s->Record().company == this->window_number) {
 				if (IsInsideMM(pos, 0, cap)) {
 					switch (column) {
 						case GC_GOAL: {
 							/* Display the goal. */
 							uint width_reduction = progress_col_width > 0 ? progress_col_width + WidgetDimensions::scaled.framerect.Horizontal() : 0;
-							DrawString(r.Indent(width_reduction, !rtl), GetString(STR_GOALS_TEXT, s->text.GetDecodedString()));
+							DrawString(r.Indent(width_reduction, !rtl), GetString(STR_GOALS_TEXT, s->Record().text.GetDecodedString()));
 							break;
 						}
 
 						case GC_PROGRESS:
-							if (!s->progress.empty()) {
-								StringID str = s->completed ? STR_GOALS_PROGRESS_COMPLETE : STR_GOALS_PROGRESS;
-								DrawString(r.WithWidth(progress_col_width, !rtl), GetString(str, s->progress.GetDecodedString()), TC_FROMSTRING, SA_RIGHT | SA_FORCE);
+							if (!s->Record().progress.empty()) {
+								StringID str = s->Record().completed ? STR_GOALS_PROGRESS_COMPLETE : STR_GOALS_PROGRESS;
+								DrawString(r.WithWidth(progress_col_width, !rtl), GetString(str, s->Record().progress.GetDecodedString()), TC_FROMSTRING, SA_RIGHT | SA_FORCE);
 							}
 							break;
 					}
@@ -238,9 +238,9 @@ struct GoalListWindow : public Window {
 		/* Calculate progress column width. */
 		uint max_width = 0;
 		for (const Goal *s : Goal::Iterate()) {
-			if (!s->progress.empty()) {
-				StringID str = s->completed ? STR_GOALS_PROGRESS_COMPLETE : STR_GOALS_PROGRESS;
-				uint str_width = GetStringBoundingBox(GetString(str, s->progress.GetDecodedString())).width;
+			if (!s->Record().progress.empty()) {
+				StringID str = s->Record().completed ? STR_GOALS_PROGRESS_COMPLETE : STR_GOALS_PROGRESS;
+				uint str_width = GetStringBoundingBox(GetString(str, s->Record().progress.GetDecodedString())).width;
 				if (str_width > max_width) max_width = str_width;
 			}
 		}

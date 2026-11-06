@@ -25,7 +25,7 @@ struct OpenTTDDepotServices {
 };
 const OpenTTDDepotServices &GetRustDepotServices() noexcept;
 extern "C" {
-void openttd_rust_depot_destroy(const OpenTTDDepotServices *, const OpenTTDDepotRecord *);
+void OPENTTD_RUST_CALL openttd_rust_depot_destroy(const OpenTTDDepotServices *, const OpenTTDDepotRecord *);
 void openttd_rust_depot_default_name(const OpenTTDSharedServices *, uint16_t);
 void openttd_rust_depot_rename(const OpenTTDDepotServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 }

@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Goals, story pages and league command/lifecycle policy. Native pools and strings retain storage.
+//! Goals, story pages and league command/lifecycle policy. Canonical pool records and encoded bytes are Rust-owned; native constructors and GUI/VM frames remain.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -20,13 +20,16 @@ use crate::{
     company_type::CompanyID,
     goal_type::{
         GOAL_QUESTION_BUTTON_COUNT, GQT_END, GQT_QUESTION, GT_COMPANY, GT_INDUSTRY, GT_NONE,
-        GT_STORY_PAGE, GT_TILE, GT_TOWN, Goal, GoalID,
+        GT_STORY_PAGE, GT_TILE, GT_TOWN, GoalID, GoalRecord as Goal,
     },
     league_type::{
-        LT_COMPANY, LT_INDUSTRY, LT_NONE, LT_STORY_PAGE, LT_TILE, LT_TOWN, LeagueTableElement,
-        LeagueTableElementID, LeagueTableID,
+        LT_COMPANY, LT_INDUSTRY, LT_NONE, LT_STORY_PAGE, LT_TILE, LT_TOWN, LeagueTableElementID,
+        LeagueTableElementRecord as LeagueTableElement, LeagueTableID,
     },
-    story_type::{StoryPage, StoryPageElement, StoryPageElementID, StoryPageID},
+    story_type::{
+        StoryPageElementID, StoryPageElementRecord as StoryPageElement, StoryPageID,
+        StoryPageRecord as StoryPage,
+    },
 };
 #[repr(C)]
 pub struct EncodedString {
@@ -36,66 +39,20 @@ pub struct EncodedString {
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub company: *const crate::company::Services,
-    pub goal: extern "C" fn(GoalID) -> *mut Goal,
-    pub goal_company: unsafe extern "C" fn(*mut Goal) -> *mut CompanyID,
-    pub goal_type: unsafe extern "C" fn(*mut Goal) -> *mut u8,
-    pub goal_dst: unsafe extern "C" fn(*mut Goal) -> *mut u32,
-    pub goal_text: unsafe extern "C" fn(*mut Goal) -> *mut EncodedString,
-    pub goal_progress: unsafe extern "C" fn(*mut Goal) -> *mut EncodedString,
-    pub goal_completed: unsafe extern "C" fn(*mut Goal) -> *mut bool,
-    pub goal_count: extern "C" fn() -> u32,
-    pub goal_can_allocate: extern "C" fn() -> bool,
-    pub page: extern "C" fn(u32) -> *mut StoryPage,
-    pub page_company: unsafe extern "C" fn(*mut StoryPage) -> *mut CompanyID,
-    pub page_title: unsafe extern "C" fn(*mut StoryPage) -> *mut EncodedString,
-    pub page_date: unsafe extern "C" fn(*mut StoryPage) -> *mut i32,
-    pub page_count: extern "C" fn() -> u32,
-    pub page_can_allocate: extern "C" fn() -> bool,
-    pub element: extern "C" fn(StoryPageElementID) -> *mut StoryPageElement,
-    pub element_page: unsafe extern "C" fn(*mut StoryPageElement) -> *mut StoryPageID,
-    pub element_type: unsafe extern "C" fn(*mut StoryPageElement) -> *mut u8,
-    pub element_text: unsafe extern "C" fn(*mut StoryPageElement) -> *mut EncodedString,
-    pub element_referenced_id: unsafe extern "C" fn(*mut StoryPageElement) -> *mut u32,
+    /// Native shell constructors publish their initialized-default records.
+    pub goal_allocate: extern "C" fn() -> *mut Goal,
+    pub page_allocate: extern "C" fn() -> *mut StoryPage,
+    pub element_allocate: extern "C" fn() -> *mut StoryPageElement,
+    pub table_allocate: extern "C" fn() -> *mut crate::league_type::LeagueTableRecord,
+    pub entry_allocate: extern "C" fn() -> *mut LeagueTableElement,
     pub element_destroy: unsafe extern "C" fn(*mut StoryPageElement),
-    pub element_count: extern "C" fn() -> u32,
-    pub element_can_allocate: extern "C" fn() -> bool,
-    pub entry: extern "C" fn(LeagueTableElementID) -> *mut LeagueTableElement,
-    pub entry_company: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut CompanyID,
-    pub entry_table: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut LeagueTableID,
-    pub entry_rating: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut i64,
-    pub entry_text: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut EncodedString,
-    pub entry_score: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut EncodedString,
-    pub entry_link_type: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut u8,
-    pub entry_link_target: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut u32,
     pub entry_destroy: unsafe extern "C" fn(*mut LeagueTableElement),
-    pub entry_can_allocate: extern "C" fn() -> bool,
-    pub goal_allocate: unsafe extern "C" fn(u8, u32, CompanyID, *const EncodedString) -> GoalID,
-    pub page_allocate:
-        unsafe extern "C" fn(u32, i32, CompanyID, *const EncodedString) -> StoryPageID,
-    pub element_allocate: extern "C" fn(u32, u8, StoryPageID) -> StoryPageElementID,
-    pub element_next: extern "C" fn(u32) -> *mut StoryPageElement,
-    pub element_id: unsafe extern "C" fn(*mut StoryPageElement) -> StoryPageElementID,
-    pub table_can_allocate: extern "C" fn() -> bool,
-    pub table_allocate: unsafe extern "C" fn(
-        *const EncodedString,
-        *const EncodedString,
-        *const EncodedString,
-    ) -> LeagueTableID,
-    pub entry_allocate: unsafe extern "C" fn(
-        LeagueTableID,
-        i64,
-        CompanyID,
-        *const EncodedString,
-        *const EncodedString,
-        u8,
-        u32,
-    ) -> LeagueTableElementID,
     pub orders: *const crate::orders::Leaves,
     pub subsidy: *const crate::subsidy::Services,
     pub road_commands: *const crate::road_cmd::RoadCommandServices,
     pub vehicle_valid: extern "C" fn(VehicleID) -> bool,
-    pub text_empty: unsafe extern "C" fn(*const EncodedString) -> bool,
-    pub text_assign: unsafe extern "C" fn(*mut EncodedString, *const EncodedString),
+    /// View a borrowed command/GUI input; pool strings are canonical `NativeVec` fields.
+    pub text_view: unsafe extern "C" fn(*const EncodedString) -> crate::services::ByteSpan,
     pub window_data: extern "C" fn(u16, u32, i32),
     pub window_classes: extern "C" fn(u16, i32),
     pub window_close: extern "C" fn(u16, u32),
@@ -105,6 +62,32 @@ pub struct Services {
     pub push_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID),
     pub tile_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, TileIndex),
     pub vehicle_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, VehicleID),
+}
+unsafe fn page_record(id: u32) -> *mut StoryPage {
+    if id >= StoryPageID::END as u32 {
+        return std::ptr::null_mut();
+    }
+    unsafe { crate::story_type::story_page_pool().record(StoryPageID(id as u16)) }
+}
+unsafe fn next_element(from: u32) -> *mut StoryPageElement {
+    unsafe {
+        let pool = crate::story_type::story_page_element_pool();
+        let index = pool.next_index(from as usize, StoryPageElementID::END);
+        if index == StoryPageElementID::END {
+            std::ptr::null_mut()
+        } else {
+            pool.record(StoryPageElementID(index as u16))
+        }
+    }
+}
+unsafe fn copy_text(
+    s: &Services,
+    target: *mut crate::industrytype::NativeVec<u8>,
+    text: *const EncodedString,
+) {
+    unsafe {
+        crate::owned_bytes::openttd_rust_owned_bytes_assign(target, (s.text_view)(text));
+    }
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -118,7 +101,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
-    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, table_can_allocate, table_allocate, entry_allocate, orders, subsidy, road_commands, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal_allocate, page_allocate, element_allocate, table_allocate, entry_allocate, element_destroy, entry_destroy, orders, subsidy, road_commands, vehicle_valid, text_view, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
 // Native loader aliases and Rust control share one process-wide allocation. Accesses
@@ -183,11 +166,11 @@ unsafe fn valid_goal_destination(s: &Services, company: CompanyID, kind: u8, des
         // Company::IsValidID takes the full u32; IDs above u8 lie past the company pool.
         GT_COMPANY => u8::try_from(dest).is_ok_and(|id| s.company_valid(CompanyID(id))),
         GT_STORY_PAGE => {
-            let page = (s.page)(dest);
+            let page = unsafe { page_record(dest) };
             if page.is_null() {
                 return false;
             }
-            let owner = unsafe { *(s.page_company)(page) };
+            let owner = unsafe { (*page).company };
             if company == CompanyID::INVALID {
                 owner == CompanyID::INVALID
             } else {
@@ -209,19 +192,23 @@ pub unsafe extern "C" fn openttd_rust_create_goal_abi(
 ) -> u8 {
     u8::from(unsafe {
         result.write(GoalID::INVALID);
-        if !(s.goal_can_allocate)()
+        if !crate::goal_type::goal_can_allocate()
             || !s.deity()
-            || (s.text_empty)(text)
+            || ((s.text_view)(text).size == 0)
             || (company != CompanyID::INVALID && !s.company_valid(company))
             || !valid_goal_destination(s, company, kind, dest)
         {
             return u8::from(false);
         }
         if execute(flags) {
-            let id = (s.goal_allocate)(kind, dest, company, text);
-            let goal = (s.goal)(id);
-            s.goal_dirty(*(s.goal_company)(goal));
-            if (s.goal_count)() == 1 {
+            let goal = (s.goal_allocate)();
+            (*goal).r#type = kind;
+            (*goal).dst = dest;
+            (*goal).company = company;
+            copy_text(s, &raw mut (*goal).text, text);
+            let id = (*goal).index;
+            s.goal_dirty((*goal).company);
+            if (*crate::goal_type::goal_descriptor()).items as u32 == 1 {
                 s.toolbar_dirty();
             }
             result.write(id);
@@ -235,15 +222,15 @@ pub unsafe extern "C" fn openttd_rust_remove_goal_abi(s: &Services, flags: u16, 
         if !s.deity() {
             return u8::from(false);
         }
-        let goal = (s.goal)(id);
+        let goal = crate::goal_type::goal_pool().record(id);
         if goal.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            let company = *(s.goal_company)(goal);
+            let company = (*goal).company;
             (s.company().delete_goal)(u32::from(id.0));
             s.goal_dirty(company);
-            if (s.goal_count)() == 0 {
+            if (*crate::goal_type::goal_descriptor()).items as u32 == 0 {
                 s.toolbar_dirty();
             }
         }
@@ -262,16 +249,16 @@ pub unsafe extern "C" fn openttd_rust_set_goal_destination_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let goal = (s.goal)(id);
+        let goal = crate::goal_type::goal_pool().record(id);
         if goal.is_null() {
             return u8::from(false);
         }
-        if !valid_goal_destination(s, *(s.goal_company)(goal), kind, dest) {
+        if !valid_goal_destination(s, (*goal).company, kind, dest) {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.goal_type)(goal).write(kind);
-            (s.goal_dst)(goal).write(dest);
+            (&raw mut (*goal).r#type).write(kind);
+            (&raw mut (*goal).dst).write(dest);
         }
         true
     })
@@ -287,13 +274,13 @@ pub unsafe extern "C" fn openttd_rust_set_goal_text_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let goal = (s.goal)(id);
-        if goal.is_null() || (s.text_empty)(text) {
+        let goal = crate::goal_type::goal_pool().record(id);
+        if goal.is_null() || ((s.text_view)(text).size == 0) {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.text_assign)((s.goal_text)(goal), text);
-            s.goal_dirty(*(s.goal_company)(goal));
+            copy_text(s, (&raw mut (*goal).text), text);
+            s.goal_dirty((*goal).company);
         }
         true
     })
@@ -309,13 +296,13 @@ pub unsafe extern "C" fn openttd_rust_set_goal_progress_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let goal = (s.goal)(id);
+        let goal = crate::goal_type::goal_pool().record(id);
         if goal.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.text_assign)((s.goal_progress)(goal), text);
-            s.goal_dirty(*(s.goal_company)(goal));
+            copy_text(s, (&raw mut (*goal).progress), text);
+            s.goal_dirty((*goal).company);
         }
         true
     })
@@ -331,13 +318,13 @@ pub unsafe extern "C" fn openttd_rust_set_goal_completed_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let goal = (s.goal)(id);
+        let goal = crate::goal_type::goal_pool().record(id);
         if goal.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.goal_completed)(goal).write(completed);
-            s.goal_dirty(*(s.goal_company)(goal));
+            (&raw mut (*goal).completed).write(completed);
+            s.goal_dirty((*goal).company);
         }
         true
     })
@@ -355,7 +342,7 @@ pub unsafe extern "C" fn openttd_rust_goal_question_abi(
 ) -> u8 {
     let company = CompanyID(target as u8);
     buttons &= (1_u32 << GOAL_QUESTION_BUTTON_COUNT) - 1;
-    if !s.deity() || unsafe { (s.text_empty)(text) } {
+    if !s.deity() || unsafe { (s.text_view)(text).size == 0 } {
         return u8::from(false);
     }
     if is_client {
@@ -434,15 +421,14 @@ unsafe fn verify_element(
     let button = StoryPageButtonData(reference);
     unsafe {
         match kind {
-            SPET_TEXT => !(s.text_empty)(text),
-            SPET_LOCATION => !(s.text_empty)(text) && s.tile_valid(tile),
+            SPET_TEXT => (s.text_view)(text).size != 0,
+            SPET_LOCATION => (s.text_view)(text).size != 0 && s.tile_valid(tile),
             SPET_GOAL => {
-                let goal = (s.goal)(GoalID(reference as u16));
+                let goal = crate::goal_type::goal_pool().record(GoalID(reference as u16));
                 if goal.is_null() {
                     return false;
                 }
-                !(*(s.page_company)(page) == CompanyID::INVALID
-                    && *(s.goal_company)(goal) != CompanyID::INVALID)
+                !((*page).company == CompanyID::INVALID && (*goal).company != CompanyID::INVALID)
             }
             SPET_BUTTON_PUSH => button.validate_colour() && button.validate_flags(),
             SPET_BUTTON_TILE => {
@@ -466,18 +452,21 @@ unsafe fn update_element(
     text: *const EncodedString,
 ) {
     unsafe {
-        match *(s.element_type)(element) {
-            SPET_TEXT => (s.text_assign)((s.element_text)(element), text),
+        match (*element).r#type {
+            SPET_TEXT => copy_text(s, (&raw mut (*element).text), text),
             SPET_LOCATION => {
-                (s.text_assign)((s.element_text)(element), text);
-                (s.element_referenced_id)(element).write(tile.0);
+                copy_text(s, (&raw mut (*element).text), text);
+                (&raw mut (*element).referenced_id).write(tile.0);
             }
-            SPET_GOAL => (s.element_referenced_id)(element).write(reference),
+            SPET_GOAL => (&raw mut (*element).referenced_id).write(reference),
             SPET_BUTTON_PUSH | SPET_BUTTON_TILE | SPET_BUTTON_VEHICLE => {
-                (s.text_assign)((s.element_text)(element), text);
-                (s.element_referenced_id)(element).write(reference);
+                copy_text(s, (&raw mut (*element).text), text);
+                (&raw mut (*element).referenced_id).write(reference);
             }
-            _ => unreachable!(),
+            _ => {
+                (s.shared().not_reached)();
+                std::process::abort();
+            }
         }
     }
 }
@@ -491,24 +480,24 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_abi(
 ) -> u8 {
     u8::from(unsafe {
         result.write(StoryPageID::INVALID);
-        if !(s.page_can_allocate)()
+        if !crate::story_type::story_page_can_allocate()
             || !s.deity()
             || (company != CompanyID::INVALID && !s.company_valid(company))
         {
             return u8::from(false);
         }
         if execute(flags) {
-            if (s.page_count)() == 0 {
+            if (*crate::story_type::story_page_descriptor()).items as u32 == 0 {
                 page_sort().write(0);
             }
-            let id = (s.page_allocate)(
-                *page_sort(),
-                crate::timer_game_common::calendar_date().0,
-                company,
-                text,
-            );
+            let page = (s.page_allocate)();
+            (*page).sort_value = *page_sort();
+            (*page).date = crate::timer_game_common::calendar_date().0;
+            (*page).company = company;
+            copy_text(s, &raw mut (*page).title, text);
+            let id = (*page).index;
             (s.window_classes)(WC_STORY_BOOK, -1);
-            if (s.page_count)() == 1 {
+            if (*crate::story_type::story_page_descriptor()).items as u32 == 1 {
                 s.toolbar_dirty();
             }
             let next = page_sort();
@@ -518,14 +507,14 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_abi(
         true
     })
 }
-unsafe fn each_element(s: &Services, mut visit: impl FnMut(*mut StoryPageElement)) {
+unsafe fn each_element(mut visit: impl FnMut(*mut StoryPageElement)) {
     let mut from = 0;
     loop {
-        let element = (s.element_next)(from);
+        let element = unsafe { next_element(from) };
         if element.is_null() {
             break;
         }
-        from = u32::from(unsafe { (s.element_id)(element) }.0) + 1;
+        from = u32::from(unsafe { (*element).index }.0) + 1;
         visit(element);
     }
 }
@@ -542,28 +531,32 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element_abi(
 ) -> u8 {
     u8::from(unsafe {
         result.write(StoryPageElementID::INVALID);
-        if !(s.element_can_allocate)() {
+        if !crate::story_type::story_page_element_can_allocate() {
             return u8::from(false);
         }
         let mut count = 0_u16;
-        each_element(s, |element| {
-            if *(s.element_page)(element) == page {
+        each_element(|element| {
+            if (*element).page == page {
                 count = count.wrapping_add(1);
             }
         });
         if count >= 128 || !s.deity() {
             return u8::from(false);
         }
-        let page_record = (s.page)(u32::from(page.0));
+        let page_record = page_record(u32::from(page.0));
         if page_record.is_null() || !verify_element(s, page_record, kind, tile, reference, text) {
             return u8::from(false);
         }
         if execute(flags) {
-            if (s.element_count)() == 0 {
+            if (*crate::story_type::story_page_element_descriptor()).items as u32 == 0 {
                 element_sort().write(0);
             }
-            let id = (s.element_allocate)(*element_sort(), kind, page);
-            update_element(s, (s.element)(id), tile, reference, text);
+            let element = (s.element_allocate)();
+            (*element).sort_value = *element_sort();
+            (*element).r#type = kind;
+            (*element).page = page;
+            let id = (*element).index;
+            update_element(s, element, tile, reference, text);
             (s.window_classes)(WC_STORY_BOOK, i32::from(page.0));
             let next = element_sort();
             next.write((*next).wrapping_add(1));
@@ -585,14 +578,14 @@ pub unsafe extern "C" fn openttd_rust_update_story_page_element_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let element = (s.element)(id);
+        let element = crate::story_type::story_page_element_pool().record(id);
         if element.is_null() {
             return u8::from(false);
         }
-        let page = *(s.element_page)(element);
-        let kind = *(s.element_type)(element);
+        let page = (*element).page;
+        let kind = (*element).r#type;
         let page_record = if kind == SPET_GOAL {
-            (s.page)(u32::from(page.0))
+            page_record(u32::from(page.0))
         } else {
             std::ptr::null_mut()
         };
@@ -601,7 +594,7 @@ pub unsafe extern "C" fn openttd_rust_update_story_page_element_abi(
         }
         if execute(flags) {
             update_element(s, element, tile, reference, text);
-            (s.window_classes)(WC_STORY_BOOK, i32::from((*(s.element_page)(element)).0));
+            (s.window_classes)(WC_STORY_BOOK, i32::from(((*element).page).0));
         }
         true
     })
@@ -617,12 +610,12 @@ pub unsafe extern "C" fn openttd_rust_set_story_page_title_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let page = (s.page)(u32::from(id.0));
+        let page = page_record(u32::from(id.0));
         if page.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.text_assign)((s.page_title)(page), text);
+            copy_text(s, (&raw mut (*page).title), text);
             (s.window_classes)(WC_STORY_BOOK, i32::from(id.0));
         }
         true
@@ -639,12 +632,12 @@ pub unsafe extern "C" fn openttd_rust_set_story_page_date_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let page = (s.page)(u32::from(id.0));
+        let page = page_record(u32::from(id.0));
         if page.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.page_date)(page).write(date);
+            (&raw mut (*page).date).write(date);
             (s.window_classes)(WC_STORY_BOOK, i32::from(id.0));
         }
         true
@@ -660,12 +653,12 @@ pub unsafe extern "C" fn openttd_rust_show_story_page_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let page = (s.page)(u32::from(id.0));
+        let page = page_record(u32::from(id.0));
         if page.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            let company = *(s.page_company)(page);
+            let company = (*page).company;
             let local = CompanyID((s.company().local_company)());
             if (company != CompanyID::INVALID && company == local)
                 || (company == CompanyID::INVALID && s.company_valid(local))
@@ -676,10 +669,14 @@ pub unsafe extern "C" fn openttd_rust_show_story_page_abi(
         true
     })
 }
-pub(crate) unsafe fn delete_elements(s: &Services, page: StoryPageID) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_story_page_destroy(s: &Services, page: StoryPageID) {
     unsafe {
-        each_element(s, |element| {
-            if *(s.element_page)(element) == page {
+        if (*crate::story_type::story_page_descriptor()).cleaning {
+            return;
+        }
+        each_element(|element| {
+            if (*element).page == page {
                 (s.element_destroy)(element);
             }
         });
@@ -695,15 +692,14 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let page = (s.page)(u32::from(id.0));
+        let page = page_record(u32::from(id.0));
         if page.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            delete_elements(s, id);
             (s.company().delete_story_page)(u32::from(id.0));
             (s.window_classes)(WC_STORY_BOOK, -1);
-            if (s.page_count)() == 0 {
+            if (*crate::story_type::story_page_descriptor()).items as u32 == 0 {
                 s.toolbar_dirty();
             }
         }
@@ -720,12 +716,12 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_element_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let element = (s.element)(id);
+        let element = crate::story_type::story_page_element_pool().record(id);
         if element.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            let page = *(s.element_page)(element);
+            let page = (*element).page;
             (s.element_destroy)(element);
             (s.window_classes)(WC_STORY_BOOK, i32::from(page.0));
         }
@@ -741,17 +737,17 @@ pub unsafe extern "C" fn openttd_rust_story_page_button_abi(
     reference: VehicleID,
 ) -> u8 {
     u8::from(unsafe {
-        let element = (s.element)(id);
+        let element = crate::story_type::story_page_element_pool().record(id);
         if element.is_null() {
             return u8::from(false);
         }
-        let page = *(s.element_page)(element);
-        let company = *(s.page_company)((s.page)(u32::from(page.0)));
+        let page = (*element).page;
+        let company = (*(page_record(u32::from(page.0)))).company;
         let current = CompanyID((s.shared().current_company)());
         if company != CompanyID::INVALID && company != current {
             return u8::from(false);
         }
-        match *(s.element_type)(element) {
+        match (*element).r#type {
             SPET_BUTTON_PUSH => {
                 if execute(flags) {
                     (s.push_event)(current, page, id);
@@ -786,7 +782,7 @@ pub extern "C" fn openttd_rust_valid_link_abi(s: &Services, kind: u8, target: u3
         LT_INDUSTRY => s.industry_valid(target),
         LT_TOWN => s.town_valid(target),
         LT_COMPANY => u8::try_from(target).is_ok_and(|id| s.company_valid(CompanyID(id))),
-        LT_STORY_PAGE => !(s.page)(target).is_null(),
+        LT_STORY_PAGE => !unsafe { page_record(target) }.is_null(),
         _ => false,
     })
 }
@@ -801,11 +797,18 @@ pub unsafe extern "C" fn openttd_rust_create_league_table_abi(
 ) -> u8 {
     u8::from(unsafe {
         result.write(LeagueTableID::INVALID);
-        if !s.deity() || !(s.table_can_allocate)() || (s.text_empty)(title) {
+        if !s.deity()
+            || !crate::league_type::league_table_can_allocate()
+            || ((s.text_view)(title).size == 0)
+        {
             return u8::from(false);
         }
         if execute(flags) {
-            result.write((s.table_allocate)(title, header, footer));
+            let table = (s.table_allocate)();
+            copy_text(s, &raw mut (*table).title, title);
+            copy_text(s, &raw mut (*table).header, header);
+            copy_text(s, &raw mut (*table).footer, footer);
+            result.write((*table).index);
         }
         true
     })
@@ -826,16 +829,22 @@ pub unsafe extern "C" fn openttd_rust_create_league_table_element_abi(
     u8::from(unsafe {
         result.write(LeagueTableElementID::INVALID);
         if !s.deity()
-            || !(s.entry_can_allocate)()
+            || !crate::league_type::league_table_element_can_allocate()
             || openttd_rust_valid_link_abi(s, kind, target) == 0
             || (company != CompanyID::INVALID && !s.company_valid(company))
         {
             return u8::from(false);
         }
         if execute(flags) {
-            result.write((s.entry_allocate)(
-                table, rating, company, text, score, kind, target,
-            ));
+            let entry = (s.entry_allocate)();
+            (*entry).table = table;
+            (*entry).rating = rating;
+            (*entry).company = company;
+            copy_text(s, &raw mut (*entry).text, text);
+            copy_text(s, &raw mut (*entry).score, score);
+            (*entry).link_type = kind;
+            (*entry).link_target = target;
+            result.write((*entry).index);
             (s.window_data)(WC_COMPANY_LEAGUE, u32::from(table.0), 0);
         }
         true
@@ -855,7 +864,7 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_data_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let entry = (s.entry)(id);
+        let entry = crate::league_type::league_table_element_pool().record(id);
         if entry.is_null() {
             return u8::from(false);
         }
@@ -865,11 +874,11 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_data_abi(
             return u8::from(false);
         }
         if execute(flags) {
-            (s.entry_company)(entry).write(company);
-            (s.text_assign)((s.entry_text)(entry), text);
-            (s.entry_link_type)(entry).write(kind);
-            (s.entry_link_target)(entry).write(target);
-            (s.window_data)(WC_COMPANY_LEAGUE, u32::from((*(s.entry_table)(entry)).0), 0);
+            (&raw mut (*entry).company).write(company);
+            copy_text(s, (&raw mut (*entry).text), text);
+            (&raw mut (*entry).link_type).write(kind);
+            (&raw mut (*entry).link_target).write(target);
+            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(((*entry).table).0), 0);
         }
         true
     })
@@ -886,14 +895,14 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_score_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let entry = (s.entry)(id);
+        let entry = crate::league_type::league_table_element_pool().record(id);
         if entry.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            (s.entry_rating)(entry).write(rating);
-            (s.text_assign)((s.entry_score)(entry), score);
-            (s.window_data)(WC_COMPANY_LEAGUE, u32::from((*(s.entry_table)(entry)).0), 0);
+            (&raw mut (*entry).rating).write(rating);
+            copy_text(s, (&raw mut (*entry).score), score);
+            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(((*entry).table).0), 0);
         }
         true
     })
@@ -908,12 +917,12 @@ pub unsafe extern "C" fn openttd_rust_remove_league_table_element_abi(
         if !s.deity() {
             return u8::from(false);
         }
-        let entry = (s.entry)(id);
+        let entry = crate::league_type::league_table_element_pool().record(id);
         if entry.is_null() {
             return u8::from(false);
         }
         if execute(flags) {
-            let table = *(s.entry_table)(entry);
+            let table = (*entry).table;
             (s.entry_destroy)(entry);
             (s.window_data)(WC_COMPANY_LEAGUE, u32::from(table.0), 0);
         }

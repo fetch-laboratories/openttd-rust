@@ -18,6 +18,6 @@ ScriptStoryPageElementList::ScriptStoryPageElementList(StoryPageID story_page_id
 	if (!ScriptStoryPage::IsValidStoryPage(story_page_id)) return;
 
 	ScriptList::FillList<StoryPageElement>(this,
-		[story_page_id](const StoryPageElement *pe) {return pe->page == story_page_id; }
+		[story_page_id](const StoryPageElement *pe) {return pe->Record().page == story_page_id; }
 	);
 }

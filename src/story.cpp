@@ -9,7 +9,6 @@
 
 #include "stdafx.h"
 #include "story_base.h"
-#include "core/pool_func.hpp"
 #include "command_func.h"
 #include "company_base.h"
 #include "company_func.h"
@@ -33,8 +32,14 @@
 
 StoryPageElementPool _story_page_element_pool("StoryPageElement");
 StoryPagePool _story_page_pool("StoryPage");
-INSTANTIATE_POOL_METHODS(StoryPageElement)
-INSTANTIATE_POOL_METHODS(StoryPage)
+[[maybe_unused]] static const int _story_page_element_pool_binding = (openttd_rust_story_page_element_pool_bind(_story_page_element_pool.owner), 0);
+[[maybe_unused]] static const int _story_page_pool_binding = (openttd_rust_story_page_pool_bind(_story_page_pool.owner), 0);
+
+
+StoryPage::~StoryPage()
+{
+	openttd_rust_story_page_destroy(&GetRustObjectivesServices(), this->index.base());
+}
 
 
 /** Set the button background colour. */

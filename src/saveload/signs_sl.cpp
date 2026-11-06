@@ -19,6 +19,10 @@
 
 /** Description of a sign within the savegame. */
 static std::string _name;
+struct SignNameScope {
+	Sign *item;
+	~SignNameScope() { this->item->SetName(_name); }
+};
 
 static const SaveLoad _sign_desc[] = {
 	SLEG_CONDVAR("name", _name, SLE_NAME, SL_MIN_VERSION, SLV_84),
@@ -54,8 +58,8 @@ struct SIGNChunkHandler : ChunkHandler {
 		while ((index = SlIterateArray()) != -1) {
 			Sign *si = new (SignID(index)) Sign();
 			_name.clear();
+			SignNameScope staged{si};
 			SlObject(si, slt);
-			si->SetName(_name);
 			/* Before version 6.1, signs didn't have owner.
 			 * Before version 83, invalid signs were determined by si->str == 0.
 			 * Before version 103, owner could be a bankrupted company.

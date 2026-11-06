@@ -498,7 +498,7 @@ CommandCost CmdIndustrySetExclusivity(DoCommandFlags flags, IndustryID ind_id, O
  */
 CommandCost CmdIndustrySetText(DoCommandFlags flags, IndustryID ind_id, const EncodedString &text)
 {
-	return openttd_rust_industry_set_text_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), Industry::TextView(text), &GetIndustryCommandServices()) ? CommandCost() : CMD_ERROR;
+	return openttd_rust_industry_set_text_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), RustEncodedString::Span(text), &GetIndustryCommandServices()) ? CommandCost() : CMD_ERROR;
 }
 
 /**

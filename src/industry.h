@@ -20,6 +20,7 @@
 #include "station_base.h"
 #include "timer/timer_game_calendar.h"
 #include "timer/timer_game_economy.h"
+#include "rust/encoded_string.h"
 #	include "rust/industry_adapter.hpp"
 #	include "rust/station_catchment_ffi.h"
 
@@ -142,8 +143,7 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 		auto view = openttd_rust_industry_text(this->production_owner.get());
 		return EncodedString(std::string(reinterpret_cast<const char *>(view.data), view.size));
 	}
-	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
-	void SetText(const EncodedString &value) { auto text = TextView(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
+	void SetText(const EncodedString &value) { auto text = RustEncodedString::Span(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
 
 	uint16_t &random = this->Metadata().random;
 

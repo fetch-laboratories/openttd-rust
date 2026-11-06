@@ -17,6 +17,7 @@
 #include "subsidy_type.h"
 #include "newgrf_storage.h"
 #include "cargotype.h"
+#include "rust/encoded_string.h"
 #include "rust/town_owner.hpp"
 #include "rust/station_catchment_ffi.h"
 
@@ -191,8 +192,7 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 		auto view = openttd_rust_town_text(this->growth_owner.get());
 		return EncodedString(std::string(reinterpret_cast<const char *>(view.data), view.size));
 	}
-	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
-	void SetText(const EncodedString &value) { openttd_rust_town_set_text(this->growth_owner.get(), TextView(value)); }
+	void SetText(const EncodedString &value) { openttd_rust_town_set_text(this->growth_owner.get(), RustEncodedString::Span(value)); }
 
 	inline SuppliedCargo &GetOrCreateCargoSupplied(CargoType cargo)
 	{

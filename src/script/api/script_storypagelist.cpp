@@ -19,6 +19,6 @@ ScriptStoryPageList::ScriptStoryPageList(ScriptCompany::CompanyID company)
 	::CompanyID c = ScriptCompany::FromScriptCompanyID(company);
 
 	ScriptList::FillList<StoryPage>(this,
-		[c](const StoryPage *p) {return p->company == c || p->company == CompanyID::Invalid(); }
+		[c](const StoryPage *p) {return p->Record().company == c || p->Record().company == CompanyID::Invalid(); }
 	);
 }

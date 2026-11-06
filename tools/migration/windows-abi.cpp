@@ -11,6 +11,9 @@
 #include "depot_base.h"
 #include "ground_vehicle.hpp"
 #include "signs_base.h"
+#include "goal_base.h"
+#include "story_base.h"
+#include "league_base.h"
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
 #include "rust/auth_ffi.h"
@@ -112,6 +115,9 @@ static void Layouts()
 #include "abi-layout-content.inc"
 #include "abi-layout-depot_type.inc"
 #include "abi-layout-signs_type.inc"
+#include "abi-layout-goal_type.inc"
+#include "abi-layout-story_type.inc"
+#include "abi-layout-league_type.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);

@@ -102,6 +102,7 @@ public:
 	auto operator<=>(const EncodedString &) const = default;
 
 	std::string GetDecodedString() const;
+	static std::string GetDecodedString(std::string_view bytes);
 	EncodedString ReplaceParam(size_t param, StringParameter &&value) const;
 
 	inline void clear() { this->string.clear(); }
@@ -119,6 +120,7 @@ private:
 	friend class EndianBufferWriter;
 	friend class EndianBufferReader;
 	friend class ScriptText;
+	friend struct RustEncodedString;
 	friend struct Industry;
 	friend struct Town;
 };

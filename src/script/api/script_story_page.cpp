@@ -76,7 +76,7 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 	}
 	EnforcePrecondition(STORY_PAGE_ELEMENT_INVALID, type != SPET_LOCATION || ::IsValidTile((::TileIndex)reference));
 	EnforcePrecondition(STORY_PAGE_ELEMENT_INVALID, type != SPET_GOAL || ScriptGoal::IsValidGoal(static_cast<::GoalID>(reference)));
-	EnforcePrecondition(STORY_PAGE_ELEMENT_INVALID, type != SPET_GOAL || !(StoryPage::Get(story_page_id)->company == CompanyID::Invalid() && Goal::Get(reference)->company != CompanyID::Invalid()));
+	EnforcePrecondition(STORY_PAGE_ELEMENT_INVALID, type != SPET_GOAL || !(StoryPage::Get(story_page_id)->Record().company == CompanyID::Invalid() && Goal::Get(reference)->Record().company != CompanyID::Invalid()));
 
 	uint32_t refid = 0;
 	TileIndex reftile{};
@@ -114,8 +114,8 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 	EnforcePrecondition(false, IsValidStoryPageElement(story_page_element_id));
 
 	const StoryPageElement *pe = StoryPageElement::Get(story_page_element_id);
-	const StoryPage *p = StoryPage::Get(pe->page);
-	::StoryPageElementType type = pe->type;
+	const StoryPage *p = StoryPage::Get(pe->Record().page);
+	::StoryPageElementType type = pe->Record().type;
 
 	EncodedString encoded_text;
 	if (StoryPageElementTypeRequiresText(type)) {
@@ -125,7 +125,7 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 	}
 	EnforcePrecondition(false, type != ::SPET_LOCATION || ::IsValidTile((::TileIndex)reference));
 	EnforcePrecondition(false, type != ::SPET_GOAL || ScriptGoal::IsValidGoal(static_cast<::GoalID>(reference)));
-	EnforcePrecondition(false, type != ::SPET_GOAL || !(p->company == CompanyID::Invalid() && Goal::Get(reference)->company != CompanyID::Invalid()));
+	EnforcePrecondition(false, type != ::SPET_GOAL || !(p->Record().company == CompanyID::Invalid() && Goal::Get(reference)->Record().company != CompanyID::Invalid()));
 
 	uint32_t refid = 0;
 	TileIndex reftile{};
@@ -152,14 +152,14 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 {
 	EnforcePrecondition(false, IsValidStoryPage(story_page_id));
 
-	return StoryPage::Get(story_page_id)->sort_value;
+	return StoryPage::Get(story_page_id)->Record().sort_value;
 }
 
 /* static */ SQInteger ScriptStoryPage::GetPageElementSortValue(StoryPageElementID story_page_element_id)
 {
 	EnforcePrecondition(false, IsValidStoryPageElement(story_page_element_id));
 
-	return StoryPageElement::Get(story_page_element_id)->sort_value;
+	return StoryPageElement::Get(story_page_element_id)->Record().sort_value;
 }
 
 /* static */ bool ScriptStoryPage::SetTitle(StoryPageID story_page_id, Text *title)
@@ -176,7 +176,7 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 {
 	EnforcePrecondition(ScriptCompany::COMPANY_INVALID, IsValidStoryPage(story_page_id));
 
-	return ScriptCompany::ToScriptCompanyID(StoryPage::Get(story_page_id)->company);
+	return ScriptCompany::ToScriptCompanyID(StoryPage::Get(story_page_id)->Record().company);
 }
 
 /* static */ ScriptDate::Date ScriptStoryPage::GetDate(StoryPageID story_page_id)
@@ -184,7 +184,7 @@ static inline bool StoryPageElementTypeRequiresText(StoryPageElementType type)
 	EnforcePrecondition(ScriptDate::DATE_INVALID, IsValidStoryPage(story_page_id));
 	EnforceDeityMode(ScriptDate::DATE_INVALID);
 
-	return (ScriptDate::Date)StoryPage::Get(story_page_id)->date.base();
+	return (ScriptDate::Date)StoryPage::Get(story_page_id)->Record().date.base();
 }
 
 /* static */ bool ScriptStoryPage::SetDate(StoryPageID story_page_id, ScriptDate::Date date)

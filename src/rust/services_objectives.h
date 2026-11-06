@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file services_objectives.h Canonical native objectives record access. */
+/** @file services_objectives.h Native objectives shell and GUI/VM operations. */
 #ifndef RUST_OBJECTIVES_SERVICES_H
 #define RUST_OBJECTIVES_SERVICES_H
 #include "objectives_ffi.h"
@@ -20,50 +20,15 @@
 #include "../network/network_func.h"
 #include "../script/api/script_story_page.hpp"
 #include "../script/api/script_event_types.hpp"
-inline Goal * RustObjectives_goal(uint16_t id) noexcept { return Goal::GetIfValid(GoalID(id)); }
-inline uint8_t * RustObjectives_goal_company(Goal * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
-inline uint8_t * RustObjectives_goal_type(Goal * p) noexcept { return reinterpret_cast<uint8_t *>(&p->type); }
-inline uint32_t * RustObjectives_goal_dst(Goal * p) noexcept { return reinterpret_cast<uint32_t *>(&p->dst); }
-inline EncodedString * RustObjectives_goal_text(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
-inline EncodedString * RustObjectives_goal_progress(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->progress); }
-inline bool * RustObjectives_goal_completed(Goal * p) noexcept { return reinterpret_cast<bool *>(&p->completed); }
-inline uint32_t RustObjectives_goal_count() noexcept { return static_cast<uint32_t>(Goal::GetNumItems()); }
-inline bool RustObjectives_goal_can_allocate() noexcept { return Goal::CanAllocateItem(); }
-inline StoryPage * RustObjectives_page(uint32_t id) noexcept { return StoryPage::GetIfValid(id); }
-inline uint8_t * RustObjectives_page_company(StoryPage * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
-inline EncodedString * RustObjectives_page_title(StoryPage * p) noexcept { return reinterpret_cast<EncodedString *>(&p->title); }
-inline int32_t * RustObjectives_page_date(StoryPage * p) noexcept { return reinterpret_cast<int32_t *>(&p->date); }
-inline uint32_t RustObjectives_page_count() noexcept { return static_cast<uint32_t>(StoryPage::GetNumItems()); }
-inline bool RustObjectives_page_can_allocate() noexcept { return StoryPage::CanAllocateItem(); }
-inline StoryPageElement * RustObjectives_element(uint16_t id) noexcept { return StoryPageElement::GetIfValid(StoryPageElementID(id)); }
-inline uint16_t * RustObjectives_element_page(StoryPageElement * p) noexcept { return reinterpret_cast<uint16_t *>(&p->page); }
-inline uint8_t * RustObjectives_element_type(StoryPageElement * p) noexcept { return reinterpret_cast<uint8_t *>(&p->type); }
-inline EncodedString * RustObjectives_element_text(StoryPageElement * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
-inline uint32_t * RustObjectives_element_referenced_id(StoryPageElement * p) noexcept { return reinterpret_cast<uint32_t *>(&p->referenced_id); }
-inline void RustObjectives_element_destroy(StoryPageElement * p) noexcept { delete p; }
-inline uint32_t RustObjectives_element_count() noexcept { return static_cast<uint32_t>(StoryPageElement::GetNumItems()); }
-inline bool RustObjectives_element_can_allocate() noexcept { return StoryPageElement::CanAllocateItem(); }
-inline LeagueTableElement * RustObjectives_entry(uint16_t id) noexcept { return LeagueTableElement::GetIfValid(LeagueTableElementID(id)); }
-inline uint8_t * RustObjectives_entry_company(LeagueTableElement * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
-inline uint8_t * RustObjectives_entry_table(LeagueTableElement * p) noexcept { return reinterpret_cast<uint8_t *>(&p->table); }
-inline int64_t * RustObjectives_entry_rating(LeagueTableElement * p) noexcept { return reinterpret_cast<int64_t *>(&p->rating); }
-inline EncodedString * RustObjectives_entry_text(LeagueTableElement * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
-inline EncodedString * RustObjectives_entry_score(LeagueTableElement * p) noexcept { return reinterpret_cast<EncodedString *>(&p->score); }
-inline uint8_t * RustObjectives_entry_link_type(LeagueTableElement * p) noexcept { return reinterpret_cast<uint8_t *>(&p->link.type); }
-inline uint32_t * RustObjectives_entry_link_target(LeagueTableElement * p) noexcept { return reinterpret_cast<uint32_t *>(&p->link.target); }
-inline void RustObjectives_entry_destroy(LeagueTableElement * p) noexcept { delete p; }
-inline bool RustObjectives_entry_can_allocate() noexcept { return LeagueTableElement::CanAllocateItem(); }
-inline uint16_t RustObjectives_goal_allocate(uint8_t type, uint32_t dest, uint8_t company, const EncodedString * text) noexcept { return (new Goal(GoalType(type), dest, CompanyID(company), *text))->index.base(); }
-inline uint16_t RustObjectives_page_allocate(uint32_t sort, int32_t date, uint8_t company, const EncodedString * text) noexcept { return (new StoryPage(sort, TimerGameCalendar::Date(date), CompanyID(company), *text))->index.base(); }
-inline uint16_t RustObjectives_element_allocate(uint32_t sort, uint8_t type, uint16_t page) noexcept { return (new StoryPageElement(sort, StoryPageElementType(type), StoryPageID(page)))->index.base(); }
-inline StoryPageElement * RustObjectives_element_next(uint32_t from) noexcept { for (auto *p : StoryPageElement::Iterate(from)) return p; return nullptr; }
-inline uint16_t RustObjectives_element_id(StoryPageElement * p) noexcept { return p->index.base(); }
-inline bool RustObjectives_table_can_allocate() noexcept { return LeagueTable::CanAllocateItem(); }
-inline uint8_t RustObjectives_table_allocate(const EncodedString * title, const EncodedString * header, const EncodedString * footer) noexcept { return (new LeagueTable(*title, *header, *footer))->index.base(); }
-inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uint8_t company, const EncodedString * text, const EncodedString * score, uint8_t type, uint32_t target) noexcept { return (new LeagueTableElement(LeagueTableID(table), rating, CompanyID(company), *text, *score, Link(LinkType(type), target)))->index.base(); }
+inline OpenTTDGoalRecord *RustObjectives_goal_allocate() noexcept { return (new Goal())->record.get(); }
+inline OpenTTDStoryPageRecord *RustObjectives_page_allocate() noexcept { return (new StoryPage())->record.get(); }
+inline OpenTTDStoryPageElementRecord *RustObjectives_element_allocate() noexcept { return (new StoryPageElement())->record.get(); }
+inline OpenTTDLeagueTableRecord *RustObjectives_table_allocate() noexcept { return (new LeagueTable())->record.get(); }
+inline OpenTTDLeagueTableElementRecord *RustObjectives_entry_allocate() noexcept { return (new LeagueTableElement())->record.get(); }
+inline void RustObjectives_element_destroy(OpenTTDStoryPageElementRecord *p) noexcept { delete p->shell; }
+inline void RustObjectives_entry_destroy(OpenTTDLeagueTableElementRecord *p) noexcept { delete p->shell; }
+inline OpenTTDByteSpan RustObjectives_text_view(const EncodedString *text) noexcept { return RustEncodedString::Span(*text); }
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
-inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
-inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
 inline void RustObjectives_window_close(uint16_t cls, uint32_t number) noexcept { CloseWindowById(WindowClass(cls), number); }
 inline void RustObjectives_question_show(uint16_t id, uint8_t type, uint32_t buttons, const EncodedString * text) noexcept { ShowGoalQuestion(id, GoalQuestionType(type), buttons, *text); }
 inline void RustObjectives_story_show(uint8_t company, uint16_t page) noexcept { ShowStoryBook(CompanyID(company), StoryPageID(page), true); }
@@ -76,53 +41,18 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 	static const OpenTTDObjectivesServices services{
 		.shared = &GetRustSharedServices(),
 		.company = &GetRustCompanyServices(),
-		.goal = RustObjectives_goal,
-		.goal_company = RustObjectives_goal_company,
-		.goal_type = RustObjectives_goal_type,
-		.goal_dst = RustObjectives_goal_dst,
-		.goal_text = RustObjectives_goal_text,
-		.goal_progress = RustObjectives_goal_progress,
-		.goal_completed = RustObjectives_goal_completed,
-		.goal_count = RustObjectives_goal_count,
-		.goal_can_allocate = RustObjectives_goal_can_allocate,
-		.page = RustObjectives_page,
-		.page_company = RustObjectives_page_company,
-		.page_title = RustObjectives_page_title,
-		.page_date = RustObjectives_page_date,
-		.page_count = RustObjectives_page_count,
-		.page_can_allocate = RustObjectives_page_can_allocate,
-		.element = RustObjectives_element,
-		.element_page = RustObjectives_element_page,
-		.element_type = RustObjectives_element_type,
-		.element_text = RustObjectives_element_text,
-		.element_referenced_id = RustObjectives_element_referenced_id,
-		.element_destroy = RustObjectives_element_destroy,
-		.element_count = RustObjectives_element_count,
-		.element_can_allocate = RustObjectives_element_can_allocate,
-		.entry = RustObjectives_entry,
-		.entry_company = RustObjectives_entry_company,
-		.entry_table = RustObjectives_entry_table,
-		.entry_rating = RustObjectives_entry_rating,
-		.entry_text = RustObjectives_entry_text,
-		.entry_score = RustObjectives_entry_score,
-		.entry_link_type = RustObjectives_entry_link_type,
-		.entry_link_target = RustObjectives_entry_link_target,
-		.entry_destroy = RustObjectives_entry_destroy,
-		.entry_can_allocate = RustObjectives_entry_can_allocate,
 		.goal_allocate = RustObjectives_goal_allocate,
 		.page_allocate = RustObjectives_page_allocate,
 		.element_allocate = RustObjectives_element_allocate,
-		.element_next = RustObjectives_element_next,
-		.element_id = RustObjectives_element_id,
-		.table_can_allocate = RustObjectives_table_can_allocate,
 		.table_allocate = RustObjectives_table_allocate,
 		.entry_allocate = RustObjectives_entry_allocate,
+		.element_destroy = RustObjectives_element_destroy,
+		.entry_destroy = RustObjectives_entry_destroy,
 		.orders = &GetRustOrdersLeaves(),
 		.subsidy = &GetRustSubsidyServices(),
 		.road_commands = &GetRustRoadCommandServices(),
 		.vehicle_valid = RustObjectives_vehicle_valid,
-		.text_empty = RustObjectives_text_empty,
-		.text_assign = RustObjectives_text_assign,
+		.text_view = RustObjectives_text_view,
 		.window_data = RustInvalidateWindowData,
 		.window_classes = RustInvalidateWindowClassesData,
 		.window_close = RustObjectives_window_close,

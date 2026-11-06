@@ -12,31 +12,34 @@
 
 #include "company_type.h"
 #include "goal_type.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
+#include "rust/encoded_string.h"
 #include "strings_type.h"
 
-using GoalPool = Pool<Goal, GoalID, 64>;
+using GoalPool = RustPool<Goal, GoalID, 64>;
 extern GoalPool _goal_pool;
 
 /** Struct about goals, current and completed */
+
+#include "abi-record-goal_type.h"
+extern "C" {
+void OPENTTD_RUST_CALL openttd_rust_goal_pool_bind(RustPoolCore *);
+OpenTTDGoalRecord *OPENTTD_RUST_CALL openttd_rust_goal_record_new(Goal *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_goal_record_delete(OpenTTDGoalRecord *);
+}
+
 struct Goal : GoalPool::PoolItem<&_goal_pool> {
-	CompanyID company = CompanyID::Invalid(); ///< Goal is for a specific company; CompanyID::Invalid() if it is global
-	GoalType type = GT_NONE; ///< Type of the goal
-	GoalTypeID dst = 0; ///< Index of type
-	EncodedString text{}; ///< Text of the goal.
-	EncodedString progress{}; ///< Progress text of the goal.
-	bool completed = false; ///< Is the goal completed or not?
-
-	/**
-	 * We need an (empty) constructor so struct isn't zeroed (as C++ standard states)
-	 */
-	Goal() { }
-	Goal(GoalType type, GoalTypeID dst, CompanyID company, const EncodedString &text) : company(company), type(type), dst(dst), text(text) {}
-
-	/**
-	 * (Empty) destructor has to be defined else operator delete might be called with nullptr parameter
-	 */
-	~Goal() { }
+	struct RecordDeleter {
+		void operator()(OpenTTDGoalRecord *record) const
+		{
+			_goal_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_goal_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDGoalRecord, RecordDeleter> record{openttd_rust_goal_record_new(this, this->index.base())};
+	OpenTTDGoalRecord &Record() { return *this->record; }
+	const OpenTTDGoalRecord &Record() const { return *this->record; }
+	Goal() { _goal_pool.BindRecord(this->index.base(), this, this->record.get()); }
 
 };
 

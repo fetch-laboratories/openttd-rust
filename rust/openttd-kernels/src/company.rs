@@ -324,9 +324,7 @@ pub struct Services {
     pub set_station_owner: extern "C" fn(u32, u8),
     pub waypoint_next_owned: extern "C" fn(u8, u32) -> u32,
     pub set_waypoint_owner: extern "C" fn(u32, u8),
-    pub goal_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_goal: extern "C" fn(u32),
-    pub story_page_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_story_page: extern "C" fn(u32),
     pub change_window_owner: extern "C" fn(u8, u8),
 }
@@ -1390,24 +1388,31 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             index = pool.next_index(index + 1, crate::signs_type::SignID::END);
         }
     }
-    each(
-        |from| (s.goal_next_owned)(old, from),
-        |id| (s.delete_goal)(id),
-    );
+    unsafe {
+        let pool = crate::goal_type::goal_pool();
+        let mut index = pool.next_index(0, crate::goal_type::GoalID::END);
+        while index < crate::goal_type::GoalID::END {
+            let record = pool.record(crate::goal_type::GoalID(index as u16));
+            if (*record).company.0 == old {
+                (s.delete_goal)(index as u32);
+            }
+            index = pool.next_index(index + 1, crate::goal_type::GoalID::END);
+        }
+    }
     crate::cargomonitor::openttd_rust_monitor_clear_pickups(old);
     crate::cargomonitor::openttd_rust_monitor_clear_deliveries(old);
-    each(
-        |from| (s.story_page_next_owned)(old, from),
-        |id| {
-            unsafe {
-                crate::objectives::delete_elements(
-                    (s.objectives)(),
-                    crate::story_type::StoryPageID(id as u16),
-                );
+    unsafe {
+        let pool = crate::story_type::story_page_pool();
+        let mut index = pool.next_index(0, crate::story_type::StoryPageID::END);
+        while index < crate::story_type::StoryPageID::END {
+            let id = crate::story_type::StoryPageID(index as u16);
+            let record = pool.record(id);
+            if (*record).company.0 == old {
+                (s.delete_story_page)(index as u32);
             }
-            (s.delete_story_page)(id);
-        },
-    );
+            index = pool.next_index(index + 1, crate::story_type::StoryPageID::END);
+        }
+    }
     if new != INVALID_OWNER {
         (s.change_window_owner)(old, new);
     }
@@ -1505,6 +1510,14 @@ pub(crate) fn control(
                 }
                 (s.delete_company)(target);
                 (s.company_removed)(target, c.reason);
+                let windows = (s.objectives)();
+                if unsafe {
+                    (*crate::story_type::story_page_descriptor()).items == 0
+                        || (*crate::goal_type::goal_descriptor()).items == 0
+                } {
+                    (windows.window_data)(crate::window_type::WC_MAIN_TOOLBAR, 0, 0);
+                }
+                (windows.window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
             }
             _ => {
                 c.result = error();
@@ -2299,9 +2312,7 @@ crate::abi::layouts! {
         set_station_owner,
         waypoint_next_owned,
         set_waypoint_owner,
-        goal_next_owned,
         delete_goal,
-        story_page_next_owned,
         delete_story_page,
         change_window_owner,
     };

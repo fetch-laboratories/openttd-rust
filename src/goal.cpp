@@ -13,7 +13,6 @@
 #include "town.h"
 #include "window_func.h"
 #include "goal_base.h"
-#include "core/pool_func.hpp"
 #include "game/game.hpp"
 #include "command_func.h"
 #include "company_base.h"
@@ -31,7 +30,7 @@
 
 
 GoalPool _goal_pool("Goal");
-INSTANTIATE_POOL_METHODS(Goal)
+[[maybe_unused]] static const int _goal_pool_binding = (openttd_rust_goal_pool_bind(_goal_pool.owner), 0);
 
 
 /**

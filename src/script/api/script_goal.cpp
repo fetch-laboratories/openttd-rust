@@ -40,10 +40,10 @@
 			if (!ScriptStoryPage::IsValidStoryPage(static_cast<StoryPageID>(destination))) return false;
 
 			StoryPage *story_page = ::StoryPage::Get(static_cast<StoryPageID>(destination));
-			if (story_page->company == CompanyID::Invalid()) return true;
+			if (story_page->Record().company == CompanyID::Invalid()) return true;
 
 			::CompanyID c = ScriptCompany::FromScriptCompanyID(company);
-			return c != CompanyID::Invalid() && story_page->company == c;
+			return c != CompanyID::Invalid() && story_page->Record().company == c;
 		}
 
 		default: return false;
@@ -80,7 +80,7 @@
 	EnforceDeityMode(false);
 	EnforcePrecondition(false, IsValidGoal(goal_id));
 	const Goal *g = Goal::Get(goal_id);
-	EnforcePrecondition(false, IsValidGoalDestination(ScriptCompany::ToScriptCompanyID(g->company), type, destination));
+	EnforcePrecondition(false, IsValidGoalDestination(ScriptCompany::ToScriptCompanyID(g->Record().company), type, destination));
 
 	return ScriptObject::Command<CMD_SET_GOAL_DESTINATION>::Do(goal_id, (::GoalType)type, destination);
 }
@@ -122,7 +122,7 @@
 	EnforceDeityMode(false);
 
 	const Goal *g = Goal::Get(goal_id);
-	return g != nullptr && g->completed;
+	return g != nullptr && g->Record().completed;
 }
 
 /* static */ bool ScriptGoal::DoQuestion(SQInteger uniqueid, uint32_t target, bool is_client, Text *question, QuestionType type, SQInteger buttons)

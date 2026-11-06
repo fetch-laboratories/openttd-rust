@@ -20,6 +20,10 @@
 static TownID _town_index;
 
 static std::string _name;
+struct DepotNameScope {
+	Depot *item;
+	~DepotNameScope() { this->item->SetName(_name); }
+};
 
 static const SaveLoad _depot_desc[] = {
 	 SLE_CONDVARNAME(Depot, Record().xy, "xy",         SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
@@ -54,8 +58,8 @@ struct DEPTChunkHandler : ChunkHandler {
 		while ((index = SlIterateArray()) != -1) {
 			Depot *depot = new (DepotID(index)) Depot();
 			_name.clear();
+			DepotNameScope staged{depot};
 			SlObject(depot, slt);
-			depot->SetName(_name);
 
 			/* Set the town 'pointer' so we can restore it later. */
 			if (IsSavegameVersionBefore(SLV_141)) depot->Record().town = reinterpret_cast<Town *>(static_cast<size_t>(_town_index.base()));

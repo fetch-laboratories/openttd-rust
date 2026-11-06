@@ -18,9 +18,9 @@
 
 #include "abi-record-signs_type.h"
 extern "C" {
-void openttd_rust_sign_pool_bind(RustPoolCore *);
-OpenTTDSignRecord *openttd_rust_sign_record_new(Sign *, uint16_t);
-void openttd_rust_sign_record_delete(OpenTTDSignRecord *);
+void OPENTTD_RUST_CALL openttd_rust_sign_pool_bind(RustPoolCore *);
+OpenTTDSignRecord *OPENTTD_RUST_CALL openttd_rust_sign_record_new(Sign *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_sign_record_delete(OpenTTDSignRecord *);
 }
 using SignPool = RustPool<Sign, SignID, 16>;
 extern SignPool _sign_pool;

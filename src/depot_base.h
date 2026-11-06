@@ -17,9 +17,9 @@
 
 #include "abi-record-depot_type.h"
 extern "C" {
-RustPoolCore *openttd_rust_depot_pool_bind(RustPoolCore *);
-OpenTTDDepotRecord *openttd_rust_depot_record_new(Depot *, uint16_t);
-void openttd_rust_depot_record_delete(OpenTTDDepotRecord *);
+RustPoolCore *OPENTTD_RUST_CALL openttd_rust_depot_pool_bind(RustPoolCore *);
+OpenTTDDepotRecord *OPENTTD_RUST_CALL openttd_rust_depot_record_new(Depot *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_depot_record_delete(OpenTTDDepotRecord *);
 }
 using DepotPool = RustPool<Depot, DepotID, 64>;
 extern DepotPool _depot_pool;

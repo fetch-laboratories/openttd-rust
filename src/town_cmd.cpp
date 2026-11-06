@@ -815,7 +815,7 @@ CommandCost CmdTownCargoGoal(DoCommandFlags flags, TownID town_id, TownAcceptanc
 CommandCost CmdTownSetText(DoCommandFlags flags, TownID town_id, const EncodedString &text)
 {
 	CommandCost result;
-	openttd_rust_town_text_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), Town::TextView(text));
+	openttd_rust_town_text_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), RustEncodedString::Span(text));
 	return result;
 }
 

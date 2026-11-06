@@ -5,63 +5,28 @@
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 struct Goal; struct StoryPage; struct StoryPageElement; struct LeagueTableElement; class EncodedString;
+struct OpenTTDGoalRecord; struct OpenTTDStoryPageRecord; struct OpenTTDStoryPageElementRecord; struct OpenTTDLeagueTableRecord; struct OpenTTDLeagueTableElementRecord;
 struct OpenTTDCompanyServices;
 struct OpenTTDOrdersLeaves;
 struct OpenTTDSubsidyServices;
 struct OpenTTDRoadCommandServices;
-/** Records and strings stay in native pools. Pointers address their live fields;
- * no pointer or borrow survives destruction, pool cleanup or a reentrant callback.
- * Commands hold the game-state mutex. Events enqueue without entering the VM. */
+/** Rust owns canonical records and bytes; native constructors/destructors retain shells.
+ * Text spans borrow native command/GUI inputs. No borrow crosses a reentrant hook. */
 struct OpenTTDObjectivesServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCompanyServices *company;
-	Goal * (*goal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(goal);
-	uint8_t * (*goal_company)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_company);
-	uint8_t * (*goal_type)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_type);
-	uint32_t * (*goal_dst)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_dst);
-	EncodedString * (*goal_text)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_text);
-	EncodedString * (*goal_progress)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_progress);
-	bool * (*goal_completed)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_completed);
-	uint32_t (*goal_count)() noexcept OPENTTD_SERVICE_DEFAULT(goal_count);
-	bool (*goal_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(goal_can_allocate);
-	StoryPage * (*page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(page);
-	uint8_t * (*page_company)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_company);
-	EncodedString * (*page_title)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_title);
-	int32_t * (*page_date)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_date);
-	uint32_t (*page_count)() noexcept OPENTTD_SERVICE_DEFAULT(page_count);
-	bool (*page_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(page_can_allocate);
-	StoryPageElement * (*element)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(element);
-	uint16_t * (*element_page)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_page);
-	uint8_t * (*element_type)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_type);
-	EncodedString * (*element_text)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_text);
-	uint32_t * (*element_referenced_id)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_referenced_id);
-	void (*element_destroy)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_destroy);
-	uint32_t (*element_count)() noexcept OPENTTD_SERVICE_DEFAULT(element_count);
-	bool (*element_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(element_can_allocate);
-	LeagueTableElement * (*entry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(entry);
-	uint8_t * (*entry_company)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_company);
-	uint8_t * (*entry_table)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_table);
-	int64_t * (*entry_rating)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_rating);
-	EncodedString * (*entry_text)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_text);
-	EncodedString * (*entry_score)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_score);
-	uint8_t * (*entry_link_type)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_link_type);
-	uint32_t * (*entry_link_target)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_link_target);
-	void (*entry_destroy)(LeagueTableElement *) noexcept OPENTTD_SERVICE_DEFAULT(entry_destroy);
-	bool (*entry_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(entry_can_allocate);
-	uint16_t (*goal_allocate)(uint8_t, uint32_t, uint8_t, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(goal_allocate);
-	uint16_t (*page_allocate)(uint32_t, int32_t, uint8_t, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(page_allocate);
-	uint16_t (*element_allocate)(uint32_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(element_allocate);
-	StoryPageElement * (*element_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(element_next);
-	uint16_t (*element_id)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_id);
-	bool (*table_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_can_allocate);
-	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
-	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
+	OpenTTDGoalRecord *(*goal_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(goal_allocate);
+	OpenTTDStoryPageRecord *(*page_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(page_allocate);
+	OpenTTDStoryPageElementRecord *(*element_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(element_allocate);
+	OpenTTDLeagueTableRecord *(*table_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
+	OpenTTDLeagueTableElementRecord *(*entry_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
+	void (*element_destroy)(OpenTTDStoryPageElementRecord *) noexcept OPENTTD_SERVICE_DEFAULT(element_destroy);
+	void (*entry_destroy)(OpenTTDLeagueTableElementRecord *) noexcept OPENTTD_SERVICE_DEFAULT(entry_destroy);
 	const OpenTTDOrdersLeaves *orders;
 	const OpenTTDSubsidyServices *subsidy;
 	const OpenTTDRoadCommandServices *road_commands;
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);
-	bool (*text_empty)(const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_empty);
-	void (*text_assign)(EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_assign);
+	OpenTTDByteSpan (*text_view)(const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_view);
 	void (*window_data)(uint16_t, uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_data);
 	void (*window_classes)(uint16_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_classes);
 	void (*window_close)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_close);
@@ -74,6 +39,7 @@ struct OpenTTDObjectivesServices {
 };
 const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept;
 extern "C" {
+void OPENTTD_RUST_CALL openttd_rust_story_page_destroy(const OpenTTDObjectivesServices *, uint16_t);
 uint8_t openttd_rust_create_goal_abi(const OpenTTDObjectivesServices *, uint16_t, uint8_t, uint8_t, uint32_t, const EncodedString *, uint16_t *);
 extern "C++" inline bool openttd_rust_create_goal(const OpenTTDObjectivesServices *a0, uint16_t a1, uint8_t a2, uint8_t a3, uint32_t a4, const EncodedString *a5, uint16_t *a6) { return openttd_rust_create_goal_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
 uint8_t openttd_rust_remove_goal_abi(const OpenTTDObjectivesServices *, uint16_t, uint16_t);

@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file objectives-console.cpp Production command results and unsaved GS event observations. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -56,10 +57,10 @@ template <typename ID> static ID Created(const std::tuple<CommandCost, ID> &resu
 }
 static void State()
 {
-	for (const Goal *g : Goal::Iterate()) fmt::print(stderr, "OBJECTIVES goal {} {} {} {} {}\n", g->index, g->company, g->type, g->dst, g->completed);
-	for (const StoryPage *p : StoryPage::Iterate()) fmt::print(stderr, "OBJECTIVES page {} {} {} {}\n", p->index, p->sort_value, p->company, p->date);
-	for (const StoryPageElement *e : StoryPageElement::Iterate()) fmt::print(stderr, "OBJECTIVES element {} {} {} {} {}\n", e->index, e->sort_value, e->page, e->type, e->referenced_id);
-	for (const LeagueTableElement *e : LeagueTableElement::Iterate()) fmt::print(stderr, "OBJECTIVES entry {} {} {} {} {} {}\n", e->index, e->table, e->rating, e->company, e->link.type, e->link.target);
+	for (const Goal *g : Goal::Iterate()) fmt::print(stderr, "OBJECTIVES goal {} {} {} {} {}\n", g->index, FIXTURE_FIELD(g, company), FIXTURE_FIELD(g, type), FIXTURE_FIELD(g, dst), FIXTURE_FIELD(g, completed));
+	for (const StoryPage *p : StoryPage::Iterate()) fmt::print(stderr, "OBJECTIVES page {} {} {} {}\n", p->index, FIXTURE_FIELD(p, sort_value), FIXTURE_FIELD(p, company), FIXTURE_FIELD(p, date));
+	for (const StoryPageElement *e : StoryPageElement::Iterate()) fmt::print(stderr, "OBJECTIVES element {} {} {} {} {}\n", e->index, FIXTURE_FIELD(e, sort_value), FIXTURE_FIELD(e, page), FIXTURE_FIELD(e, type), FIXTURE_FIELD(e, referenced_id));
+	for (const LeagueTableElement *e : LeagueTableElement::Iterate()) fmt::print(stderr, "OBJECTIVES entry {} {} {} {} {} {}\n", e->index, FIXTURE_FIELD(e, table), FIXTURE_FIELD(e, rating), FIXTURE_FIELD(e, company), FIXTURE_GET(e, Link, link).type, FIXTURE_GET(e, Link, link).target);
 	fmt::print(stderr, "OBJECTIVES rng {} {}\n", _random.state[0], _random.state[1]);
 	fmt::print(stderr, "OBJECTIVES state-complete\n");
 }
@@ -69,18 +70,18 @@ static void SortStateProbe(StoryPageID page, TileIndex tile, const EncodedString
 	const auto run = DoCommandFlag::Execute;
 	_story_page_next_sort_value = UINT32_MAX;
 	auto wrapped = Created(Observe<CMD_CREATE_STORY_PAGE>("page-sort-wrap", run, CompanyID::Invalid(), text));
-	fmt::print(stderr, "OBJECTIVES page-wrap {} {}\n", StoryPage::Get(wrapped)->sort_value, _story_page_next_sort_value);
+	fmt::print(stderr, "OBJECTIVES page-wrap {} {}\n", FIXTURE_FIELD(StoryPage::Get(wrapped), sort_value), _story_page_next_sort_value);
 	Observe<CMD_REMOVE_STORY_PAGE>("page-sort-cleanup", run, wrapped);
 	_story_page_next_sort_value = saved_page;
 	auto primer = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-primer", run, tile, page, SPET_TEXT, 0, text));
 	_story_page_element_next_sort_value = UINT32_MAX;
 	auto element = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-wrap", run, tile, page, SPET_TEXT, 0, text));
-	fmt::print(stderr, "OBJECTIVES element-wrap {} {}\n", StoryPageElement::Get(element)->sort_value, _story_page_element_next_sort_value);
+	fmt::print(stderr, "OBJECTIVES element-wrap {} {}\n", FIXTURE_FIELD(StoryPageElement::Get(element), sort_value), _story_page_element_next_sort_value);
 	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-cleanup", run, element);
 	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-primer-cleanup", run, primer);
 	_story_page_element_next_sort_value = UINT32_MAX;
 	auto reset = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-reset", run, tile, page, SPET_TEXT, 0, text));
-	fmt::print(stderr, "OBJECTIVES element-reset {} {}\n", StoryPageElement::Get(reset)->sort_value, _story_page_element_next_sort_value);
+	fmt::print(stderr, "OBJECTIVES element-reset {} {}\n", FIXTURE_FIELD(StoryPageElement::Get(reset), sort_value), _story_page_element_next_sort_value);
 	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-reset-cleanup", run, reset);
 	_story_page_element_next_sort_value = saved_element;
 }
@@ -94,7 +95,7 @@ static bool ObjectivesScenario(std::span<std::string_view> args)
 		uint32_t page_sort = _story_page_next_sort_value, element_sort = _story_page_element_next_sort_value;
 		auto page = Created(Observe<CMD_CREATE_STORY_PAGE>("reload-page", DoCommandFlag::Execute, CompanyID::Invalid(), text));
 		auto element = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("reload-element", DoCommandFlag::Execute, TileXY(10, 10), page, SPET_TEXT, 0, text));
-		fmt::print(stderr, "OBJECTIVES loaded-sorts {} {} {} {}\n", page_sort, StoryPage::Get(page)->sort_value, element_sort, StoryPageElement::Get(element)->sort_value);
+		fmt::print(stderr, "OBJECTIVES loaded-sorts {} {} {} {}\n", page_sort, FIXTURE_FIELD(StoryPage::Get(page), sort_value), element_sort, FIXTURE_FIELD(StoryPageElement::Get(element), sort_value));
 		fmt::print(stderr, "OBJECTIVES reload-complete\n");
 		actor.Restore();
 		return true;

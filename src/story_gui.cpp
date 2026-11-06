@@ -86,7 +86,7 @@ protected:
 	/** Sort story pages by order value. */
 	static bool PageOrderSorter(const StoryPage * const &a, const StoryPage * const &b)
 	{
-		return a->sort_value < b->sort_value;
+		return a->Record().sort_value < b->Record().sort_value;
 	}
 
 	/** (Re)Build story page element list. */
@@ -98,7 +98,7 @@ protected:
 			const StoryPage *p = GetSelPage();
 			if (p != nullptr) {
 				for (const StoryPageElement *pe : StoryPageElement::Iterate()) {
-					if (pe->page == p->index) {
+					if (pe->Record().page == p->index) {
 						this->story_page_elements.push_back(pe);
 					}
 				}
@@ -114,7 +114,7 @@ protected:
 	/** Sort story page elements by order value. */
 	static bool PageElementOrderSorter(const StoryPageElement * const &a, const StoryPageElement * const &b)
 	{
-		return a->sort_value < b->sort_value;
+		return a->Record().sort_value < b->Record().sort_value;
 	}
 
 	/*
@@ -124,7 +124,7 @@ protected:
 	 */
 	bool IsPageAvailable(const StoryPage *page) const
 	{
-		return page->company == CompanyID::Invalid() || page->company == this->window_number;
+		return page->Record().company == CompanyID::Invalid() || page->Record().company == this->window_number;
 	}
 
 	/**
@@ -184,7 +184,7 @@ protected:
 	{
 		/* Generate generic title if selected page have no custom title. */
 		StoryPage *page = this->GetSelPage();
-		if (page != nullptr && page->title.empty()) {
+		if (page != nullptr && page->Record().title.empty()) {
 			selected_generic_title = GetString(STR_STORY_BOOK_GENERIC_PAGE_ITEM, GetSelPageNum() + 1);
 		}
 
@@ -249,8 +249,8 @@ protected:
 		uint16_t page_num = 1;
 		for (const StoryPage *p : this->story_pages) {
 			bool current_page = p->index == this->selected_page_id;
-			if (!p->title.empty()) {
-				list.push_back(MakeDropDownListStringItem(p->title.GetDecodedString(), p->index.base(), current_page));
+			if (!p->Record().title.empty()) {
+				list.push_back(MakeDropDownListStringItem(p->Record().title.GetDecodedString(), p->index.base(), current_page));
 			} else {
 				/* No custom title => use a generic page title with page number. */
 				list.push_back(MakeDropDownListStringItem(GetString(STR_STORY_BOOK_GENERIC_PAGE_ITEM, page_num), p->index.base(), current_page));
@@ -284,7 +284,7 @@ protected:
 
 		/* Title lines */
 		height += GetCharacterHeight(FS_NORMAL); // Date always use exactly one line.
-		height += GetStringHeight(GetString(STR_STORY_BOOK_TITLE, !page->title.empty() ? page->title.GetDecodedString() : this->selected_generic_title), max_width);
+		height += GetStringHeight(GetString(STR_STORY_BOOK_TITLE, !page->Record().title.empty() ? page->Record().title.GetDecodedString() : this->selected_generic_title), max_width);
 
 		return height;
 	}
@@ -293,15 +293,15 @@ protected:
 	 * Decides which sprite to display for a given page element.
 	 * @param pe The page element.
 	 * @return The SpriteID of the sprite to display.
-	 * @pre pe.type must be SPET_GOAL or SPET_LOCATION.
+	 * @pre pe.Record().type must be SPET_GOAL or SPET_LOCATION.
 	 */
 	SpriteID GetPageElementSprite(const StoryPageElement &pe) const
 	{
-		switch (pe.type) {
+		switch (pe.Record().type) {
 			case SPET_GOAL: {
-				Goal *g = Goal::Get((GoalID) pe.referenced_id);
+				Goal *g = Goal::Get((GoalID) pe.Record().referenced_id);
 				if (g == nullptr) return SPR_IMG_GOAL_BROKEN_REF;
-				return g->completed ? SPR_IMG_GOAL_COMPLETED : SPR_IMG_GOAL;
+				return g->Record().completed ? SPR_IMG_GOAL_COMPLETED : SPR_IMG_GOAL;
 			}
 			case SPET_LOCATION:
 				return SPR_IMG_VIEW_LOCATION;
@@ -318,9 +318,9 @@ protected:
 	 */
 	uint GetPageElementHeight(const StoryPageElement &pe, int max_width) const
 	{
-		switch (pe.type) {
+		switch (pe.Record().type) {
 			case SPET_TEXT:
-				return GetStringHeight(pe.text.GetDecodedString(), max_width);
+				return GetStringHeight(pe.Record().text.GetDecodedString(), max_width);
 
 			case SPET_GOAL:
 			case SPET_LOCATION: {
@@ -331,7 +331,7 @@ protected:
 			case SPET_BUTTON_PUSH:
 			case SPET_BUTTON_TILE:
 			case SPET_BUTTON_VEHICLE: {
-				Dimension dim = GetStringBoundingBox(pe.text.GetDecodedString(), FS_NORMAL);
+				Dimension dim = GetStringBoundingBox(pe.Record().text.GetDecodedString(), FS_NORMAL);
 				return dim.height + WidgetDimensions::scaled.framerect.Vertical() + WidgetDimensions::scaled.frametext.Vertical();
 			}
 
@@ -348,11 +348,11 @@ protected:
 	 */
 	ElementFloat GetPageElementFloat(const StoryPageElement &pe) const
 	{
-		switch (pe.type) {
+		switch (pe.Record().type) {
 			case SPET_BUTTON_PUSH:
 			case SPET_BUTTON_TILE:
 			case SPET_BUTTON_VEHICLE: {
-				StoryPageButtonFlags flags = StoryPageButtonData{ pe.referenced_id }.GetFlags();
+				StoryPageButtonFlags flags = StoryPageButtonData{ pe.Record().referenced_id }.GetFlags();
 				if (flags & SPBF_FLOAT_LEFT) return ElementFloat::Left;
 				if (flags & SPBF_FLOAT_RIGHT) return ElementFloat::Right;
 				return ElementFloat::None;
@@ -370,11 +370,11 @@ protected:
 	 */
 	int GetPageElementFloatWidth(const StoryPageElement &pe) const
 	{
-		switch (pe.type) {
+		switch (pe.Record().type) {
 			case SPET_BUTTON_PUSH:
 			case SPET_BUTTON_TILE:
 			case SPET_BUTTON_VEHICLE: {
-				Dimension dim = GetStringBoundingBox(pe.text.GetDecodedString(), FS_NORMAL);
+				Dimension dim = GetStringBoundingBox(pe.Record().text.GetDecodedString(), FS_NORMAL);
 				return dim.width + WidgetDimensions::scaled.framerect.Vertical() + WidgetDimensions::scaled.frametext.Vertical();
 			}
 
@@ -435,7 +435,7 @@ protected:
 				const int height = GetPageElementHeight(*pe, available_width);
 				/* Check for button that needs extra margin */
 				if (left_offset == 0 && right_offset == 0) {
-					switch (pe->type) {
+					switch (pe->Record().type) {
 						case SPET_BUTTON_PUSH:
 						case SPET_BUTTON_TILE:
 						case SPET_BUTTON_VEHICLE:
@@ -530,16 +530,16 @@ protected:
 	 */
 	void OnPageElementClick(const StoryPageElement &pe)
 	{
-		switch (pe.type) {
+		switch (pe.Record().type) {
 			case SPET_TEXT:
 				/* Do nothing. */
 				break;
 
 			case SPET_LOCATION:
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow((TileIndex)pe.referenced_id);
+					ShowExtraViewportWindow((TileIndex)pe.Record().referenced_id);
 				} else {
-					ScrollMainWindowToTile((TileIndex)pe.referenced_id);
+					ScrollMainWindowToTile((TileIndex)pe.Record().referenced_id);
 				}
 				break;
 
@@ -561,7 +561,7 @@ protected:
 					ResetObjectToPlace();
 					this->active_button_id = StoryPageElementID::Invalid();
 				} else {
-					CursorID cursor = TranslateStoryPageButtonCursor(StoryPageButtonData{ pe.referenced_id }.GetCursor());
+					CursorID cursor = TranslateStoryPageButtonCursor(StoryPageButtonData{ pe.Record().referenced_id }.GetCursor());
 					SetObjectToPlaceWnd(cursor, PAL_NONE, HT_RECT, this);
 					this->active_button_id = pe.index;
 				}
@@ -573,7 +573,7 @@ protected:
 					ResetObjectToPlace();
 					this->active_button_id = StoryPageElementID::Invalid();
 				} else {
-					CursorID cursor = TranslateStoryPageButtonCursor(StoryPageButtonData{ pe.referenced_id }.GetCursor());
+					CursorID cursor = TranslateStoryPageButtonCursor(StoryPageButtonData{ pe.Record().referenced_id }.GetCursor());
 					SetObjectToPlaceWnd(cursor, PAL_NONE, HT_VEHICLE, this);
 					this->active_button_id = pe.index;
 				}
@@ -642,7 +642,7 @@ public:
 		switch (widget) {
 			case WID_SB_SEL_PAGE: {
 				const StoryPage *page = this->GetSelPage();
-				return page != nullptr && !page->title.empty() ? page->title.GetDecodedString() : this->selected_generic_title;
+				return page != nullptr && !page->Record().title.empty() ? page->Record().title.GetDecodedString() : this->selected_generic_title;
 			}
 
 			case WID_SB_CAPTION:
@@ -693,14 +693,14 @@ public:
 		int y_offset = -scrollpos;
 
 		/* Date */
-		if (page->date != CalendarTime::INVALID_DATE) {
-			DrawString(0, fr.right, y_offset, GetString(STR_JUST_DATE_LONG, page->date), TC_BLACK);
+		if (page->Record().date != CalendarTime::INVALID_DATE) {
+			DrawString(0, fr.right, y_offset, GetString(STR_JUST_DATE_LONG, page->Record().date), TC_BLACK);
 		}
 		y_offset += line_height;
 
 		/* Title */
 		y_offset = DrawStringMultiLine(0, fr.right, y_offset, fr.bottom,
-			GetString(STR_STORY_BOOK_TITLE, !page->title.empty() ? page->title.GetDecodedString() : this->selected_generic_title), TC_BLACK, SA_TOP | SA_HOR_CENTER);
+			GetString(STR_STORY_BOOK_TITLE, !page->Record().title.empty() ? page->Record().title.GetDecodedString() : this->selected_generic_title), TC_BLACK, SA_TOP | SA_HOR_CENTER);
 
 		/* Page elements */
 		this->EnsureStoryPageElementLayout();
@@ -710,22 +710,22 @@ public:
 			y_offset = ce.bounds.top - scrollpos;
 			if (y_offset > fr.bottom) return;
 
-			switch (ce.pe->type) {
+			switch (ce.pe->Record().type) {
 				case SPET_TEXT:
 					DrawStringMultiLineWithClipping(ce.bounds.left, ce.bounds.right, ce.bounds.top - scrollpos, ce.bounds.bottom - scrollpos,
-						ce.pe->text.GetDecodedString(), TC_BLACK, SA_TOP | SA_LEFT);
+						ce.pe->Record().text.GetDecodedString(), TC_BLACK, SA_TOP | SA_LEFT);
 					break;
 
 				case SPET_GOAL: {
-					Goal *g = Goal::Get((GoalID) ce.pe->referenced_id);
+					Goal *g = Goal::Get((GoalID) ce.pe->Record().referenced_id);
 					DrawActionElement(y_offset, ce.bounds.right - ce.bounds.left, line_height, GetPageElementSprite(*ce.pe),
-						g == nullptr ? GetString(STR_STORY_BOOK_INVALID_GOAL_REF) : g->text.GetDecodedString());
+						g == nullptr ? GetString(STR_STORY_BOOK_INVALID_GOAL_REF) : g->Record().text.GetDecodedString());
 					break;
 				}
 
 				case SPET_LOCATION:
 					DrawActionElement(y_offset, ce.bounds.right - ce.bounds.left, line_height, GetPageElementSprite(*ce.pe),
-						ce.pe->text.GetDecodedString());
+						ce.pe->Record().text.GetDecodedString());
 					break;
 
 				case SPET_BUTTON_PUSH:
@@ -733,12 +733,12 @@ public:
 				case SPET_BUTTON_VEHICLE: {
 					const int tmargin = WidgetDimensions::scaled.bevel.top + WidgetDimensions::scaled.frametext.top;
 					const FrameFlags frame = this->active_button_id == ce.pe->index ? FrameFlag::Lowered : FrameFlags{};
-					const Colours bgcolour = StoryPageButtonData{ ce.pe->referenced_id }.GetColour();
+					const Colours bgcolour = StoryPageButtonData{ ce.pe->Record().referenced_id }.GetColour();
 
 					DrawFrameRect(ce.bounds.left, ce.bounds.top - scrollpos, ce.bounds.right, ce.bounds.bottom - scrollpos - 1, bgcolour, frame);
 
 					DrawString(ce.bounds.left + WidgetDimensions::scaled.bevel.left, ce.bounds.right - WidgetDimensions::scaled.bevel.right, ce.bounds.top + tmargin - scrollpos,
-						ce.pe->text.GetDecodedString(), TC_WHITE, SA_CENTER);
+						ce.pe->Record().text.GetDecodedString(), TC_WHITE, SA_CENTER);
 					break;
 				}
 
@@ -761,7 +761,7 @@ public:
 				/* Get max title width. */
 				for (size_t i = 0; i < this->story_pages.size(); i++) {
 					const StoryPage *s = this->story_pages[i];
-					Dimension title_d = GetStringBoundingBox(s->title.empty() ? this->selected_generic_title : s->title.GetDecodedString());
+					Dimension title_d = GetStringBoundingBox(s->Record().title.empty() ? this->selected_generic_title : s->Record().title.GetDecodedString());
 
 					if (title_d.width > d.width) {
 						d.width = title_d.width;
@@ -891,7 +891,7 @@ public:
 	void OnPlaceObject([[maybe_unused]] Point pt, TileIndex tile) override
 	{
 		const StoryPageElement *const pe = StoryPageElement::GetIfValid(this->active_button_id);
-		if (pe == nullptr || pe->type != SPET_BUTTON_TILE) {
+		if (pe == nullptr || pe->Record().type != SPET_BUTTON_TILE) {
 			ResetObjectToPlace();
 			this->active_button_id = StoryPageElementID::Invalid();
 			this->SetWidgetDirty(WID_SB_PAGE_PANEL);
@@ -905,7 +905,7 @@ public:
 	bool OnVehicleSelect(const Vehicle *v) override
 	{
 		const StoryPageElement *const pe = StoryPageElement::GetIfValid(this->active_button_id);
-		if (pe == nullptr || pe->type != SPET_BUTTON_VEHICLE) {
+		if (pe == nullptr || pe->Record().type != SPET_BUTTON_VEHICLE) {
 			ResetObjectToPlace();
 			this->active_button_id = StoryPageElementID::Invalid();
 			this->SetWidgetDirty(WID_SB_PAGE_PANEL);
@@ -913,7 +913,7 @@ public:
 		}
 
 		/* Check that the vehicle matches the requested type */
-		StoryPageButtonData data{ pe->referenced_id };
+		StoryPageButtonData data{ pe->Record().referenced_id };
 		VehicleType wanted_vehtype = data.GetVehicleType();
 		if (wanted_vehtype != VEH_INVALID && wanted_vehtype != v->GetType()) return false;
 

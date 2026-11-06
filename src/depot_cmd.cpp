@@ -30,7 +30,7 @@
 
 #include "safeguards.h"
 
-static_assert(MAX_LENGTH_DEPOT_NAME_CHARS == 32);
+static_assert(MAX_LENGTH_DEPOT_NAME_CHARS == 32 && VLT_END == 5);
 static_assert(WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST == 42 && WC_SHIPS_LIST == 43 && WC_AIRCRAFT_LIST == 44 && WC_VEHICLE_DEPOT == 48);
 
 const OpenTTDDepotServices &GetRustDepotServices() noexcept

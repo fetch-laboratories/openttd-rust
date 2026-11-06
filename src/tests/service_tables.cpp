@@ -8,6 +8,9 @@
 #include "../company_type.h"
 #include "../depot_base.h"
 #include "../signs_base.h"
+#include "../goal_base.h"
+#include "../story_base.h"
+#include "../league_base.h"
 #include "../newgrf_text_type.h"
 #include "abi-visit-OpenTTDRandomServices.hpp"
 #include "../settings_type.h"
@@ -115,4 +118,12 @@ TEST_CASE("Rust ABI - canonical depot and sign records")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-depot_type.inc"
 #include "abi-layout-signs_type.inc"
+}
+
+TEST_CASE("Rust ABI - canonical objective records")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-goal_type.inc"
+#include "abi-layout-story_type.inc"
+#include "abi-layout-league_type.inc"
 }

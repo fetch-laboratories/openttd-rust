@@ -21,7 +21,7 @@ struct OpenTTDSignServices {
 };
 const OpenTTDSignServices &GetRustSignServices() noexcept;
 extern "C" {
-void openttd_rust_sign_destroy(const OpenTTDSignServices *, const OpenTTDSignRecord *);
+void OPENTTD_RUST_CALL openttd_rust_sign_destroy(const OpenTTDSignServices *, const OpenTTDSignRecord *);
 uint16_t openttd_rust_sign_place(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint32_t, OpenTTDByteSpan);
 void openttd_rust_sign_rename(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 void openttd_rust_sign_move(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);
