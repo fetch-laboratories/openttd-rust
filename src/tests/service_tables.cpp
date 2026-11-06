@@ -6,6 +6,8 @@
 #include "../rust/services_ffi.h"
 #include "../rust/service_table_check.hpp"
 #include "../company_type.h"
+#include "../depot_base.h"
+#include "../signs_base.h"
 #include "../newgrf_text_type.h"
 #include "abi-visit-OpenTTDRandomServices.hpp"
 #include "../settings_type.h"
@@ -106,4 +108,11 @@ TEST_CASE("Rust ABI - setting callback records")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-settings.inc"
+}
+
+TEST_CASE("Rust ABI - canonical depot and sign records")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-depot_type.inc"
+#include "abi-layout-signs_type.inc"
 }

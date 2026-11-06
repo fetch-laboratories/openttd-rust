@@ -394,8 +394,9 @@ impl Game<'_> {
             let record = unsafe { pool.record(crate::depot_type::DepotID(index as u16)) };
             let tile = unsafe { (*record).xy.0 };
             index = unsafe { pool.next_index(index + 1, 64000) };
-            let world = crate::map_func::World::new(self.services);
-            if !world.ship_depot(tile) || u32::from(world.owner(tile)) != observed_owner {
+            if !(self.leaves.is_depot)(tile)
+                || u32::from((self.services.tile_owner)(tile)) != observed_owner
+            {
                 continue;
             }
             let distance = (self.leaves.dist_square)(tile, observed_tile);

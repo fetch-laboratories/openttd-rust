@@ -20,6 +20,7 @@
 
 /** All our depots tucked away in a pool. */
 DepotPool _depot_pool("Depot");
+[[maybe_unused]] static const int _depot_pool_binding = (openttd_rust_depot_pool_bind(_depot_pool.owner), 0);
 
 
 /**

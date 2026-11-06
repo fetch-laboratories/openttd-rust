@@ -1496,7 +1496,7 @@ impl<'a> Ctx<'a> {
                 cost.error(self.r.strings.demolish_bridge);
                 return;
             }
-            if !(self.r.depot_available)() {
+            if !unsafe { crate::depot_type::can_allocate() } {
                 cost.error(INVALID_STRING_ID);
                 return;
             }

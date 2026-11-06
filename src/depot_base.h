@@ -15,15 +15,13 @@
 #include "rust/owned_bytes.h"
 #include "timer/timer_game_calendar.h"
 
-#include "rust/abi-record-depot_type.h"
+#include "abi-record-depot_type.h"
 extern "C" {
-void openttd_rust_depot_pool_bind(RustPoolCore *);
-OpenTTDDepotRecord *openttd_rust_depot_record_new(Depot *, DepotID);
+RustPoolCore *openttd_rust_depot_pool_bind(RustPoolCore *);
+OpenTTDDepotRecord *openttd_rust_depot_record_new(Depot *, uint16_t);
 void openttd_rust_depot_record_delete(OpenTTDDepotRecord *);
 }
-struct DepotPool : RustPool<Depot, DepotID, 64> {
-	explicit DepotPool(std::string_view name) : RustPool(name) { openttd_rust_depot_pool_bind(this->owner); }
-};
+using DepotPool = RustPool<Depot, DepotID, 64>;
 extern DepotPool _depot_pool;
 
 struct Depot : DepotPool::PoolItem<&_depot_pool> {
@@ -34,7 +32,7 @@ struct Depot : DepotPool::PoolItem<&_depot_pool> {
 			openttd_rust_depot_record_delete(record);
 		}
 	};
-	std::unique_ptr<OpenTTDDepotRecord, RecordDeleter> record{openttd_rust_depot_record_new(this, this->index)};
+	std::unique_ptr<OpenTTDDepotRecord, RecordDeleter> record{openttd_rust_depot_record_new(this, this->index.base())};
 	OpenTTDDepotRecord &Record() { return *this->record; }
 	const OpenTTDDepotRecord &Record() const { return *this->record; }
 	std::string_view Name() const { return RustBytesView(this->record->name); }

@@ -23,6 +23,7 @@
 
 /** Initialize the sign-pool */
 SignPool _sign_pool("Sign");
+[[maybe_unused]] static const int _sign_pool_binding = (openttd_rust_sign_pool_bind(_sign_pool.owner), 0);
 
 
 /** Destroy the sign */

@@ -95,7 +95,6 @@ static void ShipBoundary()
 		.order_max_speed = ShipProbeUnused<uint32_t, uint32_t>,
 		.state_owner = ShipProbeUnused<OpenTTDShipState *, uint32_t>,
 		.patch = ShipProbeUnused<OpenTTDWaterPatch, uint32_t>, .neighbours = ShipProbeUnused<size_t, OpenTTDWaterPatch, OpenTTDWaterPatch *>,
-		.next_depot = ShipProbeUnused<bool, uint32_t, OpenTTDShipDepot *>,
 		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};
@@ -142,16 +141,34 @@ static void ShipBoundary()
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
 	openttd_rust_occupancy_update(&ship_vehicle, shell, true);
-	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
+
 	ship_probe.record.owner = 3;
-	leaves.next_depot = [](uint32_t first, OpenTTDShipDepot *out) noexcept {
-		if (first != 0) return false;
-		*out = {0x1234, 0x80000017, 3, 1};
-		return true;
+	const RustPoolConfig config{.max_size = 64000, .growth_step = 64, .cache = false, .item_size = 1, .assertions = false};
+	const RustPoolNativeOps ops{
+		.context = nullptr,
+		.allocate = [](void *, size_t size) noexcept -> void * { return std::allocator<uint8_t>{}.allocate(size); },
+		.deallocate = [](void *, void *shell, size_t size) noexcept { std::allocator<uint8_t>{}.deallocate(static_cast<uint8_t *>(shell), size); },
+		.set_index = [](void *, void *, size_t) noexcept {},
+		.destroy = [](void *, void *) noexcept { CHECK(false); },
+		.post_destructor = [](void *, size_t) noexcept {},
+		.assertion = [](void *, bool condition) noexcept { CHECK(condition); },
 	};
+	std::unique_ptr<RustPoolCore, decltype(&openttd_rust_pool_drop)> pool(openttd_rust_pool_new(&config, &ops), openttd_rust_pool_drop);
+	auto *previous_pool = openttd_rust_depot_pool_bind(pool.get());
+	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
+	void *depot_shell = openttd_rust_pool_allocate_at(pool.get(), 1, 0x1234);
+	std::unique_ptr<OpenTTDDepotRecord, decltype(&openttd_rust_depot_record_delete)> depot_record(openttd_rust_depot_record_new(static_cast<Depot *>(depot_shell), 0x1234), openttd_rust_depot_record_delete);
+	depot_record->xy = TileIndex(0x80000017);
+	openttd_rust_pool_bind_record(pool.get(), 0x1234, depot_record.get());
+	leaves.is_depot = [](uint32_t tile) noexcept { CHECK(tile == 0x80000017); return true; };
+	ship_probe.services.tile_owner = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 0x80000017); return 3; };
 	leaves.dist_square = [](uint32_t, uint32_t) noexcept { return uint32_t{49}; };
 	auto depot = openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services);
 	CHECK(depot.valid && depot.tile == 0x80000017 && depot.id == 0x1234);
+	openttd_rust_pool_retire_record(pool.get(), 0x1234);
+	depot_record.reset();
+	openttd_rust_pool_free(pool.get(), 1, 0x1234);
+	openttd_rust_depot_pool_bind(previous_pool);
 	state.reset(openttd_rust_ship_state_new());
 	CHECK(openttd_rust_ship_get_rotation_x(state.get()) == 0 && openttd_rust_ship_get_rotation(state.get()) == 255);
 	std::printf("ship scalar widths, native transient narrowing, direct order and nested owner mutation passed\n");

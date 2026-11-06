@@ -240,7 +240,7 @@ impl World<'_> {
             self.error(out, self.a.strings.unsuitable);
             return;
         }
-        if !(self.rail().depot_available)() {
+        if !unsafe { crate::depot_type::can_allocate() } {
             self.error(out, INVALID_STRING_ID);
             return;
         }
@@ -277,7 +277,7 @@ impl World<'_> {
             self.check_docking(tile2);
             (self.s.mark_dirty)(tile);
             (self.s.mark_dirty)(tile2);
-            unsafe { crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(id)) };
+            unsafe { crate::depot_cmd::default_name(self.s, crate::depot_type::DepotID(id)) };
             w::hit(w::WATER_CMD_DEPOT);
         }
     }

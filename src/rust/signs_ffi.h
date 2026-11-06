@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file signs_ffi.h Sign command owner boundary; records and names stay in the native pool. */
+/** @file signs_ffi.h Sign command boundary over canonical Rust records and native viewport operations. */
 #ifndef RUST_SIGNS_FFI_H
 #define RUST_SIGNS_FFI_H
 #include "service_defaults.hpp"

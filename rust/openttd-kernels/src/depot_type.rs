@@ -36,8 +36,8 @@ impl PoolId for DepotID {
 static POOL: GameState<*mut PoolCore> = GameState::new(null_mut());
 /// Bind the actual native pool at startup, before allocation or command dispatch.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_depot_pool_bind(pool: *mut PoolCore) {
-    unsafe { *POOL.get() = pool };
+pub unsafe extern "C" fn openttd_rust_depot_pool_bind(pool: *mut PoolCore) -> *mut PoolCore {
+    unsafe { std::ptr::replace(POOL.get(), pool) }
 }
 pub(crate) unsafe fn pool() -> TypedPool<DepotID, DepotRecord, Depot> {
     unsafe { TypedPool::from_descriptor(PoolCore::descriptor(*POOL.get())) }
@@ -64,4 +64,8 @@ pub extern "C" fn openttd_rust_depot_record_new(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_depot_record_delete(record: *mut DepotRecord) {
     unsafe { drop(Box::from_raw(record)) };
+}
+
+pub(crate) unsafe fn can_allocate() -> bool {
+    unsafe { PoolCore::can_allocate(*POOL.get(), 1) }
 }

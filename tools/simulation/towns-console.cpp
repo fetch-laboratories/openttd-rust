@@ -7,6 +7,7 @@
 
 /** @file towns-console.cpp Identical founding/house commands and otherwise unreachable name/cancellation inputs. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #endif
@@ -568,7 +569,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	Waypoint *waypoint = new Waypoint(target->xy); waypoint->town = target; waypoint->owner = company->index;
 	Cost("delete-waypoint-veto", CmdDeleteTown({}, removed)); delete waypoint;
 	if (!Depot::CanAllocateItem()) std::abort();
-	Depot *depot = new Depot(target->xy); depot->town = target;
+	Depot *depot = new Depot(target->xy); FIXTURE_FIELD(depot, town) = target;
 	Cost("delete-depot-veto", CmdDeleteTown({}, removed)); delete depot;
 	bool industry_built = false;
 	for (TileIndex at{}; at < Map::Size(); ++at) {

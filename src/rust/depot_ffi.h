@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file depot_ffi.h Depot naming owner boundary; records and names stay in the native pool. */
+/** @file depot_ffi.h Depot naming boundary over canonical Rust records. */
 #ifndef RUST_DEPOT_FFI_H
 #define RUST_DEPOT_FFI_H
 #include "service_defaults.hpp"
@@ -9,7 +9,7 @@ struct OpenTTDSharedServices;
 struct OpenTTDCommandServices;
 struct OpenTTDRailCommandServices;
 struct Depot;
-/** Name assignment and window refresh are whole native operations. */
+/** Native window refresh follows canonical Rust name mutation. */
 struct OpenTTDDepotServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandServices *command;

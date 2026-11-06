@@ -16,15 +16,13 @@
 #include "rust/owned_bytes.h"
 #include "company_type.h"
 
-#include "rust/abi-record-signs_type.h"
+#include "abi-record-signs_type.h"
 extern "C" {
 void openttd_rust_sign_pool_bind(RustPoolCore *);
-OpenTTDSignRecord *openttd_rust_sign_record_new(Sign *, SignID);
+OpenTTDSignRecord *openttd_rust_sign_record_new(Sign *, uint16_t);
 void openttd_rust_sign_record_delete(OpenTTDSignRecord *);
 }
-struct SignPool : RustPool<Sign, SignID, 16> {
-	explicit SignPool(std::string_view name) : RustPool(name) { openttd_rust_sign_pool_bind(this->owner); }
-};
+using SignPool = RustPool<Sign, SignID, 16>;
 extern SignPool _sign_pool;
 
 struct Sign : SignPool::PoolItem<&_sign_pool> {
@@ -35,7 +33,7 @@ struct Sign : SignPool::PoolItem<&_sign_pool> {
 			openttd_rust_sign_record_delete(record);
 		}
 	};
-	std::unique_ptr<OpenTTDSignRecord, RecordDeleter> record{openttd_rust_sign_record_new(this, this->index)};
+	std::unique_ptr<OpenTTDSignRecord, RecordDeleter> record{openttd_rust_sign_record_new(this, this->index.base())};
 	TrackedViewportSign sign{};
 	OpenTTDSignRecord &Record() { return *this->record; }
 	const OpenTTDSignRecord &Record() const { return *this->record; }

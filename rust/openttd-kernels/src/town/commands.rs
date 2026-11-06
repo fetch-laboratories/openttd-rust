@@ -415,10 +415,10 @@ impl<'a> Commands<'a> {
                 }
             }
         }
-        for next in [self.s.next_waypoint] {
+        {
             from = 0;
             loop {
-                let item = next(from);
+                let item = (self.s.next_waypoint)(from);
                 if item.next == u32::MAX {
                     break;
                 }
@@ -434,7 +434,7 @@ impl<'a> Commands<'a> {
             let mut index = pool.next_index(0, 64000);
             while index < 64000 {
                 let record = pool.record(crate::depot_type::DepotID(index as u16));
-                if (*record).town == t.shell.cast_mut() {
+                if (*record).town == t.shell {
                     self.error(out);
                     return;
                 }

@@ -1227,7 +1227,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.crossing_removed = [](uint32_t tile, uint8_t axis) noexcept { UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex{tile}, static_cast<Axis>(axis)); },
 		.make_crossing = RailMakeCrossing,
 		.make_road = RailMakeRoad,
-		.depot_available = []() noexcept { return Depot::CanAllocateItem(); },
 		.new_depot = [](uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); },
 		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,

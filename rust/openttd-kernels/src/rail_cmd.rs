@@ -207,8 +207,6 @@ pub struct RailCommandServices {
     pub make_crossing: extern "C" fn(u32, u8, u8, u8, u8, u8, u8, u8, u16),
     /// `MakeRoadNormal(tile, bits, road_rt, tram_rt, town, road_owner, tram_owner)`.
     pub make_road: extern "C" fn(u32, CrossingRoad),
-    /// `Depot::CanAllocateItem`.
-    pub depot_available: extern "C" fn() -> bool,
     /// `new Depot(tile)`, returning its ID.
     pub new_depot: extern "C" fn(u32) -> u16,
     /// `delete Depot::GetByTile(tile)`.
@@ -1143,7 +1141,7 @@ impl<'a> Ctx<'a> {
             if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 return cost.error(self.s.strings.demolish_bridge);
             }
-            if !(self.s.depot_available)() {
+            if !unsafe { crate::depot_type::can_allocate() } {
                 return cost.error(INVALID_STRING_ID);
             }
         }
@@ -2594,7 +2592,6 @@ crate::abi::layouts! {
         crossing_removed,
         make_crossing,
         make_road,
-        depot_available,
         new_depot,
         delete_depot,
         depot_windows,

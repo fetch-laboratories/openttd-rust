@@ -8,7 +8,9 @@
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
 #include "tests/fixture_map.hpp"
+#include "depot_base.h"
 #include "ground_vehicle.hpp"
+#include "signs_base.h"
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
 #include "rust/auth_ffi.h"
@@ -108,6 +110,8 @@ static void Layouts()
 #include "abi-layout-ground.inc"
 #include "abi-layout-train_state.inc"
 #include "abi-layout-content.inc"
+#include "abi-layout-depot_type.inc"
+#include "abi-layout-signs_type.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);

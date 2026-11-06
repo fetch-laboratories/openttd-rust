@@ -624,25 +624,25 @@ impl Game {
     }
     fn depot_owner(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(crate::newgrf_airport::runtime())
+            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
                 .owner(self.depot_tile(id) as u32),
         )
     }
     fn rail_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(crate::newgrf_airport::runtime())
+            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
                 .rail_depot(self.depot_tile(id) as u32),
         )
     }
     fn road_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(crate::newgrf_airport::runtime())
+            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
                 .road_depot(self.depot_tile(id) as u32),
         )
     }
     fn ship_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(crate::newgrf_airport::runtime())
+            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
                 .ship_depot(self.depot_tile(id) as u32),
         )
     }
