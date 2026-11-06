@@ -215,7 +215,15 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage, started by this commit. Code main is integration 102, `a0337694c4`, tree `4c81b596`. No ownership PR is open. Root restarts with `/start-development` on the [cleanup work order](#cleanup-work-order); first slots: #733, #737 batch C, #736 R0 and #734 F.
+Cleanup stage in progress. Code main remains integration 102, `a0337694c4`, tree `4c81b596`. Root resumed the [cleanup work order](#cleanup-work-order); the four implementation slots are assigned below. All 42 open issues are placed, excluded return conditions remain unmet, and startup housekeeping reclaimed 872.7 MiB of eligible output. Integration and rollback procedures now live in the [root workflow](root-workflow.md).
+
+| Work | Owner | Next action |
+| --- | --- | --- |
+| #733 checks and refactor proof | `/root/cleanup_733_checks` | Finish the first cleanup draft, review and integrate before later cleanup PRs. |
+| #737 C cargo records | `/root/cleanup_737_cargo` | Replace packet copy/set and map-axis routes; expose canonical list access for V. |
+| #736 R0 evidence registration | `/root/cleanup_736_registration` | Establish replacement registration while preserving nonempty checks and existing observations. |
+| #734 F shared definitions | `/root/cleanup_734_foundation` | Freeze header types and compatibility re-exports; use #733's proof before integration. |
+| #738 rule corpus | Root | First docs checkpoint separates root procedures and removes stale or duplicate guidance. Finish remaining inventory rows and #733-dependent check documentation. |
 
 Retained state from root's wind-down ([checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)), for housekeeping:
 

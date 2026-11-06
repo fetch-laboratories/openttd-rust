@@ -31,9 +31,10 @@ This file holds what every agent needs. The routing table points to the rest (us
 | Writing port standards, or when a check or work order cites them | [Porting](docs/porting.md) |
 | Touching an already-ported component | [Components](docs/components/README.md) |
 | Designing a storage port or map access | [World state](docs/design/world-state.md), [storage ports](docs/porting.md#storage-ports) |
-| Opening issues or PRs, committing, reviewing, integrating or cleaning up | [Workflow](docs/workflow.md) |
+| Opening issues or PRs, committing or reviewing | [Workflow](docs/workflow.md) |
+| Integrating PRs or reclaiming worktrees and output as root | [Root workflow](docs/root-workflow.md) |
 | Spawning or briefing agents, or running as root | [Team](docs/team.md) |
 | Checking speed projections or running speed passes | [Speed](docs/speed.md) |
 | Running a deep check | [Deep checks](docs/deep-checks.md) |
-| Rolling back a merge or winding down | [Automatic rollback and wind-down](docs/workflow.md#automatic-rollback-and-wind-down) |
+| Rolling back a merge or winding down | [Automatic rollback and wind-down](docs/root-workflow.md#automatic-rollback-and-wind-down) |
 | Starting root, steering, navigating or writing a wind-down message | User-invoked skills: [start-development](docs/skills/start-development/SKILL.md), [steer](docs/skills/steer/SKILL.md), [navigate](docs/skills/navigate/SKILL.md), [wind-down](docs/skills/wind-down/SKILL.md) |
