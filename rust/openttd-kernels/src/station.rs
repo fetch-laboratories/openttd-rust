@@ -27,6 +27,7 @@ use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
 use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
 use crate::industry_type::IndustryID;
+use crate::industrytype::NativeVec;
 use crate::map_func::Map;
 use crate::services::Services;
 use crate::station_service::Service;
@@ -202,45 +203,57 @@ fn scan_for_station_tiles(
         .any(|tile| (c.s.tile_type)(tile) == MP_STATION && c.station_index(tile) == id)
 }
 
-/// One `StationList` member; the set orders by station ID.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct StationListEntry {
-    /// Live member station.
-    pub station: *mut BaseStation,
-    /// Its pool index, the `StationCompare` key.
-    pub id: StationID,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// One `StationList` member; the set orders by station ID.
+    #[derive(Clone, Copy)]
+    "OpenTTDStationListEntry" ["station_service"] => pub struct StationListEntry {
+        /// Live member station.
+        pub station: *mut BaseStation,
+        /// Its pool index, the `StationCompare` key.
+        pub id: StationID,
+    }
+    /// One canonical ordered set, owned by its existing town, industry or finder.
+    #[derive(Default)]
+    "OpenTTDStationList" ["station_service"] => pub struct StationList {
+        /// Native borrows expire on mutation; this is the only storage metadata.
+        pub entries: NativeVec<StationListEntry> => "RustVector<OpenTTDStationListEntry>",
+    }
 }
-/// `StationList`: a station set ordered by `StationCompare`.
-#[derive(Default)]
-pub struct StationList(Vec<StationListEntry>);
 impl StationList {
     /// `insert`, ignoring a station already present.
     pub fn insert(&mut self, station: *mut BaseStation, id: StationID) {
-        if let Err(at) = self.0.binary_search_by_key(&id, |e| e.id) {
-            self.0.insert(at, StationListEntry { station, id });
+        if let Err(at) = self.entries().binary_search_by_key(&id, |e| e.id) {
+            let mut entries = std::mem::take(&mut self.entries).into_vec();
+            entries.insert(at, StationListEntry { station, id });
+            self.entries = NativeVec::from_vec(entries);
         }
     }
     /// `erase` by key.
     pub fn erase(&mut self, id: StationID) {
-        if let Ok(at) = self.0.binary_search_by_key(&id, |e| e.id) {
-            self.0.remove(at);
+        if let Ok(at) = self.entries().binary_search_by_key(&id, |e| e.id) {
+            let mut entries = std::mem::take(&mut self.entries).into_vec();
+            entries.remove(at);
+            self.entries = NativeVec::from_vec(entries);
         }
     }
     /// `clear`.
     pub fn clear(&mut self) {
-        self.0.clear();
+        let mut entries = std::mem::take(&mut self.entries).into_vec();
+        entries.clear();
+        self.entries = NativeVec::from_vec(entries);
     }
     /// `begin()` for `previous == None`, else `upper_bound(previous)`.
     #[must_use]
     pub fn next_after(&self, previous: Option<StationID>) -> Option<StationListEntry> {
-        let at = previous.map_or(0, |id| self.0.partition_point(|e| e.id <= id));
-        self.0.get(at).copied()
+        let entries = self.entries();
+        let at = previous.map_or(0, |id| entries.partition_point(|e| e.id <= id));
+        entries.get(at).copied()
     }
     /// Ordered members.
     #[must_use]
     pub fn entries(&self) -> &[StationListEntry] {
-        &self.0
+        self.entries.as_slice()
     }
 }
 /// Walk a live list in order, re-reading it after each visit. Visits may mutate
@@ -1007,19 +1020,6 @@ pub struct ListView<T> {
     pub data: *const T,
     pub size: usize,
 }
-/// Borrowed view of a live `StationList`; valid until the list next changes.
-/// # Safety
-/// `list` is live.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_list_view(
-    list: *const StationList,
-) -> ListView<StationListEntry> {
-    let entries = unsafe { (*list).entries() };
-    ListView {
-        data: entries.as_ptr(),
-        size: entries.len(),
-    }
-}
 /// Borrowed view of a live `industries_near`; valid until the list next changes.
 /// # Safety
 /// `state` is a live station owner.
@@ -1167,7 +1167,6 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_around(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationRect" ["station_service"] => StationRect { left, top, right, bottom };
-    "OpenTTDStationListEntry" ["station_service"] => StationListEntry { station, id };
     "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
     "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
@@ -1203,6 +1202,41 @@ mod tests {
         }
         assert_eq!(seen, [3, 7, 9]);
         assert!(list.entries().is_empty());
+    }
+
+    #[test]
+    fn station_list_reacquires_after_membership_changes() {
+        let mut list = StationList::default();
+        let p = |n: usize| std::ptr::without_provenance_mut::<BaseStation>(n);
+        for id in [3, 7, 9] {
+            list.insert(p(usize::from(id)), StationID(id));
+        }
+        let mut seen = Vec::new();
+        let raw = &raw mut list;
+        // SAFETY: The list stays live; each copied row's borrow ends before mutation.
+        unsafe {
+            for_each_station(raw, |entry| {
+                seen.push(entry.id.0);
+                if entry.id == StationID(3) {
+                    (*raw).erase(entry.id);
+                    (*raw).insert(p(33), entry.id);
+                    (*raw).insert(p(1), StationID(1));
+                    (*raw).insert(p(5), StationID(5));
+                    (*raw).erase(StationID(9));
+                } else if entry.id == StationID(7) {
+                    (*raw).insert(p(11), StationID(11));
+                }
+            });
+        }
+        // Reuse and insertion behind the ID cursor are skipped; later keys are live.
+        assert_eq!(seen, [3, 5, 7, 11]);
+        assert_eq!(
+            list.entries()
+                .iter()
+                .map(|entry| entry.id.0)
+                .collect::<Vec<_>>(),
+            [1, 3, 5, 7, 11]
+        );
     }
 
     #[test]
