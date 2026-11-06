@@ -140,6 +140,10 @@ pub unsafe extern "C" fn openttd_rust_engine_destroy(state: *mut Lifecycle) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_set_name(state: *mut Lifecycle, text: ByteSpan) {
+    unsafe { set_name(state, text) };
+}
+
+unsafe fn set_name(state: *mut Lifecycle, text: ByteSpan) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     // SAFETY: Owner is live and serialized; source may alias this owner's name,
     // so copy before replacing. Empty spans may have a null pointer.
@@ -1134,7 +1138,7 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
     if execute {
         crate::witness::hit(crate::witness::ENGINE_RENAME);
         unsafe {
-            openttd_rust_engine_set_name(e.state, name);
+            set_name(e.state, name);
             call!(&*s.shared, screen_dirty);
         }
     }
