@@ -376,8 +376,6 @@ pub struct CatchmentServices {
     /// `MoveGoodsToStation`'s vehicle visit services.
     pub visits: *const crate::vehicle::visits::Services,
     pub station_count: extern "C" fn() -> usize,
-    pub station_if_valid: extern "C" fn(StationID) -> *mut BaseStation,
-    pub next_station: extern "C" fn(u32) -> *mut BaseStation,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
     pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
@@ -754,10 +752,10 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
         unsafe { (*c.industry_stations(industry)).clear() };
         industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry).0) + 1);
     }
-    let mut st = (c.c.next_station)(0);
+    let mut st = crate::station_record::next_station_shell(c.s, 0);
     while !st.is_null() {
         recompute_catchment(st, true, c);
-        st = (c.c.next_station)(u32::from((c.c.id)(st).0) + 1);
+        st = crate::station_record::next_station_shell(c.s, u32::from((c.c.id)(st).0) + 1);
     }
 }
 
@@ -788,7 +786,7 @@ pub(crate) fn for_all_stations_around_tiles(
         flat_insert(&mut seen, c.station_index(tile));
     }
     for id in seen {
-        let st = (c.c.station_if_valid)(id);
+        let st = crate::station_record::station_get_if_valid(c.s, id.0);
         if st.is_null() {
             continue; // Waypoint.
         }
@@ -1170,8 +1168,6 @@ crate::abi::layouts! {
         station,
         visits,
         station_count,
-        station_if_valid,
-        next_station,
         id,
         radius_facilities,
         modified_catchment,

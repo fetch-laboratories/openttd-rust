@@ -200,7 +200,6 @@ pub struct CommandServicesTable {
     pub rail_layout: extern "C" fn(*const RailSpec, u16) -> crate::services::ByteSpan,
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
-    pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
     pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
@@ -235,9 +234,6 @@ pub struct CommandServicesTable {
     pub new_stop: extern "C" fn(u32) -> *mut Stop,
     pub set_stop_head: extern "C" fn(*mut BaseStation, bool, *mut Stop),
     pub set_stop_next: extern "C" fn(*mut Stop, *mut Stop),
-    /// `truck_station` or `bus_station`, in place.
-    pub stop_area: extern "C" fn(*mut BaseStation, bool) -> *mut TileArea,
-    pub clear_stop_area: extern "C" fn(*mut BaseStation, bool),
     pub make_drive_stop: extern "C" fn(u32, u8, u8, u8, u16, u8, u8, u8, u8),
     pub make_bay_stop: extern "C" fn(u32, u8, u16, u8, u8, u8, u8),
     pub delete_stop: extern "C" fn(*mut Stop),
@@ -246,7 +242,6 @@ pub struct CommandServicesTable {
 
     pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
-    pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, TileArea),
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
     pub aircraft: *const crate::aircraft::Leaves,
@@ -263,8 +258,6 @@ pub struct CommandServicesTable {
     pub airport_airplanes: extern "C" fn(*const std::ffi::c_void) -> bool,
     pub set_airport_details: extern "C" fn(*mut BaseStation, u8, u8, u8),
     pub make_airport: extern "C" fn(u32, u8, u16, u8, u8),
-    /// `airport`, in place.
-    pub airport_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
     pub airport_animated: extern "C" fn(*const crate::animated_tile::AirportSpec) -> bool,
 
     pub airport_infrastructure: extern "C" fn(u8, u32),
@@ -282,12 +275,6 @@ pub struct CommandServicesTable {
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
     pub set_docking: extern "C" fn(u32, bool),
-    pub set_ship_area: extern "C" fn(*mut BaseStation, TileArea),
-    /// `ship_station`, in place.
-    pub ship_station_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
-    pub docking_clear: extern "C" fn(*mut BaseStation),
-    /// `docking_station`, in place.
-    pub docking_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
     pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
     pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
@@ -310,8 +297,6 @@ pub struct CommandServicesTable {
     pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
     pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub road_ground: *const crate::ground::RoadServices,
-    /// `road_waypoint_area`, in place.
-    pub road_waypoint_tile_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
     pub set_facility_bits: extern "C" fn(*mut BaseStation, u8),
     pub set_location: extern "C" fn(*mut BaseStation, u32),
     pub set_rail_station_reservation: extern "C" fn(u32, bool),
@@ -1546,7 +1531,7 @@ impl Ctx<'_> {
         if flags & 1 == 0 {
             return;
         }
-        (self.s.set_train_area)(st, area);
+        crate::station_record::set_area(crate::station_record::train_area(st), area);
         crate::station_lifecycle::add_facility(st, 0, area.tile, unsafe { &*self.s.lifecycle });
         self.before_add_rect(
             ret,
@@ -1868,7 +1853,7 @@ impl Ctx<'_> {
         }
         for &st in &affected {
             let area = self.shrink(st, self.s.rail_area(st), 0);
-            (self.s.set_train_area)(st, area);
+            crate::station_record::set_area(crate::station_record::train_area(st), area);
             self.sign_coord(st);
             if area.tile == u32::MAX {
                 (self.s.reset_facilities)(st, 1);
@@ -2483,7 +2468,7 @@ impl Ctx<'_> {
                 }
                 (self.s.set_stop_next)(tail, stop);
             }
-            self.area_add((self.s.stop_area)(st, truck), tile);
+            self.area_add(crate::station_record::stop_area(st, truck), tile);
             crate::station_lifecycle::add_facility(st, if truck { 1 } else { 2 }, tile, unsafe {
                 &*self.s.lifecycle
             });
@@ -2700,8 +2685,15 @@ impl Ctx<'_> {
             }
             if waypoint {
                 if replacement < 0 {
-                    let area = self.shrink(st, Self::area((self.s.road_waypoint_tile_area)(st)), 8);
-                    (self.s.set_road_waypoint_area)(st, area);
+                    let area = self.shrink(
+                        st,
+                        Self::area(crate::station_record::road_waypoint_area(st)),
+                        8,
+                    );
+                    crate::station_record::set_area(
+                        crate::station_record::road_waypoint_area(st),
+                        area,
+                    );
                     self.sign_coord(st);
                     if area.tile == u32::MAX {
                         (self.s.reset_facilities)(st, 6);
@@ -2711,10 +2703,13 @@ impl Ctx<'_> {
                     }
                 }
             } else {
-                (self.s.clear_stop_area)(st, truck);
+                crate::station_record::clear_area(crate::station_record::stop_area(st, truck));
                 let mut next = (self.stops().head)(st, truck);
                 while !next.is_null() {
-                    self.area_add((self.s.stop_area)(st, truck), (self.stops().tile)(next));
+                    self.area_add(
+                        crate::station_record::stop_area(st, truck),
+                        (self.stops().tile)(next),
+                    );
                     next = (self.stops().next)(next);
                 }
             }
@@ -2979,7 +2974,7 @@ impl Ctx<'_> {
         &self,
         st: *mut BaseStation,
     ) -> (*const crate::services::TownHandle, u32) {
-        let area = Self::area((self.s.airport_area)(st));
+        let area = Self::area(crate::station_record::airport_area(st));
         let rotation = crate::station_record::read(st.cast(), |r| r.airport.rotation);
         let id = (self.links().graphs.station_id)(st);
         self.nearest_town(
@@ -3162,7 +3157,7 @@ impl Ctx<'_> {
                 t.tile,
                 ((self.shared.random)(self.shared.context) & 15) as u8,
             );
-            self.area_add((self.s.airport_area)(st), t.tile);
+            self.area_add(crate::station_record::airport_area(st), t.tile);
             if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(t.gfx, unsafe {
                 &*self.s.airport_runtime
             })) {
@@ -3233,7 +3228,7 @@ impl Ctx<'_> {
                 (self.s.town_view_dirty)(nearest);
             }
         }
-        let area = Self::area((self.s.airport_area)(st));
+        let area = Self::area(crate::station_record::airport_area(st));
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
                 || (self.shared.station_type)(tile).0 != 1
@@ -3384,13 +3379,13 @@ impl Ctx<'_> {
             }
             if self.dock(next) && (self.shared.station_gfx)(next) >= 4 {
                 let st = self.full_station((self.shared.station_index)(next));
-                self.area_add((self.s.docking_area)(st), tile);
+                self.area_add(crate::station_record::docking_area(st), tile);
                 (self.s.set_docking)(tile, true);
             }
             if (self.shared.tile_type)(next) == MP_INDUSTRY {
                 let st = (self.s.neutral_for_tile)(next);
                 if !st.is_null() {
-                    self.area_add((self.s.docking_area)(st), tile);
+                    self.area_add(crate::station_record::docking_area(st), tile);
                     (self.s.set_docking)(tile, true);
                 }
             }
@@ -3398,16 +3393,16 @@ impl Ctx<'_> {
                 && (self.shared.station_type)(next).0 == 4
             {
                 let st = self.full_station((self.shared.station_index)(next));
-                self.area_add((self.s.docking_area)(st), tile);
+                self.area_add(crate::station_record::docking_area(st), tile);
                 (self.s.set_docking)(tile, true);
             }
         }
     }
     fn update_docking(&self, st: *mut BaseStation) {
-        (self.s.docking_clear)(st);
+        crate::station_record::clear_area(crate::station_record::docking_area(st));
         let industry = crate::station_record::read(st.cast(), |r| r.industry.cast::<Industry>());
         let area = if industry.is_null() {
-            Self::area((self.s.ship_station_area)(st))
+            Self::area(crate::station_record::ship_area(st))
         } else {
             (self.s.industry_area)(industry)
         };
@@ -3556,8 +3551,8 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if flags & 1 != 0 {
-            self.area_add((self.s.ship_station_area)(st), tile);
-            self.area_add((self.s.ship_station_area)(st), flat);
+            self.area_add(crate::station_record::ship_area(st), tile);
+            self.area_add(crate::station_record::ship_area(st), flat);
             crate::station_lifecycle::add_facility(st, 4, tile, unsafe { &*self.s.lifecycle });
             self.before_add_rect(ret, st, area, 1);
             let owner = crate::station_record::owner_company(st.cast());
@@ -3639,19 +3634,19 @@ impl Ctx<'_> {
             }
             self.after_remove_tile(st, land);
             self.after_remove_tile(st, water);
-            let area = self.shrink(st, Self::area((self.s.ship_station_area)(st)), 5);
-            (self.s.set_ship_area)(st, area);
+            let area = self.shrink(st, Self::area(crate::station_record::ship_area(st)), 5);
+            crate::station_record::set_area(crate::station_record::ship_area(st), area);
             self.update_docking(st);
             if area.tile == u32::MAX {
-                (self.s.set_ship_area)(
-                    st,
+                crate::station_record::set_area(
+                    crate::station_record::ship_area(st),
                     TileArea {
                         tile: u32::MAX,
                         w: 0,
                         h: 0,
                     },
                 );
-                (self.s.docking_clear)(st);
+                crate::station_record::clear_area(crate::station_record::docking_area(st));
                 (self.s.reset_facilities)(st, 16);
                 (self.s.orders_dirty)();
             }
@@ -3736,8 +3731,8 @@ impl Ctx<'_> {
         );
         (self.s.set_station_owner)(st, 0x10);
         (self.s.set_airport_kind_rotation)(st, 9, 0);
-        self.area_add((self.s.airport_area)(st), tile);
-        self.area_add((self.s.ship_station_area)(st), tile);
+        self.area_add(crate::station_record::airport_area(st), tile);
+        self.area_add(crate::station_record::ship_area(st), tile);
         (self.s.set_facilities)(st, 24);
         (self.s.set_build_date)(st, crate::timer_game_common::calendar_date().0);
         self.update_docking(st);
@@ -4275,7 +4270,6 @@ crate::abi::layouts! {
         rail_layout,
         rail_boolean,
         rail_callback_error,
-        set_train_area,
         rail_triggers,
         reserved,
         last_train,
@@ -4308,8 +4302,6 @@ crate::abi::layouts! {
         new_stop,
         set_stop_head,
         set_stop_next,
-        stop_area,
-        clear_stop_area,
         make_drive_stop,
         make_bay_stop,
         delete_stop,
@@ -4317,7 +4309,6 @@ crate::abi::layouts! {
         custom_road_index,
         remove_stop_tile_data,
         close_stop_inspect,
-        set_road_waypoint_area,
         road_vehicle_owner,
         order_station_location,
         aircraft,
@@ -4334,7 +4325,6 @@ crate::abi::layouts! {
         airport_airplanes,
         set_airport_details,
         make_airport,
-        airport_area,
         airport_animated,
         airport_infrastructure,
         station_view_invalidate,
@@ -4351,10 +4341,6 @@ crate::abi::layouts! {
         clear,
         restoration,
         set_docking,
-        set_ship_area,
-        ship_station_area,
-        docking_clear,
-        docking_area,
         water_infrastructure,
         make_dock,
         neutral_for_tile,
@@ -4376,7 +4362,6 @@ crate::abi::layouts! {
         new_waypoint,
         rail_axis,
         road_ground,
-        road_waypoint_tile_area,
         set_facility_bits,
         set_location,
         set_rail_station_reservation,

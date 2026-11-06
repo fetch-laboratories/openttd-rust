@@ -753,9 +753,11 @@ impl Game<'_> {
                                 // SAFETY: The shared table is immutable; `Station::Get` names a
                                 // live station whose docking area is read in place.
                                 let docking = unsafe {
-                                    let table = &*(self.services.station_commands)();
-                                    let st = (*table.station).get(station as u16);
-                                    *(table.docking_area)(st)
+                                    let st = crate::station_record::station_get(
+                                        self.services,
+                                        station as u16,
+                                    );
+                                    crate::station_record::docking_area(st).read()
                                 };
                                 if docking.contains(new_tile, self.services.map(), |ok| {
                                     crate::movement::native_assert(self.services, ok);

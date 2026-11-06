@@ -44,7 +44,10 @@ const OpenTTDSharedServices *MovementWorld()
 	movement.vehicle = &vehicle;
 	static OpenTTDStationCatchmentServices stations{};
 	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
-	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
+	world.station_pool = []() noexcept {
+		static const size_t first_unused = 0;
+		return OpenTTDStationPool{nullptr, 0, &first_unused};
+	};
 	world.movement = &movement;
 	world.map = &movement_map.statics;
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };

@@ -24,6 +24,13 @@ pub struct TileArea {
     pub h: u16,
 }
 impl TileArea {
+    /// `OrthogonalTileArea::Clear`.
+    pub(crate) fn clear(&mut self) {
+        self.tile = crate::tile_type::INVALID_TILE;
+        self.w = 0;
+        self.h = 0;
+    }
+
     /// `OrthogonalTileArea(start, end)`, spanning both corners in either order.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]

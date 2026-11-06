@@ -203,8 +203,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.station = &GetRustStationServices(),
 		.visits = &GetRustVehicleVisits(),
 		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
-		.station_if_valid = RustStationIfValid<BaseStation *>,
-		.next_station = RustNextStation<BaseStation *>,
 		.id = RustBaseStationID<BaseStation>,
 		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
 			const Station *st = Station::From(handle);

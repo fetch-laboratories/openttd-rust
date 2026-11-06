@@ -46,8 +46,6 @@ struct OpenTTDStationCatchmentServices {
 	const OpenTTDStationServices *station;
 	const OpenTTDVehicleVisits *visits;
 	size_t (*station_count)() noexcept OPENTTD_SERVICE_DEFAULT(station_count);
-	BaseStation *(*station_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_if_valid);
-	BaseStation *(*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	uint16_t (*id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	OpenTTDStationRadiusFacilities (*radius_facilities)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(radius_facilities);
 	bool (*modified_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(modified_catchment);

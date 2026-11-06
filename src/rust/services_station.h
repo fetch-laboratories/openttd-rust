@@ -108,12 +108,7 @@ inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGR
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline Station *RustStationByTile(uint32_t tile) noexcept { return Station::GetByTile(TileIndex{tile}); }
-inline OpenTTDTileArea *RustStationStopArea(BaseStation *st, bool truck) noexcept { return truck ? &st->Record().truck_station : &st->Record().bus_station; }
-inline OpenTTDTileArea *RustStationAirportArea(BaseStation *st) noexcept { return &Station::From(st)->Record().airport.area; }
-inline OpenTTDTileArea *RustStationShipArea(BaseStation *st) noexcept { return &Station::From(st)->Record().ship_station; }
-inline OpenTTDTileArea *RustStationDockingArea(BaseStation *st) noexcept { return &Station::From(st)->Record().docking_station; }
 inline bool RustWaypointSingleTile(uint16_t id) noexcept { return Waypoint::Get(StationID{id})->IsSingleTile(); }
-inline OpenTTDTileArea *RustWaypointRoadArea(BaseStation *st) noexcept { return &Waypoint::From(st)->Record().road_waypoint_area; }
 inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { return RustStation(RustStationByTile(tile)); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
@@ -130,7 +125,6 @@ inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return s
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->Record().town; }
 inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
-template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
 template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
 /** The canonical Rust service owner of a station or waypoint. */
 template <class TStation> inline OpenTTDStationRecord *RustStationServiceOwner(TStation *st) noexcept { return const_cast<OpenTTDStationRecord *>(&st->Record()); }

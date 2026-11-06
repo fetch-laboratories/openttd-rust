@@ -68,7 +68,6 @@ pub struct Services {
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
     pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u8,
-    pub airport_area: extern "C" fn(*mut Station) -> TileArea,
     pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
     pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
@@ -480,7 +479,7 @@ pub extern "C" fn openttd_rust_trigger_airport_tile_abi(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_airport_abi(st: *mut Station, trigger: u8, cargo: u8) -> u8 {
     let a = services();
-    let area = (a.airport_area)(st);
+    let area = unsafe { crate::station_record::airport_area(st.cast()).read() };
     if area.tile == INVALID_TILE {
         return u8::from(false);
     }
@@ -537,12 +536,10 @@ crate::abi::layouts! {
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
-        airport_area,
         airport_belongs,
         road_count,
         road_tile,
     };
-    "OpenTTDAnimationArea" ["probe"] => TileArea { tile, w => width, h => height };
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };

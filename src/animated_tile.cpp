@@ -52,7 +52,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_spec_triggers = RustStationAnimationTriggers,
 		.road_spec_triggers = RustRoadStopAnimationTriggers,
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
-		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { const OpenTTDTileArea &a = s->Record().airport.area; return {a.tile, a.w, a.h}; },
 		.airport_belongs = RustStationAirportMember,
 		.road_count = RustRoadStopTileDataCount,
 		.road_tile = RustRoadStopDataTile,

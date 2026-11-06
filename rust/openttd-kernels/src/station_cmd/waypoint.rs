@@ -410,7 +410,7 @@ impl Ctx<'_> {
         (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
-        (self.s.set_train_area)(wp, area);
+        crate::station_record::set_area(crate::station_record::train_area(wp), area);
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
@@ -645,7 +645,7 @@ impl Ctx<'_> {
             if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
-            self.area_add((self.s.road_waypoint_tile_area)(wp), tile);
+            self.area_add(crate::station_record::road_waypoint_area(wp), tile);
             self.before_add_tile(ret, wp, tile, ADD_TRY);
             let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(

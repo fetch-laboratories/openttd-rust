@@ -626,8 +626,7 @@ impl Search<'_> {
         }
         if let Some(station) = self.dest_station {
             let shared = unsafe { &*self.leaves.shared };
-            let catchment = unsafe { &*(shared.station_catchment)() };
-            let st = (catchment.station_if_valid)(crate::station_type::StationID(station));
+            let st = crate::station_record::station_get_if_valid(shared, station);
             if st.is_null() {
                 return self.arena[index].td;
             }
@@ -644,13 +643,10 @@ impl Search<'_> {
             if world.station_road_stop((stops.tile)(stop)) && !world.bay_stop((stops.tile)(stop))
                 || !crate::road_stop::next_for_vehicle(shared, stop, vehicle).is_null()
             {
-                let kind = if (stops.is_bus)(vehicle) {
-                    crate::station_type::STATION_BUS
-                } else {
-                    crate::station_type::STATION_TRUCK
+                // SAFETY: The selected stop rectangle belongs to this live station.
+                let a = unsafe {
+                    crate::station_record::stop_area(st, !(stops.is_bus)(vehicle)).read()
                 };
-                let commands = unsafe { &*(shared.station_commands)() };
-                let a = (commands.tile_area)(st, kind);
                 let x = (a.tile % self.input.map_x) as i32;
                 let y = (a.tile / self.input.map_x) as i32;
                 let sx = (x - 8).max(0);

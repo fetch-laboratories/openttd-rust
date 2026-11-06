@@ -266,6 +266,58 @@ pub(crate) fn get_record(
     unsafe { record_of(station_get(s, id.0)) }
 }
 
+// The two area types have the generated OpenTTDTileArea layout; TileIndex is
+// transparent over u32. Returned pointers borrow fields of the live record.
+#[inline]
+pub(crate) fn train_area(shell: *const BaseStation) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The live shell owns this record throughout the immediate access.
+    unsafe { (&raw mut (*record_of(shell)).train_station).cast() }
+}
+#[inline]
+pub(crate) fn airport_area(shell: *const BaseStation) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The live shell owns this record throughout the immediate access.
+    unsafe { (&raw mut (*record_of(shell)).airport.area).cast() }
+}
+#[inline]
+pub(crate) fn ship_area(shell: *const BaseStation) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The live shell owns this record throughout the immediate access.
+    unsafe { (&raw mut (*record_of(shell)).ship_station).cast() }
+}
+#[inline]
+pub(crate) fn docking_area(shell: *const BaseStation) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The live shell owns this record throughout the immediate access.
+    unsafe { (&raw mut (*record_of(shell)).docking_station).cast() }
+}
+#[inline]
+pub(crate) fn road_waypoint_area(shell: *const BaseStation) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The live shell owns this record throughout the immediate access.
+    unsafe { (&raw mut (*record_of(shell)).road_waypoint_area).cast() }
+}
+#[inline]
+pub(crate) fn stop_area(shell: *const BaseStation, truck: bool) -> *mut crate::tilearea::TileArea {
+    // SAFETY: The selected area is a field of the live record.
+    unsafe {
+        let record = record_of(shell);
+        if truck {
+            (&raw mut (*record).truck_station).cast()
+        } else {
+            (&raw mut (*record).bus_station).cast()
+        }
+    }
+}
+/// Store an area at the original SetTrain/Ship/RoadWaypointStation observation.
+#[inline]
+pub(crate) fn set_area(area: *mut crate::tilearea::TileArea, value: crate::tilearea::TileArea) {
+    // SAFETY: A record-area accessor supplies the live, writable destination.
+    unsafe { area.write(value) };
+}
+/// OrthogonalTileArea::Clear on the selected live record field.
+#[inline]
+pub(crate) fn clear_area(area: *mut crate::tilearea::TileArea) {
+    // SAFETY: A record-area accessor supplies the live, writable destination.
+    unsafe { (*area).clear() };
+}
+
 /// `BaseStation::GetPoolSize()`: the pool's live extent.
 pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
     // SAFETY: The live extent is a scalar of the canonical pool.
@@ -352,6 +404,15 @@ pub(crate) unsafe fn next_station(
         }
     }
     None
+}
+
+/// Resolve the first Station at or after `from`, as the native filtered iterator.
+pub(crate) fn next_station_shell(s: &crate::services::Services, from: u32) -> *mut BaseStation {
+    let mut pool = (s.station_pool)();
+    let mut cursor = from as usize;
+    // SAFETY: This cursor is confined to the immediate serialized lookup.
+    unsafe { next_station(s, &mut pool, &mut cursor) }
+        .map_or(std::ptr::null_mut(), |(shell, _)| shell)
 }
 
 /// Visit canonical records in `BaseStation::Iterate` order. A visit may mutate

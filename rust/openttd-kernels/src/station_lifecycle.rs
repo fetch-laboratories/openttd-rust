@@ -170,7 +170,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     };
     let mut from = 0;
     loop {
-        let other = (s.catchment.next_station)(from);
+        let other = crate::station_record::next_station_shell(s.shared, from);
         if other.is_null() {
             break;
         }
@@ -575,7 +575,7 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
     let mut total: i64 = 0;
     let mut from = 0;
     loop {
-        let st = (s.catchment.next_station)(from);
+        let st = crate::station_record::next_station_shell(s.shared, from);
         if st.is_null() {
             break;
         }

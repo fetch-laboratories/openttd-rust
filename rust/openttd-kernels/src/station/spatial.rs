@@ -9,8 +9,8 @@ static TREE: GameState<Kdtree<StationID>> = GameState::new(Kdtree::new());
 fn table(s: &Services) -> &CatchmentServices {
     unsafe { &*(s.station_catchment)() }
 }
-fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
-    let tile = crate::station_record::read((c.station_if_valid)(id).cast(), |r| r.xy.0);
+fn coordinate(s: &Services, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
+    let tile = crate::raw_field::read_field!(crate::station_record::get_record(s, id), xy).0;
     if dim == 0 {
         map.tile_x(tile) as u16
     } else {
@@ -20,17 +20,17 @@ fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, d
 pub(crate) fn rebuild(s: &Services) {
     let c = table(s);
     let map = s.map();
-    let mut st = (c.next_station)(0);
+    let mut st = crate::station_record::next_station_shell(s, 0);
     let ids = std::iter::from_fn(|| {
         if st.is_null() {
             return None;
         }
         let id = (c.id)(st);
-        st = (c.next_station)(u32::from(id.0) + 1);
+        st = crate::station_record::next_station_shell(s, u32::from(id.0) + 1);
         Some(id)
     });
     unsafe {
-        (*TREE.get()).build(ids, &|id, dim| coordinate(c, map, id, dim), &|keys| {
+        (*TREE.get()).build(ids, &|id, dim| coordinate(s, map, id, dim), &|keys| {
             crate::kdtree::native_split(s, keys)
         });
     }
@@ -41,16 +41,15 @@ pub(crate) fn insert(s: &Services, st: *mut BaseStation) {
     unsafe {
         (*TREE.get()).insert(
             (c.id)(st),
-            &|id, dim| coordinate(c, map, id, dim),
+            &|id, dim| coordinate(s, map, id, dim),
             &|keys| crate::kdtree::native_split(s, keys),
         );
     }
 }
 pub(crate) fn remove(s: &Services, id: StationID) {
-    let c = table(s);
     let map = s.map();
     unsafe {
-        (*TREE.get()).remove(id, &|id, dim| coordinate(c, map, id, dim), &|keys| {
+        (*TREE.get()).remove(id, &|id, dim| coordinate(s, map, id, dim), &|keys| {
             crate::kdtree::native_split(s, keys)
         });
     }
@@ -61,7 +60,6 @@ pub(crate) fn radius(
     radius: u32,
     mut visit: impl FnMut(*mut BaseStation),
 ) {
-    let c = table(s);
     let map = s.map();
     // Native unsigned arithmetic converts to int before clipping, then narrows to u16.
     let bounds = |v: u32, size: u32| {
@@ -79,8 +77,8 @@ pub(crate) fn radius(
         (*TREE.get()).contained(
             [x[0], y[0]],
             [x[1], y[1]],
-            &|id, dim| coordinate(c, map, id, dim),
-            |id| visit((c.station_if_valid)(id)),
+            &|id, dim| coordinate(s, map, id, dim),
+            |id| visit(crate::station_record::station_get_if_valid(s, id.0)),
         );
     }
 }
