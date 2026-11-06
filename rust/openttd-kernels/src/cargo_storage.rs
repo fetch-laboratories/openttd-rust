@@ -63,7 +63,6 @@ pub struct Services {
     pub(crate) coordinate: extern "C" fn(u32, u8) -> u32,
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
-    pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowMap,
     pub(crate) shared: *const crate::services::Services,
     pub(crate) packet_next: extern "C" fn(*mut c_void) -> *mut c_void,
 }
@@ -207,7 +206,6 @@ crate::abi::layouts! {
         coordinate,
         pay,
         origin,
-        flow_map,
         shared,
         packet_next,
     };
@@ -447,7 +445,7 @@ unsafe fn forced_flow(
         flow_via, openttd_rust_flow_change, openttd_rust_flow_clone, openttd_rust_flow_destroy,
         openttd_rust_flow_read,
     };
-    let map = (s.flow_map)(ge);
+    let map = unsafe { crate::station_record::existing_flows(ge.cast()) };
     let original = if map.is_null() {
         std::ptr::null_mut()
     } else {
@@ -925,7 +923,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
             action = TRANSFER;
             via = unsafe { forced_flow(s, ge, observed.first_station, station, next_slice) };
         } else {
-            let map = (s.flow_map)(ge);
+            let map = unsafe { crate::station_record::existing_flows(ge.cast()) };
             if observed.first_station == INVALID && !map.is_null() {
                 let first = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, 0, 0) };
                 if first.found != 0 {
@@ -1088,7 +1086,7 @@ unsafe fn action(
             if p.next_hop == avoid || p.next_hop == avoid2 {
                 let via = unsafe {
                     crate::station_base::goods_get_via(
-                        (s.flow_map)(ge),
+                        crate::station_record::existing_flows(ge.cast()),
                         p.first_station,
                         avoid,
                         avoid2,
@@ -1132,7 +1130,7 @@ unsafe fn action(
         8 => {
             let via = unsafe {
                 crate::station_base::goods_get_via(
-                    (s.flow_map)(ge),
+                    crate::station_record::existing_flows(ge.cast()),
                     p.first_station,
                     avoid,
                     avoid2,
@@ -1745,8 +1743,14 @@ mod tests {
         7
     }
     extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-    extern "C" fn flow_map(context: *const c_void) -> *mut crate::cargo_flow::FlowMap {
-        context.cast_mut().cast()
+    fn goods_fixture(flows: *mut crate::cargo_flow::FlowMap) -> crate::station_record::GoodsRecord {
+        let mut goods = crate::station_record::GoodsRecord::default();
+        unsafe {
+            let data = crate::station_record::goods_data_ensure(&raw mut goods);
+            crate::cargo_flow::openttd_rust_flow_map_destroy((*data).flows);
+            (*data).flows = flows;
+        }
+        goods
     }
     fn flow_fixture(via: u16) -> *mut crate::cargo_flow::FlowMap {
         let map = crate::cargo_flow::openttd_rust_flow_map_new();
@@ -1788,7 +1792,6 @@ mod tests {
             coordinate,
             pay,
             origin,
-            flow_map,
             shared: SHARED.with(std::ptr::from_ref),
             packet_next: next_packet,
         }
@@ -1959,6 +1962,7 @@ mod tests {
             for first in [10, 11, 12] {
                 append(vehicle, service, cargo(8, first, 0), KEEP as u16);
             }
+            let mut goods = goods_fixture(flows);
             let next = [100];
             assert_eq!(
                 openttd_rust_cargo_list_stage(
@@ -1969,7 +1973,7 @@ mod tests {
                     next.as_ptr(),
                     1,
                     0,
-                    flows.cast(),
+                    (&raw const goods).cast(),
                     0,
                     std::ptr::null_mut(),
                     5
@@ -2006,7 +2010,7 @@ mod tests {
             PAYMENTS.with(|payments| assert_eq!(*payments.borrow(), [(0, 8, 24), (1, 4, 12)]));
             clean(vehicle);
             clean(station);
-            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+            crate::station_record::goods_data_clear(&raw mut goods, &raw const service);
         }
     }
     #[test]
@@ -2015,6 +2019,7 @@ mod tests {
         unsafe {
             for via in [10_u16, 90] {
                 let flows = flow_fixture(via);
+                let mut goods = goods_fixture(flows);
                 let station = list(false);
                 append(station, service, cargo(8, 10, 0), 70);
                 append(station, service, cargo(8, 11, 0), 70);
@@ -2029,7 +2034,7 @@ mod tests {
                         INVALID,
                         std::ptr::null(),
                         0,
-                        flows.cast(),
+                        (&raw const goods).cast(),
                         0,
                         std::ptr::null_mut(),
                         5
@@ -2044,7 +2049,7 @@ mod tests {
                 assert_eq!(selected, 10);
                 assert_eq!(fields(station).count, 16);
                 clean(station);
-                crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+                crate::station_record::goods_data_clear(&raw mut goods, &raw const service);
             }
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
@@ -2053,6 +2058,7 @@ mod tests {
             (*vehicle).fields.action_counts = [8, 0, 0, 0];
             let via = 90_u16;
             let flows = flow_fixture(via);
+            let mut goods = goods_fixture(flows);
             assert_eq!(
                 openttd_rust_cargo_list_move(
                     vehicle,
@@ -2064,7 +2070,7 @@ mod tests {
                     INVALID,
                     std::ptr::null(),
                     0,
-                    flows.cast(),
+                    (&raw const goods).cast(),
                     0,
                     std::ptr::null_mut(),
                     5
@@ -2075,7 +2081,7 @@ mod tests {
             assert_eq!(packet(service, nodes(vehicle)[0].shell).next_hop, 70);
             assert_eq!(fields(vehicle).action_counts, [8, 0, 0, 0]);
             clean(vehicle);
-            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+            crate::station_record::goods_data_clear(&raw mut goods, &raw const service);
         }
     }
     #[test]
@@ -2141,6 +2147,7 @@ mod tests {
     #[test]
     fn all_forced_unloading_selectors() {
         let service = services();
+        let goods = crate::station_record::GoodsRecord::default();
         for (selector, action) in [(4, KEEP), (1, DELIVER), (2, TRANSFER)] {
             let vehicle = list(true);
             PAYMENT_LIST.with(|slot| slot.set(vehicle));
@@ -2154,7 +2161,7 @@ mod tests {
                     std::ptr::null(),
                     0,
                     selector,
-                    std::ptr::null(),
+                    (&raw const goods).cast(),
                     0,
                     std::ptr::null_mut(),
                     5,

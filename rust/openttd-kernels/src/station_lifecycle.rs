@@ -472,7 +472,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;
             let other = w.get(other_id);
             let goods = crate::station_record::goods(other, cargo);
-            let flows = (storage.flow_map)(goods.cast());
+            let flows = unsafe { crate::station_record::existing_flows(goods) };
             if !flows.is_null() {
                 unsafe {
                     crate::cargo_flow::openttd_rust_flow_map_erase(flows, id.0);

@@ -343,6 +343,18 @@ pub(crate) fn existing_cargo(
     }
 }
 
+/// Existing flow map at the source goods observation; no attachment is created.
+/// The goods slot is live and serialized; returned aliases end before clear/reentry.
+#[inline]
+pub(crate) unsafe fn existing_flows(goods: *const GoodsRecord) -> *mut crate::cargo_flow::FlowMap {
+    let data = unsafe { (*goods).data };
+    if data.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { (*data).flows }
+    }
+}
+
 /// Resolve the live goods slot and create its canonical cargo/flow attachment.
 #[inline]
 pub(crate) fn ensure_cargo(

@@ -28,12 +28,6 @@ static void CargoOrigin(void *context, uint16_t origin, uint32_t amount, uint8_t
 	if (remove != 0) map[StationID(origin)] -= amount;
 	else map[StationID(origin)] += amount;
 }
-static OpenTTDCargoFlowMap *CargoFlowMap(const void *context) noexcept
-{
-	/* The context is the goods slot of a live station record. */
-	const GoodsEntry ge{const_cast<OpenTTDGoodsEntry *>(static_cast<const OpenTTDGoodsEntry *>(context))};
-	return ge.HasData() ? ge.GetData().flows.RustState() : nullptr;
-}
 static void *CargoNextPacket(void *shell) noexcept
 {
 	auto range = CargoPacket::Iterate(shell == nullptr ? 0 : static_cast<CargoPacket *>(shell)->index.base() + 1);
@@ -48,7 +42,6 @@ static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.coordinate = CargoCoordinate,
 	.pay = CargoPay,
 	.origin = CargoOrigin,
-	.flow_map = CargoFlowMap,
 	.shared = &_rust_shared_services,
 	.packet_next = CargoNextPacket,
 };
