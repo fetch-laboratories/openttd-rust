@@ -12,7 +12,7 @@
 use crate::debug::{Bytes, debug};
 use crate::game_state::GameState;
 use crate::network_config::TCP_MTU;
-use crate::network_tcp::{self as tcp, NetworkTCPSocketHandler, Packet};
+use crate::network_tcp::{self as tcp, NetworkTCPSocketHandler};
 use crate::packet::{self, State as PacketState};
 use crate::services::ByteSpan;
 use crate::services_assert::check;

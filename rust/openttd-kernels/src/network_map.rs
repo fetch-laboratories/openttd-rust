@@ -163,16 +163,6 @@ pub extern "C" fn openttd_rust_network_map_reader_new() -> *mut MapReader {
 
 /// # Safety
 /// The final native filter owner releases its uniquely owned live reader.
-/// # Safety
-/// The live load-filter reader is exclusively accessible during Reset.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_map_reset(reader: *mut MapReader) {
-    unsafe { (*reader).read_bytes = 0 };
-}
-
-/// # Safety
-/// The reader and `size` writable output bytes are live and disjoint; the load frame
-/// serializes reads and Reset. No buffer mutation occurs during a read.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_map_reader_drop(reader: *mut MapReader) {
     unsafe { drop(Box::from_raw(reader)) };
