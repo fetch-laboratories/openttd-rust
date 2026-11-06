@@ -392,7 +392,7 @@ bool IsTileForestIndustry(TileIndex tile)
 
 void PlantRandomFarmField(const Industry *i)
 {
-	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), &GetIndustryRustServices());
+	openttd_rust_industry_farm(i->production_owner.get(), i->index.base(), &GetIndustryRustServices());
 }
 
 
@@ -790,10 +790,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
 	},
-	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
-		const Industry *i = RustIndustry(handle);
-		return {RustIndustryTile(handle), i->Record().location.w, i->Record().location.h};
-	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
 		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->Record().type)->random_sounds[index]);
@@ -946,7 +942,6 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
-		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->Record().town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);
@@ -1036,8 +1031,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
 		.town = OpenTTDIndustryTownHandle,
-		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->Record().population; },
-		.town_position = OpenTTDTownTile,
 		.industry = RustIndustryByID<uint16_t>,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },

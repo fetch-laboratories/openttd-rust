@@ -251,7 +251,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
 		.nearby = RustNearbyTile,
 		.water_distance = RustClosestWaterDistance,
-		.town_tile = OpenTTDTownTile,
 		.town_id = RustTownAuthorityIndex,
 		.founder_info = [](uint8_t founder) noexcept -> OpenTTDIndustryFounderInfo {
 			const Company *company = Company::GetIfValid(CompanyID(founder));

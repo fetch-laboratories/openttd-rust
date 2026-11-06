@@ -428,7 +428,6 @@ pub struct Change {
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
-    pub location: unsafe extern "C" fn(*mut c_void) -> TileArea,
     pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
@@ -700,7 +699,7 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
         };
         if act {
             if parameter == 0 {
-                farm(i, e.id, tick_map(s), s);
+                farm(owner, e.id, tick_map(s), s);
             } else {
                 chop(i, owner, tick_map(s), s, builder);
             }
@@ -1510,13 +1509,13 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
     fence(tiles.tile_xy(x, y + sy - 1), sx, kind, 1, map, s);
 }
 fn farm_with_landscape(
-    i: *mut c_void,
+    owner: *mut Industry,
     id: u16,
     map: Map,
     s: &Services,
     landscape: &impl Fn() -> u8,
 ) {
-    let l = unsafe { (s.location)(i) };
+    let l = location(owner);
     let x = (u32::from(l.w) / 2)
         .wrapping_add(rand(s) % 31)
         .wrapping_sub(16) as i32;
@@ -1542,23 +1541,27 @@ fn tick_map(s: &Services) -> Map {
         landscape: unsafe { s.shared().settings().climate.read() },
     }
 }
-fn farm(i: *mut c_void, id: u16, map: Map, s: &Services) {
-    farm_with_landscape(i, id, map, s, &|| unsafe {
+fn farm(owner: *mut Industry, id: u16, map: Map, s: &Services) {
+    farm_with_landscape(owner, id, map, s, &|| unsafe {
         s.shared().settings().climate.read()
     });
 }
 /// # Safety
 /// Live industry, synchronous map/RNG services. No owner references cross calls.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: *const Services) {
+pub unsafe extern "C" fn openttd_rust_industry_farm(
+    owner: *mut Industry,
+    id: u16,
+    s: *const Services,
+) {
     let s = unsafe { &*s };
-    farm(i, id, tick_map(s), s);
+    farm(owner, id, tick_map(s), s);
 }
 fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *mut Builder) {
     if produced_count(owner) == 0 || unsafe { !valid((*produced(owner, 0)).cargo) } {
         return;
     }
-    let l = unsafe { (s.location)(i) };
+    let l = location(owner);
     let width = map.size_x;
     let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
     for y in l.tile / width..l.tile / width + u32::from(l.h) {
@@ -1976,8 +1979,6 @@ crate::abi::layouts! {
         raw_setting,
         multiple_per_town,
         town,
-        population,
-        town_position,
         industry,
 
         edge_distance,
@@ -2094,7 +2095,6 @@ crate::abi::layouts! {
         founder,
     };
     "OpenTTDIndustryConstructionServices" ["industry"] => crate::industry::ConstructionServices {
-        set_town,
         generating,
         callback,
         callback_error,
@@ -2201,7 +2201,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
-        location,
         industry_sound,
         play_sound,
         special_effect,
@@ -2264,10 +2263,10 @@ crate::abi::layouts! {
         owner,
         id,
     };
-    "OpenTTDIndustryLocation" ["industry"] => TileArea {
+    "TileArea" ["industry"] => TileArea {
         tile,
-        w => width,
-        h => height,
+        w,
+        h,
     };
     "OpenTTDIndustryFarmTile" ["industry"] => FarmTile {
         kind => type,

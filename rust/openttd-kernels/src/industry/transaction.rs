@@ -50,8 +50,6 @@ pub struct TransactionServices {
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
-    pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
-    pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub refinery_limit: unsafe extern "C" fn() -> u8,
@@ -265,13 +263,17 @@ impl Engine<'_> {
         Some(town)
     }
     fn allowed(&self, tile: u32, kind: u8, town: *const TownHandle) -> bool {
+        let owner = std::cell::OnceCell::new();
+        let owner = || *owner.get_or_init(|| (self.s.shared().town_owner)(town.cast()));
         let spec = industrytype::industry(u16::from(kind));
-        if unsafe { (*spec).behaviour } & 8 != 0 && unsafe { (self.x.population)(town) } < 1200 {
+        if unsafe { (*spec).behaviour } & 8 != 0
+            && unsafe { crate::town::population(owner()) } < 1200
+        {
             return self.fail(self.e.population);
         }
         let spec = industrytype::industry(u16::from(kind));
         if unsafe { (*spec).behaviour } & 32 != 0
-            && self.distance(unsafe { (self.x.town_position)(town) }, tile) > 9
+            && self.distance(unsafe { crate::town::position(owner()) }, tile) > 9
         {
             return self.fail(self.e.near_town);
         }
@@ -691,7 +693,7 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
     }
     let town = crate::town::spatial::closest(unsafe { &*e.s.shared }, call.tile, u32::MAX);
     unsafe {
-        (e.c.set_town)(shell.cast(), town);
+        (*owner).record.town = town.cast_mut().cast();
         (*owner).record.random = call.bits;
         (*owner).record.founder = call.founder;
     }

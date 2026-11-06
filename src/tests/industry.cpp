@@ -32,7 +32,6 @@
 extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
-static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
 static_assert(sizeof(IndustryID) == sizeof(uint16_t) && alignof(IndustryID) == alignof(uint16_t));
 static_assert(sizeof(Owner) == sizeof(uint8_t) && alignof(Owner) == alignof(uint8_t));
 static_assert(sizeof(Colours) == sizeof(uint8_t));
@@ -398,6 +397,7 @@ static OpenTTDIndustryLocationResult Observe(Industry *shell)
 	CHECK(shell->Record().type == 7);
 	CHECK(shell->Record().random == 0xABCD);
 	CHECK(shell->Record().founder == Owner(2));
+	CHECK(shell->Record().town == nullptr);
 	CHECK(shell->accepted.empty());
 	CHECK(shell->produced.empty());
 	trace.push_back(3);
@@ -425,7 +425,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	errors.site = 1234;
 	tile_spec.grf_prop.grffile = &tile_file;
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
-	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->Record().town = nullptr; };
 	const OpenTTDFixtureMap map{Map::LogX()};
 	shared.map = &map.statics;
 	static const OpenTTDMovementServices movement{};

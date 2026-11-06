@@ -55,7 +55,6 @@ pub struct ConstructionRequest {
 }
 #[repr(C)]
 pub struct ConstructionServices {
-    pub set_town: unsafe extern "C" fn(*mut c_void, *const TownHandle),
     pub generating: unsafe extern "C" fn() -> bool,
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
@@ -232,8 +231,8 @@ fn cargo_callbacks(
 }
 /// # Safety
 /// Live newly allocated shell/owner, builder and immutable request/spec/layout.
-/// Native town/station relationships remain native. Resolver and world callbacks
-/// may reenter; raw scalar/slot access ends before every such call. Panics abort.
+/// Resolver and world callbacks may reenter; raw scalar/slot access ends before
+/// every such call. Panics abort.
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn openttd_rust_industry_initialize(
     industry: *mut c_void,
@@ -308,7 +307,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     unsafe {
-        (c.set_town)(industry, r.town);
+        (*owner).record.town = r.town.cast_mut().cast();
         (*owner).record.owner = 16;
     }
     let random = s.shared().random() as u16;
@@ -465,7 +464,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::farm_with_landscape(industry, r.id, map, s, &|| unsafe { (s.landscape)() });
+            super::farm_with_landscape(owner, r.id, map, s, &|| unsafe { (s.landscape)() });
         }
     }
     unsafe {
