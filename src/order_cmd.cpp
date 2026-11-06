@@ -540,7 +540,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.tick_counter = openttd_orders_tick_counter,
 	.primary_vehicle = openttd_orders_primary_vehicle,
 	.ticks_per_second = openttd_orders_ticks_per_second,
-	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
 	.economy_fraction = openttd_orders_economy_fraction,
 	.maximum_date = openttd_orders_maximum_date,
 	.timetable_year_limit = openttd_orders_timetable_year_limit,

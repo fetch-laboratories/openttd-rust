@@ -59,7 +59,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
 	uint64_t (*primary_vehicle)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(primary_vehicle);
 	uint64_t (*ticks_per_second)() noexcept OPENTTD_SERVICE_DEFAULT(ticks_per_second);
-	uint64_t (*unit_number)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(unit_number);
 	uint64_t (*economy_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(economy_fraction);
 	uint64_t (*maximum_date)() noexcept OPENTTD_SERVICE_DEFAULT(maximum_date);
 	uint64_t (*timetable_year_limit)() noexcept OPENTTD_SERVICE_DEFAULT(timetable_year_limit);

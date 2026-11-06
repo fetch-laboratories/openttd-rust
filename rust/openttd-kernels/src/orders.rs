@@ -512,7 +512,6 @@ pub struct Leaves {
     pub tick_counter: extern "C" fn() -> u64,
     pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
-    pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub economy_fraction: extern "C" fn() -> u64,
     pub maximum_date: extern "C" fn() -> u64,
     pub timetable_year_limit: extern "C" fn() -> u64,
@@ -631,7 +630,6 @@ leaves! {
     fn vehicle_type(ctx: *mut c_void) -> u64;
     fn vehicle_status(ctx: *mut c_void) -> u64;
     fn primary_vehicle(ctx: *mut c_void) -> u64;
-    fn unit_number(ctx: *mut c_void) -> u64;
     fn stopped_or_crashed(ctx: *mut c_void) -> u64;
     fn suppress_implicit(ctx: *mut c_void) -> u64;
     fn shared_window(ctx: *mut c_void, first: *mut c_void) -> u64;
@@ -1467,7 +1465,9 @@ impl Game {
         if time != 0 {
             return time.cmp(&0);
         }
-        self.unit_number(b).cmp(&self.unit_number(a))
+        native_vehicle(b, self.0.base)
+            .unit_number()
+            .cmp(&native_vehicle(a, self.0.base).unit_number())
     }
 }
 
@@ -4677,7 +4677,6 @@ crate::abi::layouts! {
         tick_counter,
         primary_vehicle,
         ticks_per_second,
-        unit_number,
         economy_fraction,
         maximum_date,
         timetable_year_limit,
