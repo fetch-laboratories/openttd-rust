@@ -119,6 +119,10 @@ private:
 	PoolBase(const PoolBase &other);
 };
 
+/** Shared native item/index facade for native and Rust-owned pool policies. */
+template <class Titem, typename Tindex, auto *Tpool>
+struct PoolItemBase;
+
 /**
  * Base class for all pools.
  * @tparam Titem        Type of the class/struct that is going to be pooled
@@ -131,6 +135,7 @@ private:
 template <class Titem, typename Tindex, size_t Tgrowth_step, PoolType Tpool_type = PoolType::Normal, bool Tcache = false>
 requires std::is_base_of_v<PoolIDBase, Tindex>
 struct Pool : PoolBase {
+	template <class, typename, auto *> friend struct PoolItemBase;
 public:
 	static constexpr size_t MAX_SIZE = Tindex::End().base(); ///< Make template parameter accessible from outside
 
@@ -149,6 +154,10 @@ public:
 
 	std::vector<Titem *> data{}; ///< Pointers to Titem
 	std::vector<BitmapStorage> used_bitmap{}; ///< Bitmap of used indices.
+
+	size_t GetPoolSize() const { return this->first_unused; }
+	size_t GetNumItems() const { return this->items; }
+	bool CleaningPool() const { return this->cleaning; }
 
 	Pool(std::string_view name) : PoolBase(Tpool_type), name(name) {}
 	void CleanPool() override;
@@ -277,164 +286,8 @@ public:
 		bool empty() { return this->begin() == this->end(); }
 	};
 
-	/**
-	 * Base class for all PoolItems
-	 * @tparam Tpool The pool this item is going to be part of
-	 */
-	template <struct Pool<Titem, Tindex, Tgrowth_step, Tpool_type, Tcache> *Tpool>
-	struct PoolItem {
-		Tindex index; ///< Index of this pool item
-
-		/** Type of the pool this item is going to be part of */
-		typedef struct Pool<Titem, Tindex, Tgrowth_step, Tpool_type, Tcache> Pool;
-
-		/**
-		 * Allocates space for new Titem
-		 * @param size size of Titem
-		 * @return pointer to allocated memory
-		 * @note can never fail (return nullptr), use CanAllocate() to check first!
-		 */
-		inline void *operator new(size_t size)
-		{
-			return Tpool->GetNew(size);
-		}
-
-		/**
-		 * Marks Titem as free. Its memory is released
-		 * @param p memory to free
-		 * @note the item has to be allocated in the pool!
-		 */
-		inline void operator delete(void *p, size_t size)
-		{
-			if (p == nullptr) return;
-			Titem *pn = static_cast<Titem *>(p);
-			assert(pn == Tpool->Get(Pool::GetRawIndex(pn->index)));
-			Tpool->FreeItem(size, Pool::GetRawIndex(pn->index));
-		}
-
-		/**
-		 * Allocates space for new Titem with given index
-		 * @param size size of Titem
-		 * @param index index of item
-		 * @return pointer to allocated memory
-		 * @note can never fail (return nullptr), use CanAllocate() to check first!
-		 * @pre index has to be unused! Else it will crash
-		 */
-		inline void *operator new(size_t size, Tindex index)
-		{
-			return Tpool->GetNew(size, index.base());
-		}
-
-		/**
-		 * Allocates space for new Titem at given memory address
-		 * @param ptr where are we allocating the item?
-		 * @return pointer to allocated memory (== ptr)
-		 * @note use of this is strongly discouraged
-		 * @pre the memory must not be allocated in the Pool!
-		 */
-		inline void *operator new(size_t, void *ptr)
-		{
-			for (size_t i = 0; i < Tpool->first_unused; i++) {
-				/* Don't allow creating new objects over existing.
-				 * Even if we called the destructor and reused this memory,
-				 * we don't know whether 'size' and size of currently allocated
-				 * memory are the same (because of possible inheritance).
-				 * Use { size_t index = item->index; delete item; new (index) item; }
-				 * instead to make sure destructor is called and no memory leaks. */
-				assert(ptr != Tpool->data[i]);
-			}
-			return ptr;
-		}
-
-
-		/** Helper functions so we can use PoolItem::Function() instead of _poolitem_pool.Function() */
-
-		/**
-		 * Tests whether we can allocate 'n' items
-		 * @param n number of items we want to allocate
-		 * @return true if 'n' items can be allocated
-		 */
-		static inline bool CanAllocateItem(size_t n = 1)
-		{
-			return Tpool->CanAllocate(n);
-		}
-
-		/**
-		 * Returns current state of pool cleaning - yes or no
-		 * @return true iff we are cleaning the pool now
-		 */
-		static inline bool CleaningPool()
-		{
-			return Tpool->cleaning;
-		}
-
-		/**
-		 * Tests whether given index can be used to get valid (non-nullptr) Titem
-		 * @param index index to examine
-		 * @return true if PoolItem::Get(index) will return non-nullptr pointer
-		 */
-		static inline bool IsValidID(auto index)
-		{
-			return Tpool->IsValidID(GetRawIndex(index));
-		}
-
-		/**
-		 * Returns Titem with given index
-		 * @param index of item to get
-		 * @return pointer to Titem
-		 * @pre index < this->first_unused
-		 */
-		static inline Titem *Get(auto index)
-		{
-			return Tpool->Get(GetRawIndex(index));
-		}
-
-		/**
-		 * Returns Titem with given index
-		 * @param index of item to get
-		 * @return pointer to Titem
-		 * @note returns nullptr for invalid index
-		 */
-		static inline Titem *GetIfValid(auto index)
-		{
-			return GetRawIndex(index) < Tpool->first_unused ? Tpool->Get(GetRawIndex(index)) : nullptr;
-		}
-
-		/**
-		 * Returns first unused index. Useful when iterating over
-		 * all pool items.
-		 * @return first unused index
-		 */
-		static inline size_t GetPoolSize()
-		{
-			return Tpool->first_unused;
-		}
-
-		/**
-		 * Returns number of valid items in the pool
-		 * @return number of valid items in the pool
-		 */
-		static inline size_t GetNumItems()
-		{
-			return Tpool->items;
-		}
-
-		/**
-		 * Dummy function called after destructor of each member.
-		 * If you want to use it, override it in PoolItem's subclass.
-		 * @param index index of deleted item
-		 * @note when this function is called, PoolItem::Get(index) == nullptr.
-		 * @note it's called only when !CleaningPool()
-		 */
-		static inline void PostDestructor([[maybe_unused]] size_t index) { }
-
-		/**
-		 * Returns an iterable ensemble of all valid Titem
-		 * @param from index of the first Titem to consider
-		 * @return an iterable ensemble of all valid Titem
-		 */
-		static Pool::IterateWrapper<Titem> Iterate(size_t from = 0) { return Pool::IterateWrapper<Titem>(from); }
-	};
+	template <Pool *Tpool>
+	using PoolItem = PoolItemBase<Titem, Tindex, Tpool>;
 
 private:
 	static const size_t NO_FREE_ITEM = std::numeric_limits<size_t>::max(); ///< Constant to indicate we can't allocate any more items
@@ -461,9 +314,167 @@ private:
 
 	void FreeItem(size_t size, size_t index);
 
+};
+
+/** Native allocation syntax and stable item index, independent of pool policy. */
+template <class Titem, typename Tindex, auto *Tpool>
+struct PoolItemBase {
+	Tindex index; ///< Index of this pool item
+
+	/** Type of the pool this item is going to be part of */
+	using Pool = std::remove_pointer_t<decltype(Tpool)>;
+
+	/**
+	 * Allocates space for new Titem
+	 * @param size size of Titem
+	 * @return pointer to allocated memory
+	 * @note can never fail (return nullptr), use CanAllocate() to check first!
+	 */
+	inline void *operator new(size_t size)
+	{
+		return Tpool->GetNew(size);
+	}
+
+	/**
+	 * Marks Titem as free. Its memory is released
+	 * @param p memory to free
+	 * @note the item has to be allocated in the pool!
+	 */
+	inline void operator delete(void *p, size_t size)
+	{
+		if (p == nullptr) return;
+		Titem *pn = static_cast<Titem *>(p);
+		assert(pn == Tpool->Get(GetRawIndex(pn->index)));
+		Tpool->FreeItem(size, GetRawIndex(pn->index));
+	}
+
+	/**
+	 * Allocates space for new Titem with given index
+	 * @param size size of Titem
+	 * @param index index of item
+	 * @return pointer to allocated memory
+	 * @note can never fail (return nullptr), use CanAllocate() to check first!
+	 * @pre index has to be unused! Else it will crash
+	 */
+	inline void *operator new(size_t size, Tindex index)
+	{
+		return Tpool->GetNew(size, index.base());
+	}
+
+	/**
+	 * Allocates space for new Titem at given memory address
+	 * @param ptr where are we allocating the item?
+	 * @return pointer to allocated memory (== ptr)
+	 * @note use of this is strongly discouraged
+	 * @pre the memory must not be allocated in the Pool!
+	 */
+	inline void *operator new(size_t, void *ptr)
+	{
+		for (size_t i = 0; i < Tpool->GetPoolSize(); i++) {
+			/* Don't allow creating new objects over existing.
+			 * Even if we called the destructor and reused this memory,
+			 * we don't know whether 'size' and size of currently allocated
+			 * memory are the same (because of possible inheritance).
+			 * Use { size_t index = item->index; delete item; new (index) item; }
+			 * instead to make sure destructor is called and no memory leaks. */
+			assert(ptr != Tpool->Get(i));
+		}
+		return ptr;
+	}
+
+
+	/** Helper functions so we can use PoolItem::Function() instead of _poolitem_pool.Function() */
+
+	/**
+	 * Tests whether we can allocate 'n' items
+	 * @param n number of items we want to allocate
+	 * @return true if 'n' items can be allocated
+	 */
+	static inline bool CanAllocateItem(size_t n = 1)
+	{
+		return Tpool->CanAllocate(n);
+	}
+
+	/**
+	 * Returns current state of pool cleaning - yes or no
+	 * @return true iff we are cleaning the pool now
+	 */
+	static inline bool CleaningPool()
+	{
+		return Tpool->CleaningPool();
+	}
+
+	/**
+	 * Tests whether given index can be used to get valid (non-nullptr) Titem
+	 * @param index index to examine
+	 * @return true if PoolItem::Get(index) will return non-nullptr pointer
+	 */
+	static inline bool IsValidID(auto index)
+	{
+		return Tpool->IsValidID(GetRawIndex(index));
+	}
+
+	/**
+	 * Returns Titem with given index
+	 * @param index of item to get
+	 * @return pointer to Titem
+	 * @pre index < this->first_unused
+	 */
+	static inline Titem *Get(auto index)
+	{
+		return Tpool->Get(GetRawIndex(index));
+	}
+
+	/**
+	 * Returns Titem with given index
+	 * @param index of item to get
+	 * @return pointer to Titem
+	 * @note returns nullptr for invalid index
+	 */
+	static inline Titem *GetIfValid(auto index)
+	{
+		return GetRawIndex(index) < Tpool->GetPoolSize() ? Tpool->Get(GetRawIndex(index)) : nullptr;
+	}
+
+	/**
+	 * Returns first unused index. Useful when iterating over
+	 * all pool items.
+	 * @return first unused index
+	 */
+	static inline size_t GetPoolSize()
+	{
+		return Tpool->GetPoolSize();
+	}
+
+	/**
+	 * Returns number of valid items in the pool
+	 * @return number of valid items in the pool
+	 */
+	static inline size_t GetNumItems()
+	{
+		return Tpool->GetNumItems();
+	}
+
+	/**
+	 * Dummy function called after destructor of each member.
+	 * If you want to use it, override it in PoolItem's subclass.
+	 * @param index index of deleted item
+	 * @note when this function is called, PoolItem::Get(index) == nullptr.
+	 * @note it's called only when !CleaningPool()
+	 */
+	static inline void PostDestructor([[maybe_unused]] size_t index) { }
+
+	/**
+	 * Returns an iterable ensemble of all valid Titem
+	 * @param from index of the first Titem to consider
+	 * @return an iterable ensemble of all valid Titem
+	 */
+	static typename Pool::template IterateWrapper<Titem> Iterate(size_t from = 0) { return typename Pool::template IterateWrapper<Titem>(from); }
+private:
 	static constexpr size_t GetRawIndex(size_t index) { return index; }
 	template <typename T> requires std::is_base_of_v<PoolIDBase, T>
 	static constexpr size_t GetRawIndex(const T &index) { return index.base(); }
+
 };
 
 #endif /* POOL_TYPE_HPP */

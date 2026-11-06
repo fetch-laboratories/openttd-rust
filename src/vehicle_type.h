@@ -51,10 +51,10 @@ struct DisasterVehicle;
 struct BaseVehicle {
 	OpenTTDVehicle *const record; ///< Shared record of the moved fields, including the type.
 
-	explicit BaseVehicle(VehicleType type) : record(openttd_rust_vehicle_record_new(nullptr, type)) {}
+	explicit BaseVehicle(VehicleType type, Vehicle *shell, VehicleID index);
 	BaseVehicle(const BaseVehicle &) = delete;
 	BaseVehicle &operator=(const BaseVehicle &) = delete;
-	~BaseVehicle() { openttd_rust_vehicle_record_delete(this->record); }
+	~BaseVehicle();
 
 	/** @return The shared record. */
 	inline OpenTTDVehicle &Record() { return *this->record; }
