@@ -368,6 +368,49 @@ def boundary(head: str) -> BoundaryMetrics:
     return dict(exports=exports, callback_slots=slots)
 
 
+def growth_inventory(head: str) -> dict[str, dict[str, int]]:
+    """Independent cleanup counters, sharing this metric's code-line semantics.
+
+    The AST inventory closes aliases/unprefixed exports; boundary() remains the
+    historical syntactic series and is reported separately by the caller.
+    """
+    from rust_syntax import boundary_ids
+
+    files = {
+        path: show(head, path)
+        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
+        if path.endswith(".rs")
+    }
+    identities = boundary_ids(files)
+    evidence = evidence_cpp(head)
+    glue: dict[str, set[int]] = {}
+    source_metrics(BASELINE, head, glue_lines=glue)
+    result = {
+        "tools_cpp": {
+            row["path"]: row["lines"]
+            for row in evidence["files"]
+            if row["path"].startswith("tools/")
+        },
+        "tests_cpp": {
+            path: len(lines)
+            for path, lines in glue.items()
+            if path.startswith("src/tests/")
+        },
+        "exports": dict.fromkeys(sorted(identities["exports"]), 1),
+        "callback_slots": dict.fromkeys(sorted(identities["callback_slots"]), 1),
+        "generated_records": {
+            name: len(code_lines(text, name))
+            for name, text in generated_records(head).items()
+        },
+        "outside_cpp": {
+            row["path"]: row["lines"]
+            for row in evidence["files"]
+            if not row["path"].startswith("tools/")
+        },
+    }
+    return result
+
+
 def source_metrics(
     base: str,
     head: str = "HEAD",

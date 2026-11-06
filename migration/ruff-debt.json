@@ -1,0 +1,913 @@
+{
+  "schema": 1,
+  "version": "ruff 0.16.8",
+  "inventory_head": "77c60cd08f0fcc9be4fc1f6b7f33066dd99304a3",
+  "sites": {
+    "tools/auth-comparison.py | scenario | C901": [
+      15
+    ],
+    "tools/auth-comparison.py | scenario | PLR0912": [
+      16
+    ],
+    "tools/auth-comparison.py | scenario | PLR0915": [
+      67
+    ],
+    "tools/baseline_ratchet.py | main | PLR0913": [
+      8
+    ],
+    "tools/byte-strings-comparison.py | corpus | C901": [
+      16
+    ],
+    "tools/byte-strings-comparison.py | corpus | PLR0912": [
+      15
+    ],
+    "tools/check-rust-platform.py | check_build | C901": [
+      12
+    ],
+    "tools/check-rust-platform.py | check_windows_link | PLR0913": [
+      6
+    ],
+    "tools/ci.py | main | C901": [
+      11
+    ],
+    "tools/deep.py | run_deep | C901": [
+      14
+    ],
+    "tools/deep.py | run_deep | PLR0912": [
+      13
+    ],
+    "tools/deep.py | run_deep | PLR0913": [
+      7
+    ],
+    "tools/encoded-comparison.py | corpus | C901": [
+      17
+    ],
+    "tools/encoded-comparison.py | corpus | PLR0912": [
+      16
+    ],
+    "tools/encoded-comparison.py | main | C901": [
+      11
+    ],
+    "tools/generate-abi.py | generate | C901": [
+      13
+    ],
+    "tools/generate-abi.py | shared_records | C901": [
+      24
+    ],
+    "tools/generate-abi.py | shared_records | PLR0912": [
+      14
+    ],
+    "tools/generate-abi.py | shared_records | PLR0915": [
+      68
+    ],
+    "tools/housekeeping.py | open_outputs | C901": [
+      12
+    ],
+    "tools/housekeeping.py | plan_local | C901": [
+      17
+    ],
+    "tools/housekeeping.py | plan_local | PLR0912": [
+      18
+    ],
+    "tools/housekeeping.py | plan_worktrees | C901": [
+      16
+    ],
+    "tools/housekeeping.py | plan_worktrees | PLR0912": [
+      19
+    ],
+    "tools/housekeeping.py | plan_worktrees | PLR0915": [
+      55
+    ],
+    "tools/housekeeping.py | remove | C901": [
+      11
+    ],
+    "tools/housekeeping.py | remove | PLR0911": [
+      9
+    ],
+    "tools/housekeeping.py | worktree_refusal | C901": [
+      15
+    ],
+    "tools/housekeeping.py | worktree_refusal | PLR0911": [
+      8
+    ],
+    "tools/housekeeping.py | worktree_refusal | PLR0912": [
+      14
+    ],
+    "tools/lint-policy.py | config_errors | C901": [
+      11
+    ],
+    "tools/lint-policy.py | suppressions | C901": [
+      11
+    ],
+    "tools/migration.py | build_games | C901": [
+      11
+    ],
+    "tools/migration.py | main | C901": [
+      22
+    ],
+    "tools/migration.py | main | PLR0912": [
+      18
+    ],
+    "tools/migration.py | main | PLR0915": [
+      82
+    ],
+    "tools/port-metrics.py | area | PLR0911": [
+      9
+    ],
+    "tools/port-metrics.py | source_metrics | C901": [
+      11
+    ],
+    "tools/port-metrics.py | source_metrics | PLR0913": [
+      6
+    ],
+    "tools/port-metrics.py | spans | C901": [
+      13
+    ],
+    "tools/port-metrics.py | spans | PLR0912": [
+      14
+    ],
+    "tools/probe.py | compare | PLR0913": [
+      6
+    ],
+    "tools/probe.py | execute | PLR0913": [
+      6
+    ],
+    "tools/refactor-proof.py | archive_sections | C901": [
+      15
+    ],
+    "tools/refactor-proof.py | archive_sections | PLR0915": [
+      57
+    ],
+    "tools/rust_syntax.py | boundary_ids | C901": [
+      23
+    ],
+    "tools/rust_syntax.py | boundary_ids | PLR0912": [
+      16
+    ],
+    "tools/script-list-comparison.py | main | C901": [
+      17
+    ],
+    "tools/script-list-comparison.py | main | PLR0912": [
+      14
+    ],
+    "tools/script-list-comparison.py | main | PLR0915": [
+      70
+    ],
+    "tools/shared-accessors.py | callee_copies | C901": [
+      12
+    ],
+    "tools/shared-accessors.py | main | C901": [
+      11
+    ],
+    "tools/signal-witness.py | main | C901": [
+      11
+    ],
+    "tools/simulation/aircraft.py | check | C901": [
+      15
+    ],
+    "tools/simulation/aircraft.py | check | PLR0912": [
+      14
+    ],
+    "tools/simulation/aircraft.py | check_control | C901": [
+      30
+    ],
+    "tools/simulation/aircraft.py | check_control | PLR0912": [
+      29
+    ],
+    "tools/simulation/aircraft.py | check_control | PLR0915": [
+      82
+    ],
+    "tools/simulation/aircraft.py | check_landing | C901": [
+      17
+    ],
+    "tools/simulation/aircraft.py | check_landing | PLR0912": [
+      16
+    ],
+    "tools/simulation/aircraft.py | prepare | C901": [
+      34
+    ],
+    "tools/simulation/aircraft.py | prepare | PLR0912": [
+      35
+    ],
+    "tools/simulation/aircraft.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/aircraft.py | prepare | PLR0915": [
+      110
+    ],
+    "tools/simulation/cargo_storage.py | prepare | C901": [
+      11
+    ],
+    "tools/simulation/cargo_storage.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/cli.py | main | C901": [
+      14
+    ],
+    "tools/simulation/cli.py | main | PLR0912": [
+      14
+    ],
+    "tools/simulation/cli.py | main | PLR0915": [
+      65
+    ],
+    "tools/simulation/cli.py | run_simulation | C901": [
+      15
+    ],
+    "tools/simulation/cli.py | run_simulation | PLR0912": [
+      16
+    ],
+    "tools/simulation/cli.py | run_simulation | PLR0913": [
+      6
+    ],
+    "tools/simulation/cli.py | run_simulation | PLR0915": [
+      52
+    ],
+    "tools/simulation/clocks.py | native_probes | C901": [
+      12
+    ],
+    "tools/simulation/clocks.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/commands.py | check | C901": [
+      11
+    ],
+    "tools/simulation/commands.py | outcomes | C901": [
+      12
+    ],
+    "tools/simulation/commands.py | prepare | C901": [
+      13
+    ],
+    "tools/simulation/commands.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/community_ai.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/community_newgrf.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/companies.py | check | C901": [
+      30
+    ],
+    "tools/simulation/companies.py | check | PLR0912": [
+      29
+    ],
+    "tools/simulation/companies.py | check | PLR0915": [
+      81
+    ],
+    "tools/simulation/companies.py | check_competitors | C901": [
+      13
+    ],
+    "tools/simulation/companies.py | prepare | C901": [
+      26
+    ],
+    "tools/simulation/companies.py | prepare | PLR0912": [
+      25
+    ],
+    "tools/simulation/companies.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/companies.py | prepare | PLR0915": [
+      96
+    ],
+    "tools/simulation/console_adapter.py | console_adapter | PLR0913": [
+      9
+    ],
+    "tools/simulation/console_adapter.py | prepared_console | PLR0913": [
+      6
+    ],
+    "tools/simulation/content_protocol.py | info_payload | PLR0913": [
+      11
+    ],
+    "tools/simulation/content_protocol.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/coverage.py | measure | PLR0913": [
+      7
+    ],
+    "tools/simulation/coverage.py | measure.reference_game | PLR0913": [
+      8
+    ],
+    "tools/simulation/disasters.py | check | C901": [
+      30
+    ],
+    "tools/simulation/disasters.py | check | PLR0912": [
+      29
+    ],
+    "tools/simulation/disasters.py | check | PLR0915": [
+      66
+    ],
+    "tools/simulation/disasters.py | prepare | C901": [
+      23
+    ],
+    "tools/simulation/disasters.py | prepare | PLR0912": [
+      20
+    ],
+    "tools/simulation/disasters.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/disasters.py | prepare | PLR0915": [
+      92
+    ],
+    "tools/simulation/drawing.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/economy.py | check | C901": [
+      18
+    ],
+    "tools/simulation/economy.py | check | PLR0912": [
+      15
+    ],
+    "tools/simulation/economy.py | check | PLR0915": [
+      53
+    ],
+    "tools/simulation/economy.py | monitor_load_probes | PLR0913": [
+      6
+    ],
+    "tools/simulation/economy.py | prepare | C901": [
+      21
+    ],
+    "tools/simulation/economy.py | prepare | PLR0912": [
+      15
+    ],
+    "tools/simulation/economy.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/economy.py | prepare | PLR0915": [
+      65
+    ],
+    "tools/simulation/effects.py | check | C901": [
+      23
+    ],
+    "tools/simulation/effects.py | check | PLR0912": [
+      22
+    ],
+    "tools/simulation/effects.py | check_effects | C901": [
+      18
+    ],
+    "tools/simulation/effects.py | check_effects | PLR0912": [
+      16
+    ],
+    "tools/simulation/effects.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/effects.py | prepare_effects | C901": [
+      25
+    ],
+    "tools/simulation/effects.py | prepare_effects | PLR0912": [
+      25
+    ],
+    "tools/simulation/effects.py | prepare_effects | PLR0913": [
+      6
+    ],
+    "tools/simulation/effects.py | prepare_effects | PLR0915": [
+      98
+    ],
+    "tools/simulation/engines.py | check | C901": [
+      16
+    ],
+    "tools/simulation/engines.py | check | PLR0912": [
+      15
+    ],
+    "tools/simulation/engines.py | definition_reload | PLR0913": [
+      7
+    ],
+    "tools/simulation/engines.py | loading_grfs | C901": [
+      28
+    ],
+    "tools/simulation/engines.py | loading_grfs | PLR0912": [
+      19
+    ],
+    "tools/simulation/engines.py | loading_grfs | PLR0915": [
+      64
+    ],
+    "tools/simulation/engines.py | loading_markers | C901": [
+      16
+    ],
+    "tools/simulation/engines.py | loading_markers | PLR0912": [
+      15
+    ],
+    "tools/simulation/engines.py | prepare | C901": [
+      13
+    ],
+    "tools/simulation/engines.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/engines.py | prepare_loading | PLR0913": [
+      7
+    ],
+    "tools/simulation/engines.py | runtime_fatal_probes | PLR0913": [
+      7
+    ],
+    "tools/simulation/engines.py | runtime_markers | C901": [
+      11
+    ],
+    "tools/simulation/fleet.py | check | C901": [
+      37
+    ],
+    "tools/simulation/fleet.py | check | PLR0912": [
+      36
+    ],
+    "tools/simulation/fleet.py | check | PLR0915": [
+      71
+    ],
+    "tools/simulation/fleet.py | prepare | C901": [
+      18
+    ],
+    "tools/simulation/fleet.py | prepare | PLR0912": [
+      17
+    ],
+    "tools/simulation/fleet.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/fleet.py | prepare | PLR0915": [
+      63
+    ],
+    "tools/simulation/game.py | benchmark_run | PLR0913": [
+      7
+    ],
+    "tools/simulation/game.py | capture_pair | PLR0913": [
+      7
+    ],
+    "tools/simulation/game.py | prepare_game | PLR0913": [
+      10
+    ],
+    "tools/simulation/game.py | prepare_scenario | PLR0913": [
+      7
+    ],
+    "tools/simulation/game.py | run_game | PLR0913": [
+      10
+    ],
+    "tools/simulation/generated.py | lifecycle_check | C901": [
+      17
+    ],
+    "tools/simulation/generated.py | lifecycle_check | PLR0912": [
+      16
+    ],
+    "tools/simulation/generated.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/industries.py | check | C901": [
+      45
+    ],
+    "tools/simulation/industries.py | check | PLR0912": [
+      42
+    ],
+    "tools/simulation/industries.py | check | PLR0915": [
+      97
+    ],
+    "tools/simulation/industries.py | check_definitions | C901": [
+      11
+    ],
+    "tools/simulation/industries.py | prepare | C901": [
+      18
+    ],
+    "tools/simulation/industries.py | prepare | PLR0911": [
+      7
+    ],
+    "tools/simulation/industries.py | prepare | PLR0912": [
+      17
+    ],
+    "tools/simulation/industries.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/industries.py | prepare | PLR0915": [
+      72
+    ],
+    "tools/simulation/industries.py | prepare_definitions | PLR0913": [
+      7
+    ],
+    "tools/simulation/instructions.py | identity | PLR0913": [
+      8
+    ],
+    "tools/simulation/instructions.py | prepare | PLR0913": [
+      8
+    ],
+    "tools/simulation/landscape.py | bmp_file | PLR0913": [
+      6
+    ],
+    "tools/simulation/landscape.py | check | C901": [
+      33
+    ],
+    "tools/simulation/landscape.py | check | PLR0912": [
+      33
+    ],
+    "tools/simulation/landscape.py | check | PLR0915": [
+      84
+    ],
+    "tools/simulation/landscape.py | png_file | PLR0913": [
+      6
+    ],
+    "tools/simulation/landscape.py | prepare | C901": [
+      31
+    ],
+    "tools/simulation/landscape.py | prepare | PLR0912": [
+      28
+    ],
+    "tools/simulation/landscape.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/landscape.py | prepare | PLR0915": [
+      91
+    ],
+    "tools/simulation/multiplayer.py | session | C901": [
+      20
+    ],
+    "tools/simulation/multiplayer.py | session | PLR0913": [
+      6
+    ],
+    "tools/simulation/multiplayer.py | session | PLR0915": [
+      91
+    ],
+    "tools/simulation/network_protocol.py | observe | C901": [
+      14
+    ],
+    "tools/simulation/network_protocol.py | observe | PLR0912": [
+      13
+    ],
+    "tools/simulation/network_protocol.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/network_protocol.py | session | PLR0913": [
+      6
+    ],
+    "tools/simulation/network_protocol.py | session | PLR0915": [
+      60
+    ],
+    "tools/simulation/network_protocol.py | start | PLR0913": [
+      8
+    ],
+    "tools/simulation/newgrf_loading.py | action2 | PLR0913": [
+      6
+    ],
+    "tools/simulation/newgrf_loading.py | binding_observations | C901": [
+      14
+    ],
+    "tools/simulation/newgrf_loading.py | binding_observations | PLR0912": [
+      13
+    ],
+    "tools/simulation/newgrf_loading.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/objectives.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/objects.py | check | C901": [
+      22
+    ],
+    "tools/simulation/objects.py | check | PLR0912": [
+      21
+    ],
+    "tools/simulation/objects.py | prepare | C901": [
+      13
+    ],
+    "tools/simulation/objects.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/orders.py | adapter | PLR0913": [
+      6
+    ],
+    "tools/simulation/orders.py | check | C901": [
+      15
+    ],
+    "tools/simulation/orders.py | check | PLR0912": [
+      14
+    ],
+    "tools/simulation/orders.py | prepare | C901": [
+      15
+    ],
+    "tools/simulation/orders.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/platform_subset.py | main | C901": [
+      11
+    ],
+    "tools/simulation/platform_subset.py | main.runner | PLR0913": [
+      8
+    ],
+    "tools/simulation/play_saves.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/rails.py | check | C901": [
+      38
+    ],
+    "tools/simulation/rails.py | check | PLR0912": [
+      37
+    ],
+    "tools/simulation/rails.py | check | PLR0915": [
+      109
+    ],
+    "tools/simulation/rails.py | controller_witnesses | C901": [
+      18
+    ],
+    "tools/simulation/rails.py | controller_witnesses | PLR0912": [
+      18
+    ],
+    "tools/simulation/rails.py | prepare | C901": [
+      14
+    ],
+    "tools/simulation/rails.py | prepare | PLR0912": [
+      13
+    ],
+    "tools/simulation/rails.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/rails.py | prepare | PLR0915": [
+      54
+    ],
+    "tools/simulation/roads.py | check | C901": [
+      50
+    ],
+    "tools/simulation/roads.py | check | PLR0912": [
+      48
+    ],
+    "tools/simulation/roads.py | check | PLR0915": [
+      192
+    ],
+    "tools/simulation/roads.py | check_tram | PLR0913": [
+      6
+    ],
+    "tools/simulation/roads.py | prepare | C901": [
+      14
+    ],
+    "tools/simulation/roads.py | prepare | PLR0912": [
+      13
+    ],
+    "tools/simulation/roads.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/roads.py | prepare_commands | PLR0913": [
+      7
+    ],
+    "tools/simulation/savegame.py | compare_chunk | C901": [
+      17
+    ],
+    "tools/simulation/savegame.py | compare_chunk | PLR0912": [
+      17
+    ],
+    "tools/simulation/savegame.py | patch | C901": [
+      17
+    ],
+    "tools/simulation/savegame.py | patch | PLR0912": [
+      16
+    ],
+    "tools/simulation/scenario_runner.py | run_scenario | C901": [
+      38
+    ],
+    "tools/simulation/scenario_runner.py | run_scenario | PLR0912": [
+      35
+    ],
+    "tools/simulation/scenario_runner.py | run_scenario | PLR0913": [
+      11
+    ],
+    "tools/simulation/scenario_runner.py | run_scenario | PLR0915": [
+      100
+    ],
+    "tools/simulation/script_host.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/script_infrastructure.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/session.py | prepare | C901": [
+      11
+    ],
+    "tools/simulation/session.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/ships.py | check | C901": [
+      29
+    ],
+    "tools/simulation/ships.py | check | PLR0912": [
+      28
+    ],
+    "tools/simulation/ships.py | check | PLR0915": [
+      61
+    ],
+    "tools/simulation/ships.py | check_water | C901": [
+      12
+    ],
+    "tools/simulation/ships.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/ships.py | prepare_water_save | C901": [
+      21
+    ],
+    "tools/simulation/ships.py | prepare_water_save | PLR0912": [
+      15
+    ],
+    "tools/simulation/ships.py | prepare_water_save | PLR0915": [
+      76
+    ],
+    "tools/simulation/signals.py | check | C901": [
+      28
+    ],
+    "tools/simulation/signals.py | check | PLR0912": [
+      27
+    ],
+    "tools/simulation/signals.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/signs.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/speed.py | collect_games | C901": [
+      11
+    ],
+    "tools/simulation/speed.py | prepare | C901": [
+      14
+    ],
+    "tools/simulation/speed.py | prepare | PLR0912": [
+      13
+    ],
+    "tools/simulation/stations.py | check | C901": [
+      20
+    ],
+    "tools/simulation/stations.py | check | PLR0912": [
+      20
+    ],
+    "tools/simulation/stations.py | check | PLR0915": [
+      57
+    ],
+    "tools/simulation/stations.py | check_commands | C901": [
+      38
+    ],
+    "tools/simulation/stations.py | check_commands | PLR0912": [
+      37
+    ],
+    "tools/simulation/stations.py | check_commands | PLR0915": [
+      79
+    ],
+    "tools/simulation/stations.py | check_spatial602 | C901": [
+      13
+    ],
+    "tools/simulation/stations.py | check_spatial602 | PLR0912": [
+      14
+    ],
+    "tools/simulation/stations.py | prepare | C901": [
+      27
+    ],
+    "tools/simulation/stations.py | prepare | PLR0912": [
+      24
+    ],
+    "tools/simulation/stations.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/stations.py | prepare | PLR0915": [
+      93
+    ],
+    "tools/simulation/stations.py | prepare_commands | C901": [
+      12
+    ],
+    "tools/simulation/stations.py | prepare_commands | PLR0913": [
+      7
+    ],
+    "tools/simulation/thread_sanitizer.py | findings | C901": [
+      18
+    ],
+    "tools/simulation/thread_sanitizer.py | findings | PLR0912": [
+      17
+    ],
+    "tools/simulation/threaded.py | run_game | PLR0913": [
+      9
+    ],
+    "tools/simulation/towns.py | check | C901": [
+      29
+    ],
+    "tools/simulation/towns.py | check | PLR0912": [
+      29
+    ],
+    "tools/simulation/towns.py | check | PLR0915": [
+      62
+    ],
+    "tools/simulation/towns.py | check_action_money | C901": [
+      17
+    ],
+    "tools/simulation/towns.py | check_action_money | PLR0912": [
+      16
+    ],
+    "tools/simulation/towns.py | check_bribes | C901": [
+      17
+    ],
+    "tools/simulation/towns.py | check_bribes | PLR0912": [
+      16
+    ],
+    "tools/simulation/towns.py | check_growth | C901": [
+      25
+    ],
+    "tools/simulation/towns.py | check_growth | PLR0912": [
+      24
+    ],
+    "tools/simulation/towns.py | check_growth | PLR0915": [
+      61
+    ],
+    "tools/simulation/towns.py | check_statue_search | C901": [
+      17
+    ],
+    "tools/simulation/towns.py | check_statue_search | PLR0912": [
+      16
+    ],
+    "tools/simulation/towns.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/towns.py | prepare_founding | C901": [
+      22
+    ],
+    "tools/simulation/towns.py | prepare_founding | PLR0911": [
+      10
+    ],
+    "tools/simulation/towns.py | prepare_founding | PLR0912": [
+      20
+    ],
+    "tools/simulation/towns.py | prepare_founding | PLR0913": [
+      7
+    ],
+    "tools/simulation/towns.py | prepare_founding | PLR0915": [
+      71
+    ],
+    "tools/simulation/towns.py | prepare_growth | C901": [
+      11
+    ],
+    "tools/simulation/towns.py | prepare_growth | PLR0913": [
+      6
+    ],
+    "tools/simulation/towns.py | prepare_house_definitions | PLR0913": [
+      7
+    ],
+    "tools/simulation/towns.py | prepare_town_names | PLR0913": [
+      6
+    ],
+    "tools/simulation/towns.py | storage_load_probes | PLR0913": [
+      7
+    ],
+    "tools/simulation/trees.py | check_editor_groups | C901": [
+      15
+    ],
+    "tools/simulation/trees.py | check_editor_groups | PLR0912": [
+      14
+    ],
+    "tools/simulation/trees.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/simulation/trees.py | prepare_trees | C901": [
+      23
+    ],
+    "tools/simulation/trees.py | prepare_trees | PLR0912": [
+      22
+    ],
+    "tools/simulation/trees.py | prepare_trees | PLR0913": [
+      6
+    ],
+    "tools/simulation/trees.py | prepare_trees | PLR0915": [
+      83
+    ],
+    "tools/simulation/vehicles.py | prepare | PLR0913": [
+      7
+    ],
+    "tools/test-ci.py | execute_script | PLR0913": [
+      10
+    ],
+    "tools/test-ci.py | run_policy | PLR0913": [
+      7
+    ],
+    "tools/test-simulation.py | InstructionSpeedTests.test_real_nested_scope_extraction_identity_and_semantic_rejection | C901": [
+      15
+    ],
+    "tools/test-simulation.py | InstructionSpeedTests.test_real_nested_scope_extraction_identity_and_semantic_rejection | PLR0915": [
+      106
+    ],
+    "tools/test-simulation.py | SimulationRuntimeTests.exercise | C901": [
+      15
+    ],
+    "tools/test-simulation.py | SimulationRuntimeTests.exercise | PLR0915": [
+      71
+    ],
+    "tools/test-simulation.py | SpeedPassTests.test_anchor_is_median_of_group_medians | PLR0915": [
+      57
+    ],
+    "tools/test-simulation.py | SpeedPassTests.test_preparation_identities_match_each_profiled_role.prepare | PLR0913": [
+      8
+    ],
+    "tools/validation_execution.py | file_lock | C901": [
+      15
+    ],
+    "tools/validation_execution.py | file_lock | PLR0915": [
+      59
+    ],
+    "tools/validation_execution.py | run_logged | C901": [
+      11
+    ],
+    "tools/validation_execution.py | run_logged | PLR0913": [
+      8
+    ],
+    "tools/widget-parser-comparison.py | main | C901": [
+      23
+    ],
+    "tools/widget-parser-comparison.py | main | PLR0912": [
+      21
+    ],
+    "tools/widget-parser-comparison.py | main | PLR0915": [
+      66
+    ]
+  }
+}
