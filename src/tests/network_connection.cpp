@@ -59,7 +59,8 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	OpenTTDNetworkGameSocket game{};
 	game.status = 7; // Client STATUS_MAP.
 	OpenTTDNetworkClientServices client{};
-	client.map_exists = [](void *) noexcept { return true; };
+	std::unique_ptr<OpenTTDNetworkMapReader, decltype(&openttd_rust_network_map_reader_drop)> reader(openttd_rust_network_map_reader_new(), openttd_rust_network_map_reader_drop);
+	game.map_reader = reader.get();
 	uint8_t join_status = 0;
 	client.join_status = &join_status;
 	client.dirty_join = []() noexcept {};
@@ -127,6 +128,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	struct Writers { ~Writers() { for (auto &client : map_clients) openttd_rust_network_map_writer_drop(client.writer); } } writers;
 	for (auto &client : map_clients) {
 		client.writer = openttd_rust_network_map_writer_new(&client, nullptr);
+		client.record.map_writer = client.writer;
 		client.record.game = &client;
 		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
 		client.record.server = &client;
@@ -148,7 +150,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	connection.join_date = [](void *) noexcept { return 0; };
 	connection.map_create = [](void *socket) noexcept { MapEvent(2, socket); };
 	connection.map_destroy = [](void *socket) noexcept { MapEvent(1, socket); };
-	connection.map_begin = [](void *socket) noexcept { MapEvent(4, socket); return static_cast<MapClient *>(socket)->writer; };
+	connection.map_lock = [](OpenTTDNetworkMapWriter *writer) noexcept { MapEvent(4, writer->resource); };
 	connection.map_end = [](OpenTTDNetworkMapWriter *) noexcept {};
 	connection.admin_error = [](void *socket, uint8_t) noexcept { MapEvent(8, socket); };
 	uint8_t on = 4, connected = 4;
@@ -192,8 +194,9 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	CHECK(on == 3);
 	CHECK(connected == 3);
 	openttd_rust_network_process_deferred(&network);
+	/* Event 4 observes mutex acquisition; an empty writer returns before locking. */
 	const std::vector<std::pair<int, int>> expected{
-		{1, 0}, {2, 1}, {3, 1}, {4, 1}, {1, 1}, {2, 2}, {3, 2}, {4, 2},
+		{1, 0}, {2, 1}, {3, 1}, {4, 1}, {1, 1}, {2, 2}, {3, 2},
 		{7, 3}, {7, 3}, {8, 0}, {9, 0}, {10, 0},
 	};
 	CHECK(map_events == expected);

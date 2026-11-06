@@ -26,7 +26,6 @@ struct OpenTTDNetworkClientServices {
 	void (*leave)(void *) noexcept OPENTTD_SERVICE_DEFAULT(leave);
 	void (*leave_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(leave_error);
 	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
-	bool (*map_exists)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_exists);
 	void (*map_load_prepare)(void *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(map_load_prepare);
 	void (*map_release)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_release);
 	uint32_t *own_client_id;

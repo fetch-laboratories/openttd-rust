@@ -1167,16 +1167,10 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
 		},
 		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
-		.map_begin = [](void *socket) noexcept -> OpenTTDNetworkMapWriter * {
-			auto *writer = static_cast<NetworkClientSocket *>(socket)->savegame.get();
-			/* TransferToNetworkQueue checks emptiness before locking. */
-			if (writer->state->next_packet == writer->state->packets.size()) return nullptr;
-			writer->mutex.lock();
-			return writer->state;
-		},
-		.map_create = [](void *socket) noexcept { WaitTillSaved(); static_cast<NetworkClientSocket *>(socket)->savegame = std::make_shared<PacketWriter>(static_cast<NetworkClientSocket *>(socket)); },
-		.map_destroy = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame->Destroy(); cs->savegame = nullptr; },
+		.map_create = [](void *socket) noexcept { WaitTillSaved(); auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame = std::make_shared<PacketWriter>(cs); cs->map_writer = cs->savegame->state; },
+		.map_destroy = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame->Destroy(); cs->savegame = nullptr; cs->map_writer = nullptr; },
 		.map_end = [](OpenTTDNetworkMapWriter *writer) noexcept { static_cast<PacketWriter *>(writer->resource)->mutex.unlock(); },
+		.map_lock = [](OpenTTDNetworkMapWriter *writer) noexcept { static_cast<PacketWriter *>(writer->resource)->mutex.lock(); },
 		.max_clients = RustNetworkMaxClients,
 		.max_companies = RustNetworkMaxCompanies,
 		.min_active_clients = RustNetworkMinActiveClients,

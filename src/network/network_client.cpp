@@ -52,7 +52,7 @@ struct PacketReader : LoadFilter {
 	PacketReader() : LoadFilter(nullptr), state(openttd_rust_network_map_reader_new()) {}
 	~PacketReader() { openttd_rust_network_map_reader_drop(this->state); }
 	size_t Read(uint8_t *rbuf, size_t size) override { return openttd_rust_network_map_read(this->state, rbuf, size); }
-	void Reset() override { this->state->read_bytes = 0; }
+	void Reset() override { openttd_rust_network_map_reset(this->state); }
 };
 
 /**
@@ -604,10 +604,8 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.leave = [](void *info) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },
 		.leave_error = [](void *info, uint8_t error) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error))); },
 		.map_create = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = std::make_shared<PacketReader>(); cs->map_reader = cs->savegame->state; },
-		.map_exists = [](void *game) noexcept -> bool { return ClientFromGame(game)->savegame != nullptr; },
 		.map_load_prepare = [](void *game, OpenTTDSessionLoad *load) noexcept {
 			auto *cs = ClientFromGame(game);
-			cs->savegame->Reset();
 			ClearErrorMessages();
 			_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
 			load->filter = cs->savegame;

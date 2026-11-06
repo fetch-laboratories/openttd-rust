@@ -58,10 +58,10 @@ pub struct Services {
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
-    pub map_begin: extern "C" fn(*mut c_void) -> *mut MapWriter,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_destroy: extern "C" fn(*mut c_void),
     pub map_end: extern "C" fn(*mut MapWriter),
+    pub map_lock: extern "C" fn(*mut MapWriter),
     pub max_clients: extern "C" fn() -> u8,
     pub max_companies: extern "C" fn() -> u8,
     pub min_active_clients: extern "C" fn() -> u8,
@@ -98,10 +98,10 @@ crate::abi::layouts! {
         join_date,
         joined,
         lost_connection_announcement,
-        map_begin,
         map_create,
         map_destroy,
         map_end,
+        map_lock,
         max_clients,
         max_companies,
         min_active_clients,
@@ -362,10 +362,12 @@ fn transfer_to_network_queue(
     f: &FrameServices,
     socket: *mut socket::GameSocket,
 ) -> bool {
-    let writer = (s.map_begin)(socket::server(socket));
-    if writer.is_null() {
+    let writer = unsafe { (*socket).map_writer };
+    // PacketWriter checks emptiness before acquiring the save-worker mutex.
+    if unsafe { (*writer).next_packet == (*writer).packets.len() } {
         return false;
     }
+    (s.map_lock)(writer);
     let mut last = false;
     loop {
         if unsafe { (*writer).next_packet == (*writer).packets.len() } {

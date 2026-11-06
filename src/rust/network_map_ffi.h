@@ -12,6 +12,7 @@ void openttd_rust_network_map_write(OpenTTDNetworkMapWriter *, const OpenTTDPack
 void openttd_rust_network_map_finish(OpenTTDNetworkMapWriter *, const OpenTTDPacketServices *, void (*)(bool) noexcept);
 OpenTTDNetworkMapReader *openttd_rust_network_map_reader_new();
 void openttd_rust_network_map_reader_drop(OpenTTDNetworkMapReader *);
+void openttd_rust_network_map_reset(OpenTTDNetworkMapReader *);
 size_t openttd_rust_network_map_read(OpenTTDNetworkMapReader *, uint8_t *, size_t);
 }
 #endif /* RUST_NETWORK_MAP_FFI_H */

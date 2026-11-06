@@ -49,7 +49,6 @@ pub struct Services {
     pub leave: extern "C" fn(*mut c_void),
     pub leave_error: extern "C" fn(*mut c_void, u8),
     pub map_create: extern "C" fn(*mut c_void),
-    pub map_exists: extern "C" fn(*mut c_void) -> bool,
     pub map_load_prepare: extern "C" fn(*mut c_void, *mut crate::session::Load),
     pub map_release: extern "C" fn(*mut c_void),
     pub own_client_id: *mut u32,
@@ -88,7 +87,6 @@ crate::abi::layouts! {
         leave,
         leave_error,
         map_create,
-        map_exists,
         map_load_prepare,
         map_release,
         own_client_id,
@@ -303,7 +301,7 @@ pub(crate) fn receive_map_begin(
     }
     debug!(net, 9, "Client::status = MAP");
     set_status(s, game, status::MAP);
-    if (s.map_exists)(socket::shell(game)) {
+    if unsafe { !(*game).map_reader.is_null() } {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     (s.map_create)(socket::shell(game));
@@ -330,7 +328,7 @@ pub(crate) fn receive_map_size(
     game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
+    if status(s, game) != status::MAP || unsafe { (*game).map_reader.is_null() } {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
@@ -350,7 +348,7 @@ pub(crate) fn receive_map_data(
     game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
+    if status(s, game) != status::MAP || unsafe { (*game).map_reader.is_null() } {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let size = unsafe { (*p).remaining() };
@@ -375,13 +373,14 @@ pub(crate) fn receive_map_done(
     frame: *mut crate::session::Frame,
     load: *mut crate::session::Load,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
+    if status(s, game) != status::MAP || unsafe { (*game).map_reader.is_null() } {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     debug!(net, 9, "Client::Receive_SERVER_MAP_DONE()");
     debug!(net, 9, "Client::join_status = PROCESSING");
     set_join_status(s, NETWORK_JOIN_STATUS_PROCESSING);
     (s.dirty_join)();
+    unsafe { crate::network_map::openttd_rust_network_map_reset((*game).map_reader) };
     (s.map_load_prepare)(socket::shell(game), load);
     let Ok(success) =
         crate::session::safe_load(session, frame, load, crate::openttd::GameMode::NORMAL)
