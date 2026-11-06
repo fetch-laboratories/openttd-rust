@@ -465,7 +465,7 @@ static void RoadServiceBoundary()
 	static OpenTTDEngineLifecycle engine_state{};
 	static OpenTTDEngineLoadingServices engines{};
 	/* The old reset carrier counted this same service observation. */
-	engines.resolve = [](uint16_t) noexcept { ++road_service_probe->services; return OpenTTDEngineRef{.state = &engine_state}; };
+	engines.resolve = [](uint16_t) noexcept { ++road_service_probe->services; return OpenTTDEngineRef{.shell = nullptr, .state = &engine_state, .id = 0, .type = VEH_ROAD}; };
 	settings.clock = &clocks; settings.engines = &engines;
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
 	const auto saved_clock = GetRustClockState();

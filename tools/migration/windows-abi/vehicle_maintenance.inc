@@ -39,11 +39,11 @@ static void VehicleMaintenanceBoundary()
 	static CompanySettings defaults{};
 	defaults.engine_renew = false; defaults.engine_renew_months = -4;
 	static OpenTTDCompanyIdentityServices identity{};
-	identity.settings = [](const Company *) noexcept { return &defaults; };
+	identity.settings = [](const Company *) noexcept -> const CompanySettings * { return &defaults; };
 	maintenance.company = &identity;
 	static OpenTTDEngineLifecycle engine_state{}; engine_state.reliability = 0x9876;
 	static OpenTTDEngineLoadingServices engines{};
-	engines.resolve = [](uint16_t) noexcept { return OpenTTDEngineRef{.state = &engine_state}; };
+	engines.resolve = [](uint16_t) noexcept { return OpenTTDEngineRef{.shell = nullptr, .state = &engine_state, .id = 0, .type = VEH_ROAD}; };
 	static OpenTTDClockServices clocks{};
 	clocks.using_wallclock_units = [](bool newgame) noexcept { CHECK(!newgame); return false; };
 	static OpenTTDSettingServices settings{}; settings.engines = &engines; settings.clock = &clocks;
