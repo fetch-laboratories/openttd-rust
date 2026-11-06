@@ -27,6 +27,7 @@
   "cargo-storage-unload",
   "clocks",
   "commands-lifecycle-control",
+  "content-protocol",
   "commands-lifecycle-reload",
   "commands-money",
   "commands-play-1",

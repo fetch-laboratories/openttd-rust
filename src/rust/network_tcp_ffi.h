@@ -17,8 +17,10 @@ struct OpenTTDNetworkTcpServices {
 	bool (*error_reset)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_reset);
 	OpenTTDByteSpan (*error_text)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_text);
 	bool (*error_would_block)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_would_block);
+	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
 	const OpenTTDPacketServices *packet;
 	void (*packet_delete_shell)(Packet *) noexcept OPENTTD_SERVICE_DEFAULT(packet_delete_shell);
+	void (*packet_enqueue)(NetworkTCPSocketHandler *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
 	OpenTTDPacketState *(*packet_record)(Packet *) noexcept OPENTTD_SERVICE_DEFAULT(packet_record);
 	intptr_t (*receive_bytes)(NetworkTCPSocketHandler *, uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(receive_bytes);
 	OpenTTDPacketState *(*receive_create)(NetworkTCPSocketHandler *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(receive_create);
