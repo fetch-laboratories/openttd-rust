@@ -179,18 +179,28 @@ def callee_copies(files: dict[str, str]) -> dict[str, int]:
             continue
         parameters = header[header.find("(") + 1 : header.rfind(")")].split(",")
         replacements: dict[str, str] = {}
+        receiver_types: dict[str, str] = {}
         for i, parameter in enumerate(parameters):
             name = re.search(r"\b(\w+)\s*$", parameter)
             if name:
                 replacements[name[1]] = f"arg{i}"
+                receiver_types[f"arg{i}"] = parameter[: name.start()].strip()
         body = re.sub(
             r"\b\w+\b", lambda m, names=replacements: names.get(m[0], m[0]), body
         )
+        for cast in re.finditer(
+            r"(?:static|reinterpret|const)_cast<([^>]*\*[^>]*)>"
+            r"\((arg\d+)(?:\.(?:shell|handle))?\)",
+            body,
+        ):
+            receiver_types[cast[2]] = cast[1]
         body = re.sub(
             r"(?:static|reinterpret|const)_cast<[^>]*\*[^>]*>\((arg\d+)(?:\.(?:shell|handle))?\)",
             r"\1",
             body,
         )
+        for vehicle in re.finditer(r"\bVehicleOf\((arg\d+)(?:\.handle)?\)", body):
+            receiver_types[vehicle[1]] = "Vehicle *"
         body = re.sub(r"\bVehicleOf\((arg\d+)(?:\.handle)?\)", r"\1", body)
         statements = [s.strip() for s in body.split(";") if s.strip()]
         while len(statements) > 1:
@@ -220,9 +230,16 @@ def callee_copies(files: dict[str, str]) -> dict[str, int]:
             signature = f"{call[1]}({','.join(arguments)})"
             identity = f"callee | {signature} | {path} | {header}"
             occurrences[identity] += 1
-            groups.setdefault(signature, {})[
-                f"{identity} | {occurrences[identity]}"
-            ] = line
+            receiver = re.match(r"(arg\d+)->", call[1])
+            receiver_type = receiver_types.get(receiver[1], "") if receiver else ""
+            # Member names identify a callee only within the receiver's concrete type.
+            receiver_type = re.sub(r"^(?:(?:const|volatile)\s+)+", "", receiver_type)
+            receiver_type = re.sub(
+                r"(?:\s*[*&]|\s+(?:const|volatile))+\s*$", "", receiver_type
+            )
+            receiver_type = "".join(receiver_type.split())
+            group = f"{receiver_type}::{signature}" if receiver_type else signature
+            groups.setdefault(group, {})[f"{identity} | {occurrences[identity]}"] = line
     return {
         k: v for group in groups.values() if len(group) > 1 for k, v in group.items()
     }
