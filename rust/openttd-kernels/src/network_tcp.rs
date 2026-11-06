@@ -485,7 +485,8 @@ pub(crate) fn packet_only_services() -> Services {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ptr::{null_mut, replace};
+    use std::mem::replace;
+    use std::ptr::null_mut;
     use std::sync::Mutex;
 
     #[derive(Default)]
