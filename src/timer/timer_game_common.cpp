@@ -34,8 +34,7 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 		.using_wallclock_units = RustUsingWallclockUnits,
 		.vehicle_id = RustVehicleIndexOpaque,
 		.vehicle_shift_dates = RustVehicleShiftDates,
-		.next_graph = RustLinkGraphNext,
-		.graph_owner = LiveGraphOwner,
+		.graph_pool = &_link_graph_pool.descriptor,
 	};
 	return services;
 }

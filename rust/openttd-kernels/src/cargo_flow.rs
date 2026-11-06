@@ -306,6 +306,20 @@ impl Clone for FlowMap {
     }
 }
 impl FlowMap {
+    pub(crate) fn import_shares(&mut self, shares: &[crate::linkgraph::OutputShare]) {
+        let first = shares.first().unwrap();
+        let flow = Flow {
+            shares: shares
+                .iter()
+                .filter(|s| s.has_share != 0)
+                .map(|s| (s.cumulative, s.via as u16))
+                .collect(),
+            unrestricted: first.unrestricted,
+        };
+        self.entries
+            .entry(first.origin as u16)
+            .or_insert_with(|| Box::into_raw(Box::new(flow)));
+    }
     fn erase(&mut self, key: u16) {
         if let Some(ptr) = self.entries.remove(&key) {
             unsafe {
@@ -596,11 +610,12 @@ pub unsafe extern "C" fn openttd_rust_flow_map_delete(
 }
 #[repr(C)]
 pub struct Services {
-    pub snapshot: *const crate::linkgraph::live::Graph,
+    pub job: *mut crate::linkgraph::job::JobRecord,
     pub live_graph: *const crate::linkgraph::live::Graph,
     pub context: *mut c_void,
-    pub read: extern "C" fn(*mut c_void, u8, u16, u16) -> u32,
-    pub job_flows: extern "C" fn(*mut c_void, u16) -> *mut FlowMap,
+    pub stations: *const crate::station_service::World,
+    pub links: *const crate::station_service::Links,
+    pub data_is_empty: extern "C" fn(*mut c_void, u16) -> bool,
     pub live_flows: extern "C" fn(*mut c_void, u16) -> *mut FlowMap,
     pub reroute: extern "C" fn(*mut c_void, u16, u16),
     pub finish: extern "C" fn(*mut c_void, u16, u8),
@@ -608,36 +623,47 @@ pub struct Services {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
     let s = unsafe { &*services };
-    let read = |op, node, edge| (s.read)(s.context, op, node, edge);
-    if read(0, 0, 0) == 0 {
+    if s.live_graph.is_null() {
         return;
     }
-    let size = unsafe { &*s.snapshot }.size();
-    let graph = read(12, 0, 0);
+    let snapshot = unsafe { (*s.job).graph };
+    let size = unsafe { &*snapshot }.size();
+    let graph = unsafe { (*s.job).graph_index.0 };
+    let cargo = unsafe { (*snapshot).cargo };
+    let stations = unsafe { &*s.stations };
+    let links = unsafe { &*s.links };
+    let job_flows = |node: u16| unsafe { (&(*s.job).nodes)[usize::from(node)].flows };
+    let mut edge_begin = 0;
     let valid_node = |node| {
-        read(3, node, 0) != 0 && read(10, node, 0) == graph && read(11, node, 0) == u32::from(node)
+        let station = unsafe { (&(*snapshot).nodes)[usize::from(node)].station };
+        let shell = (stations.get)(station);
+        !shell.is_null()
+            && (stations.is_station)(shell)
+            && (links.graphs.graph_id)(shell, cargo) == graph
+            && (links.graphs.node)(shell, cargo) == node
     };
     for node in 0..size {
-        let station = unsafe { &*s.snapshot }.nodes[usize::from(node)].station;
+        let station = unsafe { &*snapshot }.nodes[usize::from(node)].station;
+        let edge_count = unsafe { &*snapshot }.nodes[usize::from(node)].edges.len();
+        let first_edge = edge_begin;
+        edge_begin += edge_count;
         if !valid_node(node) {
             for index in 0..size {
-                let map = (s.job_flows)(s.context, index);
+                let map = job_flows(index);
                 unsafe {
                     (&mut *map).erase(station);
                 }
             }
             continue;
         }
-        let flows = (s.job_flows)(s.context, node);
+        let flows = job_flows(node);
         let live = (s.live_flows)(s.context, node);
-        let edge_count = read(4, node, 0);
         for edge in 0..edge_count {
-            let edge = edge as u16;
-            if read(5, node, edge) == 0 {
+            if unsafe { (&(*s.job).edge_flows)[first_edge + edge] } == 0 {
                 continue;
             }
-            let dest = read(6, node, edge) as u16;
-            let to = unsafe { &*s.snapshot }.nodes[usize::from(dest)].station;
+            let dest = unsafe { &*snapshot }.nodes[usize::from(node)].edges[edge].dest_node;
+            let to = unsafe { &*snapshot }.nodes[usize::from(dest)].station;
             let observed = if valid_node(dest) {
                 // No owner borrow crosses a native world leaf, including reroute.
                 unsafe { &*s.live_graph }.nodes[usize::from(node)]
@@ -664,7 +690,7 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
             let next = unsafe { openttd_rust_flow_map_at(live, u32::from(current.origin), 2) };
             let new = unsafe { openttd_rust_flow_map_at(flows, u32::from(current.origin), 1) };
             if new.found == 0 {
-                if read(8, node, 0) == 0 {
+                if (links.automatic_distribution)(cargo) {
                     unsafe {
                         (*current.flow).invalidate();
                     }
@@ -672,6 +698,10 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                     // Remove the live entry before routing, as in erase(it++).
                     let removed = unsafe { (*live).entries.remove(&current.origin).unwrap() };
                     let shares = unsafe { Box::from_raw(removed) };
+                    // The audited reroute changes station/loading-vehicle cargo only:
+                    // it cannot replace data/flows, delete the station or reset/yield.
+                    // Like the source iterator, raw live/next handles remain valid;
+                    // no borrowed station/map/entry reference crosses the callback.
                     for &via in shares.shares.values() {
                         (s.reroute)(s.context, node, via);
                     }
@@ -690,7 +720,8 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                 openttd_rust_flow_map_insert(live, origin, flow);
             }
         }
-        let empty = read(9, node, 0) as u8;
+        let empty = u8::from((s.data_is_empty)(s.context, node));
+        // finish may clear station data: no live map or entry is accessed afterward.
         (s.finish)(s.context, node, empty);
     }
 }
@@ -708,11 +739,12 @@ crate::abi::layouts! {
         found,
     };
     "OpenTTDCargoFlowServices" ["probe"] => Services {
-        snapshot,
+        job,
         live_graph,
         context,
-        read,
-        job_flows,
+        stations,
+        links,
+        data_is_empty,
         live_flows,
         reroute,
         finish,
@@ -795,37 +827,23 @@ mod tests {
     struct World {
         job: [*mut FlowMap; 3],
         live: [*mut FlowMap; 3],
-        manual: bool,
         events: Vec<(u8, u16, u16)>,
     }
     impl Drop for World {
         fn drop(&mut self) {
-            for ptr in self.job.into_iter().chain(self.live) {
+            for ptr in self.live {
                 unsafe {
                     drop(Box::from_raw(ptr));
                 }
             }
         }
     }
-    extern "C" fn job_read(ctx: *mut c_void, op: u8, node: u16, _edge: u16) -> u32 {
-        let world = unsafe { &*ctx.cast::<World>() };
-        match op {
-            0 | 7 | 13 | 14 => 1,
-            1 => 3,
-            2 => 100 + u32::from(node),
-            3 => u32::from(node != 2),
-            4 => u32::from(node == 0),
-            5 => 10,
-            6 => 2,
-            8 => u32::from(world.manual),
-            9 => u32::from(unsafe { (*world.live[usize::from(node)]).entries.is_empty() }),
-            10 | 12 => 42,
-            11 => u32::from(node),
-            _ => unreachable!(),
+    extern "C" fn data_is_empty(ctx: *mut c_void, node: u16) -> bool {
+        unsafe {
+            (*(*ctx.cast::<World>()).live[usize::from(node)])
+                .entries
+                .is_empty()
         }
-    }
-    extern "C" fn job_map(ctx: *mut c_void, node: u16) -> *mut FlowMap {
-        unsafe { (*ctx.cast::<World>()).job[usize::from(node)] }
     }
     extern "C" fn live_map(ctx: *mut c_void, node: u16) -> *mut FlowMap {
         unsafe { (*ctx.cast::<World>()).live[usize::from(node)] }
@@ -846,13 +864,125 @@ mod tests {
                 .push((1, node, u16::from(empty)));
         }
     }
+    thread_local! { static MANUAL: Cell<bool> = const { Cell::new(false) }; }
+    extern "C" fn station_get(id: u16) -> *mut crate::station::BaseStation {
+        if id == 102 {
+            std::ptr::null_mut()
+        } else {
+            std::ptr::without_provenance_mut(usize::from(id) + 1)
+        }
+    }
+    extern "C" fn is_station(_: *mut crate::station::BaseStation) -> bool {
+        true
+    }
+    extern "C" fn graph_id(_: *mut crate::station::BaseStation, _: u8) -> u16 {
+        42
+    }
+    extern "C" fn node_id(station: *mut crate::station::BaseStation, _: u8) -> u16 {
+        (station.addr() - 101) as u16
+    }
+    extern "C" fn automatic_distribution(_: u8) -> bool {
+        !MANUAL.with(Cell::get)
+    }
+    fn station_tables() -> (crate::station_service::World, crate::station_service::Links) {
+        // Unused leaves terminate if application unexpectedly reaches another operation.
+        macro_rules! unused {
+            (($($arg:ty),*) $(-> $result:ty)?) => {{
+                extern "C" fn leaf($(_: $arg),*) $(-> $result)? { unreachable!() }
+                leaf
+            }};
+        }
+        let graphs = Box::leak(Box::new(crate::linkgraph::live::Services {
+            assertions: true,
+            pool: std::ptr::null(),
+            station_id: unused!((*const crate::station::BaseStation) -> u16),
+            index: unused!((*const crate::linkgraph::live::Graph) -> crate::linkgraph_type::LinkGraphID),
+            station: unused!((u16, u8) -> crate::linkgraph::live::StationInput),
+            attach: unused!((u16, u8, u16, u16)),
+            set_node: unused!((u16, u8, u16)),
+            delete_graph: unused!((*mut crate::linkgraph::live::Graph)),
+            graph_id,
+            node: node_id,
+            available: unused!(() -> bool),
+            allocate: unused!((u8) -> *mut crate::linkgraph::live::Graph),
+        }));
+        let world = crate::station_service::World {
+            graphs,
+            station: unused!((u16) -> crate::station_service::LoadingStation),
+            station_owner: unused!((*mut crate::station::BaseStation) -> u8),
+            station_exclusivity: unused!((*mut crate::station::BaseStation) -> crate::station_service::StationExclusivity),
+            rating_counts: unused!((*mut crate::station::BaseStation, u8) -> crate::station_service::RatingCounts),
+            get: station_get,
+            owner: unused!((*mut crate::station::BaseStation) -> *mut crate::station_service::Service),
+            pool_size: unused!(() -> usize),
+            environment: crate::services::EnvironmentServices {
+                editor: unused!(() -> bool),
+                freeform_edges: unused!(() -> bool),
+            },
+            facilities: unused!((*mut crate::station::BaseStation) -> u8),
+            in_use: unused!((*mut crate::station::BaseStation) -> bool),
+            is_station,
+            local_owner: unused!((*mut crate::station::BaseStation) -> bool),
+            town_statue: unused!((*mut crate::station::BaseStation) -> bool),
+            select_goods: unused!(() -> bool),
+            rating_cheat: unused!(() -> bool),
+            available: unused!((*mut crate::station::BaseStation, u8) -> u32),
+            cargo_valid: unused!((u8) -> bool),
+            rating_callback_enabled: unused!((u8) -> bool),
+            passenger_cargo: unused!((u8) -> bool),
+            packet_available: unused!(() -> bool),
+            rating_redraw: unused!((*mut crate::station::BaseStation, bool)),
+            acceptance_news: unused!((*mut crate::station::BaseStation, u64, bool)),
+            acceptance_redraw: unused!((*mut crate::station::BaseStation)),
+            delete_station: unused!((*mut crate::station::BaseStation)),
+            append_packet: unused!((
+                *mut crate::station::BaseStation,
+                u8,
+                u32,
+                crate::cargo_storage::Source
+            )),
+            station_list_invalidation: unused!((*mut crate::station::BaseStation, i32)),
+            waiting_redraw: unused!((*mut crate::station::BaseStation)),
+            cargo_registry: std::ptr::null(),
+            with_truncation: unused!((
+                *mut crate::station::BaseStation,
+                u8,
+                u32,
+                *mut c_void,
+                crate::station_service::Scope
+            )),
+            truncate_next: unused!((*mut c_void) -> crate::station_service::TruncatedSource),
+            shared: std::ptr::null(),
+        };
+        let links = crate::station_service::Links {
+            graphs,
+            automatic_distribution,
+            edge: unused!((*mut crate::station::BaseStation, u16) -> crate::station_service::Edge),
+            delete_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
+            restrict_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
+            order_list: unused!((u16) -> *mut crate::orders::NativeOrderList),
+            order_pool_size: unused!(() -> usize),
+            order_count: unused!((*mut crate::orders::NativeOrderList) -> usize),
+            order_destination: unused!((*mut crate::orders::NativeOrderList, usize) -> crate::station_service::OrderDestination),
+            order_vehicle: unused!((*mut crate::orders::NativeOrderList) -> Option<crate::vehicle::VehicleRef>),
+            next_shared: unused!((crate::vehicle::VehicleRef) -> Option<crate::vehicle::VehicleRef>),
+            stopped_in_depot: unused!((crate::vehicle::VehicleRef) -> bool),
+            last_service: unused!((crate::vehicle::VehicleRef) -> i32),
+            cargo_type: unused!((crate::vehicle::VehicleRef) -> u8),
+            goods_entry: unused!((*mut crate::station::BaseStation, u8) -> *const crate::station_base::GoodsEntry),
+            station_resolver: std::ptr::null(),
+            vehicle_resolver: std::ptr::null(),
+        };
+        (world, links)
+    }
     #[test]
     fn live_application_erases_before_rerouting_and_preserves_node_order() {
         for manual in [false, true] {
+            MANUAL.with(|value| value.set(manual));
+            let (stations, links) = station_tables();
             let mut world = World {
                 job: std::array::from_fn(|_| openttd_rust_flow_map_new()),
                 live: std::array::from_fn(|_| openttd_rust_flow_map_new()),
-                manual,
                 events: Vec::new(),
             };
             unsafe {
@@ -865,21 +995,59 @@ mod tests {
             }
             let snapshot = crate::linkgraph::live::openttd_rust_live_graph_new(0);
             unsafe {
-                *crate::linkgraph::live::openttd_rust_live_graph_date(snapshot) = 0;
+                (*snapshot).last_compression = 0;
                 crate::linkgraph::live::openttd_rust_live_graph_init(snapshot, 3);
                 for node in 0..3 {
-                    *crate::linkgraph::live::openttd_rust_live_node_fields(snapshot, node)
-                        .station = 100 + node;
+                    (&mut (*snapshot).nodes)[usize::from(node)].station = 100 + node;
                 }
             }
+            let settings = crate::linkgraph::job::SnapshotSettings {
+                recalc_time: 60,
+                recalc_interval: 4,
+                distribution_pax: 1,
+                distribution_mail: 1,
+                distribution_armoured: 1,
+                distribution_default: 1,
+                accuracy: 2,
+                demand_size: 100,
+                demand_distance: 100,
+                short_path_saturation: 80,
+            };
+            unsafe {
+                crate::linkgraph::live::openttd_rust_live_node_add_edge(
+                    snapshot,
+                    0,
+                    2,
+                    20,
+                    0,
+                    0,
+                    crate::linkgraph_type::EdgeUpdateModes::UNRESTRICTED,
+                );
+            }
+            let job = unsafe {
+                crate::linkgraph::job::openttd_rust_linkgraph_job_new(
+                    snapshot,
+                    crate::linkgraph_type::LinkGraphID(42),
+                    &raw const settings,
+                )
+            };
+            unsafe {
+                (*job).nodes = crate::industrytype::NativeVec::from_vec(
+                    world
+                        .job
+                        .map(|flows| crate::linkgraph::job::JobNode { flows })
+                        .into(),
+                );
+                (*job).edge_flows = crate::industrytype::NativeVec::from_vec(vec![10]);
+            }
             let services = Services {
-                snapshot,
-                // The sole annotated edge targets invalid station 102; source
-                // short-circuiting must never read the live graph in this test.
-                live_graph: std::ptr::null(),
+                job,
+                // The sole annotated edge targets invalid station 102.
+                live_graph: snapshot,
                 context: (&raw mut world).cast(),
-                read: job_read,
-                job_flows: job_map,
+                stations: &raw const stations,
+                links: &raw const links,
+                data_is_empty,
                 live_flows: live_map,
                 reroute,
                 finish,
@@ -903,6 +1071,9 @@ mod tests {
                 assert_eq!(world.events, [(1, 0, 0), (1, 1, 0)]);
                 let flow = unsafe { &*(&(*world.live[0]).entries)[&7] };
                 assert_eq!(flow.shares, BTreeMap::from([(1, 106), (2, 107)]));
+            }
+            unsafe {
+                crate::linkgraph::job::openttd_rust_linkgraph_job_delete(job);
             }
         }
     }
