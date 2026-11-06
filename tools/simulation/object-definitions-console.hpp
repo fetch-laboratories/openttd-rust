@@ -86,11 +86,12 @@ static bool ObjectDefinitionsScenario(std::span<std::string_view> args)
 		auto config = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		ObjectNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__); config->flags.Reset(GRFConfigFlag::InitOnly); _grfconfig.push_back(std::move(config));
 	}
-	ReloadNewGRFData(); ObjectNeed(ObjectSpec::Count() == 8, __LINE__); ObjectDefinitionState("first");
+	// The unchanged input reserves mapping IDs 5 through 9; these files allocate 10 through 12.
+	ReloadNewGRFData(); ObjectNeed(ObjectSpec::Count() == 13, __LINE__); ObjectDefinitionState("first");
 	std::array<ObjectType, 3> ids{_object_mngr.GetID(0, 0x3436414F), _object_mngr.GetID(1, 0x3436414F), _object_mngr.GetID(0, 0x3436424F)};
 	ResetNewGRFData();
 	fmt::print(stderr, "OBJECT definition reset mappings {} {} {} {}\n", ObjectSpec::Count(), _object_mngr.GetID(0, 0x3436414F) == ids[0], _object_mngr.GetID(1, 0x3436414F) == ids[1], _object_mngr.GetID(0, 0x3436424F) == ids[2]);
-	std::reverse(_grfconfig.begin(), _grfconfig.end()); ReloadNewGRFData(); ObjectNeed(ObjectSpec::Count() == 8, __LINE__); ObjectDefinitionState("reordered");
+	std::reverse(_grfconfig.begin(), _grfconfig.end()); ReloadNewGRFData(); ObjectNeed(ObjectSpec::Count() == 13, __LINE__); ObjectDefinitionState("reordered");
 	fmt::print(stderr, "OBJECT definition reordered mappings {} {} {}\n", _object_mngr.GetID(0, 0x3436414F) == ids[0], _object_mngr.GetID(1, 0x3436414F) == ids[1], _object_mngr.GetID(0, 0x3436424F) == ids[2]);
 	if (args.size() > 3) ObjectNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
 	fmt::print(stderr, "OBJECT definition complete true\n"); return true;

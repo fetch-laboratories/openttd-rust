@@ -430,7 +430,10 @@ def check_definitions(
         raise RuntimeError("production object parser observations missing")
     for phase in ("first", "reordered"):
         state = definition_rows(rows, phase)
-        if "count 8" not in state or sum(row.startswith("spec ") for row in state) != 8:
+        if (
+            "count 13" not in state
+            or sum(row.startswith("spec ") for row in state) != 13
+        ):
             raise RuntimeError("production object publication records missing")
     key = "object_definitions_" + str(mode)
     if role == "reference":
