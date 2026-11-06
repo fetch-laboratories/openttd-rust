@@ -7,6 +7,7 @@
 
 /** @file towns-console.cpp Identical founding/house commands and otherwise unreachable name/cancellation inputs. */
 #include "stdafx.h"
+#include "pool-record-fixture.hpp"
 #ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #endif
@@ -149,7 +150,7 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 		}
 	}
 	peer.Restore();
-	Backup<uint8_t> funding(town->fund_buildings_months, 0);
+	Backup<uint8_t> funding(FIXTURE_POOL_RECORD(town).fund_buildings_months, 0);
 	Money price = prices[to_underlying(TownAction::FundBuildings)];
 	for (int delta : {-1, 0}) {
 		cash.Change(price + delta);
@@ -164,7 +165,7 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 		save("test");
 		Cost("money-exec", CmdDoTownAction(DoCommandFlag::Execute, town->index, TownAction::FundBuildings));
 		save("after");
-		fmt::print(stderr, "TOWN money-funded {} {}\n", delta, town->fund_buildings_months);
+		fmt::print(stderr, "TOWN money-funded {} {}\n", delta, FIXTURE_POOL_RECORD(town).fund_buildings_months);
 	}
 	fmt::print(stderr, "TOWN money-rng {} {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == random.state[0] && _random.state[1] == random.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
 	cash.Restore(); funding.Restore(); infinite.Restore(); interactive_seed.Restore();
@@ -174,7 +175,7 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 static void TownStatueSearch(Town *town, Company *company)
 {
 	std::vector<TileIndex> tiles;
-	for (TileIndex tile : SpiralTileSequence(town->xy, 9)) tiles.push_back(tile);
+	for (TileIndex tile : SpiralTileSequence(FIXTURE_POOL_RECORD(town).xy, 9)) tiles.push_back(tile);
 	if (tiles.size() != 81) std::abort();
 	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
 	for (TileIndex tile : tiles) {
@@ -217,7 +218,7 @@ static void TownStatueSearch(Town *town, Company *company)
 		bool placed = IsObjectTypeTile(last, OBJECT_STATUE) && GetTileOwner(last) == company->index && Object::GetByTile(last)->town == town;
 		uint statues = 0;
 		for (TileIndex tile : tiles) statues += IsObjectTypeTile(tile, OBJECT_STATUE);
-		fmt::print(stderr, "TOWN statue-state {} {} {} {}\n", open, placed, statues, town->statues.Test(company->index));
+		fmt::print(stderr, "TOWN statue-state {} {} {} {}\n", open, placed, statues, FIXTURE_POOL_RECORD(town).statues.Test(company->index));
 	}
 	owner.Change(OWNER_DEITY);
 	for (TileIndex tile : tiles) {
@@ -225,7 +226,7 @@ static void TownStatueSearch(Town *town, Company *company)
 	}
 	for (const auto &[corner, height] : heights) SetTileHeight(corner, height);
 	bool restored = std::ranges::all_of(heights, [](const auto &entry) { return TileHeight(entry.first) == entry.second; });
-	fmt::print(stderr, "TOWN statue-cleanup {} {}\n", !town->statues.Test(company->index) && !IsObjectTypeTile(last, OBJECT_STATUE), restored);
+	fmt::print(stderr, "TOWN statue-cleanup {} {}\n", !FIXTURE_POOL_RECORD(town).statues.Test(company->index) && !IsObjectTypeTile(last, OBJECT_STATUE), restored);
 	owner.Restore(); interactive_seed.Restore();
 }
 /* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
@@ -377,20 +378,20 @@ static void TownSpatial(const char *phase, bool ties)
 {
 	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
 	_interactive_random.SetSeed(12345);
-	for (const Town *town : Town::Iterate()) TownSpatialQueries(phase, town->xy);
+	for (const Town *town : Town::Iterate()) TownSpatialQueries(phase, FIXTURE_POOL_RECORD(town).xy);
 	if (!ties) return;
 	std::vector<std::pair<Town *, TileIndex>> positions;
 	for (Town *town : Town::Iterate()) {
-		positions.emplace_back(town, town->xy);
-		town->xy = TileXY(100, 100);
+		positions.emplace_back(town, FIXTURE_POOL_RECORD(town).xy);
+		FIXTURE_POOL_RECORD(town).xy = TileXY(100, 100);
 	}
 	if (positions.size() < 3) std::abort();
-	positions[0].first->xy = TileXY(20, 20);
-	positions[1].first->xy = TileXY(40, 20);
-	positions[2].first->xy = TileXY(30, 30);
+	FIXTURE_POOL_RECORD(positions[0].first).xy = TileXY(20, 20);
+	FIXTURE_POOL_RECORD(positions[1].first).xy = TileXY(40, 20);
+	FIXTURE_POOL_RECORD(positions[2].first).xy = TileXY(30, 30);
 	RebuildTownKdtree();
 	TownSpatialQueries("ties", TileXY(30, 20));
-	for (auto [town, tile] : positions) town->xy = tile;
+	for (auto [town, tile] : positions) FIXTURE_POOL_RECORD(town).xy = tile;
 	RebuildTownKdtree();
 }
 /* Commands use the unchanged native bodies in the reference. The explicit pool
@@ -447,7 +448,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	Cost("expand-random", CmdExpandTown(DoCommandFlag::Execute, id, 0, TownExpandMode::Roads));
 	owner.Change(company->index);
 	if (!Station::CanAllocateItem()) std::abort();
-	Station *station = new Station(town->xy);
+	Station *station = new Station(FIXTURE_POOL_RECORD(town).xy);
 #ifdef WITH_RUST
 	openttd_test_station_insert(&GetRustSharedServices(), station);
 #else
@@ -468,7 +469,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	std::array<Station *, 4> stations{station};
 	for (size_t i = 1; i < stations.size(); ++i) {
 		if (!Station::CanAllocateItem()) std::abort();
-		stations[i] = new Station(i < 2 ? town->xy : neighbour->xy);
+		stations[i] = new Station(i < 2 ? FIXTURE_POOL_RECORD(town).xy : FIXTURE_POOL_RECORD(neighbour).xy);
 
 #ifdef WITH_RUST
 	openttd_test_station_insert(&GetRustSharedServices(), stations[i]);
@@ -489,8 +490,8 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		_random.SetSeed(seed); _interactive_random.SetSeed(12345);
 		Randomizer expected = _random; expected.Next();
 		const Randomizer interactive = _interactive_random;
-		town->unwanted[company->index] = 0; town->ratings[company->index] = initial;
-		town->exclusivity = other->index; town->exclusive_counter = 12;
+		FIXTURE_POOL_RECORD(town).unwanted[company->index] = 0; FIXTURE_POOL_RECORD(town).ratings[company->index] = initial;
+		FIXTURE_POOL_RECORD(town).exclusivity = other->index; FIXTURE_POOL_RECORD(town).exclusive_counter = 12;
 		for (size_t i = 0; i < stations.size(); ++i) {
 			for (size_t cargo = 0; cargo < stations[i]->goods.size(); ++cargo) stations[i]->goods[cargo].rating = 70 + 20 * i + cargo;
 		}
@@ -507,11 +508,11 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		Cost("bribe-exec", CmdDoTownAction(DoCommandFlag::Execute, id, TownAction::Bribe));
 		fmt::print(stderr, "TOWN bribe-outcome {} {} {} {} {} {} {}\n", initial, bribe_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
 		save("after");
-		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, town->ratings[company->index], town->unwanted[company->index], station->goods[0].rating, town->exclusive_counter, town->exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
+		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, FIXTURE_POOL_RECORD(town).ratings[company->index], FIXTURE_POOL_RECORD(town).unwanted[company->index], station->goods[0].rating, FIXTURE_POOL_RECORD(town).exclusive_counter, FIXTURE_POOL_RECORD(town).exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
 	}
 	duration.Restore(); local.Restore();
 	/* Querying a different company must retain the original _current_company comparison. */
-	town->ratings[other->index] = RATING_BRIBE_MAXIMUM;
+	FIXTURE_POOL_RECORD(town).ratings[other->index] = RATING_BRIBE_MAXIMUM;
 	fmt::print(stderr, "TOWN foreign-mask {}\n", GetMaskOfTownActions(other->index, town).base());
 	for (Station *st : stations) delete st;
 	roads.Change(false); buildings.Change(false); rights.Change(false); bribes.Change(false);
@@ -544,8 +545,8 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		if (built.Failed()) std::abort();
 		Industry *industry = nullptr; for (Industry *i : Industry::Iterate()) if (!original_industries.contains(i->index)) industry = i;
 		if (industry == nullptr) std::abort();
-		industry->town = target; oilrig = industry->index;
-		for (TileIndex part : industry->location) if (IsTileType(part, MP_INDUSTRY) && GetIndustryGfx(part) == GFX_OILRIG_1 && IsTileType(part + TileDiffXY(0, 1), MP_INDUSTRY)) { BuildOilRig(part); break; }
+		FIXTURE_POOL_RECORD(industry).town = target; oilrig = industry->index;
+		for (TileIndex part : FIXTURE_POOL_RECORD(industry).location) if (IsTileType(part, MP_INDUSTRY) && GetIndustryGfx(part) == GFX_OILRIG_1 && IsTileType(part + TileDiffXY(0, 1), MP_INDUSTRY)) { BuildOilRig(part); break; }
 		for (Station *st : Station::Iterate()) if (st->industry == industry) st->town = target;
 		break;
 	}
@@ -553,9 +554,9 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	if (oilrig == IndustryID::Invalid()) { Cost("fixture-oilrig", CmdBuildIndustry({}, TileXY(8, 8), IndustryType{5}, 0, true, 123)); std::abort(); }
 	CommandCost oilrig_refusal = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-oilrig-refusal", oilrig_refusal);
 	fmt::print(stderr, "TOWN oilrig-refusal {} {}\n", oilrig_refusal.Failed(), Industry::IsValidID(oilrig));
-	for (TileIndex part : Industry::Get(oilrig)->location) if (IsTileType(part, MP_INDUSTRY)) { Cost("delete-oilrig-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, part)); break; }
+	for (TileIndex part : FIXTURE_POOL_RECORD(Industry::Get(oilrig)).location) if (IsTileType(part, MP_INDUSTRY)) { Cost("delete-oilrig-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, part)); break; }
 	if (!Station::CanAllocateItem()) std::abort();
-	Station *veto = new Station(target->xy);
+	Station *veto = new Station(FIXTURE_POOL_RECORD(target).xy);
 #ifdef WITH_RUST
 	openttd_test_station_insert(&GetRustSharedServices(), veto);
 #else
@@ -565,17 +566,17 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	Cost("delete-station-veto", CmdDeleteTown(DoCommandFlag::Execute, removed));
 	delete veto;
 	if (!Waypoint::CanAllocateItem()) std::abort();
-	Waypoint *waypoint = new Waypoint(target->xy); waypoint->town = target; waypoint->owner = company->index;
+	Waypoint *waypoint = new Waypoint(FIXTURE_POOL_RECORD(target).xy); waypoint->town = target; waypoint->owner = company->index;
 	Cost("delete-waypoint-veto", CmdDeleteTown({}, removed)); delete waypoint;
 	if (!Depot::CanAllocateItem()) std::abort();
-	Depot *depot = new Depot(target->xy); depot->town = target;
+	Depot *depot = new Depot(FIXTURE_POOL_RECORD(target).xy); depot->town = target;
 	Cost("delete-depot-veto", CmdDeleteTown({}, removed)); delete depot;
 	bool industry_built = false;
 	for (TileIndex at{}; at < Map::Size(); ++at) {
 		if (!IsTileType(at, MP_CLEAR) || CmdBuildIndustry({}, at, IndustryType{0}, 0, true, 321).Failed()) continue;
 		CommandCost built = CmdBuildIndustry(DoCommandFlag::Execute, at, IndustryType{0}, 0, true, 321); Cost("delete-industry-build", built);
 		if (built.Failed()) std::abort();
-		Industry::GetByTile(at)->town = target; industry_built = true; break;
+		FIXTURE_POOL_RECORD(Industry::GetByTile(at)).town = target; industry_built = true; break;
 	}
 	if (!industry_built) std::abort();
 	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) {
@@ -601,11 +602,11 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (TileIndex at{}; at < Map::Size(); ++at) if (IsTileType(at, MP_CLEAR) && GetTileSlope(at) == SLOPE_FLAT && !IsBridgeAbove(at)) { BuildObject(OBJECT_TRANSMITTER, at, OWNER_NONE, target); detached = Object::GetByTile(at); break; }
 	if (detached == nullptr) std::abort();
 	if (!PersistentStorage::CanAllocateItem() || !CargoPacket::CanAllocateItem() || !Subsidy::CanAllocateItem()) std::abort();
-	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, target->xy); auto storage_id = storage->index; target->psa_list.push_back(storage);
+	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, FIXTURE_POOL_RECORD(target).xy); auto storage_id = storage->index; target->psa_list.push_back(storage);
 	auto *packet = new CargoPacket(StationID::Invalid(), 7, {removed, SourceType::Town});
 	auto *subsidy = new Subsidy(CargoType{0}, {removed, SourceType::Town}, {id, SourceType::Town}, 12); auto subsidy_id = subsidy->index;
 	TownSpatial("before-delete", true);
-	const TileIndex deleted_xy = target->xy;
+	const TileIndex deleted_xy = FIXTURE_POOL_RECORD(target).xy;
 	Cost("delete-test", CmdDeleteTown({}, removed));
 	CommandCost deleted = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-exec", deleted);
 	TownSpatialQueries("deleted", deleted_xy);
@@ -811,13 +812,13 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "TOWN definition-allow-construction founding {} {}\n", founded.first, founded.second);
 	HouseDefinitionNeed(founded.first == 0 && founded.second > 0, "allow-construction-founding");
 	Town *town = Town::Get(town_id);
-	uint population = town->cache.population;
+	uint population = FIXTURE_TOWN_CACHE(town).population;
 	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, town_id, 128, {TownExpandMode::Buildings, TownExpandMode::Roads}).Succeeded(), "expand-command");
-	HouseDefinitionNeed(town->cache.population > population, "growth");
+	HouseDefinitionNeed(FIXTURE_TOWN_CACHE(town).population > population, "growth");
 	const auto expanded = AllowConstructionTiles();
 	fmt::print(stderr, "TOWN definition-allow-construction expansion {} {}\n", expanded.first, expanded.second);
 	HouseDefinitionNeed(expanded.first == 0 && expanded.second > founded.second, "allow-construction-expansion");
-	fmt::print(stderr, "TOWN definition-population {} {}\n", population, town->cache.population);
+	fmt::print(stderr, "TOWN definition-population {} {}\n", population, FIXTURE_TOWN_CACHE(town).population);
 	HouseID before = _house_mngr.GetID(0, HOUSE_DEFINITION_GRF);
 	ResetNewGRFData();
 	HouseDefinitionNeed(_house_mngr.GetID(0, HOUSE_DEFINITION_GRF) == before && HouseSpec::Specs().size() == NEW_HOUSE_OFFSET, "reset-keeps-hids");
@@ -862,7 +863,7 @@ static bool TownDataScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "TOWN data {} {} {} {} {} {} {} {}\n", name, Town::GetNumItems() - towns, Sign::GetNumItems() - signs, town_data_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 		for (const Town *t : Town::Iterate()) {
 			if (std::ranges::find(before, t->index) != before.end()) continue;
-			fmt::print(stderr, "TOWN data-town {} {} {} {} {} {}\n", name, t->GetCachedName(), t->xy.base(), t->larger_town, t->cache.num_houses, t->cache.population);
+			fmt::print(stderr, "TOWN data-town {} {} {} {} {} {}\n", name, t->GetCachedName(), FIXTURE_POOL_RECORD(t).xy.base(), FIXTURE_POOL_RECORD(t).larger_town, FIXTURE_TOWN_CACHE(t).num_houses, FIXTURE_TOWN_CACHE(t).population);
 		}
 		town_data_errors = -1;
 	}
@@ -896,10 +897,10 @@ static bool TownsScenario(std::span<std::string_view> args)
 	Cost("edge", CmdFoundTown({}, TileIndex{}, TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Edge"));
 	TileIndex site = Site();
 	Town *initial = *Town::Iterate().begin(); TownNameParams initial_params(initial); std::string generated_name = GetTownName(initial);
-	bool generated_duplicate = !VerifyTownName(initial->townnameparts, &initial_params);
+	bool generated_duplicate = !VerifyTownName(FIXTURE_POOL_RECORD(initial).townnameparts, &initial_params);
 	Cost("custom-generated", CmdFoundTown({}, site, TSZ_SMALL, false, TL_ORIGINAL, false, 0, generated_name));
 	Cost("custom-initial", CmdRenameTown(DoCommandFlag::Execute, initial->index, generated_name));
-	fmt::print(stderr, "TOWN automatic {} {}\n", generated_duplicate, !VerifyTownName(initial->townnameparts, &initial_params));
+	fmt::print(stderr, "TOWN automatic {} {}\n", generated_duplicate, !VerifyTownName(FIXTURE_POOL_RECORD(initial).townnameparts, &initial_params));
 	owner.Change(company->index);
 #ifdef WITH_RUST
 	Backup<Money> money(company->Finances().money, 0);

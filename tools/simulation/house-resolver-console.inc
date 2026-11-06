@@ -2,6 +2,7 @@
 /* Real Action2 programs through house callbacks, plus native state inputs absent
  * from external-GRF-free saves. Every transient spec/group is restored. */
 #ifdef WITH_RUST
+#include "pool-record-fixture.hpp"
 #include "tests/station_spatial_fixture.hpp"
 #endif
 #include "newgrf_house.h"
@@ -159,11 +160,11 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	}
 	/* Preserve signed ratings, high-byte aliases, transported percentages,
 	 * native history periods and null/unavailable parent behavior. */
-	const auto old_rating = town->ratings[0]; town->ratings[0] = -1234;
-	const auto old_received = town->received; const auto old_population = town->cache.population;
-	town->cache.population = UINT32_MAX;
-	town->received[TAE_FOOD].new_act = 0xABCD; town->received[TAE_FOOD].old_act = 0x5678;
-	town->received[TAE_WATER].new_act = 0x2345; town->received[TAE_WATER].old_act = 0xFEDC;
+	const auto old_rating = FIXTURE_POOL_RECORD(town).ratings[0]; FIXTURE_POOL_RECORD(town).ratings[0] = -1234;
+	const auto old_received = FIXTURE_POOL_RECORD(town).received; const auto old_population = FIXTURE_TOWN_CACHE(town).population;
+	FIXTURE_TOWN_CACHE(town).population = UINT32_MAX;
+	FIXTURE_POOL_RECORD(town).received[TAE_FOOD].new_act = 0xABCD; FIXTURE_POOL_RECORD(town).received[TAE_FOOD].old_act = 0x5678;
+	FIXTURE_POOL_RECORD(town).received[TAE_WATER].new_act = 0x2345; FIXTURE_POOL_RECORD(town).received[TAE_WATER].old_act = 0xFEDC;
 
 	for (CargoLabel label : {CT_PASSENGERS, CT_MAIL}) {
 		CargoType type = GetCargoTypeByLabel(label); if (!IsValidCargoType(type)) continue;
@@ -175,7 +176,7 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	for (uint8_t var : {0x40, 0x41, 0x80, 0x81, 0x82, 0x83, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x9C, 0x9D, 0x9E, 0x9F, 0xAE, 0xB2, 0xB6, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xFF}) {
 		run("parent", CBID_HOUSE_ALLOW_CONSTRUCTION, var, 0, true, tile, 0, VSG_SCOPE_PARENT);
 	}
-	town->ratings[0] = old_rating; town->received = old_received; town->cache.population = old_population;
+	FIXTURE_POOL_RECORD(town).ratings[0] = old_rating; FIXTURE_POOL_RECORD(town).received = old_received; FIXTURE_TOWN_CACHE(town).population = old_population;
 	HouseResolverObject future(first, tile, town, CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, true);
 	const size_t psa_count = town->psa_list.size(); future.GetScope(VSG_SCOPE_PARENT)->StorePSA(0, 409);
 	require(psa_count == town->psa_list.size());

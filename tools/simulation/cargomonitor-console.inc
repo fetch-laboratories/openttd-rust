@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real facades/chunk handlers; malformed loads terminate before any further game work. */
+#include "pool-record-fixture.hpp"
 #include "cargomonitor.h"
 #include "vehicle-record-fixture.hpp"
 #include "saveload-codec-console.hpp"
@@ -20,7 +21,7 @@ static MonitorSite FindMonitorSite(CargoType pax)
 		for (const auto &entry : st->industries_near) {
 			if (site.st != nullptr) break;
 			Industry *ind = entry.industry;
-			if (ind->exclusive_supplier != INVALID_OWNER) continue;
+			if (FIXTURE_POOL_RECORD(ind).exclusive_supplier != INVALID_OWNER) continue;
 			for (const auto &a : ind->accepted) {
 				if (!IsValidCargoType(a.cargo) || HasBit(st->always_accepted, a.cargo) || a.waiting != 0) continue;
 				site.st = st; site.near = ind; site.accepted = a.cargo; break;

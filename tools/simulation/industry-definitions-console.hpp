@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file industry-definitions-console.hpp Real GRF definitions, funding and reload evidence. */
+#include "pool-record-fixture.hpp"
 #include "newgrf_config.h"
 #include "newgrf_badge.h"
 #include "newgrf/newgrf_internal.h"
@@ -115,7 +116,7 @@ static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 	_settings_game.economy.multiple_industry_per_town = true;
 	bool funded = false;
 	for (const Industry *source : Industry::Iterate()) {
-		if (source->type != 0) continue;
+		if (FIXTURE_POOL_RECORD(source).type != 0) continue;
 		for (const Station *station : source->stations_near) {
 			AutoRestoreBackup company(_current_company, station->owner);
 			for (TileIndex at{0}; at < Map::Size(); ++at) {
@@ -123,7 +124,7 @@ static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 				CommandCost result = Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, at, IndustryType{0}, 0, true, 0x475);
 				if (result.Failed()) continue;
 				const Industry *built = Industry::GetByTile(at);
-				DefinitionRequire(built != nullptr && built->type == 0 && built->location.w == 1 && built->location.h == 1, "funded-custom-layout");
+				DefinitionRequire(built != nullptr && FIXTURE_POOL_RECORD(built).type == 0 && FIXTURE_POOL_RECORD(built).location.w == 1 && FIXTURE_POOL_RECORD(built).location.h == 1, "funded-custom-layout");
 				fmt::print(stderr, "INDUSTRY-DEFINITIONS funded {} {} {} {}\n", built->index.base(), at.base(), station->index.base(), result.GetCost());
 				funded = true; break;
 			}

@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file industries-console.cpp Real Action2 programs on both games' industry specs. */
 #include "stdafx.h"
+#include "pool-record-fixture.hpp"
 #include "console_internal.h"
 #include "industry.h"
 #include "newgrf_industrytiles.h"
@@ -35,7 +36,7 @@ static DeterministicSpriteGroup *Query(uint8_t variable, uint8_t parameter, cons
 /** Query the public virtuals, including unavailable and empty-slot results. */
 static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, IndustryGfx gfx, GRFFile &file)
 {
-	IndustriesResolverObject live(tile, i, i->type), missing(INVALID_TILE, nullptr, i->type), invalid(INVALID_TILE, i, i->type), prototype(tile, temporary, i->type);
+	IndustriesResolverObject live(tile, i, FIXTURE_POOL_RECORD(i).type), missing(INVALID_TILE, nullptr, FIXTURE_POOL_RECORD(i).type), invalid(INVALID_TILE, i, FIXTURE_POOL_RECORD(i).type), prototype(tile, temporary, FIXTURE_POOL_RECORD(i).type);
 	IndustryTileResolverObject tile_live(gfx, tile, i), tile_temporary(gfx, tile, temporary);
 	IndustryTileScopeResolver tile_null(live, nullptr, tile);
 	std::vector<uint8_t> variables{0x7A, 0x7C, 0xB0, 0xB3, 0xB4, 0xFF};
@@ -57,7 +58,7 @@ static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, Indu
 	}
 	for (uint8_t version : {6, 7, 8}) {
 		file.grf_version = version;
-		IndustriesResolverObject location(tile, temporary, i->type, 0xFEDCBA98, CBID_INDUSTRY_LOCATION);
+		IndustriesResolverObject location(tile, temporary, FIXTURE_POOL_RECORD(i).type, 0xFEDCBA98, CBID_INDUSTRY_LOCATION);
 		for (uint8_t v : {0x80, 0x81, 0x82, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8D, 0x8F}) {
 			bool available = false;
 			fmt::print(stderr, "INDUSTRY-RESOLVER location-variable {} {} {}\n", version, v, location.industries_scope.GetVariable(v, 0, available));
@@ -69,9 +70,9 @@ static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, Indu
 	}
 	file.grf_version = 8;
 	{
-		Backup<Owner> founder(i->founder);
+		Backup<Owner> founder(FIXTURE_POOL_RECORD(i).founder);
 		for (Owner owner : {Owner(0), OWNER_NONE, INVALID_OWNER}) {
-			i->founder = owner; bool available = true;
+			FIXTURE_POOL_RECORD(i).founder = owner; bool available = true;
 			fmt::print(stderr, "INDUSTRY-RESOLVER founder {} {}\n", owner.base(), live.industries_scope.GetVariable(0x45, 0, available));
 		}
 	}
@@ -81,11 +82,11 @@ static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, Indu
 		bool available = true;
 		fmt::print(stderr, "INDUSTRY-RESOLVER caller-cargo {} {} {}\n", v, parameter, live.industries_scope.GetVariable(v, parameter, available));
 	}
-	Backup<EntityIDMapping> mapping(_industry_mngr.mappings[i->type]);
-	_industry_mngr.mappings[i->type] = {file.grfid, 17, i->type}; live.grffile = &file;
+	Backup<EntityIDMapping> mapping(_industry_mngr.mappings[FIXTURE_POOL_RECORD(i).type]);
+	_industry_mngr.mappings[FIXTURE_POOL_RECORD(i).type] = {file.grfid, 17, FIXTURE_POOL_RECORD(i).type}; live.grffile = &file;
 	for (uint32_t id : {0U, UINT32_MAX, file.grfid, file.grfid + 1}) for (uint32_t filter : {0U, 1U, 0x100U, 0x101U}) {
 		live.SetRegister(0x100, id); live.SetRegister(0x101, filter); bool available = true;
-		fmt::print(stderr, "INDUSTRY-RESOLVER mapping {} {} {}\n", id, filter, live.industries_scope.GetVariable(0x68, id == 0 ? i->type : 17, available));
+		fmt::print(stderr, "INDUSTRY-RESOLVER mapping {} {} {}\n", id, filter, live.industries_scope.GetVariable(0x68, id == 0 ? FIXTURE_POOL_RECORD(i).type : 17, available));
 	}
 	fmt::print(stderr, "INDUSTRY-RESOLVER variable-cases {}\n", count);
 	return count > 600;
@@ -95,16 +96,16 @@ static bool CountWrapCases(Industry *i)
 	std::vector<Industry *> sisters;
 	Industry::CanAllocateItem(260);
 	for (uint n = 0; n < 260; ++n) {
-		auto *other = new Industry(); other->location.tile = i->location.tile + 1; other->location.w = 0;
-		other->type = i->type; other->town = i->town; other->selected_layout = 127;
-		Industry::industries[i->type].insert(other->index); sisters.push_back(other);
+		auto *other = new Industry(); FIXTURE_POOL_RECORD(other).location.tile = FIXTURE_POOL_RECORD(i).location.tile + 1; FIXTURE_POOL_RECORD(other).location.w = 0;
+		FIXTURE_POOL_RECORD(other).type = FIXTURE_POOL_RECORD(i).type; FIXTURE_POOL_RECORD(other).town = FIXTURE_POOL_RECORD(i).town; FIXTURE_POOL_RECORD(other).selected_layout = 127;
+		Industry::industries[FIXTURE_POOL_RECORD(i).type].insert(other->index); sisters.push_back(other);
 	}
-	IndustriesResolverObject object(i->location.tile, i, i->type);
+	IndustriesResolverObject object(FIXTURE_POOL_RECORD(i).location.tile, i, FIXTURE_POOL_RECORD(i).type);
 	object.SetRegister(0x100, 0); object.SetRegister(0x101, 127); bool available = true;
-	uint32_t unfiltered = object.industries_scope.GetVariable(0x67, i->type, available);
-	uint32_t filtered = object.industries_scope.GetVariable(0x68, i->type, available);
+	uint32_t unfiltered = object.industries_scope.GetVariable(0x67, FIXTURE_POOL_RECORD(i).type, available);
+	uint32_t filtered = object.industries_scope.GetVariable(0x68, FIXTURE_POOL_RECORD(i).type, available);
 	bool equal = (unfiltered >> 16) == 255 && (unfiltered & 0xFFFF) == 1 && (filtered >> 16) == 4 && (filtered & 0xFFFF) == 1;
-	for (auto *other : sisters) { Industry::industries[i->type].erase(other->index); delete other; }
+	for (auto *other : sisters) { Industry::industries[FIXTURE_POOL_RECORD(i).type].erase(other->index); delete other; }
 	fmt::print(stderr, "INDUSTRY-RESOLVER count-wrap {}\n", equal);
 	return equal;
 }
@@ -131,8 +132,8 @@ static bool TileIdentityCases(Industry *i, Industry *temporary, TileIndex tile, 
 		fmt::print(stderr, "INDUSTRY-RESOLVER tile-id {} {} {} {}\n", gfx, groups, grfid, value);
 	}
 	SetIndustryGfx(tile, original);
-	Backup<TileArea> location(temporary->location);
-	temporary->location.tile = tile + 1;
+	Backup<TileArea> location(FIXTURE_POOL_RECORD(temporary).location);
+	FIXTURE_POOL_RECORD(temporary).location.tile = tile + 1;
 	IndustryTileResolverObject negative(original, tile, temporary); bool available = true;
 	fmt::print(stderr, "INDUSTRY-RESOLVER relative-negative {}\n", negative.indtile_scope.GetVariable(0x43, 0, available));
 	ResolverObject resolver(&file); IndustryTileScopeResolver outside(resolver, i, tile + TileDiffXY(20, 20));
@@ -151,7 +152,7 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 		spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, answer);
 		spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, answer);
 		spec->callback_mask.Set(IndustryCallbackMask::Probability);
-		uint32_t probability = GetIndustryProbabilityCallback(i->type, IACT_USERCREATION, 73);
+		uint32_t probability = GetIndustryProbabilityCallback(FIXTURE_POOL_RECORD(i).type, IACT_USERCREATION, 73);
 		uint32_t expected = result == CALLBACK_FAILED || (version >= 8 && result == 256) ? 73 : version < 8 ? (result == 0 ? 73 : 0) : result;
 		equal &= probability == expected;
 		if (result <= 1 || result == CALLBACK_FAILED) {
@@ -166,8 +167,8 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 	file.grf_version = 8;
 	if (i->produced.empty() || !IsValidCargoType(i->produced[0].cargo)) return false;
 	Backup<uint16_t> input(i->accepted[0].waiting), output(i->produced[0].waiting);
-	Backup<uint8_t> level(i->prod_level);
-	i->accepted[0].waiting = 48; i->produced[0].waiting = 7; i->prod_level = 16;
+	Backup<uint8_t> level(FIXTURE_POOL_RECORD(i).prod_level);
+	i->accepted[0].waiting = 48; i->produced[0].waiting = 7; FIXTURE_POOL_RECORD(i).prod_level = 16;
 	spec->callback_mask.Set(IndustryCallbackMask::ProductionCargoArrival);
 	SpriteGroup::CanAllocateItem(); auto *production = new IndustryProductionSpriteGroup();
 	production->version = 1; production->num_input = production->num_output = 1; production->subtract_input[0] = 0x102; production->add_output[0] = 0x103; production->again = 4;
@@ -198,7 +199,7 @@ static bool RandomCases(Industry *i, IndustryTileSpec *spec, IndustryGfx gfx, Ti
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, self);
 	bool equal = true;
 	for (uint16_t bits : {0, 0x200, 0xFFFF}) {
-		i->random = bits;
+		FIXTURE_POOL_RECORD(i).random = bits;
 		IndustryTileResolverObject object(gfx, tile, i, CBID_RANDOM_TRIGGER); object.SetWaitingRandomTriggers(IndustryRandomTriggers(1));
 		object.ResolveRerandomisation();
 		equal &= object.reseed[VSG_SCOPE_SELF] == 4 && object.reseed[VSG_SCOPE_PARENT] == 0x200 && object.GetUsedRandomTriggers().base() == 1;
@@ -209,7 +210,7 @@ static bool RandomCases(Industry *i, IndustryTileSpec *spec, IndustryGfx gfx, Ti
 	for (uint8_t bits : {0, 4, 255}) {
 		SetIndustryRandomBits(tile, bits); SetIndustryRandomTriggers(tile, IndustryRandomTriggers(2));
 		TriggerIndustryTileRandomisation(tile, IndustryRandomTrigger::TileLoop);
-		fmt::print(stderr, "INDUSTRY-RESOLVER reseed {} {} {} {} {}\n", GetIndustryRandomBits(tile), GetIndustryRandomTriggers(tile).base(), i->random, _random.state[0], _random.state[1]);
+		fmt::print(stderr, "INDUSTRY-RESOLVER reseed {} {} {} {} {}\n", GetIndustryRandomBits(tile), GetIndustryRandomTriggers(tile).base(), FIXTURE_POOL_RECORD(i).random, _random.state[0], _random.state[1]);
 	}
 	delete self; delete parent; delete one; delete zero;
 	fmt::print(stderr, "INDUSTRY-RESOLVER randomized {}\n", equal);
@@ -222,10 +223,10 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	for (Industry *candidate : Industry::Iterate()) if (!candidate->accepted.empty() && IsValidCargoType(candidate->accepted[0].cargo) && !candidate->produced.empty() && IsValidCargoType(candidate->produced[0].cargo)) { i = candidate; break; }
 	if (i == nullptr) std::abort();
 	TileIndex tile = INVALID_TILE;
-	for (TileIndex t : i->location) if (i->TileBelongsToIndustry(t)) { tile = t; break; }
+	for (TileIndex t : FIXTURE_POOL_RECORD(i).location) if (i->TileBelongsToIndustry(t)) { tile = t; break; }
 	if (tile == INVALID_TILE) std::abort();
 	const IndustryGfx gfx = GetIndustryGfx(tile);
-	auto *spec = const_cast<IndustrySpec *>(GetIndustrySpec(i->type));
+	auto *spec = const_cast<IndustrySpec *>(GetIndustrySpec(FIXTURE_POOL_RECORD(i).type));
 	auto *tile_spec = const_cast<IndustryTileSpec *>(GetIndustryTileSpec(gfx));
 	Backup<IndustrySpec> spec_backup(*spec);
 	Backup<IndustryTileSpec> tile_backup(*tile_spec);
@@ -236,8 +237,8 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	SpriteGroup::CanAllocateItem(6);
 	auto *zero = new CallbackResultSpriteGroup(0);
 	auto *one = new CallbackResultSpriteGroup(1);
-	auto *count = Query(0x67, i->type, zero);
-	auto *filtered = Query(0x68, i->type, zero, 0x100);
+	auto *count = Query(0x67, FIXTURE_POOL_RECORD(i).type, zero);
+	auto *filtered = Query(0x68, FIXTURE_POOL_RECORD(i).type, zero, 0x100);
 	auto *location = Query(0x8F, 0, zero);
 	auto *relative = Query(0x43, 0, one);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, count);
@@ -248,30 +249,30 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	SpriteGroup::CanAllocateItem(); auto *unavailable = Query(0xFF, 0, zero); unavailable->error_group = one;
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, unavailable);
 	std::array<int32_t, 4> unavailable_regs{};
-	bool fallback = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, i->type, tile, unavailable_regs) == 1;
+	bool fallback = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, FIXTURE_POOL_RECORD(i).type, tile, unavailable_regs) == 1;
 	equal &= fallback;
 	fmt::print(stderr, "INDUSTRY-RESOLVER unavailable-fallback {}\n", fallback);
 	delete unavailable;
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, count);
 	std::array<int32_t, 4> regs{};
 	const auto rng = _random;
-	auto result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, i->type, tile, regs);
-	equal &= result == 0 && (static_cast<uint32_t>(regs[2]) >> 16) == Industry::GetIndustryTypeCount(i->type);
+	auto result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, FIXTURE_POOL_RECORD(i).type, tile, regs);
+	equal &= result == 0 && (static_cast<uint32_t>(regs[2]) >> 16) == Industry::GetIndustryTypeCount(FIXTURE_POOL_RECORD(i).type);
 	fmt::print(stderr, "INDUSTRY-RESOLVER var67 {} {}\n", result, regs[2]);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, filtered);
-	result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, i->type, tile, regs);
+	result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, FIXTURE_POOL_RECORD(i).type, tile, regs);
 	fmt::print(stderr, "INDUSTRY-RESOLVER var68 {} {}\n", result, regs[2]);
 	spec->callback_mask.Set(IndustryCallbackMask::RefuseCargo);
 	equal &= IndustryTemporarilyRefusesCargo(i, i->accepted[0].cargo);
 	fmt::print(stderr, "INDUSTRY-RESOLVER refusal true\n");
 	Industry temporary;
-	temporary.index = IndustryID::Invalid(); temporary.location.tile = tile; temporary.location.w = 0; temporary.type = i->type;
-	temporary.town = i->town; temporary.selected_layout = 23; temporary.random = 0xA55A; temporary.founder = OWNER_NONE;
-	IndustriesResolverObject construction(tile, &temporary, i->type, 0x87654321, CBID_INDUSTRY_LOCATION);
+	temporary.index = IndustryID::Invalid(); FIXTURE_POOL_RECORD(&temporary).location.tile = tile; FIXTURE_POOL_RECORD(&temporary).location.w = 0; FIXTURE_POOL_RECORD(&temporary).type = FIXTURE_POOL_RECORD(i).type;
+	FIXTURE_POOL_RECORD(&temporary).town = FIXTURE_POOL_RECORD(i).town; FIXTURE_POOL_RECORD(&temporary).selected_layout = 23; FIXTURE_POOL_RECORD(&temporary).random = 0xA55A; FIXTURE_POOL_RECORD(&temporary).founder = OWNER_NONE;
+	IndustriesResolverObject construction(tile, &temporary, FIXTURE_POOL_RECORD(i).type, 0x87654321, CBID_INDUSTRY_LOCATION);
 	result = construction.ResolveCallback(regs);
 	equal &= result == 0 && static_cast<uint32_t>(regs[2]) == 0x87654321;
 	fmt::print(stderr, "INDUSTRY-RESOLVER location {} {}\n", result, static_cast<uint32_t>(regs[2]));
-	IndustriesResolverObject live(tile, i, i->type), missing(INVALID_TILE, nullptr, i->type), nearby(tile, nullptr, i->type);
+	IndustriesResolverObject live(tile, i, FIXTURE_POOL_RECORD(i).type), missing(INVALID_TILE, nullptr, FIXTURE_POOL_RECORD(i).type), nearby(tile, nullptr, FIXTURE_POOL_RECORD(i).type);
 	IndustryTileResolverObject live_tile(gfx, tile, i), temporary_tile(gfx, tile, &temporary);
 	equal &= live.root_spritegroup == filtered && missing.root_spritegroup == location;
 	equal &= live.GetFeature() == GSF_INDUSTRIES && live.GetDebugID() == 17 && live_tile.GetFeature() == GSF_INDUSTRYTILES && live_tile.GetDebugID() == 19;
@@ -284,7 +285,7 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	equal &= live.GetScope(VSG_SCOPE_SELF) == &live.industries_scope && live.GetScope(VSG_SCOPE_PARENT) == live.GetTown();
 	equal &= live_tile.GetScope(VSG_SCOPE_SELF) == &live_tile.indtile_scope && live_tile.GetScope(VSG_SCOPE_PARENT) == &live_tile.ind_scope;
 	result = GetIndustryTileCallback(CBID_INDTILE_SHAPE_CHECK, 0, 0, gfx, i, tile, regs);
-	equal &= result == 1 && static_cast<uint32_t>(regs[2]) == (((TileY(tile) - TileY(i->location.tile)) & 15) << 20 | ((TileX(tile) - TileX(i->location.tile)) & 15) << 16 | static_cast<uint8_t>(TileY(tile) - TileY(i->location.tile)) << 8 | static_cast<uint8_t>(TileX(tile) - TileX(i->location.tile)));
+	equal &= result == 1 && static_cast<uint32_t>(regs[2]) == (((TileY(tile) - TileY(FIXTURE_POOL_RECORD(i).location.tile)) & 15) << 20 | ((TileX(tile) - TileX(FIXTURE_POOL_RECORD(i).location.tile)) & 15) << 16 | static_cast<uint8_t>(TileY(tile) - TileY(FIXTURE_POOL_RECORD(i).location.tile)) << 8 | static_cast<uint8_t>(TileX(tile) - TileX(FIXTURE_POOL_RECORD(i).location.tile)));
 	equal &= temporary_tile.indtile_scope.GetRandomBits() == 0 && temporary_tile.indtile_scope.GetRandomTriggers() == 0;
 	equal &= std::ranges::equal(_random.state, rng.state);
 	fmt::print(stderr, "INDUSTRY-RESOLVER checkpoint {}\n", equal);

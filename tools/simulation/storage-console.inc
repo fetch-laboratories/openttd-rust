@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real resolver facades and native associations, without an external GRF program. */
+#include "pool-record-fixture.hpp"
 #include "saveload-codec-console.hpp"
 #include "newgrf_town.h"
 #include "newgrf_industries.h"
@@ -29,7 +30,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	auto Det = [&](DeterministicSpriteGroupSize size = DSG_SIZE_DWORD, VarSpriteGroupScope scope = VSG_SCOPE_SELF) {
 		auto *g = Keep(new DeterministicSpriteGroup()); g->size = size; g->var_scope = scope; g->default_result.calculated_result = true; return g;
 	};
-	IndustriesResolverObject ro(industry->location.tile, industry, industry->type);
+	IndustriesResolverObject ro(FIXTURE_POOL_RECORD(industry).location.tile, industry, FIXTURE_POOL_RECORD(industry).type);
 	ro.grffile = &grf;
 	int32_t saved_register100 = ro.GetRegister(0x100);
 	ro.callback_param1 = 0x8005; ro.callback_param2 = 9;
@@ -115,11 +116,11 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 		using IndustriesResolverObject::IndustriesResolverObject;
 		void Waiting(uint32_t v) { this->waiting_random_triggers = v; }
 		uint32_t Used() const { return this->used_random_triggers; }
-	} trigger(industry->location.tile, industry, industry->type, 0, CBID_RANDOM_TRIGGER);
+	} trigger(FIXTURE_POOL_RECORD(industry).location.tile, industry, FIXTURE_POOL_RECORD(industry).type, 0, CBID_RANDOM_TRIGGER);
 	trigger.grffile = &grf; trigger.root_spritegroup = random;
-	Backup<uint16_t> random_bits(industry->random);
+	Backup<uint16_t> random_bits(FIXTURE_POOL_RECORD(industry).random);
 	for (uint16_t bits : {0, 4, 8, 12, 0xFFFF}) {
-		industry->random = bits;
+		FIXTURE_POOL_RECORD(industry).random = bits;
 		Require(trigger.ResolveCallback({}) == 200 + ((bits & 12) >> 2));
 	}
 	std::array<uint32_t, 4> rng{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]};
@@ -224,15 +225,15 @@ static bool StorageScenario(std::span<std::string_view> args)
 	GRFFile grf; grf.grfid = 0x39312345;
 	ResolverObject ro(&grf), anonymous(nullptr);
 	TownScopeResolver writable(ro, town, false), readonly(ro, nullptr, true), no_grf(anonymous, town, false);
-	IndustriesScopeResolver ind(ro, industry->location.tile, industry, industry->type);
+	IndustriesScopeResolver ind(ro, FIXTURE_POOL_RECORD(industry).location.tile, industry, FIXTURE_POOL_RECORD(industry).type);
 	AirportScopeResolver airport(ro, station->airport.tile, station, nullptr, 0), preview(ro, TileIndex{}, nullptr, nullptr, 0);
 	bool available = true;
 	if (args[1] == "storage-inspect") {
 		ro.SetRegister(0x100, -1);
 		Require(town->psa_list.size() == 2 && writable.GetVariable(0x7C, 0, available) == 0x80000000 && writable.GetVariable(0x7C, 255, available) == INT32_MAX);
 		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
-		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == industry->location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
-		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == town->xy);
+		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == FIXTURE_POOL_RECORD(industry).location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
+		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == FIXTURE_POOL_RECORD(town).xy);
 		CommonAction2(industry, grf);
 		fmt::print(stderr, "STORAGE reloaded true\n");
 		return true;
@@ -254,14 +255,14 @@ static bool StorageScenario(std::span<std::string_view> args)
 	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
 	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
 	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
-	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
+	Require(industry->psa->grfid == GetIndustrySpec(FIXTURE_POOL_RECORD(industry).type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
 	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
 	Require(ind.GetVariable(0x7C, 0, available) == 0 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
 	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);
 	/* Invalid-ID construction scopes can read existing PSA, but cannot write it. */
 	{
 		Backup<IndustryID> invalid(industry->index, IndustryID::Invalid());
-		IndustriesScopeResolver temporary(ro, industry->location.tile, industry, industry->type);
+		IndustriesScopeResolver temporary(ro, FIXTURE_POOL_RECORD(industry).location.tile, industry, FIXTURE_POOL_RECORD(industry).type);
 		temporary.StorePSA(15, 7);
 		Require(temporary.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
 	}

@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file industry-policy-console.hpp Industry timer consequences on real pool shells. */
+#include "pool-record-fixture.hpp"
 #include "company_type.h"
 #include "vehicle-record-fixture.hpp"
 #include "economy_type.h"
@@ -24,10 +25,10 @@ static void IndustryPolicyObserve()
 {
 	uint forests = 0, others = 0;
 	for (const Industry *ind : Industry::Iterate()) {
-		for (TileIndex tile : TileArea{ind->location}) if (IsTileType(tile, MP_INDUSTRY) && Industry::GetByTile(tile) == ind) {
+		for (TileIndex tile : TileArea{FIXTURE_POOL_RECORD(ind).location}) if (IsTileType(tile, MP_INDUSTRY) && Industry::GetByTile(tile) == ind) {
 			if (IsTileForestIndustry(tile)) ++forests; else ++others;
 		}
-		fmt::print(stderr, "INDUSTRY-POLICY industry {} {} {}", ind->index.base(), ind->prod_level, ind->valid_history);
+		fmt::print(stderr, "INDUSTRY-POLICY industry {} {} {}", ind->index.base(), FIXTURE_POOL_RECORD(ind).prod_level, FIXTURE_POOL_RECORD(ind).valid_history);
 		for (const auto &p : ind->produced) fmt::print(stderr, " {}:{}:{}:{}", p.cargo, p.rate, p.history[LAST_MONTH].production, p.history[LAST_MONTH].transported);
 		fmt::print(stderr, "\n");
 	}
@@ -52,7 +53,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		local.Change(outcome == 2 ? FIXTURE_GET(vehicle, Owner, owner) : CompanyID{OWNER_NONE});
 		Industry *ind = nullptr;
 		for (Industry *candidate : Industry::Iterate()) {
-			const auto *spec = GetIndustrySpec(candidate->type);
+			const auto *spec = GetIndustrySpec(FIXTURE_POOL_RECORD(candidate).type);
 			if (candidate->produced.empty() || !IsValidCargoType(candidate->produced[0].cargo) || candidate->produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) ||
 #ifdef WITH_RUST
 				!IsRawIndustry(spec) || UsesOriginalEconomy(spec)
@@ -63,7 +64,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 			if (candidate->stations_near.empty() == (outcome == 0)) { ind = candidate; break; }
 		}
 		IndustryPolicyRequire(ind != nullptr);
-		ind->ctlflags.Set(IndustryControlFlag::NoClosure);
+		FIXTURE_POOL_RECORD(ind).ctlflags.Set(IndustryControlFlag::NoClosure);
 		vehicle->cargo_type = ind->produced[0].cargo;
 		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
 		std::vector<std::pair<Vehicle *, OrderList *>> original_orders;
