@@ -562,7 +562,6 @@ pub struct Leaves {
     pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub review_setting: extern "C" fn() -> u64,
     pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub fast_aircraft: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
     pub station_commands: *const crate::station_cmd::CommandServicesTable,
@@ -665,7 +664,6 @@ leaves! {
     fn vehicle_group(ctx: *mut c_void) -> u64;
     fn unique_backup_name(ctx: *mut c_void) -> u64;
     fn local_owner(ctx: *mut c_void) -> u64;
-    fn fast_aircraft(ctx: *mut c_void) -> u64;
     fn append_station(ctx: *mut c_void, station: u16);
     fn timetable_dirty(ctx: *mut c_void);
     fn invalidate_order(ctx: *mut c_void, data: i32);
@@ -2955,10 +2953,8 @@ impl Game {
             )),
             1 => ((self.reliability(v) * 101) >> 16) as i32,
             7 => {
-                (i32::from((self.maintenance().engine_reliability)(native_vehicle(
-                    v,
-                    self.0.base,
-                ))) * 101)
+                (i32::from((self.0.base.engine)(native_vehicle(v, self.0.base)).reliability())
+                    * 101)
                     >> 16
             }
             2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,
@@ -4334,7 +4330,9 @@ impl Control {
                     if order_can_use_station(v, order.destination) == 0 {
                         message = 2;
                     } else if g.vehicle_type(v) == u64::from(VEH_AIRCRAFT)
-                        && g.fast_aircraft(v) != 0
+                        && (g.0.base.engine)(native_vehicle(v, g.0.base)).aircraft_subtype()
+                            & crate::engine_type::AIR_FAST
+                            != 0
                         && u64::from(
                             (crate::newgrf_airport::runtime().fta_flags)(
                                 crate::newgrf_airport::station_fta(
@@ -4731,7 +4729,6 @@ crate::abi::layouts! {
         unique_backup_name,
         review_setting,
         local_owner,
-        fast_aircraft,
         no_jet_crash,
         append_station,
         station_commands,

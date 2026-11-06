@@ -31,9 +31,7 @@ use crate::newgrf_callbacks::{
 };
 use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
-use crate::vehicle::{
-    OpenTTDEngine, RailVehicleTypes, VEHICLE_LENGTH, VehicleRef, VehicleServices, VehicleType,
-};
+use crate::vehicle::{RailVehicleTypes, VEHICLE_LENGTH, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::{
     VESM_DIESEL, VESM_ELECTRIC, VESM_END, VESM_NONE, VESM_STEAM, VS_HIDDEN, VS_STOPPED,
     VS_TRAIN_SLOWING,
@@ -44,18 +42,6 @@ struct Show {
     speed: u16,
     kind: VehicleType,
     smoke: u8,
-}
-#[repr(C)]
-pub struct Engine {
-    engine: *const OpenTTDEngine,
-    kind: VehicleType,
-    visual: u8,
-    callback: bool,
-}
-#[repr(C)]
-pub struct Defaults {
-    rail_kind: RailVehicleTypes,
-    engclass: u8,
 }
 /// One part's position, kind, status, tick and visual cache, observed at its visit.
 struct Part {
@@ -90,9 +76,6 @@ pub struct Services {
     shared: &'static Shared,
     /// `_settings_client.gui.smoke_amount`.
     smoke: extern "C" fn() -> u8,
-    engine: extern "C" fn(VehicleRef) -> Engine,
-    defaults: extern "C" fn(*const OpenTTDEngine) -> Defaults,
-    grf_version: extern "C" fn(*const OpenTTDEngine) -> u8,
     power_error: extern "C" fn(u16),
     station: extern "C" fn(u32) -> bool,
     depot: extern "C" fn(u32) -> bool,
@@ -111,30 +94,18 @@ fn services() -> &'static Services {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: bool) {
     let s = services();
-    let e = (s.engine)(v);
+    let engine = (s.vehicle.engine)(v);
     let cache = crate::raw_field::read_field!(v.0.as_ptr(), visual);
     let id = v.engine_id();
     let powered_before = has_bit(unsafe { *cache }, VE_DISABLE_WAGON_POWER);
-    let mut visual = if matches!(
-        e.kind,
-        VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP
-    ) {
-        u32::from(e.visual)
-    } else {
-        1 << VE_DISABLE_EFFECT
-    };
-    if e.callback {
+    let mut visual = u32::from(engine.visual_effect());
+    if engine.callbacks() & crate::newgrf_callbacks::VEHICLE_VISUAL_EFFECT != 0 {
         let mut callback =
             (s.vehicle.callback)((s.vehicle.newgrf)(), v, CBID_VEHICLE_VISUAL_EFFECT);
         if callback != CALLBACK_FAILED {
-            if callback >= 0x100 && (s.grf_version)(e.engine) >= 8 {
-                s.vehicle.unknown_callback_result(
-                    crate::vehicle::EngineRef(unsafe {
-                        std::ptr::NonNull::new_unchecked(e.engine.cast_mut())
-                    }),
-                    CBID_VEHICLE_VISUAL_EFFECT,
-                    callback,
-                );
+            if callback >= 0x100 && engine.grf_version(s.shared) >= 8 {
+                s.vehicle
+                    .unknown_callback_result(engine, CBID_VEHICLE_VISUAL_EFFECT, callback);
             }
             callback = gb(u32::from(callback), 0, 8) as u16;
             if callback == u16::from(VE_DEFAULT) {
@@ -149,26 +120,21 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
         || (!has_bit(visual, VE_DISABLE_EFFECT)
             && gb(visual, VE_TYPE_START, VE_TYPE_COUNT) == u32::from(VE_TYPE_DEFAULT))
     {
-        let defaults = if e.kind == VehicleType::TRAIN {
-            Some((s.defaults)(e.engine))
-        } else {
-            None
-        };
-        if defaults.as_ref().is_none_or(|d| {
-            d.rail_kind == RailVehicleTypes::WAGON
-                || !crate::math::is_inside_mm(
-                    usize::from(d.engclass),
-                    usize::from(EC_STEAM),
-                    usize::from(EC_MONORAIL),
-                )
-        }) {
+        if engine.kind() != VehicleType::TRAIN
+            || engine.rail_kind() == RailVehicleTypes::WAGON
+            || !crate::math::is_inside_mm(
+                usize::from(engine.train_class()),
+                usize::from(EC_STEAM),
+                usize::from(EC_MONORAIL),
+            )
+        {
             visual = if visual == u32::from(VE_DEFAULT) {
                 1 << VE_DISABLE_EFFECT
             } else {
                 set_bit(&mut visual, VE_DISABLE_EFFECT)
             };
         } else {
-            let engclass = defaults.unwrap().engclass;
+            let engclass = engine.train_class();
             if visual == u32::from(VE_DEFAULT) {
                 visual = u32::from(VE_OFFSET_CENTRE - if engclass == EC_STEAM { 4 } else { 0 })
                     << VE_OFFSET_START;
@@ -440,7 +406,5 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVisualEngine" ["probe"] => Engine { engine, kind, visual, callback, };
-    "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, engine, defaults, grf_version, power_error, station, depot, tunnel, tile_rail, powered, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, power_error, station, depot, tunnel, tile_rail, powered, };
 }

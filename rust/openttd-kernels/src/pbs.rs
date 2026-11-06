@@ -39,7 +39,6 @@ pub struct PbsServices {
     pub write_train_on_res: extern "C" fn(*mut TrainOutput, Handle),
     pub assertions: bool,
     pub handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
-    pub all_compatible: extern "C" fn(u64) -> u64,
     pub compatible: extern "C" fn(u8) -> u64,
     pub rail90: extern "C" fn(u8, u8, bool) -> bool,
     pub blocking: extern "C" fn(u32, u8) -> bool,
@@ -460,7 +459,7 @@ impl<'a> Pbs<'a> {
         }
         let mut res = self.follow_reservation(
             v.vehicle().owner(),
-            (self.0.all_compatible)(v.get_railtypes()),
+            (self.shared().all_compatible_railtypes)(v.get_railtypes()),
             tile,
             td,
             false,
@@ -580,7 +579,7 @@ impl<'a> Pbs<'a> {
         if self.block_signal(tile, td) {
             return true;
         }
-        let types = (self.0.all_compatible)(v.get_railtypes());
+        let types = (self.shared().all_compatible_railtypes)(v.get_railtypes());
         let mut ft = self.follower(v, 0, types);
         if !ft.follow(self.shared(), tile, td) && include_end {
             crate::witness::hit(crate::witness::PBS_SAFE_LINE_END);
@@ -742,7 +741,6 @@ crate::abi::layouts! {
         write_train_on_res,
         assertions,
         handle,
-        all_compatible,
         compatible,
         rail90,
         blocking,

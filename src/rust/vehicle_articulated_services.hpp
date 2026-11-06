@@ -5,7 +5,6 @@ static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = st
 template <class T> static void *VehicleArticNew() noexcept { return new T(); }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
 static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = RustRoadVehicleType(first); v->compatible_roadtypes = first->compatible_roadtypes; }
-template <class T, auto Capacity> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDEngine *engine, bool carry) noexcept { const auto &info = EngineOf(engine)->VehInfo<T>(); return {.image = info.image_index, .capacity = static_cast<uint16_t>(carry ? Capacity(engine) : 0)}; }
 static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint16_t capacity, bool validate) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -33,11 +32,10 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept
 {
 	static const OpenTTDVehicleArticulatedServices services{
-		.refit = &GetRustVehicleRefitServices(), .default_cargo = RustEngineDefaultCargo,
+		.refit = &GetRustVehicleRefitServices(),
 		.pool_available = RustVehicleCanAllocate,
 		.prepare_previous = VehicleArticPreparePrevious, .new_train = VehicleArticNew<Train>, .new_road = VehicleArticNew<RoadVehicle>,
 		.road_length = VehicleArticRoadLength, .copy_roadtype = VehicleArticCopyRoadtype,
-		.train_info = VehicleArticInfo<RailVehicleInfo, RustEngineRailCapacity>, .road_info = VehicleArticInfo<RoadVehicleInfo, RustEngineRoadCapacity>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
 		.flip_image = RustOpaqueVehicleInvoke<RustVehicleFlipImage>,

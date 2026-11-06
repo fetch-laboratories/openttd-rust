@@ -45,7 +45,6 @@ struct OpenTTDFleetGroupServices {
 	void * (*renew_state)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_state);
 	void * (*next_renew)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_renew);
 	uint32_t (*renew_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_id);
-	uint8_t (*engine_type)(uint16_t engine) noexcept OPENTTD_SERVICE_DEFAULT(engine_type);
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	bool (*buildable_type)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(buildable_type);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
@@ -108,11 +107,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
 	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	bool (*engine_buildable)(uint16_t id, uint8_t type, uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(engine_buildable);
-	uint64_t (*rail_compatible)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(rail_compatible);
-	uint64_t (*road_powered)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
-	bool (*wagon)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(wagon);
-	bool (*tram)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(tram);
-	uint8_t (*plane)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(plane);
 	void * (*orders)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(orders);
 	size_t (*order_count)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 	uint8_t (*order_count_id)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count_id);

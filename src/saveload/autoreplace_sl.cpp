@@ -17,12 +17,12 @@
 #include "../safeguards.h"
 
 static const SaveLoad _engine_renew_desc[] = {
-	    SLE_VAR(EngineRenew, from,     SLE_UINT16),
-	    SLE_VAR(EngineRenew, to,       SLE_UINT16),
+	    SLE_VAR(FleetRenewFields, from,     SLE_UINT16),
+	    SLE_VAR(FleetRenewFields, to,       SLE_UINT16),
 
-	    SLE_REF(EngineRenew, next,     REF_ENGINE_RENEWS),
-	SLE_CONDVAR(EngineRenew, group_id, SLE_UINT16, SLV_60, SL_MAX_VERSION),
-	SLE_CONDVAR(EngineRenew, replace_when_old, SLE_BOOL, SLV_175, SL_MAX_VERSION),
+	    SLE_REF(FleetRenewFields, next,     REF_ENGINE_RENEWS),
+	SLE_CONDVAR(FleetRenewFields, group_id, SLE_UINT16, SLV_60, SL_MAX_VERSION),
+	SLE_CONDVAR(FleetRenewFields, replace_when_old, SLE_BOOL, SLV_175, SL_MAX_VERSION),
 };
 
 struct ERNWChunkHandler : ChunkHandler {
@@ -34,7 +34,7 @@ struct ERNWChunkHandler : ChunkHandler {
 
 		for (EngineRenew *er : EngineRenew::Iterate()) {
 			SlSetArrayIndex(er->index);
-			SlObject(er, _engine_renew_desc);
+			SlObject(&er->Record(), _engine_renew_desc);
 		}
 	}
 
@@ -46,13 +46,13 @@ struct ERNWChunkHandler : ChunkHandler {
 
 		while ((index = SlIterateArray()) != -1) {
 			EngineRenew *er = new (EngineRenewID(index)) EngineRenew();
-			SlObject(er, slt);
+			SlObject(&er->Record(), slt);
 
 			/* Advanced vehicle lists, ungrouped vehicles got added */
 			if (IsSavegameVersionBefore(SLV_60)) {
-				er->group_id = ALL_GROUP;
+				er->Record().group_id = ALL_GROUP;
 			} else if (IsSavegameVersionBefore(SLV_71)) {
-				if (er->group_id == DEFAULT_GROUP) er->group_id = ALL_GROUP;
+				if (er->Record().group_id == DEFAULT_GROUP) er->Record().group_id = ALL_GROUP;
 			}
 		}
 	}
@@ -60,7 +60,7 @@ struct ERNWChunkHandler : ChunkHandler {
 	void FixPointers() const override
 	{
 		for (EngineRenew *er : EngineRenew::Iterate()) {
-			SlObject(er, _engine_renew_desc);
+			SlObject(&er->Record(), _engine_renew_desc);
 		}
 	}
 };

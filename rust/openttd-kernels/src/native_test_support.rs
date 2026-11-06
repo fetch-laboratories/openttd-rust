@@ -666,3 +666,84 @@ pub extern "C" fn openttd_test_schedule_pause_observer(observer: Option<extern "
     // SAFETY: Serialized like every game-state slot; no borrow outlives the write.
     unsafe { *crate::linkgraph_schedule::PAUSE_OBSERVER.get() = observer };
 }
+
+/// Deep snapshot for the existing native engine fixtures; it has no shell/pool owner.
+/// # Safety
+/// Source is a live serialized binding record; the result is uniquely owned by the fixture.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_bindings_clone(
+    source: &crate::engine::bindings::Bindings,
+) -> *mut crate::engine::bindings::Bindings {
+    Box::into_raw(Box::new(source.clone()))
+}
+/// # Safety
+/// Retire exactly one fixture snapshot, after all borrowed views end.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_bindings_drop(
+    snapshot: *mut crate::engine::bindings::Bindings,
+) {
+    drop(unsafe { Box::from_raw(snapshot) });
+}
+/// # Safety
+/// Destination is a live serialized Rust-owned vector.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_sprites_clear(
+    destination: &mut crate::industrytype::NativeVec<crate::engine::bindings::CargoBinding>,
+) {
+    *destination = crate::industrytype::NativeVec::new();
+}
+/// # Safety
+/// Destination is a live serialized Rust-owned vector, with no retained nested views.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_overrides_clear(
+    destination: &mut crate::industrytype::NativeVec<crate::engine::bindings::WagonOverride>,
+) {
+    *destination = crate::industrytype::NativeVec::new();
+}
+/// # Safety
+/// Source IDs are readable for count; destination is live/serialized and may alias source.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_badges_assign(
+    destination: &mut crate::industrytype::NativeVec<u32>,
+    items: *const u32,
+    count: usize,
+) {
+    let items = if count == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(items, count) }.to_vec()
+    };
+    *destination = crate::industrytype::NativeVec::from_vec(items);
+}
+/// # Safety
+/// Live serialized props and borrowed group share the fixture lifetime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_sprite(
+    props: *mut crate::engine::bindings::GrfProps,
+    cargo: u8,
+    group: *const std::ffi::c_void,
+) {
+    unsafe {
+        crate::engine::bindings::set_sprite_group(props, cargo, group);
+    }
+}
+/// # Safety
+/// Bindings and shared table are live/serialized; IDs are readable for count.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_engine_override(
+    shared: &crate::services::Services,
+    bindings: *mut crate::engine::bindings::Bindings,
+    cargo: u8,
+    group: *const std::ffi::c_void,
+    ids: *const crate::engine_type::EngineID,
+    count: usize,
+) {
+    let ids = if count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(ids, count) }
+    };
+    unsafe {
+        crate::engine::bindings::append_override(shared, bindings, cargo, group, ids);
+    }
+}

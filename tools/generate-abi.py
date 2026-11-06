@@ -18,7 +18,7 @@ DECLARATION = re.compile(
 )
 RECORDS = re.compile(r"shared_records!\s*\{\s*fn\s+\w+\s*;(.*?)\n\}", re.S)
 RECORD = re.compile(
-    r'"([^"]+)"\s*\["([^"]+)"\]\s*=>\s*pub\s+struct\s+(\w+)\s*\{([^{}]*)\}'
+    r'"([^"]+)"\s*\["([^"]+)"\]\s*=>\s*pub\s+(struct|union)\s+(\w+)\s*\{([^{}]*)\}'
 )
 PRIMITIVES = {
     "bool": "bool",
@@ -72,6 +72,7 @@ class SharedRecord(NamedTuple):
     group: str
     rust: str
     fields: list[Field]
+    kind: str = "struct"
 
 
 class AbiField(NamedTuple):
@@ -106,12 +107,15 @@ def shared_records(
     for _, source in sources:
         scalars.update(TRANSPARENT.findall(source))
         opaque.update(OPAQUE.findall(source))
-    found: list[tuple[str, str, str, str]] = []
+    found: list[tuple[str, str, str, str, str]] = []
     for _, source in sources:
         for block in RECORDS.findall(source):
             block = re.sub(r"#\[[^\]]*\]", "", block)
-            found += [match for match in RECORD.findall(block)]
-    names = {rust: cpp for cpp, _, rust, _ in found}
+            found += [
+                (cpp, group, rust, body, kind)
+                for cpp, group, kind, rust, body in RECORD.findall(block)
+            ]
+    names = {rust: cpp for cpp, _, rust, _, _ in found}
     pointer_names = {
         declaration.rust: declaration.cpp for declaration in declarations(root)
     }
@@ -156,7 +160,7 @@ def shared_records(
 
     result = []
     opaque_tags: dict[str, str] = {}
-    for cpp, group, rust, body in sorted(found):
+    for cpp, group, rust, body, kind in sorted(found):
         fields = []
         for field in split_fields(body):
             if field.count('"') % 2:
@@ -193,7 +197,7 @@ def shared_records(
             if cpp_type.endswith(" *") and target in pointer_names.values():
                 tag = "struct"
             fields.append(Field(match[1], cpp_type, tag, dimensions))
-        result.append(SharedRecord(cpp, group, rust, fields))
+        result.append(SharedRecord(cpp, group, rust, fields, kind))
     if len(names) != len(found):
         raise ValueError("duplicate shared record")
     return result
@@ -217,7 +221,7 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         "#include <cstdint>",
     ]
     lines += [f"{tag} {name};" for name, tag in sorted(opaque.items())]
-    lines += [f"struct {name};" for name in sorted(defined)]
+    lines += [f"{record.kind} {record.cpp};" for record in sorted(entries)]
     records = {record.cpp: record for record in entries}
     emitted: set[str] = set()
 
@@ -230,7 +234,7 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
             if field.cpp_type in records:
                 emit(records[field.cpp_type], active | {record.cpp})
         # Quoted native field types are declared by the includer.
-        lines.append(f"struct {record.cpp} {{")
+        lines.append(f"{record.kind} {record.cpp} {{")
         for field in record.fields:
             if "(OPENTTD_RUST_CALL *)" in field.cpp_type:
                 declaration = field.cpp_type.replace(
@@ -319,7 +323,7 @@ def generate(root: Path = ROOT) -> dict[str, str]:
         output[f"abi-visit-{name}.hpp"].extend(visitor)
     shared: defaultdict[str, list[SharedRecord]] = defaultdict(list)
     for record in shared_records(root):
-        name, group, _, fields = record
+        name, group, _, fields, _ = record
         shared[group].append(record)
         values = [f"sizeof({name})", f"alignof({name})"]
         for field in fields:

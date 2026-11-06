@@ -7,3 +7,6 @@ pub const DAY_TICKS: i32 = 74;
 pub const TICKS_PER_SECOND: i32 = 37;
 /// `Ticks::INDUSTRY_PRODUCE_TICKS`.
 pub const INDUSTRY_PRODUCE_TICKS: u32 = 256;
+
+/// `Ticks::CARGO_AGING_TICKS`.
+pub const CARGO_AGING_TICKS: u16 = 185;

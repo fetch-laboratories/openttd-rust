@@ -86,7 +86,7 @@ static void GetShipIcon(EngineID engine, EngineImageType image_type, VehicleSpri
 		GetCustomVehicleIcon(engine, DIR_W, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = e->original_image_index;
+		spritenum = e->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_SHIP>(spritenum));
@@ -140,7 +140,7 @@ void Ship::GetImage(Direction direction, EngineImageType image_type, VehicleSpri
 		GetCustomVehicleSprite(this, direction, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = this->GetEngine()->original_image_index;
+		spritenum = this->GetEngine()->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_SHIP>(spritenum));
