@@ -45,7 +45,7 @@ KEPT = {
 RUNNING_SECONDS = 12 * 3600
 # Session managers hide their cwd from their own user and never run agent work.
 SESSION_MANAGERS = {"systemd", "(sd-pam)"}
-REFERENCE = re.compile(r"\.local/(" + "|".join(OUTPUT) + r")/([^/\"\s`<>()[\]{},;]+)")
+REFERENCE = re.compile(r"\.local/(" + "|".join(OUTPUT) + r")/([^/\"\s]+)")
 
 
 @dataclass(frozen=True)
@@ -507,15 +507,7 @@ def finished(main: Path, report: Path) -> tuple[bool, str]:
 
 
 def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
-    # Main output folders may each link to a different HDD directory.
-    for folder in OUTPUT:
-        references = references.replace(
-            str((local / folder).resolve()), f".local/{folder}"
-        )
-    keep: dict[Path, str] = {
-        local / folder / name: "referenced by roadmap or open issue/PR"
-        for folder, name in REFERENCE.findall(references)
-    }
+    keep: dict[Path, str] = {}
     deep = max((r.parent for r in local.glob("deep/*/report.json")), default=None)
     if deep is not None:
         keep[deep] = "current deep report"
@@ -533,10 +525,11 @@ def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
         name = entry.name
         if name in OUTPUT and entry.is_dir():
             for run in sorted(entry.iterdir()):
+                # Bare names cover .local, HDD-target, inner-file and listed forms.
                 if re.search(
                     r"(?<![\w.-])" + re.escape(run.name) + r"(?![\w.-])", references
                 ):
-                    keep.setdefault(run, "named by roadmap or open issue/PR")
+                    keep.setdefault(run, "referenced by roadmap or open issue/PR")
                 if run in keep:
                     items.append(Item(run, False, keep[run]))
                 elif (run / "report.json").exists():
