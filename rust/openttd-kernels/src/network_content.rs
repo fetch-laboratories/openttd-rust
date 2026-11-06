@@ -277,29 +277,6 @@ fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
     }
 }
 
-/// `NetworkTCPSocketHandler::ReceivePacket` using the integrated TCP and packet owners.
-fn receive_packet(s: &Services) -> *mut Packet {
-    match unsafe { tcp::openttd_rust_tcp_receive(s.tcp, s.client, check) } {
-        tcp::Receive::None => std::ptr::null_mut(),
-        tcp::Receive::Close => {
-            close_connection(s);
-            std::ptr::null_mut()
-        }
-        tcp::Receive::Ready => {
-            let p = (s.tcp.receive_packet)(s.client);
-            if !unsafe { packet::prepare_to_read(p, s.tcp.packet) } {
-                debug!(
-                    net,
-                    0, "Invalid packet received (too small / decryption error)"
-                );
-                close_connection(s);
-                return std::ptr::null_mut();
-            }
-            (s.tcp.receive_take)(s.client)
-        }
-    }
-}
-
 /// `NetworkContentSocketHandler::ReceivePackets`: a bounded batch per call.
 fn receive_packets(s: &Services) -> bool {
     let mut i = MAX_PACKETS_TO_RECEIVE;
@@ -308,7 +285,7 @@ fn receive_packets(s: &Services) -> bool {
         if i == 0 {
             break;
         }
-        let p = receive_packet(s);
+        let p = unsafe { tcp::receive_packet(s.tcp, s.client, check, || close_connection(s)) };
         if p.is_null() {
             break;
         }
@@ -1144,9 +1121,7 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
         with(|c| c.last_activity = now);
     }
 
-    if unsafe { tcp::openttd_rust_tcp_send(s.tcp, s.client, false, check) } == tcp::Send::Close {
-        close_connection(s);
-    }
+    unsafe { tcp::send_packets(s.tcp, s.client, false, check, || close_connection(s)) };
 }
 
 #[unsafe(no_mangle)]

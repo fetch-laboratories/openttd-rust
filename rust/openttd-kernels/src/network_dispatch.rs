@@ -303,30 +303,20 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
     if server && read_field!(socket::sync(game), receive_limit) == 0 {
         return std::ptr::null_mut();
     }
-    match unsafe {
-        tcp::openttd_rust_tcp_receive(
+    let shell = unsafe {
+        tcp::receive_packet(
             s.tcp,
             socket::tcp(game),
             crate::network_frame::packet_check(s),
+            || {
+                socket::close(s, game, work);
+            },
         )
-    } {
-        tcp::Receive::None => return std::ptr::null_mut(),
-        tcp::Receive::Close => {
-            socket::close(s, game, work);
-            return std::ptr::null_mut();
-        }
-        tcp::Receive::Ready => (),
+    };
+    if shell.is_null() {
+        return shell;
     }
-    let p = (s.tcp.receive_packet)(socket::tcp(game));
-    if !unsafe { packet::prepare_to_read(p, s.packet) } {
-        debug!(
-            net,
-            0, "Invalid packet received (too small / decryption error)"
-        );
-        socket::close(s, game, work);
-        return std::ptr::null_mut();
-    }
-    let shell = (s.tcp.receive_take)(socket::tcp(game));
+    let p = (s.tcp.packet_record)(shell);
     if server {
         let sync = socket::sync(game);
         write_field!(

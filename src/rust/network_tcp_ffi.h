@@ -37,6 +37,7 @@ enum class OpenTTDTcpReceive : uint8_t { None, Close, Ready };
 const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept;
 extern "C" {
 OpenTTDTcpSend openttd_rust_tcp_send(const OpenTTDNetworkTcpServices *, NetworkTCPSocketHandler *, bool, void (*)(bool) noexcept);
+OpenTTDTcpReceive openttd_rust_tcp_receive_prepared(bool);
 OpenTTDTcpReceive openttd_rust_tcp_receive(const OpenTTDNetworkTcpServices *, NetworkTCPSocketHandler *, void (*)(bool) noexcept);
 }
 #endif /* RUST_NETWORK_TCP_FFI_H */

@@ -96,8 +96,7 @@ std::unique_ptr<Packet> NetworkTCPSocketHandler::ReceivePacket()
 		return nullptr;
 	}
 	if (result == OpenTTDTcpReceive::None) return nullptr;
-	if (!this->packet_recv->PrepareToRead()) {
-		Debug(net, 0, "Invalid packet received (too small / decryption error)");
+	if (openttd_rust_tcp_receive_prepared(this->packet_recv->PrepareToRead()) == OpenTTDTcpReceive::Close) {
 		this->CloseConnection();
 		return nullptr;
 	}

@@ -209,6 +209,64 @@ pub unsafe extern "C" fn openttd_rust_tcp_receive(
     unsafe { read_bytes(s, socket, p, check) }
 }
 
+/// Complete `ReceivePacket` after the codec returns on its owning frame.
+/// Native virtual codecs can throw, so their caller supplies the result after Rust returns.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_tcp_receive_prepared(valid: bool) -> Receive {
+    if valid {
+        Receive::Ready
+    } else {
+        debug!(
+            net,
+            0, "Invalid packet received (too small / decryption error)"
+        );
+        Receive::Close
+    }
+}
+
+/// Common receive/decrypt/virtual-close tail for direct Rust protocol consumers.
+/// # Safety
+/// The socket and pending packet are live; `close` may invalidate both after aliases end.
+pub(crate) unsafe fn receive_packet(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    check: extern "C" fn(bool),
+    close: impl FnOnce(),
+) -> *mut Packet {
+    let mut result = unsafe { openttd_rust_tcp_receive(s, socket, check) };
+    if result == Receive::Ready {
+        let p = (s.receive_packet)(socket);
+        result = openttd_rust_tcp_receive_prepared(unsafe { packet::prepare_to_read(p, s.packet) });
+    }
+    match result {
+        Receive::None => std::ptr::null_mut(),
+        Receive::Close => {
+            close();
+            std::ptr::null_mut()
+        }
+        Receive::Ready => (s.receive_take)(socket),
+    }
+}
+
+/// Common send tail; close runs after all packet and transport aliases have ended.
+/// # Safety
+/// Same live transport contract as `openttd_rust_tcp_send`.
+pub(crate) unsafe fn send_packets(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    closing: bool,
+    check: extern "C" fn(bool),
+    close: impl FnOnce(),
+) -> Send {
+    let result = unsafe { openttd_rust_tcp_send(s, socket, closing, check) };
+    if result == Send::Close {
+        close();
+        Send::Closed
+    } else {
+        result
+    }
+}
+
 /// Consume a native shell after dropping its canonical Rust packet allocation.
 pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
     let record = (s.packet_record)(packet);
