@@ -1344,7 +1344,6 @@ pub(crate) mod tests {
         crate::vehicle::VehicleServices {
             record_from_shell: resolve_record,
             assert_next: unused(),
-            tile_links: unused(),
             map_log_x: unused(),
             assertions: unused(),
             train_handle: unused(),

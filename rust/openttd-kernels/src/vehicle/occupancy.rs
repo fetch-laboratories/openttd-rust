@@ -212,7 +212,7 @@ pub struct Near {
 }
 impl Near {
     #[inline]
-    pub(crate) unsafe fn new(s: &VehicleServices, x: i32, y: i32, distance: u32) -> Self {
+    pub(crate) unsafe fn new(_s: &VehicleServices, x: i32, y: i32, distance: u32) -> Self {
         crate::witness::hit(crate::witness::OCCUPANCY_NEAR);
         let left = (x as u32).wrapping_sub(distance) as i32;
         let right = (x as u32).wrapping_add(distance) as i32;
