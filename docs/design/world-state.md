@@ -294,8 +294,13 @@ The tested shell-identity BindRecordIfOwned extension from #719 is promoted
 unchanged through #704 Industry's first required real pooled/nonpooled adoption,
 unless root selects another earlier real consumer. Do not infer membership from
 an uninitialized or copied index, or retire a caller-owned record when destroying
-a borrowed shell. Preserve the normal vehicle indexed path, explicit O(extent)
-scan cost and original owner/drop timing. Other drafts reconcile the same
+a borrowed shell. Preserve the normal vehicle indexed path and original
+owner/drop timing. Pooled production shells bind and retire by index (steering
+31). The O(extent) shell-identity scan serves only nonpooled shells. Delete
+fixture-only stack or copy shells rather than keeping the scan alive for them.
+At #719's head every production LinkGraph/Job shell is pooled, so the scan
+makes LGRP load and CleanPool quadratic. CargoPacket churn would make it a hot
+path. Other drafts reconcile the same
 pool.hpp definition at necessary updates; no extra support branch is required.
 
 ## Link graph and job storage (#717)
