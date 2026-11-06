@@ -20,3 +20,10 @@ pub const GT_STORY_PAGE: u8 = 5;
 pub const GOAL_QUESTION_BUTTON_COUNT: u8 = 18;
 pub const GQT_QUESTION: u8 = 0;
 pub const GQT_END: u8 = 4;
+
+impl GoalID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}

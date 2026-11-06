@@ -44,3 +44,23 @@ impl Source {
         self.id != u16::MAX
     }
 }
+
+/// Native `SourceType`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl SourceType {
+    /// Source/destination is an industry
+    pub const Industry: Self = Self(0);
+    /// Source/destination is a town
+    pub const Town: Self = Self(1);
+    /// Source/destination are company headquarters
+    pub const Headquarters: Self = Self(2);
+}
+
+/// Native `SourceID`, retaining every underlying `u16` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceID(pub u16);

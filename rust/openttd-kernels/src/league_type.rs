@@ -23,3 +23,17 @@ pub const LT_INDUSTRY: u8 = 2;
 pub const LT_TOWN: u8 = 3;
 pub const LT_COMPANY: u8 = 4;
 pub const LT_STORY_PAGE: u8 = 5;
+
+impl LeagueTableID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(255);
+}
+
+impl LeagueTableElementID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}

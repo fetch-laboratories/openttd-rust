@@ -10,3 +10,12 @@ pub struct Depot {
     _private: [u8; 0],
 }
 pub const MAX_LENGTH_DEPOT_NAME_CHARS: usize = 32;
+
+impl DepotID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+    /// Native `PoolID::Invalid()`.
+    pub const INVALID: Self = Self(65535);
+}

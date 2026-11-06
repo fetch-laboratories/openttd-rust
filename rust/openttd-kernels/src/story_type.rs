@@ -21,3 +21,17 @@ pub struct StoryPage {
 pub struct StoryPageElement {
     _private: [u8; 0],
 }
+
+impl StoryPageID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}
+
+impl StoryPageElementID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}

@@ -25,3 +25,18 @@ pub const TAB_SIZE_NEWGRF: usize = (1 << TAB_SIZE_BITS) * 256;
 pub fn grf_string_id(index: usize) -> u32 {
     (TEXT_TAB_NEWGRF_START << TAB_SIZE_BITS) + u32::try_from(index).unwrap()
 }
+
+/// Native `StringID`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StringID(pub u32);
+
+/// Native `StringIndexInTab`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StringIndexInTab(pub u32);
+
+impl StringID {
+    /// Invalid string ID.
+    pub const INVALID_STRING_ID: Self = Self(0xFFFF);
+}

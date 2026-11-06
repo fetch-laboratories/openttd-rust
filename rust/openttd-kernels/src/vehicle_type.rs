@@ -7,21 +7,21 @@
 
 //! Shared `vehicle_type.h` transport identities.
 /// `VEH_TRAIN`.
-pub const VEH_TRAIN: u8 = VehicleType::TRAIN.0;
+pub const VEH_TRAIN: u8 = VehicleType::VEH_TRAIN.0;
 /// `VEH_ROAD`.
-pub const VEH_ROAD: u8 = VehicleType::ROAD.0;
+pub const VEH_ROAD: u8 = VehicleType::VEH_ROAD.0;
 /// `VEH_SHIP`.
-pub const VEH_SHIP: u8 = VehicleType::SHIP.0;
+pub const VEH_SHIP: u8 = VehicleType::VEH_SHIP.0;
 /// `VEH_AIRCRAFT`.
-pub const VEH_AIRCRAFT: u8 = VehicleType::AIRCRAFT.0;
+pub const VEH_AIRCRAFT: u8 = VehicleType::VEH_AIRCRAFT.0;
 pub const GROUND_ACCELERATION: u32 = 9800;
 /// `AccelerationModel::AM_ORIGINAL`.
 pub const AM_ORIGINAL: u8 = 0;
 
 /// End of vehicle types buildable by companies.
-pub const VEH_COMPANY_END: u8 = VehicleType::COMPANY_END.0;
+pub const VEH_COMPANY_END: u8 = VehicleType::VEH_COMPANY_END.0;
 /// Native `VEH_INVALID`.
-pub const VEH_INVALID: u8 = u8::MAX;
+pub const VEH_INVALID: u8 = VehicleType::VEH_INVALID.0;
 
 /// A vehicle's shared record (`VehicleRef`'s target); live while its native shell lives.
 pub use crate::vehicle_base::VehicleRecord as OpenTTDVehicle;
@@ -33,19 +33,19 @@ pub struct VehicleType(pub u8);
 
 impl VehicleType {
     /// Native `VEH_TRAIN`.
-    pub const TRAIN: Self = Self(0);
+    pub const TRAIN: Self = Self::VEH_TRAIN;
     /// Native `VEH_ROAD`.
-    pub const ROAD: Self = Self(1);
+    pub const ROAD: Self = Self::VEH_ROAD;
     /// Native `VEH_SHIP`.
-    pub const SHIP: Self = Self(2);
+    pub const SHIP: Self = Self::VEH_SHIP;
     /// Native `VEH_AIRCRAFT`.
-    pub const AIRCRAFT: Self = Self(3);
+    pub const AIRCRAFT: Self = Self::VEH_AIRCRAFT;
     /// Native `VEH_COMPANY_END`.
-    pub const COMPANY_END: Self = Self(4);
+    pub const COMPANY_END: Self = Self::VEH_COMPANY_END;
     /// Native `VEH_EFFECT`.
-    pub const EFFECT: Self = Self::COMPANY_END;
+    pub const EFFECT: Self = Self::VEH_EFFECT;
     /// Native `VEH_DISASTER`.
-    pub const DISASTER: Self = Self(5);
+    pub const DISASTER: Self = Self::VEH_DISASTER;
 }
 
 /// Native `VehicleID` with its full original integer domain.
@@ -55,4 +55,101 @@ pub struct VehicleID(pub u32);
 impl VehicleID {
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(0xFFFFF);
+}
+
+#[allow(non_upper_case_globals)]
+impl VehicleType {
+    /// Native `VEH_BEGIN`.
+    pub const VEH_BEGIN: Self = Self(0);
+    /// %Train vehicle type.
+    pub const VEH_TRAIN: Self = Self(0);
+    /// Road vehicle type.
+    pub const VEH_ROAD: Self = Self(1);
+    /// %Ship vehicle type.
+    pub const VEH_SHIP: Self = Self(2);
+    /// %Aircraft vehicle type.
+    pub const VEH_AIRCRAFT: Self = Self(3);
+    /// Last company-ownable type.
+    pub const VEH_COMPANY_END: Self = Self(4);
+    /// Effect vehicle type (smoke, explosions, sparks, bubbles)
+    pub const VEH_EFFECT: Self = Self(4);
+    /// Disaster vehicle type.
+    pub const VEH_DISASTER: Self = Self(5);
+    /// Native `VEH_END`.
+    pub const VEH_END: Self = Self(6);
+    /// Non-existing type of vehicle.
+    pub const VEH_INVALID: Self = Self(255);
+}
+
+/// Native `DepotCommandFlag`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DepotCommandFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl DepotCommandFlag {
+    /// The vehicle will leave the depot right after arrival (service only)
+    pub const Service: Self = Self(0);
+    /// Tells that it's a mass send to depot command (type in VLW flag)
+    pub const MassSend: Self = Self(1);
+    /// Don't cancel current goto depot command if any
+    pub const DontCancel: Self = Self(2);
+}
+
+/// Native `VehicleRandomTrigger`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehicleRandomTrigger(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl VehicleRandomTrigger {
+    /// Affected vehicle only: Vehicle is loaded with cargo, after it was empty.
+    pub const NewCargo: Self = Self(0);
+    /// Front vehicle only: Consist arrived in depot.
+    pub const Depot: Self = Self(1);
+    /// Front vehicle only: Entire consist is empty.
+    pub const Empty: Self = Self(2);
+    /// All vehicles in consist: Any vehicle in the consist received new cargo.
+    pub const AnyNewCargo: Self = Self(3);
+    /// All vehicles in consist: 32 day callback requested rerandomisation
+    pub const Callback32: Self = Self(4);
+}
+
+/// Native `DepotCommandFlags`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DepotCommandFlags(pub u8);
+
+impl DepotCommandFlags {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Set containing the named element (the element is a bit position).
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: DepotCommandFlag) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+}
+
+/// Native `VehicleRandomTriggers`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehicleRandomTriggers(pub u8);
+
+impl VehicleRandomTriggers {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Set containing the named element (the element is a bit position).
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: VehicleRandomTrigger) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+}
+
+impl VehicleID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(1044480);
 }

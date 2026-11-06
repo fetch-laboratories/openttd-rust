@@ -38,3 +38,22 @@ pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: u32) -> Option<u8> {
     let fields = m.require_type(t, MP_TREES)?;
     Some(fields.m5() & 7)
 }
+
+/// Native `TreeGround` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TreeGround(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl TreeGround {
+    /// normal grass
+    pub const TREE_GROUND_GRASS: Self = Self(0);
+    /// some rough tile
+    pub const TREE_GROUND_ROUGH: Self = Self(1);
+    /// a desert or snow tile, depend on landscape
+    pub const TREE_GROUND_SNOW_DESERT: Self = Self(2);
+    /// shore
+    pub const TREE_GROUND_SHORE: Self = Self(3);
+    /// A snow tile that is rough underneath.
+    pub const TREE_GROUND_ROUGH_SNOW: Self = Self(4);
+}

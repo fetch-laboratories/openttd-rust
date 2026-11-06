@@ -134,3 +134,8 @@ pub(crate) unsafe fn elapsed(
     }
     true
 }
+
+/// Distinct C ABI carrier for a native economy Date, converted in C++.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct EconomyDate(pub i32);

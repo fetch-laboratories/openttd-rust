@@ -849,3 +849,20 @@ pub(crate) fn fixture() -> WaterServices {
 extern "C" fn unused_region_context() -> crate::water_regions::Context {
     panic!("unused water region context")
 }
+
+/// Native `FloodingBehaviour` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct FloodingBehaviour(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl FloodingBehaviour {
+    /// The tile does not flood neighboured tiles.
+    pub const FLOOD_NONE: Self = Self(0);
+    /// The tile floods neighboured tiles.
+    pub const FLOOD_ACTIVE: Self = Self(1);
+    /// The tile does not actively flood neighboured tiles, but it prevents them from drying up.
+    pub const FLOOD_PASSIVE: Self = Self(2);
+    /// The tile drys up if it is not constantly flooded from neighboured tiles.
+    pub const FLOOD_DRYUP: Self = Self(3);
+}

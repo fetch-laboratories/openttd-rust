@@ -80,3 +80,8 @@ pub(crate) unsafe fn elapsed(
     }
     true
 }
+
+/// Explicit C ABI carrier for a native calendar Date, converted in C++.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct CalendarDate(pub i32);

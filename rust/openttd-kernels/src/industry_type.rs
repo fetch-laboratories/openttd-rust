@@ -55,3 +55,10 @@ pub const LIFE_ORGANIC: u8 = 2;
 pub const LIFE_PROCESSING: u8 = 4;
 /// `IndustryBehaviour::CutTrees` mask.
 pub const CUT_TREES: u32 = 1 << 1;
+
+impl IndustryID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}
