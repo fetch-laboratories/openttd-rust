@@ -564,7 +564,7 @@ impl<'a> World<'a> {
             }
             cost.add_money(south.money());
             for tile in [start, end] {
-                if !(self.s.bridge_above)(tile) {
+                if !crate::map_func::World::new(self.s).bridge_above(tile) {
                     continue;
                 }
                 if axis == (self.s.bridge_axis)(tile) {
@@ -586,7 +586,7 @@ impl<'a> World<'a> {
                 {
                     return cost.error(self.a.strings.too_high);
                 }
-                if (self.s.bridge_above)(tile) {
+                if crate::map_func::World::new(self.s).bridge_above(tile) {
                     return cost.error(self.a.strings.demolish_bridge);
                 }
                 self.build_above_tile(ret, tile, flags, axis, start_z.wrapping_add(1));
@@ -644,10 +644,16 @@ impl<'a> World<'a> {
                 }
                 ROAD => {
                     if new_owner {
-                        if hasroad && (self.s.road_owner)(start) == OWNER_NONE {
+                        if hasroad
+                            && crate::map_func::World::new(self.s).road_owner(start, false)
+                                == OWNER_NONE
+                        {
                             hasroad = false;
                         }
-                        if hastram && (self.s.tram_owner)(start) == OWNER_NONE {
+                        if hastram
+                            && crate::map_func::World::new(self.s).road_owner(start, true)
+                                == OWNER_NONE
+                        {
                             hastram = false;
                         }
                     }
@@ -660,12 +666,12 @@ impl<'a> World<'a> {
                         }
                     }
                     let owner_road = if hasroad {
-                        (self.s.road_owner)(start)
+                        crate::map_func::World::new(self.s).road_owner(start, false)
                     } else {
                         company
                     };
                     let owner_tram = if hastram {
-                        (self.s.tram_owner)(start)
+                        crate::map_func::World::new(self.s).road_owner(start, true)
                     } else {
                         company
                     };
@@ -983,10 +989,10 @@ impl<'a> World<'a> {
                 let mut road_owner = company;
                 let mut tram_owner = company;
                 if road != INVALID_ROADTYPE {
-                    road_owner = (self.s.road_owner)(tile);
+                    road_owner = crate::map_func::World::new(self.s).road_owner(tile, false);
                 }
                 if tram != INVALID_ROADTYPE {
-                    tram_owner = (self.s.tram_owner)(tile);
+                    tram_owner = crate::map_func::World::new(self.s).road_owner(tile, true);
                 }
                 if road_owner == OWNER_TOWN
                     && company != OWNER_TOWN
@@ -1106,7 +1112,7 @@ impl<'a> World<'a> {
             } else {
                 self.update_road_infrastructure(
                     (self.s.road_type)(tile),
-                    (self.s.road_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, false),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1114,7 +1120,7 @@ impl<'a> World<'a> {
                 );
                 self.update_road_infrastructure(
                     (self.s.tram_type)(tile).0,
-                    (self.s.tram_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, true),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1188,7 +1194,7 @@ impl<'a> World<'a> {
             } else if (self.s.tunnel_transport)(tile) == ROAD {
                 self.update_road_infrastructure(
                     (self.s.road_type)(tile),
-                    (self.s.road_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, false),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1196,7 +1202,7 @@ impl<'a> World<'a> {
                 );
                 self.update_road_infrastructure(
                     (self.s.tram_type)(tile).0,
-                    (self.s.tram_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, true),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1285,9 +1291,9 @@ impl<'a> World<'a> {
         if transport == ROAD {
             for rtt in [0, 1] {
                 let owner = if rtt == 0 {
-                    (self.s.road_owner)(tile)
+                    crate::map_func::World::new(self.s).road_owner(tile, false)
                 } else {
-                    (self.s.tram_owner)(tile)
+                    crate::map_func::World::new(self.s).road_owner(tile, true)
                 };
                 if owner == old {
                     let kind = if rtt == 0 {

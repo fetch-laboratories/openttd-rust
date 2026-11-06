@@ -452,7 +452,7 @@ impl<'a> Ctx<'a> {
         allow_steep: bool,
         check_bridge: bool,
     ) {
-        if check_bridge && (self.shared.bridge_above)(tile) {
+        if check_bridge && crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.error(self.s.strings.demolish_bridge);
         }
         // SAFETY: the native output is a live command slot for this entry.
@@ -530,7 +530,7 @@ impl<'a> Ctx<'a> {
         out.zero();
     }
     fn default_bridge_ok(&self, out: Cost<'_>, tile: u32, kind: u8, layout: u8) {
-        if !(self.shared.bridge_above)(tile) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let south = (self.s.southern_bridge_end)(tile);
@@ -583,7 +583,7 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
     layout: u8,
 ) {
     let c = unsafe { Ctx::new(s) };
-    if !(c.shared.bridge_above)(tile) {
+    if !crate::map_func::World::new(c.shared).bridge_above(tile) {
         return c.c(out).zero();
     }
     let south = (c.s.southern_bridge_end)(tile);
@@ -1338,7 +1338,7 @@ impl Ctx<'_> {
         }
     }
     fn rail_bridge(&self, out: Cost<'_>, tile: u32, spec: *const RailSpec, kind: u8, gfx: u8) {
-        if !(self.shared.bridge_above)(tile) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let south = (self.s.southern_bridge_end)(tile);
@@ -1495,7 +1495,7 @@ impl Ctx<'_> {
                 let t = tile
                     .wrapping_add(u32::from(i).wrapping_mul(track_delta))
                     .wrapping_add(u32::from(j).wrapping_mul(delta));
-                if !(self.shared.bridge_above)(t) {
+                if !crate::map_func::World::new(self.shared).bridge_above(t) {
                     continue;
                 }
                 let mut gfx = Self::layout_gfx(
@@ -2045,9 +2045,9 @@ impl Ctx<'_> {
     }
     fn road_owner(&self, tile: u32, tram: bool) -> u8 {
         if tram {
-            (self.shared.tram_owner)(tile)
+            crate::map_func::World::new(self.shared).road_owner(tile, true)
         } else {
-            (self.shared.road_owner)(tile)
+            crate::map_func::World::new(self.shared).road_owner(tile, false)
         }
     }
     fn may_have_road(&self, tile: u32) -> bool {
@@ -2066,7 +2066,7 @@ impl Ctx<'_> {
         (self.command.infrastructure_dirty)(owner);
     }
     fn road_bridge(&self, out: Cost<'_>, tile: u32, spec: *const RoadSpec, kind: u8, gfx: u8) {
-        if !(self.shared.bridge_above)(tile) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
         let south = (self.s.southern_bridge_end)(tile);
@@ -2123,13 +2123,13 @@ impl Ctx<'_> {
         if (self.shared.tile_type)(tile) == MP_STATION {
             if !(self.shared.is_any_road_stop)(tile)
                 || kind != (self.shared.station_type)(tile).0
-                || drive != (self.shared.is_drive_through_stop)(tile)
+                || drive != crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
             {
                 return self.auto_clear(cost, tile);
             }
             if drive
-                && (self.shared.is_drive_through_stop)(tile)
-                && (self.shared.drive_through_axis)(tile) != axis
+                && crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
+                && crate::map_func::World::new(self.shared).drive_through_axis(tile) != axis
             {
                 return cost.error(self.s.strings.drive_direction);
             }
@@ -2637,7 +2637,9 @@ impl Ctx<'_> {
                     return;
                 }
             }
-        } else if (self.shared.is_drive_through_stop)(tile) && flags & 32 != 0 {
+        } else if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
+            && flags & 32 != 0
+        {
             if flags & 1 != 0 {
                 self.vehicle().for_each_on_tile(tile, |vehicle| {
                     if vehicle.vehicle_type() == 1 {
@@ -2688,7 +2690,7 @@ impl Ctx<'_> {
             (self.command.infrastructure_dirty)(owner);
             let specindex = (self.s.custom_road_index)(tile);
             (self.s.close_stop_inspect)(tile);
-            if !waypoint && (self.shared.is_drive_through_stop)(tile) {
+            if !waypoint && crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                 crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
                 crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
@@ -2772,7 +2774,7 @@ impl Ctx<'_> {
             let mut types = [63_u8; 2];
             let mut owners = [0x10_u8; 2];
             let mut bits = 0;
-            if (self.shared.is_drive_through_stop)(tile) {
+            if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                 for tram in [false, true] {
                     let i = usize::from(tram);
                     types[i] = self.road_type(tile, tram);
@@ -2784,7 +2786,7 @@ impl Ctx<'_> {
                         types[i] = 63;
                     }
                 }
-                bits = if (self.shared.drive_through_axis)(tile) == 0 {
+                bits = if crate::map_func::World::new(self.shared).drive_through_axis(tile) == 0 {
                     10
                 } else {
                     5
@@ -4007,7 +4009,7 @@ impl Ctx<'_> {
             7 => self.remove_rail_all(cost, ret, error, flags, tile, true),
             1 => self.remove_airport(cost, ret, tile, flags),
             2 | 3 => {
-                if (self.shared.is_drive_through_stop)(tile) {
+                if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                     self.can_remove_road_stop(cost, tile, flags);
                     if !cost.ok() {
                         return;
@@ -4036,12 +4038,12 @@ impl Ctx<'_> {
                 0 | 7 => (self.s.autoslope_axis)(tile, z, slope, self.station_axis(tile)),
                 1 => true,
                 2 | 3 | 8 => {
-                    if (self.shared.is_drive_through_stop)(tile) {
+                    if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                         (self.s.autoslope_axis)(
                             tile,
                             z,
                             slope,
-                            (self.shared.drive_through_axis)(tile),
+                            crate::map_func::World::new(self.shared).drive_through_axis(tile),
                         )
                     } else {
                         (self.rail().entrance_edge)(
@@ -4114,7 +4116,7 @@ impl Ctx<'_> {
             }
             (self.shared.set_tile_owner)(tile, new);
             (self.s.station_list_classes_invalidate)();
-        } else if (self.shared.is_drive_through_stop)(tile) {
+        } else if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
             let kind = (self.shared.station_type)(tile).0;
             self.nested(cost, tile, 33, |flags| {
                 self.remove_road_command(

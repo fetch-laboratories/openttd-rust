@@ -305,7 +305,7 @@ impl Engine<'_> {
                 if !self.succeeded() {
                     return false;
                 }
-                if (self.s.shared().bridge_above)(current) {
+                if crate::map_func::World::new(self.s.shared()).bridge_above(current) {
                     return self.fail(self.e.site);
                 }
                 let spec = unsafe { (self.t.spec)(gfx) };

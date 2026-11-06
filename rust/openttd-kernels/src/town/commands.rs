@@ -245,7 +245,7 @@ impl<'a> Commands<'a> {
             if is_steep_slope((self.shared.tile_slope)(tile)) {
                 continue;
             }
-            if (self.shared.bridge_above)(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 continue;
             }
             if matches!((self.shared.tile_type)(tile), MP_CLEAR | MP_TREES)

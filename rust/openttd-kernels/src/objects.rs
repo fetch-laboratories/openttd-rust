@@ -1132,7 +1132,7 @@ impl<'a> World<'a> {
                 return;
             }
             for t in self.tiles(area) {
-                if (self.shared.bridge_above)(t)
+                if crate::map_func::World::new(self.shared).bridge_above(t)
                     && (shape.flags & UNDER_BRIDGE == 0
                         || (self.shared.tile_max_z)(t) + i32::from(admission.height) >= {
                             let station = &*(self.shared.station_commands)();
@@ -1603,7 +1603,7 @@ impl World<'_> {
                 if (self.shared.tile_type)(tile) == MP_CLEAR
                     && ((*self.s.founding).flat)(crate::town::founding::Tile(tile))
                     && (self.shared.tile_z)(tile) <= 2
-                    && !(self.shared.bridge_above)(tile)
+                    && !crate::map_func::World::new(self.shared).bridge_above(tile)
                 {
                     if self.near(tile, LIGHTHOUSE) {
                         return false;
@@ -1628,7 +1628,7 @@ impl World<'_> {
         if (self.shared.tile_type)(tile) == MP_CLEAR
             && unsafe { ((*self.s.founding).flat)(crate::town::founding::Tile(tile)) }
             && (self.shared.tile_z)(tile) >= 4
-            && !(self.shared.bridge_above)(tile)
+            && !crate::map_func::World::new(self.shared).bridge_above(tile)
         {
             if self.near(tile, TRANSMITTER) {
                 return false;

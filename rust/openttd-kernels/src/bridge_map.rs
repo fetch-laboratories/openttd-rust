@@ -53,6 +53,14 @@ impl crate::map_func::World<'_> {
     }
 }
 
+impl crate::map_func::World<'_> {
+    /// `IsBridgeAbove`.
+    #[inline]
+    pub(crate) fn bridge_above(&self, t: u32) -> bool {
+        self.asserted(|m| is_bridge_above(m, t))
+    }
+}
+
 /// `IsBridgeAbove`, over the canonical tile's bridge-axis bits.
 pub(crate) fn is_bridge_above(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
     Some(m.kind(tile)? & 0x0c != 0)

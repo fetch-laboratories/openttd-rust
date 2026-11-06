@@ -105,6 +105,10 @@ impl crate::map_func::World<'_> {
     pub(crate) fn water_class(&self, t: u32) -> u8 {
         self.asserted(|m| get_water_class(m, t))
     }
+    /// `IsSea`.
+    pub(crate) fn is_sea(&self, t: u32) -> bool {
+        self.asserted(|m| is_sea(m, t))
+    }
     /// `GetLockDirection`, with its `IsLock` assertion.
     pub(crate) fn lock_direction(&self, t: u32) -> u8 {
         self.check(self.water_tile_type(t) == LOCK);

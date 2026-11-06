@@ -248,7 +248,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
-	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };

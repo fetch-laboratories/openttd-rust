@@ -190,8 +190,6 @@ static bool Candidate()
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
 	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };
 	services.tunnel_bridge_direction = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeDirection(id)); };
-	services.is_drive_through_stop = [](uint32_t id) noexcept { return IsDriveThroughStopTile(id); };
-	services.drive_through_axis = [](uint32_t id) noexcept { return uint8_t(GetDriveThroughStopAxis(id)); };
 	services.is_bay_stop = [](uint32_t id) noexcept { return IsBayRoadStopTile(id); };
 	services.bay_stop_direction = [](uint32_t id) noexcept { return uint8_t(GetBayRoadStopDir(id)); };
 	services.is_road_depot = [](uint32_t id) noexcept { return IsRoadDepot(id); };

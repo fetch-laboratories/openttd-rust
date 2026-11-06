@@ -282,7 +282,6 @@ bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return RustIsTileFlat(tile); }
 ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return RustClearGround(Tile{TileIndex{tile}}); }
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return RustTreeGround(Tile{TileIndex{tile}}); }
 
-static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(TileIndex{tile}); }
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
@@ -383,20 +382,16 @@ static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
-static bool Shared_is_sea(uint32_t tile) noexcept { return IsSea(TileIndex{tile}); }
 static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileIndex{tile}); }
-static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
 static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
 static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
-static uint8_t Shared_road_owner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_ROAD).base(); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
 static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noexcept { return GetAnyRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type), straight); }
 static void SharedUpdateLevelCrossing(uint32_t tile, bool sound) noexcept { UpdateLevelCrossing(TileIndex{tile}, sound); }
 static void SharedMarkBridgeDirty(uint32_t tile) noexcept { MarkBridgeDirty(TileIndex{tile}); }
 static Trackdir SharedTrainTrackdir(const Train *v) noexcept { return v->GetVehicleTrackdir(); }
 static RoadType SharedTramType(uint32_t tile) noexcept { return GetRoadTypeTram(TileIndex{tile}); }
-static uint8_t SharedTramOwner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_TRAM).base(); }
 static RoadBits SharedCrossingRoadBits(uint32_t tile) noexcept { return GetCrossingRoadBits(TileIndex{tile}); }
 static uint32_t SharedMapMaxX() noexcept { return Map::MaxX(); }
 static uint32_t SharedMapMaxY() noexcept { return Map::MaxY(); }
@@ -430,7 +425,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
-	.bridge_above = SharedBridgeAbove,
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
@@ -446,7 +440,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,
 	.disaster_sound = SharedDisasterSound,
-	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,
@@ -455,12 +448,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_any_road_stop = Shared_is_any_road_stop,
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
-	.is_drive_through_stop = Shared_is_drive_through_stop,
-	.is_level_crossing = MapSvcIsLevelCrossing,
 	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
-	.is_sea = Shared_is_sea,
 	.is_water_tile = MapSvcIsWaterTile,
 	.map = &_rust_map_statics,
 	.settings = &_rust_setting_addresses,
@@ -477,7 +467,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_bits = Shared_road_bits,
 	.road_cost_multiplier = RustRoadCostMultiplier,
 	.road_depot_direction = Shared_road_depot_direction,
-	.road_owner = Shared_road_owner,
 	.road_type = Shared_road_type,
 	.crossing_reserved = RustCrossingReserved,
 	.set_crossing_reserved = RustSetCrossingReserved,
@@ -521,7 +510,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,
 	.train_trackdir = SharedTrainTrackdir,
-	.tram_owner = SharedTramOwner,
 	.tram_type = SharedTramType,
 	.tropic_zone = SharedTropicZone,
 	.try_path_reserve = SharedTryPathReserve,
@@ -543,7 +531,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.for_each_station = SharedForEachStation,
-	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,
 	.nearby_tile_information = RustNearbyTileInformation,

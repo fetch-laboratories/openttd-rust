@@ -526,7 +526,7 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     for tile in crate::map_func::Map::iterate(count) {
         let convert = match (s.tile_type)(tile) {
             MP_RAILWAY => true,
-            MP_ROAD => (s.is_level_crossing)(tile),
+            MP_ROAD => crate::map_func::World::new(s).level_crossing_tile(tile),
             MP_STATION => (map.has_station_rail)(tile),
             MP_TUNNELBRIDGE => (s.tunnel_transport)(tile) == TRANSPORT_RAIL,
             _ => false,

@@ -791,7 +791,7 @@ pub(crate) unsafe fn road_tile_loop(
                 }
             }
         }
-        if (s.road_owner)(tile) == 15 {
+        if crate::map_func::World::new(s).road_owner(tile, false) == 15 {
             // SAFETY: The immutable town table is live; road selection borrows no owner.
             let road_type =
                 RoadType(unsafe { crate::town::openttd_rust_town_road_type(r.town, s) } as u8);

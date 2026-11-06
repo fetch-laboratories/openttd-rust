@@ -230,7 +230,9 @@ impl World<'_> {
             self.error(out, self.a.strings.built_on_water);
             return;
         }
-        if (self.s.bridge_above)(tile) || (self.s.bridge_above)(tile2) {
+        if crate::map_func::World::new(self.s).bridge_above(tile)
+            || crate::map_func::World::new(self.s).bridge_above(tile2)
+        {
             self.error(out, self.a.strings.demolish_bridge);
             return;
         }
@@ -369,7 +371,7 @@ impl World<'_> {
             };
         }
         for (part, t) in [tile, lower, upper].into_iter().enumerate() {
-            if (self.s.bridge_above)(t)
+            if crate::map_func::World::new(self.s).bridge_above(t)
                 && self.bridge_height(t)
                     < (self.s.tile_max_z)(t) + get_lock_part_minimal_bridge_height(part)
             {

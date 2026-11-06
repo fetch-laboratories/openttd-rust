@@ -121,7 +121,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.disallowed_directions = Shared_disallowed_road_directions,
 	.is_bay_stop = Shared_is_bay_stop,
 	.bay_direction = Shared_bay_stop_direction,
-	.is_drive_through = Shared_is_drive_through_stop,
 	.is_station_road_stop = RoadSvcIsStationRoadStop,
 	.choose_track = RoadSvcChooseTrack,
 	.find_depot = RoadSvcFindDepot,

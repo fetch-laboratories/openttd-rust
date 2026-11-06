@@ -543,7 +543,7 @@ impl<'a> World<'a> {
                     }
                 }
                 if pass == 0 {
-                    if (self.s.bridge_above)(t) {
+                    if crate::map_func::World::new(self.s).bridge_above(t) {
                         let station = unsafe { &*(self.s.station_commands)() };
                         let height = crate::bridge_map::get_bridge_height(
                             (station.southern_bridge_end)(t),

@@ -285,8 +285,6 @@ pub struct Services {
     pub autoslope: extern "C" fn() -> bool,
     /// Original native `bay_stop_direction` map observation.
     pub bay_stop_direction: extern "C" fn(u32) -> u8,
-    /// `IsBridgeAbove`.
-    pub bridge_above: extern "C" fn(u32) -> bool,
     /// Original native `bridge_axis` map observation.
     pub bridge_axis: extern "C" fn(u32) -> u8,
     /// Bridge specification speed at this bridge tile.
@@ -309,8 +307,6 @@ pub struct Services {
     pub depot_index: extern "C" fn(u32) -> u16,
     /// Shared live disaster sound setting.
     pub disaster_sound: extern "C" fn() -> bool,
-    /// Original native `drive_through_axis` map observation.
-    pub drive_through_axis: extern "C" fn(u32) -> u8,
     /// Original pathfinding setting, observed at the calling branch.
     pub forbid_90_deg: extern "C" fn() -> bool,
     /// `FreeTrainTrackReservation(v)`.
@@ -327,18 +323,12 @@ pub struct Services {
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_bridge` map observation.
     pub is_bridge: extern "C" fn(u32) -> bool,
-    /// Original native `is_drive_through_stop` map observation.
-    pub is_drive_through_stop: extern "C" fn(u32) -> bool,
-    /// `IsLevelCrossingTile`.
-    pub is_level_crossing: extern "C" fn(u32) -> bool,
     /// Original native `IsNormalRoadTile` map observation.
     pub is_normal_road_tile: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
     pub is_plain_rail: extern "C" fn(u32) -> bool,
     /// Original native `is_road_depot` map observation.
     pub is_road_depot: extern "C" fn(u32) -> bool,
-    /// Original native `is_sea` map observation.
-    pub is_sea: extern "C" fn(u32) -> bool,
     /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
     pub is_water_tile: extern "C" fn(u32) -> bool,
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
@@ -371,8 +361,6 @@ pub struct Services {
     pub road_cost_multiplier: extern "C" fn(u8) -> u16,
     /// Original native `road_depot_direction` map observation.
     pub road_depot_direction: extern "C" fn(u32) -> u8,
-    /// Original native `road_owner` map observation.
-    pub road_owner: extern "C" fn(u32) -> u8,
     /// Original native `road_type` map observation.
     pub road_type: extern "C" fn(u32) -> u8,
     /// Canonical native `HasCrossingReservation`.
@@ -459,8 +447,6 @@ pub struct Services {
     pub town_owner: extern "C" fn(*const TownHandle) -> *mut crate::town::State,
     /// Original train track direction, computed lazily at the consuming branch.
     pub train_trackdir: unsafe extern "C" fn(*const Train) -> Trackdir,
-    /// Original tram owner.
-    pub tram_owner: extern "C" fn(u32) -> u8,
     /// Original tram road type (including `INVALID_ROADTYPE`).
     pub tram_type: extern "C" fn(u32) -> RoadType,
     /// `GetTropicZone`.
@@ -502,8 +488,6 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
-    /// `GetRoadStopType`.
-    pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
     pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
     /// `GetNearbyTile` with signed offsets.
@@ -790,7 +774,6 @@ crate::abi::layouts! {
         set_tile_owner,
         autoslope,
         bay_stop_direction,
-        bridge_above,
         bridge_axis,
         bridge_speed,
         build_on_slopes,
@@ -802,7 +785,6 @@ crate::abi::layouts! {
         current_company,
         depot_index,
         disaster_sound,
-        drive_through_axis,
         forbid_90_deg,
         free_train_reservation,
         has_road_type,
@@ -811,12 +793,9 @@ crate::abi::layouts! {
         is_any_road_stop,
         is_bay_stop,
         is_bridge,
-        is_drive_through_stop,
-        is_level_crossing,
         is_normal_road_tile,
         is_plain_rail,
         is_road_depot,
-        is_sea,
         is_water_tile,
         map,
         settings,
@@ -833,7 +812,6 @@ crate::abi::layouts! {
         road_bits,
         road_cost_multiplier,
         road_depot_direction,
-        road_owner,
         road_type,
         crossing_reserved,
         set_crossing_reserved,
@@ -876,7 +854,6 @@ crate::abi::layouts! {
         town_index,
         town_owner,
         train_trackdir,
-        tram_owner,
         tram_type,
         tropic_zone,
         try_path_reserve,
@@ -896,7 +873,6 @@ crate::abi::layouts! {
         tree_ground,
         water_services,
         for_each_station,
-        road_stop_type,
         road_stops,
         nearby_tile,
         nearby_tile_information,
@@ -1065,7 +1041,6 @@ pub fn fixture(
         set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
-        bridge_above: flag,
         bridge_axis: byte,
         bridge_speed: short,
         build_on_slopes: flag0,
@@ -1080,7 +1055,6 @@ pub fn fixture(
         current_company: unused_current_company,
         depot_index: short,
         disaster_sound: flag0,
-        drive_through_axis: byte,
         forbid_90_deg: flag0,
         free_train_reservation: train,
         has_road_type: flag,
@@ -1089,12 +1063,9 @@ pub fn fixture(
         is_any_road_stop: flag,
         is_bay_stop: flag,
         is_bridge: flag,
-        is_drive_through_stop: flag,
-        is_level_crossing: flag,
         is_normal_road_tile: flag,
         is_plain_rail: flag,
         is_road_depot: flag,
-        is_sea: flag,
         is_water_tile: flag,
         map: crate::map_func::fixture::statics(),
         settings: std::ptr::null(),
@@ -1111,7 +1082,6 @@ pub fn fixture(
         road_bits: bits,
         road_cost_multiplier: unused_road_cost_multiplier,
         road_depot_direction: byte,
-        road_owner: byte,
         road_type: byte,
         crossing_reserved: flag,
         set_crossing_reserved: set_reserved,
@@ -1157,7 +1127,6 @@ pub fn fixture(
         town_index: index,
         town_owner: unused_town_owner,
         train_trackdir: fixture_train_trackdir,
-        tram_owner: byte,
         tram_type: fixture_tram_type,
         tropic_zone: byte,
         try_path_reserve: train_path,
@@ -1177,7 +1146,6 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
-        road_stop_type: fixture_road_stop_type,
         road_stops: fixture_road_stops,
     }
 }
@@ -1553,10 +1521,6 @@ pub struct StationType(pub u8);
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RoadStopType(pub u8);
-#[cfg(test)]
-extern "C" fn fixture_road_stop_type(_: u32) -> RoadStopType {
-    panic!("unused road stop type")
-}
 #[cfg(test)]
 extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
     panic!("unused road stop table")

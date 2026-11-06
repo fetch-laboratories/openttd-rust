@@ -71,7 +71,6 @@ static void RoadBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
-	t.shared.is_level_crossing = [](uint32_t) noexcept { return false; };
 	static uint8_t cache_visual_byte = 0;
 	OpenTTDVisualServices cache_visual{
 		.vehicle = &t.vehicle, .shared = &t.shared,
@@ -99,7 +98,11 @@ static void RoadBoundary()
 		CHECK(road_abi_probe->ground.state->flags == 0);
 		return 7;
 	};
-	t.shared.road_stop_type = [](uint32_t tile) noexcept { CHECK(tile == 100); return RoadStopType::Bus; };
+	/* Tile 100 is a bus bay stop: station type Bus in m6, bay graphics in m5. */
+	static OpenTTDFixtureMap stop_map{6, 4096};
+	stop_map.base[100].type = 5 << 4; // MP_STATION
+	stop_map.extended[100].m6 = 3 << 3;
+	t.shared.map = &stop_map.statics;
 	t.shared.road_stops = []() noexcept { return &road_abi_stops; };
 	t.shared.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->entries = &probe.entries;
@@ -205,7 +208,6 @@ static void RoadBoundary()
 
 
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
-	t.leaves.is_drive_through = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->status = 0xFF; // Entering the bay frees its entrance.
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
@@ -213,6 +215,8 @@ static void RoadBoundary()
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	static OpenTTDFixtureMap map{6, 4096};
 	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = 9 << 4;
+	map.base[100].type = 5 << 4; // The bus bay stop above.
+	map.extended[100].m6 = 3 << 3;
 	static OpenTTDSharedServices movement_world{};
 	movement_world.map = &map.statics;
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
@@ -269,7 +273,7 @@ static void RoadBoundary()
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
 	};
 	auto emission_shared = t.shared;
-	emission_shared.is_bridge = emission_shared.bridge_above = [](uint32_t) noexcept { return false; };
+	emission_shared.is_bridge = [](uint32_t) noexcept { return false; };
 	static uint8_t emission_cache = 0x11;
 	OpenTTDVisualServices emission{
 		.vehicle = &emission_vehicle, .shared = &emission_shared,

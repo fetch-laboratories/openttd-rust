@@ -1110,7 +1110,7 @@ impl Engine<'_> {
     }
     fn road_allowed(&self, town: u32, tile: u32, dir: u32) -> bool {
         if self.distance_from_edge(tile) == 0
-            || ((self.services.bridge_above)(tile)
+            || (crate::map_func::World::new(self.services).bridge_above(tile)
                 && u32::from((self.services.bridge_axis)(tile)) == (dir & 1))
         {
             return false;
@@ -1231,8 +1231,10 @@ impl Engine<'_> {
                     && u32::from((self.services.tunnel_bridge_direction)(next)) == dir;
             }
             MP_STATION => {
-                if (self.services.is_drive_through_stop)(next) {
-                    return u32::from((self.services.drive_through_axis)(next)) == dir & 1;
+                if crate::map_func::World::new(self.services).drive_through_stop_tile(next) {
+                    return u32::from(
+                        crate::map_func::World::new(self.services).drive_through_axis(next),
+                    ) == dir & 1;
                 }
                 if (self.services.is_bay_stop)(next) {
                     return u32::from((self.services.bay_stop_direction)(next)) == reverse(dir);
@@ -1272,7 +1274,7 @@ impl Engine<'_> {
             end = self.step(end, dir);
             if !self.valid(end)
                 || !(((self.services.is_water_tile)(end)
-                    && (slope != 0 || !(self.services.is_sea)(end)))
+                    && (slope != 0 || !crate::map_func::World::new(self.services).is_sea(end)))
                     || (self.services.is_plain_rail)(end)
                     || ((self.services.is_normal_road_tile)(end)
                         && crate::map_func::World::new(self.services)
@@ -1407,7 +1409,9 @@ impl Engine<'_> {
         if modes & 2 != 0 {
             match (self.services.tile_type)(next) {
                 MP_ROAD => bits != 0,
-                MP_STATION => (self.services.is_drive_through_stop)(next),
+                MP_STATION => {
+                    crate::map_func::World::new(self.services).drive_through_stop_tile(next)
+                }
                 MP_TUNNELBRIDGE => (self.services.tunnel_transport)(next) == 1,
                 MP_HOUSE | MP_INDUSTRY | MP_OBJECT => false,
                 _ => true,
@@ -1605,7 +1609,7 @@ impl Engine<'_> {
                 && !(self.services.is_road_depot)(tile)
                 && (self.services.has_road_type)(tile)
             {
-                let owner = (self.services.road_owner)(tile);
+                let owner = crate::map_func::World::new(self.services).road_owner(tile, false);
                 if owner == 15 && u32::from((self.services.town_index)(tile)) != town {
                     return false;
                 }
@@ -1702,7 +1706,9 @@ impl Engine<'_> {
         if (noslope && slope != 0) || is_steep_slope(slope) {
             return false;
         }
-        if !self.roads_allow_house(tile) || (self.services.bridge_above)(tile) {
+        if !self.roads_allow_house(tile)
+            || crate::map_func::World::new(self.services).bridge_above(tile)
+        {
             return false;
         }
         self.clear(tile, false)

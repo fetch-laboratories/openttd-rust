@@ -352,8 +352,6 @@ rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction
 rebound | Shared_bay_stop_direction | src/rust/services.cpp | bay_stop_direction
 rebound | Shared_is_bay_stop | src/rust/road_services.h | is_bay_stop
 rebound | Shared_is_bay_stop | src/rust/services.cpp | is_bay_stop
-rebound | Shared_is_drive_through_stop | src/rust/road_services.h | is_drive_through
-rebound | Shared_is_drive_through_stop | src/rust/services.cpp | is_drive_through_stop
 rebound | Shared_is_road_depot | src/rust/road_services.h | is_road_depot_tile
 rebound | Shared_is_road_depot | src/rust/services.cpp | is_road_depot
 rebound | Shared_road_depot_direction | src/rust/road_services.h | depot_direction

@@ -1008,7 +1008,7 @@ impl<'a> House<'a> {
                 (c.error)(result, self.h.errors.sloped);
                 return;
             }
-            if (self.s.bridge_above)(subtile) {
+            if crate::map_func::World::new(self.s).bridge_above(subtile) {
                 (c.error)(result, self.h.errors.bridge);
                 return;
             }

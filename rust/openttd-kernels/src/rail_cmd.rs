@@ -622,7 +622,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 if !built {
-                    if (self.shared.is_level_crossing)(tile)
+                    if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
                         && (self.rail.crossing_rail_bits)(tile).0 == trackbit
                     {
                         return cost.error(strings.already_built);
@@ -686,8 +686,8 @@ impl<'a> Ctx<'a> {
         track: u8,
         road: NormalRoad,
     ) -> Option<()> {
-        let road_owner = (self.shared.road_owner)(tile);
-        let tram_owner = (self.shared.tram_owner)(tile);
+        let road_owner = crate::map_func::World::new(self.shared).road_owner(tile, false);
+        let tram_owner = crate::map_func::World::new(self.shared).road_owner(tile, true);
         if (self.shared.company_valid)(tram_owner) && road.tram_bits.is_power_of_two() {
             ret.ownership(self.command, tram_owner, 0);
             if !ret.ok() {
@@ -762,7 +762,7 @@ impl<'a> Ctx<'a> {
         let no_track = self.s.strings.no_track;
         match self.tile_type(tile) {
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(tile)
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile)
                     || (self.rail.crossing_rail_bits)(tile).0 != trackbit
                 {
                     return cost.error(no_track);
@@ -804,8 +804,9 @@ impl<'a> Ctx<'a> {
                         road_type: (self.shared.road_type)(tile),
                         tram_type: (self.shared.tram_type)(tile).0,
                         town: (self.shared.town_index)(tile),
-                        road_owner: (self.shared.road_owner)(tile),
-                        tram_owner: (self.shared.tram_owner)(tile),
+                        road_owner: crate::map_func::World::new(self.shared)
+                            .road_owner(tile, false),
+                        tram_owner: crate::map_func::World::new(self.shared).road_owner(tile, true),
                     };
                     (self.s.make_road)(tile, road);
                     (self.s.close_inspect)(tile);
@@ -1071,7 +1072,7 @@ impl<'a> Ctx<'a> {
             if !cost.ok() {
                 return;
             }
-            if (self.shared.bridge_above)(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 return cost.error(self.s.strings.demolish_bridge);
             }
             if !(self.s.depot_available)() {
@@ -1324,7 +1325,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(*tile) {
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(*tile) {
                     return false;
                 }
             }
@@ -1722,7 +1723,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(tile) {
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
                     return false;
                 }
                 if (self.s.rail_no_crossings)(totype) {
@@ -1778,11 +1779,12 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.rail.is_rail_station)(tile) || !(self.rail.station_blocked)(tile) {
                     let owner = (self.shared.tile_owner)(tile);
-                    let mut num = if (self.shared.is_level_crossing)(tile) {
-                        LEVELCROSSING_TRACKBIT_FACTOR
-                    } else {
-                        1
-                    };
+                    let mut num =
+                        if crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
+                            LEVELCROSSING_TRACKBIT_FACTOR
+                        } else {
+                            1
+                        };
                     if (self.shared.is_plain_rail)(tile) {
                         num = pieces(self.tracks(tile));
                     }

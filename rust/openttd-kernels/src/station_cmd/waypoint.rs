@@ -51,7 +51,7 @@ impl Ctx<'_> {
     fn waypoint_road_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_ROAD);
         if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
-            return (self.shared.drive_through_axis)(tile);
+            return crate::map_func::World::new(self.shared).drive_through_axis(tile);
         }
         if !(self.shared.is_normal_road_tile)(tile) {
             return INVALID_AXIS;

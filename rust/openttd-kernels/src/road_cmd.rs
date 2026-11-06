@@ -337,9 +337,9 @@ impl<'a> Ctx<'a> {
     }
     fn owner(&self, tile: u32, rtt: u8) -> u8 {
         if rtt == 0 {
-            (self.shared.road_owner)(tile)
+            crate::map_func::World::new(self.shared).road_owner(tile, false)
         } else {
-            (self.shared.tram_owner)(tile)
+            crate::map_func::World::new(self.shared).road_owner(tile, true)
         }
     }
     fn bits(&self, tile: u32, rtt: u8) -> u8 {
@@ -502,7 +502,7 @@ impl<'a> Ctx<'a> {
         match self.tile_type(tile) {
             MP_ROAD => cost.no_vehicle(self.commands, tile),
             MP_STATION => {
-                if !(self.shared.is_drive_through_stop)(tile) {
+                if !crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                     cost.error(INVALID_STRING_ID);
                     return;
                 }
@@ -1002,10 +1002,12 @@ impl<'a> Ctx<'a> {
                     cost.error(self.r.strings.already_built);
                     return;
                 }
-                if !(self.shared.is_drive_through_stop)(tile) {
+                if !crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                     clear = true;
                 } else {
-                    let bits = axis_bits((self.shared.drive_through_axis)(tile));
+                    let bits = axis_bits(
+                        crate::map_func::World::new(self.shared).drive_through_axis(tile),
+                    );
                     if pieces & !bits != 0 {
                         clear = true;
                     } else {
@@ -1141,7 +1143,9 @@ impl<'a> Ctx<'a> {
                 }
                 MP_STATION => {
                     w::hit(w::ROAD_COMMANDS_BUILD_STOP);
-                    debug_assert!((self.shared.is_drive_through_stop)(tile));
+                    debug_assert!(
+                        crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
+                    );
                     (self.shared.set_road_type)(tile, rtt, rt);
                     (self.shared.set_road_owner)(tile, rtt, company);
                 }
@@ -1445,7 +1449,7 @@ impl<'a> Ctx<'a> {
             if !cost.ok() {
                 return;
             }
-            if (self.shared.bridge_above)(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 cost.error(self.r.strings.demolish_bridge);
                 return;
             }
@@ -1606,7 +1610,8 @@ impl<'a> Ctx<'a> {
             if self.owner(tile, rtt) == old {
                 let rt = self.rt(tile, rtt);
                 if rt != INVALID {
-                    let num = if (self.shared.is_level_crossing)(tile) {
+                    let num = if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
+                    {
                         2
                     } else {
                         self.bits(tile, rtt).count_ones()
@@ -1627,7 +1632,9 @@ impl<'a> Ctx<'a> {
                 );
             }
         }
-        if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
+        if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
+            && (self.shared.tile_owner)(tile) == old
+        {
             if new == INVALID_OWNER {
                 let track = crate::ground::crossing_rail_track(tile, self.rail, |ok| {
                     crate::movement::native_assert(self.shared, ok);
@@ -1826,7 +1833,9 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_ROAD => {
-                if (self.shared.is_level_crossing)(tile) && (self.r.road_no_crossing)(to) {
+                if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
+                    && (self.r.road_no_crossing)(to)
+                {
                     error.make_error(self.r.strings.crossing_road);
                     return;
                 }
