@@ -111,8 +111,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	using AcceptedCargoes = RustIndustryVector<AcceptedCargo, false>;
 	RustIndustryOwner production_owner{[this] {
 		auto *owner = openttd_rust_industry_new(this);
-		/* An owned stack shell has no initialized pool index at this point. */
-		_industry_pool.BindRecordIfOwned(this, owner);
+		/* The owning production constructor follows indexed pool publication. */
+		_industry_pool.BindRecord(this->index.base(), this, owner);
 		return owner;
 	}(), RustIndustryDeleteOwned};
 	/** The shared record: the canonical owner's first member, at its address. */

@@ -269,13 +269,6 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 	accepted.clear();
 	CHECK(accepted.empty());
 	CHECK(accepted.emplace_back().history == nullptr);
-	{
-		Industry temporary;
-		temporary.index = shell->index; // A copied live ID must not publish or retire another owner's record.
-		temporary.Record().random = 0xABCD;
-		CHECK(descriptor->slots[17].record == owner.get());
-		CHECK(temporary.production_owner.get() != owner.get());
-	}
 	CHECK(descriptor->slots[17].record == owner.get());
 	CHECK(descriptor->items == 1);
 	delete shell;

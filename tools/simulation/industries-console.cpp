@@ -265,7 +265,14 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	spec->callback_mask.Set(IndustryCallbackMask::RefuseCargo);
 	equal &= IndustryTemporarilyRefusesCargo(i, i->accepted[0].cargo);
 	fmt::print(stderr, "INDUSTRY-RESOLVER refusal true\n");
+#ifdef WITH_RUST
+	/* Match the actual synchronous construction path: the caller owns Rust state,
+	 * and the native resolver shell borrows it without pool publication/retirement. */
+	RustIndustryOwner temporary_owner{openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy};
+	Industry temporary(temporary_owner.get());
+#else
 	Industry temporary;
+#endif
 	temporary.index = IndustryID::Invalid(); FIXTURE_POOL_RECORD(&temporary).location.tile = tile; FIXTURE_POOL_RECORD(&temporary).location.w = 0; FIXTURE_POOL_RECORD(&temporary).type = FIXTURE_POOL_RECORD(i).type;
 	FIXTURE_POOL_RECORD(&temporary).town = FIXTURE_POOL_RECORD(i).town; FIXTURE_POOL_RECORD(&temporary).selected_layout = 23; FIXTURE_POOL_RECORD(&temporary).random = 0xA55A; FIXTURE_POOL_RECORD(&temporary).founder = OWNER_NONE;
 	IndustriesResolverObject construction(tile, &temporary, FIXTURE_POOL_RECORD(i).type, 0x87654321, CBID_INDUSTRY_LOCATION);

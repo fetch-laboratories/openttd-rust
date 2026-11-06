@@ -99,9 +99,9 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 IndustryPool _industry_pool("Industry");
 void RustIndustryDeleteOwned(OpenTTDIndustry *owner)
 {
-	/* Exact record identity also handles owned stack shells and copied IDs.
-	 * Retire after the destructor's final read, before the actual owner drops. */
-	_industry_pool.RetireUnboundRecord(owner);
+	/* Pooled production shells retain their ID through the destructor's final read. */
+	Industry *shell = reinterpret_cast<OpenTTDIndustryRecord *>(owner)->shell;
+	_industry_pool.RetireRecord(shell->index.base(), shell, owner);
 	openttd_rust_industry_destroy(owner);
 }
 INSTANTIATE_POOL_METHODS(Industry)
