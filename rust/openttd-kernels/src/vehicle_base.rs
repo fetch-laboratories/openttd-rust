@@ -106,6 +106,8 @@ crate::abi::shared_records! {
         pub shell: *mut OpenTTDVehicleShell,
         /// `Vehicle::next`.
         pub next: *mut VehicleRecord,
+        /// Stable NOSAVE links for the canonical tile index.
+        pub tile_links: crate::vehicle::occupancy::Links,
         /// Stable owner links, initialized by the corresponding native constructors.
         pub ground: *mut crate::ground_vehicle::GroundState,
         pub train: *mut crate::train_state::TrainState,
@@ -162,6 +164,7 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
     let record = Box::into_raw(Box::new(VehicleRecord {
         shell,
         next: std::ptr::null_mut(),
+        tile_links: crate::vehicle::occupancy::Links::default(),
         ground: std::ptr::null_mut(),
         train: std::ptr::null_mut(),
         road: std::ptr::null_mut(),

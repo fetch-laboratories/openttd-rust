@@ -287,7 +287,6 @@ pub struct Leaves {
     pub has_signals: extern "C" fn(Handle, u32) -> u64,
     pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
     pub hide_fill: extern "C" fn(Handle),
-    pub invalidate_grf: extern "C" fn(Handle),
     pub is_bridge: extern "C" fn(Handle, u32) -> u64,
     pub is_crossing: extern "C" fn(Handle, u32) -> u64,
     pub is_depot: extern "C" fn(Handle, u32) -> u64,
@@ -343,7 +342,6 @@ pub struct Leaves {
     pub stopped_in_depot: extern "C" fn(Handle) -> u64,
     pub stop_location: extern "C" fn(Handle) -> u64,
     pub stuck_news: extern "C" fn(Handle),
-    pub suppress_implicit: extern "C" fn(Handle),
     pub tile_add_diag: extern "C" fn(Handle, u32, u8) -> u64,
     pub tile_offset_axis: extern "C" fn(Handle, u8) -> u64,
     pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
@@ -454,14 +452,14 @@ impl<'a> Game<'a> {
         let vs = self.vs();
         vs.any_on_tile(tile, |v| {
             v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(Handle::from_record(v.0.as_ptr()))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_near(x, y, 7, |v| {
             v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
-                && visitor((vs.train_handle)(v.0.as_ptr()))
+                && visitor(Handle::from_record(v.0.as_ptr()))
         })
     }
 
@@ -475,6 +473,16 @@ impl<'a> Game<'a> {
     }
 }
 impl Game<'_> {
+    fn invalidate_grf(&self, id: Handle) {
+        // SAFETY: Each consist pass retains the live train through this observation.
+        unsafe {
+            crate::newgrf_vehicle::openttd_rust_vehicle_grf_invalidate(
+                &*(self.vs().newgrf)(),
+                id.record,
+                false,
+            );
+        }
+    }
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
         (self.vs().property)(
             (self.vs().newgrf)(),
@@ -511,8 +519,8 @@ impl Game<'_> {
                 first_engine = part_engine;
             }
             u.set_user_def_data((self.leaves.user_default)(u));
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
+            self.invalidate_grf(id);
+            self.invalidate_grf(u);
             u = (u).next();
         }
         u = id;
@@ -522,8 +530,8 @@ impl Game<'_> {
                 u32::from(crate::newgrf_properties::PROP_TRAIN_USER_DATA),
                 u.get_user_def_data(),
             ));
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
+            self.invalidate_grf(id);
+            self.invalidate_grf(u);
             u = (u).next();
         }
         u = id;
@@ -651,8 +659,8 @@ impl Game<'_> {
                     ),
                 )) as u16
             );
-            (self.leaves.invalidate_grf)(id);
-            (self.leaves.invalidate_grf)(u);
+            self.invalidate_grf(id);
+            self.invalidate_grf(u);
             u = (u).next();
         }
         (id).vehicle()
@@ -2474,7 +2482,7 @@ impl Game<'_> {
         {
             return;
         }
-        (self.leaves.suppress_implicit)(id);
+        id.set_suppress_implicit(true);
         (self.leaves.order_depot_service)(id, depot_id);
         (id).vehicle().write_dest((u64::from(tile)) as u32);
         (self.leaves.start_stop_dirty)(id);
@@ -2970,7 +2978,6 @@ crate::abi::layouts! {
         has_signals,
         has_signal_td,
         hide_fill,
-        invalidate_grf,
         is_bridge,
         is_crossing,
         is_depot,
@@ -3026,7 +3033,6 @@ crate::abi::layouts! {
         stopped_in_depot,
         stop_location,
         stuck_news,
-        suppress_implicit,
         tile_add_diag,
         tile_offset_axis,
         tile_offset_diag,

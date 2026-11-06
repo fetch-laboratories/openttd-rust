@@ -184,7 +184,6 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 }
 static_assert(AIR_SHADOW == 4);
 
-static OpenTTDVehicleTileLinks *OPENTTD_RUST_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
 
 static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
 static void VehicleRecordAssertNext([[maybe_unused]] OpenTTDVehicle *v, [[maybe_unused]] OpenTTDVehicle *next) noexcept { assert(v != next); }
@@ -192,7 +191,6 @@ static void VehicleRecordAssertNext([[maybe_unused]] OpenTTDVehicle *v, [[maybe_
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assert_next = VehicleRecordAssertNext,
 	.record_from_shell = VehicleRecordFromShell,
-	.tile_links = VehicleSvcTileLinks,
 	.map_log_x = OpenTTDMapLogX,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	.assertions = true,

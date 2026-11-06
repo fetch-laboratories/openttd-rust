@@ -83,7 +83,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*has_signals)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	uint64_t (*has_signal_td)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_td);
 	void (*hide_fill)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(hide_fill);
-	void (*invalidate_grf)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
 	uint64_t (*is_bridge)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
 	uint64_t (*is_crossing)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_crossing);
 	uint64_t (*is_depot)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_depot);
@@ -139,7 +138,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*stopped_in_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	uint64_t (*stop_location)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stop_location);
 	void (*stuck_news)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stuck_news);
-	void (*suppress_implicit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(suppress_implicit);
 	uint64_t (*tile_add_diag)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_diag);
 	uint64_t (*tile_offset_axis)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset_axis);
 	uint64_t (*tile_offset_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset_diag);

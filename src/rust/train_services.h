@@ -26,12 +26,6 @@ static Result TrainVehicleRead(OpenTTDTrainHandle id) noexcept
 }
 
 template <auto Operation>
-static void TrainVehicleInvoke(OpenTTDTrainHandle id) noexcept
-{
-	Operation(static_cast<Train *>(VehicleFromRecord(id.record)));
-}
-
-template <auto Operation>
 static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) noexcept
 {
 	Operation(static_cast<Train *>(VehicleFromRecord(id.record)), static_cast<Train *>(VehicleFromRecord(other.record)));
@@ -396,12 +390,6 @@ static void TrainStuckNews(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	AddVehicleAdviceNewsItem(AdviceType::TrainStuck, GetEncodedString(STR_NEWS_TRAIN_IS_STUCK, v->index), v->index);
 }
-static void TrainSuppressImplicit(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	SetBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
-}
-
 
 static uint64_t TrainTileOffsetAxis(OpenTTDTrainHandle, uint8_t a) noexcept
 {

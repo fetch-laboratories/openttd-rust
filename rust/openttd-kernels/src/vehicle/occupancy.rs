@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! NOSAVE vehicle tile index. Native shells own only its stable intrusive links.
+//! NOSAVE vehicle tile index with stable intrusive links in each shared record.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -23,13 +23,28 @@ const HASH_SIZE: u32 = 1 << HASH_BITS;
 const HASH_MASK: u32 = HASH_SIZE - 1;
 const TOTAL: usize = (HASH_SIZE * HASH_SIZE) as usize;
 type Shell = *mut OpenTTDVehicle;
-/// Field layout is shared, not the Vehicle layout. Native construction zeros it;
-/// the Rust owner alone changes links. Shell addresses never move while indexed.
-#[repr(C)]
-pub struct Links {
-    pub next: Shell,
-    pub prev: *mut Shell,
-    pub current: *mut Shell,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Stable NOSAVE links; the Rust occupancy owner alone mutates them.
+    "OpenTTDVehicleTileLinks" ["vehicle"] => pub struct Links {
+        pub next: *mut crate::vehicle_base::VehicleRecord,
+        pub prev: *mut *mut crate::vehicle_base::VehicleRecord => "OpenTTDVehicle **",
+        pub current: *mut *mut crate::vehicle_base::VehicleRecord => "OpenTTDVehicle **",
+    }
+}
+impl Default for Links {
+    fn default() -> Self {
+        Self {
+            next: ptr::null_mut(),
+            prev: ptr::null_mut(),
+            current: ptr::null_mut(),
+        }
+    }
+}
+#[inline]
+fn record_links(record: *mut OpenTTDVehicle) -> *mut Links {
+    // SAFETY: Each caller supplies a live record under the game-state mutex.
+    unsafe { ptr::addr_of_mut!((*record).tile_links) }
 }
 static BUCKETS: GameState<[Shell; TOTAL]> = GameState::new([ptr::null_mut(); TOTAL]);
 fn hash_1d(p: u32) -> u32 {
@@ -56,28 +71,28 @@ unsafe fn handle(shell: Shell) -> VehicleRef {
 }
 /// The current shell must survive advancement (as in the native iterator).
 /// Callbacks may change links: read LIVE next only AFTER the callback returns.
-unsafe fn next(s: &VehicleServices, shell: Shell) -> Shell {
-    unsafe { (*((s.tile_links)(handle(shell)))).next }
+unsafe fn next(shell: Shell) -> Shell {
+    unsafe { (*record_links(shell)).next }
 }
 /// Complete `UpdateVehicleTileHash`, including stale next/prev after removal.
 #[inline]
 pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
     if remove {
-        unsafe { update_bucket(s, v, (s.tile_links)(v), ptr::null_mut()) };
+        unsafe { update_bucket(v, record_links(v.0.as_ptr()), ptr::null_mut()) };
     } else {
         let map = Map::from_log_x((s.map_log_x)());
         unsafe { update_position(s, v, map) };
     }
 }
 /// The caller's dimensions cover only a serialized synchronous no-reset/no-yield
-/// interval. No map storage is exposed. Links resolve once here; native link access neither reenters nor mutates state.
+/// interval. No map storage is exposed; record links remain stable through the update.
 #[inline]
-pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Map) {
-    let links = (s.tile_links)(v);
-    unsafe { update_bucket(s, v, links, tile_bucket(map, v.tile())) };
+pub(crate) unsafe fn update_position(_s: &VehicleServices, v: VehicleRef, map: Map) {
+    let links = record_links(v.0.as_ptr());
+    unsafe { update_bucket(v, links, tile_bucket(map, v.tile())) };
 }
 #[inline]
-unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, new: *mut Shell) {
+unsafe fn update_bucket(v: VehicleRef, links: *mut Links, new: *mut Shell) {
     let old = unsafe { (*links).current };
     if old == new {
         crate::witness::hit(crate::witness::OCCUPANCY_SAME);
@@ -88,7 +103,7 @@ unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, n
             crate::witness::hit(crate::witness::OCCUPANCY_REMOVE);
             let n = (*links).next;
             if !n.is_null() {
-                (*((s.tile_links)(handle(n)))).prev = (*links).prev;
+                (*record_links(n)).prev = (*links).prev;
             }
             *(*links).prev = (*links).next;
         }
@@ -96,7 +111,7 @@ unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, n
             crate::witness::hit(crate::witness::OCCUPANCY_INSERT);
             (*links).next = *new;
             if !(*links).next.is_null() {
-                (*((s.tile_links)(handle((*links).next)))).prev = ptr::addr_of_mut!((*links).next);
+                (*record_links((*links).next)).prev = ptr::addr_of_mut!((*links).next);
             }
             (*links).prev = new;
             *new = v.0.as_ptr();
@@ -115,7 +130,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
         if !shell.is_null() {
             unsafe {
                 let v = VehicleRef::from_shell(shell.cast(), vs);
-                (*((vs.tile_links)(v))).current = ptr::null_mut();
+                (*record_links(v.0.as_ptr())).current = ptr::null_mut();
             }
         }
     }
@@ -148,20 +163,20 @@ impl OnTile {
             current: unsafe { *tile_bucket(map, tile) },
         };
         unsafe {
-            it.filter(s);
+            it.filter();
         }
         it
     }
-    unsafe fn filter(&mut self, s: &VehicleServices) {
+    unsafe fn filter(&mut self) {
         while !self.current.is_null() && unsafe { handle(self.current) }.tile() != self.tile {
             crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
-            self.current = unsafe { next(s, self.current) };
+            self.current = unsafe { next(self.current) };
         }
     }
-    pub(crate) unsafe fn advance(&mut self, s: &VehicleServices) {
-        self.current = unsafe { next(s, self.current) };
+    pub(crate) unsafe fn advance(&mut self, _s: &VehicleServices) {
+        self.current = unsafe { next(self.current) };
         unsafe {
-            self.filter(s);
+            self.filter();
         }
     }
     pub(crate) fn get(&self) -> Option<VehicleRef> {
@@ -227,7 +242,7 @@ impl Near {
         it.current = unsafe { *bucket(it.hx, it.hy) };
         unsafe {
             it.skip_empty();
-            it.filter(s);
+            it.filter();
         }
         it
     }
@@ -255,9 +270,9 @@ impl Near {
         }
     }
     #[inline]
-    unsafe fn filter(&mut self, s: &VehicleServices) {
+    unsafe fn filter(&mut self) {
         while let Some(v) = self.get() {
-            let links = (s.tile_links)(v);
+            let links = record_links(v.0.as_ptr());
             if crate::geometry_type::rect_contains(
                 self.left,
                 self.top,
@@ -280,10 +295,10 @@ impl Near {
         if s.assertions {
             assert!(!self.current.is_null());
         }
-        let links = (s.tile_links)(unsafe { handle(self.current) });
+        let links = record_links(self.current);
         unsafe {
             self.increment(links);
-            self.filter(s);
+            self.filter();
         }
     }
     #[inline]
@@ -309,7 +324,6 @@ pub unsafe extern "C" fn openttd_rust_occupancy_near_advance(s: &VehicleServices
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
-    "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
 }
@@ -407,7 +421,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_train(
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
         if v.vehicle_type() == super::VehicleType::TRAIN.0 {
-            let track = (s.train_handle)(v.0.as_ptr()).track();
+            let track = crate::train::Handle::from_record(v.0.as_ptr()).track();
             if track == bits || crate::track_func::tracks_overlap(track | bits) {
                 c.result(out, Some(super::VehicleType::TRAIN.0));
                 return;

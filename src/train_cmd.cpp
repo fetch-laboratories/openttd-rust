@@ -1012,7 +1012,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.has_signals = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignals, OpenTTDTrainHandle, uint32_t>,
 		.has_signal_td = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.hide_fill = TrainHideFill,
-		.invalidate_grf = TrainVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 		.is_bridge = TrainIsBridge,
 		.is_crossing = TrainSharedMap<uint64_t, &OpenTTDSharedServices::is_level_crossing>,
 		.is_depot = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
@@ -1069,7 +1068,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.stopped_in_depot = TrainStoppedInDepot,
 		.stop_location = TrainStopLocation,
 		.stuck_news = TrainStuckNews,
-		.suppress_implicit = TrainSuppressImplicit,
 
 		.tile_add_diag = OpenTTDLegacyMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset_axis = TrainTileOffsetAxis,

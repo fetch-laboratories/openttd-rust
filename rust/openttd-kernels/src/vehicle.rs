@@ -138,7 +138,6 @@ pub struct VehicleServices {
     pub assert_next: extern "C" fn(*mut OpenTTDVehicle, *mut OpenTTDVehicle),
     /// Resolve a legacy opaque native shell to its canonical record.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
-    pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
@@ -304,7 +303,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
         assert_next,
         record_from_shell,
-        tile_links,
         map_log_x,
         assertions,
         train_handle,

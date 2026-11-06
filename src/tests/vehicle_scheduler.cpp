@@ -456,23 +456,21 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	a->Record().z_pos = b->Record().z_pos = 9;
 	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Succeeded());
 	const auto &s = GetRustVehicleServices();
-	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
-	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
 	a->Record().x_pos = 17; a->Record().y_pos = 29;
-	CHECK(b->tile_links.next == RustVehicle(a));
-	CHECK(a->tile_links.prev == &b->tile_links.next);
+	CHECK(b->Record().tile_links.next == RustVehicle(a));
+	CHECK(a->Record().tile_links.prev == &b->Record().tile_links.next);
 	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
 	// Removal does not resolve map dimensions.
 	auto removal = s;
 	removal.map_log_x = []() noexcept -> uint32_t { CHECK(false); return 0; };
 	openttd_rust_occupancy_update(&removal, RustVehicle(b), true);
-	CHECK(b->tile_links.current == nullptr);
-	CHECK(b->tile_links.next == RustVehicle(a)); // Source retains stale next.
+	CHECK(b->Record().tile_links.current == nullptr);
+	CHECK(b->Record().tile_links.next == RustVehicle(a)); // Source retains stale next.
 	++it; ++copy;
 	CHECK(*it == a); CHECK(it == copy);
 	ResetVehicleHash();
-	CHECK(a->tile_links.current == nullptr);
-	CHECK(b->tile_links.next == RustVehicle(a));
+	CHECK(a->Record().tile_links.current == nullptr);
+	CHECK(b->Record().tile_links.next == RustVehicle(a));
 	a->UpdatePosition(); b->UpdatePosition();
 	CHECK(*VehiclesOnTile(a->GetTile()).begin() == b);
 	delete b; delete a;

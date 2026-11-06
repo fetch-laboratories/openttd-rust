@@ -23,12 +23,6 @@ struct OpenTTDTrainState;
 struct OpenTTDVehicle;
 struct OpenTTDTrainHandle { OpenTTDVehicle *record; OpenTTDTrainState *owner; };
 struct OpenTTDOrdersLeaves;
-/** Canonical stable NOSAVE links; only the Rust occupancy owner mutates them. */
-struct OpenTTDVehicleTileLinks {
-	OpenTTDVehicle *next = nullptr;
-	OpenTTDVehicle **prev = nullptr;
-	OpenTTDVehicle **current = nullptr;
-};
 struct OpenTTDVehicleOnTile { uint32_t tile; OpenTTDVehicle *current; };
 struct OpenTTDVehicleNear {
 	int32_t left, top, right, bottom;
@@ -52,7 +46,6 @@ struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
 	void (*assert_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(assert_next);
 	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
-	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	bool assertions;
 	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);

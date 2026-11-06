@@ -277,8 +277,6 @@ public:
 	Vehicle *hash_viewport_next = nullptr; ///< NOSAVE: Next vehicle in the visual location hash.
 	Vehicle **hash_viewport_prev = nullptr; ///< NOSAVE: Previous vehicle in the visual location hash.
 
-	OpenTTDVehicleTileLinks tile_links; ///< NOSAVE: Canonical Rust tile-index links.
-
 	SpriteID colourmap{}; ///< NOSAVE: cached colour mapping
 
 	/* Related to age and service time */
