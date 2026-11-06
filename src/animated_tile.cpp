@@ -43,7 +43,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.house_spec = RustHouseSpec,
-		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
 		.industry_object = RustIndustryByTile,
 		.rail_spec_triggers = RustStationAnimationTriggers,
 		.road_spec_triggers = RustRoadStopAnimationTriggers,

@@ -104,7 +104,6 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
         return;
     }
     let s = unsafe { &*native };
-    let animation = crate::animated_tile::services();
     let area = crate::newgrf_station::rail_tile_area(
         unsafe { &*s.shared },
         st,
@@ -117,7 +116,7 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     for y in 0..area.h {
         for x in 0..area.w {
             let tile = TileIndex(area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y))));
-            if (animation.rail_belongs)(st, tile.0)
+            if crate::station_record::rail_member(st, tile.0, shared)
                 && (command.custom_rail_index)(tile.0) == u32::from(index)
             {
                 return;

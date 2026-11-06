@@ -41,7 +41,6 @@ struct OpenTTDAnimationServices {
 	AnimatedTileState (*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
 	void (*set_state)(uint32_t, AnimatedTileState) noexcept OPENTTD_SERVICE_DEFAULT(set_state);
 	const HouseSpec *(*house_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_spec);
-	bool (*rail_belongs)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_belongs);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);

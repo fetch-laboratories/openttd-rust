@@ -57,7 +57,6 @@ pub struct Services {
     pub state: extern "C" fn(u32) -> AnimatedTileState,
     pub set_state: extern "C" fn(u32, AnimatedTileState),
     pub house_spec: extern "C" fn(u16) -> *const HouseSpec,
-    pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
@@ -356,7 +355,7 @@ pub extern "C" fn openttd_rust_trigger_station(
     );
     let b = unsafe { &*a.station };
     area.tiles(a.shared().map()).for_each(|t| {
-        if !(a.rail_belongs)(st, t) {
+        if !crate::station_record::rail_member(st, t, a.shared()) {
             return;
         }
         let spec = crate::station_storage::rail_spec_by_tile(a.shared(), t);
@@ -517,7 +516,6 @@ crate::abi::layouts! {
         state,
         set_state,
         house_spec,
-        rail_belongs,
         industry_object,
         rail_spec_triggers,
         road_spec_triggers,

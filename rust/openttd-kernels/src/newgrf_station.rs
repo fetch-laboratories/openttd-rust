@@ -699,7 +699,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             } else {
                 tile
             };
-            if (crate::animated_tile::services().rail_belongs)(st, nearby) {
+            if crate::station_record::rail_member(st, nearby, native.shared()) {
                 u32::from(unsafe {
                     ((*crate::animated_tile::services().industry_tiles).frame)(nearby)
                 })
@@ -740,7 +740,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             let mut value = if variable == 0x68 {
                 (u32::from((native.shared().station_gfx)(nearby) >> 1 & 3) << 12)
                     | (u32::from((native.axis)(tile).0 != (native.axis)(nearby).0) << 11)
-                    | (u32::from((crate::animated_tile::services().rail_belongs)(st, nearby)) << 10)
+                    | (u32::from(crate::station_record::rail_member(
+                        st,
+                        nearby,
+                        native.shared(),
+                    )) << 10)
             } else {
                 0
             };
@@ -902,7 +906,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
     for y in 0..area.h {
         for x in 0..area.w {
             let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
-            if !(a.rail_belongs)(st, t) {
+            if !crate::station_record::rail_member(st, t, a.shared()) {
                 continue;
             }
             let spec = crate::station_storage::rail_spec_by_tile(a.shared(), t);

@@ -258,6 +258,21 @@ pub(crate) fn id(shell: *const BaseStation) -> StationID {
     read(shell, |r| r.id)
 }
 
+/// The station/waypoint rail membership override, using its preserved type marker.
+pub(crate) fn rail_member(
+    shell: *const BaseStation,
+    tile: u32,
+    s: &crate::services::Services,
+) -> bool {
+    let world = crate::map_func::World::new(s);
+    let matches_type = if is_station(shell) {
+        world.rail_station(tile)
+    } else {
+        world.rail_waypoint_tile(tile)
+    };
+    matches_type && world.station_index(tile) == id(shell)
+}
+
 /// `Station::TileBelongsToAirport`, retaining the source predicate order.
 pub(crate) fn airport_member(
     shell: *const BaseStation,
