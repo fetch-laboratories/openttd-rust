@@ -14,4 +14,4 @@ Use the existing [review](../../workflow.md#review), [fidelity](../../porting.md
 
 Return a short evidence matrix: **claim or branch | production entry | unchanged oracle and observation | check/default-CI coverage | limit or finding**. Cite files, functions and the reviewed commit in the normal review report.
 
-Separate a demonstrated regression, invalid oracle or missing evidence required for this port's claim from a pre-existing coverage gap. The former needs correction or a narrower justified claim; record unreached harness branches in the existing #156 tracker under the review rules. State the gap without treating it as proof of a defect or claiming full equivalence from passing covered cases.
+Separate a demonstrated regression, invalid oracle or missing evidence required for this port's claim from a pre-existing coverage gap. The former needs a fix, or a narrower justified claim, which is root's scope decision; record unreached harness branches in the existing #156 tracker under the review rules. State the gap without treating it as proof of a defect or claiming full equivalence from passing covered cases.
