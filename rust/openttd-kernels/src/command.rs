@@ -628,3 +628,102 @@ pub(crate) unsafe fn with_cost<T>(
     drop(guard);
     result
 }
+
+/// `InternalPost`/`Execute` for Rust-owned procedures with no callback or tile argument.
+/// Admission, test/send/execute and completion use the same lifecycle as native templates.
+/// Procedures are synchronous and nonthrowing; native argument packing runs only for logs/send.
+pub(crate) fn post(
+    p: &crate::command_post::Services,
+    cmd: u8,
+    command_type: u8,
+    cmd_flags: u16,
+    client_set: bool,
+    mut proc: impl FnMut(crate::services::Cost<'_>, u16),
+    mut pack: impl FnMut() -> crate::network_command::CommandData,
+) -> bool {
+    let s = (p.command)();
+    if tile_rejected(s.shared, 0, cmd_flags & CommandFlag::ALL_TILES != 0) {
+        return false;
+    }
+    let admission = openttd_rust_command_admit(s, command_type, cmd_flags, 0, 0, false);
+    if admission.rejected {
+        return false;
+    }
+    // SAFETY: Each result stays native and live for the synchronous procedure/lifecycle calls.
+    unsafe {
+        with_cost(s.cost, |result| {
+            let counter = Nesting::new();
+            (s.signals.assert_condition)(counter.0);
+            if cmd_flags & CommandFlag::CLIENT_ID != 0 {
+                (s.signals.assert_condition)(client_set);
+            }
+            if openttd_rust_command_prepare(s, counter.0, cmd_flags) == 0 {
+                result.error(INVALID_STRING_ID);
+            } else {
+                let flags = crate::command_func::command_flags_to_dc_flags(cmd_flags);
+                proc(result, flags);
+                match openttd_rust_command_tested(
+                    s,
+                    result.0,
+                    cmd_flags,
+                    admission.estimate_only,
+                    false,
+                ) {
+                    Tested::ExitLogged => {
+                        let data = pack();
+                        (p.log)(cmd, data.span(), true);
+                        drop(data);
+                        restore(s);
+                    }
+                    Tested::Exit => restore(s),
+                    Tested::Send => {
+                        let data = pack();
+                        crate::network_command::send_command(
+                            (p.network)(),
+                            cmd,
+                            0,
+                            std::ptr::null(),
+                            (s.finance.current_company)(),
+                            data.span(),
+                        );
+                        drop(data);
+                        restore(s);
+                        result.zero();
+                    }
+                    Tested::Execute => {
+                        if (p.desync_logging)() {
+                            let data = pack();
+                            (p.log)(cmd, data.span(), false);
+                        }
+                        with_cost(s.cost, |exec| {
+                            proc(exec, flags | DoCommandFlag::EXECUTE);
+                            openttd_rust_command_finish(
+                                s,
+                                cmd,
+                                command_type,
+                                cmd_flags,
+                                result.0,
+                                exec.0,
+                                0,
+                                0,
+                            );
+                            result.take(exec);
+                        });
+                    }
+                }
+            }
+            drop(counter);
+            openttd_rust_command_posted(
+                s,
+                result.0,
+                0,
+                admission.estimate_only,
+                admission.only_sending,
+                0,
+                true,
+                false,
+            );
+            result.ok()
+        })
+    }
+}

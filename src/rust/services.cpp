@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "command_post_ffi.h"
 #include "../source_type.h"
 #include "../effectvehicle_func.h"
 #include "../airport.h"
@@ -63,6 +64,7 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "services_linkgraph.h"
 #include "../company_base.h"
+#include "../network/network_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
 #include "../command_func.h"
@@ -188,6 +190,9 @@ static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowE
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.command_flags = [](uint8_t cmd) noexcept { return GetCommandFlags(static_cast<Commands>(cmd)).base(); },
+		.command_type = [](uint8_t cmd) noexcept { return GetCommandType(static_cast<Commands>(cmd)); },
+		.command_valid = [](uint8_t cmd) noexcept { return IsValidCommand(static_cast<Commands>(cmd)); },
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
@@ -420,6 +425,7 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
@@ -432,6 +438,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
+	.company_human = OpenTTDCompanyIsValidHuman,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,
@@ -532,10 +539,17 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,
 	.nearby_tile_information = RustNearbyTileInformation,
+	.network_client_info = [](uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)); },
 	.screen_dirty = RustScreenDirty,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
 	.grf_cargo_map = RustGRFCargoMap,
+	.grf_boolean_callback = OpenTTDConvertBooleanCallback,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
 	.grf_file_name = RustGRFFileName,
@@ -543,6 +557,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
+	.resolver_badges = [](const ResolverObject *resolver, const BadgeID *badges, size_t count, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), std::span{badges, count}, parameter); },
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
@@ -648,26 +663,19 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDAirportSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
 #include "abi-visit-OpenTTDHouseSpecServices.hpp"
-#include "abi-visit-OpenTTDIndustrySpecServices.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecServices.hpp"
 #include "abi-visit-OpenTTDObjectSpecServices.hpp"
 #include "abi-visit-OpenTTDRoadStopSpecServices.hpp"
 #include "abi-visit-OpenTTDStationSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecAnimation.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecAnimation.hpp"
 #include "abi-visit-OpenTTDRoadStopSpecAnimation.hpp"
 #include "abi-visit-OpenTTDStationSpecAnimation.hpp"
 #include "abi-visit-OpenTTDAirportSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDHouseSpecStandard.hpp"
-#include "abi-visit-OpenTTDIndustrySpecStandard.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDObjectSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDHouseSpecSubstitute.hpp"
-#include "abi-visit-OpenTTDIndustrySpecSubstitute.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecSubstitute.hpp"
 /* Each capability table Rust reaches is present and complete. */
 static bool NewGRFSpecsComplete()
 {
@@ -676,8 +684,6 @@ static bool NewGRFSpecsComplete()
 	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
 		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
 		complete(s.house) && complete(s.house->standard) && complete(s.house->substitute) &&
-		complete(s.industry) && complete(s.industry->standard) && complete(s.industry->substitute) &&
-		complete(s.industry_tile) && complete(s.industry_tile->animation) && complete(s.industry_tile->standard) && complete(s.industry_tile->substitute) &&
 		complete(s.object) && complete(s.object->standard) &&
 		complete(s.road_stop) && complete(s.road_stop->animation) &&
 		complete(s.station) && complete(s.station->animation);

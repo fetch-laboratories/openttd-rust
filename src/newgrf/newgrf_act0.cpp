@@ -51,7 +51,12 @@ void SkipBadgeList(ByteReader &buf)
  */
 std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature)
 {
-	uint16_t count = buf.ReadWord();
+	return ReadBadgeList(buf, feature, buf.ReadWord());
+}
+
+/** Read badge entries after the count, into native temporary storage. */
+std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature, uint16_t count)
+{
 
 	std::vector<BadgeID> badges;
 	badges.reserve(count);

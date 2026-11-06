@@ -66,7 +66,13 @@ TEST_CASE("Checked NewGRF badges retain partial native effects", "[newgrf][reade
 		}
 		const GrfSpecFeatures after = badge->features;
 		badge->features = before;
-		CHECK(GetRustByteReaderServices().read_badges(&checked, GSF_INDUSTRIES, &actual) == success);
+		uint16_t count = 0;
+		bool read = GetRustByteReaderServices().read_word(&checked, &count);
+		std::vector<BadgeID> ids(count);
+		size_t size = 0;
+		if (read) read = GetRustByteReaderServices().read_badge_ids(&checked, GSF_INDUSTRIES, count, ids.data(), &size);
+		if (read) GetRustByteReaderServices().assign_badges(&actual, ids.data(), size);
+		CHECK(read == success);
 		CHECK(actual == expected);
 		CHECK(checked.Remaining() == original.Remaining());
 		CHECK(badge->features == after);

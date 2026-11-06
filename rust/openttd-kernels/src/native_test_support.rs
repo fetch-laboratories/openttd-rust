@@ -612,3 +612,22 @@ pub unsafe extern "C" fn openttd_test_trees_generate(
 ) -> u8 {
     u8::from(unsafe { crate::trees::generate(services, shared) })
 }
+
+/// `_local_wait_queue` for the commands console, which inspects it in place.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_network_wait_queue() -> *const crate::network_command::CommandQueue {
+    crate::network_command::wait_queue()
+}
+
+/// `_local_wait_queue.clear()` through the queue's own clear.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_network_wait_queue_clear() {
+    crate::network_command::clear_wait_queue();
+}
+
+/// Install, or with null clear, the scheduler fixture's stand-in for its pause post.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_schedule_pause_observer(observer: Option<extern "C" fn(bool)>) {
+    // SAFETY: Serialized like every game-state slot; no borrow outlives the write.
+    unsafe { *crate::linkgraph_schedule::PAUSE_OBSERVER.get() = observer };
+}

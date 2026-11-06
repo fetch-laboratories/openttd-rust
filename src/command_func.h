@@ -34,6 +34,7 @@ bool IsNetworkRegisteredCallback(CommandCallback *callback);
 
 bool IsValidCommand(Commands cmd);
 CommandFlags GetCommandFlags(Commands cmd);
+uint8_t GetCommandType(Commands cmd) noexcept;
 std::string_view GetCommandName(Commands cmd);
 bool IsCommandAllowedWhilePaused(Commands cmd);
 
@@ -94,8 +95,8 @@ private:
 template <Commands TCmd, typename T, bool THasTile> struct CommandHelper;
 
 class CommandHelperBase {
-protected:
-	static void LogCommandExecution(Commands cmd, StringID err_message, const CommandDataBuffer &args, bool failed);
+public:
+	static void LogCommandExecution(Commands cmd, StringID err_message, std::span<const uint8_t> args, bool failed);
 	static bool DesyncLogging();
 };
 

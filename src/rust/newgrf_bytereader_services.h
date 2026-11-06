@@ -51,9 +51,22 @@ inline bool RustGRFSkipBytes(ByteReader *reader, size_t size) noexcept
 	return RustGRFReadChecked([&] { reader->Skip(size); });
 }
 
-inline bool RustGRFReadBadgeList(ByteReader *reader, GrfSpecFeature feature, std::vector<BadgeID> *badges) noexcept
+inline void RustGRFAssignBadges(std::vector<BadgeID> *badges, const BadgeID *items, size_t count) noexcept
 {
-	return RustGRFReadChecked([&] { *badges = ReadBadgeList(*reader, feature); });
+	if (count == 0) {
+		badges->clear();
+	} else {
+		badges->assign(items, items + count);
+	}
+}
+
+inline bool RustGRFReadBadgeIDs(ByteReader *reader, GrfSpecFeature feature, uint16_t count, BadgeID *items, size_t *size) noexcept
+{
+	return RustGRFReadChecked([&] {
+		auto list = ReadBadgeList(*reader, feature, count);
+		std::ranges::copy(list, items);
+		*size = list.size();
+	});
 }
 
 inline bool RustGRFSkipBadgeList(ByteReader *reader) noexcept
@@ -71,7 +84,8 @@ inline const OpenTTDByteReaderServices &GetRustByteReaderServices() noexcept
 		.read_word = RustGRFReadWord,
 		.read_dword = RustGRFReadDWord,
 		.skip = RustGRFSkipBytes,
-		.read_badges = RustGRFReadBadgeList,
+		.assign_badges = RustGRFAssignBadges,
+		.read_badge_ids = RustGRFReadBadgeIDs,
 		.skip_badges = RustGRFSkipBadgeList,
 	};
 	return services;

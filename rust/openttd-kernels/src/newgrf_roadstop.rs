@@ -355,7 +355,13 @@ unsafe fn variable(
             }
             return res;
         }
-        0x7a => return (s.shared().specs().road_stop().badges)(ro, c.spec, parameter),
+        0x7a => {
+            return (s.shared().specs().road_stop().badges)(c.spec).resolve(
+                s.shared(),
+                ro,
+                parameter,
+            );
+        }
         0xf0 => {
             return if c.station.is_null() {
                 0

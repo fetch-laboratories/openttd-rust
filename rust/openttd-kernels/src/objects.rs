@@ -513,7 +513,11 @@ impl<'a> World<'a> {
                     0x44 => return u32::from((self.shared.current_company)()),
                     0x48 => return u32::from(view),
                     0x7a => {
-                        return (self.shared.specs().object().badges)(ro.cast(), spec, parameter);
+                        return (self.shared.specs().object().badges)(spec).resolve(
+                            self.shared,
+                            ro.cast(),
+                            parameter,
+                        );
                     }
                     _ => return Self::unhandled(variable, available),
                 }
@@ -576,7 +580,11 @@ impl<'a> World<'a> {
                     tile,
                     obj,
                 ),
-                0x7a => (self.shared.specs().object().badges)(ro.cast(), spec, parameter),
+                0x7a => (self.shared.specs().object().badges)(spec).resolve(
+                    self.shared,
+                    ro.cast(),
+                    parameter,
+                ),
                 _ => Self::unhandled(variable, available),
             }
         }
@@ -1347,8 +1355,8 @@ impl World<'_> {
                                 0,
                             );
                             result == CALLBACK_FAILED
-                                || !(self.shared.specs().object().boolean_callback)(
-                                    spec,
+                                || !(self.shared.grf_boolean_callback)(
+                                    (self.shared.specs().object().file)(spec),
                                     CBID_OBJECT_AUTOSLOPE,
                                     result,
                                 )

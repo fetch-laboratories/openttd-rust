@@ -5,6 +5,7 @@
 use crate::debug::grf_msg;
 use crate::engine_type::EngineID;
 use crate::game_state::GameState;
+use crate::industrytype;
 use crate::newgrf::{
     CF_END, GSF_AIRCRAFT, GSF_AIRPORTS, GSF_AIRPORTTILES, GSF_BADGES, GSF_CANALS, GSF_CARGOES,
     GSF_DEFAULT, GSF_END, GSF_HOUSES, GSF_INDUSTRIES, GSF_INDUSTRYTILES, GSF_OBJECTS,
@@ -148,6 +149,35 @@ fn bind_standard<S, T>(
         (table.set_local_id)(spec, local);
     }
 }
+/// `bind_standard` for a Rust-owned record's `SubstituteGRFFileProps`.
+unsafe fn bind_record(
+    props: Option<*mut industrytype::SubstituteProps>,
+    local: u16,
+    cargo: Option<u8>,
+    group: *const c_void,
+    shared: &crate::services::Services,
+) {
+    let Some(props) = props else {
+        grf_msg!(1, "MapSpriteGroup: {local} undefined, skipping.");
+        return;
+    };
+    unsafe {
+        if cargo.is_some() {
+            (*props).spritegroups[StandardSpriteGroup::Purchase as usize] = group;
+        } else {
+            (*props).spritegroups[StandardSpriteGroup::Default as usize] = group;
+            // GRFFilePropsBase::SetGRFFile.
+            let file = loading::file();
+            (*props).grffile = file;
+            (*props).grfid = if file.is_null() {
+                0
+            } else {
+                (shared.grf_file_id)(file)
+            };
+            (*props).local_id = local;
+        }
+    }
+}
 unsafe fn map_binding(
     s: &Services,
     feature: u8,
@@ -187,22 +217,20 @@ unsafe fn map_binding(
                 bind_standard(specs.house(), spec, local, cargo, group);
             }
             GSF_INDUSTRIES => {
-                let owner = &*s.industry;
-                let spec = if usize::from(local) >= (owner.industry_count)(file) {
-                    std::ptr::null_mut()
-                } else {
-                    (owner.file_industry)(file, usize::from(local))
-                };
-                bind_standard(specs.industry(), spec, local, cargo, group);
+                let specs = industrytype::file_specs(file);
+                let spec = specs.industries.get_mut(usize::from(local));
+                let props = spec
+                    .and_then(|spec| spec.as_deref_mut())
+                    .map(|spec| &raw mut spec.grf_prop);
+                bind_record(props, local, cargo, group, s.shared());
             }
             GSF_INDUSTRYTILES => {
-                let owner = &*s.industry;
-                let spec = if usize::from(local) >= (owner.tile_count)(file) {
-                    std::ptr::null_mut()
-                } else {
-                    (owner.file_tile)(file, usize::from(local))
-                };
-                bind_standard(specs.industry_tile(), spec, local, cargo, group);
+                let specs = industrytype::file_specs(file);
+                let spec = specs.tiles.get_mut(usize::from(local));
+                let props = spec
+                    .and_then(|spec| spec.as_deref_mut())
+                    .map(|spec| &raw mut spec.grf_prop);
+                bind_record(props, local, cargo, group, s.shared());
             }
             GSF_AIRPORTS => {
                 let owner = &*s.airports;

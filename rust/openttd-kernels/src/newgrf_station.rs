@@ -677,7 +677,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 };
                 land_info(native, file, nearby, axis)
             }
-            0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
+            0x7a => (native.shared().specs().station().badges)(spec).resolve(
+                native.shared(),
+                resolver,
+                parameter,
+            ),
             0xfa => build_date(crate::timer_game_common::calendar_date().0),
             _ => {
                 unsafe {
@@ -775,7 +779,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             }
             value
         }
-        0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
+        0x7a => (native.shared().specs().station().badges)(spec).resolve(
+            native.shared(),
+            resolver,
+            parameter,
+        ),
         0x82 => 50,
         0x84 => (native.commands().string_id)(st),
         0x86 => 0,

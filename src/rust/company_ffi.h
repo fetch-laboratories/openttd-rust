@@ -76,7 +76,7 @@ struct OpenTTDCompanyFinanceServices {
 /**
  * Lifecycle, economy and ownership-transfer services. Every service is a typed
  * noexcept C++ call; environmental failures terminate inside it. Services that
- * reenter or delete (post_company_delete, delete_*,
+ * reenter or delete (delete_*,
  * allocate_company, reset_service_interval, stop_ai) run after Rust has ended
  * every raw field access it may invalidate. *_next_owned scans a pool from an
  * index for the next item of that owner, in pool order.
@@ -105,7 +105,6 @@ struct OpenTTDCompanyServices {
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *company_vehicle_counts)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_counts);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *vehicle_limits)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_limits);
 	void (OPENTTD_RUST_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
-	void (OPENTTD_RUST_CALL *post_company_delete)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(post_company_delete);
 	uint32_t (OPENTTD_RUST_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
 	const OpenTTDObjectServices *(OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
 	void (OPENTTD_RUST_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
@@ -140,7 +139,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *company_ctrl_windows)() noexcept OPENTTD_SERVICE_DEFAULT(company_ctrl_windows);
 	void (OPENTTD_RUST_CALL *close_network_status)() noexcept OPENTTD_SERVICE_DEFAULT(close_network_status);
 	void (OPENTTD_RUST_CALL *network_spectate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_spectate);
-	void (OPENTTD_RUST_CALL *network_company_new)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(network_company_new);
+	void (OPENTTD_RUST_CALL *admin_company_new)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(admin_company_new);
 	Company *(OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
 	void (OPENTTD_RUST_CALL *network_own_company_settings)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company_settings);
 	void (OPENTTD_RUST_CALL *assert_new_ai_slot)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_new_ai_slot);

@@ -17,6 +17,7 @@
 #include "../strings_func.h"
 #include "../error.h"
 inline void OpenTTDInvalidateTownView(uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); }
+inline void RustInvalidateWindowData(uint16_t cls, uint32_t number, int32_t data) noexcept { InvalidateWindowData(WindowClass(cls), number, data); }
 inline void RustShowErrorMessage(uint32_t summary, uint32_t detail) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR); }
 inline void RustScreenDirty() noexcept { MarkWholeScreenDirty(); }
 inline void RustSetWindowClassesDirty(uint16_t cls) noexcept { SetWindowClassesDirty(WindowClass(cls)); }

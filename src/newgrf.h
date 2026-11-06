@@ -114,8 +114,6 @@ struct GRFFile {
 
 	std::vector<std::unique_ptr<struct StationSpec>> stations;
 	std::vector<std::unique_ptr<struct HouseSpec>> housespec;
-	std::vector<std::unique_ptr<struct IndustrySpec>> industryspec;
-	std::vector<std::unique_ptr<struct IndustryTileSpec>> indtspec;
 	std::vector<std::unique_ptr<struct ObjectSpec>> objectspec;
 	std::vector<std::unique_ptr<struct AirportSpec>> airportspec;
 	std::vector<std::unique_ptr<struct AirportTileSpec>> airtspec;

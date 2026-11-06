@@ -812,10 +812,8 @@ const OpenTTDMovementServices _rust_movement_services{
 	.owned_land = GetRustRailGroundServices().owned_land,
 	.object_foundation = RustObjectFoundation,
 	.house_foundation = RustHouseFoundation,
-	.house_boolean = RustHouseFoundationBoolean,
 	.industry_foundation = RustIndustryFoundation,
 	.industry_callback = RustIndustryFoundationCallback,
-	.industry_boolean = RustIndustryFoundationBoolean,
 };
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {

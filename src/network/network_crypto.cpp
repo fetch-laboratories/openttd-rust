@@ -33,6 +33,7 @@ const OpenTTDAuthHandlerServices &GetAuthHandlerServices()
 class X25519EncryptionHandler : public NetworkEncryptionHandler {
 	RustAuthStream context;
 public:
+	explicit X25519EncryptionHandler(OpenTTDAuthStream *stream) : context(stream) {}
 	X25519EncryptionHandler(const OpenTTDAuthHandler *handler, uint8_t side) : context(openttd_rust_auth_stream_new(handler, side)) {}
 	OpenTTDAuthStream *GetRustStream() const noexcept override { return this->context.get(); }
 	size_t MACSize() const override { return X25519_MAC_SIZE; }
@@ -43,6 +44,16 @@ public:
 X25519Key::~X25519Key() { openttd_rust_crypto_wipe(this->data(), this->size()); }
 X25519SecretKey X25519SecretKey::CreateRandom() { X25519SecretKey secret; RandomBytesWithFallback(secret); return secret; }
 X25519PublicKey X25519SecretKey::CreatePublicKey() const { X25519PublicKey key; openttd_rust_crypto_public_key(key.data(), this->data()); return key; }
+
+std::string FormatNetworkPublicKey(const uint8_t *key)
+{
+	return FormatArrayAsHex(std::span(key, X25519_KEY_SIZE));
+}
+
+std::unique_ptr<NetworkEncryptionHandler> MakeNetworkEncryptionHandler(OpenTTDAuthStream *stream)
+{
+	return std::make_unique<X25519EncryptionHandler>(stream);
+}
 
 RustAuthenticationClientHandler::RustAuthenticationClientHandler(const X25519SecretKey &secret, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password) :
 	password_handler(std::move(password)), handler(openttd_rust_auth_client_new(&GetAuthHandlerServices(), secret.data(), this)) {}
@@ -56,7 +67,7 @@ void RustAuthenticationServerHandler::SendRequest(Packet &p) { openttd_rust_auth
 NetworkAuthenticationServerHandler::ResponseResult RustAuthenticationServerHandler::ReceiveResponse(Packet &p) { return static_cast<ResponseResult>(openttd_rust_auth_handler_receive_response(this->handler.get(), p.Record())); }
 void RustAuthenticationServerHandler::SendEnableEncryption(Packet &p) { openttd_rust_auth_handler_send_enable(this->handler.get(), p.Record()); }
 bool RustAuthenticationServerHandler::CanBeUsed() const { return openttd_rust_auth_handler_can_be_used(this->handler.get()) != 0; }
-std::string RustAuthenticationServerHandler::GetPeerPublicKey() const { return FormatArrayAsHex(std::span(openttd_rust_auth_handler_peer(this->handler.get()), X25519_KEY_SIZE)); }
+std::string RustAuthenticationServerHandler::GetPeerPublicKey() const { return FormatNetworkPublicKey(openttd_rust_auth_handler_peer(this->handler.get())); }
 
 std::string_view RustAuthenticationClientHandler::GetName() const { size_t size; auto name = openttd_rust_auth_handler_name(this->handler.get(), &size); return {reinterpret_cast<const char *>(name), size}; }
 NetworkAuthenticationMethod RustAuthenticationClientHandler::GetAuthenticationMethod() const { return static_cast<NetworkAuthenticationMethod>(openttd_rust_auth_handler_method(this->handler.get())); }

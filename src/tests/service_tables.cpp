@@ -44,13 +44,21 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(vehicle_services) \
 	X(ground_physics) \
 	X(company_adapter) \
+	X(command_post) \
 	X(autoreplace_cmd) \
 	X(linkgraphjob) \
 	X(water_regions) \
 	X(yapf_rail) \
 	X(yapf_road) \
 	X(yapf_ship) \
+	X(network_client) \
+	X(network_command) \
+	X(network_connection) \
 	X(network_crypto) \
+	X(network_dispatch) \
+	X(network_frame) \
+	X(network_lifecycle) \
+	X(network_tcp) \
 	X(packet) \
 	X(landscape) \
 	X(genworld) \

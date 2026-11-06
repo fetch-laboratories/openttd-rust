@@ -326,7 +326,7 @@ class BuildIndustryWindow : public Window {
 				/* Rule is that editor mode loads all industries.
 				 * In game mode, all non raw industries are loaded too
 				 * and raw ones are loaded only when setting allows it */
-				if (_game_mode != GM_EDITOR && indsp->IsRawIndustry() && _settings_game.construction.raw_industry_construction == 0) {
+				if (_game_mode != GM_EDITOR && IsRawIndustry(indsp) && _settings_game.construction.raw_industry_construction == 0) {
 					/* Unselect if the industry is no longer in the list */
 					if (this->selected_type == ind) this->selected_type = IT_INVALID;
 					continue;
@@ -492,7 +492,7 @@ public:
 				}
 				if (this->selected_type != IT_INVALID) {
 					const IndustrySpec *indsp = GetIndustrySpec(this->selected_type);
-					return GetString((_settings_game.construction.raw_industry_construction == 2 && indsp->IsRawIndustry()) ? STR_FUND_INDUSTRY_PROSPECT_NEW_INDUSTRY : STR_FUND_INDUSTRY_FUND_NEW_INDUSTRY);
+					return GetString((_settings_game.construction.raw_industry_construction == 2 && IsRawIndustry(indsp)) ? STR_FUND_INDUSTRY_PROSPECT_NEW_INDUSTRY : STR_FUND_INDUSTRY_FUND_NEW_INDUSTRY);
 				}
 				return GetString(STR_FUND_INDUSTRY_FUND_NEW_INDUSTRY);
 
@@ -555,7 +555,7 @@ public:
 				const IndustrySpec *indsp = GetIndustrySpec(this->selected_type);
 
 				if (_game_mode != GM_EDITOR) {
-					DrawString(ir, GetString(STR_FUND_INDUSTRY_INDUSTRY_BUILD_COST, indsp->GetConstructionCost()));
+					DrawString(ir, GetString(STR_FUND_INDUSTRY_INDUSTRY_BUILD_COST, GetConstructionCost(indsp)));
 					ir.top += GetCharacterHeight(FS_NORMAL);
 				}
 
@@ -661,7 +661,7 @@ public:
 					this->SetDirty();
 
 					if (_thd.GetCallbackWnd() == this &&
-							((_game_mode != GM_EDITOR && _settings_game.construction.raw_industry_construction == 2 && indsp != nullptr && indsp->IsRawIndustry()) || !this->enabled)) {
+							((_game_mode != GM_EDITOR && _settings_game.construction.raw_industry_construction == 2 && indsp != nullptr && IsRawIndustry(indsp)) || !this->enabled)) {
 						/* Reset the button state if going to prospecting or "build many industries" */
 						this->RaiseButtons();
 						ResetObjectToPlace();
@@ -679,7 +679,7 @@ public:
 
 			case WID_DPI_FUND_WIDGET: {
 				if (this->selected_type != IT_INVALID) {
-					if (_game_mode != GM_EDITOR && _settings_game.construction.raw_industry_construction == 2 && GetIndustrySpec(this->selected_type)->IsRawIndustry()) {
+					if (_game_mode != GM_EDITOR && _settings_game.construction.raw_industry_construction == 2 && IsRawIndustry(GetIndustrySpec(this->selected_type))) {
 						Command<CMD_BUILD_INDUSTRY>::Post(STR_ERROR_CAN_T_CONSTRUCT_THIS_INDUSTRY, TileIndex{}, this->selected_type, 0, false, InteractiveRandom());
 						this->HandleButtonClick(WID_DPI_FUND_WIDGET);
 					} else {
@@ -776,7 +776,7 @@ static inline bool IsProductionAlterable(const Industry *i)
 	const IndustrySpec *is = GetIndustrySpec(i->type);
 	bool has_prod = std::any_of(std::begin(is->production_rate), std::end(is->production_rate), [](auto rate) { return rate != 0; });
 	return ((_game_mode == GM_EDITOR || _cheats.setup_prod.value) &&
-			(has_prod || is->IsRawIndustry()) &&
+			(has_prod || IsRawIndustry(is)) &&
 			!_networking);
 }
 
@@ -1165,7 +1165,7 @@ public:
 		const Industry *i = Industry::Get(this->window_number);
 		if (IsProductionAlterable(i)) {
 			const IndustrySpec *ind = GetIndustrySpec(i->type);
-			this->editable = ind->UsesOriginalEconomy() ? EA_MULTIPLIER : EA_RATE;
+			this->editable = UsesOriginalEconomy(ind) ? EA_MULTIPLIER : EA_RATE;
 		} else {
 			this->editable = EA_NONE;
 		}
@@ -1185,7 +1185,7 @@ public:
 static void UpdateIndustryProduction(Industry *i)
 {
 	const IndustrySpec *indspec = GetIndustrySpec(i->type);
-	if (indspec->UsesOriginalEconomy()) i->RecomputeProductionMultipliers();
+	if (UsesOriginalEconomy(indspec)) i->RecomputeProductionMultipliers();
 
 	for (auto &p : i->produced) {
 		if (IsValidCargoType(p.cargo)) {

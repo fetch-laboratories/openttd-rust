@@ -11,6 +11,7 @@
 #include "abi-record-settings.h"
 #include "byte_span_ffi.h"
 #include "../tile_storage_type.h"
+#include "../newgrf_badge_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -24,6 +25,7 @@ enum class StationType : uint8_t;
 struct OpenTTDStationService;
 struct OpenTTDNewGRFSpecs;
 struct ResolverObject;
+struct NetworkClientInfo;
 enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
 struct OpenTTDStationCatchmentServices;
@@ -90,7 +92,9 @@ struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
 struct GRFFile;
+struct OpenTTDCommandPostServices;
 struct OpenTTDSharedServices {
+	const OpenTTDCommandPostServices &(*command_post)() noexcept OPENTTD_SERVICE_DEFAULT(command_post);
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
@@ -99,6 +103,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	OpenTTDClearSquareServices clear_square_services;
+	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
 	void (*cost_animation)(int32_t, int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
@@ -197,10 +202,13 @@ struct OpenTTDSharedServices {
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 	uint32_t (*nearby_tile)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile);
 	uint32_t (*nearby_tile_information)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile_information);
+	NetworkClientInfo *(*network_client_info)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_client_info);
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
+	const uint8_t *(*string_data)(const void *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(string_data);
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
+	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
 	OpenTTDByteSpan (*grf_file_name)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_name);
@@ -208,6 +216,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);
+	uint32_t (*resolver_badges)(const ResolverObject *, const BadgeID *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolver_badges);
 	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);
 	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);

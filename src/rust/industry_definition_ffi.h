@@ -1,49 +1,32 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file industry_definition_ffi.h Industry definition storage leaves. */
+/** @file industry_definition_ffi.h Native inputs of the Rust industry definitions. */
 #ifndef RUST_INDUSTRY_DEFINITION_FFI_H
 #define RUST_INDUSTRY_DEFINITION_FFI_H
 #include "service_defaults.hpp"
-#include "spec_identity.h"
-#include "newgrf_global_ffi.h"
-#include "../industry_type.h"
-#include <cstdint>
-#include <cstddef>
-struct OpenTTDIndustryGenerationServices;
-struct OpenTTDOverrideManager;
-struct IndustrySpec;
-struct IndustryTileSpec;
-struct GRFFile;
-struct OpenTTDIndustryDefinitionAvailability { bool enabled, has_file; };
-struct OpenTTDIndustryProducedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_OUTPUTS]; };
-struct OpenTTDIndustryAcceptedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_INPUTS]; };
-struct OpenTTDIndustryDefinitionCargo { OpenTTDIndustryProducedSlots produced; OpenTTDIndustryAcceptedSlots accepted; };
-/** Native specs remain canonical. Load/reset is serialized by the game-state mutex;
- * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */
+#include "newgrf_bytereader_ffi.h"
+#include "../industrytype.h"
+struct OpenTTDGrfLoadingServices;
+struct OpenTTDSharedServices;
+/** Rust owns the specs; the original tables and string ids stay native. Calls hold the game-state mutex. */
 struct OpenTTDIndustryDefinitionServices {
-	const OpenTTDIndustryGenerationServices *generation;
 	const OpenTTDSharedServices *shared;
-	IndustrySpec *(*industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
-	IndustryTileSpec *(*tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDIndustryDefinitionAvailability (*availability)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
-	void (*publish)(uint16_t, IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish);
-	void (*publish_tile)(uint16_t, IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish_tile);
-	void (*reset_industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_industry);
-	void (*clear_industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_industry);
-	bool (*climate_available)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(climate_available);
-	void (*reset_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_tile);
-	void (*clear_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_tile);
-	size_t (*industry_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(industry_count);
-	size_t (*tile_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(tile_count);
-	IndustrySpec *(*file_industry)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(file_industry);
-	IndustryTileSpec *(*file_tile)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(file_tile);
-	void (*clear_file)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(clear_file);
-	uint8_t *(*conflicting)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(conflicting);
-	void (*invalid_name)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_name);
-	OpenTTDIndustryDefinitionCargo (*cargo)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
-	OpenTTDIndustryAcceptedSlots (*tile_cargo)(IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_cargo);
-	void (*set_produced)(IndustrySpec *, size_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_produced);
-	void (*set_accepted)(IndustrySpec *, size_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_accepted);
-	void (*set_tile_accepted)(IndustryTileSpec *, size_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_accepted);
+	const IndustrySpec *origin;
+	const IndustryTileSpec *origin_tiles;
+	uint32_t invalid_name;
+	void (*map_string)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(map_string);
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
+struct OpenTTDIndustryPropertyContext {
+	GRFFile *file;
+	uint32_t grfid;
+	uint8_t version, climate;
+};
+extern "C" {
+uint8_t openttd_rust_industry_properties_abi(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C++" inline bool openttd_rust_industry_properties(uint32_t a0, uint32_t a1, int32_t a2, ByteReader *a3, const OpenTTDIndustryPropertyContext *a4, const OpenTTDByteReaderServices *a5, const OpenTTDGrfLoadingServices *a6, int32_t *a7) { return openttd_rust_industry_properties_abi(a0, a1, a2, a3, a4, a5, a6, a7) != 0; }
+uint8_t openttd_rust_industry_tile_properties_abi(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C++" inline bool openttd_rust_industry_tile_properties(uint32_t a0, uint32_t a1, int32_t a2, ByteReader *a3, const OpenTTDIndustryPropertyContext *a4, const OpenTTDByteReaderServices *a5, const OpenTTDGrfLoadingServices *a6, int32_t *a7) { return openttd_rust_industry_tile_properties_abi(a0, a1, a2, a3, a4, a5, a6, a7) != 0; }
+uint8_t openttd_rust_industry_file_badge_abi(const GRFFile *, bool, uint32_t);
+extern "C++" inline bool openttd_rust_industry_file_badge(const GRFFile *a0, bool a1, BadgeID a2) { return openttd_rust_industry_file_badge_abi(a0, a1, a2.base()) != 0; }
+}
 #endif

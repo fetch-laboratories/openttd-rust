@@ -109,7 +109,6 @@ src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | b
 src/script/api/script_vehiclelist.cpp | [vehicle_type](const Vehicle *v) | 24bdc2b99efbbacb | 1
 src/order_cmd.cpp | openttd_orders_shared_window(void *ctx, void *first) noexcept | 3755ddc11f656e07 | 1
 write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
-src/rust/session_services.inc | [=] | bd9340cb404adf2f | 1
 src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1
 src/rust/session_services.inc | []() noexcept | 5910eb80ec425d16 | 1
 src/rust/session_services.inc | []() noexcept | 819ee15bd28ec7c1 | 1

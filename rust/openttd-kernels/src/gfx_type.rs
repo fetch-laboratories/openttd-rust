@@ -1,5 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Shared colour constants from `gfx_type.h`.
+//! Shared graphics constants from `gfx_type.h`.
+
+/// `MILLISECONDS_PER_TICK`.
+pub(crate) const MILLISECONDS_PER_TICK: u32 = 27;
 pub const COLOUR_RED: u8 = 4;
 pub const COLOUR_BLUE: u8 = 8;
 pub const COLOUR_ORANGE: u8 = 12;

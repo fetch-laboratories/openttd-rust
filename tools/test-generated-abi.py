@@ -27,6 +27,36 @@ def layouts(fragments):
 
 
 class GeneratedAbiTests(unittest.TestCase):
+    def test_embedded_record_precedes_container_and_void_stays_opaque(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "record.rs").write_text(
+                'layouts! { "Other" ["test"] => Other {}; }\n'
+                "shared_records! {\n    fn abi_record;\n"
+                '    "AContainer" ["test"] => pub struct Container {\n'
+                "        pub value: Value,\n        pub context: *mut c_void,\n"
+                "    }\n"
+                '    "ZValue" ["test"] => pub struct Value {\n'
+                "        pub number: u32,\n"
+                '        pub bytes: [u8; 3] => "std::array<uint8_t, 3>",\n    }\n}\n'
+            )
+            header = "\n".join(
+                GENERATOR["record_header"]("test", GENERATOR["shared_records"](root))
+            )
+            source = root / "record.cpp"
+            (root / "record.h").write_text(header)
+            source.write_text(
+                '#include "record.h"\n#include <type_traits>\n'
+                "static_assert(std::is_same_v<decltype(AContainer::value), ZValue>);\n"
+                "static_assert(std::is_same_v<decltype(AContainer::context), void *>);\n"
+                "static_assert(std::is_same_v<decltype(ZValue::bytes), std::array<uint8_t, 3>>);\n"
+            )
+            subprocess.run(
+                ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
+            )
+
     def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self):
         fragments = GENERATOR["generate"]()
         generated = layouts(fragments)
@@ -183,6 +213,74 @@ class GeneratedAbiTests(unittest.TestCase):
                 ),
                 ("pub value: u8 => class", "pointee tag requires an opaque pointer"),
                 ("pub value: *mut NativeClass => union", "unsupported pointee tag"),
+            ):
+                with self.subTest(error=error):
+                    source.write_text(prefix + fields + "\n    }\n}\n")
+                    with self.assertRaisesRegex(ValueError, error):
+                        GENERATOR["generate"](root)
+
+    def test_shared_record_native_types_and_arrays(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            source = rust / "probe.rs"
+            prefix = (
+                'layouts! { "Other" ["probe"] => Other {}; }\n'
+                "shared_records! { fn abi_record;\n"
+                '"Probe" ["probe"] => pub struct Probe {\n'
+            )
+            source.write_text(
+                prefix
+                + 'pub list: [u8; 4] => "std::array<uint8_t, 4>",\n'
+                + "pub plain: [u16; COUNT],\n"
+                + "pub grid: [[u16; 3]; 2],\n"
+                + 'pub kinds: [u8; 3] => "Kind[3]",\n'
+                + 'pub flags: u32 => "Flags",\n'
+                + "pub last: u8,\n    }\n}\n"
+            )
+            fragments = GENERATOR["generate"](root)
+            header = fragments["abi-record-probe.h"]
+            with self.subTest(behavior="native type and bounds follow the field name"):
+                self.assertIn("\tstd::array<uint8_t, 4> list;\n", header)
+                self.assertIn("\tuint16_t plain[COUNT];\n", header)
+                self.assertIn("\tuint16_t grid[2][3];\n", header)
+                self.assertIn("\tKind kinds[3];\n", header)
+                self.assertIn("\tFlags flags;\n", header)
+            with self.subTest(
+                behavior="layout checks every field after a comma in a type"
+            ):
+                _, items = layouts(fragments)["Probe"]
+                for field in ("list", "plain", "grid", "kinds", "flags", "last"):
+                    self.assertIn(f"offsetof(Probe, {field})", items)
+                    self.assertIn(f"sizeof(Probe::{field})", items)
+            with self.subTest(
+                behavior="the declaration compiles with the includer's types"
+            ):
+                path = root / "abi-record-probe.h"
+                path.write_text(header)
+                subprocess.run(
+                    [
+                        os.environ.get("CXX", "c++"),
+                        "-std=c++20",
+                        "-x",
+                        "c++",
+                        "-fsyntax-only",
+                        "-",
+                    ],
+                    input=(
+                        "#include <array>\n#include <cstdint>\n"
+                        "using Kind = uint8_t;\nstruct Flags { uint32_t value; };\n"
+                        "constexpr int COUNT = 5;\n"
+                        f'#include "{path}"\n'
+                        "static_assert(sizeof(Probe::grid) == 12 && sizeof(Probe::plain) == 10);\n"
+                    ),
+                    text=True,
+                    check=True,
+                )
+            for fields, error in (
+                ("pub value: [u8 3]", "unsupported record field type"),
+                ('pub value: u8 => "Kind', "invalid record field"),
             ):
                 with self.subTest(error=error):
                     source.write_text(prefix + fields + "\n    }\n}\n")
