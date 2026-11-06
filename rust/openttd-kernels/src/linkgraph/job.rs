@@ -4,6 +4,7 @@
 //! thread is joined before publication or destruction. No owner borrow spans callbacks.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 use super::{Settings, live::Graph};
+use crate::cargotype::{CC_EXPRESS, CC_MAIL, PASSENGERS};
 use crate::{cargo_flow::FlowMap, industrytype::NativeVec, timer_game_common::INVALID_DATE};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -59,6 +60,9 @@ impl Drop for JobNode {
 }
 impl Drop for JobRecord {
     fn drop(&mut self) {
+        // Source nodes/flows are destroyed before their immutable graph snapshot.
+        drop(std::mem::take(&mut self.nodes));
+        drop(std::mem::take(&mut self.edge_flows));
         // SAFETY: constructor transferred this independent snapshot to the job.
         drop(unsafe { Box::from_raw(self.graph) });
     }
@@ -117,7 +121,6 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_job_run(
         .wrapping_sub(i32::from(settings.recalc_time) / crate::timer_game_common::SECONDS_PER_DAY)
         .wrapping_sub(unsafe { (*graph).last_compression })
         .wrapping_add(1);
-    use crate::cargotype::{CC_EXPRESS, CC_MAIL, PASSENGERS};
     let input = Settings {
         accuracy: u32::from(settings.accuracy),
         demand_distance: u32::from(settings.demand_distance),
@@ -164,4 +167,84 @@ crate::abi::layouts! {
         distribution_armoured, distribution_default, accuracy, demand_size,
         demand_distance, short_path_saturation,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{cargo_flow, linkgraph::live, linkgraph_type::EdgeUpdateModes};
+
+    #[test]
+    fn worker_uses_private_inputs_and_prestart_abort_publishes_no_result() {
+        // The two-station expectation is the pinned computation ABI fixture's
+        // 10 units from station 12 to station 24, over one 20-unit link.
+        for abort in [false, true] {
+            let graph = live::openttd_rust_live_graph_new_empty();
+            let mut settings = SnapshotSettings {
+                recalc_time: 60,
+                recalc_interval: 4,
+                distribution_pax: 1,
+                distribution_mail: 1,
+                distribution_armoured: 1,
+                distribution_default: 1,
+                accuracy: 2,
+                demand_size: 100,
+                demand_distance: 100,
+                short_path_saturation: 80,
+            };
+            unsafe {
+                (*graph).cargo = 0;
+                live::openttd_rust_live_graph_init(graph, 2);
+                let nodes = &mut (*graph).nodes;
+                nodes[0].supply = 10;
+                nodes[0].station = 12;
+                nodes[0].xy = 129;
+                nodes[1].demand = 1;
+                nodes[1].station = 24;
+                nodes[1].xy = 132;
+                live::openttd_rust_live_node_add_edge(
+                    graph,
+                    0,
+                    1,
+                    20,
+                    0,
+                    0,
+                    EdgeUpdateModes::UNRESTRICTED,
+                );
+            }
+            let job = unsafe { openttd_rust_linkgraph_job_new(graph, 42, &raw const settings) };
+            unsafe {
+                (*job).join_date = 59;
+                (*job).aborted.store(abort, Ordering::Release);
+                // Live graph growth/destruction and later settings changes cannot
+                // invalidate a worker's graph, edge or settings snapshot.
+                (&mut (*graph).nodes)[0].supply = 999;
+                live::openttd_rust_live_graph_init(graph, 200);
+                live::openttd_rust_live_graph_delete(graph);
+            }
+            settings.distribution_pax = 0;
+            let address = job as usize;
+            std::thread::spawn(move || unsafe {
+                openttd_rust_linkgraph_job_run(address as *mut JobRecord, PASSENGERS, 127, 127);
+            })
+            .join()
+            .unwrap();
+            unsafe {
+                assert_eq!((*job).settings.distribution_pax, 1);
+                assert_eq!(settings.distribution_pax, 0);
+                assert_eq!((*job).completed.load(Ordering::Acquire), !abort);
+                assert_eq!((*job).nodes.len(), if abort { 0 } else { 2 });
+                if !abort {
+                    assert_eq!((*job).edge_flows.as_slice(), [10]);
+                    for node in &(*job).nodes {
+                        let origin = cargo_flow::openttd_rust_flow_map_at(node.flows, 12, 1);
+                        assert_eq!(origin.found, 1);
+                        let share = cargo_flow::openttd_rust_flow_share(origin.flow, 0, 0);
+                        assert_eq!((share.station, share.cumulative), (24, 10));
+                    }
+                }
+                openttd_rust_linkgraph_job_delete(job);
+            }
+        }
+    }
 }

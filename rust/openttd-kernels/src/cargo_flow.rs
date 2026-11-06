@@ -908,7 +908,11 @@ mod tests {
                 );
             }
             let job = unsafe {
-                crate::linkgraph::job::openttd_rust_linkgraph_job_new(snapshot, 42, &settings)
+                crate::linkgraph::job::openttd_rust_linkgraph_job_new(
+                    snapshot,
+                    42,
+                    &raw const settings,
+                )
             };
             unsafe {
                 (*job).nodes = crate::industrytype::NativeVec::from_vec(
