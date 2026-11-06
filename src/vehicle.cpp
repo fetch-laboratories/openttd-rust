@@ -1126,6 +1126,12 @@ VehicleEnterTileStates VehicleEnterTile(Vehicle *v, TileIndex tile, int x, int y
 	return VehicleEnterTileStates{openttd_rust_movement_enter(&GetRustMovementServices(), RustVehicle(v), tile.base(), x, y)};
 }
 
+/** Preserve the original ReleaseID compilation unit's native assertion policy. */
+void OPENTTD_RUST_CALL FreeUnitIDGenerator::Check([[maybe_unused]] bool condition) noexcept
+{
+	assert(condition);
+}
+
 /**
  * Check whether we can build infrastructure for the given
  * vehicle type. This to disable building stations etc. when

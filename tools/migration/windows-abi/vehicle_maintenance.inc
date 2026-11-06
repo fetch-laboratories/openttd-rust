@@ -20,7 +20,7 @@ static void VehicleMaintenanceBoundary()
 	CHECK(copied.UseID(2) == 2 && numbers.NextID() == 2);
 	numbers = copied;
 	CHECK(numbers.NextID() == 3);
-	numbers.ReleaseID(1);
+	openttd_rust_unit_numbers_release(&numbers.Record(), 1, [](bool condition) noexcept { CHECK(condition); });
 	CHECK(numbers.NextID() == 1 && copied.NextID() == 3);
 	FreeUnitIDGenerator moved = std::move(copied);
 	CHECK(moved.NextID() == 3 && copied.NextID() == 1);

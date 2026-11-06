@@ -77,7 +77,7 @@ public:
 	const OpenTTDUnitNumberState &Record() const { return this->state; }
 
 private:
-	static void OPENTTD_RUST_CALL Check(bool condition) noexcept { assert(condition); }
+	static void OPENTTD_RUST_CALL Check(bool condition) noexcept;
 	OpenTTDUnitNumberState state{};
 };
 
