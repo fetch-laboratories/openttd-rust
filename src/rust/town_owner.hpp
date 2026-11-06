@@ -57,32 +57,4 @@ public:
 	}
 	T &emplace_back(uint8_t cargo = UINT8_MAX) { return *this->emplace(this->end(), cargo); }
 };
-/** Compile-time-selected nonowning views preserve native counter widths. */
-template <typename T, bool Class> class RustTownCountsVector {
-	OpenTTDTownState *owner;
-	OpenTTDTownSlots View() const
-	{
-		if constexpr (Class) return openttd_rust_town_class_counts(this->owner);
-		else return openttd_rust_town_id_counts(this->owner);
-	}
-public:
-	using value_type = T;
-	explicit RustTownCountsVector(OpenTTDTownState *owner = nullptr) : owner(owner) {}
-	T *data() { return static_cast<T *>(this->View().data); }
-	const T *data() const { return static_cast<const T *>(this->View().data); }
-	size_t size() const { return this->View().size; }
-	T *begin() { return this->data(); }
-	const T *begin() const { return this->data(); }
-	T *end() { const auto v = this->View(); return static_cast<T *>(v.data) + v.size; }
-	const T *end() const { const auto v = this->View(); return static_cast<const T *>(v.data) + v.size; }
-	T &operator[](size_t at) { return this->data()[at]; }
-	const T &operator[](size_t at) const { return this->data()[at]; }
-
-};
-
-template <typename T> struct RustTownBuildingCounts {
-	RustTownCountsVector<T, false> id_count;
-	RustTownCountsVector<T, true> class_count;
-	explicit RustTownBuildingCounts(OpenTTDTownState *owner = nullptr) : id_count(owner), class_count(owner) {}
-};
 #endif /* RUST_TOWN_OWNER_HPP */

@@ -65,17 +65,14 @@ struct TownCache {
 	auto operator<=>(const TownCache &) const = default;
 };
 
-/** Cache facade over the presentation and building-count caches; the scalar
- * caches are record fields. Debug cache snapshots copy their values. */
+/** Native sign cache; debug snapshots copy canonical record values. */
 struct RustTownCache {
 	TrackedViewportSign sign{};
-	RustTownBuildingCounts<uint16_t> building_counts;
-	explicit RustTownCache(OpenTTDTownState *owner) : building_counts(owner) {}
 	TownCache Snapshot(const OpenTTDTownRecord &record) const
 	{
 		TownCache snapshot{record.num_houses, record.population, sign, record.part_of_subsidy, record.squared_town_zone_radius};
-		snapshot.building_counts.id_count.assign(building_counts.id_count.begin(), building_counts.id_count.end());
-		snapshot.building_counts.class_count.assign(building_counts.class_count.begin(), building_counts.class_count.end());
+		snapshot.building_counts.id_count.assign(record.id_counts.begin(), record.id_counts.end());
+		snapshot.building_counts.class_count.assign(record.class_counts.begin(), record.class_counts.end());
 		return snapshot;
 	}
 };
@@ -90,7 +87,7 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	/** The shared record: the canonical owner's first member, at its address. */
 	inline OpenTTDTownRecord &Record() { return *reinterpret_cast<OpenTTDTownRecord *>(this->growth_owner.get()); }
 	inline const OpenTTDTownRecord &Record() const { return *reinterpret_cast<const OpenTTDTownRecord *>(this->growth_owner.get()); }
-	RustTownCache cache{growth_owner.get()};
+	RustTownCache cache{};
 
 	/* Town name */
 	RustTownName name{growth_owner.get()};

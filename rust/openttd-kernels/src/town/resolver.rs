@@ -112,10 +112,10 @@ pub extern "C" fn openttd_rust_house_class_allocate(class: u8, grfid: u32) -> u1
 }
 unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     let owner = unsafe { &mut *owner };
-    owner.id_counts.clear();
-    owner.class_counts.clear();
-    owner.id_counts.resize(specs, 0);
-    owner.class_counts.resize(classes, 0);
+    owner.record.id_counts.clear();
+    owner.record.class_counts.clear();
+    owner.record.id_counts.resize(specs, 0);
+    owner.record.class_counts.resize(classes, 0);
 }
 pub(crate) unsafe fn counts_init(s: &Services, owner: *mut State, specs: usize) {
     let classes = unsafe { (*CLASSES.get()).len() };
@@ -142,8 +142,8 @@ unsafe fn num_houses(owner: *const State, house: u16, class: u16) -> u32 {
     let (town_id, town_class) = unsafe {
         let state = &*owner;
         (
-            state.id_counts[usize::from(house)],
-            state.class_counts[usize::from(class)],
+            state.record.id_counts[usize::from(house)],
+            state.record.class_counts[usize::from(class)],
         )
     };
     let (map_id, map_class) = unsafe {

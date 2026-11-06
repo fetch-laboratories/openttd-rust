@@ -111,8 +111,8 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		require(run("nearest-match", CBID_HOUSE_PRODUCE_CARGO, 0x65, 0x84, false, tile) == DistanceManhattan(tile, nearby));
 		SetHouseType(nearby, old); break;
 	}
-	town->cache.building_counts.id_count[first] = UINT16_MAX;
-	town->cache.building_counts.class_count[2] = UINT16_MAX;
+	FIXTURE_TOWN_ID_COUNTS(town)[first] = UINT16_MAX;
+	FIXTURE_TOWN_CLASS_COUNTS(town)[2] = UINT16_MAX;
 	require(run("count-clamps", CBID_HOUSE_PRODUCE_CARGO, 0x44, 0, false, tile) == 0x04FF01FF);
 
 	/* Ordered StationFinder must OR canonical acceptance histories. It is

@@ -319,8 +319,8 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 2);
 	check(w.clears == 25 * 13 && w.company == 7 && w.draws == 1);
 	w.clear_ok = true; w.house_callback = true;
-	auto *id_counts = static_cast<uint16_t *>(openttd_rust_town_id_counts(owner.get()).data);
-	auto *class_counts = static_cast<uint16_t *>(openttd_rust_town_class_counts(owner.get()).data);
+	auto &id_counts = TownProtocolRecordOf(owner.get())->id_counts;
+	auto &class_counts = TownProtocolRecordOf(owner.get())->class_counts;
 	/* A growing town rebuilds the expired house: one draw, clear, then TryBuildTownHouse. */
 	const auto rebuild = [&] {
 		fields->time_until_rebuild = 1; fields->num_houses++;
@@ -352,8 +352,8 @@ template <typename Check> void CheckTownProtocol(Check check)
 	check(w.writes[0][0] == 2080 && w.writes[1][0] == 2144 && w.writes[2][0] == 2081 && w.writes[3][0] == 2145);
 	check(w.writes[0][2] == 1 && w.writes[1][2] == 2 && w.writes[2][2] == 3 && w.writes[3][2] == 4);
 	check(w.population == 10 && fields->num_houses == 2);
-	const auto counts = openttd_rust_town_id_counts(owner.get());
-	const auto *ids = static_cast<const uint16_t *>(counts.data);
+	const auto &counts = TownProtocolRecordOf(owner.get())->id_counts;
+	const auto *ids = counts.items;
 	check(ids[0] == 1 && ids[1] == 1 && ids[2] == 1 && ids[3] == 1 && ids[4] == 1);
 	/* A skipped builtin lift tick must not observe lift state, owner or map.
 	 * This fixture leaves the lift observation at its abort default, making eager reads fail. */

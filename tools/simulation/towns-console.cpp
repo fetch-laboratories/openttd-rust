@@ -702,7 +702,7 @@ static size_t OccupiedDefinitionTiles()
 				bool available = true;
 				HouseDefinitionNeed(resolver.house_scope.GetVariable(0x67, 0, available) == HOUSE_DEFINITION_GRF && available, "resolver-grfid");
 				const uint32_t count = resolver.house_scope.GetVariable(0x61, HouseSpec::Get(id)->grf_prop.local_id, available);
-				HouseDefinitionNeed((count & 0xFF) == std::min<uint>(255, Town::GetByTile(tile)->cache.building_counts.id_count[id]) && (count & 0xFF) > 0 && available, "resolver-local-id");
+				HouseDefinitionNeed((count & 0xFF) == std::min<uint>(255, FIXTURE_TOWN_ID_COUNTS(Town::GetByTile(tile))[id]) && (count & 0xFF) > 0 && available, "resolver-local-id");
 			};
 			check_mapping();
 			{

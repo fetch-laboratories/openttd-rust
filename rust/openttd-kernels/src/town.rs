@@ -101,6 +101,8 @@ crate::abi::shared_records! {
         pub psa_list: crate::industrytype::NativeVec<*mut crate::newgrf_storage::PersistentStorage> => "RustVector<PersistentStorage *>",
         pub cached_name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
         pub stations_near: crate::station::StationList => "OpenTTDStationList",
+        pub id_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
+        pub class_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
     }
 }
 impl Default for TownRecord {
@@ -136,6 +138,8 @@ impl Default for TownRecord {
             psa_list: crate::industrytype::NativeVec::new(),
             cached_name: crate::industrytype::NativeVec::new(),
             stations_near: crate::station::StationList::default(),
+            id_counts: crate::industrytype::NativeVec::new(),
+            class_counts: crate::industrytype::NativeVec::new(),
         }
     }
 }
@@ -173,8 +177,6 @@ pub struct State {
     name: Vec<u8>,
     text: Vec<u8>,
     supplied: Vec<Supplied>,
-    id_counts: Vec<u16>,
-    class_counts: Vec<u16>,
 }
 /// The record of a live town owner: its first member, at the same address.
 #[inline]
@@ -513,35 +515,17 @@ static BUILDING_COUNTS: GameState<GlobalCounts> = GameState::new(GlobalCounts {
     classes: Vec::new(),
 });
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_id_counts(state: *mut State) -> Slots {
-    // SAFETY: Canonical serialized vector. Native views end before resize.
-    let counts = unsafe { &mut (*state).id_counts };
-    Slots {
-        data: counts.as_mut_ptr().cast(),
-        size: counts.len(),
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_id_counts_resize(state: *mut State, count: usize) {
     // SAFETY: No native view survives a structural vector mutation.
     unsafe {
-        (*state).id_counts.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_class_counts(state: *mut State) -> Slots {
-    // SAFETY: Canonical serialized vector. Native views end before resize.
-    let counts = unsafe { &mut (*state).class_counts };
-    Slots {
-        data: counts.as_mut_ptr().cast(),
-        size: counts.len(),
+        (*state).record.id_counts.resize(count, 0);
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_class_counts_resize(state: *mut State, count: usize) {
     // SAFETY: No native view survives a structural vector mutation.
     unsafe {
-        (*state).class_counts.resize(count, 0);
+        (*state).record.class_counts.resize(count, 0);
     }
 }
 #[unsafe(no_mangle)]
@@ -582,11 +566,12 @@ unsafe fn increase_building(state: *mut State, house: u16, class: u16) {
     let state = unsafe { &mut *state };
     // SAFETY: All counters are serialized by the game-state mutex.
     let global = unsafe { &mut *BUILDING_COUNTS.get() };
-    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
+    state.record.id_counts[usize::from(house)] =
+        state.record.id_counts[usize::from(house)].wrapping_add(1);
     global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
     if class != 0 {
-        state.class_counts[usize::from(class)] =
-            state.class_counts[usize::from(class)].wrapping_add(1);
+        state.record.class_counts[usize::from(class)] =
+            state.record.class_counts[usize::from(class)].wrapping_add(1);
         global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
     }
 }
@@ -596,11 +581,12 @@ unsafe fn decrease_building(state: *mut State, house: u16, class: u16) {
     let state = unsafe { &mut *state };
     // SAFETY: No callback spans the process-wide global count access.
     let global = unsafe { &mut *BUILDING_COUNTS.get() };
-    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
+    state.record.id_counts[usize::from(house)] =
+        state.record.id_counts[usize::from(house)].saturating_sub(1);
     global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
     if class != 0 {
-        state.class_counts[usize::from(class)] =
-            state.class_counts[usize::from(class)].saturating_sub(1);
+        state.record.class_counts[usize::from(class)] =
+            state.record.class_counts[usize::from(class)].saturating_sub(1);
         global.classes[usize::from(class)] = global.classes[usize::from(class)].saturating_sub(1);
     }
 }
@@ -2016,9 +2002,9 @@ impl Engine<'_> {
             // before the next spec query or any construction callback.
             let count = unsafe {
                 if h.class_id != 0 {
-                    (&(*self.owner).class_counts)[usize::from(h.class_id)]
+                    (&(*self.owner).record.class_counts)[usize::from(h.class_id)]
                 } else {
-                    (&(*self.owner).id_counts)[house as usize]
+                    (&(*self.owner).record.id_counts)[house as usize]
                 }
             };
             if count == u16::MAX {
@@ -2600,11 +2586,9 @@ mod tests {
         openttd_rust_town_global_class_counts_resize(16);
         let ids = openttd_rust_town_global_id_counts();
         let classes = openttd_rust_town_global_class_counts();
-        let mut owner = State {
-            id_counts: vec![0; 4096],
-            class_counts: vec![0; 16],
-            ..State::default()
-        };
+        let mut owner = State::default();
+        owner.record.id_counts = crate::industrytype::NativeVec::from_vec(vec![0; 4096]);
+        owner.record.class_counts = crate::industrytype::NativeVec::from_vec(vec![0; 16]);
         owner.record.ratings[0] = 77;
         let address = (&raw mut owner) as usize;
         assert_eq!(openttd_rust_town_generating_exchange_abi(true), 0);
@@ -2651,7 +2635,7 @@ mod tests {
             assert_eq!(*ids.data.cast::<u32>().add(110), 0);
             assert_eq!(*classes.data.cast::<u32>().add(15), 0);
         }
-        assert_eq!(owner.id_counts[110], 0);
+        assert_eq!(owner.record.id_counts[110], 0);
         openttd_rust_town_rating_test(false);
         // SAFETY: Test scratch is disabled; the live owner's rating is restored.
         assert_eq!(
