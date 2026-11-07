@@ -48,25 +48,23 @@ public:
 	CargoPacket(StationID first_station, uint16_t count, Source source);
 	CargoPacket(uint16_t count, uint16_t periods, StationID first, TileIndex tile, Money feeder);
 	CargoPacket(uint16_t count, Money feeder, CargoPacket &original);
-	explicit CargoPacket(const OpenTTDCargoPacketFields &fields);
+	explicit CargoPacket(const OpenTTDCargoPacket &fields);
 	~CargoPacket();
 	OpenTTDCargoPacket *RustOwner() const { return this->state; }
-	OpenTTDCargoPacketFields Export() const;
-	void Import(const OpenTTDCargoPacketFields &fields);
 	CargoPacket *Split(uint size);
 	void Merge(CargoPacket *cp);
 	void Reduce(uint count);
-	void SetNextHop(StationID next) { openttd_rust_cargo_packet_set(this->state, 0, next.base()); }
+	void SetNextHop(StationID next) { this->state->next_hop = next.base(); }
 	void UpdateLoadingTile(TileIndex tile);
 	void UpdateUnloadingTile(TileIndex tile);
 	void AddFeederShare(Money share) { openttd_rust_cargo_packet_feeder(this->state, share.base()); }
-	uint16_t Count() const { return this->Export().count; }
-	Money GetFeederShare() const { return this->Export().feeder_share; }
+	uint16_t Count() const { return this->state->count; }
+	Money GetFeederShare() const { return this->state->feeder_share; }
 	Money GetFeederShare(uint count) const { return openttd_rust_cargo_packet_share(this->state, count); }
-	uint16_t GetPeriodsInTransit() const { return this->Export().periods_in_transit; }
-	Source GetSource() const { auto f = this->Export(); return {f.source_id, static_cast<SourceType>(f.source_type)}; }
-	StationID GetFirstStation() const { return StationID(this->Export().first_station); }
-	StationID GetNextHop() const { return StationID(this->Export().next_hop); }
+	uint16_t GetPeriodsInTransit() const { return this->state->periods_in_transit; }
+	Source GetSource() const { return {this->state->source_id, static_cast<SourceType>(this->state->source_type)}; }
+	StationID GetFirstStation() const { return StationID(this->state->first_station); }
+	StationID GetNextHop() const { return StationID(this->state->next_hop); }
 	uint GetDistance(TileIndex tile) const;
 	static void InvalidateAllFrom(Source src);
 	static void InvalidateAllFrom(StationID station);
