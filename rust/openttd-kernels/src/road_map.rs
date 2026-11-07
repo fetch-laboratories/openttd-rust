@@ -6,19 +6,18 @@
  */
 
 //! Shared `road_map.h` values.
-use crate::services::Roadside;
 use crate::tile_type::TileIndex;
 /// `Roadside::Trees`.
-pub const ROADSIDE_TREES: Roadside = Roadside(5);
+pub const ROADSIDE_TREES: Roadside = Roadside::Trees;
 /// `Roadside::Paved`.
-pub const ROADSIDE_PAVED: Roadside = Roadside(2);
+pub const ROADSIDE_PAVED: Roadside = Roadside::Paved;
 
 /// `RoadTileType::Normal`.
-pub const ROAD_TILE_NORMAL: u8 = 0;
+pub const ROAD_TILE_NORMAL: u8 = RoadTileType::Normal.0;
 /// `RoadTileType::Crossing`.
-pub const ROAD_TILE_CROSSING: u8 = 1;
+pub const ROAD_TILE_CROSSING: u8 = RoadTileType::Crossing.0;
 /// `RoadTileType::Depot`.
-pub const ROAD_TILE_DEPOT: u8 = 2;
+pub const ROAD_TILE_DEPOT: u8 = RoadTileType::Depot.0;
 
 /// `SetRoadTypeRoad` delegates to the canonical typed map setter.
 #[allow(clippy::inline_always)]
@@ -312,4 +311,42 @@ pub(crate) fn has_tile_any_road_type(
 ) -> bool {
     may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile")
         && get_present_road_types(world, tile) & types != 0
+}
+
+/// Native `Roadside` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Roadside(pub u8);
+
+/// Native road tile kind.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RoadTileType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl RoadTileType {
+    /// Normal road
+    pub const Normal: Self = Self(0);
+    /// Level crossing
+    pub const Crossing: Self = Self(1);
+    /// Depot (one entrance)
+    pub const Depot: Self = Self(2);
+}
+
+#[allow(non_upper_case_globals)]
+impl Roadside {
+    /// Road on barren land
+    pub const Barren: Self = Self(0);
+    /// Road on grass
+    pub const Grass: Self = Self(1);
+    /// Road with paved sidewalks
+    pub const Paved: Self = Self(2);
+    /// Road with street lights on paved sidewalks
+    pub const StreetLights: Self = Self(3);
+    /// Road with trees on paved sidewalks
+    pub const Trees: Self = Self(5);
+    /// Road on grass with road works
+    pub const GrassRoadWorks: Self = Self(6);
+    /// Road with sidewalks and road works
+    pub const PavedRoadWorks: Self = Self(7);
 }

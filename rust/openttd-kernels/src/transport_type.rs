@@ -7,8 +7,30 @@
 
 //! Shared `transport_type.h` values.
 /// Railway transport.
-pub const TRANSPORT_RAIL: u8 = 0;
+pub const TRANSPORT_RAIL: u8 = TransportType::TRANSPORT_RAIL.0;
 /// Road transport.
-pub const TRANSPORT_ROAD: u8 = 1;
+pub const TRANSPORT_ROAD: u8 = TransportType::TRANSPORT_ROAD.0;
 /// Water transport.
-pub const TRANSPORT_WATER: u8 = 2;
+pub const TRANSPORT_WATER: u8 = TransportType::TRANSPORT_WATER.0;
+
+/// Native `TransportType` with its unchanged uint8 representation.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TransportType(pub u8);
+
+impl TransportType {
+    /// Begin of the iterator.
+    pub const TRANSPORT_BEGIN: Self = Self(0);
+    /// Transport by train
+    pub const TRANSPORT_RAIL: Self = Self(0);
+    /// Transport by road vehicle
+    pub const TRANSPORT_ROAD: Self = Self(1);
+    /// Transport over water
+    pub const TRANSPORT_WATER: Self = Self(2);
+    /// Transport through air
+    pub const TRANSPORT_AIR: Self = Self(3);
+    /// End of iterations.
+    pub const TRANSPORT_END: Self = Self(4);
+    /// Sentinel for invalid transport types.
+    pub const INVALID_TRANSPORT: Self = Self(255);
+}

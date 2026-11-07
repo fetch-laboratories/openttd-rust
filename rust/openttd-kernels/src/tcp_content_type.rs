@@ -4,27 +4,30 @@
 //! `ContentInfo`, whose text and list fields stay native; both languages access them in place.
 #![allow(unsafe_code)]
 
-pub const CONTENT_TYPE_BEGIN: u8 = 1;
-pub const CONTENT_TYPE_BASE_GRAPHICS: u8 = 1;
-pub const CONTENT_TYPE_NEWGRF: u8 = 2;
-pub const CONTENT_TYPE_AI: u8 = 3;
-pub const CONTENT_TYPE_AI_LIBRARY: u8 = 4;
-pub const CONTENT_TYPE_SCENARIO: u8 = 5;
-pub const CONTENT_TYPE_HEIGHTMAP: u8 = 6;
-pub const CONTENT_TYPE_BASE_SOUNDS: u8 = 7;
-pub const CONTENT_TYPE_BASE_MUSIC: u8 = 8;
-pub const CONTENT_TYPE_GAME: u8 = 9;
-pub const CONTENT_TYPE_GAME_LIBRARY: u8 = 10;
-pub const CONTENT_TYPE_END: u8 = 11;
+pub const CONTENT_TYPE_BEGIN: u8 = ContentType::CONTENT_TYPE_BEGIN.0;
+pub const CONTENT_TYPE_BASE_GRAPHICS: u8 = ContentType::CONTENT_TYPE_BASE_GRAPHICS.0;
+pub const CONTENT_TYPE_NEWGRF: u8 = ContentType::CONTENT_TYPE_NEWGRF.0;
+pub const CONTENT_TYPE_AI: u8 = ContentType::CONTENT_TYPE_AI.0;
+pub const CONTENT_TYPE_AI_LIBRARY: u8 = ContentType::CONTENT_TYPE_AI_LIBRARY.0;
+pub const CONTENT_TYPE_SCENARIO: u8 = ContentType::CONTENT_TYPE_SCENARIO.0;
+pub const CONTENT_TYPE_HEIGHTMAP: u8 = ContentType::CONTENT_TYPE_HEIGHTMAP.0;
+pub const CONTENT_TYPE_BASE_SOUNDS: u8 = ContentType::CONTENT_TYPE_BASE_SOUNDS.0;
+pub const CONTENT_TYPE_BASE_MUSIC: u8 = ContentType::CONTENT_TYPE_BASE_MUSIC.0;
+pub const CONTENT_TYPE_GAME: u8 = ContentType::CONTENT_TYPE_GAME.0;
+pub const CONTENT_TYPE_GAME_LIBRARY: u8 = ContentType::CONTENT_TYPE_GAME_LIBRARY.0;
+pub const CONTENT_TYPE_END: u8 = ContentType::CONTENT_TYPE_END.0;
 
-pub const PACKET_CONTENT_CLIENT_INFO_LIST: u8 = 0;
-pub const PACKET_CONTENT_CLIENT_INFO_ID: u8 = 1;
-pub const PACKET_CONTENT_CLIENT_INFO_EXTID: u8 = 2;
-pub const PACKET_CONTENT_CLIENT_INFO_EXTID_MD5: u8 = 3;
-pub const PACKET_CONTENT_SERVER_INFO: u8 = 4;
-pub const PACKET_CONTENT_CLIENT_CONTENT: u8 = 5;
-pub const PACKET_CONTENT_SERVER_CONTENT: u8 = 6;
-pub const PACKET_CONTENT_END: u8 = 7;
+pub const PACKET_CONTENT_CLIENT_INFO_LIST: u8 =
+    PacketContentType::PACKET_CONTENT_CLIENT_INFO_LIST.0;
+pub const PACKET_CONTENT_CLIENT_INFO_ID: u8 = PacketContentType::PACKET_CONTENT_CLIENT_INFO_ID.0;
+pub const PACKET_CONTENT_CLIENT_INFO_EXTID: u8 =
+    PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID.0;
+pub const PACKET_CONTENT_CLIENT_INFO_EXTID_MD5: u8 =
+    PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5.0;
+pub const PACKET_CONTENT_SERVER_INFO: u8 = PacketContentType::PACKET_CONTENT_SERVER_INFO.0;
+pub const PACKET_CONTENT_CLIENT_CONTENT: u8 = PacketContentType::PACKET_CONTENT_CLIENT_CONTENT.0;
+pub const PACKET_CONTENT_SERVER_CONTENT: u8 = PacketContentType::PACKET_CONTENT_SERVER_CONTENT.0;
+pub const PACKET_CONTENT_END: u8 = PacketContentType::PACKET_CONTENT_END.0;
 
 /// `ContentInfo::State`.
 pub mod state {
@@ -109,4 +112,72 @@ mod tests {
             assert_eq!(info.is_valid(), expected);
         }
     }
+}
+
+/// Native `ContentType`: these values are database keys. Every underlying byte is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ContentType(pub u8);
+
+impl ContentType {
+    /// Helper to mark the begin of the types
+    pub const CONTENT_TYPE_BEGIN: Self = Self(1);
+    /// The content consists of base graphics
+    pub const CONTENT_TYPE_BASE_GRAPHICS: Self = Self(1);
+    /// The content consists of a `NewGRF`
+    pub const CONTENT_TYPE_NEWGRF: Self = Self(2);
+    /// The content consists of an AI
+    pub const CONTENT_TYPE_AI: Self = Self(3);
+    /// The content consists of an AI library
+    pub const CONTENT_TYPE_AI_LIBRARY: Self = Self(4);
+    /// The content consists of a scenario
+    pub const CONTENT_TYPE_SCENARIO: Self = Self(5);
+    /// The content consists of a heightmap
+    pub const CONTENT_TYPE_HEIGHTMAP: Self = Self(6);
+    /// The content consists of base sounds
+    pub const CONTENT_TYPE_BASE_SOUNDS: Self = Self(7);
+    /// The content consists of base music
+    pub const CONTENT_TYPE_BASE_MUSIC: Self = Self(8);
+    /// The content consists of a game script
+    pub const CONTENT_TYPE_GAME: Self = Self(9);
+    /// The content consists of a GS library
+    pub const CONTENT_TYPE_GAME_LIBRARY: Self = Self(10);
+    /// Helper to mark the end of the types
+    pub const CONTENT_TYPE_END: Self = Self(11);
+    /// Invalid/uninitialized content
+    pub const INVALID_CONTENT_TYPE: Self = Self(255);
+}
+
+/// Native `PacketContentType`: packet order must not change. Every underlying byte is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PacketContentType(pub u8);
+
+impl PacketContentType {
+    /// Queries the content server for a list of info of a given content type
+    pub const PACKET_CONTENT_CLIENT_INFO_LIST: Self = Self(0);
+    /// Queries the content server for information about a list of internal IDs
+    pub const PACKET_CONTENT_CLIENT_INFO_ID: Self = Self(1);
+    /// Queries the content server for information about a list of external IDs
+    pub const PACKET_CONTENT_CLIENT_INFO_EXTID: Self = Self(2);
+    /// Queries the content server for information about a list of external IDs and MD5
+    pub const PACKET_CONTENT_CLIENT_INFO_EXTID_MD5: Self = Self(3);
+    /// Reply of content server with information about content
+    pub const PACKET_CONTENT_SERVER_INFO: Self = Self(4);
+    /// Request a content file given an internal ID
+    pub const PACKET_CONTENT_CLIENT_CONTENT: Self = Self(5);
+    /// Reply with the content of the given ID
+    pub const PACKET_CONTENT_SERVER_CONTENT: Self = Self(6);
+    /// Must ALWAYS be on the end of this list!! (period)
+    pub const PACKET_CONTENT_END: Self = Self(7);
+}
+
+/// Native `ContentID`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ContentID(pub u32);
+
+impl ContentID {
+    /// Invalid content identifier.
+    pub const INVALID_CONTENT_ID: Self = Self(u32::MAX);
 }

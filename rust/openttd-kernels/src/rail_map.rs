@@ -17,7 +17,7 @@ pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
 }
 
 /// `RailTileType::Normal`, asserted by native compilation.
-pub const RAIL_TILE_NORMAL: u8 = 0;
+pub const RAIL_TILE_NORMAL: u8 = RailTileType::Normal.0;
 /// `IsPbsSignal`, from `rail_map.h`.
 #[inline]
 pub const fn is_pbs_signal(kind: u8) -> bool {
@@ -25,11 +25,11 @@ pub const fn is_pbs_signal(kind: u8) -> bool {
 }
 
 /// `RailGroundType::HalfTileWater`.
-pub const RAIL_GROUND_HALF_TILE_WATER: u8 = 13;
+pub const RAIL_GROUND_HALF_TILE_WATER: u8 = RailGroundType::HalfTileWater.0;
 /// `RailTileType::Signals`.
-pub const RAIL_TILE_SIGNALS: u8 = 1;
+pub const RAIL_TILE_SIGNALS: u8 = RailTileType::Signals.0;
 /// `RailTileType::Depot`.
-pub const RAIL_TILE_DEPOT: u8 = 3;
+pub const RAIL_TILE_DEPOT: u8 = RailTileType::Depot.0;
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
@@ -118,4 +118,58 @@ impl crate::map_func::World<'_> {
     pub(crate) fn rail_depot_dir(&self, t: u32) -> u8 {
         gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
     }
+}
+
+/// Native `RailTileType` with its unchanged uint8 representation.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RailTileType(pub u8);
+
+/// Native `RailGroundType` with its unchanged uint8 representation.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RailGroundType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl RailTileType {
+    /// Normal rail tile without signals
+    pub const Normal: Self = Self(0);
+    /// Normal rail tile with signals
+    pub const Signals: Self = Self(1);
+    /// Depot (one entrance)
+    pub const Depot: Self = Self(3);
+}
+
+#[allow(non_upper_case_globals)]
+impl RailGroundType {
+    /// Nothing (dirt)
+    pub const Barren: Self = Self(0);
+    /// Grassy
+    pub const Grass: Self = Self(1);
+    /// Grass with a fence at the NW edge
+    pub const FenceNW: Self = Self(2);
+    /// Grass with a fence at the SE edge
+    pub const FenceSE: Self = Self(3);
+    /// Grass with a fence at the NW and SE edges
+    pub const FenceSENW: Self = Self(4);
+    /// Grass with a fence at the NE edge
+    pub const FenceNE: Self = Self(5);
+    /// Grass with a fence at the SW edge
+    pub const FenceSW: Self = Self(6);
+    /// Grass with a fence at the NE and SW edges
+    pub const FenceNESW: Self = Self(7);
+    /// Grass with a fence at the eastern side
+    pub const FenceVert1: Self = Self(8);
+    /// Grass with a fence at the western side
+    pub const FenceVert2: Self = Self(9);
+    /// Grass with a fence at the southern side
+    pub const FenceHoriz1: Self = Self(10);
+    /// Grass with a fence at the northern side
+    pub const FenceHoriz2: Self = Self(11);
+    /// Icy or sandy
+    pub const SnowOrDesert: Self = Self(12);
+    /// Grass with a fence and shore or water on the free halftile
+    pub const HalfTileWater: Self = Self(13);
+    /// Snow only on higher part of slope (steep or one corner raised)
+    pub const HalfTileSnow: Self = Self(14);
 }
