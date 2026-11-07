@@ -368,7 +368,7 @@ impl FlowMap {
         }
     }
     /// `FlowStatMap::DeleteFlows`: delete flows to a remote station and return
-    /// source IDs whose complete FlowStat, rather than just a share, was erased.
+    /// source IDs whose complete `FlowStat`, rather than just a share, was erased.
     pub(crate) fn deleted(&mut self, via: u16) -> Vec<u16> {
         let mut ret = Vec::new();
         for (&origin, &ptr) in &self.entries {
