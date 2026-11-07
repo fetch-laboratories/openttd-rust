@@ -26,6 +26,7 @@ use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::VS_CRASHED;
 
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
+#[allow(clippy::cast_possible_truncation)] // TILE_SIZE is 16.
 const TILE_UNITS: u16 = TILE_SIZE as u16;
 
 /// `RoadStop::Entry`: one drive-through entry point in tile units.
