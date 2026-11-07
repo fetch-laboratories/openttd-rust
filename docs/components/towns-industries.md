@@ -145,3 +145,10 @@
 - Raw byte/word domains, count clamps, allocation/retry and RNG order, name scratch, progress/cancellation and scalar service contracts remain unchanged. Native map/pool/frame ownership stays in C++.
 - Limits: Existing deletion-assert ordering, invalid setting domains, final-fallback, NewGRF, historical-save and scheduling qualifications remain on #156. Other founding families remain in the cleanup workset.
 - PRs: #779, integrated in #780.
+
+## Original Town creation vocabulary (#734)
+
+- Town creation and layout initialization use the original helper names, canonical sizes/layouts, cargo effects, company IDs and growth flags. Initial rating and winter/desert cargo-goal constants have one definition in the original header modules.
+- Field/count initialization, generating context, climate goals, layout/RNG decisions, growth iteration and directory/noise callbacks keep their captured operations and order. Raw service/record contracts and native ownership are unchanged.
+- Limits: Inherited initialization/assertion ordering and finite raw-setting, mod/save and scheduling coverage remain on #156. Other Town families remain in the cleanup workset.
+- PRs: #783, integrated in #786.

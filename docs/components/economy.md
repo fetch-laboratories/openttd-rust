@@ -170,3 +170,10 @@
 - Native copy/publication, validity and label reads, mask/array writes and callback order remain unchanged. Raw pointer views, registry services and scalar interfaces retain their layouts and owners.
 - Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Sorting, finalisation, translation and other registry vocabulary remain in the cleanup workset.
 - PRs: #782, integrated in #785.
+
+## Original engine livery vocabulary (#734)
+
+- The existing engine-livery helper uses the original name and canonical cargo, vehicle, engine-class, misc-flag and livery vocabulary. A compatibility reexport preserves its existing engine-loading caller and one helper body.
+- Parent/articulated overrides, repeated live reads, default-cargo fallbacks, class/MU/tram/passenger decisions and raw return/assertion domains keep their operations and order. Company generation and all native records/services remain unchanged.
+- Limits: Inherited original differences, raw-domain, native callback/lifetime, mod/save and presentation qualifications remain on #156. Other Company/economy families remain in the cleanup workset.
+- PRs: #784, integrated in #786.
