@@ -24,7 +24,6 @@ Development is paused for a cleanup stage (user, 2026-11-06). Code main is integ
 
 | Measure | Original C++ | Rust port |
 | --- | ---: | ---: |
-| Enum types | 773 | 33 |
 | Comment lines per 100 code lines | 35 | 7 |
 | Functions with more than 7 parameters | 0.6% | 2.5% |
 | Functions over 100 lines | 1.6% | 2.5% |
@@ -54,7 +53,7 @@ Phase numbers name content; the execution order above sets the sequence. Phase 1
 
 ## Cleanup work order
 
-Each stream issue holds its batches, rules, proof and inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting a batch. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](workflow.md#integration)).
+Each stream issue holds its batches, rules, proof and inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting a batch. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](workflow.md#integration)).
 
 1. **#733 checks** start first: Rust checks in quick CI, Clippy and Ruff ratchets, growth ratchets, the refactor proof. #737's batch C (cargo records), #736's R0 registration and #734's foundation F may start beside it.
 2. **#734 types, names and comments**, after F and the #733 refactor proof: worksets 01 to 23 with disjoint files, then closure (private wrapper fields).
@@ -63,13 +62,21 @@ Each stream issue holds its batches, rules, proof and inventory. A file belongs 
 5. **#738 rules** is docs-only; root applies it between integrations.
 6. **#726** integrates as a cleanup maintenance PR beside #737; its TCP tail stays with #730.
 
+Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), without changing the course:
+
+- #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order plus exact-head Full when compiled code differs. Archive equivalence remains the first attempt; per-PR Callgrind profiles and disassembly accounting are not required. F's existing evidence is accepted.
+- #747 narrows the Clippy ratchet to complexity, parameter count, nesting and safety documentation after F integrates. Preserve retained debt; remove unnecessary existing cast suppressions on later base updates, after F integrates.
+- #734 permits the original's integer uses through wrapper accessors and measures wrapper adoption rather than Rust enum counts. The implementer brief places helpers by their original file, including `.cpp`-only helpers (#738).
+- #734/#737 may merge mechanical shared-file edits on base updates; H's protocol closure does not wait for F's unrelated `lib.rs` declarations.
+- Before selecting #669 afterload, re-check its all-pool writes against the boundary yardstick and current storage ownership, as noted below.
+
 ## After cleanup
 
 Readers first, in this order, re-estimated by fork C++ when selected:
 
 | Rank | Owner | Issue estimate | Notes |
 | ---: | --- | ---: | --- |
-| 1 | #669 afterload/legacy | 1,800 to 2,600 | Establish a complete canonical-write route through existing owner operations before selection |
+| 1 | #669 afterload/legacy | 1,800 to 2,600 | Conditional rank: re-check all-pool writes against boundary falls or holds before selection; pool records remain C++-owned until phase 2, so this owner may need to follow storage |
 | 2 | #730 network core/discovery/resource | 700 to 1,100 | Resume from closed draft #731's branch |
 | 3 | #669 GRF configuration/common publication/actions | 500 to 800 | Remaining SpriteGroupPool lifetime |
 | 4 | #573 continuation | 350 to 550 | Codec, corrupt input, LoadCheck and wrappers; pool chunks move with their pool |
@@ -216,14 +223,15 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Code main is integration 103, `b7b6603f4c`. A's checks are installed. R0 and cargo C combine in #743; road R and history H proceed in disjoint files. F's seven semantic comparisons match, but archive and exact instruction-count proof fail; [decision #746](https://github.com/fetch-laboratories/openttd-rust/issues/746) holds only F's integration and its reserved-file release. No proof rule is waived while it is open. Integration and rollback procedures live in the [root workflow](root-workflow.md).
+Cleanup stage in progress. Code main is integration 103, `b7b6603f4c`. A's checks are installed. R0 and cargo C combine in #743; its first Full timed out waiting for an original client to reconnect in the network-protocol scenario, with the other validation jobs passing. No #743 source regression is established; root records the diagnostic on #693 before retry. F's proof is accepted under closed [decision #746](https://github.com/fetch-laboratories/openttd-rust/issues/746); no further archive or profiling work is required. Road R and history H have completed source review and can adopt mechanically merging shared-file edits before updating from integrated #743. Integration and rollback procedures live in the [root workflow](root-workflow.md).
 
 | Work | Owner | Next action |
 | --- | --- | --- |
-| #743: #736 R0 and #737 C | Root | Finish native completeness/growth repair, exact exception review, Quick and one combined Full. Component reviews and focused checks pass. |
-| #734 F, PR #739 | `/root/cleanup_734_foundation` | Resolve #746 before base/debt adoption or integration. Source and all 122 lint proposals are reviewed; no jobs remain. |
-| #737 R, PR #744 | `/root/cleanup_737_road` | Independent source/exception review, then serialized baseline and native-fixture adoption after #743. |
-| #737 H, PR #745 | `/root/cleanup_737_history` | Finish typed-path native evidence. Preserve generic fixture behavior; close the old protocol only when F releases `lib.rs`. |
+| #743: #736 R0 and #737 C | Root | Diagnose the timed-out simulation shard, update from the docs correction, refresh exact contracts and finish current-head Full. Component/source reviews and other validation jobs pass. |
+| #734 F, PR #739 | Root | After #743, update from base, adopt the exact reviewed lint delta, review and current-head Full. Source and all 122 lint proposals are reviewed; proof is accepted. |
+| #737 R, PR #744 | `/root/cleanup_737_road` | Adopt exact baseline/native-fixture changes, update from integrated #743, then final-head acceptance and Full. Source review and focused checks pass. |
+| #737 H, PR #745 | `/root/cleanup_737_history` | Apply the mechanical protocol closure/native patch and delete one stale debt row; update from integrated #743 before final gates and Full. Source review and four suppression acceptances pass. |
+| #747 Clippy selection | Root | Small reviewed tooling PR after F integrates; retain only the five approved lint families and preserve all surviving baseline rows. |
 | #738 rule corpus | Root | Two docs checkpoints are pushed. The remaining orchestration-skill rows belong to an authorized navigation/steering pass. |
 
 Retained state from root's wind-down ([checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)), for housekeeping:
