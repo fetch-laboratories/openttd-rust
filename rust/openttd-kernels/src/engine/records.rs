@@ -344,18 +344,20 @@ mod tests {
             }
             assert_eq!(record.vehicle_info_type.0, kind.0);
             assert!(!record.info.cargo_label.mixed);
-            // SAFETY: The constructor has installed the variant selected by kind.
-            let extra = unsafe {
-                match kind {
-                    VehicleType::TRAIN => {
-                        assert_eq!(record.vehicle_info.rail.railtypes, 1);
-                        record.vehicle_info.rail.railveh_type
-                    }
-                    VehicleType::ROAD => record.vehicle_info.road.tractive_effort,
-                    VehicleType::SHIP => record.vehicle_info.ship.acceleration,
-                    VehicleType::AIRCRAFT => record.vehicle_info.aircraft.subtype,
-                    _ => unreachable!(),
+            let extra = match kind {
+                VehicleType::TRAIN => {
+                    // SAFETY: The constructor has installed the rail variant.
+                    let rail = unsafe { record.vehicle_info.rail };
+                    assert_eq!(rail.railtypes, 1);
+                    rail.railveh_type
                 }
+                // SAFETY: Each arm reads only the variant installed for kind.
+                VehicleType::ROAD => unsafe { record.vehicle_info.road }.tractive_effort,
+                // SAFETY: The constructor has installed the ship variant.
+                VehicleType::SHIP => unsafe { record.vehicle_info.ship }.acceleration,
+                // SAFETY: The constructor has installed the aircraft variant.
+                VehicleType::AIRCRAFT => unsafe { record.vehicle_info.aircraft }.subtype,
+                _ => unreachable!(),
             };
             writeln!(
                 observed,
