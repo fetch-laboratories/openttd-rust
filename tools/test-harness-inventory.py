@@ -260,7 +260,35 @@ class ReplacementTests(unittest.TestCase):
             # Use the actual common CMake helper and existing native fixture names.
             for name in ("history_func.cpp", "test_network_crypto.cpp"):
                 (root / "src/tests" / name).touch()
-            (root / "replacements.cmake").write_text(er.cmake([self.record()]))
+            tools = root / "tools"
+            tools.mkdir()
+            shutil.copyfile(
+                ROOT / "tools/evidence_replacements.py", tools / "register.py"
+            )
+            # Configure hosts such as Emscripten cannot import the simulation
+            # runtime. Exercise the actual registration entry under that limit.
+            (tools / "simulation.py").write_text(
+                "raise ImportError('simulation runtime unavailable at configure')\n"
+            )
+            manifest = root / "migration/evidence-replacements/crypto.json"
+            manifest.parent.mkdir(parents=True)
+            record = self.record()
+            record["observations"]["crypto known answers"].append("scenario:missing")
+            manifest.write_text(json.dumps([record]))
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(tools / "register.py"),
+                    "--cmake",
+                    str(root / "replacements.cmake"),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            self.assertIn(
+                "not a default harness scenario",
+                " ".join(er.errors([record], TREE["default"])),
+            )
             (root / "src/tests/CMakeLists.txt").write_text(
                 "add_test_files(history_func.cpp test_network_crypto.cpp)\n"
             )
