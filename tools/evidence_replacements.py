@@ -95,6 +95,21 @@ def rust_selector(check: str, root: Path = ROOT) -> list[str]:
     return ["--test", target, name]
 
 
+def destination_errors(
+    check: str, default: Sequence[str] | None, root: Path
+) -> list[str]:
+    if check.startswith("scenario:"):
+        scenario = check.removeprefix("scenario:")
+        if not scenario.strip() or (default is not None and scenario not in default):
+            return [f"replacement is not a default harness scenario: {check}"]
+    else:
+        try:
+            rust_selector(check, root)
+        except ValueError as error:
+            return [str(error)]
+    return []
+
+
 def errors(
     records: Sequence[Replacement], default: Sequence[str] | None, root: Path = ROOT
 ) -> list[str]:
@@ -110,17 +125,7 @@ def errors(
                 found.append(f"duplicate replacement owner: {retired}")
             owners.add(retired)
     for check in sorted(destinations(records)):
-        if check.startswith("scenario:"):
-            scenario = check.removeprefix("scenario:")
-            if not scenario.strip() or (
-                default is not None and scenario not in default
-            ):
-                found.append(f"replacement is not a default harness scenario: {check}")
-        else:
-            try:
-                rust_selector(check, root)
-            except ValueError as error:
-                found.append(str(error))
+        found.extend(destination_errors(check, default, root))
     # Reference CTest verification runs before simulation: its replacement must
     # be a registered Rust CTest, not a promise to run a scenario later.
     for record in records:
