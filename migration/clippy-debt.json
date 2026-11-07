@@ -3024,6 +3024,9 @@
     "rust/openttd-kernels/src/cargomonitor.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
+    "rust/openttd-kernels/src/cargotype.rs | impl CargoClasses::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
     "rust/openttd-kernels/src/command.rs | fn enter | multiple_unsafe_ops_per_block | b68bd9d90c926ba58c69": [
       3
     ],
@@ -3058,6 +3061,12 @@
       1
     ],
     "rust/openttd-kernels/src/command_post.rs | fn control_cost | undocumented_unsafe_blocks | f099c675a013b68874e9": [
+      1
+    ],
+    "rust/openttd-kernels/src/command_type.rs | impl CommandFlags::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
+    "rust/openttd-kernels/src/command_type.rs | impl DoCommandFlags::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
       1
     ],
     "rust/openttd-kernels/src/company.rs | fn assets | undocumented_unsafe_blocks | 6e63333deb2663212404": [
@@ -3412,6 +3421,12 @@
       1
     ],
     "rust/openttd-kernels/src/depot_cmd.rs | fn unique | undocumented_unsafe_blocks | 5ddbe042a0082d433843": [
+      1
+    ],
+    "rust/openttd-kernels/src/direction_type.rs | impl DiagDirections::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/direction_type.rs | impl Directions::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
       1
     ],
     "rust/openttd-kernels/src/disaster.rs | fn industry_behaviour | undocumented_unsafe_blocks | 25150afe146ef438c642": [
@@ -5106,6 +5121,15 @@
     "rust/openttd-kernels/src/engine_loading/properties.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       110,
       230
+    ],
+    "rust/openttd-kernels/src/engine_type.rs | impl EngineFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/engine_type.rs | impl EngineMiscFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/engine_type.rs | impl ExtraEngineFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
     ],
     "rust/openttd-kernels/src/fleet.rs | fn add_profit | multiple_unsafe_ops_per_block | e81a5fbe15f0780d58b6": [
       2
@@ -11323,6 +11347,9 @@
     "rust/openttd-kernels/src/landscape_generation.rs | impl World < ' _ >::fn wetlands | undocumented_unsafe_blocks | b66fc67d97a9ab1c5736": [
       1
     ],
+    "rust/openttd-kernels/src/landscape_type.rs | impl LandscapeTypes::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
     "rust/openttd-kernels/src/lib.rs | fn encoded_parameter | undocumented_unsafe_blocks | a9952154afdf3f1db423": [
       1
     ],
@@ -11764,6 +11791,9 @@
       2
     ],
     "rust/openttd-kernels/src/linkgraph_schedule.rs | fn unfinished | undocumented_unsafe_blocks | d65a29685ebac0462ef1": [
+      1
+    ],
+    "rust/openttd-kernels/src/linkgraph_type.rs | impl EdgeUpdateModes::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
       1
     ],
     "rust/openttd-kernels/src/map_func.rs | impl < ' a > World < ' a >::fn new | multiple_unsafe_ops_per_block | 61191060922c1e35fd20": [
@@ -13006,10 +13036,16 @@
     "rust/openttd-kernels/src/newgrf_act3.rs | fn translate_cargo | undocumented_unsafe_blocks | 69c7326e97a461c0fc09": [
       1
     ],
-    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_record | multiple_unsafe_ops_per_block | 64e7c059b7c943ef12f5": [
+    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_record | multiple_unsafe_ops_per_block | df8e8c976c34fa084ac1": [
       6
     ],
-    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_record | undocumented_unsafe_blocks | 64e7c059b7c943ef12f5": [
+    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_record | undocumented_unsafe_blocks | df8e8c976c34fa084ac1": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_standard | cast_possible_truncation | 46d6db64b6addb9c3acc": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_standard | cast_possible_truncation | cfd54e468e2fcd82008d": [
       1
     ],
     "rust/openttd-kernels/src/newgrf_act3/loading.rs | fn bind_standard | undocumented_unsafe_blocks | 8c4cbf1c4c8678c173c0": [
@@ -13254,6 +13290,9 @@
     "rust/openttd-kernels/src/newgrf_animation_base.rs | trait Callback | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
     ],
+    "rust/openttd-kernels/src/newgrf_badge_type.rs | impl BadgeFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
     "rust/openttd-kernels/src/newgrf_bytereader.rs | impl < ' a > Reader < ' a >::fn badge_ids | undocumented_unsafe_blocks | 928e08e782df2c0b4a55": [
       1
     ],
@@ -13327,6 +13366,36 @@
       1
     ],
     "rust/openttd-kernels/src/newgrf_bytereader.rs | impl Read for Cursor::fn word | undocumented_unsafe_blocks | 222867e1ad5832488ae3": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl AirportTileCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl CanalCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl CargoCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl HouseCallbackMasks::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl IndustryCallbackMasks::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl IndustryTileCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl ObjectCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl RoadStopCallbackMasks::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl StationCallbackMasks::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
+    "rust/openttd-kernels/src/newgrf_callbacks.rs | impl VehicleCallbackMasks::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
       1
     ],
     "rust/openttd-kernels/src/newgrf_class.rs | fn allocate | cast_possible_truncation | 0abd132a04124a1fea40": [
@@ -15257,10 +15326,10 @@
     "rust/openttd-kernels/src/newgrf_vehicle.rs | fn signed_property | undocumented_unsafe_blocks | 7b955404acb5b22fa152": [
       1
     ],
-    "rust/openttd-kernels/src/newgrf_vehicle.rs | fn trigger | multiple_unsafe_ops_per_block | b64c4190884d8fca7270": [
+    "rust/openttd-kernels/src/newgrf_vehicle.rs | fn trigger | multiple_unsafe_ops_per_block | b1aa01097666d3dc3c5f": [
       2
     ],
-    "rust/openttd-kernels/src/newgrf_vehicle.rs | fn trigger | undocumented_unsafe_blocks | d96814a123d3f6d09798": [
+    "rust/openttd-kernels/src/newgrf_vehicle.rs | fn trigger | undocumented_unsafe_blocks | 16909afeff0f07870422": [
       1
     ],
     "rust/openttd-kernels/src/newgrf_vehicle.rs | fn variable | cast_possible_truncation | 2adaf0d21400a9a9e74e": [
@@ -15339,6 +15408,9 @@
       104,
       106,
       520
+    ],
+    "rust/openttd-kernels/src/object_type.rs | impl ObjectAnimationTriggers::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
     ],
     "rust/openttd-kernels/src/objectives.rs | fn delete_elements | multiple_unsafe_ops_per_block | 693069e31a238b844f0a": [
       4
@@ -15973,6 +16045,18 @@
       1
     ],
     "rust/openttd-kernels/src/objects.rs | impl World < ' _ >::fn transmitter | undocumented_unsafe_blocks | 81d0c987fc63c00465f3": [
+      1
+    ],
+    "rust/openttd-kernels/src/openttd.rs | impl PauseModes::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/order_type.rs | impl OrderDepotActionFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/order_type.rs | impl OrderDepotTypeFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/order_type.rs | impl OrderNonStopFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
       1
     ],
     "rust/openttd-kernels/src/orders.rs | fn openttd_rust_order_equals | multiple_unsafe_ops_per_block | c28c274b702b08938683": [
@@ -22071,6 +22155,21 @@
     "rust/openttd-kernels/src/station_service.rs | module | undocumented_unsafe_blocks | fc3cde8ee7be7cf93ba0": [
       1
     ],
+    "rust/openttd-kernels/src/station_type.rs | impl AirportAnimationTriggers::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/station_type.rs | impl StationAnimationTriggers::fn from_element | cast_possible_truncation | 43094853ec7f4a0ceee8": [
+      1
+    ],
+    "rust/openttd-kernels/src/station_type.rs | impl StationFacilities::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/station_type.rs | impl StationRandomTriggers::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/string_type.rs | impl StringValidationSettings::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
     "rust/openttd-kernels/src/subsidy.rs | fn each | undocumented_unsafe_blocks | 6d142dd3f854a1cdbf66": [
       1
     ],
@@ -22254,6 +22353,9 @@
       1
     ],
     "rust/openttd-kernels/src/subsidy.rs | impl Services::fn transfer | undocumented_unsafe_blocks | af28d0f4023c177dea48": [
+      1
+    ],
+    "rust/openttd-kernels/src/subsidy_type.rs | impl PartsOfSubsidy::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
       1
     ],
     "rust/openttd-kernels/src/tcp_content_type.rs | fn openttd_rust_content_is_selected | undocumented_unsafe_blocks | 8e84b37441f84792d775": [
@@ -27342,6 +27444,12 @@
     "rust/openttd-kernels/src/vehicle_transactions/refit.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       151,
       239
+    ],
+    "rust/openttd-kernels/src/vehicle_type.rs | impl DepotCommandFlags::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
+    ],
+    "rust/openttd-kernels/src/vehicle_type.rs | impl VehicleRandomTriggers::fn from_element | cast_possible_truncation | e036456664eb869629d6": [
+      1
     ],
     "rust/openttd-kernels/src/water.rs | fn dirty_water_neighbours | undocumented_unsafe_blocks | ec54b25573073febf134": [
       1

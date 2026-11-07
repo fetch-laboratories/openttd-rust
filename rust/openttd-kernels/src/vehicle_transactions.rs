@@ -428,9 +428,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_generate_list_abi(
     })
 }
 
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct GrfStringId(pub u32);
 #[repr(C)]
 pub struct AircraftStartState {
     pub state: u8,
@@ -707,3 +704,6 @@ impl TransactionServices {
         )
     }
 }
+
+/// Compatibility import of the original header identity.
+pub use crate::newgrf_text_type::GRFStringID as GrfStringId;

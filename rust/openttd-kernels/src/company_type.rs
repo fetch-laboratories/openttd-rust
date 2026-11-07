@@ -59,6 +59,7 @@ impl CompanyID {
 
 /// Native name limits, including the terminating character.
 pub const MAX_LENGTH_COMPANY_NAME_CHARS: usize = 32;
+/// Native `MAX_LENGTH_PRESIDENT_NAME_CHARS`.
 pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;
 
 /// Company allow-list addition.
@@ -77,3 +78,8 @@ pub(crate) const CCA_DELETE: u8 = 2;
 pub(crate) const CRR_NONE: u8 = 0;
 /// `CompanyRemoveReason::CRR_BANKRUPT`.
 pub(crate) const CRR_BANKRUPT: u8 = 2;
+
+impl CompanyID {
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(15);
+}
