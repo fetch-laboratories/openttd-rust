@@ -83,8 +83,10 @@ def rust_site(path: str, text: str, start: int, end: int, lint: str) -> tuple[st
             site = compact(clean[start : start + 180]).split(";", 1)[0][:160]
     depth = 1
     if lint == "excessive_nesting" and containing:
-        scope = clean[containing[-1][0] : end]
-        level = 0
+        prefix = clean[containing[-1][0] : start]
+        scope = clean[start:end]
+        level = prefix.count("{") - prefix.count("}")
+        depth = max(depth, level)
         for token in re.findall(r"[{}]", scope):
             level += 1 if token == "{" else -1
             depth = max(depth, level)

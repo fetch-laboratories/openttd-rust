@@ -117,6 +117,20 @@ class DebtTests(unittest.TestCase):
         )[0]
         self.assertNotEqual(a, b)
 
+    def test_nesting_magnitude_ignores_earlier_deeper_blocks(self) -> None:
+        old = "fn work() { if a { if b { if c { deeper(); } } } if d { work(); } }"
+        start = old.index("{ work();")
+        key, magnitude = LINT.rust_site(
+            "x.rs", old, start, start + 11, "excessive_nesting"
+        )
+        new = old.replace("if d { work(); }", "if d { if e { work(); } }")
+        other = new.index("{ work();")
+        key2, grown = LINT.rust_site(
+            "x.rs", new, other, other + 11, "excessive_nesting"
+        )
+        self.assertEqual(key, key2)
+        self.assertEqual(grown, magnitude + 1)
+
     def test_clippy_deduplicates_targets_but_preserves_two_sites(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
