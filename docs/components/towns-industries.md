@@ -152,3 +152,9 @@
 - Field/count initialization, generating context, climate goals, layout/RNG decisions, growth iteration and directory/noise callbacks keep their captured operations and order. Raw service/record contracts and native ownership are unchanged.
 - Limits: Inherited initialization/assertion ordering and finite raw-setting, mod/save and scheduling coverage remain on #156. Other Town families remain in the cleanup workset.
 - PRs: #783, integrated in #786.
+
+## Original Town placement and coastal vocabulary (#734)
+
+- Grid alignment, placement checks and coastal search use the original helper names, canonical tile/layout/ground values and explanatory comments. Map-edge and close-town checks, spiral counts and height bounds, short circuits, scan order, strict furthest-distance selection and the invalid-tile sentinel retain their captured operations.
+- Native map/pool storage, service observations, records and raw interfaces remain unchanged. Source review, the exact unchanged depth-6 lint carry and exact-head Full pass; archive equivalence is unclaimed. Inherited read-staging differences and coverage limits remain on #156.
+- PRs: #790, integration 122. Other Town vocabulary remains in the cleanup workset.
