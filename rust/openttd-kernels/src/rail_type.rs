@@ -35,7 +35,6 @@ pub const INVALID_RAILTYPES: u64 = u64::MAX;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl RailType {
     /// Used for iterations
     pub const RAILTYPE_BEGIN: Self = Self(0);
@@ -63,7 +62,6 @@ impl RailTypes {
     pub const EMPTY: Self = Self(0);
     /// Set containing the named element (the element is a bit position).
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub const fn from_element(element: RailType) -> Self {
         Self(1_u64 << element.0)
     }
@@ -73,7 +71,7 @@ impl RailTypes {
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RailType) -> bool {
-        (self.0 as u64) & (1_u64 << element.0) != 0
+        self.0 & (1_u64 << element.0) != 0
     }
     /// Native bit-set union.
     #[must_use]

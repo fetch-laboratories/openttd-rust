@@ -87,7 +87,6 @@ pub const FOUNDATION_RAIL_N: u8 = Foundation::FOUNDATION_RAIL_N.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Corner(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl Corner {
     /// Native `CORNER_W`.
     pub const CORNER_W: Self = Self(0);
@@ -103,7 +102,6 @@ impl Corner {
     pub const CORNER_INVALID: Self = Self(255);
 }
 
-#[allow(non_upper_case_globals)]
 impl Slope {
     /// a flat tile
     pub const SLOPE_FLAT: Self = Self(0);
@@ -161,7 +159,6 @@ impl Slope {
     pub const SLOPE_HALFTILE_N: Self = Self(224);
 }
 
-#[allow(non_upper_case_globals)]
 impl Foundation {
     /// The tile has no foundation, the slope remains unchanged.
     pub const FOUNDATION_NONE: Self = Self(0);
@@ -183,15 +180,15 @@ impl Foundation {
     pub const FOUNDATION_HALFTILE_E: Self = Self(8);
     /// Level north halftile non-continuously.
     pub const FOUNDATION_HALFTILE_N: Self = Self(9);
-    /// Foundation for TRACK_BIT_LEFT, but not a leveled foundation.
+    /// Foundation for `TRACK_BIT_LEFT`, but not a leveled foundation.
     pub const FOUNDATION_RAIL_W: Self = Self(10);
-    /// Foundation for TRACK_BIT_LOWER, but not a leveled foundation.
+    /// Foundation for `TRACK_BIT_LOWER`, but not a leveled foundation.
     pub const FOUNDATION_RAIL_S: Self = Self(11);
-    /// Foundation for TRACK_BIT_RIGHT, but not a leveled foundation.
+    /// Foundation for `TRACK_BIT_RIGHT`, but not a leveled foundation.
     pub const FOUNDATION_RAIL_E: Self = Self(12);
-    /// Foundation for TRACK_BIT_UPPER, but not a leveled foundation.
+    /// Foundation for `TRACK_BIT_UPPER`, but not a leveled foundation.
     pub const FOUNDATION_RAIL_N: Self = Self(13);
-    /// Used inside "rail_cmd.cpp" to indicate invalid slope/track combination.
+    /// Used inside "`rail_cmd.cpp`" to indicate invalid slope/track combination.
     pub const FOUNDATION_INVALID: Self = Self(255);
 }
 

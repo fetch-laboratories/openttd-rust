@@ -12,9 +12,9 @@ impl ObjectID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(16711680);
+    pub const END: Self = Self(16_711_680);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(4294967295);
+    pub const INVALID: Self = Self(4_294_967_295);
 }
 
 /// Native `ObjectAnimationTrigger`, retaining every underlying `u8` value.

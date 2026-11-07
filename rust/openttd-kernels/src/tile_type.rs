@@ -98,7 +98,6 @@ pub const DEF_SNOWLINE_HEIGHT: u8 = 10;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TropicZone(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TropicZone {
     /// Normal tropiczone
     pub const TROPICZONE_NORMAL: Self = Self(0);

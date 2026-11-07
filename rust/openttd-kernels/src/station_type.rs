@@ -192,7 +192,6 @@ impl StationFacility {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StationHadVehicleOfType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl StationHadVehicleOfType {
     /// Station has seen no vehicles
     pub const HVOT_NONE: Self = Self(0);
@@ -206,7 +205,7 @@ impl StationHadVehicleOfType {
     pub const HVOT_AIRCRAFT: Self = Self(16);
     /// Station has seen a ship
     pub const HVOT_SHIP: Self = Self(32);
-    /// Station is a waypoint (NewGRF only!)
+    /// Station is a waypoint (`NewGRF` only!)
     pub const HVOT_WAYPOINT: Self = Self(64);
 }
 

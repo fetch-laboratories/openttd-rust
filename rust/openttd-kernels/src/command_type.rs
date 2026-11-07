@@ -106,7 +106,7 @@ impl DoCommandFlag {
     pub const AutoReplace: Self = Self(6);
     /// when autoreplace/autorenew is in progress, this shall prevent truncating the amount of cargo in the vehicle to prevent testing the command to remove cargo
     pub const NoCargoCapacityCheck: Self = Self(7);
-    /// allow this command also on MP_VOID tiles
+    /// allow this command also on `MP_VOID` tiles
     pub const AllTiles: Self = Self(8);
     /// do not change town rating
     pub const NoModifyTownRating: Self = Self(9);
@@ -127,17 +127,17 @@ impl CommandFlag {
     pub const Spectator: Self = Self(1);
     /// the command cannot be executed in a multiplayer game; single-player only
     pub const Offline: Self = Self(2);
-    /// set the DoCommandFlag::Auto flag on this command
+    /// set the `DoCommandFlag::Auto` flag on this command
     pub const Auto: Self = Self(3);
-    /// allow this command also on MP_VOID tiles
+    /// allow this command also on `MP_VOID` tiles
     pub const AllTiles: Self = Self(4);
     /// the command's output may differ between test and execute due to town rating changes etc.
     pub const NoTest: Self = Self(5);
-    /// set the DoCommandFlag::NoWater flag on this command
+    /// set the `DoCommandFlag::NoWater` flag on this command
     pub const NoWater: Self = Self(6);
-    /// set p2 with the ClientID of the sending client.
+    /// set p2 with the `ClientID` of the sending client.
     pub const ClientID: Self = Self(7);
-    /// the command may be executed by COMPANY_DEITY
+    /// the command may be executed by `COMPANY_DEITY`
     pub const Deity: Self = Self(8);
     /// the command's string may contain control strings
     pub const StrCtrl: Self = Self(9);
@@ -239,7 +239,6 @@ impl CommandFlags {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Commands(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl Commands {
     /// build a rail track
     pub const CMD_BUILD_RAILROAD_TRACK: Self = Self(0);
@@ -441,7 +440,7 @@ impl Commands {
     pub const CMD_SET_GOAL_COMPLETED: Self = Self(98);
     /// ask a goal related question
     pub const CMD_GOAL_QUESTION: Self = Self(99);
-    /// answer(s) to CMD_GOAL_QUESTION
+    /// answer(s) to `CMD_GOAL_QUESTION`
     pub const CMD_GOAL_QUESTION_ANSWER: Self = Self(100);
     /// create a new story page
     pub const CMD_CREATE_STORY_PAGE: Self = Self(101);

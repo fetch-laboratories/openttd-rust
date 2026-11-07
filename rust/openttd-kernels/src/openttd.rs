@@ -57,6 +57,7 @@ impl PauseMode {
     pub const GAME_SCRIPT: Self = Self::GameScript;
     pub const LINK_GRAPH: Self = Self::LinkGraph;
     pub const COMMAND_DURING_PAUSE: Self = Self::CommandDuringPause;
+    #[must_use]
     pub const fn bit(self) -> u8 {
         1 << self.0
     }
@@ -68,11 +69,11 @@ impl PauseMode {
     pub const Normal: Self = Self(0);
     /// A game paused for saving/loading
     pub const SaveLoad: Self = Self(1);
-    /// A game paused for 'pause_on_join'
+    /// A game paused for '`pause_on_join`'
     pub const Join: Self = Self(2);
     /// A game paused because a (critical) error
     pub const Error: Self = Self(3);
-    /// A game paused for 'min_active_clients'
+    /// A game paused for '`min_active_clients`'
     pub const ActiveClients: Self = Self(4);
     /// A game paused by a game script
     pub const GameScript: Self = Self(5);

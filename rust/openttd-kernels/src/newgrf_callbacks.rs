@@ -166,7 +166,6 @@ pub const VEHICLE_LENGTH: u16 = VehicleCallbackMasks::from_element(VehicleCallba
 pub const VEHICLE_LOAD_AMOUNT: u16 =
     VehicleCallbackMasks::from_element(VehicleCallbackMask::LoadAmount).0;
 
-#[allow(non_upper_case_globals)]
 impl CallbackID {
     /// Set when using the callback resolve system, but not to resolve a callback.
     /// Native `CBID_NO_CALLBACK`.
@@ -189,7 +188,7 @@ impl CallbackID {
     /// Choose a tile layout to draw, instead of the standard range.
     /// Native `CBID_STATION_DRAW_TILE_LAYOUT`.
     pub const CBID_STATION_DRAW_TILE_LAYOUT: Self = Self(20);
-    /// Refit capacity, the passed vehicle needs to have its ->cargo_type set to the cargo we are refitting to, returns the new cargo capacity.
+    /// Refit capacity, the passed vehicle needs to have its `cargo_type` set to the cargo we are refitting to, returns the new cargo capacity.
     /// 15 bit callback
     pub const CBID_VEHICLE_REFIT_CAPACITY: Self = Self(21);
     /// Builds articulated engines for trains and RVs.
@@ -414,7 +413,7 @@ impl CallbackID {
     /// Called to determine probability during build.
     /// 15 bit callback
     pub const CBID_VEHICLE_BUILD_PROBABILITY: Self = Self(354);
-    /// Called to get custom engine refit mask. Called once for each defined cargo after all NewGRFs are loaded.
+    /// Called to get custom engine refit mask. Called once for each defined cargo after all `NewGRFs` are loaded.
     /// 15 bit callback
     pub const CBID_VEHICLE_CUSTOM_REFIT: Self = Self(355);
 }

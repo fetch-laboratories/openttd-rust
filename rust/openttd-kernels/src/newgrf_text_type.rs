@@ -7,7 +7,7 @@
 
 //! Shared definitions from `newgrf_text_type.h`.
 
-/// GRF-internal string ID, distinct from an OpenTTD string ID.
+/// GRF-internal string ID, distinct from an `OpenTTD` string ID.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GRFStringID(pub u32);

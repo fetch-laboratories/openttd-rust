@@ -22,6 +22,11 @@ pub const TEXT_TAB_NEWGRF_START: u32 = StringTab::TEXT_TAB_NEWGRF_START.0 as u32
 /// Maximum GRF text entries (`TAB_SIZE_NEWGRF`).
 pub const TAB_SIZE_NEWGRF: usize = (1 << TAB_SIZE_BITS) * 256;
 /// `MakeStringID(TEXT_TAB_NEWGRF_START, index)`.
+///
+/// # Panics
+/// The caller supplies a string-table index; an index above `u32::MAX` cannot
+/// be represented by the native string ID.
+#[must_use]
 pub fn grf_string_id(index: usize) -> u32 {
     (TEXT_TAB_NEWGRF_START << TAB_SIZE_BITS) + u32::try_from(index).unwrap()
 }
@@ -46,7 +51,6 @@ impl StringID {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TextDirection(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TextDirection {
     /// Text is written left-to-right by default
     pub const TD_LTR: Self = Self(0);
@@ -59,7 +63,6 @@ impl TextDirection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StringTab(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl StringTab {
     /// Native `TEXT_TAB_TOWN`.
     pub const TEXT_TAB_TOWN: Self = Self(4);
@@ -77,8 +80,8 @@ impl StringTab {
     pub const TEXT_TAB_OLD_NEWGRF: Self = Self(26);
     /// End of language files.
     pub const TEXT_TAB_END: Self = Self(32);
-    /// Start of GameScript supplied strings.
+    /// Start of `GameScript` supplied strings.
     pub const TEXT_TAB_GAMESCRIPT_START: Self = Self(32);
-    /// Start of NewGRF supplied strings.
+    /// Start of `NewGRF` supplied strings.
     pub const TEXT_TAB_NEWGRF_START: Self = Self(64);
 }

@@ -104,7 +104,6 @@ pub(crate) fn is_field_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClearGround(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl ClearGround {
     /// 0-3
     pub const CLEAR_GRASS: Self = Self(0);

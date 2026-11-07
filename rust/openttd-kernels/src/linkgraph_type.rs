@@ -46,6 +46,7 @@ impl EdgeUpdateModes {
     /// `EdgeUpdateMode::Unrestricted`.
     pub const UNRESTRICTED: Self = Self(1 << 3);
     /// `EnumBitSet::Test`, for one named update mode.
+    #[must_use]
     pub const fn test(self, mode: Self) -> bool {
         self.0 & mode.0 != 0
     }

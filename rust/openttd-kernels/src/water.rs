@@ -854,7 +854,6 @@ extern "C" fn unused_region_context() -> crate::water_regions::Context {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FloodingBehaviour(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl FloodingBehaviour {
     /// The tile does not flood neighboured tiles.
     pub const FLOOD_NONE: Self = Self(0);

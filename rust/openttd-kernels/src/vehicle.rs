@@ -27,6 +27,12 @@ pub use crate::vehicle_type::OpenTTDVehicle;
 /// including sentinels and unnamed values, without Rust enum validity constraints.
 pub use crate::vehicle_type::VehicleType;
 
+/// Compatibility import of the original header type.
+pub use crate::order_type::OrderType;
+
+/// Compatibility import of the original header type.
+pub use crate::engine_type::RailVehicleTypes;
+
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -420,9 +426,3 @@ mod tests {
         assert_eq!(advance_distance(3), 192);
     }
 }
-
-/// Compatibility import of the original header type.
-pub use crate::order_type::OrderType;
-
-/// Compatibility import of the original header type.
-pub use crate::engine_type::RailVehicleTypes;

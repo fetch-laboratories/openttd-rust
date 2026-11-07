@@ -989,7 +989,7 @@ impl SpriteGroupID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(1073741824);
+    pub const END: Self = Self(1_073_741_824);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(4294967295);
+    pub const INVALID: Self = Self(4_294_967_295);
 }
