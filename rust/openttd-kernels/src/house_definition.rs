@@ -20,12 +20,14 @@ use crate::cargo_type::{
 use crate::debug::{Bytes, debug, grf_msg};
 use crate::gfx_type::{COLOUR_BLUE, COLOUR_GREEN, COLOUR_ORANGE, COLOUR_RED};
 use crate::house::{
-    BUILDING_HAS_1_TILE, BUILDING_HAS_2_TILES, BUILDING_HAS_4_TILES, BUILDING_IS_CHURCH,
-    BUILDING_IS_STADIUM, HOUSE_NUM_ACCEPTS, HOUSE_ORIGINAL_NUM_ACCEPTS, HZ_CLIMATE_ALL,
-    HZ_ZONE_ALL, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, NUM_HOUSES, NUM_HOUSES_PER_GRF,
+    BuildingFlag, BuildingFlags, HOUSE_NUM_ACCEPTS, HOUSE_ORIGINAL_NUM_ACCEPTS, HouseExtraFlags,
+    HouseZones, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, NUM_HOUSES, NUM_HOUSES_PER_GRF,
 };
-use crate::newgrf_animation_type::{ANIMATION_LOOPING, ANIMATION_NON_LOOPING};
+use crate::landscape_type::LandscapeType;
+use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
+use crate::newgrf_callbacks::HouseCallbackMasks;
+use crate::newgrf_internal::ChangeInfoResult;
 use crate::timer_game_common::{MAX_YEAR, MIN_YEAR, ORIGINAL_BASE_YEAR};
 use crate::{newgrf_loading, override_manager};
 use std::ffi::c_void;
@@ -122,7 +124,8 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
-fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
+/// Ignore a house property, retaining its original byte consumption.
+fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<ChangeInfoResult, ReadError> {
     match prop {
         0x09 | 0x0b..=0x0f | 0x11 | 0x14..=0x16 | 0x18..=0x1d | 0x1f => {
             reader.byte()?;
@@ -148,10 +151,11 @@ fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> 
             let count = reader.byte()?;
             reader.skip(usize::from(count) * 2)?;
         }
-        _ => return Ok(3),
+        _ => return Ok(ChangeInfoResult::CIR_UNKNOWN),
     }
-    Ok(0)
+    Ok(ChangeInfoResult::CIR_SUCCESS)
 }
+/// Define properties for the local house ID interval.
 fn property(
     s: &Services,
     loading: &newgrf_loading::Services,
@@ -160,7 +164,7 @@ fn property(
     last: u32,
     prop: i32,
     reader: &mut Reader<'_>,
-) -> Result<u8, ReadError> {
+) -> Result<ChangeInfoResult, ReadError> {
     if last > NUM_HOUSES_PER_GRF {
         grf_msg!(
             1,
@@ -171,27 +175,33 @@ fn property(
         unsafe {
             newgrf_loading::disable_invalid_id(loading);
         }
-        return Ok(1);
+        return Ok(ChangeInfoResult::CIR_DISABLED);
     }
+    // Allocate house specs if they have not been allocated already.
     if (s.local_count)(file) < last as usize {
         (s.resize_local)(file, last as usize);
     }
-    let mut result = 0;
+    let mut result = ChangeInfoResult::CIR_SUCCESS;
     for id in first..last {
         let spec = (s.local)(file, id as usize);
         if prop != 0x08 && spec.is_null() {
+            // If property 08 is not yet set, ignore this property.
             result = result.max(ignore_property(prop, reader)?);
             continue;
         }
         match prop {
+            // Substitute building type and definition of a new house.
             0x08 => {
                 let substitute = reader.byte()?;
                 if substitute == 0xff {
+                    // A substitute ID of 0xFF disables the old house with the current ID
+                    // instead of defining a new house.
                     if id < u32::from(NEW_HOUSE_OFFSET) {
                         (s.set_enabled)((s.get)(id as u16), false);
                     }
                     continue;
                 } else if u16::from(substitute) >= NEW_HOUSE_OFFSET {
+                    // The substitute ID must be one of the original houses.
                     grf_msg!(
                         2,
                         "TownHouseChangeInfo: Attempt to use new house {} as substitute house for {}. Ignoring.",
@@ -200,19 +210,34 @@ fn property(
                     );
                     continue;
                 }
+                // Allocate space for this house.
                 if spec.is_null() {
+                    // Only the first property 08 setting copies properties; later changes
+                    // leave the properties in place.
                     let source = (s.get)(u16::from(substitute));
                     let spec = (s.copy_substitute)(file, id as u16, source);
                     (s.set_enabled)(spec, true);
                     (s.set_identity)(spec, file, id as u16, u16::from(substitute));
+                    // Default randomization colours, used if not overridden.
                     for (index, colour) in [COLOUR_RED, COLOUR_BLUE, COLOUR_ORANGE, COLOUR_GREEN]
                         .into_iter()
                         .enumerate()
                     {
                         (s.set_colour)(spec, index as u8, colour);
                     }
-                    let flags = (s.flags)(spec);
-                    (s.set_flags)(spec, flags & !(BUILDING_IS_CHURCH | BUILDING_IS_STADIUM));
+                    // House flags 40 and 80 are exceptions: never set them automatically.
+                    let flags = BuildingFlags((s.flags)(spec));
+                    (s.set_flags)(
+                        spec,
+                        flags
+                            .without(
+                                BuildingFlags::from_element(BuildingFlag::IsChurch)
+                                    .with(BuildingFlags::from_element(BuildingFlag::IsStadium)),
+                            )
+                            .0,
+                    );
+                    // Ensure the third cargo type is valid in this climate. Copying a
+                    // food-accepting house can otherwise cause problems in temperate games.
                     let cargo = (s.cargo)(spec, 2);
                     let cargo = if is_valid_cargo_type(cargo.cargo) {
                         cargo.cargo
@@ -224,7 +249,9 @@ fn property(
                     }
                 }
             }
-            0x09 => (s.set_flags)(spec, reader.byte()?),
+            // Building flags.
+            0x09 => (s.set_flags)(spec, BuildingFlags(reader.byte()?).0),
+            // Availability years.
             0x0a => {
                 let years = reader.word()?;
                 let year = |v: u8| {
@@ -237,13 +264,20 @@ fn property(
                 (s.set_min_year)(spec, year(years as u8));
                 (s.set_max_year)(spec, year((years >> 8) as u8));
             }
+            // Population.
             0x0b => (s.set_population)(spec, reader.byte()?),
+            // Mail generation multiplier.
             0x0c => (s.set_mail)(spec, reader.byte()?),
+            // Passenger acceptance and mail acceptance.
             0x0d | 0x0e => (s.set_acceptance)(spec, (prop - 0x0d) as u8, reader.byte()?),
+            // Goods/candy, food/fizzy drinks acceptance.
             0x0f => {
                 let mut goods = i16::from(reader.byte()? as i8);
-                let toyland = unsafe { (*s.resolver).shared().settings().climate.read() }
-                    == crate::landscape_type::TOYLAND;
+                // Negative goods acceptance means food, or fizzy drinks in toyland.
+                // Nonnegative values mean goods, or candy in toyland.
+                let toyland =
+                    LandscapeType(unsafe { (*s.resolver).shared().settings().climate.read() })
+                        == LandscapeType::Toyland;
                 let label = if goods >= 0 {
                     if toyland { CT_CANDY } else { CT_GOODS }
                 } else if toyland {
@@ -252,23 +286,32 @@ fn property(
                     CT_FOOD
                 };
                 let cargo = by_label(label);
+                // Make sure the cargo type is valid in this climate.
                 if !is_valid_cargo_type(cargo) {
                     goods = 0;
                 }
                 (s.set_cargo)(spec, 2, cargo);
                 (s.set_label)(spec, 2, CT_INVALID);
+                // Acceptance needs the positive value.
                 (s.set_acceptance)(spec, 2, goods.unsigned_abs() as u8);
             }
+            // Local authority rating decrease on removal.
             0x10 => (s.set_rating)(spec, reader.word()?),
+            // Removal cost multiplier.
             0x11 => (s.set_removal)(spec, reader.byte()?),
+            // Building name ID.
             0x12 => (s.map_string)(spec, reader.word()?),
-            0x13 => (s.set_availability)(spec, reader.word()?),
+            // Building availability mask.
+            0x13 => (s.set_availability)(spec, HouseZones(reader.word()?).0),
+            // House callback mask.
             0x14 => {
-                let mask = (s.callbacks)(spec);
-                (s.set_callbacks)(spec, (mask & 0xff00) | u16::from(reader.byte()?));
+                let mask = HouseCallbackMasks((s.callbacks)(spec));
+                (s.set_callbacks)(spec, (mask.0 & 0xff00) | u16::from(reader.byte()?));
             }
+            // House override byte.
             0x15 => {
                 let target = reader.byte()?;
+                // The house being overridden must be an original house.
                 if u16::from(target) >= NEW_HOUSE_OFFSET {
                     grf_msg!(
                         2,
@@ -287,27 +330,34 @@ fn property(
                     );
                 }
             }
+            // Periodic refresh multiplier.
             0x16 => (s.set_processing)(spec, reader.byte()?.min(63)),
+            // Four random colours to use.
             0x17 => {
                 for index in 0..4 {
                     (s.set_colour)(spec, index, reader.byte()? & 0x0f);
                 }
             }
+            // Relative probability of appearing.
             0x18 => (s.set_probability)(spec, reader.byte()?),
-            0x19 => (s.set_extra)(spec, reader.byte()?),
+            // Extra flags.
+            0x19 => (s.set_extra)(spec, HouseExtraFlags(reader.byte()?).0),
+            // Animation frames.
             0x1a => {
                 let info = reader.byte()?;
                 (s.set_animation)(
                     spec,
                     info & 0x7f,
                     if info & 0x80 != 0 {
-                        ANIMATION_LOOPING
+                        AnimationStatus::Looping.0
                     } else {
-                        ANIMATION_NON_LOOPING
+                        AnimationStatus::NonLooping.0
                     },
                 );
             }
+            // Animation speed.
             0x1b => (s.set_animation_speed)(spec, reader.byte()?.clamp(2, 16)),
+            // Class of the building type.
             0x1c => {
                 let class = crate::town::resolver::openttd_rust_house_class_allocate(
                     reader.byte()?,
@@ -315,26 +365,33 @@ fn property(
                 );
                 (s.set_class_id)(spec, class);
             }
+            // Callback mask part 2.
             0x1d => {
-                let mask = (s.callbacks)(spec);
-                (s.set_callbacks)(spec, (mask & 0x00ff) | (u16::from(reader.byte()?) << 8));
+                let mask = HouseCallbackMasks((s.callbacks)(spec));
+                (s.set_callbacks)(spec, (mask.0 & 0x00ff) | (u16::from(reader.byte()?) << 8));
             }
+            // Accepted cargo types.
             0x1e => {
                 let cargos = reader.dword()?;
+                // Check whether the cargo types should stay unchanged.
                 if cargos == u32::MAX {
                     continue;
                 }
                 for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
+                    // Get the cargo number from the list.
                     let cargo = translate((cargos >> (8 * index)) as u8, file, false);
                     if is_valid_cargo_type(cargo) {
                         (s.set_cargo)(spec, index, cargo);
                     } else {
+                        // Disable acceptance of an invalid cargo type.
                         (s.set_acceptance)(spec, index, 0);
                     }
                     (s.set_label)(spec, index, CT_INVALID);
                 }
             }
+            // Minimum life span.
             0x1f => (s.set_minimum_life)(spec, reader.byte()?),
+            // Cargo acceptance watch list.
             0x20 => {
                 let count = reader.byte()?;
                 for _ in 0..count {
@@ -344,7 +401,9 @@ fn property(
                     }
                 }
             }
+            // Long introduction year.
             0x21 => (s.set_min_year)(spec, i32::from(reader.word()?)),
+            // Long maximum year.
             0x22 => {
                 let year = reader.word()?;
                 (s.set_max_year)(
@@ -356,14 +415,17 @@ fn property(
                     },
                 );
             }
+            // Variable length cargo types accepted.
             0x23 => {
                 let count = reader.byte()?;
                 if count > HOUSE_NUM_ACCEPTS {
                     unsafe {
                         newgrf_loading::disable_list_property(loading, prop as u32);
                     }
-                    return Ok(1);
+                    return Ok(ChangeInfoResult::CIR_DISABLED);
                 }
+                // Always write the full accepts_cargo array, checking each index against
+                // the provided data to initialize all values and avoid array overruns.
                 for index in 0..HOUSE_NUM_ACCEPTS {
                     if index < count {
                         (s.set_cargo)(spec, index, translate(reader.byte()?, file, false));
@@ -377,10 +439,11 @@ fn property(
                     }
                 }
             }
+            // Badge list.
             0x24 => unsafe {
                 reader.badges(crate::newgrf::GSF_HOUSES, (s.badges)(spec))?;
             },
-            _ => result = 3,
+            _ => result = ChangeInfoResult::CIR_UNKNOWN,
         }
     }
     Ok(result)
@@ -406,13 +469,15 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
         prop,
         &mut reader,
     )
-    .unwrap_or(u8::MAX)
+    .map_or(u8::MAX, |result| result.0)
 }
 
+/// Check a house spec and disable it when invalid; following specs validate multitile houses.
 fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     let info = (s.validity)(spec);
-    let two = info.flags & BUILDING_HAS_2_TILES != 0;
-    let four = info.flags & BUILDING_HAS_4_TILES != 0;
+    let flags = BuildingFlags(info.flags);
+    let two = flags.any(BuildingFlags::BUILDING_HAS_2_TILES);
+    let four = flags.any(BuildingFlags::BUILDING_HAS_4_TILES);
     let part = |spec: Spec| {
         if spec.is_null() {
             None
@@ -424,8 +489,9 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     let next2 = if four { part(next[1]) } else { None };
     let next3 = if four { part(next[2]) } else { None };
     let missing = |part: &Option<Part>| {
-        part.as_ref()
-            .is_none_or(|info| !info.enabled || info.flags & BUILDING_HAS_1_TILE != 0)
+        part.as_ref().is_none_or(|info| {
+            !info.enabled || BuildingFlags(info.flags).any(BuildingFlags::BUILDING_HAS_1_TILE)
+        })
     };
     // The original passes an empty name for files without one, and reports only nonempty names.
     let filename = if file.is_null() {
@@ -447,6 +513,9 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
         }
         return false;
     }
+    // Some places count population only on north tiles, others on all tiles, causing
+    // desyncs. NewGRF requires zero population on non-north tiles, so disable offenders.
+    // Allowing nonzero population would require summing all tiles everywhere.
     if (two && next1.as_ref().is_some_and(|info| info.population != 0))
         || (four
             && (next2.as_ref().is_some_and(|info| info.population != 0)
@@ -464,9 +533,11 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
         }
         return false;
     }
+    // The substitute type is also used for overrides; a different size causes crashes.
+    // Check only NewGRF houses, because original houses have no substitute ID set.
     if report
-        && (info.flags & BUILDING_HAS_1_TILE)
-            != ((s.flags)((s.get)(info.substitute)) & BUILDING_HAS_1_TILE)
+        && (info.flags & BuildingFlags::BUILDING_HAS_1_TILE.0)
+            != ((s.flags)((s.get)(info.substitute)) & BuildingFlags::BUILDING_HAS_1_TILE.0)
     {
         (s.set_enabled)(spec, false);
         debug!(
@@ -478,9 +549,10 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
         );
         return false;
     }
-    if info.flags & BUILDING_HAS_1_TILE == 0
-        && info.availability & HZ_ZONE_ALL != 0
-        && info.availability & HZ_CLIMATE_ALL != 0
+    // Additional parts of multitile houses must not be available.
+    if !flags.any(BuildingFlags::BUILDING_HAS_1_TILE)
+        && HouseZones(info.availability).any(HouseZones::HZ_ZONE_ALL)
+        && HouseZones(info.availability).any(HouseZones::HZ_CLIMATE_ALL)
     {
         (s.set_enabled)(spec, false);
         if report {
@@ -496,11 +568,12 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     }
     true
 }
-fn early_house(s: &Services, mask: u16) {
+/// Ensure a house is available in year 0 for exactly one climate and one town zone.
+fn early_house(s: &Services, mask: HouseZones) {
     let mut min_year = MAX_YEAR;
     for id in 0..(s.count)() {
         let info = (s.early)((s.get)(id as u16));
-        if !info.enabled || info.availability & mask != mask {
+        if !info.enabled || !HouseZones(info.availability).all(mask) {
             continue;
         }
         min_year = min_year.min(info.year);
@@ -511,7 +584,7 @@ fn early_house(s: &Services, mask: u16) {
     for id in 0..(s.count)() {
         let spec = (s.get)(id as u16);
         let info = (s.early)(spec);
-        if !info.enabled || info.availability & mask != mask {
+        if !info.enabled || !HouseZones(info.availability).all(mask) {
             continue;
         }
         if info.year == min_year {
@@ -519,6 +592,7 @@ fn early_house(s: &Services, mask: u16) {
         }
     }
 }
+/// Reset and initialize house specs.
 pub fn reset(s: &Services) {
     (s.clear_specs)();
     (s.reserve_specs)(usize::from(NEW_HOUSE_OFFSET));
@@ -526,9 +600,11 @@ pub fn reset(s: &Services) {
         crate::town::resolver::openttd_rust_house_resolver_exchange(s.resolver);
     }
     crate::town::resolver::openttd_rust_house_classes_reset();
+    // Copy default houses.
     for id in 0..NEW_HOUSE_OFFSET {
         (s.append_default)(id);
     }
+    // Reset any overrides that have been set.
     unsafe {
         override_manager::openttd_rust_override_reset(override_manager::house());
     }
@@ -567,7 +643,12 @@ pub fn publish(s: &Services, spec: Spec) {
         }
     }
 }
+/// Add new houses only after all properties in their GRF file have been loaded,
+/// and check dates to emulate `TTDPatch`'s early-year behavior.
 pub fn finalise(s: &Services) {
+    // TTDPatch pretends a pre-1930 date is 1930 when no houses start before then.
+    // Rather than hard-code 1930, reset houses with the lowest introduction date
+    // to year 0; leave later dates alone when earlier houses have been defined.
     for index in 0..(s.file_count)() {
         let file = (s.file_at)(index);
         let count = (s.local_count)(file);
@@ -591,6 +672,7 @@ pub fn finalise(s: &Services) {
             }
             publish(s, spec);
         }
+        // These local specs will not be used again.
         (s.clear_local)(file);
     }
     let mut id = 0;
@@ -603,9 +685,15 @@ pub fn finalise(s: &Services) {
                 std::ptr::null()
             }
         });
+        // Recheck all houses to ensure multitile parts have consecutive IDs and none
+        // are missing.
         if !valid(s, spec, next, std::ptr::null_mut()) {
-            (s.set_flags)(spec, 0);
+            // GetHouseNorthPart checks the three preceding houses for multitile flags.
+            // Disabled invalid houses must not influence valid following tiles: clear
+            // their flags so the following house is handled correctly as a 1x1 house.
+            (s.set_flags)(spec, BuildingFlags(0).0);
         }
+        // Apply the default cargo translation map for unset cargo slots.
         for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
             let info = (s.cargo)(spec, index);
             let cargo = if is_valid_cargo_type(info.cargo) {
@@ -615,6 +703,7 @@ pub fn finalise(s: &Services) {
                 (s.set_cargo)(spec, index, cargo);
                 cargo
             };
+            // Disable acceptance if the cargo type is invalid.
             if !is_valid_cargo_type(cargo) {
                 (s.set_acceptance)(spec, index, 0);
             }
@@ -626,8 +715,8 @@ pub fn finalise(s: &Services) {
     for climate in 0..16 {
         if climates & (1 << climate) != 0 {
             for zone in 0..16 {
-                if HZ_ZONE_ALL & (1 << zone) != 0 {
-                    early_house(s, (1 << climate) | (1 << zone));
+                if HouseZones::HZ_ZONE_ALL.0 & (1 << zone) != 0 {
+                    early_house(s, HouseZones((1 << climate) | (1 << zone)));
                 }
             }
         }
