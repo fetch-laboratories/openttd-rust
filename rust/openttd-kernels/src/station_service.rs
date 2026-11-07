@@ -16,26 +16,29 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_payment::NativePayment;
+use crate::cargo_type::CARGO_AUTO_REFIT;
 use crate::command_type::DoCommandFlag;
+use crate::company_type::{INVALID_OWNER, OWNER_END, OWNER_NONE};
 use crate::linkgraph::live;
+use crate::order_type::{OrderLoadType, OrderUnloadType};
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
+use crate::station_base::goods_entry::{State as GoodsState, States as GoodsStates};
+use crate::station_type::{StationFacilities, StationFacility};
 use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::VehicleRef;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
+use crate::vehicle_type::VehicleType;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 /// `GoodsEntry::ConvertState`: the four history bits keep their native order.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
-    use crate::station_base::{
-        GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED, GE_LAST_MONTH,
-    };
-    ((status >> GE_EVER_ACCEPTED) & 1)
-        | (((status >> GE_LAST_MONTH) & 1) << 1)
-        | (((status >> GE_CURRENT_MONTH) & 1) << 2)
-        | (((status >> GE_ACCEPTED_BIGTICK) & 1) << 3)
+    ((status >> GoodsState::EverAccepted.0) & 1)
+        | (((status >> GoodsState::LastMonth.0) & 1) << 1)
+        | (((status >> GoodsState::CurrentMonth.0) & 1) << 2)
+        | (((status >> GoodsState::AcceptedBigtick.0) & 1) << 3)
 }
 
 #[repr(C)]
@@ -91,10 +94,10 @@ pub(crate) unsafe fn always_accepts(state: *const Service, cargo: u8) -> bool {
 /// Record the original `GoodsEntry` delivery history bits.
 /// SAFETY: Live serialized station owner and valid cargo slot.
 pub(crate) unsafe fn record_delivery(state: *mut Service, cargo: u8) {
-    use crate::station_base::{GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED};
     unsafe {
-        (*cp(state, cargo)).status |=
-            (1 << GE_EVER_ACCEPTED) | (1 << GE_CURRENT_MONTH) | (1 << GE_ACCEPTED_BIGTICK);
+        (*cp(state, cargo)).status |= (1 << GoodsState::EverAccepted.0)
+            | (1 << GoodsState::CurrentMonth.0)
+            | (1 << GoodsState::AcceptedBigtick.0);
     };
 }
 /// Clear every goods rating at the failed-bribe point, without crossing back
@@ -137,7 +140,7 @@ pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
             delete_ctr: 0,
             time_since_load: 255,
             time_since_unload: 255,
-            last_vehicle_type: 255,
+            last_vehicle_type: VehicleType::VEH_INVALID.0,
         },
         cargo: [CargoFields::default(); 64],
         queue: Vec::new(),
@@ -445,7 +448,7 @@ pub(crate) unsafe fn newgrf_cargo_variable(
                 }
             }
             0x65 => {
-                if (*ge).status & (1 << crate::station_base::GE_ACCEPTANCE) != 0 {
+                if GoodsStates((*ge).status).test(GoodsState::Acceptance) {
                     8
                 } else {
                     0
@@ -458,21 +461,21 @@ pub(crate) unsafe fn newgrf_cargo_variable(
         }
     }
 }
-unsafe fn status(state: *mut Service, cargo: u8, bit: u8, value: bool) {
+unsafe fn status(state: *mut Service, cargo: u8, bit: GoodsState, value: bool) {
     let p = unsafe { &raw mut (*cp(state, cargo)).status };
     let old = unsafe { p.read() };
     unsafe {
         p.write(if value {
-            old | (1 << bit)
+            old | (1 << bit.0)
         } else {
-            old & !(1 << bit)
+            old & !(1 << bit.0)
         });
     }
 }
 pub(crate) unsafe fn acceptance_mask(state: *mut Service) -> u64 {
     let mut mask = 0;
     for cargo in 0..64 {
-        if unsafe { (*cp(state, cargo)).status } & 1 != 0 {
+        if GoodsStates(unsafe { (*cp(state, cargo)).status }).test(GoodsState::Acceptance) {
             mask |= 1 << cargo;
         }
     }
@@ -524,12 +527,25 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     for cargo in 0..64 {
         let mut amt = acceptance[usize::from(cargo)];
         let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
-        // Train=0,truck=1,bus=2,airport=3,dock=4 in StationFacility.
-        if facilities & if passenger { 0b11101 } else { 0b11011 } == 0 {
+        // Make sure the station can accept this cargo type.
+        if facilities
+            & u32::from(
+                (StationFacilities::from_element(StationFacility::Train)
+                    | StationFacilities::from_element(if passenger {
+                        StationFacility::BusStop
+                    } else {
+                        StationFacility::TruckStop
+                    })
+                    | StationFacilities::from_element(StationFacility::Airport)
+                    | StationFacilities::from_element(StationFacility::Dock))
+                .0,
+            )
+            == 0
+        {
             amt = 0;
         }
         unsafe {
-            status(state, cargo, 0, amt >= 8);
+            status(state, cargo, GoodsState::Acceptance, amt >= 8);
         }
         unsafe {
             live::station_demand(st, cargo, amt / 8, w.graphs);
@@ -557,7 +573,7 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
     let state = (w.owner)(st);
     let mut cargoes = 0_u64;
     for cargo in 0..64 {
-        if unsafe { (*cp(state, cargo)).status } & 32 != 0 {
+        if GoodsStates(unsafe { (*cp(state, cargo)).status }).test(GoodsState::AcceptedBigtick) {
             cargoes |= 1 << cargo;
         }
     }
@@ -579,6 +595,9 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
 // Preserve the complete source rating loop and its immediate mutation order.
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world: *const World) {
+    const WAITING_CARGO_THRESHOLD: u32 = 1 << 12;
+    const WAITING_CARGO_CUT_FACTOR: u32 = 1 << 6;
+    const MAX_WAITING_CARGO: u32 = 1 << 15;
     let w = unsafe { &*world };
     let state = (w.owner)(st);
     let mut waiting_changed = false;
@@ -594,9 +613,12 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             continue;
         }
         let ge = unsafe { cp(state, cargo) };
-        if unsafe { (*ge).status } & 2 == 0 {
+        // The station might not currently be moving this cargo.
+        if !GoodsStates(unsafe { (*ge).status }).test(GoodsState::Rating) {
+            // Slowly restore the initial rating after, for example, a failed
+            // bribe before this cargo ever reached the station.
             unsafe {
-                if (*ge).rating < 175 {
+                if (*ge).rating < crate::station_base::INITIAL_STATION_RATING {
                     (&raw mut (*ge).rating).write((*ge).rating + 1);
                 }
             }
@@ -605,9 +627,10 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
         unsafe {
             (&raw mut (*ge).time_since_pickup).write((*ge).time_since_pickup.saturating_add(1));
         }
+        // Get rid of cargo that has not been picked up in a long time.
         if unsafe { (*ge).time_since_pickup } == 255 && u32::from((w.select_goods)()) != 0 {
             unsafe {
-                status(state, cargo, 1, false);
+                status(state, cargo, GoodsState::Rating, false);
                 (&raw mut (*ge).last_speed).write(0);
                 truncate(st, cargo, u32::MAX, w);
             }
@@ -618,7 +641,12 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
         let mut rating = 0_i32;
         let counts = (w.rating_counts)(st, cargo);
         let mut waiting = counts.available;
+        // INVALID_STATION also counts as a destination, so any cargo has
+        // at least one destination.
         let num_dests = counts.destinations;
+        // Average per next hop, with more allowance for solitary stations
+        // with one or two next hops. Manual distribution has only the invalid
+        // destination and therefore divides waiting by two.
         let waiting_avg = waiting / num_dests.wrapping_add(1);
         if u32::from((w.rating_cheat)()) != 0 {
             unsafe {
@@ -627,6 +655,8 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             rating = 255;
             skip = true;
         } else if u32::from((w.rating_callback_enabled)(cargo)) != 0 {
+            // A successful custom rating skips speed, pickup time and waiting
+            // cargo ratings. NewGRFs expect 0xFF if no vehicle has arrived yet.
             let speed = unsafe { (*ge).last_speed };
             let var18 = unsafe {
                 u32::from((*ge).time_since_pickup)
@@ -634,7 +664,8 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                     | (u32::from(if speed == 0 { 255 } else { speed }) << 24)
             };
             let kind = unsafe { (*state).fields.last_vehicle_type };
-            let var10 = if kind == 255 {
+            // Convert to the old vehicle types.
+            let var10 = if kind == VehicleType::VEH_INVALID.0 {
                 0
             } else {
                 u32::from(kind) + 0x10
@@ -648,9 +679,10 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                     var18,
                 )
             };
-            if cb != 0xffff {
+            if cb != crate::newgrf_callbacks::CALLBACK_FAILED {
                 skip = true;
                 rating = i32::from(cb & 0x3fff);
+                // Simulate a 15-bit signed value.
                 if cb & 0x4000 != 0 {
                     rating -= 0x4000;
                 }
@@ -662,7 +694,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                 rating += b >> 2;
             }
             let mut waittime = unsafe { (*ge).time_since_pickup };
-            if unsafe { (*state).fields.last_vehicle_type } == 2 {
+            if unsafe { (*state).fields.last_vehicle_type } == VehicleType::SHIP.0 {
                 waittime >>= 2;
             }
             if waittime <= 21 {
@@ -709,10 +741,13 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             rating += 13;
         }
         let old_rating = i32::from(unsafe { (*ge).rating });
+        // Only modify the rating in steps of -2, -1, 0, 1 or 2.
         rating = (old_rating + (rating - old_rating).clamp(-2, 2)).clamp(0, 255);
         unsafe {
             (&raw mut (*ge).rating).write(rating as u8);
         }
+        // With rating <= 64 and at least 100 waiting per destination, remove
+        // a random amount of goods.
         if rating <= 64 && waiting_avg >= 100 {
             let mut dec = w.random() & 31;
             if waiting_avg < 200 {
@@ -721,27 +756,34 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             waiting = waiting.wrapping_sub((dec + 1).wrapping_mul(num_dests));
             waiting_changed = true;
         }
+        // With rating <= 127, maybe remove some of the remaining goods.
         if rating <= 127 && waiting != 0 {
             let random = w.random();
             if rating <= (random & 127) as i32 {
+                // Signed arithmetic prevents unsigned overflow here.
                 waiting = (waiting as i32)
                     .wrapping_sub((((random >> 8) & 3) + 1).wrapping_mul(num_dests) as i32)
                     .max(0) as u32;
                 waiting_changed = true;
             }
         }
-        if waiting > 4096 {
-            waiting -= (waiting - 4096) / 64;
-            waiting = waiting.min(32768);
+        // Replace the old strict 4095 cap with increasingly aggressive
+        // truncation as the amount of waiting cargo grows.
+        if waiting > WAITING_CARGO_THRESHOLD {
+            waiting -= (waiting - WAITING_CARGO_THRESHOLD) / WAITING_CARGO_CUT_FACTOR;
+            waiting = waiting.min(MAX_WAITING_CARGO);
             waiting_changed = true;
         }
         let available = (w.available)(st, cargo);
+        // Reserved cargo cannot be truncated. Feed back the exact own waiting
+        // cargo for the next rating calculation.
         if waiting_changed && waiting < available {
             unsafe {
                 (&raw mut (*ge).max_waiting_cargo).write(0);
                 truncate(st, cargo, available - waiting, w);
             }
         } else {
+            // Be more forgiving when the average per next hop is low.
             unsafe {
                 (&raw mut (*ge).max_waiting_cargo).write(waiting_avg);
             }
@@ -758,10 +800,11 @@ pub(crate) unsafe fn openttd_rust_station_monthly(world: *const World) {
         }
         let state = (w.owner)(st);
         for cargo in 0..64 {
-            let current = unsafe { (*cp(state, cargo)).status } & 16 != 0;
+            let current =
+                GoodsStates(unsafe { (*cp(state, cargo)).status }).test(GoodsState::CurrentMonth);
             unsafe {
-                status(state, cargo, 3, current);
-                status(state, cargo, 4, false);
+                status(state, cargo, GoodsState::LastMonth, current);
+                status(state, cargo, GoodsState::CurrentMonth, false);
             }
         }
     }
@@ -792,10 +835,10 @@ unsafe fn admit(
     unsafe {
         live::station_supply(st, cargo, amount, w.graphs, visits.schedule);
     }
-    if unsafe { (*ge).status } & 2 == 0 {
+    if !GoodsStates(unsafe { (*ge).status }).test(GoodsState::Rating) {
         (w.station_list_invalidation)(st, 0);
         unsafe {
-            status(state, cargo, 1, true);
+            status(state, cargo, GoodsState::Rating, true);
         }
     }
     crate::animated_tile::cargo_event(
@@ -832,10 +875,10 @@ pub(crate) unsafe fn distribute(
         crate::station::for_each_station(stations, |entry| {
             let st = entry.station;
             let owner = (w.station_owner)(st);
-            if exclusivity != 255 && exclusivity != owner {
+            if exclusivity != INVALID_OWNER && exclusivity != owner {
                 return;
             }
-            if owner != 16 {
+            if owner != OWNER_NONE {
                 let observed = (w.station_exclusivity)(st);
                 if observed.counter > 0 && observed.exclusive != owner {
                     return;
@@ -850,7 +893,17 @@ pub(crate) unsafe fn distribute(
                 return;
             }
             let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
-            if u32::from((w.facilities)(st)) == if passenger { 2 } else { 4 } {
+            // Passengers cannot use just a truck stop, nor freight just a bus stop.
+            if u32::from((w.facilities)(st))
+                == u32::from(
+                    StationFacilities::from_element(if passenger {
+                        StationFacility::TruckStop
+                    } else {
+                        StationFacility::BusStop
+                    })
+                    .0,
+                )
+            {
                 return;
             }
             let observed = (st, owner as usize, u32::from(rating), 0_u32);
@@ -880,8 +933,8 @@ pub(crate) unsafe fn distribute(
             )
         };
     }
-    let mut company_best = [0_u32; 19];
-    let mut company_sum = [0_u32; 19];
+    let mut company_best = [0_u32; OWNER_END as usize];
+    let mut company_sum = [0_u32; OWNER_END as usize];
     let mut best_rating = 0;
     let mut best_sum = 0_u32;
     for &(_, owner, rating, _) in &used {
@@ -1157,7 +1210,9 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
         let st = (w.get)(id as u16);
         if !st.is_null() {
             let state = (w.owner)(st);
-            if u32::from((w.facilities)(st)) & 128 == 0 && u32::from((w.in_use)(st)) != 0 {
+            if !StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint)
+                && u32::from((w.in_use)(st)) != 0
+            {
                 let mut b = unsafe { (*state).fields.delete_ctr }.wrapping_add(1);
                 if b >= 185 {
                     b = 0;
@@ -1197,11 +1252,11 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
                     }
                     for cargo in 0..64 {
                         unsafe {
-                            status(state, cargo, 5, false);
+                            status(state, cargo, GoodsState::AcceptedBigtick, false);
                         }
                     }
                 }
-                if u32::from((w.facilities)(st)) & 128 == 0 {
+                if !StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint) {
                     unsafe {
                         openttd_rust_station_acceptance(st, world, 1);
                     }
@@ -1270,7 +1325,7 @@ fn parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
         if !action(part) {
             return false;
         }
-        if part.vehicle_type() == 0
+        if part.vehicle_type() == VehicleType::TRAIN.0
             && crate::ground_vehicle::is_multiheaded(part.subtype())
             && !action(part.other_multiheaded_part().unwrap())
         {
@@ -1282,7 +1337,9 @@ fn parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
             None
         };
     }
-    if v.vehicle_type() == 3 && crate::aircraft::is_normal_aircraft(v.subtype()) {
+    if v.vehicle_type() == VehicleType::AIRCRAFT.0
+        && crate::aircraft::is_normal_aircraft(v.subtype())
+    {
         return action(unsafe { v.next().unwrap_unchecked() });
     }
     true
@@ -1296,7 +1353,7 @@ pub struct LoadingStation {
     pub(crate) state: *mut Service,
 }
 fn may_load(st: LoadingStation, v: VehicleRef, w: &World) -> bool {
-    if (w.station_owner)(st.base) != 16 {
+    if (w.station_owner)(st.base) != OWNER_NONE {
         return true;
     }
     let observed = (w.station_exclusivity)(st.base);
@@ -1354,13 +1411,14 @@ fn load_amount(
     let vehicle = unsafe { &*l.vehicle };
     let engine = (vehicle.engine)(v);
     let mut amount = u32::from(engine.load_amount());
-    let mail = v.vehicle_type() == 3 && !crate::aircraft::is_normal_aircraft(v.subtype());
+    let mail = v.vehicle_type() == VehicleType::AIRCRAFT.0
+        && !crate::aircraft::is_normal_aircraft(v.subtype());
     if mail {
         amount = amount.wrapping_add(3) / 4;
     }
     if gradual {
         let version = engine.grf_version(shared);
-        let mut cb = 0xffff;
+        let mut cb = crate::newgrf_callbacks::CALLBACK_FAILED;
         if version >= 8 {
             cb = (vehicle.property)(
                 (vehicle.newgrf)(),
@@ -1375,7 +1433,7 @@ fn load_amount(
                 crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
             );
         }
-        if cb != 0xffff {
+        if cb != crate::newgrf_callbacks::CALLBACK_FAILED {
             if engine.grf_version(shared) < 8 {
                 cb &= 255;
             }
@@ -1526,7 +1584,7 @@ pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     (l.set_load_ticks)(front, 1);
     let payment = (l.create_payment)(front);
     let mut body = |next| {
-        if !(l.has_orders)(front) || (l.unload_type)(front) != 4 {
+        if !(l.has_orders)(front) || (l.unload_type)(front) != OrderUnloadType::NoUnload.0 {
             let mut current = Some(front);
             while let Some(v) = current {
                 if u32::from(v.cargo_cap()) > 0 && (l.total_count)(v) > 0 {
@@ -1565,6 +1623,7 @@ fn update_ticks(
             ticks = ticks.wrapping_add(overhang.wrapping_mul(ticks) / 8);
         }
     }
+    // Always wait at least one tick; zero would wait indefinitely.
     (l.set_load_ticks)(front, ticks.max(1) as u16);
 }
 // Preserve complete loading control at the source observation points.
@@ -1581,8 +1640,10 @@ unsafe fn load_vehicle(
     let st = (w.station)(front.last_station());
     let mut body = |next| {
         let control = (l.control)(front);
-        let auto = control.refit && control.refit_cargo == 253;
+        let auto = control.refit && control.refit_cargo == CARGO_AUTO_REFIT;
         let mut capleft = [0_u32; 64];
+        // Keep the original conditional-operator precedence: payment controls
+        // reservation only when improved loading and autorefit are both active.
         let reserve = if control.improved && auto {
             (l.get_payment)(front).is_null()
         } else {
@@ -1606,15 +1667,18 @@ unsafe fn load_vehicle(
                 l,
             );
         }
+        // The next round of loading/unloading has not yet arrived.
         if control.ticks != 0 {
             return;
         }
-        if front.vehicle_type() == 0 && {
+        if front.vehicle_type() == VehicleType::TRAIN.0 && {
             let tile = front.tile();
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
+            // The train reversed in the station. Take the easy way out and
+            // let it leave as it always did.
             (l.set_loading_finished)(front, true);
             (l.set_load_ticks)(front, 1);
             return;
@@ -1632,6 +1696,7 @@ unsafe fn load_vehicle(
         let mut reservation_left = 0_u64;
         front.write_speed(0);
         let payment = (l.get_payment)(front);
+        // Articulated part being loaded, excluding parts without capacity.
         let mut artic_part = 0_u32;
         let mut current = Some(front);
         while let Some(v) = current {
@@ -1646,7 +1711,7 @@ unsafe fn load_vehicle(
             artic_part = artic_part.wrapping_add(1);
             let mut cargo = part.cargo;
             let mut ge = unsafe { cp(state, cargo) };
-            if part.unloading && control.unload_type != 4 {
+            if part.unloading && control.unload_type != OrderUnloadType::NoUnload.0 {
                 let count = (l.unload_count)(v);
                 let mut amount = if control.gradual {
                     if count > 0 {
@@ -1656,10 +1721,16 @@ unsafe fn load_vehicle(
                 } else {
                     count
                 };
-                if unsafe { (*ge).status } & 1 == 0 && (l.deliver_count)(v) > 0 {
+                if !GoodsStates(unsafe { (*ge).status }).test(GoodsState::Acceptance)
+                    && (l.deliver_count)(v) > 0
+                {
                     crate::witness::hit(crate::witness::STATION_REJECTED_DELIVERY);
+                    // The station no longer accepts our cargo.
                     let unload_type = control.unload_type;
-                    if unload_type == 2 || unload_type == 1 {
+                    if unload_type == OrderUnloadType::Transfer.0
+                        || unload_type == OrderUnloadType::Unload.0
+                    {
+                        // Transfer instead of delivering.
                         (l.deliver_to_transfer)(v, (l.deliver_count)(v));
                     } else {
                         let observed = (l.cargo_capacity)(v);
@@ -1669,18 +1740,24 @@ unsafe fn load_vehicle(
                         .wrapping_add((l.deliver_count)(v));
                         let capacity = u32::from(v.cargo_cap());
                         if capacity < remaining {
+                            // Return reserved cargo so the vehicle is not overloaded.
                             (l.return_cargo)(st.native, v, remaining - capacity);
                         }
+                        // Keep instead of delivering. Pretend something was unloaded
+                        // so loading gets another cycle instead of finishing now.
                         (l.deliver_to_keep)(v, (l.deliver_count)(v));
                         unloaded = true;
                     }
                 }
                 if (l.transfer_count)(v) > 0 {
+                    // Transfers dirty the station; final deliveries alone do not.
                     dirty_station = true;
-                    if unsafe { (*ge).status } & 2 == 0 {
+                    // Give transferred cargo a rating and fake the first pickup
+                    // so it does not quickly decay after its initial drop.
+                    if !GoodsStates(unsafe { (*ge).status }).test(GoodsState::Rating) {
                         unsafe {
                             (&raw mut (*ge).time_since_pickup).write(0);
-                            status(state, cargo, 1, true);
+                            status(state, cargo, GoodsState::Rating, true);
                         }
                     }
                 }
@@ -1703,10 +1780,13 @@ unsafe fn load_vehicle(
                 current = v.next();
                 continue;
             }
-            if control.load_type == 4 || control.stop {
+            // Do not pick up goods with no-load set or loading stopped.
+            if control.load_type == OrderLoadType::NoLoad.0 || control.stop {
                 current = v.next();
                 continue;
             }
+            // Try refitting at the first cargo-carrying part when the consist
+            // is empty. Reacquire the goods entry after the refit.
             let refitted = control.refit && artic_part == 1;
             if refitted {
                 refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, w, l, refit);
@@ -1715,14 +1795,18 @@ unsafe fn load_vehicle(
                 cargo = (l.cargo_type)(v);
                 ge = unsafe { cp(state, cargo) };
             }
+            // The following link can carry the full capacity while loading here.
             v.write_refit_cap(v.cargo_cap());
-            let speed = match front.vehicle_type() {
-                0 | 2 => i32::from(front.max_speed()),
-                1 => i32::from(front.max_speed()) / 2,
-                3 => crate::aircraft::speed_old_units(u32::from(front.max_speed())) as i32,
+            let speed = match VehicleType(front.vehicle_type()) {
+                VehicleType::TRAIN | VehicleType::SHIP => i32::from(front.max_speed()),
+                VehicleType::ROAD => i32::from(front.max_speed()) / 2,
+                VehicleType::AIRCRAFT => {
+                    crate::aircraft::speed_old_units(u32::from(front.max_speed())) as i32
+                }
                 _ => unreachable!("original NOT_REACHED vehicle type"),
             };
             unsafe {
+                // Zero means no vehicle has ever visited the station.
                 (&raw mut (*ge).last_speed).write(speed.clamp(0, 255) as u8);
             }
             let resolver = unsafe { &*(vehicle.newgrf)() };
@@ -1732,6 +1816,7 @@ unsafe fn load_vehicle(
             unsafe {
                 (&raw mut (*ge).last_age).write(age.clamp(0, 255) as u8);
             }
+            // Capacity available to load more cargo.
             let mut cap = u32::from(v.cargo_cap()).wrapping_sub((l.stored_count)(v));
             if cap > 0 {
                 unsafe {
@@ -1754,13 +1839,19 @@ unsafe fn load_vehicle(
                     }
                     let loaded = (l.load_cargo)(st.native, v, cap, next);
                     if (l.load_count)(v) > 0 {
+                        // Keep loading while reservations remain.
                         reservation_left |= 1 << cargo;
                     }
+                    // Record whether the maximum possible amount was loaded.
                     if loaded == cap {
                         full_load |= 1 << cargo;
                     } else {
                         full_load &= !(1 << cargo);
                     }
+                    // TODO: With gradual loading, unload the complete consist
+                    // before loading any part, as TTDPatch does. That would let
+                    // the Empty trigger run when the entire chain is empty and
+                    // make this emptied assignment unnecessary.
                     if loaded > 0 {
                         emptied = false;
                         loaded_any = true;
@@ -1791,14 +1882,14 @@ unsafe fn load_vehicle(
             current = v.next();
         }
         if loaded_any || unloaded {
-            if front.vehicle_type() == 0 {
+            if front.vehicle_type() == VehicleType::TRAIN.0 {
                 crate::animated_tile::rail_event(
                     st.base,
                     (front).tile(),
                     crate::station_type::SAT_VEHICLE_LOADS,
                     crate::station_type::SRT_VEHICLE_LOADS,
                 );
-            } else if front.vehicle_type() == 1 {
+            } else if front.vehicle_type() == VehicleType::ROAD.0 {
                 crate::animated_tile::road_event(
                     st.base,
                     (front).tile(),
@@ -1807,6 +1898,7 @@ unsafe fn load_vehicle(
                 );
             }
         }
+        // Only count as completely emptied if this cycle unloaded something.
         emptied &= unloaded;
         if !unloaded {
             (l.delete_payment)(payment);
@@ -1814,6 +1906,7 @@ unsafe fn load_vehicle(
         (l.set_stop)(front, false);
         if loaded_any || unloaded {
             if control.gradual {
+                // Per-vehicle slice times are the values found in TTDPatch.
                 ticks = [40, 20, 10, 20][front.vehicle_type() as usize];
             }
             if !unloaded && full_load == 0 && reservation_left == 0 && !control.full_load && {
@@ -1830,8 +1923,10 @@ unsafe fn load_vehicle(
             update_ticks(front, st, front.vehicle_type(), 20, w, l);
             let mut finished = true;
             if control.full_load {
-                if control.load_type == 3 {
-                    if (front.vehicle_type() == 3
+                if control.load_type == OrderLoadType::FullLoadAny.0 {
+                    // A passenger aircraft continues loading until its passenger
+                    // capacity is full, irrespective of how much mail is loaded.
+                    if (front.vehicle_type() == VehicleType::AIRCRAFT.0
                         && (l.passenger_cargo)(front)
                         && u32::from(front.cargo_cap()) > (l.stored_count)(front))
                         || (cargo_not_full != 0 && (cargo_full & !cargo_not_full) == 0)
@@ -1841,6 +1936,8 @@ unsafe fn load_vehicle(
                 } else if cargo_not_full != 0 {
                     finished = false;
                 }
+                // Refresh full-load next hops so distribution can send cargo
+                // along links not yet visited or whose statistics expired.
                 if !finished {
                     refresh_links(front, true, true, visits);
                 }
@@ -1853,6 +1950,7 @@ unsafe fn load_vehicle(
             (l.show_indicator)(front, percent, colour);
         }
         if emptied {
+            // The empty trigger can change weight, power and tractive effort.
             dirty_vehicle = true;
             unsafe {
                 crate::newgrf_vehicle::trigger(

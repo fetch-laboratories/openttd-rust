@@ -1,30 +1,30 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared constants of `industry_type.h`.
 /// Native `NUM_INDUSTRYTYPES`.
-pub const NUM_INDUSTRYTYPES: u8 = 240;
+pub const NUM_INDUSTRYTYPES: u8 = IndustryType::NUM_INDUSTRYTYPES.0;
 /// Native `INVALID_INDUSTRY`.
 pub const INVALID_INDUSTRY: u16 = IndustryID::INVALID.0;
 /// Native `IT_INVALID`.
-pub const IT_INVALID: u8 = 0xff;
+pub const IT_INVALID: u8 = IndustryType::IT_INVALID.0;
 /// Native `NEW_INDUSTRYTILEOFFSET`.
-pub const NEW_INDUSTRYTILEOFFSET: u16 = 175;
+pub const NEW_INDUSTRYTILEOFFSET: u16 = IndustryGfx::NEW_INDUSTRYTILEOFFSET.0;
 /// Native `INVALID_INDUSTRYTILE`.
-pub const INVALID_INDUSTRYTILE: u16 = 512;
+pub const INVALID_INDUSTRYTILE: u16 = IndustryGfx::INVALID_INDUSTRYTILE.0;
 
 /// Masks from `industrytype.h::IndustryBehaviour`.
-pub const BUILT_ON_WATER: u32 = 1 << 2;
+pub use crate::industrytype::BUILT_ON_WATER;
 /// Native `PROD_MULTI_HANDLING`.
-pub const PROD_MULTI_HANDLING: u32 = 1 << 14;
+pub use crate::industrytype::PROD_MULTI_HANDLING;
 
 /// Native `NEW_INDUSTRYOFFSET`.
-pub const NEW_INDUSTRYOFFSET: u16 = 37;
+pub const NEW_INDUSTRYOFFSET: u16 = IndustryType::NEW_INDUSTRYOFFSET.0 as u16;
 /// Native `NUM_INDUSTRYTILES`.
-pub const NUM_INDUSTRYTILES: u16 = 512;
+pub const NUM_INDUSTRYTILES: u16 = IndustryGfx::NUM_INDUSTRYTILES.0;
 
 /// Native `NUM_INDUSTRYTYPES_PER_GRF`.
-pub const NUM_INDUSTRYTYPES_PER_GRF: u8 = 128;
+pub const NUM_INDUSTRYTYPES_PER_GRF: u8 = IndustryType::NUM_INDUSTRYTYPES_PER_GRF.0;
 /// Native `NUM_INDUSTRYTILES_PER_GRF`.
-pub const NUM_INDUSTRYTILES_PER_GRF: u16 = 255;
+pub const NUM_INDUSTRYTILES_PER_GRF: u16 = IndustryGfx::NUM_INDUSTRYTILES_PER_GRF.0;
 /// Native `INDUSTRY_NUM_INPUTS`.
 pub const INDUSTRY_NUM_INPUTS: usize = 16;
 /// Native `INDUSTRY_NUM_OUTPUTS`.
@@ -35,11 +35,11 @@ pub const INDUSTRY_ORIGINAL_NUM_INPUTS: usize = 3;
 pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: usize = 2;
 
 /// `IndustryBehaviour::AirplaneAttacks`.
-pub const AIRPLANE_ATTACKS: u32 = 1 << 11;
-/// `IndustryBehaviour::ChopperAttacks`.
-pub const CHOPPER_ATTACKS: u32 = 1 << 12;
+pub use crate::industrytype::AIRPLANE_ATTACKS;
 /// `IndustryBehaviour::CanSubsidence`.
-pub const CAN_SUBSIDENCE: u32 = 1 << 13;
+pub use crate::industrytype::CAN_SUBSIDENCE;
+/// `IndustryBehaviour::ChopperAttacks`.
+pub use crate::industrytype::CHOPPER_ATTACKS;
 /// Native `IndustryID` with its full original integer domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -56,23 +56,119 @@ pub struct Industry {
 }
 
 /// `IndustryRandomTrigger::CargoReceived`.
-pub const RANDOM_TRIGGER_CARGO_RECEIVED: u8 = 2;
+pub const RANDOM_TRIGGER_CARGO_RECEIVED: u8 = IndustryRandomTrigger::CargoReceived.0;
 /// `IndustryAnimationTrigger::CargoReceived`.
-pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = 3;
+pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = IndustryAnimationTrigger::CargoReceived.0;
 
 /// `IndustryLifeType::Extractive` mask.
-pub const LIFE_EXTRACTIVE: u8 = 1;
+pub use crate::industrytype::LIFE_EXTRACTIVE;
 
-/// `IndustryLifeType::Organic` mask.
-pub const LIFE_ORGANIC: u8 = 2;
-/// `IndustryLifeType::Processing` mask.
-pub const LIFE_PROCESSING: u8 = 4;
 /// `IndustryBehaviour::CutTrees` mask.
-pub const CUT_TREES: u32 = 1 << 1;
+pub use crate::industrytype::CUT_TREES;
+/// `IndustryLifeType::Organic` mask.
+pub use crate::industrytype::LIFE_ORGANIC;
+/// `IndustryLifeType::Processing` mask.
+pub use crate::industrytype::LIFE_PROCESSING;
 
 impl IndustryID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
     pub const END: Self = Self(64000);
+}
+
+/// Native `IndustryType` (`industry_type.h`).
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryType(pub u8);
+impl IndustryType {
+    /// Maximum per `NewGRF`; bit 7 has special meaning in variables/callbacks.
+    pub const NUM_INDUSTRYTYPES_PER_GRF: Self = Self(128);
+    /// Original number of industry types.
+    pub const NEW_INDUSTRYOFFSET: Self = Self(37);
+    /// Total types; leaves room for `IT_INVALID`, `IT_AI_UNKNOWN`, `IT_AI_TOWN`, etc.
+    pub const NUM_INDUSTRYTYPES: Self = Self(240);
+    /// Invalid industry type.
+    pub const IT_INVALID: Self = Self(0xff);
+}
+
+/// Native `IndustryGfx` (`industry_type.h`).
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryGfx(pub u16);
+impl IndustryGfx {
+    /// Limited to 255 so Action3 can later extend this with an extended byte.
+    pub const NUM_INDUSTRYTILES_PER_GRF: Self = Self(255);
+    /// Marks an industry tile as having no animation.
+    pub const INDUSTRYTILE_NOANIM: Self = Self(0xff);
+    /// Original number of industry tiles.
+    pub const NEW_INDUSTRYTILEOFFSET: Self = Self(175);
+    /// Total number of industry tiles, new and old.
+    pub const NUM_INDUSTRYTILES: Self = Self(512);
+    /// One above the tile count is invalid.
+    pub const INVALID_INDUSTRYTILE: Self = Self::NUM_INDUSTRYTILES;
+}
+/// Final stage of industry construction.
+pub const INDUSTRY_COMPLETED: i32 = 3;
+
+/// Native `industry_type.h::IndustryRandomTrigger`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryRandomTrigger(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryRandomTrigger {
+    /// The tile of the industry has been triggered during the tileloop.
+    pub const TileLoop: Self = Self(0);
+    /// The industry has been triggered via its tick.
+    pub const IndustryTick: Self = Self(1);
+    /// Cargo has been delivered.
+    pub const CargoReceived: Self = Self(2);
+}
+
+/// Native `IndustryRandomTriggers`; elements are `IndustryRandomTrigger` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryRandomTriggers(pub u8);
+impl IndustryRandomTriggers {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryRandomTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Native `industry_type.h::IndustryAnimationTrigger`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryAnimationTrigger(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryAnimationTrigger {
+    /// Trigger whenever the construction stage changes.
+    pub const ConstructionStageChanged: Self = Self(0);
+    /// Trigger in the periodic tile loop.
+    pub const TileLoop: Self = Self(1);
+    /// Trigger every tick.
+    pub const IndustryTick: Self = Self(2);
+    /// Trigger when cargo is received .
+    pub const CargoReceived: Self = Self(3);
+    /// Trigger when cargo is distributed.
+    pub const CargoDistributed: Self = Self(4);
+}
+
+/// Native `IndustryAnimationTriggers`; elements are `IndustryAnimationTrigger` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryAnimationTriggers(pub u8);
+impl IndustryAnimationTriggers {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryAnimationTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
 }

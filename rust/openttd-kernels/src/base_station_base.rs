@@ -5,7 +5,17 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `base_station_base.h` station-rectangle modes, asserted by native compilation.
-pub const ADD_TEST: u8 = 0;
-pub const ADD_TRY: u8 = 1;
-pub const ADD_FORCE: u8 = 2;
+//! Station-rectangle modes from `base_station_base.h`.
+
+/// Native `StationRect::StationRectMode`, retaining the original byte domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StationRectMode(pub u8);
+impl StationRectMode {
+    /// Test the spread without changing the rectangle.
+    pub const ADD_TEST: Self = Self(0);
+    /// Try to extend the rectangle within the station spread limit.
+    pub const ADD_TRY: Self = Self(1);
+    /// Extend the rectangle regardless of the station spread limit.
+    pub const ADD_FORCE: Self = Self(2);
+}

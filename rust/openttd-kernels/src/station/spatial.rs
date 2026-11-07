@@ -4,6 +4,7 @@
 //! presentation reentry from the qualified native `BaseStation::MoveSign`.
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 use super::{BaseStation, CatchmentServices};
+use crate::company_type::CompanyID;
 use crate::{game_state::GameState, kdtree::Kdtree, services::Services, station_type::StationID};
 static TREE: GameState<Kdtree<StationID>> = GameState::new(Kdtree::new());
 fn table(s: &Services) -> &CatchmentServices {
@@ -20,7 +21,7 @@ fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, d
 pub(crate) fn rebuild(s: &Services) {
     let c = table(s);
     let map = s.map();
-    let mut st = (c.next_station)(0);
+    let mut st = (c.next_station)(u32::from(StationID::BEGIN.0));
     let ids = std::iter::from_fn(|| {
         if st.is_null() {
             return None;
@@ -105,7 +106,7 @@ pub(crate) fn modify_rating_around(s: &Services, tile: u32, owner: u8, amount: i
     let station = unsafe { &*commands.station };
     let map = s.map();
     radius(s, tile, distance, |st| {
-        if (station.station_owner)(st) == owner
+        if CompanyID((station.station_owner)(st)) == CompanyID(owner)
             && map.distance_manhattan(tile, (c.location)(st)) <= distance
         {
             unsafe {

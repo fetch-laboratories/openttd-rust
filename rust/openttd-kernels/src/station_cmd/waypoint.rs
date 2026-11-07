@@ -10,7 +10,7 @@
 use super::{
     BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, SignSearch, TileArea, sign_visit,
 };
-use crate::base_station_base::{ADD_TEST, ADD_TRY};
+use crate::base_station_base::StationRectMode;
 use crate::command_type::DoCommandFlag;
 use crate::company_type::OWNER_NONE;
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS};
@@ -21,6 +21,7 @@ use crate::economy_type::{
 use crate::rail_map::RAIL_TILE_NORMAL;
 use crate::road_type::{INVALID_ROADTYPE, ROAD_X, ROAD_Y};
 use crate::slope_func::{SLOPE_FLAT, is_steep_slope};
+use crate::station_map::StationGfx;
 use crate::station_type::{
     BUOY, FACILITY_BUS, FACILITY_DOCK, FACILITY_TRAIN, FACILITY_TRUCK, INVALID_STATION,
     MAX_LENGTH_STATION_NAME_CHARS, NEW_STATION, RAIL_WAYPOINT, ROAD_WAYPOINT,
@@ -332,7 +333,13 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-            self.rail_bridge(ret, tile, spec, RAIL_WAYPOINT, gfx.wrapping_add(axis));
+            self.rail_bridge(
+                ret,
+                tile,
+                spec,
+                RAIL_WAYPOINT,
+                StationGfx(gfx.wrapping_add(axis)),
+            );
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -378,7 +385,7 @@ impl Ctx<'_> {
                     w: u16::from(width),
                     h: u16::from(height),
                 },
-                ADD_TEST,
+                StationRectMode::ADD_TEST,
             );
             if !ret.ok() {
                 return cost.take(ret);
@@ -408,7 +415,7 @@ impl Ctx<'_> {
                 w: u16::from(width),
                 h: u16::from(height),
             },
-            ADD_TRY,
+            StationRectMode::ADD_TRY,
         );
         crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
         self.reset_delete_counter(wp);
@@ -573,7 +580,7 @@ impl Ctx<'_> {
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
-            self.before_add_rect(ret, wp, area, ADD_TEST);
+            self.before_add_rect(ret, wp, area, StationRectMode::ADD_TEST);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -605,7 +612,7 @@ impl Ctx<'_> {
         }
         let owner = (self.shared.current_company)();
         (self.s.set_station_owner)(wp, owner);
-        self.before_add_rect(ret, wp, area, ADD_TRY);
+        self.before_add_rect(ret, wp, area, StationRectMode::ADD_TRY);
         unsafe {
             crate::newgrf_roadstop::openttd_rust_roadstop_assign(
                 spec,
@@ -651,7 +658,7 @@ impl Ctx<'_> {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
             self.area_add((self.s.road_waypoint_tile_area)(wp), tile);
-            self.before_add_tile(ret, wp, tile, ADD_TRY);
+            self.before_add_tile(ret, wp, tile, StationRectMode::ADD_TRY);
             let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(
                     (self.shared.road_commands)(),
@@ -738,7 +745,7 @@ impl Ctx<'_> {
             (self.s.set_location)(wp, tile);
             (self.s.waypoint_view_invalidate)(wp);
         }
-        self.before_add_tile(ret, wp, tile, ADD_TRY);
+        self.before_add_tile(ret, wp, tile, StationRectMode::ADD_TRY);
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
         (self.s.set_facility_bits)(wp, FACILITY_DOCK);
         (self.s.set_station_owner)(wp, OWNER_NONE);

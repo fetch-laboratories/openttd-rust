@@ -16,10 +16,15 @@
     clippy::comparison_chain,
     clippy::if_not_else
 )]
+use crate::cargo_type::CargoType;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::{CompanyID, Owner};
 use crate::game_state::GameState;
 pub use crate::source_type::Source;
 use crate::station::Station;
-use crate::subsidy_type::PartOfSubsidy;
+use crate::station_type::StationID;
+use crate::subsidy_type::{PartOfSubsidy, SubsidyID};
+use crate::tile_type::TileIndex;
 use crate::{
     cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type},
     subsidy_base::{
@@ -40,7 +45,7 @@ pub struct State {
 }
 impl State {
     fn is_awarded(&self) -> bool {
-        self.awarded != u8::MAX
+        CompanyID(self.awarded) != CompanyID::INVALID
     }
 }
 #[repr(C)]
@@ -82,23 +87,23 @@ pub struct Services {
     pub assert_destination: extern "C" fn(Source),
 }
 struct RegistryState {
-    slots: [*mut State; 256],
+    slots: [*mut State; SubsidyID::END.0 as usize],
     limit: u16,
 }
 static OWNERS: GameState<RegistryState> = GameState::new(RegistryState {
-    slots: [ptr::null_mut(); 256],
+    slots: [ptr::null_mut(); SubsidyID::END.0 as usize],
     limit: 0,
 });
-fn owner(id: u16) -> *mut State {
+fn owner(id: SubsidyID) -> *mut State {
     // SAFETY: Serialized native pool index; no registry borrow crosses callbacks.
-    unsafe { (*OWNERS.get()).slots[usize::from(id)] }
+    unsafe { (*OWNERS.get()).slots[usize::from(id.0)] }
 }
-fn each(mut visit: impl FnMut(u16, *mut State)) {
+fn each(mut visit: impl FnMut(SubsidyID, *mut State)) {
     let mut id = 0;
     while id < unsafe { (*OWNERS.get()).limit } {
-        let state = owner(id);
+        let state = owner(SubsidyID(id));
         if !state.is_null() {
-            visit(id, state);
+            visit(SubsidyID(id), state);
         }
         id += 1;
     }
@@ -108,7 +113,7 @@ pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
     let state = Box::into_raw(Box::new(State {
         cargo_type: INVALID_CARGO,
         remaining: 0,
-        awarded: 255,
+        awarded: CompanyID::INVALID.0,
         src: Source::default(),
         dst: Source::default(),
     }));
@@ -139,21 +144,21 @@ impl Services {
     fn industry(&self) -> &industry::Services {
         unsafe { &*self.industry }
     }
-    fn position(&self, source: Source) -> u32 {
-        unsafe {
+    fn position(&self, source: Source) -> TileIndex {
+        TileIndex(unsafe {
             if source.kind == Source::TOWN {
                 town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
-        }
+        })
     }
     fn flag(&self, source: Source, flag: PartOfSubsidy) {
         (self.set_source_flag)(source, flag);
     }
-    fn distance_tiles(&self, a: u32, b: u32) -> bool {
+    fn distance_tiles(&self, a: TileIndex, b: TileIndex) -> bool {
         let map = self.shared().map();
-        map.distance_manhattan(a, b) <= SUBSIDY_MAX_DISTANCE
+        map.distance_manhattan(a.0, b.0) <= SUBSIDY_MAX_DISTANCE
     }
     fn distance(&self, a: Source, b: Source) -> bool {
         self.distance_tiles(self.position(a), self.position(b))
@@ -175,36 +180,38 @@ impl Services {
             self.flag(dst, PartOfSubsidy::Destination);
         });
     }
-    fn duplicate(cargo: u8, src: Source, dst: Source) -> bool {
+    fn duplicate(cargo: CargoType, src: Source, dst: Source) -> bool {
         let mut found = false;
         each(|_, state| {
             found |= unsafe {
-                (*state).cargo_type == cargo && (*state).src == src && (*state).dst == dst
+                CargoType((*state).cargo_type) == cargo
+                    && (*state).src == src
+                    && (*state).dst == dst
             };
         });
         found
     }
-    fn create(&self, cargo: u8, src: Source, dst: Source) {
-        let id = (self.allocate)(cargo, src, dst, SUBSIDY_OFFER_MONTHS);
-        (self.offered_news)(id);
+    fn create(&self, cargo: CargoType, src: Source, dst: Source) {
+        let id = SubsidyID((self.allocate)(cargo.0, src, dst, SUBSIDY_OFFER_MONTHS));
+        (self.offered_news)(id.0);
         self.flag(src, PartOfSubsidy::Source);
         self.flag(dst, PartOfSubsidy::Destination);
-        (self.offer_events)(id);
+        (self.offer_events)(id.0);
         (self.dirty)();
         crate::witness::hit(crate::witness::SUBSIDY_CREATE);
     }
-    fn award(&self, id: u16, company: u8) {
+    fn award(&self, id: SubsidyID, company: CompanyID) {
         let state = owner(id);
         // This private callee is reached after the original IsAwarded test.
         unsafe {
-            (*state).awarded = company;
+            (*state).awarded = company.0;
         }
         let remaining = u32::from((self.duration)()) * MONTHS_IN_YEAR;
         unsafe {
             (*state).remaining = remaining as u16;
         }
-        (self.awarded_news)(id);
-        (self.award_events)(id);
+        (self.awarded_news)(id.0);
+        (self.award_events)(id.0);
         (self.dirty)();
         crate::witness::hit(crate::witness::SUBSIDY_AWARD);
     }
@@ -212,16 +219,21 @@ impl Services {
         if !(self.can_allocate)() {
             return false;
         }
+        // Pick a random TPE_PASSENGERS type.
         let n = self
             .shared()
             .random_range(
                 crate::cargo_registry::town_count(crate::cargotype::TPE_PASSENGERS) as u32,
             );
-        let cargo = crate::cargo_registry::town_cargo(crate::cargotype::TPE_PASSENGERS, n as usize);
+        let cargo = CargoType(crate::cargo_registry::town_cargo(
+            crate::cargotype::TPE_PASSENGERS,
+            n as usize,
+        ));
         let src = town::spatial::random(unsafe { &*self.shared });
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
-                || town::subsidy_percent_transported(src.state, cargo) > SUBSIDY_MAX_PCT_TRANSPORTED
+                || town::subsidy_percent_transported(src.state, cargo.0)
+                    > SUBSIDY_MAX_PCT_TRANSPORTED
         } {
             return false;
         }
@@ -233,8 +245,8 @@ impl Services {
         }
         let a = Source::town(src.id.0);
         let b = Source::town(dst.id.0);
-        let from = unsafe { town::position(src.state) };
-        let to = unsafe { town::position(dst.state) };
+        let from = TileIndex(unsafe { town::position(src.state) });
+        let to = TileIndex(unsafe { town::position(dst.state) });
         if !self.distance_tiles(from, to) || Self::duplicate(cargo, a, b) {
             return false;
         }
@@ -244,7 +256,7 @@ impl Services {
     fn scan(&self, scratch: Cargo, owner: *const town::State, accepted: bool) {
         // SAFETY: Native outer frame owns one actual CargoArray and exposes its
         // own data() address. Only immediate scalar accesses cross that view.
-        for c in 0..64 {
+        for c in 0..usize::from(NUM_CARGO) {
             unsafe {
                 scratch.data.add(c).write(0);
             }
@@ -296,7 +308,9 @@ impl Services {
         if unsafe { town::population(src.state) < SUBSIDY_CARGO_MIN_POPULATION } {
             return false;
         }
+        // Calculate the produced cargo of houses around town centre.
         self.scan(scratch, src.state, false);
+        // Passenger subsidies are not handled here.
         for index in 0..crate::cargo_registry::town_count(crate::cargotype::TPE_PASSENGERS) as u32 {
             let cargo =
                 crate::cargo_registry::town_cargo(crate::cargotype::TPE_PASSENGERS, index as usize);
@@ -305,25 +319,29 @@ impl Services {
             }
         }
         let count = unsafe { crate::cargo_type::cargo_array_count(scratch.data) };
+        // No cargo produced at all?
         if count == 0 {
             return false;
         }
+        // Choose a random cargo that is produced in the town.
         let mut number = self.shared().random_range(count);
-        let mut cargo = 0_u8;
-        while cargo < NUM_CARGO {
-            if unsafe { scratch.data.add(usize::from(cargo)).read() > 0 } {
+        let mut cargo = CargoType(0);
+        while cargo.0 < NUM_CARGO {
+            if unsafe { scratch.data.add(usize::from(cargo.0)).read() > 0 } {
                 if number == 0 {
                     break;
                 }
                 number -= 1;
             }
-            cargo += 1;
+            cargo.0 += 1;
         }
-        if !(self.cargo_valid)(cargo) || !(self.manual)(cargo) {
+        // Avoid invalid NewGRF cargoes and automatically distributed cargoes.
+        if !(self.cargo_valid)(cargo.0) || !(self.manual)(cargo.0) {
             return false;
         }
+        // Quit if the percentage transported is large enough.
         if unsafe {
-            town::subsidy_percent_transported(src.state, cargo) > SUBSIDY_MAX_PCT_TRANSPORTED
+            town::subsidy_percent_transported(src.state, cargo.0) > SUBSIDY_MAX_PCT_TRANSPORTED
         } {
             return false;
         }
@@ -338,26 +356,33 @@ impl Services {
             return false;
         }
         let state = (self.industry_owner)(shell);
+        // Randomize cargo type; an industry may produce nothing.
         let count = unsafe { industry::subsidy_produced_count(state) };
         if count == 0 {
             return false;
         }
         let number = self.shared().random_range(count);
         let (cargo, total, trans) = unsafe { industry::subsidy_produced(state, number) };
+        let cargo = CargoType(cargo);
+        // Quit if there is no production, transport is already large enough,
+        // or the cargo is automatically distributed.
         if total == 0
             || trans > SUBSIDY_MAX_PCT_TRANSPORTED
-            || !is_valid_cargo_type(cargo)
-            || !(self.manual)(cargo)
+            || !is_valid_cargo_type(cargo.0)
+            || !(self.manual)(cargo.0)
         {
             return false;
         }
         self.destination(scratch, cargo, Source::industry((self.industry_id)(shell)))
     }
-    fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
+    fn destination(&self, scratch: Cargo, cargo: CargoType, src: Source) -> bool {
+        // Choose a random destination.
         let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
             let town = town::spatial::random(unsafe { &*self.shared });
+            // Calculate cargo acceptance of houses around town centre.
             self.scan(scratch, town.state, true);
-            if unsafe { scratch.data.add(usize::from(cargo)).read() < 8 } {
+            // Check if the town can accept this cargo.
+            if unsafe { scratch.data.add(usize::from(cargo.0)).read() < 8 } {
                 return false;
             }
             Source::town(town.id.0)
@@ -366,11 +391,13 @@ impl Services {
             if shell.is_null() {
                 return false;
             }
-            if !unsafe { industry::subsidy_accepts((self.industry_owner)(shell), cargo) } {
+            // The industry must accept the cargo.
+            if !unsafe { industry::subsidy_accepts((self.industry_owner)(shell), cargo.0) } {
                 return false;
             }
             Source::industry((self.industry_id)(shell))
         };
+        // Check distinct endpoints, distance, and duplicate subsidies, in that order.
         if src == dst || !self.distance(src, dst) || Self::duplicate(cargo, src, dst) {
             return false;
         }
@@ -391,24 +418,28 @@ impl Services {
                 return;
             }
             if !unsafe { (*state).is_awarded() } {
-                (self.offer_expired_news)(id);
-                (self.offer_expired_events)(id);
+                (self.offer_expired_news)(id.0);
+                (self.offer_expired_events)(id.0);
             } else {
-                if unsafe { (*state).awarded } == (self.local_company)() {
-                    (self.withdrawn_news)(id);
+                if unsafe { CompanyID((*state).awarded) } == CompanyID((self.local_company)()) {
+                    (self.withdrawn_news)(id.0);
                 }
-                (self.expired_events)(id);
+                (self.expired_events)(id.0);
             }
-            (self.destroy)(id);
+            (self.destroy)(id.0);
             modified = true;
             crate::witness::hit(crate::witness::SUBSIDY_EXPIRE);
         });
         if modified {
             self.rebuild();
         } else if (self.duration)() == 0 || !(self.any_manual)() {
+            // A zero duration disables subsidies. Also return if no cargoes are
+            // manually distributed and the subsidies window needs no invalidation.
             return;
         }
         let chance = self.shared().random_range(16);
+        // Passenger subsidies have a 1/8 monthly chance; town-source and
+        // industry-source cargo subsidies each have a 1/16 chance.
         if (chance < 2 && (self.manual_pax)()) || chance == 2 || chance == 3 {
             for _ in 0..=1000 {
                 let found = if chance < 2 {
@@ -432,7 +463,7 @@ impl Services {
         let mut dirty = false;
         each(|id, state| {
             if unsafe { (*state).src == source || (*state).dst == source } {
-                (self.destroy)(id);
+                (self.destroy)(id.0);
                 dirty = true;
             }
         });
@@ -442,23 +473,29 @@ impl Services {
         }
     }
     pub(crate) fn transfer(&self, old: u8, new: u8) {
+        let old: Owner = CompanyID(old);
+        let new: Owner = CompanyID(new);
         each(|id, state| {
-            if unsafe { (*state).awarded } != old {
+            if unsafe { CompanyID((*state).awarded) } != old {
                 return;
             }
-            if new == crate::company_type::INVALID_OWNER {
-                (self.destroy)(id);
+            if new == Owner::INVALID {
+                (self.destroy)(id.0);
             } else {
                 unsafe {
-                    (*state).awarded = new;
+                    (*state).awarded = new.0;
                 }
             }
         });
-        if new == crate::company_type::INVALID_OWNER {
+        if new == Owner::INVALID {
             self.rebuild();
         }
     }
     pub(crate) fn check(&self, cargo: u8, company: u8, src: Source, station: u16) -> bool {
+        let cargo = CargoType(cargo);
+        let company = CompanyID(company);
+        let station = StationID(station);
+        // If the source is not subsidised, do not continue.
         if !src.is_valid()
             || src.kind > Source::TOWN
             || !(self.has_source_flag)(src, PartOfSubsidy::Source)
@@ -469,17 +506,18 @@ impl Services {
         // town destination. A fixed membership set preserves first-discovery
         // semantics without allocating on the cargo-delivery hot path.
         let catchment = crate::station::Ctx::from_shared(self.shared());
-        let station_state = (catchment.c.station_owner)(crate::station_type::StationID(station));
+        let station_state = (catchment.c.station_owner)(station);
         let mut towns = [0_u64; 1024];
         // SAFETY: The live station owner; immediate read.
         if !unsafe { crate::station::rect_is_empty(station_state) } {
+            // Do not create the cache without an applicable subsidy to a town.
             let mut needed = false;
             each(|_, state| {
                 needed |= unsafe {
                     (*state).dst.kind == Source::TOWN
-                        && (*state).cargo_type == cargo
+                        && CargoType((*state).cargo_type) == cargo
                         && (*state).src == src
-                        && (!(*state).is_awarded() || (*state).awarded == company)
+                        && (!(*state).is_awarded() || CompanyID((*state).awarded) == company)
                 };
             });
             if needed {
@@ -498,13 +536,15 @@ impl Services {
                 }
             }
         }
+        // More than one subsidy can apply to this delivery: A->B and A->C
+        // both apply when the station catchment contains B and C.
         let mut subsidised = false;
         each(|id, state| {
             let (applies, dst) = unsafe {
                 (
-                    (*state).cargo_type == cargo
+                    CargoType((*state).cargo_type) == cargo
                         && (*state).src == src
-                        && (!(*state).is_awarded() || (*state).awarded == company),
+                        && (!(*state).is_awarded() || CompanyID((*state).awarded) == company),
                     (*state).dst,
                 )
             };
@@ -553,16 +593,18 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     dst: Source,
 ) -> u8 {
     let s = unsafe { &*s };
+    let cargo = CargoType(cargo);
+    let flags = DoCommandFlags(flags);
     if !(s.can_allocate)()
-        || (s.shared().current_company)() != crate::company_type::OWNER_DEITY
-        || cargo >= NUM_CARGO
-        || !(s.cargo_valid)(cargo)
+        || CompanyID((s.shared().current_company)()) != Owner::DEITY
+        || cargo.0 >= NUM_CARGO
+        || !(s.cargo_valid)(cargo.0)
         || !(s.valid_source)(src)
         || !(s.valid_source)(dst)
     {
         return u8::from(false);
     }
-    if flags & crate::command_type::DoCommandFlag::EXECUTE != 0 {
+    if flags.test(DoCommandFlag::Execute) {
         s.create(cargo, src, dst);
     }
     u8::from(true)

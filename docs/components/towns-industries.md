@@ -109,3 +109,11 @@
 - C++ keeps: pool shells and allocation, specification fields behind canonical accessors, and one native formatting/publication operation per news kind. Station naming and subsidies call the shared Rust owners directly.
 - Limits: Distinct train/order/refusal combinations, pool cardinality extremes, native news presentation and scheduling, arbitrary mods and historical saves remain on #156. News and interactive RNG are not serialized; reload observes the original reset and command-phase interactive RNG reseeding.
 - PRs: #609.
+
+## Original industry and subsidy vocabulary (#734)
+
+- Industry and subsidy bodies use the original IDs, behaviour/life/control/trigger elements and sets, availability causes, graphics, terrain, production bounds and sound names. Their canonical definitions live in the original-header modules; graphics remain uint16 and sound calls retain uint16 promotion.
+- Original explanations sit at the corresponding production, generation, construction, tile, resolver and subsidy operations. History reducers and monthly dispatch bodies remain unchanged.
+- C++ ownership, scalar ABI/save views and raw compatibility adapters remain. Private wrapper fields and unused operator/Default APIs belong to the later cleanup closure.
+- Checks: original operations/order source reviews and combined exact-head Full. Existing NewGRF, historical-save and presentation limits remain on #156; no C++ retirement is claimed.
+- PRs: #753, integrated in #758.
