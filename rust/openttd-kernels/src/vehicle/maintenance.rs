@@ -12,12 +12,16 @@
     clippy::struct_excessive_bools,
     clippy::struct_field_names
 )]
-use super::{
-    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VehicleRef, VehicleServices, VehicleType,
-};
+use super::{Breakdown, OT_LOADING, OrderType, VehicleRef, VehicleServices, VehicleType};
+use crate::cargo_type::{CargoType, CargoTypes};
+use crate::company_type::CompanyID;
+use crate::engine_type::EngineID;
 use crate::newgrf_sound::VSE_BREAKDOWN;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
-use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
+use crate::timer_game_economy::DAYS_IN_ECONOMY_MONTH;
+use crate::vehicle_base::{
+    GroundVehicleSubtypeFlags, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehState, VehStates,
+};
 use crate::{company::OpenTTDCompany, fleet, services};
 
 use crate::services::{CalendarDate, EconomyDate};
@@ -192,23 +196,31 @@ macro_rules! branch {
     };
 }
 
-unsafe fn renew<const C: bool>(
+/// Function to tell if a vehicle needs to be autorenewed.
+/// `company` is the vehicle owner; `use_renew_setting` considers its renew setting.
+/// Returns true if the vehicle is old enough for replacement.
+unsafe fn needs_autorenewing<const C: bool>(
     v: VehicleRef,
     base: &VehicleServices,
     company: *const OpenTTDCompany,
-    use_setting: bool,
+    use_renew_setting: bool,
 ) -> bool {
     let s = unsafe { &*base.maintenance };
-    // SAFETY: the native entry supplies the live vehicle owner.
+    // We can always generate the Company pointer when we have the vehicle.
+    // However this takes time and since the Company pointer is often present
+    // when this function is called then it's faster to pass the pointer as an
+    // argument rather than finding it again.
+    // SAFETY: the native entry supplies the live owner and asserts its identity.
     let r = unsafe { svc!(C, s.renewal, v, company) };
     branch!(C, VEHICLE_MAINT_RENEW);
-    if use_setting && !r.enabled {
+    if use_renew_setting && !r.enabled {
         return false;
     }
     if r.age.0.wrapping_sub(r.max_age.0) < i32::from(r.months) * 30 {
         return false;
     }
-    r.kind != VehicleType::TRAIN || r.subtype & 8 != 0
+    // Only engines need renewing.
+    r.kind != VehicleType::VEH_TRAIN || r.subtype & (1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0) != 0
 }
 unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
@@ -245,14 +257,26 @@ unsafe fn available_money(s: &Services, company: *const OpenTTDCompany) -> i64 {
     let infinite = (commands.infinite_money)();
     unsafe { crate::company::openttd_rust_company_available_money(owner, infinite) }
 }
-unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
+/// Check if the vehicle needs to go to a depot in near future (if a opportunity
+/// presents itself) for service or replacement. See `needs_automatic_servicing`.
+unsafe fn needs_servicing_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     let s = unsafe { &*base.maintenance };
-    if (v).status() & (VS_STOPPED | VS_CRASHED) != 0 {
+    // Stopped or crashed vehicles will not move, as such making unmovable
+    // vehicles to go for service is lame.
+    if VehStates(v.status()).0
+        & VehStates::from_element(VehState::Stopped)
+            .with(VehStates::from_element(VehState::Crashed))
+            .0
+        != 0
+    {
         return false;
     }
+    // Are we ready for the next service cycle?
     let r = svc!(C, s.interval, v);
     branch!(C, VEHICLE_MAINT_SERVICE);
+    // Service intervals can be measured in different units, which we handle individually.
     if r.percent {
+        // Service interval is in percents.
         branch!(C, VEHICLE_MAINT_PERCENT);
         let reliability = (base.engine)(v).reliability();
         if i32::from(r.reliability)
@@ -263,9 +287,11 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     } else {
         let interval = i32::from(r.interval)
             * if r.wallclock {
+                // Service interval is in minutes.
                 branch!(C, VEHICLE_MAINT_MINUTES);
-                30
+                DAYS_IN_ECONOMY_MONTH
             } else {
+                // Service interval is in days.
                 branch!(C, VEHICLE_MAINT_DAYS);
                 1
             };
@@ -273,119 +299,146 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
             return false;
         }
     }
+    // If we're servicing anyway, because we have not disabled servicing when
+    // there are no breakdowns or we are playing with breakdowns, bail out.
     if !r.no_service || r.breakdowns != 0 {
         return true;
     }
+    // Test whether there is some pending autoreplace.
+    // Note: We do this after the service-interval test.
+    // There are a lot more reasons for autoreplace to fail than we can test here reasonably.
     // SAFETY: interval resolved the live owner; no callback can destroy it here.
     let companies = unsafe { &*s.company };
-    let mut needed = i64::from((companies.renew_reserve)(r.company));
-    if needed > unsafe { available_money(s, r.company) } {
+    let mut needed_money = i64::from((companies.renew_reserve)(r.company));
+    if needed_money > unsafe { available_money(s, r.company) } {
         return false;
     }
-    let mut pending = false;
-    let mut current = Some(v);
-    while let Some(unit) = current {
-        if unsafe { replacement_needed::<C>(unit, base, r.company, &mut needed, &mut pending) } {
+    let mut pending_replace = false;
+    let mut vehicle = Some(v);
+    while let Some(v) = vehicle {
+        if unsafe {
+            replacement_needed::<C>(v, base, r.company, &mut needed_money, &mut pending_replace)
+        } {
             return false;
         }
-        current = if unit.vehicle_type() == VehicleType::TRAIN.0 {
-            unit.next_unit()
+        vehicle = if v.vehicle_type() == VehicleType::VEH_TRAIN.0 {
+            v.next_unit()
         } else {
             None
         };
     }
-    pending
+    pending_replace
 }
 unsafe fn replacement_needed<const C: bool>(
     v: VehicleRef,
     base: &VehicleServices,
     company: *const OpenTTDCompany,
-    needed: &mut i64,
-    pending: &mut bool,
+    needed_money: &mut i64,
+    pending_replace: &mut bool,
 ) -> bool {
     let s = unsafe { &*base.maintenance };
-    // SAFETY: needs_service retains the live native owner through this decision.
+    // SAFETY: needs_servicing_impl retains the live native owner through this decision.
     let replacement = unsafe { svc!(C, s.replacement, v, company) };
-    if replacement.engine == crate::engine_type::INVALID_ENGINE
+    let new_engine = EngineID(replacement.engine);
+    // Check engine availability.
+    if new_engine == EngineID::INVALID
         || crate::vehicle::EngineRef::of((unsafe { &*s.transaction }.capabilities.engine)(
-            replacement.engine,
+            new_engine.0,
         ))
         .company_availability()
-            & (1 << v.owner())
+            & (1 << CompanyID(v.owner()).0)
             == 0
     {
         return false;
     }
-    if replacement.when_old && !unsafe { renew::<C>(v, base, company, false) } {
+    // Is the vehicle old if we are not always replacing?
+    if replacement.when_old && !unsafe { needs_autorenewing::<C>(v, base, company, false) } {
         return false;
     }
+    // Check refittability.
     let t = unsafe { &*s.transaction };
-    let (mut union, mut available) = (0_u64, 0_u64);
+    let (mut union_mask, mut available_cargo_types) = (CargoTypes(0), CargoTypes(0));
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_masks(
             t.capabilities,
-            replacement.engine,
+            new_engine.0,
             true,
-            &raw mut union,
-            &raw mut available,
+            &raw mut union_mask.0,
+            &raw mut available_cargo_types.0,
         );
     };
     if C {
         crate::witness::add(
             crate::witness::VEHICLE_MAINT_BYTES,
-            (std::mem::size_of_val(&union) + std::mem::size_of_val(&available)) as u64,
+            (std::mem::size_of_val(&union_mask.0) + std::mem::size_of_val(&available_cargo_types.0))
+                as u64,
         );
     }
-    if union != 0 {
-        let mut cargo_type = 0;
-        let cargo = unsafe {
+    // Is there anything to refit?
+    if union_mask.0 != 0 {
+        let mut cargo_type = CargoType(0);
+        let cargo_mask = CargoTypes(unsafe {
             crate::engine_capabilities::openttd_rust_articulated_live_cargoes(
                 t.capabilities,
                 v.0.as_ptr(),
-                &raw mut cargo_type,
+                &raw mut cargo_type.0,
             )
-        };
+        });
         if C {
             crate::witness::add(
                 crate::witness::VEHICLE_MAINT_BYTES,
-                std::mem::size_of_val(&cargo_type) as u64,
+                std::mem::size_of_val(&cargo_type.0) as u64,
             );
         }
-        if cargo & cargo.wrapping_sub(1) != 0 {
-            let defaults = unsafe {
+        if cargo_mask.0 & cargo_mask.0.wrapping_sub(1) != 0 {
+            let new_engine_default_cargoes = CargoTypes(unsafe {
                 crate::engine_capabilities::openttd_rust_articulated_cargoes(
                     t.capabilities,
-                    replacement.engine,
+                    new_engine.0,
                 )
-            };
-            if cargo & defaults != cargo {
+            });
+            if cargo_mask.0 & new_engine_default_cargoes.0 != cargo_mask.0 {
+                // We cannot refit to mixed cargoes in an automated way.
                 return false;
             }
-        } else if cargo_type < 64 && available & (1_u64 << cargo_type) == 0 {
+            // engine_type is already a mixed cargo type which matches the incoming
+            // vehicle by default, no refit required.
+        } else if cargo_type.0 < CargoType::NUM_CARGO.0 // Did the old vehicle carry anything?
+            && available_cargo_types.0 & (1_u64 << cargo_type.0) == 0
+        {
+            // We can't refit the vehicle to carry the cargo we want.
             return false;
         }
     }
-    *pending = true;
+    // Check money.
+    // We want 2*(the price of the new vehicle) without looking at the value of
+    // the vehicle we are going to sell.
+    *pending_replace = true;
     // SAFETY: the same live owner remains valid after the bounded refit queries.
     let cap = t.capabilities;
     let cost = unsafe {
-        crate::engine_capabilities::openttd_rust_engine_cost(cap, (cap.engine)(replacement.engine))
+        crate::engine_capabilities::openttd_rust_engine_cost(cap, (cap.engine)(new_engine.0))
     };
-    *needed = needed.saturating_add(cost.saturating_mul(2));
-    let available = unsafe { available_money(s, company) };
+    *needed_money = needed_money.saturating_add(cost.saturating_mul(2));
+    let available_money = unsafe { available_money(s, company) };
     branch!(C, VEHICLE_MAINT_REPLACE);
-    *needed > available
+    *needed_money > available_money
 }
-unsafe fn automatic<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
+/// Checks if the current order should be interrupted for a service-in-depot
+/// order. See `needs_servicing`.
+unsafe fn needs_automatic_servicing_impl<const C: bool>(
+    v: VehicleRef,
+    base: &VehicleServices,
+) -> bool {
     let s = unsafe { &*base.maintenance };
     let r = svc!(C, s.automatic, v);
     if r.has_depot_order
-        || r.order_type.0 == OT_LOADING
-        || (r.order_type.0 == OT_GOTO_DEPOT && !svc!(C, s.depot_service, v))
+        || r.order_type == OrderType::OT_LOADING
+        || (r.order_type == OrderType::OT_GOTO_DEPOT && !svc!(C, s.depot_service, v))
     {
         return false;
     }
-    unsafe { needs_service::<C>(v, base) }
+    unsafe { needs_servicing_impl::<C>(v, base) }
 }
 
 const BREAKDOWN_CHANCE: [u8; 64] = [
@@ -703,9 +756,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_renew_abi(
 ) -> u8 {
     u8::from(if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        unsafe { renew::<true>(v, &*base, company, settings) }
+        unsafe { needs_autorenewing::<true>(v, &*base, company, settings) }
     } else {
-        unsafe { renew::<false>(v, &*base, company, settings) }
+        unsafe { needs_autorenewing::<false>(v, &*base, company, settings) }
     })
 }
 /// `Vehicle::NeedsServicing`.
@@ -714,9 +767,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_renew_abi(
 pub(crate) unsafe fn needs_servicing(v: VehicleRef, base: &VehicleServices) -> bool {
     if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        unsafe { needs_service::<true>(v, base) }
+        unsafe { needs_servicing_impl::<true>(v, base) }
     } else {
-        unsafe { needs_service::<false>(v, base) }
+        unsafe { needs_servicing_impl::<false>(v, base) }
     }
 }
 /// # Safety
@@ -734,9 +787,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_service_abi(
 pub(crate) unsafe fn needs_automatic_servicing(v: VehicleRef, base: &VehicleServices) -> bool {
     if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        unsafe { automatic::<true>(v, base) }
+        unsafe { needs_automatic_servicing_impl::<true>(v, base) }
     } else {
-        unsafe { automatic::<false>(v, base) }
+        unsafe { needs_automatic_servicing_impl::<false>(v, base) }
     }
 }
 /// # Safety
