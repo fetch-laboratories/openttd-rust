@@ -194,3 +194,10 @@
 - The existing location and order-distance helpers and their immediate callers use the original names, canonical IDs/coordinates and explanatory comments. Conditional traversal, recursive depth, signed casts, saved list-span handling, live lookups and aircraft-range caller order remain unchanged.
 - Native order/vector storage, scalar interfaces and services stay with their existing owners. Checks are original operations/order review and combined exact-head Full; archive equivalence is unclaimed and inherited oversized-list, branch and historical-save limits remain on #156.
 - PRs: #766, integrated in #769. Remaining Orders/fleet cleanup stays open.
+
+## Original vehicle header vocabulary (#734)
+
+- Original vehicle-state elements/sets, ground subtypes, NewGRF cache-valid bits, visual-effect models and custom-sprite values live in their header modules. Raw compatibility constants delegate to the canonical definitions; transparent carriers retain stored widths and unnamed bits.
+- Local predicates, state updates, constructor sentinels and station-use helpers adopt those names without changing field layouts, scalar exports, service contracts, native packing or effect order. All generated ABI inputs remain unchanged.
+- Checks: original operations/order review and exact-head Full. Archive equivalence is unclaimed; inherited ship-depot assertion and coverage limits remain on #156. Private-field/operator closure stays later.
+- PRs: #771, integrated in #773. Other Vehicle workset files remain pending.
