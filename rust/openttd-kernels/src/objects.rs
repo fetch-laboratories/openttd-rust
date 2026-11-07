@@ -166,15 +166,8 @@ pub struct Price {
     pub shift: i32,
 }
 
-/// Native `ObjectAnimationTrigger : uint8_t` carrier.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct AnimationTrigger(pub u8);
-impl AnimationTrigger {
-    const BUILT: Self = Self(0);
-    const TILE_LOOP: Self = Self(1);
-    const TILE_LOOP_NORTH: Self = Self(2);
-}
+/// Compatibility import of the original header trigger element.
+pub use crate::object_type::ObjectAnimationTrigger as AnimationTrigger;
 
 #[repr(C)]
 pub struct Spec {
@@ -325,18 +318,18 @@ pub struct ObjectServices {
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
 }
 
-const HQ: u16 = 4;
-const OWNED: u16 = 3;
+const HQ: u16 = crate::object_type::ObjectType::OBJECT_HQ.0;
+const OWNED: u16 = crate::object_type::ObjectType::OBJECT_OWNED_LAND.0;
 use crate::object_type::OBJECT_STATUE as STATUE;
-const LIGHTHOUSE: u16 = 1;
-const TRANSMITTER: u16 = 0;
-const NEW_OBJECT_OFFSET: u16 = 5;
+const LIGHTHOUSE: u16 = crate::object_type::ObjectType::OBJECT_LIGHTHOUSE.0;
+const TRANSMITTER: u16 = crate::object_type::ObjectType::OBJECT_TRANSMITTER.0;
+const NEW_OBJECT_OFFSET: u16 = crate::object_type::ObjectType::NEW_OBJECT_OFFSET.0;
 const OBJECT_SIZE_1X1: u8 = 0x11;
 const INVALID_WATER_CLASS: WaterClass = WaterClass(3);
 const SOURCE_HEADQUARTERS: u8 = 2;
-const CBID_OBJECT_AUTOSLOPE: u16 = 0x15D;
-const PR_BUILD_OBJECT: u32 = 50;
-const PR_CLEAR_OBJECT: u32 = 51;
+const CBID_OBJECT_AUTOSLOPE: u16 = crate::newgrf_callbacks::CallbackID::CBID_OBJECT_AUTOSLOPE.0;
+const PR_BUILD_OBJECT: u32 = crate::economy_type::Price::PR_BUILD_OBJECT.0 as u32;
+const PR_CLEAR_OBJECT: u32 = crate::economy_type::Price::PR_CLEAR_OBJECT.0 as u32;
 const SCENEDIT: u16 = 1;
 const CANNOT_REMOVE: u16 = 1 << 1;
 const AUTOREMOVE: u16 = 1 << 2;

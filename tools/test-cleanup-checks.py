@@ -62,8 +62,8 @@ class DebtTests(unittest.TestCase):
             "site": "operation",
             "before": [],
             "after": [1],
-            "operation": "native cast",
-            "source_contract": "original narrows to u8",
+            "operation": "native parameter list",
+            "source_contract": "original helper takes eight arguments",
             "reason": "preserve behavior",
             "retiring_owner": "owner",
             "retirement_condition": "native boundary retires",
@@ -89,18 +89,16 @@ class DebtTests(unittest.TestCase):
             self.assertEqual(LINT.reviewed_debt("clippy", {"operation": [1]}, {}), {})
 
     def test_rust_identity_survives_lines_and_qualifies_impl(self) -> None:
-        text = "impl A { fn run() { unsafe { use_it(); } } }\nimpl B { fn run() {} }"
-        start = text.index("unsafe")
-        key, _ = LINT.rust_site(
-            "x.rs", text, start, start + 8, "undocumented_unsafe_blocks"
-        )
+        text = "impl A { unsafe fn run() { use_it(); } }\nimpl B { fn run() {} }"
+        start = text.index("fn run")
+        key, _ = LINT.rust_site("x.rs", text, start, start + 8, "missing_safety_doc")
         moved = "// extra line\n\n" + text
         key2, _ = LINT.rust_site(
             "x.rs",
             moved,
-            moved.index("unsafe"),
-            moved.index("unsafe") + 8,
-            "undocumented_unsafe_blocks",
+            moved.index("fn run"),
+            moved.index("fn run") + 8,
+            "missing_safety_doc",
         )
         self.assertEqual(key, key2)
         a = LINT.rust_site(
@@ -138,30 +136,82 @@ class DebtTests(unittest.TestCase):
             root = Path(directory)
             path = "rust/test.rs"
             (root / "rust").mkdir()
-            text = "fn run() { let é = 1; let _ = é as u8; let _ = é as u8; }"
+            text = (
+                "fn run() { let é = 1; if é > 0 { use_it(); } if é > 0 { use_it(); } }"
+            )
             (root / path).write_text(text)
             records = []
-            for start in (text.index("é as"), text.rindex("é as")):
+            for start in (text.index("{ use_it();"), text.rindex("{ use_it();")):
                 span = {
                     "is_primary": True,
                     "file_name": path,
                     "byte_start": len(text[:start].encode()),
-                    "byte_end": len(text[: start + 7].encode()),
+                    "byte_end": len(text[: start + 11].encode()),
                 }
                 records.append(
                     json.dumps(
                         {
                             "reason": "compiler-message",
                             "message": {
-                                "code": {"code": "clippy::cast_sign_loss"},
-                                "message": "casting may lose the sign",
+                                "code": {"code": "clippy::excessive_nesting"},
+                                "message": "this block is too deeply nested",
                                 "spans": [span],
                             },
                         }
                     )
                 )
             rows = LINT.clippy_rows("\n".join(records * 2), root)
-            self.assertEqual(list(rows.values()), [[1, 1]])
+            self.assertEqual(list(rows.values()), [[2, 2]])
+            self.assertTrue(debt_errors(LINT.clippy_rows(records[0], root), rows, rows))
+
+    def test_only_retained_clippy_families_are_collected_and_ratcheted(self) -> None:
+        retained = {
+            "too_many_lines": 101,
+            "too_many_arguments": 8,
+            "cognitive_complexity": 26,
+            "excessive_nesting": 6,
+            "missing_safety_doc": 1,
+        }
+        removed = (
+            "cast_possible_truncation",
+            "cast_sign_loss",
+            "cast_possible_wrap",
+            "undocumented_unsafe_blocks",
+            "multiple_unsafe_ops_per_block",
+        )
+        self.assertEqual(set(LINT.CLIPPY), set(retained))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "rust").mkdir()
+            (root / "rust/test.rs").write_text("pub unsafe fn run() {}")
+            diagnostic = {
+                "reason": "compiler-message",
+                "message": {
+                    "code": {"code": ""},
+                    "message": "",
+                    "spans": [
+                        {
+                            "is_primary": True,
+                            "file_name": "rust/test.rs",
+                            "byte_start": 0,
+                            "byte_end": 22,
+                        }
+                    ],
+                },
+            }
+            for lint, magnitude in {**retained, **dict.fromkeys(removed, 1)}.items():
+                with self.subTest(lint=lint):
+                    diagnostic["message"]["code"]["code"] = "clippy::" + lint
+                    diagnostic["message"]["message"] = f"measured ({magnitude}/0)"
+                    rows = LINT.clippy_rows(json.dumps(diagnostic), root)
+                    if lint in removed:
+                        self.assertEqual(rows, {})
+                        continue
+                    self.assertEqual(list(rows.values()), [[magnitude]])
+                    self.assertFalse(debt_errors(rows, rows, rows))
+                    self.assertTrue(debt_errors({}, rows, rows))
+                    key = next(iter(rows))
+                    self.assertTrue(debt_errors({key: [magnitude + 1]}, rows, rows))
 
     def test_ruff_item_identity_and_growth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

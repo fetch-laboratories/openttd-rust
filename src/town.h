@@ -11,6 +11,7 @@
 #define TOWN_H
 
 #include "misc/history_type.hpp"
+#include "rust/history_adapter.hpp"
 #include "viewport_type.h"
 #include "timer/timer_game_tick.h"
 #include "town_map.h"
@@ -435,5 +436,7 @@ inline uint16_t TownTicksToGameTicks(uint16_t ticks)
 RoadType GetTownRoadType();
 bool CheckTownRoadTypes();
 std::span<const DrawBuildingsTileStruct> GetTownDrawTileData();
+
+template <> struct RustHistory::Operations<Town::SuppliedHistory> : RustHistory::TownOperations {};
 
 #endif /* TOWN_H */

@@ -8,12 +8,12 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
-use crate::services::{CalendarYmd, EconomyDate};
+use crate::services::CalendarYmd;
 use crate::timer_game_common::{self as common, *};
 use crate::timer_game_tick::DAY_TICKS;
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EconomyYear(pub i32);
 pub const DAYS_IN_ECONOMY_YEAR: i32 = 360;
 pub const DAYS_IN_ECONOMY_MONTH: i32 = 30;
@@ -134,3 +134,8 @@ pub(crate) unsafe fn elapsed(
     }
     true
 }
+
+/// Distinct C ABI carrier for a native economy Date, converted in C++.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EconomyDate(pub i32);

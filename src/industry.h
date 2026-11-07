@@ -12,6 +12,7 @@
 
 #include "core/flatset_type.hpp"
 #include "misc/history_type.hpp"
+#include "rust/history_adapter.hpp"
 #include "newgrf_storage.h"
 #include "subsidy_type.h"
 #include "industry_map.h"
@@ -352,5 +353,8 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices();
 OpenTTDIndustryRandomisationSpec IndustryRandomisationSpec(uint32_t tile) noexcept;
 OpenTTDIndustryReseed IndustryResolveReseed(uint32_t tile, uint16_t gfx, void *industry, uint8_t waiting) noexcept;
 OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept;
+
+template <> struct RustHistory::Operations<Industry::ProducedHistory> : RustHistory::IndustryOperations {};
+template <> struct RustHistory::Operations<Industry::AcceptedHistory> : RustHistory::IndustryOperations {};
 
 #endif /* INDUSTRY_H */

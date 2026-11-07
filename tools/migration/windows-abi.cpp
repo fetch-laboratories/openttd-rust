@@ -273,54 +273,28 @@ static void Locale()
 #endif
 }
 
-using HistoryOwner = std::unique_ptr<OpenTTDRustHistoryEngine, decltype(&openttd_rust_history_destroy)>;
-
-static void HistoryDescribe(OpenTTDRustHistoryEngine *owner, const HistoryRange &range)
-{
-	auto step = openttd_rust_history_next(owner);
-	CHECK(step.kind == 1 && step.token == reinterpret_cast<uintptr_t>(&range));
-	openttd_rust_history_describe(owner, {reinterpret_cast<uintptr_t>(range.hr), range.periods, range.records, range.first, range.last, range.division, range.total_division, range.hr != nullptr ? range.hr->periods : uint8_t{0}, range.hr != nullptr ? range.hr->division : uint8_t{0}});
-}
-
 static void History()
 {
 	const HistoryRange leaf{2};
 	const HistoryRange parent{leaf, 1, 2};
+	const HistoryRange wide{63};
 	constexpr uint64_t bits = UINT64_C(0xFEDCBA9876543210);
-	HistoryOwner owner(openttd_rust_history_create(0, reinterpret_cast<uintptr_t>(&leaf), bits, 0, 0), openttd_rust_history_destroy);
-	HistoryDescribe(owner.get(), leaf);
-	auto step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 0 && step.value == (bits | 2));
-	owner.reset(openttd_rust_history_create(1, reinterpret_cast<uintptr_t>(&leaf), bits | 2, 0, 0));
-	HistoryDescribe(owner.get(), leaf);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 0 && step.value == 1);
-	owner.reset(openttd_rust_history_create(2, reinterpret_cast<uintptr_t>(&leaf), bits | 2, 0, 1));
-	HistoryDescribe(owner.get(), leaf);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 2 && step.first == 1 && step.last == 3);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 3 && step.first == 0 && step.target == 1);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 4 && step.target == 0);
-	CHECK(openttd_rust_history_next(owner.get()).kind == 0);
-	owner.reset(openttd_rust_history_create(3, reinterpret_cast<uintptr_t>(&parent), bits | 2, 0, 0));
-	HistoryDescribe(owner.get(), parent);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 6 && step.count == 1);
-	openttd_rust_history_phase(owner.get(), 0);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 7 && step.target == 0);
-	HistoryDescribe(owner.get(), leaf);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 9 && step.first == 1);
-	CHECK(openttd_rust_history_complete(owner.get()) == 1);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 8 && step.count == 1);
-	CHECK(openttd_rust_history_complete(owner.get()) == 1);
-	step = openttd_rust_history_next(owner.get());
-	CHECK(step.kind == 0 && step.value == 1);
-	std::printf("history descriptor identities, high-bit mask and staged by-value calls passed\n");
+	CHECK(openttd_rust_history_is_valid(bits | 2, &leaf, 0) == 1);
+	CHECK(openttd_rust_history_is_valid(bits, &wide, 62) == 1);
+	CHECK(openttd_rust_history_is_valid(bits & ~(UINT64_C(1) << 63), &wide, 62) == 0);
+	std::array<OpenTTDIndustryPair, HISTORY_RECORDS> industry{};
+	industry[1] = {17, 19}; industry[2] = {23, 29};
+	OpenTTDIndustryPair pair{};
+	auto query = openttd_rust_history_get_industry(industry.data(), bits | 2, &parent, 0, &pair);
+	CHECK(query.in_range && query.is_valid && pair.first == 17 && pair.second == 19);
+	query = openttd_rust_history_get_industry(industry.data(), bits | 2, &leaf, 1, &pair);
+	CHECK(query.in_range && !query.is_valid && pair.first == 23 && pair.second == 29);
+	std::array<OpenTTDTownSuppliedHistory, HISTORY_RECORDS> town{};
+	town[1] = {41, 43};
+	OpenTTDTownSuppliedHistory supplied{};
+	query = openttd_rust_history_get_town(town.data(), bits | 2, &parent, 0, &supplied);
+	CHECK(query.in_range && query.is_valid && supplied.production == 41 && supplied.transported == 43);
+	std::printf("history range pointers, high-bit mask and typed by-value query results passed\n");
 }
 
 static void Math()

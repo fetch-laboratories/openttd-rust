@@ -8,49 +8,36 @@
 //! Copied, synchronous shared-world leaves. C++ wrappers are noexcept: environmental
 //! failures terminate there. No world reference or borrow crosses a leaf call.
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
+pub use crate::clear_map::ClearGround as ClearGroundType;
+pub use crate::direction_type::DiagDirection;
+pub use crate::economy_type::ExpensesType as ExpenseType;
+pub use crate::landscape_type::LandscapeType;
 pub use crate::map_func::Map;
+pub use crate::rail_map::RailGroundType;
+pub use crate::rail_map::RailTileType;
+pub use crate::rail_type::RailType;
+pub use crate::road_map::RoadTileType as RoadTileKind;
+pub use crate::road_map::Roadside;
+pub use crate::road_type::RoadBits;
+pub use crate::road_type::RoadTramType;
+pub use crate::road_type::RoadType;
+pub use crate::signal_type::SignalState;
+pub use crate::signal_type::SignalType;
+pub use crate::signal_type::SignalVariant;
+pub use crate::slope_type::Foundation;
+pub use crate::slope_type::Slope;
+pub use crate::station_type::RoadStopType;
+pub use crate::station_type::StationType;
+pub use crate::timer_game_calendar::CalendarDate;
+pub use crate::timer_game_economy::EconomyDate;
+pub use crate::track_type::Track;
+pub use crate::track_type::TrackBits;
+pub use crate::track_type::Trackdir;
+pub use crate::transport_type::TransportType;
+pub use crate::tree_map::TreeGround;
+pub use crate::water::FloodingBehaviour;
+pub use crate::water_map::WaterClass;
 use std::ffi::c_void;
-
-/// Native `RoadTramType : bool`; true denotes the tram mask.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RoadTramType(pub bool);
-/// Native `ClearGround` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ClearGroundType(pub u8);
-/// Native `Slope` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Slope(pub u8);
-/// Native `Foundation` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Foundation(pub u8);
-/// Native `Roadside` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Roadside(pub u8);
-/// Native `TreeGround` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TreeGround(pub u8);
-/// Native `WaterClass` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct WaterClass(pub u8);
-/// Native `FloodingBehaviour` representation; every byte pattern is retained.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct FloodingBehaviour(pub u8);
-/// Native `LandscapeType : uint8_t`; every underlying byte remains valid.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct LandscapeType(pub u8);
-impl LandscapeType {
-    /// Native `LandscapeType::Toyland`.
-    pub const TOYLAND: Self = Self(3);
-}
 
 /// Shared scalar result of `TimerGameCalendar::ConvertDateToYMD`.
 #[repr(C)]
@@ -63,15 +50,6 @@ pub struct CalendarYmd {
     /// One-based day.
     pub day: u8,
 }
-
-/// Explicit C ABI carrier for a native calendar Date, converted in C++.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct CalendarDate(pub i32);
-/// Distinct C ABI carrier for a native economy Date, converted in C++.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct EconomyDate(pub i32);
 
 /// Native stack-owned command result, including encoded error parameters.
 /// Rust only borrows its address and invokes the native operations below.
@@ -86,10 +64,6 @@ pub struct CommandCostStorage {
     /// Uninterpreted, uninitialized capacity lent to native lifetime operations.
     pub storage: [std::mem::MaybeUninit<u8>; 128],
 }
-/// Native `ExpensesType : uint8_t` carrier.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct ExpenseType(pub u8);
 /// Copied immutable command-result operations. Every input/output denotes a live
 /// native object for this call; C++ owns construction, storage and destruction.
 /// Moves and additions use the original native implementation without snapshots.
@@ -1257,62 +1231,8 @@ pub struct RandomServices {
     pub set_seed: unsafe extern "C" fn(u32),
 }
 
-/// Native byte enums use transparent carriers: every bit pattern remains valid
-/// across FFI, including source sentinels and values outside named variants.
-/// Native `DiagDirection` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct DiagDirection(pub u8);
-/// Native `RailType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RailType(pub u8);
-/// Native `RailTileType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RailTileType(pub u8);
-/// Native `RailGroundType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RailGroundType(pub u8);
-/// Native `SignalVariant` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct SignalVariant(pub u8);
-/// Native `RoadType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RoadType(pub u8);
-/// Native `RoadBits` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RoadBits(pub u8);
-/// Native `Trackdir` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Trackdir(pub u8);
-/// Native `Track` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Track(pub u8);
-/// Native `TrackBits` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TrackBits(pub u8);
-/// Native `SignalType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct SignalType(pub u8);
-/// Native `SignalState` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct SignalState(pub u8);
 /// Native `Axis` with its unchanged uint8 representation.
 pub use crate::direction_type::Axis;
-/// Native `TransportType` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct TransportType(pub u8);
 /// Fields consumed together at one original rail/signal branch phase.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -1478,14 +1398,6 @@ impl Cost<'_> {
     }
 }
 
-/// Native station tile kind (uint8).
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct StationType(pub u8);
-/// Native `RoadStopType : uint8_t` (bus 0, truck 1).
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RoadStopType(pub u8);
 #[cfg(test)]
 extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
     panic!("unused road stop table")
@@ -1530,11 +1442,6 @@ extern "C" fn fixture_station_catchment() -> *const crate::station::CatchmentSer
 extern "C" fn unused_road_cost_multiplier(_: u8) -> u16 {
     panic!("unused road cost multiplier")
 }
-
-/// Native road tile kind.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RoadTileKind(pub u8);
 
 #[cfg(test)]
 extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServices {

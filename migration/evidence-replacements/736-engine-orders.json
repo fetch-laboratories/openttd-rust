@@ -1,0 +1,17 @@
+[
+  {
+    "retires": ["ctest:Engine mappings preserve reservation, sorted identity and replacement metadata"],
+    "oracle": "Unchanged OpenTTD 15.3 at 14ec60f248547d4d062a1160f0fc26d742319888: original engine.cpp mapping methods and engine_base.h mapping records compiled with original tables on GNU/Linux x86_64. Frozen mapping-oracle.txt records the native case inputs for all four types, static and dynamic reservation, joined-thread visibility, replacement metadata and sorted insertion.",
+    "observations": {"Default counts/offsets, static no-reservation, dynamic reservation, serialized-thread publication, unchanged replacement substitute and sorted insertion": ["rust:lib:engine_loading::tests::mappings::reservation_replacement_and_serialized_threads_match_original"]}
+  },
+  {
+    "retires": ["ctest:Engine typed prototypes keep original out-of-range defaults"],
+    "oracle": "Unchanged baseline 14ec60f248547d4d062a1160f0fc26d742319888 Engine::Engine(type, UINT16_MAX) compiled with original tables on GNU/Linux x86_64; prototype-oracle.txt records four native prototypes. Rail mask and discriminants are also checked against the original engine_type.h defaults. Native ABI, temporary shell relocation and placement replacement remain in src/tests/engine.cpp.",
+    "observations": {"Original out-of-range type, default cargo/label, aging, life, variant and typed payload defaults": ["rust:lib:engine::records::tests::out_of_range_prototypes_match_original"]}
+  },
+  {
+    "retires": ["ctest:Engine capability observations preserve type and zero-capacity gates"],
+    "oracle": "Unchanged baseline 14ec60f248547d4d062a1160f0fc26d742319888 Engine::CanCarryCargo compiled and observed for original six type/capacity/cargo inputs: false,true,false,false,true,false. Existing production accessor test now checks the actual carrying decision too. Native RustEngineID observation stays in Engine temporary owners survive relocation and replacement.",
+    "observations": {"Ground zero-capacity gate, ship/aircraft cargo validity, canonical carrying/config reads": ["rust:lib:engine_capabilities::tests::carrying_and_config_preserve_type_and_zero_capacity_gates"]}
+  }
+]

@@ -233,3 +233,20 @@ mod tests {
         }
     }
 }
+
+/// Native `WaterClass` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WaterClass(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl WaterClass {
+    /// Sea.
+    pub const Sea: Self = Self(0);
+    /// Canal.
+    pub const Canal: Self = Self(1);
+    /// River.
+    pub const River: Self = Self(2);
+    /// Used for industry tiles on land (also for oilrig if newgrf says so).
+    pub const Invalid: Self = Self(3);
+}

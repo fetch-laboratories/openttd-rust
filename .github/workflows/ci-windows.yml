@@ -244,6 +244,8 @@ jobs:
       if: ${{ !inputs.cache-only }}
       shell: bash
       run: |
+        export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
+        export CARGO_BUILD_TARGET="$RUST_TARGET"
         cd build
         ctest --show-only=json-v1 > ctest-inventory.json
         python -c 'import json; tests=json.load(open("ctest-inventory.json"))["tests"]; assert tests, "Empty test inventory"; print(f"Discovered {len(tests)} tests")'
