@@ -419,7 +419,8 @@ pub(crate) unsafe fn reset(
         };
     }
     for spec in &mut specs[..usize::from(NEW_INDUSTRYOFFSET)] {
-        spec.enabled = spec.climate_availability & (1 << climate) != 0;
+        spec.enabled = crate::landscape_type::LandscapeTypes(spec.climate_availability)
+            .test(crate::landscape_type::LandscapeType(climate));
     }
     let tiles = unsafe { &mut *TILES.get() };
     for (gfx, spec) in tiles.iter_mut().enumerate() {

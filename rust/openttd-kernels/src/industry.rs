@@ -467,7 +467,10 @@ impl Map {
         crate::services::Map::from_log_x(self.size_x.trailing_zeros())
     }
 }
-use crate::landscape_type::{ARCTIC, TROPIC};
+use crate::clear_map::ClearGround;
+use crate::direction_type::DiagDirection;
+use crate::landscape_type::{ARCTIC, LandscapeType, TROPIC};
+use crate::tree_map::TreeGround;
 /// `GetIndustrySpec(i->type)` through the owner's type.
 fn spec_of(owner: *mut Industry) -> *const crate::industrytype::IndustrySpec {
     crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }))
@@ -880,7 +883,7 @@ fn statistics(owner: *mut Industry, s: &Services) {
 }
 fn protected(o: Observation, s: &Services) -> bool {
     if IndustryBehaviours(o.behaviour).test(IndustryBehaviour::DontIncrProd)
-        && unsafe { (s.landscape)() } == 0
+        && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate
     {
         return false;
     }
@@ -958,7 +961,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 != 0)
     {
         let only_decrease = IndustryBehaviours(o.behaviour).test(IndustryBehaviour::DontIncrProd)
-            && unsafe { (s.landscape)() } == 0;
+            && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate;
         if original {
             if only_decrease || chance(s, 1, 3) {
                 let pct = if produced_count(o.owner) > 0 {
@@ -1442,7 +1445,7 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
     let s = unsafe { &*services };
     let company = unsafe { (s.company_none)() };
     build_monthly(builder, s);
-    let mut from = u32::from(IndustryID::BEGIN.0);
+    let mut from = 0;
     loop {
         let e = unsafe { (s.next_tick)(from) };
         if e.industry.is_null() {
@@ -1450,7 +1453,7 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
         }
         from = u32::from(e.id) + 1;
         statistics(e.owner, s);
-        if unsafe { (*fields(e.owner)).prod_level == PRODLEVEL_CLOSURE } {
+        if unsafe { (*fields(e.owner)).prod_level == 0 } {
             unsafe { (s.destroy)(e.industry) };
         } else {
             change(e.industry, e.owner, s, true);
@@ -1485,19 +1488,22 @@ fn suitable(tile: u32, fields: bool, rough: bool, s: &Services) -> bool {
             if info.snow != 0 {
                 return false;
             }
-            match info.ground {
-                5 => false,
-                1 => rough,
-                3 => fields,
+            match ClearGround(info.ground) {
+                ClearGround::CLEAR_DESERT => false,
+                ClearGround::CLEAR_ROUGH => rough,
+                ClearGround::CLEAR_FIELDS => fields,
                 _ => true,
             }
         }
-        MP_TREES => info.ground != 3 && (rough || info.ground != 1),
+        MP_TREES => {
+            TreeGround(info.ground) != TreeGround::TREE_GROUND_SHORE
+                && (rough || TreeGround(info.ground) != TreeGround::TREE_GROUND_ROUGH)
+        }
         _ => false,
     }
 }
-fn fence(mut tile: u32, mut size: u32, kind: u8, side: u8, map: Map, s: &Services) {
-    let stride = if side == 0 || side == 2 {
+fn fence(mut tile: u32, mut size: u32, kind: u8, side: DiagDirection, map: Map, s: &Services) {
+    let stride = if side == DiagDirection::DIAGDIR_NE || side == DiagDirection::DIAGDIR_SW {
         map.size_x
     } else {
         1
@@ -1505,12 +1511,12 @@ fn fence(mut tile: u32, mut size: u32, kind: u8, side: u8, map: Map, s: &Service
     let mask = map.size_x.wrapping_mul(map.size_y).wrapping_sub(1);
     loop {
         tile &= mask;
-        if unsafe { (s.fence_wanted)(tile, side) } {
+        if unsafe { (s.fence_wanted)(tile, side.0) } {
             let mut kind = kind;
             if kind == 1 && chance(s, 1, 7) {
                 kind = 2;
             }
-            (s.shared().set_fence)(tile, crate::services::DiagDirection(side), u32::from(kind));
+            (s.shared().set_fence)(tile, side, u32::from(kind));
         }
         tile = tile.wrapping_add(stride);
         size -= 1;
@@ -1566,10 +1572,38 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
     if landscape() != ARCTIC && landscape() != TROPIC {
         kind = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6][(rand(s) & 15) as usize];
     }
-    fence(tiles.tile_xy(x, y), sy, kind, 0, map, s);
-    fence(tiles.tile_xy(x, y), sx, kind, 3, map, s);
-    fence(tiles.tile_xy(x + sx - 1, y), sy, kind, 2, map, s);
-    fence(tiles.tile_xy(x, y + sy - 1), sx, kind, 1, map, s);
+    fence(
+        tiles.tile_xy(x, y),
+        sy,
+        kind,
+        DiagDirection::DIAGDIR_NE,
+        map,
+        s,
+    );
+    fence(
+        tiles.tile_xy(x, y),
+        sx,
+        kind,
+        DiagDirection::DIAGDIR_NW,
+        map,
+        s,
+    );
+    fence(
+        tiles.tile_xy(x + sx - 1, y),
+        sy,
+        kind,
+        DiagDirection::DIAGDIR_SW,
+        map,
+        s,
+    );
+    fence(
+        tiles.tile_xy(x, y + sy - 1),
+        sx,
+        kind,
+        DiagDirection::DIAGDIR_SE,
+        map,
+        s,
+    );
 }
 fn farm_with_landscape(
     i: *mut c_void,
