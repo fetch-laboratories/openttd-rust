@@ -2586,8 +2586,11 @@ crate::abi::layouts! {
 mod tests {
     use super::*;
 
+    pub(super) static GLOBAL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn gui_and_game_threads_share_original_globals() {
+        let _guard = GLOBAL_LOCK.lock().unwrap();
         // Spawn/join serializes each access like the native game-state mutex.
         // Size a NewGRF-range house ID on the command thread before ottd:game.
         openttd_rust_town_global_id_counts_resize(4096);
@@ -2654,5 +2657,609 @@ mod tests {
         );
         openttd_rust_town_global_id_counts_resize(0);
         openttd_rust_town_global_class_counts_resize(0);
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    use crate::services::ExpenseType;
+    use crate::services::{CommandCost, CommandCostStorage};
+    use std::cell::Cell;
+    use std::fmt::Write;
+
+    // Process-wide rating scratch also belongs to the existing cross-thread test.
+    // Callback state is local to this fixture thread; no production storage changes.
+    thread_local! {
+        static COMPANY: Cell<u8> = const { Cell::new(0) };
+        static VALID: Cell<u32> = const { Cell::new(0) };
+        static DIRTY: Cell<u32> = const { Cell::new(0) };
+        static CLOSEST: Cell<u32> = const { Cell::new(0) };
+        static COUNCIL: Cell<u8> = const { Cell::new(0) };
+        static CHEAT: Cell<bool> = const { Cell::new(false) };
+        static ABSENT: Cell<bool> = const { Cell::new(false) };
+        static OWNER: Cell<*mut State> = const { Cell::new(ptr::null_mut()) };
+    }
+    extern "C" fn valid(company: u8) -> bool {
+        VALID.set(VALID.get() + 1);
+        company == 0 || company == 4
+    }
+    extern "C" fn dirty(town: u32) {
+        assert_eq!(town, 17);
+        DIRTY.set(DIRTY.get() + 1);
+    }
+    extern "C" fn unused_random(_: *mut std::ffi::c_void) -> u32 {
+        unreachable!()
+    }
+    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        unreachable!()
+    }
+    extern "C" fn company() -> u8 {
+        COMPANY.get()
+    }
+    extern "C" fn council() -> u8 {
+        COUNCIL.get()
+    }
+    extern "C" fn cheat() -> bool {
+        CHEAT.get()
+    }
+    extern "C" fn distance() -> u8 {
+        20
+    }
+    extern "C" fn town_index(_: *const crate::services::TownHandle) -> u16 {
+        17
+    }
+    extern "C" fn tile_type(tile: u32) -> u8 {
+        assert_eq!(tile, 129);
+        CLOSEST.set(CLOSEST.get() + 1);
+        if ABSENT.get() {
+            0
+        } else {
+            crate::tile_type::MP_HOUSE
+        }
+    }
+    extern "C" fn no_towns() -> usize {
+        0
+    }
+    extern "C" fn index(tile: u32) -> u16 {
+        assert_eq!(tile, 129);
+        17
+    }
+    extern "C" fn by_id(id: u32) -> *mut crate::services::TownHandle {
+        assert_eq!(id, 17);
+        assert!(!ABSENT.get());
+        OWNER.get().cast()
+    }
+    extern "C" fn owner(town: *const crate::services::TownHandle) -> *mut State {
+        assert_eq!(town.cast_mut().cast::<State>(), OWNER.get());
+        OWNER.get()
+    }
+    fn shared() -> Services {
+        let mut services =
+            crate::services::fixture(ptr::null_mut(), unused_random, unused_industry);
+        services.company_valid = valid;
+        services.current_company = company;
+        services.tile_type = tile_type;
+        services.town_count = no_towns;
+        services.town_index = index;
+        services.town_by_id = by_id;
+        services.town_owner = owner;
+        services.map = crate::map_func::fixture::statics();
+        services
+    }
+    fn leaves() -> Leaves {
+        extern "C" fn unexpected_map_log_x() -> u32 {
+            unreachable!("unexpected Leaves::map_log_x")
+        }
+        extern "C" fn unexpected_growth_rate() -> u8 {
+            unreachable!("unexpected Leaves::growth_rate")
+        }
+        extern "C" fn unexpected_generating_world() -> bool {
+            unreachable!("unexpected Leaves::generating_world")
+        }
+        extern "C" fn unexpected_allow_crossings() -> bool {
+            unreachable!("unexpected Leaves::allow_crossings")
+        }
+        extern "C" fn unexpected_climate() -> u8 {
+            unreachable!("unexpected Leaves::climate")
+        }
+        extern "C" fn unexpected_road_flags(_: u8) -> u8 {
+            unreachable!("unexpected Leaves::road_flags")
+        }
+        extern "C" fn unexpected_house_availability(_: u16) -> HouseAvailability {
+            unreachable!("unexpected Leaves::house_availability")
+        }
+        extern "C" fn unexpected_house_placement(_: u16) -> HousePlacement {
+            unreachable!("unexpected Leaves::house_placement")
+        }
+        extern "C" fn unexpected_house_population(_: u16) -> u8 {
+            unreachable!("unexpected Leaves::house_population")
+        }
+        extern "C" fn unexpected_house_flags(_: u16) -> u8 {
+            unreachable!("unexpected Leaves::house_flags")
+        }
+        extern "C" fn unexpected_house_extra_flags(_: u16) -> u8 {
+            unreachable!("unexpected Leaves::house_extra_flags")
+        }
+        extern "C" fn unexpected_house_callbacks(_: u16) -> u16 {
+            unreachable!("unexpected Leaves::house_callbacks")
+        }
+        extern "C" fn unexpected_road_info(_: u8) -> RoadChoice {
+            unreachable!("unexpected Leaves::road_info")
+        }
+        extern "C" fn unexpected_resolve_owner(_: u32) -> *mut State {
+            unreachable!("unexpected Leaves::resolve_owner")
+        }
+        extern "C" fn unexpected_dirty_town(_: u32) {
+            unreachable!("unexpected Leaves::dirty_town")
+        }
+        extern "C" fn unexpected_terraform_price() -> i64 {
+            unreachable!("unexpected Leaves::terraform_price")
+        }
+        extern "C" fn unexpected_set_road_town(_: u32, _: u32) {
+            unreachable!("unexpected Leaves::set_road_town")
+        }
+        extern "C" fn unexpected_exchange_company(_: u32) -> u32 {
+            unreachable!("unexpected Leaves::exchange_company")
+        }
+        extern "C" fn unexpected_house_class(_: u16) -> u16 {
+            unreachable!("unexpected Leaves::house_class")
+        }
+        extern "C" fn unexpected_make_house(_: u32, _: u32, _: u32, _: u32) {
+            unreachable!("unexpected Leaves::make_house")
+        }
+        extern "C" fn unexpected_population_changed(_: u32) {
+            unreachable!("unexpected Leaves::population_changed")
+        }
+        extern "C" fn unexpected_house_count() -> u32 {
+            unreachable!("unexpected Leaves::house_count")
+        }
+        extern "C" fn unexpected_road_type_error(_: i32) {
+            unreachable!("unexpected Leaves::road_type_error")
+        }
+        extern "C" fn unexpected_next_town(_: u32) -> u32 {
+            unreachable!("unexpected Leaves::next_town")
+        }
+        extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
+            unreachable!("unexpected Leaves::build_bridge")
+        }
+        extern "C" fn unexpected_build_tunnel(_: u32, _: u32, _: u32) -> bool {
+            unreachable!("unexpected Leaves::build_tunnel")
+        }
+        extern "C" fn unexpected_assert_clear_house(_: bool) {
+            unreachable!("unexpected Leaves::assert_clear_house")
+        }
+        Leaves {
+            map_log_x: unexpected_map_log_x,
+            growth_rate: unexpected_growth_rate,
+            environment: crate::services::EnvironmentServices {
+                editor: unexpected_generating_world,
+                freeform_edges: unexpected_generating_world,
+            },
+            generating_world: unexpected_generating_world,
+            allow_crossings: unexpected_allow_crossings,
+            climate: unexpected_climate,
+            road_flags: unexpected_road_flags,
+            house_availability: unexpected_house_availability,
+            house_placement: unexpected_house_placement,
+            house_population: unexpected_house_population,
+            house_flags: unexpected_house_flags,
+            house_extra_flags: unexpected_house_extra_flags,
+            house_callbacks: unexpected_house_callbacks,
+            road_info: unexpected_road_info,
+            resolve_owner: unexpected_resolve_owner,
+            dirty_authority: dirty,
+            dirty_town: unexpected_dirty_town,
+            terraform_price: unexpected_terraform_price,
+            set_road_town: unexpected_set_road_town,
+            exchange_company: unexpected_exchange_company,
+            house_class: unexpected_house_class,
+            make_house: unexpected_make_house,
+            population_changed: unexpected_population_changed,
+            house_count: unexpected_house_count,
+            road_type_error: unexpected_road_type_error,
+            next_town: unexpected_next_town,
+            build_bridge: unexpected_build_bridge,
+            build_tunnel: unexpected_build_tunnel,
+            assert_clear_house: unexpected_assert_clear_house,
+            houses: ptr::null(),
+        }
+    }
+
+    fn check_rows(kind: char, actual: &[String], count: usize) {
+        let prefix = format!("{kind} ");
+        let expected: Vec<_> = include_str!("town/policy-oracle.txt")
+            .lines()
+            .filter(|line| line.starts_with(&prefix))
+            .collect();
+        assert_eq!(actual.len(), count);
+        assert_eq!(expected.len(), count);
+        for (case, (a, e)) in actual.iter().zip(expected).enumerate() {
+            assert_eq!(a, e, "{kind} case {case}");
+        }
+    }
+    #[test]
+    fn histories_match_original_policy_corpus() {
+        let mut rows = Vec::new();
+        for count in [1, 3, 4, 61] {
+            for production in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
+                for transported in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
+                    for stride in [0_u32, 17, 0x4000_0000, 0x8000_0000] {
+                        let history: Vec<_> = (0..count)
+                            .map(|i| SuppliedHistory {
+                                production: production
+                                    .wrapping_add((i as u32).wrapping_mul(stride)),
+                                transported: transported
+                                    .wrapping_add((i as u32).wrapping_mul(stride)),
+                            })
+                            .collect();
+                        let result = sum_history(&history);
+                        rows.push(format!(
+                            "H {count} {production} {transported} {stride} {} {}",
+                            result.production, result.transported
+                        ));
+                    }
+                }
+            }
+        }
+        check_rows('H', &rows, 400);
+    }
+    #[test]
+    fn radii_match_original_policy_corpus() {
+        let mut town = State::default();
+        let mut rows = Vec::new();
+        for houses in (0..=100).chain([1000, 10000, 0x100_0000, 0x7fff_ffff, 0x8000_0000, u32::MAX])
+        {
+            town.simulation.num_houses = houses;
+            // SAFETY: Live local canonical owner, no callbacks.
+            unsafe {
+                update_radius(&raw mut town);
+            }
+            let mut row = format!("Z {houses}");
+            for value in town.simulation.radius {
+                write!(row, " {value}").unwrap();
+            }
+            rows.push(row);
+        }
+        check_rows('Z', &rows, 107);
+    }
+    #[test]
+    fn percent_transported_matches_original_policy_corpus() {
+        let mut rows = Vec::new();
+        for production in [0, 1, 255, 256, 0x100_0000, u32::MAX] {
+            for transported in [0, 1, 255, 256, 0x100_0000, u32::MAX] {
+                let history = SuppliedHistory {
+                    production,
+                    transported,
+                };
+                // SAFETY: Live typed supplied-history record.
+                let result = unsafe { openttd_rust_town_percent_transported(&raw const history) };
+                rows.push(format!("P {production} {transported} {result}"));
+            }
+        }
+        check_rows('P', &rows, 36);
+    }
+    struct Ratings {
+        town: Box<State>,
+        leaves: Leaves,
+        shared: Services,
+        rows: Vec<String>,
+        depth: u32,
+    }
+    impl Ratings {
+        fn new() -> Self {
+            Self {
+                town: Box::default(),
+                leaves: leaves(),
+                shared: shared(),
+                rows: Vec::new(),
+                depth: 0,
+            }
+        }
+        fn reset(&mut self, initial: i16) {
+            self.town.simulation.ratings.fill(initial);
+            self.town.simulation.have_ratings = 0;
+        }
+        fn mode(&mut self, enabled: bool) {
+            openttd_rust_town_rating_test(enabled);
+            if enabled {
+                self.depth += 1;
+            } else {
+                self.depth -= 1;
+            }
+        }
+        fn change(&mut self, add: i32, maximum: i32, company: u8, flags: [bool; 3]) {
+            let [no_modify, bulldozer, null_town] = flags;
+            VALID.set(0);
+            DIRTY.set(0);
+            let state = if null_town {
+                ptr::null_mut()
+            } else {
+                &raw mut *self.town
+            };
+            // SAFETY: Local owner/tables live throughout; 42 models the single native
+            // shell address, deliberately stable across canonical owner replacement.
+            unsafe {
+                openttd_rust_town_change_rating(
+                    &raw const self.leaves,
+                    &raw const self.shared,
+                    state,
+                    17,
+                    42,
+                    company,
+                    add,
+                    maximum,
+                    no_modify,
+                    bulldozer,
+                );
+            }
+            let mut row = format!(
+                "R {} {add} {maximum} {company} {} {} {} {} {} {} {}",
+                self.rows.len(),
+                u8::from(self.depth != 0),
+                u8::from(no_modify),
+                u8::from(bulldozer),
+                u8::from(null_town),
+                VALID.get(),
+                DIRTY.get(),
+                self.town.simulation.have_ratings
+            );
+            for value in self.town.simulation.ratings {
+                write!(row, " {value}").unwrap();
+            }
+            // SAFETY: Only the original fixture's two valid companies read ratings.
+            let rating = if company == 0 || company == 4 {
+                unsafe { openttd_rust_town_rating(&raw const *self.town, 42, company) }
+            } else {
+                0
+            };
+            write!(row, " {rating}").unwrap();
+            self.rows.push(row);
+        }
+    }
+    #[test]
+    fn ratings_match_original_policy_corpus() {
+        let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
+        let mut r = Ratings::new();
+        for initial in [-32768, -1000, 0, 1000, 32767] {
+            for add in [-40000, -1, 0, 1, 40000] {
+                for maximum in [-50000, -1000, 0, 1000, 50000] {
+                    r.reset(initial);
+                    r.change(add, maximum, 0, [false; 3]);
+                    r.change(add, maximum, 4, [false; 3]);
+                    r.reset(initial);
+                    r.mode(true);
+                    r.change(add, maximum, 0, [false; 3]);
+                    r.mode(true);
+                    r.change(add, maximum, 4, [false; 3]);
+                    r.mode(false);
+                    r.change(-add, maximum, 0, [false; 3]);
+                    r.mode(false);
+                    r.change(add, maximum, 0, [true, false, false]);
+                    r.change(add, maximum, 255, [false; 3]);
+                    r.change(add, maximum, 4, [false, true, false]);
+                    r.change(add, maximum, 0, [false, false, true]);
+                }
+            }
+        }
+        r.reset(10);
+        r.mode(true);
+        r.change(100, 1000, 0, [false; 3]);
+        r.mode(true);
+        r.town = Box::default();
+        r.reset(-100);
+        r.change(1, 1000, 4, [false; 3]);
+        r.mode(false);
+        r.change(-1, -1000, 0, [false; 3]);
+        r.mode(false);
+        r.mode(true);
+        r.change(1, 1000, 4, [false; 3]);
+        r.mode(false);
+        check_rows('R', &r.rows, 1129);
+    }
+    #[repr(C)]
+    #[derive(Default)]
+    struct Cost {
+        ok: bool,
+        error: u32,
+        parameter: u64,
+    }
+    extern "C" fn zero(out: *mut crate::services::CommandCost) {
+        // SAFETY: Stack-owned typed result passed synchronously to the real entry.
+        unsafe {
+            *out.cast::<Cost>() = Cost {
+                ok: true,
+                ..Cost::default()
+            };
+        }
+    }
+    extern "C" fn error(out: *mut crate::services::CommandCost, error: u32, parameter: u64) {
+        // SAFETY: Same typed result lifetime as zero.
+        unsafe {
+            *out.cast::<Cost>() = Cost {
+                ok: false,
+                error,
+                parameter,
+            };
+        }
+    }
+    fn costs() -> crate::services::CommandCostServices {
+        extern "C" fn unexpected_construct(_: *mut CommandCostStorage) -> *mut CommandCost {
+            unreachable!("unexpected CommandCostServices::construct")
+        }
+        extern "C" fn unexpected_destroy(_: *mut CommandCost) {
+            unreachable!("unexpected CommandCostServices::destroy")
+        }
+        extern "C" fn unexpected_error(_: *mut CommandCost, _: u32) {
+            unreachable!("unexpected CommandCostServices::error")
+        }
+        extern "C" fn unexpected_expense_money(_: *mut CommandCost, _: u8, _: i64) {
+            unreachable!("unexpected CommandCostServices::expense_money")
+        }
+        extern "C" fn unexpected_add(_: *mut CommandCost, _: *mut CommandCost) {
+            unreachable!("unexpected CommandCostServices::add")
+        }
+        extern "C" fn unexpected_move_cost(_: *mut CommandCost, _: *mut CommandCost) {
+            unreachable!("unexpected CommandCostServices::move_cost")
+        }
+        extern "C" fn unexpected_amount(_: *mut CommandCost, _: i64) {
+            unreachable!("unexpected CommandCostServices::amount")
+        }
+        extern "C" fn unexpected_success(_: *const CommandCost) -> bool {
+            unreachable!("unexpected CommandCostServices::success")
+        }
+        extern "C" fn unexpected_error_message(_: *const CommandCost) -> u32 {
+            unreachable!("unexpected CommandCostServices::error_message")
+        }
+        extern "C" fn unexpected_money(_: *const CommandCost) -> i64 {
+            unreachable!("unexpected CommandCostServices::money")
+        }
+        extern "C" fn unexpected_expense(_: *const CommandCost) -> ExpenseType {
+            unreachable!("unexpected CommandCostServices::expense")
+        }
+        extern "C" fn unexpected_make_error(_: *mut CommandCost, _: u32) {
+            unreachable!("unexpected CommandCostServices::make_error")
+        }
+        extern "C" fn unexpected_encode_owned_by(
+            _: *mut CommandCost,
+            _: crate::company_type::Owner,
+            _: crate::tile_type::TileIndex,
+        ) {
+            unreachable!("unexpected CommandCostServices::encode_owned_by")
+        }
+        extern "C" fn unexpected_error_owner(_: *mut CommandCost, _: crate::company_type::Owner) {
+            unreachable!("unexpected CommandCostServices::error_owner")
+        }
+        crate::services::CommandCostServices {
+            construct: unexpected_construct,
+            destroy: unexpected_destroy,
+            zero: zero,
+            error: unexpected_error,
+            expense_money: unexpected_expense_money,
+            error_param: error,
+            add: unexpected_add,
+            move_cost: unexpected_move_cost,
+            amount: unexpected_amount,
+            success: unexpected_success,
+            error_message: unexpected_error_message,
+            money: unexpected_money,
+            expense: unexpected_expense,
+            make_error: unexpected_make_error,
+            encode_owned_by: unexpected_encode_owned_by,
+            error_owner: unexpected_error_owner,
+        }
+    }
+
+    #[test]
+    fn authority_matches_original_policy_corpus() {
+        let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
+        let mut town = State::default();
+        OWNER.set(&raw mut town);
+        // An unallocated descriptor uses the existing controlled tile-type service,
+        // just like the retiring native authority fixture's map descriptor.
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: ptr::null(),
+                extended: ptr::null(),
+                count: 0,
+                assertions: false,
+            },
+            6,
+        );
+        let services = shared();
+        let leaves = leaves();
+        let costs = costs();
+        let authority = AuthorityServices {
+            council_tolerance: council,
+            bulldozer: cheat,
+            authority_distance: distance,
+            town_index,
+            refusal: 19,
+        };
+        let mut rows = Vec::new();
+        for company in [0, 4, 255] {
+            for council in 0..4 {
+                for no_test in [false, true] {
+                    for cheat in [false, true] {
+                        for absent in [false, true] {
+                            for rating in [
+                                -32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64,
+                                65, 111, 112, 113, 143, 144, 145, 207, 208, 209, 399, 400, 401,
+                                32767,
+                            ] {
+                                for testing in [false, true] {
+                                    COMPANY.set(company);
+                                    COUNCIL.set(council);
+                                    CHEAT.set(cheat);
+                                    ABSENT.set(absent);
+                                    town.simulation.ratings.fill(rating);
+                                    if testing {
+                                        openttd_rust_town_rating_test(true);
+                                        openttd_rust_town_rating_test(true);
+                                        // SAFETY: Local canonical owner and fixture callbacks, valid throughout.
+                                        unsafe {
+                                            openttd_rust_town_change_rating(
+                                                &raw const leaves,
+                                                &raw const services,
+                                                &raw mut town,
+                                                17,
+                                                (&raw const town) as usize,
+                                                company,
+                                                -40000,
+                                                -1000,
+                                                false,
+                                                cheat,
+                                            );
+                                        }
+                                    }
+                                    for kind in 0..3 {
+                                        VALID.set(0);
+                                        CLOSEST.set(0);
+                                        let mut cost = Cost::default();
+                                        let out = (&raw mut cost).cast();
+                                        let shell = if absent {
+                                            ptr::null()
+                                        } else {
+                                            (&raw const town).cast()
+                                        };
+                                        // SAFETY: Real production dispatch with typed stack result; no callback retains owner borrows.
+                                        unsafe {
+                                            if kind == 2 {
+                                                openttd_rust_town_authority_station(
+                                                    &raw const authority,
+                                                    &raw const services,
+                                                    &raw const costs,
+                                                    out,
+                                                    129,
+                                                    no_test,
+                                                );
+                                            } else {
+                                                openttd_rust_town_authority_remove(
+                                                    &raw const authority,
+                                                    &raw const services,
+                                                    &raw const costs,
+                                                    out,
+                                                    shell,
+                                                    no_test,
+                                                    kind,
+                                                );
+                                            }
+                                        }
+                                        rows.push(format!("A {} {company} {council} {} {} {} {rating} {} {kind} {} {} {} {} {}",
+                                rows.len(), u8::from(no_test), u8::from(cheat), u8::from(absent), u8::from(testing), u8::from(cost.ok), cost.error, cost.parameter, VALID.get(), CLOSEST.get()));
+                                    }
+                                    if testing {
+                                        openttd_rust_town_rating_test(false);
+                                        openttd_rust_town_rating_test(false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        OWNER.set(ptr::null_mut());
+        check_rows('A', &rows, 14976);
     }
 }

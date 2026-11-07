@@ -779,46 +779,12 @@ def industry_fields(chunks: core.Chunks, industry: int) -> set[int]:
 
 
 def production_gap() -> None:
-    """Absent NewGRFs: unchanged version, repetition and native arithmetic policy."""
-    import subprocess
+    """Require all unchanged-original version/repetition/arithmetic observations."""
+    import evidence_replacements
 
-    import probe
-
-    import migration
-
-    from .core import ROOT
-
-    out = ROOT / ".local/industry-production-gap"
-    out.mkdir(parents=True, exist_ok=True)
-    source = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/newgrf_industries.cpp"],
-        cwd=ROOT,
-    ).decode()
-    start = source.index("void IndustryProductionCallback(Industry *ind, int reason)")
-    end = source.index("/**\n * Check whether an industry temporarily", start)
-    (out / "industry-production-reference.inc").write_text(source[start:end])
-    binary = out / "probe"
-    probe.compile(
-        [
-            probe.compiler(ROOT / "build-rust"),
-            "-std=c++20",
-            "-O2",
-            "-fno-strict-overflow",
-            *probe.target_flags(ROOT / "build-rust"),
-            "-I" + str(ROOT / "src"),
-            "-I" + str(ROOT / "build-rust/generated-abi"),
-            "-I" + str(out),
-            str(ROOT / "tools/migration/industry-production-gap.cpp"),
-            *probe.rust(ROOT / "build-rust", define=False),
-            "-o",
-            str(binary),
-        ],
-        out / "compile.log",
-        cwd=ROOT,
-        env=migration.environment(),
-    )
-    print(
-        probe.execute([binary], binary, cwd=ROOT, stderr="inherited").decode(), end=""
+    evidence_replacements.run_rust(
+        "rust:lib:industry::production_policy_tests::"
+        "production_callback_matches_complete_original_corpus"
     )
 
 

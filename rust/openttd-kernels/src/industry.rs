@@ -2555,3 +2555,319 @@ impl IndustryDirectoryInvalidateWindowData {
     /// Resort the directory.
     pub const IDIWD_FORCE_RESORT: Self = Self(2);
 }
+
+#[cfg(test)]
+mod production_policy_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    thread_local! {
+        static RNG: Cell<u32> = const { Cell::new(0) };
+        static ERRORS: Cell<u32> = const { Cell::new(0) };
+        static DIRTY: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn random(_: *mut c_void) -> u32 {
+        let value = RNG.get();
+        RNG.set(value + 1);
+        value
+    }
+    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        unreachable!()
+    }
+    extern "C" fn error(_: *mut c_void, _: bool) {
+        ERRORS.set(ERRORS.get() + 1);
+    }
+    extern "C" fn dirty(_: *mut c_void) {
+        DIRTY.set(DIRTY.get() + 1);
+    }
+    fn services(shared: &crate::services::Services) -> Services {
+        extern "C" fn unexpected_next_tick(_: u32) -> Entry {
+            unreachable!("unexpected Services::next_tick")
+        }
+        extern "C" fn unexpected_location(_: *mut c_void) -> TileArea {
+            unreachable!("unexpected Services::location")
+        }
+        extern "C" fn unexpected_industry_sound(_: *mut c_void, _: u32) {
+            unreachable!("unexpected Services::industry_sound")
+        }
+        extern "C" fn unexpected_play_sound(_: u16, _: u32) {
+            unreachable!("unexpected Services::play_sound")
+        }
+        extern "C" fn unexpected_special_effect(_: *mut c_void, _: u32, _: u32) -> u16 {
+            unreachable!("unexpected Services::special_effect")
+        }
+        extern "C" fn unexpected_tick_trigger(_: *mut c_void) {
+            unreachable!("unexpected Services::tick_trigger")
+        }
+        extern "C" fn unexpected_production_callback(_: *mut c_void, _: u8) {
+            unreachable!("unexpected Services::production_callback")
+        }
+        extern "C" fn unexpected_scale_cargo(_: u32) -> u32 {
+            unreachable!("unexpected Services::scale_cargo")
+        }
+        extern "C" fn unexpected_farm_tile(_: u32) -> FarmTile {
+            unreachable!("unexpected Services::farm_tile")
+        }
+        extern "C" fn unexpected_make_field(_: u32, _: u8, _: u8, _: u16) {
+            unreachable!("unexpected Services::make_field")
+        }
+        extern "C" fn unexpected_fence_wanted(_: u32, _: u8) -> bool {
+            unreachable!("unexpected Services::fence_wanted")
+        }
+        extern "C" fn unexpected_tile_completed(_: *mut c_void, _: u32) -> bool {
+            unreachable!("unexpected Services::tile_completed")
+        }
+        extern "C" fn unexpected_harvest(_: u32) {
+            unreachable!("unexpected Services::harvest")
+        }
+        extern "C" fn unexpected_change_callback(_: *mut c_void, _: bool, _: u32) -> Change {
+            unreachable!("unexpected Services::change_callback")
+        }
+        extern "C" fn unexpected_news(_: *mut c_void, _: u32, _: bool, _: Servicing) {
+            unreachable!("unexpected Services::news")
+        }
+        extern "C" fn unexpected_production_news(_: *mut c_void, _: u8, _: i32, _: Servicing) {
+            unreachable!("unexpected Services::production_news")
+        }
+        extern "C" fn unexpected_destroy(_: *mut c_void) {
+            unreachable!("unexpected Services::destroy")
+        }
+        extern "C" fn unexpected_opening_news(_: *mut c_void) {
+            unreachable!("unexpected Services::opening_news")
+        }
+        extern "C" fn unexpected_opening_events(_: *mut c_void) {
+            unreachable!("unexpected Services::opening_events")
+        }
+        extern "C" fn unexpected_create(_: u8, _: u8) -> *mut c_void {
+            unreachable!("unexpected Services::create")
+        }
+        extern "C" fn unexpected_num_items() -> u32 {
+            unreachable!("unexpected Services::num_items")
+        }
+        extern "C" fn unexpected_get(_: u16) -> *mut c_void {
+            unreachable!("unexpected Services::get")
+        }
+        extern "C" fn unexpected_type_count(_: u8) -> u16 {
+            unreachable!("unexpected Services::type_count")
+        }
+        extern "C" fn unexpected_scale_by_map_size(_: u32) -> u32 {
+            unreachable!("unexpected Services::scale_by_map_size")
+        }
+        extern "C" fn unexpected_company_none() -> u8 {
+            unreachable!("unexpected Services::company_none")
+        }
+        extern "C" fn unexpected_restore_company(_: u8) {
+            unreachable!("unexpected Services::restore_company")
+        }
+        extern "C" fn unexpected_directory_dirty(_: u8) {
+            unreachable!("unexpected Services::directory_dirty")
+        }
+        extern "C" fn unexpected_economy_month() -> u8 {
+            unreachable!("unexpected Services::economy_month")
+        }
+        extern "C" fn unexpected_economy_year() -> i32 {
+            unreachable!("unexpected Services::economy_year")
+        }
+        extern "C" fn unexpected_days_since_last_month() -> u32 {
+            unreachable!("unexpected Services::days_since_last_month")
+        }
+        extern "C" fn unexpected_landscape() -> u8 {
+            unreachable!("unexpected Services::landscape")
+        }
+        extern "C" fn unexpected_economy_type() -> u8 {
+            unreachable!("unexpected Services::economy_type")
+        }
+        extern "C" fn unexpected_fund_only() -> bool {
+            unreachable!("unexpected Services::fund_only")
+        }
+        extern "C" fn unexpected_deity() -> bool {
+            unreachable!("unexpected Services::deity")
+        }
+        Services {
+            shared: shared,
+            next_tick: unexpected_next_tick,
+            location: unexpected_location,
+            industry_sound: unexpected_industry_sound,
+            play_sound: unexpected_play_sound,
+            special_effect: unexpected_special_effect,
+            tick_trigger: unexpected_tick_trigger,
+            production_callback: unexpected_production_callback,
+            scale_cargo: unexpected_scale_cargo,
+            environment: ptr::null(),
+            farm_tile: unexpected_farm_tile,
+            make_field: unexpected_make_field,
+            fence_wanted: unexpected_fence_wanted,
+            tile_completed: unexpected_tile_completed,
+            harvest: unexpected_harvest,
+            change_callback: unexpected_change_callback,
+            text: ptr::null(),
+            news: unexpected_news,
+            production_news: unexpected_production_news,
+            callback_error: error,
+            set_dirty: dirty,
+            destroy: unexpected_destroy,
+            opening_news: unexpected_opening_news,
+            opening_events: unexpected_opening_events,
+            create: unexpected_create,
+            num_items: unexpected_num_items,
+            get: unexpected_get,
+            type_count: unexpected_type_count,
+            resolver: ptr::null(),
+            scale_by_map_size: unexpected_scale_by_map_size,
+            company_none: unexpected_company_none,
+            restore_company: unexpected_restore_company,
+            directory_dirty: unexpected_directory_dirty,
+            economy_month: unexpected_economy_month,
+            economy_year: unexpected_economy_year,
+            days_since_last_month: unexpected_days_since_last_month,
+            landscape: unexpected_landscape,
+            economy_type: unexpected_economy_type,
+            fund_only: unexpected_fund_only,
+            deity: unexpected_deity,
+        }
+    }
+
+    // A run stores count, first pair, and per-pair uint32 deltas. Every pair is
+    // expanded and checked; this is lossless compression, not a digest/sample.
+    fn parameters(tokens: &[&str]) -> Vec<(u32, u32)> {
+        let mut pairs = Vec::new();
+        for token in tokens {
+            let fields: Vec<u32> = token.split(':').map(|v| v.parse().unwrap()).collect();
+            assert_eq!(fields.len(), 5);
+            assert!(fields[0] != 0);
+            for n in 0..fields[0] {
+                pairs.push((
+                    fields[1].wrapping_add(n.wrapping_mul(fields[3])),
+                    fields[2].wrapping_add(n.wrapping_mul(fields[4])),
+                ));
+            }
+        }
+        pairs
+    }
+    #[test]
+    fn production_callback_matches_complete_original_corpus() {
+        let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);
+        let services = services(&shared);
+        let mut oracle = include_str!("industry/production-oracle.txt")
+            .lines()
+            .filter(|line| line.starts_with("I "));
+        let mut checked = 0;
+        for version in [0, 1, 2, 255] {
+            for level in [0, 4, 16, 128, 255] {
+                for behaviour in [0, 1 << 14, 1 << 15, 3 << 14] {
+                    for limit in [0, 1, 3, 65536] {
+                        for reason in [0, 1] {
+                            for amount in [i32::MIN, -65536, -1, 0, 1, 65536, i32::MAX] {
+                                let line = oracle.next().expect("missing Industry policy case");
+                                let tokens: Vec<_> = line.split_whitespace().collect();
+                                let input = format!(
+                                    "I {version} {level} {behaviour} {limit} {reason} {amount} "
+                                );
+                                assert!(
+                                    line.starts_with(&input),
+                                    "case {checked}: dimensions changed"
+                                );
+                                let expected: Vec<u32> =
+                                    tokens[7..17].iter().map(|v| v.parse().unwrap()).collect();
+                                let pairs = parameters(&tokens[17..]);
+                                assert_eq!(pairs.len(), expected[9] as usize);
+                                let cargo = if amount == i32::MAX {
+                                    254
+                                } else if amount == i32::MIN {
+                                    64
+                                } else {
+                                    2
+                                };
+                                let mut industry = Industry::default();
+                                industry.fields.prod_level = level;
+                                for (cargo, waiting) in [(cargo, 65535), (255, 15), (3, 1)] {
+                                    industry.accepted.push(Accepted {
+                                        cargo,
+                                        waiting,
+                                        ..Accepted::default()
+                                    });
+                                }
+                                for (cargo, waiting) in [(cargo, 65535), (255, 15), (8, 1)] {
+                                    industry.produced.push(Produced {
+                                        cargo,
+                                        waiting,
+                                        ..Produced::default()
+                                    });
+                                }
+                                RNG.set(0x1234_5678);
+                                ERRORS.set(0);
+                                DIRTY.set(0);
+                                let mut calls = 0;
+                                production_callback(
+                                    ptr::null_mut(),
+                                    &raw mut industry,
+                                    behaviour,
+                                    reason,
+                                    &services,
+                                    |random, parameter, out| {
+                                        assert_eq!(
+                                            pairs.get(calls),
+                                            Some(&(random, parameter)),
+                                            "case {checked} callback {calls}"
+                                        );
+                                        calls += 1;
+                                        // SAFETY: Production supplies one initialized result for this synchronous resolver.
+                                        let out = unsafe { &mut *out };
+                                        out.present = u8::from(calls <= limit);
+                                        if out.present == 0 {
+                                            return;
+                                        }
+                                        out.version = version;
+                                        if version == 255 {
+                                            return;
+                                        }
+                                        out.num_input = 3;
+                                        out.num_output = 3;
+                                        for n in 0..3 {
+                                            out.subtract[n] =
+                                                if version >= 1 { amount } else { n as i32 };
+                                            out.add[n] =
+                                                if version >= 1 { amount } else { n as i32 + 3 };
+                                        }
+                                        out.cargo_input[..3].copy_from_slice(&[cargo, 255, 7]);
+                                        out.cargo_output[..3].copy_from_slice(&[cargo, 255, 9]);
+                                        out.again = if version == 0 {
+                                            6
+                                        } else if limit == 1 {
+                                            0
+                                        } else {
+                                            0x123
+                                        };
+                                    },
+                                );
+                                assert_eq!(
+                                    calls,
+                                    pairs.len(),
+                                    "case {checked}: truncated callbacks"
+                                );
+                                let actual = [
+                                    RNG.get(),
+                                    ERRORS.get(),
+                                    DIRTY.get(),
+                                    u32::from(industry.accepted[0].waiting),
+                                    u32::from(industry.accepted[1].waiting),
+                                    u32::from(industry.accepted[2].waiting),
+                                    u32::from(industry.produced[0].waiting),
+                                    u32::from(industry.produced[1].waiting),
+                                    u32::from(industry.produced[2].waiting),
+                                ];
+                                assert_eq!(actual, expected[..9], "case {checked}: state/effects");
+                                checked += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 4480);
+        assert!(
+            oracle.next().is_none(),
+            "unexpected extra Industry policy case"
+        );
+    }
+}

@@ -250,19 +250,9 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
     signatures = {
         "CanRoadContinueIntoNextTile": "static bool CanRoadContinueIntoNextTile(",
         "GrowTownWithTunnel": "static bool GrowTownWithTunnel(",
-        "SumHistory": "template <>\nTown::SuppliedHistory SumHistory(",
-        "SetTownRatingTestMode": "void SetTownRatingTestMode(",
-        "GetRating": "static int GetRating(",
-        "ChangeTownRating": "void ChangeTownRating(",
-        "UpdateTownRadius": "void UpdateTownRadius(",
-        "CheckIfAuthorityAllowsNewStation": "CommandCost CheckIfAuthorityAllowsNewStation(",
-        "CheckforTownRating": "CommandCost CheckforTownRating(",
     }
     for name, signature in signatures.items():
         bodies[name] = probe.body(source, signature)
-    header = (migration.REFERENCE / "src/town.h").read_text()
-    percent_body = probe.body(header, "uint8_t PctTransported() const")
-    (out / "town-percent-original.hpp").write_text(percent_body + "\n")
     (out / "town-tunnel-original.hpp").write_text("\n\n".join(bodies.values()) + "\n")
     build = ROOT / "build-rust"
     configuration = migration.rust_configuration(build)
@@ -298,7 +288,7 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
         else b""
     )
     counts: dict[str, int] = {}
-    for kind in ("tunnel", "history", "rating", "radius", "authority", "percent"):
+    for kind in ("tunnel",):
         found = re.search(
             rb"\nPASS (\d+) unchanged-reference %s cases\n" % kind.encode()
             + (b"$" if kind == "tunnel" else b""),
@@ -309,6 +299,21 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
                 f"town {kind} reference gap omitted completion/count marker"
             )
         counts["cases" if kind == "tunnel" else f"{kind}_cases"] = int(found[1])
+    # Each transferred family now executes its registered production Rust test.
+    # Exact selectors reject missing/empty tests; each test requires its full corpus.
+    import evidence_replacements
+
+    for kind, name, count in (
+        ("history", "histories_match_original_policy_corpus", 400),
+        ("rating", "ratings_match_original_policy_corpus", 1129),
+        ("radius", "radii_match_original_policy_corpus", 107),
+        ("authority", "authority_matches_original_policy_corpus", 14976),
+        ("percent", "percent_transported_matches_original_policy_corpus", 36),
+    ):
+        evidence_replacements.run_rust(
+            f"rust:lib:town::policy_tests::{name}"
+        )
+        counts[f"{kind}_cases"] = count
     migration.ensure_reference()
     report = {
         "passed": True,
