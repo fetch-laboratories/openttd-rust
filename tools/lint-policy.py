@@ -18,6 +18,36 @@ ROOT = Path(__file__).resolve().parents[1]
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
 
 
+def permitted_change(key: str, before: object, after: object) -> bool:
+    if key in ("select", "extend-select") and isinstance(after, list):
+        return isinstance(before, list) and set(before) <= set(after)
+    if key in ("ignore", "extend-ignore", "exclude", "extend-exclude"):
+        return (
+            isinstance(before, list)
+            and isinstance(after, list)
+            and set(after) <= set(before)
+        )
+    if isinstance(after, str) and after in RANK:
+        return RANK[after] >= RANK.get(str(before), 1)
+    thresholds = (
+        "too-many-lines-threshold",
+        "too-many-arguments-threshold",
+        "cognitive-complexity-threshold",
+        "excessive-nesting-threshold",
+        "max-complexity",
+        "max-returns",
+        "max-branches",
+        "max-args",
+        "max-statements",
+    )
+    return (
+        key in thresholds
+        and isinstance(before, int)
+        and isinstance(after, int)
+        and after <= before
+    )
+
+
 def config_errors(
     old: dict[str, Any], new: dict[str, Any], path: str = ""
 ) -> list[str]:
@@ -30,94 +60,63 @@ def config_errors(
             continue
         if isinstance(before, dict) and isinstance(after, dict):
             errors.extend(config_errors(before, after, name))
-        elif key in ("select", "extend-select") and isinstance(after, list):
-            if not set(before or []) <= set(after):
-                errors.append(f"weakened lint selection: {name}")
-        elif (
-            key in ("ignore", "extend-ignore", "exclude", "extend-exclude")
-            and isinstance(before, list)
-            and isinstance(after, list)
-        ):
-            if not set(after) <= set(before):
-                errors.append(f"broadened lint exclusion: {name}")
-        elif (
-            isinstance(before, str)
-            and isinstance(after, str)
-            and before in RANK
-            and after in RANK
-            and RANK[after] >= RANK[before]
-        ):
-            continue
-        elif (
-            before is None
-            and isinstance(after, str)
-            and after in ("warn", "deny", "forbid")
-        ):
-            continue
-        elif (
-            key
-            in (
-                "too-many-lines-threshold",
-                "too-many-arguments-threshold",
-                "cognitive-complexity-threshold",
-                "excessive-nesting-threshold",
-                "max-complexity",
-                "max-returns",
-                "max-branches",
-                "max-args",
-                "max-statements",
-            )
-            and isinstance(before, int)
-            and isinstance(after, int)
-            and after <= before
-        ):
-            continue
-        else:
+        elif not permitted_change(key, before, after):
             errors.append(
-                f"unclassified lint-policy change: {name}: {before!r} -> {after!r}"
+                f"weakened or unclassified lint policy: {name}: {before!r} -> {after!r}"
             )
     return errors
+
+
+def rust_suppressions(path: str, text: str) -> Counter[str]:
+    rows: Counter[str] = Counter()
+    clean = without_comments(text, path)
+    masked = without_comments(text, path, strings=True)
+    for match in re.finditer(r"#!?\[([^\]]*)\]", masked, re.S):
+        for allow in re.finditer(r"\b(allow|expect)\s*\(([^)]*)\)", match[1]):
+            rules = re.sub(r",?\s*reason\s*=.*", "", allow[2], flags=re.S)
+            item = re.search(
+                r"\b(fn|struct|enum|mod|trait|impl)\s+([^\n{;]+)", clean[match.end() :]
+            )
+            scope = (
+                " ".join(item[0].split()[:2]).split("(")[0].split("<")[0]
+                if item
+                else "module"
+            )
+            if masked[match.start() : match.start() + 3] == "#![":
+                scope = "module"
+            for rule in rules.split(","):
+                if rule.strip():
+                    rows[f"{path} | {scope} | {allow[1]} {rule.strip()}"] += 1
+    return rows
+
+
+def python_suppressions(path: str, text: str) -> Counter[str]:
+    rows: Counter[str] = Counter()
+    tree = ast.parse(text)
+    functions = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        match = re.search(r"#\s*(?:ruff:\s*)?noqa\b(.*)", token.string, re.I)
+        if match:
+            scope = ".".join(
+                n.name
+                for n in sorted(functions, key=lambda n: n.lineno)
+                if n.lineno <= token.start[0] <= (n.end_lineno or n.lineno)
+            )
+            rows[f"{path} | {scope} | noqa{match[1].strip()}"] += 1
+    return rows
 
 
 def suppressions(files: dict[str, str]) -> Counter[str]:
     rows: Counter[str] = Counter()
     for path, text in files.items():
-        if path.endswith(".rs"):
-            clean = without_comments(text, path)
-            # Attributes are parsed as attribute token groups; strings/comments
-            # containing allow(...) cannot create or hide inventory entries.
-            masked = without_comments(text, path, strings=True)
-            for match in re.finditer(r"#!?\[([^\]]*)\]", masked, re.S):
-                for allow in re.finditer(r"\b(allow|expect)\s*\(([^)]*)\)", match[1]):
-                    rules = re.sub(r",?\s*reason\s*=.*", "", allow[2], flags=re.S)
-                    tail = clean[match.end() :]
-                    item = re.search(
-                        r"\b(fn|struct|enum|mod|trait|impl)\s+([^\n{;]+)", tail
-                    )
-                    scope = re.sub(r"\s+", " ", item[0]) if item else "module"
-                    if masked[match.start() : match.start() + 3] == "#![":
-                        scope = "module"
-                    for rule in rules.split(","):
-                        if rule.strip():
-                            rows[f"{path} | {scope} | {allow[1]} {rule.strip()}"] += 1
-        else:
-            tree = ast.parse(text)
-            functions = [
-                n
-                for n in ast.walk(tree)
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-            ]
-            for token in tokenize.generate_tokens(io.StringIO(text).readline):
-                if token.type != tokenize.COMMENT:
-                    continue
-                match = re.search(r"#\s*(?:ruff:\s*)?noqa\b(.*)", token.string, re.I)
-                if match:
-                    scope = ".".join(
-                        n.name
-                        for n in sorted(functions, key=lambda n: n.lineno)
-                        if n.lineno <= token.start[0] <= (n.end_lineno or n.lineno)
-                    )
-                    rows[f"{path} | {scope} | noqa{match[1].strip()}"] += 1
+        scanner = rust_suppressions if path.endswith(".rs") else python_suppressions
+        rows.update(scanner(path, text))
     return rows
 
 
@@ -146,7 +145,13 @@ def main() -> int:
     for path in sorted(paths):
         if not (
             path.endswith("Cargo.toml")
-            or path in ("ruff.toml", "clippy.toml", "rust-toolchain.toml", "ty.toml")
+            or path
+            in (
+                "ruff.toml",
+                "migration/lints/clippy.toml",
+                "rust-toolchain.toml",
+                "ty.toml",
+            )
         ):
             continue
         before = (
@@ -166,7 +171,7 @@ def main() -> int:
             for value in (before, after):
                 if "workspace" in value:
                     value["workspace"] = {"lints": value["workspace"].get("lints", {})}
-        if not before and path == "clippy.toml":
+        if not before and path == "migration/lints/clippy.toml":
             # Bootstrap only these pinned thresholds, not an arbitrary config.
             expected = {
                 "too-many-lines-threshold": 100,

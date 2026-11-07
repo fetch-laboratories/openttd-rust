@@ -368,6 +368,58 @@ def boundary(head: str) -> BoundaryMetrics:
     return dict(exports=exports, callback_slots=slots)
 
 
+_EXPANDED: dict[str, str] = {}
+
+
+def expanded_rust(revision: str) -> str:
+    """Use the pinned compiler to expand macros, including test-only syntax.
+
+    -Zunpretty needs RUSTC_BOOTSTRAP but does not compile/link game behavior.
+    Snapshots are archive extractions, never another Git checkout.
+    """
+    import migration
+
+    key = git(
+        "rev-parse",
+        *[
+            f"{revision}:{path}"
+            for path in ("rust", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml")
+        ],
+    )
+    if key in _EXPANDED:
+        return _EXPANDED[key]
+    output = ROOT / ".local/growth-inputs"
+    output.mkdir(parents=True, exist_ok=True)
+    archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
+    with tempfile.TemporaryDirectory(dir=output) as directory:
+        source = Path(directory)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(source, filter="data")
+        env = migration.environment()
+        env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo-growth")
+        env["RUSTC_BOOTSTRAP"] = "1"
+        expanded = subprocess.check_output(
+            [
+                "cargo",
+                "rustc",
+                "-p",
+                "openttd-kernels",
+                "--lib",
+                "--locked",
+                "--",
+                "--cfg",
+                "test",
+                "-Zunpretty=expanded",
+            ],
+            cwd=source,
+            env=env,
+            text=True,
+        )
+
+    _EXPANDED[key] = expanded
+    return expanded
+
+
 def growth_inventory(head: str) -> dict[str, dict[str, int]]:
     """Independent cleanup counters, sharing this metric's code-line semantics.
 
@@ -381,7 +433,12 @@ def growth_inventory(head: str) -> dict[str, dict[str, int]]:
         for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
         if path.endswith(".rs")
     }
-    identities = boundary_ids(files)
+    has_crate = bool(show(head, "rust/openttd-kernels/Cargo.toml"))
+    identities = (
+        boundary_ids({"rust/expanded.rs": expanded_rust(head)}, expanded=True)
+        if has_crate
+        else boundary_ids(files)
+    )
     evidence = evidence_cpp(head)
     glue: dict[str, set[int]] = {}
     source_metrics(BASELINE, head, glue_lines=glue)

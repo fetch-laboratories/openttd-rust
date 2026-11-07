@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from baseline_ratchet import debt_errors
+from cleanup_contract import context, reviewed
 from code_lines import without_comments
 from vcs import git
 
@@ -173,7 +174,7 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
 
         env = migration.environment()
         env["CARGO_TARGET_DIR"] = str(root / "build-rust/cargo-lint-ratchet")
-        env["CLIPPY_CONF_DIR"] = str(root)
+        env["CLIPPY_CONF_DIR"] = str(root / "migration/lints")
         version = subprocess.check_output(
             ["rustc", "--version"], env=env, text=True
         ).strip()
@@ -204,6 +205,57 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
     ):
         raise ValueError(f"{kind} version/collection failed: {version}\n{run.stderr}")
     return run.stdout, version
+
+
+def reviewed_debt(
+    kind: str, baseline: dict[str, list[int]], previous: dict[str, list[int]]
+) -> dict[str, list[int]]:
+    growth = {
+        key: values
+        for key, values in baseline.items()
+        if any(
+            error.startswith("new site:")
+            for error in debt_errors(
+                {key: values},
+                {key: previous.get(key, [])},
+                {key: previous.get(key, [])},
+            )
+        )
+    }
+    if not growth:
+        return previous
+    author, proposals, comments, head = context()
+    allowed = dict(previous)
+    for site, values in growth.items():
+        for proposal in proposals:
+            expected = {
+                "kind": "lint",
+                "tool": kind,
+                "site": site,
+                "before": previous.get(site, []),
+                "after": values,
+            }
+            if any(proposal.get(key) != value for key, value in expected.items()):
+                continue
+            required = (
+                "operation",
+                "source_contract",
+                "reason",
+                "retiring_owner",
+                "retirement_condition",
+            )
+            if all(
+                isinstance(proposal.get(key), str) and proposal[key].strip()
+                for key in required
+            ) and reviewed(proposal, comments, author, head):
+                allowed[site] = values
+                print(
+                    json.dumps(
+                        {"accepted_at": head, "lint_exception": proposal},
+                        sort_keys=True,
+                    )
+                )
+    return allowed
 
 
 def main() -> int:
@@ -247,7 +299,8 @@ def main() -> int:
     previous = (
         json.loads(git("show", f"{args.base_ref}:{path}")) if tracked else baseline
     )
-    errors = debt_errors(rows, baseline["sites"], previous["sites"])
+    allowed = reviewed_debt(kind, baseline["sites"], previous["sites"])
+    errors = debt_errors(rows, baseline["sites"], allowed)
     if baseline["version"] != version or previous["version"] != version:
         errors.append("compiler/linter version differs from the recorded inventory")
     for error in errors:

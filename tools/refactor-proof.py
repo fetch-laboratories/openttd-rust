@@ -17,6 +17,7 @@ import tarfile
 import tempfile
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from cleanup_contract import context, reviewed
 from vcs import git
@@ -25,106 +26,115 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def normalize(value: str, renames: dict[str, str]) -> str:
-    # Simultaneous exact symbol replacements, including section-name suffixes;
-    # substring edits could accidentally rewrite another relocation target.
-    return re.sub(
-        r"[A-Za-z_.$][A-Za-z_0-9.$]*", lambda m: renames.get(m[0], m[0]), value
+    """Simultaneous raw-symbol rewrites, including section-name suffixes."""
+
+    def replace(match: re.Match[str]) -> str:
+        symbol = match[0]
+        if symbol in renames:
+            return renames[symbol]
+        for prefix in (".text.", ".rodata.", ".data.rel.ro."):
+            if symbol.startswith(prefix):
+                return prefix + renames.get(
+                    symbol[len(prefix) :], symbol[len(prefix) :]
+                )
+        return symbol
+
+    return re.sub(r"[A-Za-z_.$][A-Za-z_0-9.$]*", replace, value)
+
+
+def section_header(header: re.Match[str], flags: str) -> dict[str, Any]:
+    name, size, alignment = header.groups()
+    selected = "ALLOC" in flags and (
+        "CODE" in flags or "READONLY" in flags or name.startswith(".data.rel.ro")
     )
+    return {
+        "size": int(size, 16),
+        "alignment": alignment,
+        "flags": flags.strip(),
+        "bytes": "",
+        "relocations": [],
+        "symbols": [],
+        "selected": selected,
+    }
 
 
-def archive_sections(archive: Path, renames: dict[str, str]) -> Counter[str]:
-    """Inventory ELF section bytes, relocation targets/addends, and bound symbols.
+def dump_payload(
+    line: str,
+    mode: str,
+    current: str,
+    sections: dict[str, dict[str, Any]],
+    renames: dict[str, str],
+) -> None:
+    fields = line.split()
+    if mode == "symbols":
+        if (
+            len(fields) >= 5
+            and fields[-3] in sections
+            and re.fullmatch(r"[0-9a-f]+", fields[0])
+        ):
+            fields[-1] = normalize(fields[-1], renames)
+            fields[-3] = normalize(fields[-3], renames)
+            # Look up the unnormalized section name before recording its row.
+            section = line.split()[-3]
+            sections[section]["symbols"].append(" ".join(fields))
+    elif (
+        current in sections
+        and mode == "relocations"
+        and re.match(r"^[0-9a-f]+\s+R_", line)
+    ):
+        fields[2] = normalize(fields[2], renames)
+        sections[current]["relocations"].append(" ".join(fields))
+    elif current in sections and mode == "bytes" and re.match(r"^ [0-9a-f]+ ", line):
+        # Four fixed-width hex groups precede objdump's ASCII rendering.
+        sections[current]["bytes"] += "".join(line.split(None, 1)[1][:35].split())
 
-    Ignore archive member filenames and non-allocated metadata. Keep section
-    alignment and symbol offsets: identical instructions alone prove too little.
-    .data.rel.ro is writable in the object but read-only after relocation.
-    """
-    env = os.environ | {"LC_ALL": "C"}
-    output = subprocess.check_output(
-        ["objdump", "-h", "-s", "-r", "-t", str(archive)], text=True, env=env
-    )
-    result: Counter[str] = Counter()
-    sections: dict[str, dict[str, object]] = {}
-    current = ""
-    mode = ""
-    pending: tuple[str, str, str] | None = None
 
-    def finish() -> None:
-        for name, row in sections.items():
-            if row["selected"]:
-                payload = dict(row, name=normalize(name, renames))
-                del payload["selected"]
-                result[normalize(json.dumps(payload, sort_keys=True), renames)] += 1
-
-    objects = 0
-    for line in output.splitlines():
-        if ":     file format " in line:
-            finish()
-            sections = {}
-            objects += 1
-            mode = ""
-            continue
+def object_sections(output: str, renames: dict[str, str]) -> Counter[str]:
+    sections: dict[str, dict[str, Any]] = {}
+    current, mode = "", ""
+    lines = iter(output.splitlines())
+    for line in lines:
         header = re.match(
             r"\s*\d+\s+(\S+)\s+([0-9a-f]+)\s+[0-9a-f]+\s+[0-9a-f]+\s+[0-9a-f]+\s+(2\*\*\d+)",
             line,
         )
         if header:
-            pending = (header[1], header[2], header[3])
-            continue
-        if pending:
-            name, size, alignment = pending
-            selected = "ALLOC" in line and (
-                "CODE" in line or "READONLY" in line or name.startswith(".data.rel.ro")
-            )
-            sections[name] = {
-                "size": int(size, 16),
-                "alignment": alignment,
-                "flags": line.strip(),
-                "bytes": "",
-                "relocations": [],
-                "symbols": [],
-                "selected": selected,
-            }
-            pending = None
+            sections[header[1]] = section_header(header, next(lines))
             continue
         relocation = re.match(r"RELOCATION RECORDS FOR \[(.*)\]:", line)
         contents = re.match(r"Contents of section (.*):", line)
         if relocation or contents:
             match = relocation or contents
             assert match
-            current = match[1]
-            mode = "relocations" if relocation else "bytes"
-            continue
-        if line == "SYMBOL TABLE:":
+            current, mode = match[1], "relocations" if relocation else "bytes"
+        elif line == "SYMBOL TABLE:":
             mode = "symbols"
-            continue
-        if mode == "symbols":
-            fields = line.split()
-            if (
-                len(fields) >= 5
-                and fields[-3] in sections
-                and re.fullmatch(r"[0-9a-f]+", fields[0])
-            ):
-                symbols = sections[fields[-3]]["symbols"]
-                assert isinstance(symbols, list)
-                symbols.append(" ".join(fields))
-        elif (
-            current in sections
-            and mode == "relocations"
-            and re.match(r"^[0-9a-f]+\s+R_", line)
-        ):
-            relocations = sections[current]["relocations"]
-            assert isinstance(relocations, list)
-            relocations.append(" ".join(line.split()))
-        elif (
-            current in sections and mode == "bytes" and re.match(r"^ [0-9a-f]+ ", line)
-        ):
-            # Four fixed-width hex groups precede objdump's ASCII rendering.
-            data = line.split(None, 1)[1][:35]
-            sections[current]["bytes"] = str(sections[current]["bytes"]) + "".join(
-                data.split()
-            )
-    finish()
+        else:
+            dump_payload(line, mode, current, sections, renames)
+    result: Counter[str] = Counter()
+    for name, row in sections.items():
+        if row.pop("selected"):
+            result[
+                json.dumps(dict(row, name=normalize(name, renames)), sort_keys=True)
+            ] += 1
+    return result
+
+
+def archive_sections(archive: Path, renames: dict[str, str]) -> Counter[str]:
+    """Inventory ELF bytes, relocation targets/addends and bound symbol offsets.
+
+    Ignore archive member filenames and non-allocated metadata. Keep alignment;
+    .data.rel.ro is writable in the object but read-only after relocation.
+    """
+    output = subprocess.check_output(
+        ["objdump", "-h", "-s", "-r", "-t", str(archive)],
+        text=True,
+        env=os.environ | {"LC_ALL": "C"},
+    )
+    objects = re.split(r"^.*:     file format .*?$", output, flags=re.M)[1:]
+    result: Counter[str] = Counter()
+    for obj in objects:
+        result.update(object_sections(obj, renames))
     if not objects or not result:
         raise ValueError(
             f"archive contains no classified allocated code/data: {archive}"
@@ -182,6 +192,11 @@ def build(revision: str, destination: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", default="origin/rust-migration")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="locally build and compare both revisions without a PR claim",
+    )
     parser.add_argument("--base-archive", type=Path)
     parser.add_argument("--head-archive", type=Path)
     parser.add_argument(
@@ -195,10 +210,17 @@ def main() -> int:
         return int(not compare(args.base_archive, args.head_archive, renames))
     if args.renames:
         parser.error("CI renames must come from an exact-head reviewed PR contract")
-    if not git("diff", "--name-only", args.base_ref, "HEAD", "--", "rust/").strip():
+    if (
+        not args.build
+        and not git("diff", "--name-only", args.base_ref, "HEAD", "--", "rust/").strip()
+    ):
         print("refactor proof: no Rust source changes")
         return 0
-    author, proposals, comments, head = context()
+    author, proposals, comments, head = (
+        ("", [{"kind": "refactor-proof", "method": "archive", "renames": {}}], [], "")
+        if args.build
+        else context()
+    )
     claims = [p for p in proposals if p.get("kind") == "refactor-proof"]
     if not claims:
         print(
@@ -209,6 +231,8 @@ def main() -> int:
         raise ValueError("require one archive proof contract")
     claim = claims[0]
     renames = claim.get("renames", {})
+    if not isinstance(renames, dict):
+        raise ValueError("renames must map raw symbols to raw symbols")
     if renames and not reviewed(claim, comments, author, head):
         raise ValueError(
             "symbol renames need independent attributed acceptance at this head"

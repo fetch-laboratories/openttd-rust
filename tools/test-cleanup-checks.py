@@ -53,6 +53,39 @@ class DebtTests(unittest.TestCase):
             )
         )
 
+    def test_intentional_debt_needs_exact_reviewed_operation(self) -> None:
+        proposal = {
+            "kind": "lint",
+            "tool": "clippy",
+            "site": "operation",
+            "before": [],
+            "after": [1],
+            "operation": "native cast",
+            "source_contract": "original narrows to u8",
+            "reason": "preserve behavior",
+            "retiring_owner": "owner",
+            "retirement_condition": "native boundary retires",
+        }
+        body = (
+            "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n```cleanup-acceptance\n"
+            + json.dumps({"head": "head", "accept": [proposal]})
+            + "\n```"
+        )
+        with patch.object(
+            LINT,
+            "context",
+            return_value=("/implementation", [proposal], [body], "head"),
+        ):
+            self.assertEqual(
+                LINT.reviewed_debt("clippy", {"operation": [1]}, {}), {"operation": [1]}
+            )
+        with patch.object(
+            LINT,
+            "context",
+            return_value=("/implementation", [proposal], [body], "stale"),
+        ):
+            self.assertEqual(LINT.reviewed_debt("clippy", {"operation": [1]}, {}), {})
+
     def test_rust_identity_survives_lines_and_qualifies_impl(self) -> None:
         text = "impl A { fn run() { unsafe { use_it(); } } }\nimpl B { fn run() {} }"
         start = text.index("unsafe")
@@ -322,10 +355,11 @@ class OrdinaryRustTests(unittest.TestCase):
         env = migration.environment()
         env["RUSTUP_TOOLCHAIN"] = "1.99.0"
         cases = [
-            (["fmt", "--all", "--", "--check"], "pub fn x( )->i32{1}\n"),
+            (["fmt", "--all", "--", "--check"], "pub fn x( )->i32{1}\n", "Diff in"),
             (
                 ["check", "--workspace", "--all-targets", "--locked"],
                 "pub fn x() { missing(); }\n",
+                "cannot find function `missing`",
             ),
             (
                 [
@@ -338,10 +372,12 @@ class OrdinaryRustTests(unittest.TestCase):
                     "warnings",
                 ],
                 "pub fn x() -> bool { true == true }\n",
+                "equal expressions",
             ),
             (
                 ["test", "--workspace", "--locked"],
                 '#[test]\nfn failure() { panic!("seeded"); }\n',
+                "seeded",
             ),
         ]
         with tempfile.TemporaryDirectory() as directory:
@@ -358,12 +394,29 @@ class OrdinaryRustTests(unittest.TestCase):
                 capture_output=True,
             )
             self.assertEqual(lock.returncode, 0, lock.stderr.decode())
-            for command, source in cases:
+            for command, source, expected in cases:
                 (root / "src/lib.rs").write_text(source)
                 result = subprocess.run(
                     ["cargo", *command], cwd=root, env=env, capture_output=True
                 )
                 self.assertNotEqual(result.returncode, 0, command)
+                self.assertIn(expected, (result.stdout + result.stderr).decode())
+            (root / "migration/lints").mkdir(parents=True)
+            (root / "migration/lints/clippy.toml").write_text(
+                "too-many-arguments-threshold = 7\n"
+            )
+            (root / "src/lib.rs").write_text(
+                "#![allow(clippy::all)]\n#[allow(clippy::too_many_arguments)]\npub fn many(a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32,h:i32) { let _ = (a,b,c,d,e,f,g,h); }"
+            )
+            raw, _ = LINT.collect("clippy", root)
+            self.assertIn("too_many_arguments", raw)
+            (root / "tools").mkdir()
+            (root / "tools/x.py").write_text(
+                "def many(x):  # noqa: C901\n"
+                + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(12))
+            )
+            raw, _ = LINT.collect("ruff", root)
+            self.assertIn("C901", raw)
 
 
 if __name__ == "__main__":
