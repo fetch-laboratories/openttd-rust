@@ -123,8 +123,9 @@ def object_sections(output: str, renames: dict[str, str]) -> Counter[str]:
 def archive_sections(archive: Path, renames: dict[str, str]) -> Counter[str]:
     """Inventory ELF bytes, relocation targets/addends and bound symbol offsets.
 
-    Ignore archive member filenames and non-allocated metadata. Keep alignment;
-    .data.rel.ro is writable in the object but read-only after relocation.
+    Ignore archive member filenames and non-allocated metadata. Keep each
+    object's sections together: local relocation targets resolve within that
+    object. .data.rel.ro is read-only after relocation.
     """
     output = subprocess.check_output(
         ["objdump", "-h", "-s", "-r", "-t", str(archive)],
@@ -134,7 +135,9 @@ def archive_sections(archive: Path, renames: dict[str, str]) -> Counter[str]:
     objects = re.split(r"^.*:     file format .*?$", output, flags=re.M)[1:]
     result: Counter[str] = Counter()
     for obj in objects:
-        result.update(object_sections(obj, renames))
+        sections = object_sections(obj, renames)
+        if sections:
+            result[json.dumps(sorted(sections.items()))] += 1
     if not objects or not result:
         raise ValueError(
             f"archive contains no classified allocated code/data: {archive}"
@@ -149,11 +152,11 @@ def compare(base: Path, head: Path, renames: dict[str, str]) -> bool:
     for label, rows in (("base", before), ("head", after)):
         digest = hashlib.sha256(json.dumps(sorted(rows.items())).encode()).hexdigest()
         print(
-            f"{label}: {sum(rows.values())} code/read-only sections; canonical sha256 {digest}"
+            f"{label}: {sum(rows.values())} code/read-only object groups; canonical sha256 {digest}"
         )
     removed, added = before - after, after - before
     print(
-        f"refactor proof: {sum(removed.values())} removed/changed; {sum(added.values())} added/changed sections"
+        f"refactor proof: {sum(removed.values())} removed/changed; {sum(added.values())} added/changed object groups"
     )
     # A rename that names nothing is an invalid audit, even if archives match.
     used = "\n".join(archive_sections(base, {}))

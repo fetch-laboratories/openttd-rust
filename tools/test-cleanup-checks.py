@@ -331,6 +331,55 @@ class GrowthTests(unittest.TestCase):
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_local_relocation_targets_remain_in_their_object(self) -> None:
+        # Identical section/target names in different objects must not let a
+        # changed function reuse another object's old read-only table.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            caller = root / "caller.c"
+            caller.write_text(
+                "int a(unsigned); int b(unsigned); int main(void) { return a(0) + 10*b(0); }"
+            )
+            archives = []
+            results = []
+            for variant, tables in (
+                ("base", ("1,2,3,4", "5,6,7,8")),
+                ("head", ("5,6,7,8", "1,2,3,4")),
+            ):
+                objects = []
+                for name, table in zip(("a", "b"), tables, strict=True):
+                    source = root / f"{variant}_{name}.c"
+                    obj = source.with_suffix(".o")
+                    source.write_text(
+                        f"static const int values[4]={{ {table} }}; int {name}(unsigned x) {{ return values[x & 3]; }}"
+                    )
+                    subprocess.run(
+                        [
+                            "cc",
+                            "-c",
+                            "-O2",
+                            "-ffunction-sections",
+                            "-fdata-sections",
+                            str(source),
+                            "-o",
+                            str(obj),
+                        ],
+                        check=True,
+                    )
+                    objects.append(str(obj))
+                archive = root / f"{variant}.a"
+                subprocess.run(["ar", "rcs", str(archive), *objects], check=True)
+                executable = root / variant
+                subprocess.run(
+                    ["cc", str(caller), str(archive), "-o", str(executable)], check=True
+                )
+                results.append(
+                    subprocess.run([str(executable)], check=False).returncode
+                )
+                archives.append(archive)
+            self.assertEqual(results, [51, 15])
+            self.assertFalse(PROOF.compare(archives[0], archives[1], {}))
+
     def test_code_relocation_data_and_audited_rename(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
