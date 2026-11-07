@@ -10,18 +10,11 @@
 )]
 use crate::company_type::{CompanyID, CompanyManagerFace, OpenTTDCompany};
 use crate::engine_type::{EngineID, OpenTTDEngine};
-use crate::livery::{
-    LS_BUS, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_FREIGHT_SHIP, LS_FREIGHT_TRAM,
-    LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL, LS_PASSENGER_SHIP,
-    LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
-    LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
-    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery, LiveryScheme, PRIMARY, SECONDARY,
-};
+use crate::livery::{Livery, LiveryScheme, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
 use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
-use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{OpenTTDVehicle, VehicleID};
 use std::mem::MaybeUninit;
 type Town = crate::town_type::TownHandle;
@@ -547,164 +540,180 @@ pub extern "C" fn openttd_rust_company_rename(s: &Services, text: ByteSpan, exec
 pub extern "C" fn openttd_rust_president_rename(s: &Services, text: ByteSpan, execute: bool) -> u8 {
     rename(s, text, execute, true)
 }
-pub(crate) fn engine_livery(
+/// Determines the livery scheme for a vehicle.
+/// `engine_type` is the vehicle engine; `parent_engine_type` is the front vehicle's
+/// engine, or `EngineID::INVALID` if the vehicle is itself at the front.
+/// `v` is null in the purchase list etc. Returns the livery scheme to use.
+pub(crate) fn get_engine_livery_scheme(
     s: &Services,
-    mut engine: EngineID,
-    parent: EngineID,
+    mut engine_type: EngineID,
+    parent_engine_type: EngineID,
     v: *mut OpenTTDVehicle,
 ) -> u8 {
-    use crate::cargo_type::{INVALID_CARGO, is_valid_cargo_type};
+    use crate::cargo_registry::openttd_rust_cargo_by_label as get_cargo_type_by_label;
+    use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
+    use crate::cargotype::{CargoClass, CargoClasses};
     use crate::engine_type::{
-        AIR_CTOL, AIR_FAST, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM,
-        RAIL_IS_MU, ROAD_IS_TRAM,
+        AIR_CTOL, AIR_FAST, AIR_HELI, EngineClass, EngineMiscFlag, EngineMiscFlags, RAIL_IS_MU,
+        RailVehicleTypes,
     };
-    let mut cargo = if v.is_null() {
-        INVALID_CARGO
+    use crate::livery::{
+        LS_BUS, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_FREIGHT_SHIP, LS_FREIGHT_TRAM,
+        LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL, LS_PASSENGER_SHIP,
+        LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
+        LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
+        LS_SMALL_PLANE, LS_STEAM, LS_TRUCK,
+    };
+    use crate::vehicle::{EngineRef, VehicleRef};
+    use crate::vehicle_type::VehicleType;
+    let mut cargo_type = if v.is_null() {
+        CargoType::INVALID_CARGO
     } else {
-        (s.vehicle_cargo)(v)
+        CargoType((s.vehicle_cargo)(v))
     };
-    let mut e = (s.engine)(engine);
-    match crate::vehicle::EngineRef::of(e).kind().0 {
-        crate::vehicle_type::VEH_TRAIN => {
+    let mut e = (s.engine)(engine_type);
+    match EngineRef::of(e).kind() {
+        VehicleType::VEH_TRAIN => {
             if !v.is_null()
-                && parent != EngineID::INVALID
+                && parent_engine_type != EngineID::INVALID
                 && ((s.wagon_override)(v)
-                    || (crate::vehicle::VehicleRef::of(v).is_articulated_part()
-                        && crate::vehicle::EngineRef::of(e).rail_kind() != RailVehicleTypes::WAGON))
+                    || (VehicleRef::of(v).is_articulated_part()
+                        && EngineRef::of(e).rail_kind() != RailVehicleTypes::RAILVEH_WAGON))
             {
-                engine = parent;
-                e = (s.engine)(engine);
+                // Wagonoverrides use the colour scheme of the front engine.
+                // Articulated parts use the colour scheme of the first part. (Not supported for articulated wagons)
+                engine_type = parent_engine_type;
+                e = (s.engine)(engine_type);
+                // Note: Luckily cargo_type is not needed for engines
             }
-            if !is_valid_cargo_type(cargo) {
-                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
+            if !is_valid_cargo_type(cargo_type.0) {
+                cargo_type = CargoType(EngineRef::of(e).default_cargo());
             }
-            if !is_valid_cargo_type(cargo) {
-                cargo =
-                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+            if !is_valid_cargo_type(cargo_type.0) {
+                // The vehicle does not carry anything, let's pick some freight cargo
+                cargo_type = CargoType(get_cargo_type_by_label(CargoLabel::CT_GOODS.0));
             }
-            assert!(is_valid_cargo_type(cargo));
-            if crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON {
-                if (s.cargo_freight)(cargo) {
-                    return LS_FREIGHT_WAGON;
+            assert!(is_valid_cargo_type(cargo_type.0));
+            if EngineRef::of(e).rail_kind() == RailVehicleTypes::RAILVEH_WAGON {
+                if (s.cargo_freight)(cargo_type.0) {
+                    return LiveryScheme(LS_FREIGHT_WAGON).0;
                 }
-                if parent == EngineID::INVALID {
-                    return LS_PASSENGER_WAGON_STEAM;
+                if parent_engine_type == EngineID::INVALID {
+                    return LiveryScheme(LS_PASSENGER_WAGON_STEAM).0;
                 }
-                let p = (s.engine)(parent);
-                let mu = crate::vehicle::EngineRef::of(p).misc() & RAIL_IS_MU != 0;
-                match crate::vehicle::EngineRef::of(p).train_class() {
-                    EC_STEAM => LS_PASSENGER_WAGON_STEAM,
-                    EC_DIESEL => {
-                        if mu {
-                            LS_DMU
+                let p = (s.engine)(parent_engine_type);
+                // RAIL_IS_MU is the retained raw adapter for EngineMiscFlag::RailIsMU.
+                let is_mu = EngineRef::of(p).misc() & RAIL_IS_MU != 0;
+                match EngineClass(EngineRef::of(p).train_class()) {
+                    EngineClass::EC_STEAM => LiveryScheme(LS_PASSENGER_WAGON_STEAM),
+                    EngineClass::EC_DIESEL => {
+                        if is_mu {
+                            LiveryScheme(LS_DMU)
                         } else {
-                            LS_PASSENGER_WAGON_DIESEL
+                            LiveryScheme(LS_PASSENGER_WAGON_DIESEL)
                         }
                     }
-                    EC_ELECTRIC => {
-                        if mu {
-                            LS_EMU
+                    EngineClass::EC_ELECTRIC => {
+                        if is_mu {
+                            LiveryScheme(LS_EMU)
                         } else {
-                            LS_PASSENGER_WAGON_ELECTRIC
+                            LiveryScheme(LS_PASSENGER_WAGON_ELECTRIC)
                         }
                     }
-                    EC_MONORAIL => LS_PASSENGER_WAGON_MONORAIL,
-                    EC_MAGLEV => LS_PASSENGER_WAGON_MAGLEV,
+                    EngineClass::EC_MONORAIL => LiveryScheme(LS_PASSENGER_WAGON_MONORAIL),
+                    EngineClass::EC_MAGLEV => LiveryScheme(LS_PASSENGER_WAGON_MAGLEV),
                     _ => unreachable!("NOT_REACHED"),
                 }
             } else {
-                let mu = crate::vehicle::EngineRef::of(e).misc() & RAIL_IS_MU != 0;
-                match crate::vehicle::EngineRef::of(e).train_class() {
-                    EC_STEAM => LS_STEAM,
-                    EC_DIESEL => {
-                        if mu {
-                            LS_DMU
+                let is_mu = EngineRef::of(e).misc() & RAIL_IS_MU != 0;
+                match EngineClass(EngineRef::of(e).train_class()) {
+                    EngineClass::EC_STEAM => LiveryScheme(LS_STEAM),
+                    EngineClass::EC_DIESEL => {
+                        if is_mu {
+                            LiveryScheme(LS_DMU)
                         } else {
-                            LS_DIESEL
+                            LiveryScheme(LS_DIESEL)
                         }
                     }
-                    EC_ELECTRIC => {
-                        if mu {
-                            LS_EMU
+                    EngineClass::EC_ELECTRIC => {
+                        if is_mu {
+                            LiveryScheme(LS_EMU)
                         } else {
-                            LS_ELECTRIC
+                            LiveryScheme(LS_ELECTRIC)
                         }
                     }
-                    EC_MONORAIL => LS_MONORAIL,
-                    EC_MAGLEV => LS_MAGLEV,
+                    EngineClass::EC_MONORAIL => LiveryScheme(LS_MONORAIL),
+                    EngineClass::EC_MAGLEV => LiveryScheme(LS_MAGLEV),
                     _ => unreachable!("NOT_REACHED"),
                 }
             }
         }
-        crate::vehicle_type::VEH_ROAD => {
-            if !v.is_null() && parent != EngineID::INVALID {
-                engine = parent;
-                e = (s.engine)(engine);
-                cargo = (s.vehicle_cargo)(crate::vehicle::VehicleRef::of(v).first().0.as_ptr());
+        VehicleType::VEH_ROAD => {
+            // Always use the livery of the front
+            if !v.is_null() && parent_engine_type != EngineID::INVALID {
+                engine_type = parent_engine_type;
+                e = (s.engine)(engine_type);
+                cargo_type = CargoType((s.vehicle_cargo)(VehicleRef::of(v).first().0.as_ptr()));
             }
-            if !is_valid_cargo_type(cargo) {
-                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
+            if !is_valid_cargo_type(cargo_type.0) {
+                cargo_type = CargoType(EngineRef::of(e).default_cargo());
             }
-            if !is_valid_cargo_type(cargo) {
-                cargo =
-                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+            if !is_valid_cargo_type(cargo_type.0) {
+                // The vehicle does not carry anything, let's pick some freight cargo
+                cargo_type = CargoType(get_cargo_type_by_label(CargoLabel::CT_GOODS.0));
             }
-            assert!(is_valid_cargo_type(cargo));
-            if crate::vehicle::EngineRef::of(e).misc() & ROAD_IS_TRAM != 0 {
-                if crate::cargotype::is_cargo_in_class(
-                    (s.cargo_classes)(cargo),
-                    crate::cargotype::PASSENGERS,
-                ) {
-                    LS_PASSENGER_TRAM
+            assert!(is_valid_cargo_type(cargo_type.0));
+            // Important: Use Tram Flag of front part. Luckily engine_type refers to the front part here.
+            if EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RoadIsTram) {
+                // Tram
+                if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+                    LiveryScheme(LS_PASSENGER_TRAM)
                 } else {
-                    LS_FREIGHT_TRAM
+                    LiveryScheme(LS_FREIGHT_TRAM)
                 }
-            } else if crate::cargotype::is_cargo_in_class(
-                (s.cargo_classes)(cargo),
-                crate::cargotype::PASSENGERS,
-            ) {
-                LS_BUS
+            } else if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+                // Bus or truck
+                LiveryScheme(LS_BUS)
             } else {
-                LS_TRUCK
+                LiveryScheme(LS_TRUCK)
             }
         }
-        crate::vehicle_type::VEH_SHIP => {
-            if !is_valid_cargo_type(cargo) {
-                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
+        VehicleType::VEH_SHIP => {
+            if !is_valid_cargo_type(cargo_type.0) {
+                cargo_type = CargoType(EngineRef::of(e).default_cargo());
             }
-            if !is_valid_cargo_type(cargo) {
-                cargo =
-                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+            if !is_valid_cargo_type(cargo_type.0) {
+                // The vehicle does not carry anything, let's pick some freight cargo
+                cargo_type = CargoType(get_cargo_type_by_label(CargoLabel::CT_GOODS.0));
             }
-            assert!(is_valid_cargo_type(cargo));
-            if crate::cargotype::is_cargo_in_class(
-                (s.cargo_classes)(cargo),
-                crate::cargotype::PASSENGERS,
-            ) {
-                LS_PASSENGER_SHIP
+            assert!(is_valid_cargo_type(cargo_type.0));
+            if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+                LiveryScheme(LS_PASSENGER_SHIP)
             } else {
-                LS_FREIGHT_SHIP
+                LiveryScheme(LS_FREIGHT_SHIP)
             }
         }
-        crate::vehicle_type::VEH_AIRCRAFT => {
-            match crate::vehicle::EngineRef::of(e).aircraft_subtype() {
-                AIR_HELI => LS_HELICOPTER,
-                AIR_CTOL => LS_SMALL_PLANE,
-                x if x == AIR_CTOL | AIR_FAST => LS_LARGE_PLANE,
-                _ => unreachable!("NOT_REACHED"),
-            }
-        }
+        VehicleType::VEH_AIRCRAFT => match EngineRef::of(e).aircraft_subtype() {
+            AIR_HELI => LiveryScheme(LS_HELICOPTER),
+            AIR_CTOL => LiveryScheme(LS_SMALL_PLANE),
+            x if x == AIR_CTOL | AIR_FAST => LiveryScheme(LS_LARGE_PLANE),
+            _ => unreachable!("NOT_REACHED"),
+        },
         _ => unreachable!("NOT_REACHED"),
     }
+    .0
 }
+// Compatibility name for the existing engine-loading caller; the helper has one body.
+pub(crate) use get_engine_livery_scheme as engine_livery;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_engine_livery_scheme(
     s: &Services,
-    engine: EngineID,
-    parent: EngineID,
+    engine_type: EngineID,
+    parent_engine_type: EngineID,
     v: *mut OpenTTDVehicle,
 ) -> u8 {
-    engine_livery(s, engine, parent, v)
+    get_engine_livery_scheme(s, engine_type, parent_engine_type, v)
 }
 
 crate::abi::layouts! {
