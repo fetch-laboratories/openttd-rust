@@ -15,12 +15,32 @@ use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
 use crate::direction_type::INVALID_DIAGDIR;
-use crate::services::{Axis, Map, RailMapServices, Services, SignalType, TrackBits};
+use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
+use crate::services::{Axis, Map, RailMapServices, Services};
+use crate::signal_func::SigSegState;
+use crate::signal_type::SignalType;
+use crate::track_type::TrackBits;
 use std::ffi::c_uint;
 
-const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
-const SEARCH_ONE: [u8; 6] = [0, 1, 0, 1, 2, 1];
-const SEARCH_TWO: [u8; 6] = [2, 3, 3, 2, 3, 0];
+// Maximums used for updating signal blocks.
+const SIG_TBU_SIZE: usize = 64; // Number of signals entering the block.
+const SIG_TBD_SIZE: usize = 256; // Number of intersections: open nodes in the current block.
+const SIG_GLOB_SIZE: usize = 128; // Number of open blocks; a block can be opened more than once until detected.
+const SIG_GLOB_UPDATE: usize = 64; // Items in the global set that force an update.
+
+// Incident track bits for the given entering direction.
+const ENTERDIR_TO_TRACKBITS: [TrackBits; 4] = [
+    TrackBits::TRACK_BIT_3WAY_NE,
+    TrackBits::TRACK_BIT_3WAY_SE,
+    TrackBits::TRACK_BIT_3WAY_SW,
+    TrackBits::TRACK_BIT_3WAY_NW,
+];
+const SEARCH_DIR_1: [u8; 6] = [
+    DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_SW, DIAGDIR_SE,
+];
+const SEARCH_DIR_2: [u8; 6] = [
+    DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NW, DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NE,
+];
 const TRAIN: u16 = 1 << 0;
 const EXIT: u16 = 1 << 1;
 const MULTI_EXIT: u16 = 1 << 2;
@@ -99,9 +119,9 @@ impl<const N: usize> SmallSet<N> {
     }
 }
 struct State {
-    tbu: SmallSet<64>,
-    tbd: SmallSet<256>,
-    global: SmallSet<128>,
+    tbu: SmallSet<SIG_TBU_SIZE>,
+    tbd: SmallSet<SIG_TBD_SIZE>,
+    global: SmallSet<SIG_GLOB_SIZE>,
     last_owner: u8,
 }
 static STATE: GameState<State> = GameState::new(State {
@@ -330,8 +350,11 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 } else {
                     source_assert(w, dir < 4);
                     let mut tracks = geometry.tracks.0;
-                    let masked = tracks & ENTER_TRACKS[usize::from(dir)];
-                    if tracks == 0x0c || tracks == 0x30 {
+                    let masked = tracks & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0;
+                    // There is exactly one incident track, no need to check.
+                    if TrackBits(tracks) == TrackBits::TRACK_BIT_HORZ
+                        || TrackBits(tracks) == TrackBits::TRACK_BIT_VERT
+                    {
                         tracks = masked;
                         if flags & TRAIN == 0 && occupied(w, tile, Some(tracks)) {
                             flags |= TRAIN;
@@ -396,7 +419,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                         }
                     }
                     for exit in 0..4 {
-                        if exit != dir && tracks & ENTER_TRACKS[usize::from(exit)] != 0 {
+                        if exit != dir && tracks & ENTERDIR_TO_TRACKBITS[usize::from(exit)].0 != 0 {
                             let next = Item {
                                 tile: w.map.add_diag(tile, exit),
                                 dir: reverse(exit),
@@ -520,7 +543,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
     read!(w, native, assert_company, owner);
     crate::witness::hit(crate::witness::SIGNAL_UPDATES);
     let mut first = true;
-    let mut state = 0; // SIGSEG_FREE
+    let mut state = SigSegState::SIGSEG_FREE; // Value to return.
     while let Some(Item { mut tile, mut dir }) = access(|s| s.global.get()) {
         source_assert(w, access(|s| s.tbu.count == 0));
         source_assert(w, access(|s| s.tbd.count == 0));
@@ -556,7 +579,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 0,
                 0,
                 INVALID_DIAGDIR,
-            )) & ENTER_TRACKS[usize::from(dir)])
+            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
                 != 0
         {
             add_tbd(Item { tile, dir });
@@ -573,7 +596,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 0,
                 0,
                 INVALID_DIAGDIR,
-            )) & ENTER_TRACKS[usize::from(dir)])
+            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
                 == 0
             {
                 crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
@@ -587,14 +610,12 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         if first {
             first = false;
             if flags & PBS != 0 {
-                state = 2;
-            }
-            // SIGSEG_PBS
-            else if flags & TRAIN != 0
+                state = SigSegState::SIGSEG_PBS;
+            } else if flags & TRAIN != 0
                 || (flags & EXIT != 0 && flags & GREEN == 0)
                 || flags & FULL != 0
             {
-                state = 1;
+                state = SigSegState::SIGSEG_FULL;
             }
         }
         if flags & FULL != 0 {
@@ -604,23 +625,23 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         }
         update_around(w, flags);
     }
-    state
+    state.0
 }
 fn add_track(w: &World<'_>, tile: u32, track: u8, owner: u8) {
     source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
     access(|s| s.last_owner = owner);
     add_global(Item {
         tile,
-        dir: SEARCH_ONE[usize::from(track)],
+        dir: SEARCH_DIR_1[usize::from(track)],
     });
     add_global(Item {
         tile,
-        dir: SEARCH_TWO[usize::from(track)],
+        dir: SEARCH_DIR_2[usize::from(track)],
     });
     force_flush(w);
 }
 fn force_flush(w: &World<'_>) {
-    if access(|s| s.global.count >= 64) {
+    if access(|s| s.global.count >= SIG_GLOB_UPDATE) {
         crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
         update_buffer(w, access(|s| s.last_owner));
         access(|s| s.last_owner = INVALID_OWNER);
