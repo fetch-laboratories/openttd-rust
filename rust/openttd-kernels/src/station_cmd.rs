@@ -636,9 +636,8 @@ impl<'a> Ctx<'a> {
     fn bridge_height(&self, tile: u32) -> i32 {
         crate::bridge_map::get_bridge_height(tile, self.shared)
     }
-    fn bridge_ok(
-        &self,
-        StationBridgeCheck {
+    fn bridge_ok(&self, context: StationBridgeCheck<'_>) {
+        let StationBridgeCheck {
             out,
             tile,
             info,
@@ -646,8 +645,7 @@ impl<'a> Ctx<'a> {
             layout,
             bridge_height,
             disallowed,
-        }: StationBridgeCheck<'_>,
-    ) {
+        } = context;
         let height = if usize::from(layout) < info.size {
             // SAFETY: native immutable span, checked index; no references survive.
             unsafe { (&raw const (*info.data.add(usize::from(layout))).height).read() }
@@ -898,9 +896,8 @@ impl Ctx<'_> {
             self.recompute_catchment(st, false);
         }
     }
-    fn join(
-        &self,
-        JoiningStation {
+    fn join(&self, context: JoiningStation<'_>) -> *mut BaseStation {
+        let JoiningStation {
             out,
             existing,
             target,
@@ -909,8 +906,7 @@ impl Ctx<'_> {
             waypoint,
             road,
             overbuild_error,
-        }: JoiningStation<'_>,
-    ) -> *mut BaseStation {
+        } = context;
         crate::witness::hit(crate::witness::STATION_CMD_JOIN);
         let mut st = std::ptr::null_mut();
         let mut check = true;
@@ -1367,9 +1363,8 @@ impl Ctx<'_> {
             );
         }
     }
-    fn flat_rail(
-        &self,
-        RailStationLandCheck {
+    fn flat_rail(&self, context: RailStationLandCheck<'_>) {
+        let RailStationLandCheck {
             cost,
             ret,
             tile,
@@ -1383,8 +1378,7 @@ impl Ctx<'_> {
             spec,
             length,
             tracks,
-        }: RailStationLandCheck<'_>,
-    ) {
+        } = context;
         let invalid = if axis == 0 { 5 } else { 10 };
         let slope_callback = !spec.is_null() && (self.s.rail_spec_info)(spec).slope_callback;
         self.check_buildable(ret, tile, invalid, allowed, false, false);
@@ -1967,9 +1961,8 @@ impl Ctx<'_> {
         crate::command::nested(self.command, self.shared, out, tile, flags, body);
     }
 
-    fn remove_rail_area(
-        &self,
-        RailStationRemoval {
+    fn remove_rail_area(&self, context: RailStationRemoval<'_>) -> Vec<*mut BaseStation> {
+        let RailStationRemoval {
             cost,
             ret,
             error,
@@ -1978,8 +1971,7 @@ impl Ctx<'_> {
             unit,
             keep,
             waypoint,
-        }: RailStationRemoval<'_>,
-    ) -> Vec<*mut BaseStation> {
+        } = context;
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_RAIL_AREA);
         let mut quantity = 0_i32;
         let mut affected = Vec::new();
@@ -2317,9 +2309,8 @@ impl Ctx<'_> {
             disallowed: self.s.strings.demolish_bridge,
         });
     }
-    fn flat_road(
-        &self,
-        RoadStopLandCheck {
+    fn flat_road(&self, context: RoadStopLandCheck<'_>) {
+        let RoadStopLandCheck {
             cost,
             ret,
             tile,
@@ -2332,8 +2323,7 @@ impl Ctx<'_> {
             axis,
             est,
             rt,
-        }: RoadStopLandCheck<'_>,
-    ) {
+        } = context;
         self.check_buildable(ret, tile, invalid, allowed, !drive, false);
         if !ret.ok() {
             return cost.take(ret);
@@ -2476,9 +2466,8 @@ impl Ctx<'_> {
             }
         }
     }
-    fn road_cost(
-        &self,
-        RoadStopCost {
+    fn road_cost(&self, context: RoadStopCost<'_>) {
+        let RoadStopCost {
             cost,
             ret,
             area,
@@ -2491,8 +2480,7 @@ impl Ctx<'_> {
             est,
             rt,
             unit,
-        }: RoadStopCost<'_>,
-    ) {
+        } = context;
         let invalid = if drive {
             if axis == 0 { 5 } else { 10 }
         } else {
@@ -3050,9 +3038,8 @@ impl Ctx<'_> {
         });
         let _ = ret;
     }
-    fn remove_generic_road(
-        &self,
-        RoadStopRemoval {
+    fn remove_generic_road(&self, context: RoadStopRemoval<'_>) {
+        let RoadStopRemoval {
             cost,
             ret,
             error,
@@ -3060,8 +3047,7 @@ impl Ctx<'_> {
             area,
             waypoint,
             remove_road,
-        }: RoadStopRemoval<'_>,
-    ) {
+        } = context;
         cost.set(0);
         error.error(self.s.strings.no_station);
         let mut success = false;
@@ -4418,9 +4404,8 @@ impl Ctx<'_> {
         }
         crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
     }
-    fn change_owner(
-        &self,
-        StationOwnerChange {
+    fn change_owner(&self, context: StationOwnerChange<'_>) {
+        let StationOwnerChange {
             ownership,
             cost,
             ret,
@@ -4428,8 +4413,7 @@ impl Ctx<'_> {
             tile,
             old,
             new,
-        }: StationOwnerChange<'_>,
-    ) {
+        } = context;
         crate::witness::hit(crate::witness::STATION_CMD_CHANGE_OWNER);
         if crate::map_func::World::new(self.shared).any_road_stop_tile(tile) {
             for tram in [false, true] {
