@@ -382,7 +382,7 @@ unsafe fn remove_cache(l: *mut List, p: Packet, amount: u32, action: Option<usiz
         }
     }
 }
-/// Checks whether the second packet can merge into the first, including MAX_COUNT.
+/// Checks whether the second packet can merge into the first, including `MAX_COUNT`.
 fn mergeable(a: Packet, b: Packet) -> bool {
     a.source_xy == b.source_xy
         && a.periods_in_transit == b.periods_in_transit
@@ -515,7 +515,7 @@ fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> 
     }
 }
 /// Moves cargo between adjacent designations without changing the packets.
-/// Moving from MTA_DELIVER to MTA_TRANSFER also updates the next station.
+/// Moving from `MTA_DELIVER` to `MTA_TRANSFER` also updates the next station.
 pub(crate) unsafe fn reassign(
     list: *mut List,
     services: Services,
@@ -1134,7 +1134,7 @@ unsafe fn action(
         }
         3 => unsafe {
             remove_cache(src, p, count, Some(MoveToAction::MTA_KEEP.0 as usize));
-            append(dst, s, cp, MoveToAction::MTA_KEEP.0 as u16);
+            append(dst, s, cp, u16::from(MoveToAction::MTA_KEEP.0));
         },
         5 => {
             if p.next_hop == avoid || p.next_hop == avoid2 {
@@ -1178,9 +1178,9 @@ unsafe fn action(
                     s,
                     cp,
                     if mode == 6 {
-                        MoveToAction::MTA_LOAD.0 as u16
+                        u16::from(MoveToAction::MTA_LOAD.0)
                     } else {
-                        MoveToAction::MTA_KEEP.0 as u16
+                        u16::from(MoveToAction::MTA_KEEP.0)
                     },
                 );
             }
@@ -2082,7 +2082,7 @@ mod tests {
                     vehicle,
                     service,
                     cargo(8, first, 0),
-                    MoveToAction::MTA_KEEP.0 as u16,
+                    u16::from(MoveToAction::MTA_KEEP.0),
                 );
             }
             let next = [100];
@@ -2175,7 +2175,12 @@ mod tests {
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
             (*owner(original)).next_hop = 70;
-            append(vehicle, service, original, MoveToAction::MTA_KEEP.0 as u16);
+            append(
+                vehicle,
+                service,
+                original,
+                u16::from(MoveToAction::MTA_KEEP.0),
+            );
             (*vehicle).fields.action_counts = [8, 0, 0, 0];
             let via = 90_u16;
             let flows = flow_fixture(via);
@@ -2279,7 +2284,7 @@ mod tests {
                     vehicle,
                     service,
                     cargo(8, 10, 0),
-                    MoveToAction::MTA_KEEP.0 as u16,
+                    u16::from(MoveToAction::MTA_KEEP.0),
                 );
                 openttd_rust_cargo_list_stage(
                     vehicle,
@@ -2410,7 +2415,7 @@ mod tests {
                     entry.list,
                     service,
                     cargo(1, index as u16 + 10, 0),
-                    MoveToAction::MTA_KEEP.0 as u16,
+                    u16::from(MoveToAction::MTA_KEEP.0),
                 );
             }
             CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
@@ -2465,13 +2470,13 @@ mod tests {
                 source[0].list,
                 service,
                 cargo(8, 10, 8),
-                MoveToAction::MTA_KEEP.0 as u16,
+                u16::from(MoveToAction::MTA_KEEP.0),
             );
             append(
                 source[1].list,
                 service,
                 cargo(1, 11, 1),
-                MoveToAction::MTA_KEEP.0 as u16,
+                u16::from(MoveToAction::MTA_KEEP.0),
             );
             assert_eq!(
                 cargo_capacity(&raw const capacity, head(&source[0]), None, 0, 0),
