@@ -11,16 +11,18 @@ use crate::vehicle_type::VehicleType;
 pub struct CustomVehicleSpriteNum(pub u32);
 
 impl CustomVehicleSpriteNum {
-    /// Vehicle sprite from NewGRF.
+    /// Vehicle sprite from `NewGRF`.
     pub const CUSTOM_VEHICLE_SPRITENUM: Self = Self(0xfd);
-    /// Vehicle sprite from NewGRF with reverse driving direction
+    /// Vehicle sprite from `NewGRF` with reverse driving direction
     /// (from the articulation callback).
     pub const CUSTOM_VEHICLE_SPRITENUM_REVERSED: Self = Self(0xfe);
 }
 
 /// Raw stored-sprite compatibility sentinel.
+#[allow(clippy::cast_possible_truncation)] // Native enum stored in the sprite byte.
 pub const CUSTOM_VEHICLE_SPRITENUM: u8 = CustomVehicleSpriteNum::CUSTOM_VEHICLE_SPRITENUM.0 as u8;
 /// Raw stored-sprite compatibility sentinel for reverse driving direction.
+#[allow(clippy::cast_possible_truncation)] // Native enum stored in the sprite byte.
 pub const CUSTOM_VEHICLE_SPRITENUM_REVERSED: u8 =
     CustomVehicleSpriteNum::CUSTOM_VEHICLE_SPRITENUM_REVERSED.0 as u8;
 

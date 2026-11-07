@@ -28,6 +28,7 @@ impl VehState {
     /// Vehicle is not clickable by the user (shadow vehicles).
     pub const Unclickable: Self = Self(2);
     /// Use default vehicle palette. See `DoDrawVehicle`.
+    #[allow(dead_code)] // Complete original enumerator vocabulary; drawing remains native.
     pub const DefaultPalette: Self = Self(3);
     /// Train is slowing down.
     pub const TrainSlowing: Self = Self(4);
@@ -69,15 +70,15 @@ impl VehStates {
 pub struct NewGRFCacheValidValues(pub u8);
 
 impl NewGRFCacheValidValues {
-    /// Set if the NewGRF var 40 currently stored is valid.
+    /// Set if the `NewGRF` var 40 currently stored is valid.
     pub const NCVV_POSITION_CONSIST_LENGTH: Self = Self(0);
-    /// Set if the NewGRF var 41 currently stored is valid.
+    /// Set if the `NewGRF` var 41 currently stored is valid.
     pub const NCVV_POSITION_SAME_ID_LENGTH: Self = Self(1);
-    /// Set if the NewGRF var 42 currently stored is valid.
+    /// Set if the `NewGRF` var 42 currently stored is valid.
     pub const NCVV_CONSIST_CARGO_INFORMATION: Self = Self(2);
-    /// Set if the NewGRF var 43 currently stored is valid.
+    /// Set if the `NewGRF` var 43 currently stored is valid.
     pub const NCVV_COMPANY_INFORMATION: Self = Self(3);
-    /// Set if the NewGRF var 4D currently stored is valid.
+    /// Set if the `NewGRF` var 4D currently stored is valid.
     pub const NCVV_POSITION_IN_VEHICLE: Self = Self(4);
     /// End of the bits.
     pub const NCVV_END: Self = Self(5);
@@ -126,6 +127,7 @@ impl GroundVehicleSubtypeFlags {
 /// Raw compatibility bit positions for existing subtype consumers.
 pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
 /// Raw compatibility bit position.
+#[allow(dead_code)] // Retain the raw compatibility name until cleanup closure.
 pub const GVSF_ARTICULATED_PART: u8 = GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
 /// Raw compatibility bit position.
 pub const GVSF_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_WAGON.0;
@@ -170,16 +172,16 @@ pub const VS_AIRCRAFT_BROKEN: u8 = VehStates::from_element(VehState::AircraftBro
 /// Raw compatibility mask for `VehState::Crashed`.
 pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 
-/// Raw compatibility bit position for NewGRF var 40.
+/// Raw compatibility bit position for `NewGRF` var 40.
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
-/// Raw compatibility bit position for NewGRF var 41.
+/// Raw compatibility bit position for `NewGRF` var 41.
 pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_SAME_ID_LENGTH.0;
-/// Raw compatibility bit position for NewGRF var 42.
+/// Raw compatibility bit position for `NewGRF` var 42.
 pub const NCVV_CONSIST_CARGO_INFORMATION: u8 =
     NewGRFCacheValidValues::NCVV_CONSIST_CARGO_INFORMATION.0;
-/// Raw compatibility bit position for NewGRF var 43.
+/// Raw compatibility bit position for `NewGRF` var 43.
 pub const NCVV_COMPANY_INFORMATION: u8 = NewGRFCacheValidValues::NCVV_COMPANY_INFORMATION.0;
-/// Raw compatibility bit position for NewGRF var 4D.
+/// Raw compatibility bit position for `NewGRF` var 4D.
 pub const NCVV_POSITION_IN_VEHICLE: u8 = NewGRFCacheValidValues::NCVV_POSITION_IN_VEHICLE.0;
 /// Raw compatibility end of the cache-valid bits.
 pub const NCVV_END: u8 = NewGRFCacheValidValues::NCVV_END.0;
