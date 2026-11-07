@@ -160,7 +160,7 @@ fn bigger(
             (t.set_animation_loop)(tile, 0);
         },
         GFX_PLASTIC_FOUNTAIN_ANIMATED_1..=GFX_PLASTIC_FOUNTAIN_ANIMATED_8 => {
-            crate::animated_tile::openttd_rust_animation_add(tile, false)
+            crate::animated_tile::openttd_rust_animation_add(tile, false);
         }
         _ => {}
     }
@@ -305,11 +305,11 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
                     } else {
                         GFX_PLASTIC_FOUNTAIN_ANIMATED_1
                     },
-                )
+                );
             };
             dirty(tile, s);
         }
-        GFX_OILWELL_ANIMATED_1..=32 if (s.shared().tick_counter)() & 7 == 0 => {
+        GFX_OILWELL_ANIMATED_1..=GFX_OILWELL_ANIMATED_3 if (s.shared().tick_counter)() & 7 == 0 => {
             let stop = chance(s, 1, 7);
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             let mut gfx = gfx;
@@ -727,7 +727,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             if allowed {
                 let foundation = crate::company::price(PR_BUILD_FOUNDATION);
                 unsafe {
-                    (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, foundation)
+                    (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, foundation);
                 };
                 return;
             }

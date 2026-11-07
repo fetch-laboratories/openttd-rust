@@ -161,30 +161,6 @@ pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_1: u16 =
     IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_1.0 as u16;
 
 /// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_2: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_2.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_3: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_3.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_4: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_4.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_5: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_5.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_6: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_6.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_7: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_7.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
 pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_8: u16 =
     IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_8.0 as u16;
 
