@@ -39,7 +39,7 @@ pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
     bitnum != INVALID_CARGO_BITNUM
 }
 
-/// Returns an iterable ensemble of all valid CargoSpec (`CargoSpec::Iterate`).
+/// Returns an iterable ensemble of all valid `CargoSpec` (`CargoSpec::Iterate`).
 /// The default first slot is zero; each slot is observed when advancing, without a world borrow.
 pub(crate) fn iterate<T>(
     mut load: impl FnMut(u8) -> T,

@@ -155,7 +155,7 @@ impl GrfSpecFeature {
     pub const GSF_END: Self = Self(22);
     /// Unspecified feature, default badge.
     pub const GSF_DEFAULT: Self = Self::GSF_END;
-    /// Fake town GrfSpecFeature for NewGRF debugging (parent scope).
+    /// Fake town `GrfSpecFeature` for `NewGRF` debugging (parent scope).
     pub const GSF_FAKE_TOWNS: Self = Self::GSF_END;
     /// End of the fake features.
     pub const GSF_FAKE_END: Self = Self(23);

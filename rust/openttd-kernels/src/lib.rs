@@ -82,6 +82,8 @@ mod movement;
 mod native_test_support;
 mod network_config;
 mod newgrf;
+/// Canonical native `NewGRF` feature identity.
+pub use newgrf::GrfSpecFeature;
 mod newgrf_act2;
 mod newgrf_animation_base;
 pub mod newgrf_badge_type;
