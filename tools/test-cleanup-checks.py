@@ -187,6 +187,118 @@ class DebtTests(unittest.TestCase):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_original_name_suppression_requires_exact_item_review(self) -> None:
+        import migration
+
+        source = (
+            "pub struct Native;\n#[allow(non_upper_case_globals)]\n"
+            "impl Native { pub const OriginalName: u8 = 1; }\n"
+        )
+        site = next(iter(POLICY.rust_suppressions("rust/x.rs", source)))
+        proposal = {
+            "kind": "suppression",
+            "tool": "rust",
+            "site": site,
+            "before": 0,
+            "after": 1,
+            "operation": "Native::OriginalName",
+            "source_contract": "original header enumerator spelling",
+            "reason": "Keep the original's public vocabulary",
+            "retiring_owner": "header consumer",
+            "retirement_condition": "When the corresponding API is removed",
+        }
+        head = "a" * 40
+
+        def acceptance(
+            agent: str = "/review",
+            sha: str = head,
+            payload: dict[str, str | int] | None = None,
+        ) -> str:
+            return (
+                f"Agent: {agent} | Model: test | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps(
+                    {"head": sha, "accept": [proposal if payload is None else payload]}
+                )
+                + "\n```"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": "pub struct Native;\n"})
+            (root / "rust/x.rs").write_text(source)
+            subprocess.run(
+                [
+                    "rustc",
+                    "--crate-type",
+                    "lib",
+                    "-D",
+                    "warnings",
+                    "--out-dir",
+                    str(root),
+                    str(root / "rust/x.rs"),
+                ],
+                check=True,
+                capture_output=True,
+                env=migration.environment(),
+            )
+            for comments, proposals, expected in (
+                ([], [proposal], 1),
+                ([acceptance()], [proposal], 0),
+                ([acceptance("/impl")], [proposal], 1),
+                ([acceptance(sha="b" * 40)], [proposal], 1),
+                (
+                    [acceptance(payload=dict(proposal, after=2))],
+                    [dict(proposal, after=2)],
+                    1,
+                ),
+                (
+                    [acceptance(payload=dict(proposal, source_contract=""))],
+                    [dict(proposal, source_contract="")],
+                    1,
+                ),
+            ):
+                with (
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(
+                        POLICY,
+                        "context",
+                        return_value=("/impl", proposals, comments, head),
+                    ),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
+                ):
+                    self.assertEqual(POLICY.main(), expected)
+        for forbidden in (
+            "rust/x.rs | module | allow non_upper_case_globals",
+            "rust/x.rs | mod nested | allow non_upper_case_globals",
+            "rust/x.rs | fn work | allow warnings",
+            "rust/x.rs | fn work | allow clippy::all",
+            "rust/x.rs | fn work | allow clippy::pedantic",
+            "rust/x.rs | fn work | allow clippy :: all",
+            "rust/x.rs | fn work | allow clippy::r#all",
+            "rust/x.rs | fn work | allow unused",
+            "rust/x.rs | fn work | allow rust_2024_compatibility",
+            "tools/x.py | work | noqa:F401",
+        ):
+            exact = dict(proposal, site=forbidden)
+            comment = (
+                "Agent: /review | Model: test | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": head, "accept": [exact]})
+                + "\n```"
+            )
+            self.assertFalse(
+                POLICY.accepted_suppression(
+                    forbidden, 0, 1, ("/impl", [exact], [comment], head)
+                )
+            )
+        for attribute in ("#![allow(warnings)]", "# ! [allow(warnings)]"):
+            self.assertEqual(
+                list(POLICY.rust_suppressions("rust/x.rs", attribute + "\nfn x() {}")),
+                ["rust/x.rs | module | allow warnings"],
+            )
+
     def test_discovered_ruff_overrides_cannot_hide_ordinary_diagnostics(self) -> None:
         for path, table in (
             (".ruff.toml", "lint"),

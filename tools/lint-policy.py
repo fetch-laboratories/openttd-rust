@@ -11,11 +11,37 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from cleanup_contract import context, reviewed
 from code_lines import without_comments
 from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
+LINT_GROUPS = {
+    "all",
+    "cargo",
+    "complexity",
+    "correctness",
+    "deprecated_safe",
+    "future_incompatible",
+    "keyword_idents",
+    "let_underscore",
+    "nonstandard_style",
+    "nursery",
+    "pedantic",
+    "perf",
+    "restriction",
+    "refining_impl_trait",
+    "rust_2018_compatibility",
+    "rust_2018_idioms",
+    "rust_2021_compatibility",
+    "rust_2024_compatibility",
+    "style",
+    "suspicious",
+    "unknown_or_malformed_diagnostic_attributes",
+    "unused",
+    "warnings",
+}
 CONFIG_NAMES = {
     "Cargo.toml",
     "ruff.toml",
@@ -93,18 +119,19 @@ def rust_suppressions(path: str, text: str) -> Counter[str]:
     rows: Counter[str] = Counter()
     clean = without_comments(text, path)
     masked = without_comments(text, path, strings=True)
-    for match in re.finditer(r"#!?\[([^\]]*)\]", masked, re.S):
+    for match in re.finditer(r"#\s*!?\s*\[([^\]]*)\]", masked, re.S):
         for allow in re.finditer(r"\b(allow|expect)\s*\(([^)]*)\)", match[1]):
             rules = re.sub(r",?\s*reason\s*=.*", "", allow[2], flags=re.S)
             item = re.search(
-                r"\b(fn|struct|enum|mod|trait|impl)\s+([^\n{;]+)", clean[match.end() :]
+                r"\b(fn|struct|enum|mod|trait|impl|const|static|type|union)\s+([^\n{;]+)",
+                clean[match.end() :],
             )
             scope = (
                 " ".join(item[0].split()[:2]).split("(")[0].split("<")[0]
                 if item
                 else "module"
             )
-            if masked[match.start() : match.start() + 3] == "#![":
+            if re.match(r"#\s*!", masked[match.start() :]):
                 scope = "module"
             for rule in rules.split(","):
                 if rule.strip():
@@ -157,6 +184,58 @@ def inventory(revision: str | None) -> dict[str, str]:
     }
 
 
+def accepted_suppression(
+    site: str,
+    before: int,
+    after: int,
+    contract: tuple[str, list[dict[str, Any]], list[str], str],
+) -> bool:
+    """Permit a reviewed Rust item operation, never a module or lint group."""
+    path, scope, suppression = site.rsplit(" | ", 2)
+    if not path.endswith(".rs") or scope == "module" or scope.startswith("mod "):
+        return False
+    rule = re.sub(r"\s+|r#", "", suppression.split(" ", 1)[1])
+    if rule.rsplit("::", 1)[-1] in LINT_GROUPS:
+        return False
+    author, proposals, comments, head = contract
+    expected = {
+        "kind": "suppression",
+        "tool": "rust",
+        "site": site,
+        "before": before,
+        "after": after,
+    }
+    required = (
+        "operation",
+        "source_contract",
+        "reason",
+        "retiring_owner",
+        "retirement_condition",
+    )
+    for proposal in proposals:
+        if any(proposal.get(key) != value for key, value in expected.items()):
+            continue
+        if all(
+            isinstance(proposal.get(key), str) and proposal[key].strip()
+            for key in required
+        ) and reviewed(proposal, comments, author, head):
+            print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
+            return True
+    return False
+
+
+def suppression_errors(before: Counter[str], after: Counter[str]) -> list[str]:
+    added = after - before
+    if not added:
+        return []
+    contract = context()
+    return [
+        f"new suppression: {site} ({count})"
+        for site, count in sorted(added.items())
+        if not accepted_suppression(site, before[site], after[site], contract)
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", default="origin/rust-migration")
@@ -188,9 +267,10 @@ def main() -> int:
                 errors.append("invalid initial Clippy thresholds")
         else:
             errors.extend(config_errors(before, after, path))
-    added = suppressions(inventory(None)) - suppressions(inventory(args.base_ref))
     errors.extend(
-        f"new suppression: {name} ({count})" for name, count in sorted(added.items())
+        suppression_errors(
+            suppressions(inventory(args.base_ref)), suppressions(inventory(None))
+        )
     )
     for error in errors:
         print(error)
