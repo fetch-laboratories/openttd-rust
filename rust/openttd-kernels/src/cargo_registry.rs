@@ -469,7 +469,7 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     }
 }
 /// `MaybeInstallFallbackCargoLabel`: install a cargo label in a fallback cargo list,
-/// if a NewGRF-defined cargo list is not present. This allows this NewGRF to use its
+/// if a NewGRF-defined cargo list is not present. This allows this `NewGRF` to use its
 /// self-defined cargo types without needing an explicit translation table.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: u32, label: u32) {
