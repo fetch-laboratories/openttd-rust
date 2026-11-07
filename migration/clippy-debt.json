@@ -76,7 +76,7 @@
     "rust/openttd-kernels/src/cargo_flow.rs | impl Flow::fn change_share | excessive_nesting | ca185e965e35bfb307e6": [
       6
     ],
-    "rust/openttd-kernels/src/cargo_payment.rs | fn deliver | too_many_arguments | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/cargo_payment.rs | fn deliver_goods | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10
     ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn cargo_capacity | excessive_nesting | 28df2c3be2d6229e552d": [
