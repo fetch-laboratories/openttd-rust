@@ -220,7 +220,8 @@ unsafe fn needs_autorenewing<const C: bool>(
         return false;
     }
     // Only engines need renewing.
-    r.kind != VehicleType::VEH_TRAIN || r.subtype & (1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0) != 0
+    r.kind != VehicleType::VEH_TRAIN
+        || r.subtype & (1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0) != 0
 }
 unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
