@@ -478,7 +478,7 @@ pub extern "C" fn openttd_rust_company_colour_abi(
     }
     u8::from(true)
 }
-/// Shared implementation of CmdRenameCompany and CmdRenamePresident.
+/// Shared implementation of `CmdRenameCompany` and `CmdRenamePresident`.
 fn rename_company_or_president(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
     use crate::company_type::{MAX_LENGTH_COMPANY_NAME_CHARS, MAX_LENGTH_PRESIDENT_NAME_CHARS};
     let reset = text.size == 0;
@@ -540,14 +540,14 @@ fn rename_company_or_president(s: &Services, text: ByteSpan, execute: bool, pres
     }
     0
 }
-/// CmdRenameCompany: change the name of the company.
+/// `CmdRenameCompany`: change the name of the company.
 /// `execute` selects the operation; `text` is the new name or empty to reset to the default.
 /// Returns the raw command result: success, error, or name-must-be-unique error.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_rename(s: &Services, text: ByteSpan, execute: bool) -> u8 {
     rename_company_or_president(s, text, execute, false)
 }
-/// CmdRenamePresident: change the name of the president.
+/// `CmdRenamePresident`: change the name of the president.
 /// `execute` selects the operation; `text` is the new name or empty to reset to the default.
 /// Returns the raw command result: success, error, or name-must-be-unique error.
 #[unsafe(no_mangle)]
