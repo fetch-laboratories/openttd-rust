@@ -53,6 +53,9 @@ pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
     (leaves.road_type_error)(first.0);
     false
 }
+// Compatibility name for the scalar world-generation caller.
+pub(crate) use check_town_road_types as road_types;
+
 /// `HouseSpec::GetRemovalCost`: cost of removing this house, adjusted for inflation.
 pub(crate) fn get_removal_cost(factor: u8) -> i64 {
     crate::company::price(crate::economy_type::PR_CLEAR_HOUSE).saturating_mul(i64::from(factor))
