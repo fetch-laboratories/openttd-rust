@@ -202,7 +202,7 @@ fn count_and_distance(
     let mut distance = u32::MAX;
     if layout == 0 && !town {
         witness::hit(witness::INDUSTRY_RESOLVER_COUNT);
-        distance = closest(tile, kind, current, builder, s, map);
+        distance = closest(tile, IndustryType(kind), current, builder, s, map);
         count = unsafe { registry_count(builder, kind) }.min(255) as u8;
     } else {
         witness::hit(witness::INDUSTRY_RESOLVER_FILTERED_COUNT);
