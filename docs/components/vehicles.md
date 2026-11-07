@@ -221,3 +221,9 @@
 - The age, economy-age and value-decrease helpers use the original names, canonical dates, string identities, vehicle states and engine-subtype flags. Service observations, guards, anniversaries, warning/news order and depreciation operations remain unchanged.
 - Other maintenance families, native records and scalar interfaces retain their existing owners. Source operations/order review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited fidelity differences and coverage limits remain on #156.
 - PRs: #788, integrated in #789. Other Vehicle vocabulary remains in the cleanup workset.
+
+## Original Vehicle tile-hash and occupancy vocabulary (#734)
+
+- The existing tile buckets, live cursors, ground/track/tunnel refusal checks and raw entry points use the original helper names, canonical tile/track/vehicle/string identities and explanatory comments. Hash arithmetic, bucket order, callback-sensitive link reads, stale-link handling and first-blocker observations are preserved.
+- Cursor/link records, public scalar interfaces and native observations retain their shapes. Maintenance and scheduler bodies are unchanged. Source operations/order review and exact-head Full pass; archive equivalence is unclaimed. Inherited fidelity differences and coverage limits remain on #156.
+- PR: #793, integration 124. Other Vehicle vocabulary remains in the cleanup workset.
