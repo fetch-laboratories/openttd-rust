@@ -14,6 +14,7 @@ No manifest is needed until a component transfers evidence.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -95,7 +96,7 @@ def rust_selector(check: str, root: Path = ROOT) -> list[str]:
 
 
 def errors(
-    records: Sequence[Replacement], default: Sequence[str], root: Path = ROOT
+    records: Sequence[Replacement], default: Sequence[str] | None, root: Path = ROOT
 ) -> list[str]:
     found = []
     owners: set[str] = set()
@@ -110,7 +111,10 @@ def errors(
             owners.add(retired)
     for check in sorted(destinations(records)):
         if check.startswith("scenario:"):
-            if check.removeprefix("scenario:") not in default:
+            scenario = check.removeprefix("scenario:")
+            if not scenario.strip() or (
+                default is not None and scenario not in default
+            ):
                 found.append(f"replacement is not a default harness scenario: {check}")
         else:
             try:
@@ -168,15 +172,15 @@ def ctest_errors(
     return found
 
 
-def run_rust(check: str, root: Path = ROOT) -> None:
+def run_rust(
+    check: str, root: Path = ROOT, cargo: str = "cargo", target_dir: Path | None = None
+) -> None:
     """Cargo succeeds with zero matches; require an exact, nonempty test run."""
-    import migration
-
-    env = migration.environment()
-    env.setdefault("CARGO_TARGET_DIR", str(root / "build-rust/cargo"))
+    env = os.environ.copy()
+    env.setdefault("CARGO_TARGET_DIR", str(target_dir or root / "build-rust/cargo"))
     result = subprocess.run(
         [
-            "cargo",
+            cargo,
             "test",
             "--manifest-path",
             str(root / "Cargo.toml"),
@@ -223,6 +227,7 @@ def cmake(records: Sequence[Replacement]) -> str:
             lines.append(
                 f"add_test(NAME {quote(ctest_name(check))} COMMAND "
                 '"${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/evidence_replacements.py" '
+                '--cargo "${CARGO_EXECUTABLE}" --target-dir "${CMAKE_BINARY_DIR}/cargo" '
                 f"--run-rust {quote(check)})"
             )
             lines.append(
@@ -236,14 +241,17 @@ def main() -> None:
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument("--cmake", type=Path)
     choice.add_argument("--run-rust")
+    parser.add_argument("--cargo", default="cargo")
+    parser.add_argument("--target-dir", type=Path)
     args = parser.parse_args()
     if args.run_rust:
-        run_rust(args.run_rust)
+        run_rust(args.run_rust, cargo=args.cargo, target_dir=args.target_dir)
     else:
-        from simulation.core import scenario_list
-
         records = load()
-        found = errors(records, [scenario["name"] for scenario in scenario_list(False)])
+        # Quick CI validates default scenario membership against the live harness.
+        # CMake's Emscripten host uses Python 3.10, so configuration must not import
+        # the Python 3.11 simulation runtime.
+        found = errors(records, None)
         if found:
             sys.exit("\n".join(found))
         args.cmake.write_text(cmake(records))

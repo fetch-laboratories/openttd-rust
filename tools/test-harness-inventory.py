@@ -266,7 +266,9 @@ class ReplacementTests(unittest.TestCase):
             )
             (root / "CMakeLists.txt").write_text(
                 "cmake_minimum_required(VERSION 3.17)\nproject(registration NONE)\n"
-                'enable_testing()\nset(Python3_EXECUTABLE "' + sys.executable + '")\n'
+                'enable_testing()\nset(CARGO_EXECUTABLE cargo)\nset(Python3_EXECUTABLE "'
+                + sys.executable
+                + '")\n'
                 'include("' + str(ROOT / "cmake/SourceList.cmake") + '")\n'
                 "include(replacements.cmake)\nadd_custom_target(openttd_test)\n"
                 "add_subdirectory(src/tests)\n"
