@@ -8,7 +8,7 @@
     clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
-use crate::company_type::{CompanyID, OpenTTDCompany};
+use crate::company_type::{CompanyID, CompanyManagerFace, OpenTTDCompany};
 use crate::engine_type::{EngineID, OpenTTDEngine};
 use crate::livery::{
     LS_BUS, LS_DEFAULT, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_END, LS_FREIGHT_SHIP,
@@ -24,7 +24,6 @@ use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{OpenTTDVehicle, VehicleID};
 use std::mem::MaybeUninit;
 type Town = crate::town_type::TownHandle;
-use crate::company_manager_face::Face;
 #[repr(C, align(16))]
 pub struct NameStorage {
     bytes: [MaybeUninit<u8>; 128],
@@ -68,7 +67,7 @@ pub struct Services {
     pub president: extern "C" fn(*mut OpenTTDCompany) -> ByteSpan,
     pub set_president: extern "C" fn(*mut OpenTTDCompany, ByteSpan) -> (),
     pub livery: extern "C" fn(*mut OpenTTDCompany, u8) -> *mut Livery,
-    pub face: extern "C" fn(*mut OpenTTDCompany) -> *mut Face,
+    pub face: extern "C" fn(*mut OpenTTDCompany) -> *mut CompanyManagerFace,
     pub name_frame_init: extern "C" fn(*mut NameStorage) -> (),
     pub name_frame_drop: extern "C" fn(*mut NameStorage) -> (),
     pub render: extern "C" fn(*mut NameStorage, u32, u32) -> ByteSpan,
@@ -344,13 +343,13 @@ pub extern "C" fn openttd_rust_company_manager_face_abi(
     bits: u32,
     execute: bool,
 ) -> u8 {
-    if !crate::company_manager_face::valid(s.faces, style, bits) {
+    if !crate::company_manager_face::is_valid_company_manager_face(s.faces, style, bits) {
         return u8::from(false);
     }
     if execute {
         let c = (s.company)(CompanyID((s.shared.current_company)()));
         let face = (s.face)(c);
-        crate::company_manager_face::style(s.faces, face, style);
+        crate::company_manager_face::set_company_manager_face_style(s.faces, face, style);
         unsafe {
             (s.faces.bits)(face).write(bits);
         }

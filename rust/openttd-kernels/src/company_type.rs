@@ -31,6 +31,16 @@ pub struct OpenTTDCompany {
     _private: [u8; 0],
 }
 
+/// Opaque native `company_type.h::CompanyManagerFace`.
+///
+/// Native storage owns the style index, all 32 style-dependent face bits and the
+/// style label string. Services borrow it while its containing company or GUI
+/// face remains live; Rust neither owns nor reproduces that record's layout.
+#[repr(C)]
+pub struct CompanyManagerFace {
+    _private: [u8; 0],
+}
+
 /// Native `CompanyID` with its full original integer domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

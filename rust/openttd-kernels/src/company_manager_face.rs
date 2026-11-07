@@ -1,5 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Company-manager face bit helpers; native style/variable tables remain borrowed.
+//! `company_manager_face.h` bit helpers and existing `company_cmd.cpp` face entries.
+//! Native faces, style/variable tables and randomizers remain borrowed for the
+//! synchronous call. Their services provide live pointers; Rust retains none.
+//! Style indices and face bits keep their complete raw integer domains.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -7,11 +10,9 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
-/// Opaque native company-manager face; its string stays native.
-#[repr(C)]
-pub struct Face {
-    _private: [u8; 0],
-}
+use crate::company_type::CompanyManagerFace;
+/// Compatibility name for the native face marker owned by `company_type.h`.
+pub type Face = CompanyManagerFace;
 use crate::town::names::Randomizer;
 #[repr(C)]
 pub struct FaceVar {
@@ -39,39 +40,44 @@ pub struct Services {
     pub vars: extern "C" fn(u32) -> FaceVars,
     pub at: extern "C" fn(*const FaceVar, usize) -> *const FaceVar,
     pub spec: extern "C" fn(u32) -> *const FaceSpec,
-    pub set_style: extern "C" fn(*mut Face, u32) -> (),
-    pub set_label: extern "C" fn(*mut Face, *const FaceSpec) -> (),
-    pub style: extern "C" fn(*mut Face) -> u32,
-    pub bits: extern "C" fn(*mut Face) -> *mut u32,
+    pub set_style: extern "C" fn(*mut CompanyManagerFace, u32) -> (),
+    pub set_label: extern "C" fn(*mut CompanyManagerFace, *const FaceSpec) -> (),
+    pub style: extern "C" fn(*mut CompanyManagerFace) -> u32,
+    pub bits: extern "C" fn(*mut CompanyManagerFace) -> *mut u32,
     pub random: extern "C" fn(*mut Randomizer) -> u32,
 }
-/// `FaceVar::GetBits`, using the canonical `GB` callee.
+/// Get the company manager's requested face bits (`FaceVar::GetBits`).
 fn get_bits(s: &Services, var: *const FaceVar, bits: u32) -> u32 {
     crate::bitmath_func::gb(bits, (s.offset)(var), (s.length)(var))
 }
-/// `FaceVar::SetBits`, using the canonical `SB` callee.
+/// Set the company manager's face bits (`FaceVar::SetBits`).
 fn set_bits(s: &Services, var: *const FaceVar, bits: &mut u32, value: u32) {
     crate::bitmath_func::sb(bits, (s.offset)(var), (s.length)(var), value);
 }
-/// `FaceVar::ChangeBits`; the native temporary narrows to `int8_t` before wrapping.
-fn change_bits(s: &Services, var: *const FaceVar, face: *mut Face, amount: i8) {
-    let p = (s.bits)(face);
+/// Increase/decrease the face variable, wrapping within its valid range.
+/// The native `FaceVar::ChangeBits` temporary narrows to `int8_t`.
+fn change_bits(s: &Services, var: *const FaceVar, cmf: *mut CompanyManagerFace, amount: i8) {
+    let p = (s.bits)(cmf);
+    // The new value for the face variable.
     let mut value = (get_bits(s, var, unsafe { p.read() }) as i8).wrapping_add(amount);
+    // Scale the new value to the correct scope.
     while value < 0 {
         value = (i32::from(value) + i32::from((s.valid_values)(var))) as i8;
     }
     value = (i32::from(value) % i32::from((s.valid_values)(var))) as i8;
+    // Save the new value.
     let mut bits = unsafe { p.read() };
     set_bits(s, var, &mut bits, value as u32);
     unsafe {
         p.write(bits);
     }
 }
-/// `FaceVar::IsValid`.
+/// Check whether the face variable's bits have a valid range (`FaceVar::IsValid`).
 fn is_valid(s: &Services, var: *const FaceVar, bits: u32) -> bool {
     get_bits(s, var, bits) < u32::from((s.valid_values)(var))
 }
-pub(crate) fn active(s: &Services, bits: u32, vars: FaceVars) -> u64 {
+/// Get active face variables; toggles can make other variables inactive.
+pub(crate) fn get_active_face_vars(s: &Services, bits: u32, vars: FaceVars) -> u64 {
     let mut mask = (1u64 << vars.size) - 1;
     for i in 0..vars.size {
         let v = (s.at)(vars.data, i);
@@ -85,12 +91,15 @@ pub(crate) fn active(s: &Services, bits: u32, vars: FaceVars) -> u64 {
     }
     mask
 }
-pub(crate) fn valid(s: &Services, style: u32, bits: u32) -> bool {
+/// Check the encoding; unused bits are not enforced to be zero.
+/// Original `company_cmd.cpp::IsValidCompanyManagerFace`.
+pub(crate) fn is_valid_company_manager_face(s: &Services, style: u32, bits: u32) -> bool {
     if style >= (s.count)() {
         return false;
     }
+    // Test if each enabled part is valid.
     let vars = (s.vars)(style);
-    let mask = active(s, bits, vars);
+    let mask = get_active_face_vars(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
             let v = (s.at)(vars.data, i);
@@ -101,34 +110,59 @@ pub(crate) fn valid(s: &Services, style: u32, bits: u32) -> bool {
     }
     true
 }
-pub(crate) fn scale(s: &Services, face: *mut Face, vars: FaceVars) {
-    let bits = unsafe { (s.bits)(face).read() };
-    let mask = active(s, bits, vars);
+/// Scale all active company manager face variables to the correct scope.
+pub(crate) fn scale_all_company_manager_face_bits(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    vars: FaceVars,
+) {
+    let bits = unsafe { (s.bits)(cmf).read() };
+    let mask = get_active_face_vars(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
-            change_bits(s, (s.at)(vars.data, i), face, 0);
+            change_bits(s, (s.at)(vars.data, i), cmf, 0);
         }
     }
 }
-pub(crate) fn style(s: &Services, face: *mut Face, value: u32) {
+/// Set a company face style, changing both the style index and the label.
+/// Original `company_cmd.cpp::SetCompanyManagerFaceStyle`.
+pub(crate) fn set_company_manager_face_style(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    value: u32,
+) {
     let spec = (s.spec)(value);
     assert!(!spec.is_null());
-    (s.set_style)(face, value);
-    (s.set_label)(face, spec);
+    (s.set_style)(cmf, value);
+    (s.set_label)(cmf, spec);
 }
-pub(crate) fn random_bits(s: &Services, face: *mut Face, vars: FaceVars, r: *mut Randomizer) {
+/// Make a random new face without changing its style, using the passed randomizer.
+pub(crate) fn randomise_company_manager_face_bits(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    vars: FaceVars,
+    r: *mut Randomizer,
+) {
     unsafe {
-        (s.bits)(face).write((s.random)(r));
+        (s.bits)(cmf).write((s.random)(r));
     }
-    scale(s, face, vars);
+    scale_all_company_manager_face_bits(s, cmf, vars);
 }
-pub(crate) fn random(s: &Services, face: *mut Face, r: *mut Randomizer) {
+/// Completely randomise a face, including style (`company_cmd.cpp`).
+/// The caller passes the world or interactive randomizer appropriate to its use.
+/// The style draw precedes the face-bit draw from that same randomizer.
+pub(crate) fn randomise_company_manager_face(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    r: *mut Randomizer,
+) {
     let count = (s.count)();
     let value = crate::random_func::scale_to_limit((s.random)(r), count);
-    style(s, face, value);
-    random_bits(s, face, (s.vars)((s.style)(face)), r);
+    set_company_manager_face_style(s, cmf, value);
+    randomise_company_manager_face_bits(s, cmf, (s.vars)((s.style)(cmf)), r);
 }
-/// Original `FaceVar` scaling used when loading old face encodings.
+/// Scale a face variable to its correct scope (`FaceVar::ScaleBits`).
+/// The value must be below 2 to the power of the variable's bit length.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_scale_bits(
     s: &Services,
@@ -145,18 +179,18 @@ pub extern "C" fn openttd_rust_face_scale_bits(
 pub extern "C" fn openttd_rust_face_get_bits(
     s: &Services,
     var: *const FaceVar,
-    face: *mut Face,
+    cmf: *mut CompanyManagerFace,
 ) -> u32 {
-    get_bits(s, var, unsafe { (s.bits)(face).read() })
+    get_bits(s, var, unsafe { (s.bits)(cmf).read() })
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_set_bits(
     s: &Services,
     var: *const FaceVar,
-    face: *mut Face,
+    cmf: *mut CompanyManagerFace,
     value: u32,
 ) {
-    let p = (s.bits)(face);
+    let p = (s.bits)(cmf);
     let mut bits = unsafe { p.read() };
     set_bits(s, var, &mut bits, value);
     unsafe {
@@ -167,40 +201,50 @@ pub extern "C" fn openttd_rust_face_set_bits(
 pub extern "C" fn openttd_rust_face_change_bits(
     s: &Services,
     var: *const FaceVar,
-    face: *mut Face,
+    cmf: *mut CompanyManagerFace,
     amount: i8,
 ) {
-    change_bits(s, var, face, amount);
+    change_bits(s, var, cmf, amount);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_active(s: &Services, bits: u32, vars: FaceVars) -> u64 {
-    active(s, bits, vars)
+    get_active_face_vars(s, bits, vars)
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_face_scale(s: &Services, face: *mut Face, vars: FaceVars) {
-    scale(s, face, vars);
+pub extern "C" fn openttd_rust_face_scale(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    vars: FaceVars,
+) {
+    scale_all_company_manager_face_bits(s, cmf, vars);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_random_bits(
     s: &Services,
-    face: *mut Face,
+    cmf: *mut CompanyManagerFace,
     vars: FaceVars,
     r: *mut Randomizer,
 ) {
-    random_bits(s, face, vars, r);
+    randomise_company_manager_face_bits(s, cmf, vars, r);
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_face_style(s: &Services, face: *mut Face, value: u32) {
-    style(s, face, value);
+pub extern "C" fn openttd_rust_face_style(s: &Services, cmf: *mut CompanyManagerFace, value: u32) {
+    set_company_manager_face_style(s, cmf, value);
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_face_random(s: &Services, face: *mut Face, r: *mut Randomizer) {
-    random(s, face, r);
+pub extern "C" fn openttd_rust_face_random(
+    s: &Services,
+    cmf: *mut CompanyManagerFace,
+    r: *mut Randomizer,
+) {
+    randomise_company_manager_face(s, cmf, r);
 }
+/// Mask face bits without updating the face itself; unused bits are cleared.
+/// Original `company_cmd.cpp::MaskCompanyManagerFaceBits`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_mask(s: &Services, bits: u32, vars: FaceVars) -> u32 {
     let mut result = 0;
-    let mask = active(s, bits, vars);
+    let mask = get_active_face_vars(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
             let v = (s.at)(vars.data, i);
