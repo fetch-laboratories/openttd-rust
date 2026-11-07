@@ -19,6 +19,7 @@ use crate::livery::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
+use crate::strings_type::StringID;
 use crate::tile_type::TileIndex;
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{OpenTTDVehicle, VehicleID};
@@ -145,33 +146,38 @@ fn cache_colour(id: CompanyID, colour: u8) {
             .write(colour);
     }
 }
-/// Original 100 draws precede weighting and pool-order colour elimination.
-pub(crate) fn generate_colour(s: &Services) -> u8 {
+/// Generate a company colour.
+/// The original 100 draws precede weighting and pool-order colour elimination.
+pub(crate) fn generate_company_colour(s: &Services) -> u8 {
     use crate::gfx_type::{
         COLOUR_BLUE, COLOUR_BROWN, COLOUR_CREAM, COLOUR_DARK_BLUE, COLOUR_DARK_GREEN, COLOUR_END,
         COLOUR_GREEN, COLOUR_GREY, COLOUR_LIGHT_BLUE, COLOUR_MAUVE, COLOUR_ORANGE,
         COLOUR_PALE_GREEN, COLOUR_PURPLE, COLOUR_WHITE, COLOUR_YELLOW, INVALID_COLOUR,
     };
-    const WEIGHTS: [u8; COLOUR_END as usize] = [2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1];
-    const SIMILAR: [[u8; 2]; COLOUR_END as usize] = [
-        [COLOUR_BLUE, COLOUR_LIGHT_BLUE],
-        [COLOUR_GREEN, COLOUR_DARK_GREEN],
-        [INVALID_COLOUR, INVALID_COLOUR],
-        [COLOUR_ORANGE, INVALID_COLOUR],
-        [INVALID_COLOUR, INVALID_COLOUR],
-        [COLOUR_DARK_BLUE, COLOUR_BLUE],
-        [COLOUR_PALE_GREEN, COLOUR_DARK_GREEN],
-        [COLOUR_PALE_GREEN, COLOUR_GREEN],
-        [COLOUR_DARK_BLUE, COLOUR_LIGHT_BLUE],
-        [COLOUR_BROWN, COLOUR_ORANGE],
-        [COLOUR_PURPLE, INVALID_COLOUR],
-        [COLOUR_MAUVE, INVALID_COLOUR],
-        [COLOUR_YELLOW, COLOUR_CREAM],
-        [COLOUR_CREAM, INVALID_COLOUR],
-        [COLOUR_WHITE, INVALID_COLOUR],
-        [COLOUR_GREY, INVALID_COLOUR],
+    // Sorting weights for the company colours (_colour_sort).
+    const COLOUR_SORT: [u8; COLOUR_END as usize] = [2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1];
+    // Similar colours, so we can try to prevent same coloured companies (_similar_colour).
+    const SIMILAR_COLOUR: [[u8; 2]; COLOUR_END as usize] = [
+        [COLOUR_BLUE, COLOUR_LIGHT_BLUE],       // COLOUR_DARK_BLUE
+        [COLOUR_GREEN, COLOUR_DARK_GREEN],      // COLOUR_PALE_GREEN
+        [INVALID_COLOUR, INVALID_COLOUR],       // COLOUR_PINK
+        [COLOUR_ORANGE, INVALID_COLOUR],        // COLOUR_YELLOW
+        [INVALID_COLOUR, INVALID_COLOUR],       // COLOUR_RED
+        [COLOUR_DARK_BLUE, COLOUR_BLUE],        // COLOUR_LIGHT_BLUE
+        [COLOUR_PALE_GREEN, COLOUR_DARK_GREEN], // COLOUR_GREEN
+        [COLOUR_PALE_GREEN, COLOUR_GREEN],      // COLOUR_DARK_GREEN
+        [COLOUR_DARK_BLUE, COLOUR_LIGHT_BLUE],  // COLOUR_BLUE
+        [COLOUR_BROWN, COLOUR_ORANGE],          // COLOUR_CREAM
+        [COLOUR_PURPLE, INVALID_COLOUR],        // COLOUR_MAUVE
+        [COLOUR_MAUVE, INVALID_COLOUR],         // COLOUR_PURPLE
+        [COLOUR_YELLOW, COLOUR_CREAM],          // COLOUR_ORANGE
+        [COLOUR_CREAM, INVALID_COLOUR],         // COLOUR_BROWN
+        [COLOUR_WHITE, INVALID_COLOUR],         // COLOUR_GREY
+        [COLOUR_GREY, INVALID_COLOUR],          // COLOUR_WHITE
     ];
+    // Initialize array.
     let mut colours = std::array::from_fn::<_, { COLOUR_END as usize }, _>(|i| i as u8);
+    // And randomize it.
     for _ in 0..100 {
         let r = s.shared.random();
         colours.swap(
@@ -179,19 +185,21 @@ pub(crate) fn generate_colour(s: &Services) -> u8 {
             crate::bitmath_func::gb(r, 4, 4) as usize,
         );
     }
+    // Bubble sort it according to the values in table 1.
     for _ in 0..COLOUR_END {
         for j in 1..usize::from(COLOUR_END) {
-            if WEIGHTS[usize::from(colours[j - 1])] < WEIGHTS[usize::from(colours[j])] {
+            if COLOUR_SORT[usize::from(colours[j - 1])] < COLOUR_SORT[usize::from(colours[j])] {
                 colours.swap(j - 1, j);
             }
         }
     }
+    // Move the colours that look similar to each company's colour to the side.
     companies(s, |c| {
-        let colour = (s.colour)(c);
-        if let Some(i) = colours.iter().position(|&x| x == colour) {
+        let pcolour = (s.colour)(c);
+        if let Some(i) = colours.iter().position(|&x| x == pcolour) {
             colours[i] = INVALID_COLOUR;
         }
-        for similar in SIMILAR[usize::from(colour)] {
+        for similar in SIMILAR_COLOUR[usize::from(pcolour)] {
             if similar == INVALID_COLOUR {
                 break;
             }
@@ -203,13 +211,15 @@ pub(crate) fn generate_colour(s: &Services) -> u8 {
         }
         true
     });
+    // Return the first available colour.
     colours
         .into_iter()
         .find(|&x| x != INVALID_COLOUR)
         .expect("NOT_REACHED")
 }
-pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
-    if (s.name_id)(c) != s.strings.unnamed || (s.last_build)(c).0 == 0 {
+/// Generate the name of a company from the last build coordinate.
+pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
+    if StringID((s.name_id)(c)) != StringID(s.strings.unnamed) || (s.last_build)(c).0 == 0 {
         return;
     }
     let t = crate::town::spatial::closest(s.shared, (s.last_build)(c).0, u32::MAX);
@@ -217,8 +227,8 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     let simulation = unsafe { crate::town::openttd_rust_town_simulation(town) };
     let mut slot = NameStorage::new();
     let mut names = Names::new(s, &mut slot);
-    let mut str = s.strings.andco;
-    let mut parts;
+    let mut str = StringID(s.strings.andco);
+    let mut strp;
     let town_name = unsafe { crate::town::names::openttd_rust_town_name(town).size == 0 }
         && crate::math::is_inside_mm(
             usize::from(read_field!(simulation, townnametype)),
@@ -228,44 +238,50 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     let mut try_town = town_name;
     loop {
         if try_town {
-            str = u32::from(read_field!(simulation, townnametype)) - s.strings.town_begin
-                + s.strings.company_begin;
-            parts = read_field!(simulation, townnameparts);
-        } else if (s.president_id)(c) == s.strings.president_generated {
-            parts = (s.president_parts)(c);
-            names.render(str, parts);
+            str = StringID(
+                u32::from(read_field!(simulation, townnametype)) - s.strings.town_begin
+                    + s.strings.company_begin,
+            );
+            strp = read_field!(simulation, townnameparts);
+        } else if StringID((s.president_id)(c)) == StringID(s.strings.president_generated) {
+            strp = (s.president_parts)(c);
+            names.render(str.0, strp);
             break;
         } else {
-            parts = s.shared.random();
+            strp = s.shared.random();
         }
+        // No companies must have this name already.
         let unique = companies(s, |cc| {
-            (s.name_id)(cc) != str || (s.name_parts)(cc) != parts
+            StringID((s.name_id)(cc)) != str || (s.name_parts)(cc) != strp
         });
         if unique {
-            let name = names.render(str, parts);
+            let name = names.render(str.0, strp);
             if (s.shared.utf8_length)(name.data, name.size)
                 < crate::company_type::MAX_LENGTH_COMPANY_NAME_CHARS
             {
                 break;
             }
         }
-        str = s.strings.andco;
+        str = StringID(s.strings.andco);
         try_town = false;
     }
-    (s.set_name_id)(c, str);
-    (s.set_name_parts)(c, parts);
+    (s.set_name_id)(c, str.0);
+    (s.set_name_parts)(c, strp);
     (s.shared.screen_dirty)();
     (s.company_renamed)(c, names.slot);
     if (s.is_ai)(c) {
         (s.launch_news)(c, t.cast_mut());
     }
 }
-pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {
+/// Generate a random president name of a company.
+pub(crate) fn generate_president_name(s: &Services, c: *mut OpenTTDCompany) {
     let mut slot = NameStorage::new();
     let mut names = Names::new(s, &mut slot);
     loop {
         (s.set_president_parts)(c, s.shared.random());
         (s.set_president_id)(c, s.strings.president_generated);
+        // Reserve space for an extra unicode character so a too-long president
+        // name can be detected.
         let name = names.render(s.strings.president, u32::from((s.company_id)(c).0));
         if (s.shared.utf8_length)(name.data, name.size)
             >= crate::company_type::MAX_LENGTH_PRESIDENT_NAME_CHARS
@@ -284,6 +300,11 @@ pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {
         }
     }
 }
+// Preserve the scalar entry names used by the existing company lifecycle.
+pub(crate) use generate_company_colour as generate_colour;
+pub(crate) use generate_company_name as generate_name;
+pub(crate) use generate_president_name as generate_president;
+
 /// Reset the livery schemes to the company's primary colour.
 /// Used on loading games without livery information and on new company start up.
 pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
