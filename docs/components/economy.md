@@ -136,3 +136,10 @@
 - Packet movement, staging and reservation comparisons use the canonical `MoveToAction` and existing `CargoPacket::MAX_COUNT`. Raw scalar adapters, combined station/action keys, list lifetime and cache update order remain unchanged; no second packet record or service is introduced.
 - Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed. Existing packet-precondition, historical-save and native lifetime limits remain on #156.
 - PRs: #761, integrated in #765. Flow, payment and registry vocabulary remain in the cleanup workset.
+
+## Original Livery scheme vocabulary (#734)
+
+- `LiveryScheme` preserves the original byte values and unknown raw values; existing scalar adapters delegate to the canonical scheme definitions. Company livery reset/update and colour-command bodies use the original names, comments and state flags.
+- Separate live colour reads, inheritance, command rejection, cache/admin/GUI/vehicle updates and effect order remain unchanged. Native company/vehicle storage, livery record layout and scalar ABI are retained.
+- Checks: original operations/order review and combined exact-head Full. Archive equivalence is unclaimed; inherited colour, mod, historical-save and GUI-schedule limits remain on #156.
+- PRs: #767, integrated in #769. Other Company/economy cleanup stays open.
