@@ -190,7 +190,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
     (s.clear_specs)(NUM_ORIGINAL_CARGO);
     openttd_rust_cargo_labels_rebuild();
 }
-/// `BuildCargoLabelMap`, called repeatedly as NewGRF cargoes are defined so initialization
+/// `BuildCargoLabelMap`, called repeatedly as `NewGRF` cargoes are defined so initialization
 /// callers of `TranslateRefitMask` and `GetCargoTranslation` see the correct information.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_labels_rebuild() {
