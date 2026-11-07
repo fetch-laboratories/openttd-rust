@@ -4,11 +4,31 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-06, overhaul)
+## Where the fork stands (2026-11-07, stocktake 107)
 
-Agent: /overhaul (Claude Code, user-directed) | Model: claude-opus-5-5 | Reasoning effort: xhigh
+Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-Development is paused for a cleanup stage (user, 2026-11-06). Code main is integration 103 (`b7b6603f4c`); #722 integrated as 101, #732 as 102 and #733 as 103. After 102, with metric v2 at implementation `f4e2c5b45420…` ([root's checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)): compiled source and generated records C++ 256,796; total fork C++ 279,755; original retired 62,750 of 284,355 (22.07%), simulation 41,550 of 61,148 (67.95%); C++ evidence 22,959; exports 1,563; callback slots 3,377. Integration 103 changes no game code or C++ counts; its expanded boundary census is a separate corrected series, 1,719 exports and 3,419 callback fields. Main is green; no rollback or integration hold remains. [Profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
+Development remains in the cleanup stage (user, 2026-11-06). Code main is integration 107, `c540d0788f` (#752). Exact-head Full passes; main has no known regression or integration hold. The approved Clippy correction and cargo/engine evidence transfers are integrated. Platform cadence 105 passed; the next is 110. The scheduled profile of 107 is next; until it finishes, [profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
+
+| Current measure | Integration 107 |
+| --- | ---: |
+| Original C++ remaining | 221,645 |
+| Fork source glue, including generated records | 35,018 |
+| Compiled source and generated records C++ | 256,663 |
+| Tracked tools C++ evidence | 17,382 |
+| Other generated C++ evidence | 5,521 |
+| Total fork C++ | 279,566 |
+| Original C++ retired | 62,710 of 284,355 (22.05%) |
+| Simulation C++ retired | 41,550 of 61,148 (67.95%) |
+| Expanded Rust exports / callback fields | 1,713 / 3,418 |
+| Historical regex exports / callback slots | 1,557 / 3,376 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 42 |
+| Retained Clippy keys / diagnostics | 672 / 765 |
+| Ruff keys / diagnostics | 296 / 296 |
+
+Source tests account for 5,861 C++ lines within the compiled source count. The generated ABI census is 6,126 C++ code lines: 605 record declarations within source glue and 5,521 other generated lines already included above. The historical regex and expanded boundary series have different scopes; do not combine them. These are metric-v2 counts carried through test/workflow-only repairs; all current growth checks pass without a baseline reset.
+
+Since the historical-102 checkpoint `e800717540`, total fork C++ fell by 189 lines: compiled C++ by 133 and outside evidence by 56. Original remaining rose by 40 because H restored generic native evidence, while source glue fell by 173; simulation retirement is unchanged. The checkpoint window is 19,500 seconds (0.225694 days), equivalent to 837 fewer fork C++ lines per day for this window, not a continuous throughput forecast. Integration 107 adds 278 Rust and 97 tooling code lines by the canonical source-diff counter; baseline data is separate. #747 removes 1,222,247 baseline bytes while preserving every retained row and provenance. Two component PRs remain unintegrated, #744 and #748; workset 01 is selected below.
 
 | Scenario | Original Ir | Candidate Ir (100) | Accepted projection (100) |
 | --- | ---: | ---: | ---: |
@@ -30,7 +50,7 @@ Development is paused for a cleanup stage (user, 2026-11-06). Code main is integ
 | Mean cyclomatic complexity | 4.08 | 3.83 |
 | Code in copy-paste clones | 4.5% | 2.3% |
 
-Complexity and nesting match the original, because ports keep its control flow. The other gaps are the port's own: literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that every storage change has to patch. Clippy reports 9,628 distinct violations of the candidate lints; quick CI runs no Rust checks. Inventories are on the stream issues below.
+Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 765 current diagnostics are not comparable to the initial broader lint inventory.
 
 ## Course (user, 2026-11-06)
 
@@ -65,7 +85,7 @@ Each stream issue holds its batches, rules, proof and inventory. A file belongs 
 Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), without changing the course:
 
 - #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order plus exact-head Full when compiled code differs. Archive equivalence remains the first attempt; per-PR Callgrind profiles and disassembly accounting are not required. F's existing evidence is accepted.
-- #747 narrows the Clippy ratchet to complexity, parameter count, nesting and safety documentation after F integrates. Preserve retained debt; remove unnecessary existing cast suppressions on later base updates, after F integrates.
+- #747 is integrated through #751/#752: the Clippy ratchet retains complexity, parameter count, nesting and safety documentation, preserving retained debt. Remove unnecessary existing cast suppressions on later base updates, after F's integration.
 - #734 permits the original's integer uses through wrapper accessors and measures wrapper adoption rather than Rust enum counts. The implementer brief places helpers by their original file, including `.cpp`-only helpers (#738).
 - #734/#737 may merge mechanical shared-file edits on base updates; H's protocol closure does not wait for F's unrelated `lib.rs` declarations.
 - Before selecting #669 afterload, re-check its all-pool writes against the boundary yardstick and current storage ownership, as noted below.
@@ -207,11 +227,15 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 101 | Engine records/GRF/direct consumers #722 | `31478f303a` | Scoped reviews and exact Full42302553842/tree pass. Compiled C++−852, fork−973, original retired+380/net glue−472; callback slots−229. Actual pools/native consumers remain637/497. Main platform recovery42304912050 runs. |
 | 102 | Shared owned-bytes assignment and GRF price metadata #732 | `a0337694c4` | Review and exact-head Full passed; compiled C++ +2, fork +4. Necessary shared support, no retirement credit. |
 | 103 | Cleanup CI, lint/growth ratchets and refactor proof #733/#742 | `b7b6603f4c` | Three reviews and exact-head Full/tree match. Tooling +1,956 code lines; production Rust and C++ unchanged. |
+| 104 | Evidence registration and direct cargo records #740/#741, combined #743 | `49f7ac951e` | Reviews and exact-head Full/tree pass. Compiled C++ -9, fork C++ -6, exports -3 and callbacks -1. The initial original-client reconnect stall is recorded on #693; no source regression was established. |
+| 105 | Canonical native type foundation #734/#739 | `7c3fb4455a` | Source and exact lint reviews, accepted #746 proof disposition and exact-head Full/tree pass. C++ and boundary counts hold. Platform cadence passes. |
+| 106 | Three live typed history queries and protocol closure #737/#745 | `1e109c47a9` | Source/closure reviews and exact-head Full/tree pass. Compiled C++ -47, fork C++ -71 and exports -3; generic native evidence restored, so original retirement decreases by 40. |
+| 107 | Narrow lint debt and cargo/engine evidence #747/#751/#749/#750, combined #752 | `c540d0788f` | Source/evidence reviews and exact-head Full/tree pass after bounded CI repairs. Compiled C++ -77, outside evidence -35, fork C++ -112; boundary holds. Original retirement is unchanged. |
 
 ## Recurring
 
-- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The next stocktake follows integration 107.
-- Run the platform cadence after every fifth integration; the next follows integration 105. A new failure stops integrations.
+- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). Stocktake 107 is recorded above; its profile is next. The next stocktake follows integration 113.
+- Run the platform cadence after every fifth integration; 105 passed and the next follows integration 110. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -223,21 +247,20 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Code main is integration 103, `b7b6603f4c`. A's checks are installed. R0 and cargo C combine in #743; its first Full timed out waiting for an original client to reconnect in the network-protocol scenario, with the other validation jobs passing. No #743 source regression is established; root records the diagnostic on #693 before retry. F's proof is accepted under closed [decision #746](https://github.com/fetch-laboratories/openttd-rust/issues/746); no further archive or profiling work is required. Road R and history H have completed source review and can adopt mechanically merging shared-file edits before updating from integrated #743. Integration and rollback procedures live in the [root workflow](root-workflow.md).
+Cleanup stage in progress. Code main is integration 107, `c540d0788f`. A, R0, cargo C, foundation F and history H are integrated, as are the narrowed Clippy policy and bounded cargo/engine evidence transfers. Their exact-head Full results pass; on-demand CI is restored after the Windows workflow repair. #746 is closed and F needs no further proof work. The scheduled merged-tip profile runs beside implementation; only a quiet timed collection would hold other builds. Integration and rollback procedures live in the [root workflow](root-workflow.md).
 
 | Work | Owner | Next action |
 | --- | --- | --- |
-| #743: #736 R0 and #737 C | Root | Diagnose the timed-out simulation shard, update from the docs correction, refresh exact contracts and finish current-head Full. Component/source reviews and other validation jobs pass. |
-| #734 F, PR #739 | Root | After #743, update from base, adopt the exact reviewed lint delta, review and current-head Full. Source and all 122 lint proposals are reviewed; proof is accepted. |
-| #737 R, PR #744 | `/root/cleanup_737_road` | Adopt exact baseline/native-fixture changes, update from integrated #743, then final-head acceptance and Full. Source review and focused checks pass. |
-| #737 H, PR #745 | `/root/cleanup_737_history` | Apply the mechanical protocol closure/native patch and delete one stale debt row; update from integrated #743 before final gates and Full. Source review and four suppression acceptances pass. |
-| #747 Clippy selection | Root | Small reviewed tooling PR after F integrates; retain only the five approved lint families and preserve all surviving baseline rows. |
+| Profile/stocktake 107, #275 | Root | Profile integrated `c540d0788f`, compare retained same-host anchors and record projections. No per-PR profile or anchor reset. |
+| #737 R, PR #744 | `/root/cleanup_737_road` | Adopt current main and the narrowed debt selection, preserving reviewed source; refresh exact contracts. Root handles acceptance and combines disjoint ready work for Full. No repeated whole-fork metric on a mechanical base update. |
+| #736 W1, PR #748 | `/root/cleanup_736_world_evidence` | Adopt current main, preserving the reviewed 19,608 movement observations. Root reserves one combined integrating-head report for its second measurement and final Full. Scheduler/native boundary evidence remains. |
+| #734 workset 01, Town/house | `/root/cleanup_734_town_house` | Start from integrated main. Reserve the 14-file workset and required type companions; first coherent checkpoint is town-name vocabulary/comments with table bytes, arithmetic and selection order preserved. |
 | #738 rule corpus | Root | Two docs checkpoints are pushed. The remaining orchestration-skill rows belong to an authorized navigation/steering pass. |
 
-Retained state from root's wind-down ([checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)), for housekeeping:
+Retained state for housekeeping:
 
-- The five closed drafts' checkouts (`t3-085f01f5`, `t3-8cd4fc03`, `.local/worktrees/root-review-714`, `t3-c19acd32`, `t3-eb96953a`) are clean and pushed; ordinary housekeeping may remove them. The old vehicle `6f3` evidence inside `root-review-714` goes with it.
-- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes; release `t3-44649657` (92), `t3-b7a95131` (94) and `t3-96affac3` (steering-30 audit) through ordinary housekeeping.
+- Ordinary housekeeping may remove clean, pushed checkouts of the closed storage drafts and integrated cleanup components. Their heads and results are recorded on the issues and PRs.
+- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes; superseded profiles and steering audits follow ordinary housekeeping.
 - Dirty or staged trees need a decision before removal: `t3-3b491ddb` (five files), `t3-431c84b4` (locked #565 work), `t3-d78d5f8b` (locked native evidence), `t3-32cf4edc` (`tools/simulation/roads.py` staged), `t3-e130d5a3` (`migration/saves/README.md` staged).
 - Keep protected `.local/worktrees/root-docs-72` and the locked profile trees `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main.
 - Keep main `.local/integration-records/`, `.local/speed-pass/` anchors and frozen runtimes, and the simulation runs root listed in its checkpoint.
