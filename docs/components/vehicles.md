@@ -227,3 +227,9 @@
 - The existing tile buckets, live cursors, ground/track/tunnel refusal checks and raw entry points use the original helper names, canonical tile/track/vehicle/string identities and explanatory comments. Hash arithmetic, bucket order, callback-sensitive link reads, stale-link handling and first-blocker observations are preserved.
 - Cursor/link records, public scalar interfaces and native observations retain their shapes. Maintenance and scheduler bodies are unchanged. Source operations/order review and exact-head Full pass; archive equivalence is unclaimed. Inherited fidelity differences and coverage limits remain on #156.
 - PR: #793, integration 124. Other Vehicle vocabulary remains in the cleanup workset.
+
+## Original engine-replacement rule vocabulary (#734)
+
+- Five existing renewal-rule helpers and their immediate transaction callers use original names, canonical engine/group identities and `GroupFlag`/`GroupFlags`. Raw masks, adapters and native engine-renew ownership are preserved.
+- Ancestor-aware lookup/addition, exact removal, protection fallback, execution-only mutation, optional old-engine output, prepend order and next-before-delete traversal keep their existing operations and order. Unselected fleet and transaction bodies are unchanged.
+- Source operations/order review, exact spelling acceptance and combined Full pass. Archive equivalence is unclaimed; inherited fidelity differences and coverage limits remain on #156. PR #796, integrated in #799; remaining Orders/fleet vocabulary stays open.

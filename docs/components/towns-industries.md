@@ -158,3 +158,9 @@
 - Grid alignment, placement checks and coastal search use the original helper names, canonical tile/layout/ground values and explanatory comments. Map-edge and close-town checks, spiral counts and height bounds, short circuits, scan order, strict furthest-distance selection and the invalid-tile sentinel retain their captured operations.
 - Native map/pool storage, service observations, records and raw interfaces remain unchanged. Source review, the exact unchanged depth-6 lint carry and exact-head Full pass; archive equivalence is unclaimed. Inherited read-staging differences and coverage limits remain on #156.
 - PRs: #790, integration 122. Other Town vocabulary remains in the cleanup workset.
+
+## Original Town found and rename command vocabulary (#734)
+
+- Town founding policy retains its full byte domain in `town_type.rs`, with compatibility reexports for existing callers. Found/rename commands use canonical settings, command/name limits and the original local price-table spelling.
+- Existing validation, coordinate/name observations, costs, callbacks and execution order are preserved. Native records, scalar interfaces, macro types still in use and unselected generation/creation helpers retain their shapes.
+- Source operations/order review, exact contract acceptance and combined Full pass. Archive equivalence is unclaimed; inherited fidelity differences and coverage limits remain on #156. PR #795, integrated in #799; remaining Town vocabulary stays open.
