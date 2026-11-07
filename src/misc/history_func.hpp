@@ -28,7 +28,7 @@ bool IsValidHistory(ValidHistoryMask valid_history, const HistoryRange &hr, uint
 template <typename T>
 T SumHistory(typename std::span<const T> history);
 
-#	include "../rust/history_adapter.hpp"
+#include "../rust/history_adapter.hpp"
 
 /**
  * Rotate historical data.
@@ -42,7 +42,24 @@ T SumHistory(typename std::span<const T> history);
 template <typename T>
 void RotateHistory(HistoryData<T> &history, ValidHistoryMask valid_history, const HistoryRange &hr, uint cur_month)
 {
-	RustHistory::Rotate(history, valid_history, hr, cur_month);
+	if constexpr (requires { typename RustHistory::Operations<T>::Element; }) {
+		RustHistory::Rotate(history, valid_history, hr, cur_month);
+		return;
+	}
+
+	if (hr.hr != nullptr) RotateHistory(history, valid_history, *hr.hr, cur_month);
+	if (cur_month % hr.total_division != 0) return;
+
+	std::move_backward(std::next(std::begin(history), hr.first), std::next(std::begin(history), hr.last - 1), std::next(std::begin(history), hr.last));
+
+	if (hr.total_division == 1) {
+		history[hr.first] = history[hr.first - 1];
+		history.front() = {};
+	} else if (HasBit(valid_history, hr.first - hr.division)) {
+		auto first = std::next(std::begin(history), hr.first - hr.division);
+		auto last = std::next(first, hr.division);
+		history[hr.first] = SumHistory<T>(std::span{first, last});
+	}
 }
 
 /**
@@ -72,7 +89,34 @@ T GetAndResetAccumulatedAverage(Taccrued &total)
 template <typename T>
 bool GetHistory(const HistoryData<T> &history, ValidHistoryMask valid_history, const HistoryRange &hr, uint age, T &result)
 {
-	return RustHistory::Get(history, valid_history, hr, age, result);
+	if constexpr (requires { typename RustHistory::Operations<T>::Element; }) {
+		return RustHistory::Get(history, valid_history, hr, age, result);
+	}
+
+	if (hr.hr == nullptr) {
+		if (age < hr.periods) {
+			uint slot = hr.first + age;
+			result = history[slot];
+			return HasBit(valid_history, slot);
+		}
+	} else {
+		if (age * hr.division < static_cast<uint>(hr.hr->periods - hr.division)) {
+			bool is_valid = false;
+			std::array<T, HISTORY_MAX_DIVISION> tmp_result; // No need to clear as we fill every element we use.
+			uint start = age * hr.division + ((TimerGameEconomy::month / hr.hr->division) % hr.division);
+			for (auto i = start; i != start + hr.division; ++i) {
+				is_valid |= GetHistory(history, valid_history, *hr.hr, i, tmp_result[i - start]);
+			}
+			result = SumHistory<T>(std::span{std::begin(tmp_result), hr.division});
+			return is_valid;
+		}
+		if (age < hr.periods) {
+			uint slot = hr.first + age - ((hr.hr->periods / hr.division) - 1);
+			result = history[slot];
+			return HasBit(valid_history, slot);
+		}
+	}
+	NOT_REACHED();
 }
 
 /**

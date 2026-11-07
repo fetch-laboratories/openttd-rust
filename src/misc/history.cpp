@@ -24,7 +24,7 @@
  */
 void UpdateValidHistory(ValidHistoryMask &valid_history, const HistoryRange &hr, uint cur_month)
 {
-	valid_history = RustHistory::Scalar(0, hr, valid_history, 0, cur_month);
+	openttd_rust_history_update_valid(&valid_history, &hr, cur_month);
 }
 
 /**
@@ -36,5 +36,5 @@ void UpdateValidHistory(ValidHistoryMask &valid_history, const HistoryRange &hr,
  */
 bool IsValidHistory(ValidHistoryMask valid_history, const HistoryRange &hr, uint age)
 {
-	return RustHistory::Scalar(1, hr, valid_history, age, TimerGameEconomy::month) != 0;
+	return openttd_rust_history_is_valid(valid_history, &hr, age) != 0;
 }
