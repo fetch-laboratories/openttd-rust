@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "version": "rustc 1.99.0 (b940084d7 2026-09-28)",
-  "inventory_head": "9efb4368136f6c6cc2c8a333b185f8aa49c634e0",
+  "inventory_head": "47a9c6f9898fbf32f767be2b9e451aca12174e13",
   "sites": {
     "rust/openttd-kernels/src/admin_conversion.rs | impl Engine::fn advance | excessive_nesting | 737ef7e248ab5774343f": [
       6
@@ -448,11 +448,11 @@
       5
     ],
     "rust/openttd-kernels/src/aircraft.rs | impl < const COUNTED : bool > World < ' _ , COUNTED >::fn controller | excessive_nesting | 2a35bd256f4c699b81f7": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/aircraft.rs | impl < const COUNTED : bool > World < ' _ , COUNTED >::fn controller | excessive_nesting | 4bcbfe1de16ae68a3637": [
-      7,
-      7
+      5,
+      5
     ],
     "rust/openttd-kernels/src/aircraft.rs | impl < const COUNTED : bool > World < ' _ , COUNTED >::fn controller | excessive_nesting | 8831d488e5cb359b65b1": [
       7
@@ -3491,7 +3491,7 @@
       1
     ],
     "rust/openttd-kernels/src/disaster.rs | impl < ' a > World < ' a >::fn big_ufo | excessive_nesting | 3544495944231c0cd47a": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/disaster.rs | impl < ' a > World < ' a >::fn big_ufo | excessive_nesting | 48342ad4fde4cb9e6e05": [
       6
@@ -4577,10 +4577,10 @@
       31
     ],
     "rust/openttd-kernels/src/engine_loading.rs | fn openttd_rust_engine_calculate_refits | excessive_nesting | 8c6e648e48006686af61": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/engine_loading.rs | fn openttd_rust_engine_calculate_refits | excessive_nesting | d32429166a89d52f0861": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/engine_loading.rs | fn openttd_rust_engine_calculate_refits | multiple_unsafe_ops_per_block | 56f74618dc28b725474d": [
       7
@@ -6655,21 +6655,21 @@
       8
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | excessive_nesting | 4bcbfe1de16ae68a3637": [
-      7,
-      8
+      6,
+      6
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | excessive_nesting | 8c6e648e48006686af61": [
       6,
-      8
+      6
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | excessive_nesting | c3e596731b6e272be6ee": [
       7
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | excessive_nesting | d0632a4290c88412d7aa": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | excessive_nesting | ec15de4d663090ec319f": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/fleet/transactions.rs | fn replace_chain | multiple_unsafe_ops_per_block | 2d240e7eba9e60b49489": [
       2,
@@ -8957,10 +8957,10 @@
       31
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 3f9ff36d9d9a9d6687a4": [
-      8
+      7
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 73a2e0a0f1b09f9235e5": [
-      8
+      7
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 8a4be6a52a329e992805": [
       8
@@ -10524,7 +10524,7 @@
       1
     ],
     "rust/openttd-kernels/src/industry/transaction.rs | fn openttd_rust_industry_build | excessive_nesting | 4bcbfe1de16ae68a3637": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/industry/transaction.rs | fn openttd_rust_industry_build | excessive_nesting | efe03dce36d4a6a6f8ea": [
       7
@@ -11071,7 +11071,7 @@
       5
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn level | excessive_nesting | 6681e1ae6bd563433f7f": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn level | excessive_nesting | 6a411d931234e6cfc9bf": [
       5
@@ -11107,7 +11107,7 @@
       6
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn terraform | excessive_nesting | 6be7a26100a1ae302532": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/landscape_cmd.rs | impl < ' a > World < ' a >::fn terraform | multiple_unsafe_ops_per_block | 627ff501a5c552aa63c1": [
       3
@@ -11203,7 +11203,7 @@
       5
     ],
     "rust/openttd-kernels/src/landscape_generation.rs | impl < ' a > World < ' a >::fn fix_slopes | excessive_nesting | 7f4f4de2821b22c0cd10": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/landscape_generation.rs | impl < ' a > World < ' a >::fn fix_slopes | excessive_nesting | a6d8fef072df2f8ec834": [
       5
@@ -11267,7 +11267,7 @@
       1
     ],
     "rust/openttd-kernels/src/landscape_generation.rs | impl World < ' _ >::fn flow_river | excessive_nesting | 4bcbfe1de16ae68a3637": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/landscape_generation.rs | impl World < ' _ >::fn flow_river | excessive_nesting | c218be4b4b726fd9462f": [
       6
@@ -11906,7 +11906,7 @@
       34
     ],
     "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status::mod e | excessive_nesting | 01c5cbdca915358ab828": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status::mod e | excessive_nesting | 06a3a8ae02574c124b54": [
       6
@@ -11929,7 +11929,7 @@
       5
     ],
     "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status::mod e | excessive_nesting | 8540f3f888e2d8a5b22c": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/movement.rs | impl Context < ' _ >::fn track_status::mod e | excessive_nesting | 948793598d2ff0113571": [
       8
@@ -12010,10 +12010,10 @@
       6
     ],
     "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | excessive_nesting | 7294e3f446f69d5a87f7": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | excessive_nesting | c299016307037f1344ab": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/movement.rs | impl MovementServices::fn enter_wormhole | excessive_nesting | e25e2ed4c19c64ca2e61": [
       7
@@ -14896,7 +14896,7 @@
       9
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 1576fc8bc819af9559d9": [
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 1a75ed98fa1748a0c52c": [
       8
@@ -14916,17 +14916,17 @@
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 5fc1e516ada2a467cf65": [
       8,
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 6565a761609002a7e9f6": [
       8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 7084e546e14ef789d4e3": [
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 71c148270452761697c3": [
       8,
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | 73a2e0a0f1b09f9235e5": [
       8,
@@ -14934,16 +14934,16 @@
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | a70be3c640e4836d0cf5": [
       8,
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | c7e5a70d49c311e0f38c": [
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | d33df0140f26bbb579f7": [
       8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | excessive_nesting | fae75f8e6d6fed1c7402": [
-      9
+      8
     ],
     "rust/openttd-kernels/src/newgrf_text/translation.rs | fn translate | undocumented_unsafe_blocks | 5c5ded3a9307fbc1e4fd": [
       1
@@ -16147,7 +16147,7 @@
       5
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn begin_loading_orders | excessive_nesting | e56a0c4629bec8c03e06": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn begin_loading_orders | too_many_lines | 4a33eacd5fa65f2b2e28": [
       108
@@ -16211,16 +16211,16 @@
       1
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn destination | excessive_nesting | 04598df7d0c98ccdb694": [
-      8
+      7
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn destination | excessive_nesting | 1a62e2adf7d74d1e34bc": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn destination | excessive_nesting | 257c1be96ae69f4b01c2": [
       6
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn destination | excessive_nesting | a2e05acafb424771ec26": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/orders.rs | impl Control::fn destination | excessive_nesting | f58af328efff80d89d91": [
       8
@@ -17231,13 +17231,13 @@
       29
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_single_rail | excessive_nesting | 7676330a0cad399f4454": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_single_rail | excessive_nesting | 94e9feb37faea043a63f": [
       7
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_single_rail | excessive_nesting | f5db6c54c3e25f0a984e": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn build_single_rail | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
@@ -17364,14 +17364,14 @@
       1
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn remove_single_rail | excessive_nesting | 0abebf1ab97d26977837": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn remove_single_rail | excessive_nesting | b761514508f0398b41bb": [
       7,
       7
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn remove_single_rail | excessive_nesting | d19369d0e4015af2ca42": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/rail_cmd.rs | impl < ' a > Ctx < ' a >::fn remove_single_rail | too_many_lines | 4a33eacd5fa65f2b2e28": [
       176
@@ -17522,7 +17522,7 @@
       7
     ],
     "rust/openttd-kernels/src/rail_yapf.rs | impl Reservation::fn step | excessive_nesting | 2cca4f594e9db2be6430": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/rail_yapf.rs | impl Reservation::fn step | excessive_nesting | 504c13e7028eeb122c6e": [
       6
@@ -17890,33 +17890,33 @@
       53
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 19149e8f3e1fb0099414": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 1efeca726d0d897dbf59": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 3e4a8e4ea644f0b43e35": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 5824cc33ce7c6f7eb21d": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 616b594e8609f1a782d1": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 63d5c77ae241ec9380a1": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | a22264e51a21a60d0257": [
       7
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | c431dd615eb98c7eaa69": [
-      7,
-      7,
-      7
+      5,
+      5,
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | e0167ab06ff620ddd4b9": [
-      7
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | too_many_lines | 4a33eacd5fa65f2b2e28": [
       338
@@ -17946,7 +17946,7 @@
       5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | excessive_nesting | 76844ec4a348fa7a2bc0": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | excessive_nesting | d1a7e120d2cd46d3bb92": [
       6
@@ -17955,8 +17955,8 @@
       5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | excessive_nesting | fca612ebb9bc65e2fea2": [
-      6,
-      6
+      5,
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | too_many_lines | 4a33eacd5fa65f2b2e28": [
       110
@@ -18076,41 +18076,41 @@
       63
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | 0dfce8da13a1edc402fd": [
-      9
+      8
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | 2ae430af3f2946f69d68": [
       5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | 7603eaf3e341c123373c": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | 874d7a99b3a2e493bc3c": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | 983e14ef9b539681f723": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | b64877f5230cb356edce": [
       9
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | b6b9ee0c948ff32bb473": [
-      9
+      7
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | b8f6a84e3c6a5fe479cc": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | b90474d456d068a8ab4e": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | bafa5c4a753299dd2cef": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | c696bf0d375b337e4c93": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | excessive_nesting | e18a3f1a758f014837d9": [
-      9,
-      9
+      5,
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn build | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       10
@@ -18143,13 +18143,13 @@
       6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn change_owner | excessive_nesting | 2795ec9a48c831ec983c": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn change_owner | excessive_nesting | 8a971561edcd1f1f3efc": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn change_owner | excessive_nesting | b3ae363201b7cf5e861a": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn clear_tile | excessive_nesting | 7603eaf3e341c123373c": [
       6
@@ -18231,7 +18231,7 @@
       33
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | 407a6dfdc819dd94344e": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | 49f4a1c62c5f93148fae": [
       7
@@ -18240,13 +18240,13 @@
       7
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | d19369d0e4015af2ca42": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | d97a0b25a6d5dff4d8f8": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | e272560feb421fad16e1": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/road_cmd.rs | impl < ' a > Ctx < ' a >::fn remove | excessive_nesting | eb026c6fc544cfec2f86": [
       5
@@ -18735,11 +18735,11 @@
       1
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | 2402a438d5d871e7d67e": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | 2683c1795e256c0783b5": [
       6,
-      8
+      6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | 35ad9dbee4ed84e3b2f8": [
       6
@@ -18748,13 +18748,13 @@
       6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | 8aaf6238c4f934a996e2": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | 9f3190d57f3cd1f73381": [
       6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | aa527b1c690515182154": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/script_list_control.rs | impl Control::fn callback | excessive_nesting | c6906e611aa6361bc5a1": [
       8
@@ -19403,30 +19403,30 @@
       30
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | 00b33d4ce3dbca4bf2fe": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | 1fb44b4e00abe27e6760": [
       9
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | 27b8dd53f9c018b4f070": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | 3ea44f9cf0c5132bfa73": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | 6c23320861ae129ae2d7": [
       5
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | ded613be3417d57b4aa8": [
-      9,
-      9,
-      9
+      5,
+      5,
+      5
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | e7ba2da9d4ead37286dc": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | excessive_nesting | f260ff781fff09d22a6f": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/ship_control.rs | impl Game < ' _ >::fn controller | multiple_unsafe_ops_per_block | 6e52945d20f7ae0b4184": [
       3
@@ -19741,7 +19741,7 @@
       7
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore | excessive_nesting | 9eab464f71e55d96df76": [
-      10
+      8
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore | too_many_lines | 4a33eacd5fa65f2b2e28": [
       169
@@ -20624,10 +20624,10 @@
       6
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | excessive_nesting | 62c2c8067bcbc15aedfd": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | excessive_nesting | e2a685e00c601de24401": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
@@ -20669,8 +20669,8 @@
       1
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | excessive_nesting | 15d6c43d2b2b13ce3ec0": [
-      6,
-      6
+      5,
+      5
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | excessive_nesting | 3b17d5ef942a1a9a836e": [
       6,
@@ -20866,13 +20866,13 @@
       28
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_road_tile | excessive_nesting | 15bb80d4624a095ecc29": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_road_tile | excessive_nesting | 8d2bdc8efb8579246882": [
       6
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_road_tile | excessive_nesting | c0129fd0ca21b5f4f2b2": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_road_tile | excessive_nesting | de9c258e85cbf172f435": [
       6
@@ -21497,10 +21497,10 @@
       48
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 123da09745fe596a0f20": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 19b068539a79c44847fe": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 32a0d0af8f9c42c0edd9": [
       6
@@ -21509,7 +21509,7 @@
       6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 44cab5e48328b2ef422d": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 7c3cbca9ae09f02486ae": [
       7
@@ -21524,7 +21524,7 @@
       7
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | e7e3475c0e58c7ef30b3": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | f41932f0528a805e85e8": [
       7
@@ -21945,10 +21945,10 @@
       9
     ],
     "rust/openttd-kernels/src/station_service.rs | fn stale | excessive_nesting | 4bb3a1729d5d52aefbec": [
-      9
+      7
     ],
     "rust/openttd-kernels/src/station_service.rs | fn stale | excessive_nesting | 77cbebb602b6378d1aa6": [
-      9
+      7
     ],
     "rust/openttd-kernels/src/station_service.rs | fn stale | undocumented_unsafe_blocks | 11b15423ec48b654de15": [
       1
@@ -23045,11 +23045,11 @@
       6
     ],
     "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | excessive_nesting | 2449c139f1d30fbf1cb0": [
-      6,
-      6
+      5,
+      5
     ],
     "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | excessive_nesting | af06c354c7e4179516bd": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | too_many_lines | 4a33eacd5fa65f2b2e28": [
       137
@@ -23318,7 +23318,7 @@
       1
     ],
     "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete | excessive_nesting | 08914a24a2356c4b8c61": [
-      8
+      6
     ],
     "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete | excessive_nesting | 99eb2be66abc740060ea": [
       8
@@ -24560,34 +24560,34 @@
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 40f56c67ef8fefcbca08": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 41ff9d0bbc5fa6f627f7": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 4a855f09f442b4965da2": [
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 6e843f0950f191fe2476": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 94ca148f44f21e0804bb": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 959fb8dd6907a42938bb": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 95ed948aed8e61511b0e": [
-      9
+      6
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 9a6d49ee3f863e4f64db": [
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | c9e59917b991051c05e1": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | e091626be2d1263587ca": [
-      9
+      5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | eb5e97262c0c16382cae": [
       6,
@@ -25227,10 +25227,10 @@
       5
     ],
     "rust/openttd-kernels/src/tunnelbridge_cmd.rs | impl < ' a > World < ' a >::fn change_owner | excessive_nesting | 62c2c8067bcbc15aedfd": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/tunnelbridge_cmd.rs | impl < ' a > World < ' a >::fn change_owner | excessive_nesting | f52d5ba1aefd83d18483": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/tunnelbridge_cmd.rs | impl < ' a > World < ' a >::fn change_owner | undocumented_unsafe_blocks | bc6e1f41cdf335cf2cb6": [
       1
@@ -26659,7 +26659,7 @@
       7
     ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ae6a3ac5b6cb1c142c5e": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | b6015ee97b1acb0bd2d3": [
       7
@@ -27440,7 +27440,7 @@
       7
     ],
     "rust/openttd-kernels/src/water_cmd.rs | impl World < ' _ >::fn build_canal | excessive_nesting | f9d854aa547455dfdd0c": [
-      7
+      6
     ],
     "rust/openttd-kernels/src/water_cmd.rs | impl World < ' _ >::fn do_build_lock | undocumented_unsafe_blocks | a9e17cd14f76eea8eb97": [
       1
@@ -27575,7 +27575,7 @@
       5
     ],
     "rust/openttd-kernels/src/water_regions.rs | impl Regions::fn update | excessive_nesting | c4da154a324712f20b3a": [
-      6
+      5
     ],
     "rust/openttd-kernels/src/water_regions.rs | impl Regions::fn update | excessive_nesting | f4d462fdf9500593f332": [
       6

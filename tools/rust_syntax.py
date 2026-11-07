@@ -14,6 +14,7 @@ class Node(Protocol):
     type: str
     text: bytes
     has_error: bool
+    is_missing: bool
     named_children: list["Node"]
     prev_named_sibling: "Node | None"
     parent: "Node | None"
@@ -62,7 +63,12 @@ def syntax_trees(files: dict[str, str]) -> dict[str, Node]:
     }
     for path, tree in trees.items():
         if tree.has_error:
-            raise ValueError(f"Rust boundary parse error: {path}")
+            errors = [
+                (node.start_point, node.text[:100].decode())
+                for node in nodes(tree)
+                if node.type == "ERROR" or node.is_missing
+            ]
+            raise ValueError(f"Rust boundary parse error: {path}: {errors[:8]}")
     return trees
 
 

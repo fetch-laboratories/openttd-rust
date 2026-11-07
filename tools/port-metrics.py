@@ -390,6 +390,11 @@ def expanded_rust(revision: str) -> str:
         return _EXPANDED[key]
     output = ROOT / ".local/growth-inputs"
     output.mkdir(parents=True, exist_ok=True)
+    cache = output / (
+        hashlib.sha256((key + Path(__file__).read_text()).encode()).hexdigest() + ".rs"
+    )
+    if cache.is_file():
+        return cache.read_text()
     archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
     with tempfile.TemporaryDirectory(dir=output) as directory:
         source = Path(directory)
@@ -416,6 +421,7 @@ def expanded_rust(revision: str) -> str:
             text=True,
         )
 
+    cache.write_text(expanded)
     _EXPANDED[key] = expanded
     return expanded
 
