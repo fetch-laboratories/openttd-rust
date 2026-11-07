@@ -17,6 +17,41 @@ struct OpenTTDTownSuppliedHistory;
 extern "C" {
 #endif
 
+/** Legacy ABI fixture compatibility, removed with its protocol consumer. */
+typedef struct OpenTTDRustHistoryEngine OpenTTDRustHistoryEngine;
+
+typedef struct {
+	uintptr_t child;
+	uint8_t periods, records, first, last, division, total_division;
+	uint8_t child_periods, child_division;
+} OpenTTDRustHistoryDescriptor;
+
+typedef struct {
+	uint8_t kind, count;
+	uint32_t first, last, target;
+	uintptr_t token;
+	uint64_t value;
+} OpenTTDRustHistoryStep;
+
+/** Mode 0 update, 1 first-child validity, 2 rotation, 3 OR-validity query. Tokens are opaque
+ * uintptr_t identities that only C++ round-trips; the identified HistoryRange objects form a live
+ * acyclic chain until destroy. Typed history operations and exceptions run between calls. Age and
+ * phase use native uint32 arithmetic. Each engine and frame is destroyed once by its function.
+ * Handles are live, nonnull and exclusive; the chain is immutable with the original valid-index,
+ * divisor and bit-shift preconditions. */
+OpenTTDRustHistoryEngine *openttd_rust_history_create(uint8_t mode, uintptr_t root, uint64_t mask, uint32_t age, uint32_t month);
+
+/**
+ * 0 done, 1 describe, 2 shift, 3 copy, 4 reset, 5 rotation reduction,
+ * 6 construct all scratch elements, 7 child query, 8 query reduction, 9 leaf,
+ * 10 original invalid-age fatal path. Execute typed instructions after return.
+ */
+OpenTTDRustHistoryStep openttd_rust_history_next(OpenTTDRustHistoryEngine *engine);
+void openttd_rust_history_describe(OpenTTDRustHistoryEngine *engine, OpenTTDRustHistoryDescriptor descriptor); ///< Supply requested descriptor fields by value.
+void openttd_rust_history_phase(OpenTTDRustHistoryEngine *engine, uint32_t month); ///< Live global phase AFTER scratch construction.
+uint8_t openttd_rust_history_complete(OpenTTDRustHistoryEngine *engine); ///< After successful typed leaf/reduction; destroy on exceptions.
+void openttd_rust_history_destroy(OpenTTDRustHistoryEngine *engine); ///< Exactly once, including typed C++ unwinding; no live handle access.
+
 /** Invalid ages reach the native fatal path after Rust returns; validity is independent. */
 struct OpenTTDRustHistoryQuery { bool is_valid, in_range; };
 
