@@ -197,7 +197,7 @@
       110,
       230
     ],
-    "rust/openttd-kernels/src/fleet.rs | fn add_vehicle_group | excessive_nesting | 687add9873088ebd4c65": [
+    "rust/openttd-kernels/src/fleet.rs | fn add_vehicle_group | excessive_nesting | 55604a5e71e7195d55fe": [
       7
     ],
     "rust/openttd-kernels/src/fleet.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [

@@ -16,7 +16,7 @@ pub(crate) mod mass;
 pub(crate) mod rail;
 pub(crate) mod refit;
 use crate::command_type::DoCommandFlag;
-use crate::fleet::GroupServices;
+use crate::fleet::{ALL_GROUP, GroupServices};
 use crate::order_type::{OT_GOTO_WAYPOINT, OT_IMPLICIT};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
 use crate::strings_type::INVALID_STRING_ID as ERROR;
@@ -386,9 +386,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         // Preserve the distinct predicate order of group and standard lists.
         if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
-            let selected = if kind == VehicleListType::VL_GROUP_LIST
-                && index as u16 != crate::fleet::ALL_GROUP
-            {
+            let selected = if kind == VehicleListType::VL_GROUP_LIST && index as u16 != ALL_GROUP {
                 unsafe {
                     (s.groups.primary)(v)
                         && crate::fleet::record(s.groups, v).owner() == company
