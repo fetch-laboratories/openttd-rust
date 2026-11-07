@@ -9,6 +9,7 @@
 use super::founding::observed;
 use super::{State, TownRef};
 use crate::services::ByteSpan;
+use crate::town_type::MAX_LENGTH_TOWN_NAME_CHARS;
 use crate::witness as w;
 use std::collections::BTreeSet;
 
@@ -93,7 +94,8 @@ pub unsafe extern "C" fn openttd_rust_town_names_clear(names: *mut Names) {
         (*names).clear();
     }
 }
-pub(super) unsafe fn unique_custom(s: &NameServices, name: ByteSpan) -> bool {
+/// `town_cmd.cpp::IsUniqueTownName`: only custom names are checked.
+pub(super) unsafe fn is_unique_town_name(s: &NameServices, name: ByteSpan) -> bool {
     let mut town = observed!((s.next)(0));
     while !town.shell.is_null() {
         // SAFETY: Iteration supplies a live owner; borrow ends before next callback.
@@ -105,7 +107,8 @@ pub(super) unsafe fn unique_custom(s: &NameServices, name: ByteSpan) -> bool {
     }
     true
 }
-unsafe fn render(
+/// `townname.cpp::GetTownName`: render the specified parameters and encoded parts.
+unsafe fn get_town_name(
     s: &NameServices,
     frame: *mut NameFrame,
     params: &NameParams,
@@ -132,7 +135,8 @@ unsafe fn render(
     }
 }
 
-pub(super) unsafe fn verify(
+/// `townname.cpp::VerifyTownName`: verify that the name is valid and unique.
+pub(super) unsafe fn verify_town_name(
     s: &NameServices,
     frame: *mut NameFrame,
     seed: u32,
@@ -141,8 +145,11 @@ pub(super) unsafe fn verify(
 ) -> bool {
     let mut candidate_text = Vec::new();
     let mut other_text = Vec::new();
-    let candidate = unsafe { render(s, frame, &*params, seed, false, &mut candidate_text) };
-    if observed!((s.utf8_length)(candidate.data, candidate.size)) >= 32 {
+    let candidate = unsafe { get_town_name(s, frame, &*params, seed, false, &mut candidate_text) };
+    // Check size and width.
+    if observed!((s.utf8_length)(candidate.data, candidate.size))
+        >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+    {
         return false;
     }
     if !names.is_null() {
@@ -158,12 +165,13 @@ pub(super) unsafe fn verify(
     }
     let mut town = observed!((s.next)(0));
     while !town.shell.is_null() {
+        // We cannot just compare the numbers: several numbers may map to one name.
         // SAFETY: Short canonical name observation before resolver reentry.
         let custom = unsafe { openttd_rust_town_name(town.state) };
         let other = if custom.size == 0 {
             let params = unsafe { crate::townname_type::from_town(&*town.state) };
             let seed = unsafe { (*town.state).simulation.townnameparts };
-            unsafe { render(s, frame, &params, seed, true, &mut other_text) }
+            unsafe { get_town_name(s, frame, &params, seed, true, &mut other_text) }
         } else {
             custom
         };
@@ -176,7 +184,8 @@ pub(super) unsafe fn verify(
     }
     true
 }
-pub(super) unsafe fn generate(
+/// `townname.cpp::GenerateTownName`: store the encoded parts only on success.
+pub(super) unsafe fn generate_town_name(
     s: &NameServices,
     frame: *mut NameFrame,
     random: *mut Randomizer,
@@ -184,10 +193,14 @@ pub(super) unsafe fn generate(
     params: *const NameParams,
     names: *mut Names,
 ) -> bool {
+    // Do not set the number of tries too low: once names run out, we try this
+    // loop only once before stopping town generation. Do not set it too high
+    // either: checking all the other towns can take considerable time (10000
+    // is too much).
     for _ in 0..1000 {
         let seed = observed!((s.random_next)(random));
         // SAFETY: Call-local frames/scratch; successful seeds alone update output.
-        if unsafe { verify(s, frame, seed, params, names) } {
+        if unsafe { verify_town_name(s, frame, seed, params, names) } {
             unsafe {
                 result.write(seed);
             }
@@ -198,6 +211,11 @@ pub(super) unsafe fn generate(
     w::hit(w::TOWN_NAME_EXHAUSTED);
     false
 }
+// Compatibility names for founding and rename callers outside this checkpoint.
+pub(super) use generate_town_name as generate;
+pub(super) use is_unique_town_name as unique_custom;
+pub(super) use verify_town_name as verify;
+
 /// # Safety
 /// Tables, rendering frame and parameters remain live. Optional scratch is exclusively owned; rendering frames keep candidate and other bytes distinct.
 #[unsafe(no_mangle)]
@@ -208,7 +226,7 @@ pub unsafe extern "C" fn openttd_rust_town_verify_name_abi(
     params: *const NameParams,
     names: *mut Names,
 ) -> u8 {
-    u8::from(unsafe { verify(&*s, frame, seed, params, names) })
+    u8::from(unsafe { verify_town_name(&*s, frame, seed, params, names) })
 }
 /// # Safety
 /// Tables, frames, Randomizer and output remain live and writable as applicable. Optional scratch is exclusive; rejected seeds leave output untouched.
@@ -221,7 +239,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_name_abi(
     params: *const NameParams,
     names: *mut Names,
 ) -> u8 {
-    u8::from(unsafe { generate(&*s, frame, random, result, params, names) })
+    u8::from(unsafe { generate_town_name(&*s, frame, random, result, params, names) })
 }
 
 crate::abi::layouts! {
