@@ -92,7 +92,7 @@ impl ObjectType {
     pub const NEW_OBJECT_OFFSET: Self = Self(5);
     /// Number of supported objects overall.
     pub const NUM_OBJECTS: Self = Self(64000);
-    /// Number of supported objects per NewGRF.
+    /// Number of supported objects per `NewGRF`.
     pub const NUM_OBJECTS_PER_GRF: Self = Self::NUM_OBJECTS;
     /// An invalid object type.
     pub const INVALID_OBJECT_TYPE: Self = Self(0xFFFF);
