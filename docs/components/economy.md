@@ -168,7 +168,7 @@
 
 - Climate setup, label rebuild/lookup and default-cargo classification use the original names and canonical cargo labels/types. The existing vector and ordered map retain their sole storage, unsigned comparison, raw domains and first-slot priority.
 - Native copy/publication, validity and label reads, mask/array writes and callback order remain unchanged. Raw pointer views, registry services and scalar interfaces retain their layouts and owners.
-- Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Sorting, finalisation, translation and other registry vocabulary remain in the cleanup workset.
+- Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Finalisation, translation and other registry vocabulary remain in the cleanup workset.
 - PRs: #782, integrated in #785.
 
 ## Original engine livery vocabulary (#734)
@@ -177,3 +177,9 @@
 - Parent/articulated overrides, repeated live reads, default-cargo fallbacks, class/MU/tram/passenger decisions and raw return/assertion domains keep their operations and order. Company generation and all native records/services remain unchanged.
 - Limits: Inherited original differences, raw-domain, native callback/lifetime, mod/save and presentation qualifications remain on #156. Other Company/economy families remain in the cleanup workset.
 - PRs: #784, integrated in #786.
+
+## Original Cargo sorting vocabulary (#734)
+
+- The existing sorted-cargo initialisation body uses canonical CargoType and TownProductionEffect names and original comments. Native comparison, publication, reverse-index writes, per-town appends and the special-cargo break retain their existing order.
+- Raw services, registry storage and other helpers remain unchanged. Source operations/order review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited observation/container differences and coverage limits remain on #156.
+- PRs: #787, integrated in #789. Other Cargo registry families remain in the cleanup workset.

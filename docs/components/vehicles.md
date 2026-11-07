@@ -215,3 +215,9 @@
 - Reliability updates, short-circuit guards, shared RNG draws, live vehicle reads, sound fallback and breakdown effects preserve their operations and order. Native maintenance observations, records and ownership are unchanged.
 - Limits: Inherited observation differences, callback/lifetime, arbitrary NewGRF and scheduling qualifications remain on #156. Other maintenance families remain in the cleanup workset.
 - PRs: #781, integrated in #785.
+
+## Original Vehicle aging and value vocabulary (#734)
+
+- The age, economy-age and value-decrease helpers use the original names, canonical dates, string identities, vehicle states and engine-subtype flags. Service observations, guards, anniversaries, warning/news order and depreciation operations remain unchanged.
+- Other maintenance families, native records and scalar interfaces retain their existing owners. Source operations/order review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited fidelity differences and coverage limits remain on #156.
+- PRs: #788, integrated in #789. Other Vehicle vocabulary remains in the cleanup workset.

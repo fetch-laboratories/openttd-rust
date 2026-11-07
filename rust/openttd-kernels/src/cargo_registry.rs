@@ -16,7 +16,8 @@ use crate::cargo_type::{
     NUM_ORIGINAL_CARGO,
 };
 use crate::cargotype::{
-    INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS, is_cargo_spec_valid,
+    INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS, TownProductionEffect,
+    is_cargo_spec_valid,
 };
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::CBID_NO_CALLBACK;
@@ -299,6 +300,7 @@ pub fn production(effect: u8, index: u32) -> ProductionCargo {
         |spec| (services().production)(spec),
     )
 }
+/// Initialize the list of sorted cargo specifications.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
     // Language loading sorts the initially empty specification array before climate setup.
@@ -306,25 +308,27 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         (*REGISTRY.get()).services = native;
     }
     let s = services();
-    for effect in 0..NUM_TPE {
+    for effect in 0..TownProductionEffect::NUM_TPE.0 {
+        let effect = TownProductionEffect(effect);
         let data = unsafe {
-            let town = &mut (*REGISTRY.get()).town_production_cargoes[usize::from(effect)];
-            town.clear();
-            town.as_mut_ptr()
+            let tpc = &mut (*REGISTRY.get()).town_production_cargoes[usize::from(effect.0)];
+            tpc.clear();
+            tpc.as_mut_ptr()
         };
-        (s.publish_town)(effect, data, 0);
+        (s.publish_town)(effect.0, data, 0);
     }
     let data = unsafe {
         (*REGISTRY.get()).sorted_cargo_specs.clear();
         (*REGISTRY.get()).sorted_cargo_specs.as_mut_ptr()
     };
     (s.publish_sorted)(data, 0);
-    for (_, spec) in crate::cargotype::iterate(
+    // Add each cargo spec to the list, and determine the largest cargo icon size.
+    for (_, cargo) in crate::cargotype::iterate(
         |cargo| (s.spec)(cargo),
         |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
     ) {
         unsafe {
-            (*REGISTRY.get()).sorted_cargo_specs.push(spec);
+            (*REGISTRY.get()).sorted_cargo_specs.push(cargo);
         }
     }
     let (data, count) = unsafe {
@@ -334,36 +338,46 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         )
     };
     (s.publish_sorted)(data, count);
+    // Sort cargo specifications by cargo class and name.
     (s.sort)(data, count);
+    // Populate.
     for index in 0..count {
-        let cargo = (s.index)(unsafe { data.add(index).read() });
+        let cargo = CargoType((s.index)(unsafe { data.add(index).read() }));
         unsafe {
-            (*REGISTRY.get()).sorted_cargo_types[usize::from(cargo)] = index as u8;
+            (*REGISTRY.get()).sorted_cargo_types[usize::from(cargo.0)] = index as u8;
         }
     }
+    // Count the number of standard cargos and fill the mask.
     unsafe {
         (*REGISTRY.get()).standard_cargo_mask = 0;
     }
-    let mut standard = 0;
+    let mut nb_standard_cargo = 0;
     for index in 0..count {
-        let spec = unsafe { data.add(index).read() };
-        let order = (s.order_spec)(spec);
-        crate::movement::native_assert(unsafe { &*s.shared }, order.effect != INVALID_TPE);
+        let cargo = unsafe { data.add(index).read() };
+        let order = (s.order_spec)(cargo);
+        let town_production_effect = TownProductionEffect(order.effect);
+        crate::movement::native_assert(
+            unsafe { &*s.shared },
+            town_production_effect != TownProductionEffect::INVALID_TPE,
+        );
         let (town_data, town_count) = unsafe {
-            let town = &mut (*REGISTRY.get()).town_production_cargoes[usize::from(order.effect)];
-            town.push(spec);
-            (town.as_mut_ptr(), town.len())
+            let tpc = &mut (*REGISTRY.get()).town_production_cargoes
+                [usize::from(town_production_effect.0)];
+            tpc.push(cargo);
+            (tpc.as_mut_ptr(), tpc.len())
         };
-        (s.publish_town)(order.effect, town_data, town_count);
+        (s.publish_town)(town_production_effect.0, town_data, town_count);
         if order.special {
             break;
         }
-        standard += 1;
+        nb_standard_cargo += 1;
+        let cargo_type = CargoType(order.cargo);
         unsafe {
-            set_bit64(&mut (*REGISTRY.get()).standard_cargo_mask, order.cargo);
+            set_bit64(&mut (*REGISTRY.get()).standard_cargo_mask, cargo_type.0);
         }
     }
-    (s.publish_standard)(data, standard);
+    // _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs.
+    (s.publish_standard)(data, nb_standard_cargo);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_finalise() {
