@@ -9,6 +9,7 @@
 #include "stdafx.h"
 #include "tests/fixture_map.hpp"
 #include "ground_vehicle.hpp"
+#include "industry.h"
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
 #include "rust/auth_ffi.h"
