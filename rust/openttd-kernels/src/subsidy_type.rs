@@ -6,8 +6,6 @@
  */
 
 //! Named cache flags from `subsidy_type.h`.
-/// Native `PartOfSubsidy : uint8_t`.
-
 /// Native `PartOfSubsidy`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -50,3 +48,18 @@ impl SubsidyID {
     /// Native `PoolID::Invalid()`.
     pub const INVALID: Self = Self(65535);
 }
+
+impl PartsOfSubsidy {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: PartOfSubsidy) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(PartsOfSubsidy);

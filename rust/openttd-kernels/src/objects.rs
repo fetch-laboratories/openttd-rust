@@ -166,15 +166,8 @@ pub struct Price {
     pub shift: i32,
 }
 
-/// Native `ObjectAnimationTrigger : uint8_t` carrier.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct AnimationTrigger(pub u8);
-impl AnimationTrigger {
-    const BUILT: Self = Self(0);
-    const TILE_LOOP: Self = Self(1);
-    const TILE_LOOP_NORTH: Self = Self(2);
-}
+/// Compatibility import of the original header trigger element.
+pub use crate::object_type::ObjectAnimationTrigger as AnimationTrigger;
 
 #[repr(C)]
 pub struct Spec {

@@ -979,3 +979,17 @@ crate::abi::layouts! {
 pub(crate) const DSG_SIZE_DWORD: u8 = 2;
 pub(crate) const DSGA_TYPE_NONE: u8 = 0;
 pub(crate) const RSG_CMP_ALL: u8 = 1;
+
+/// Native `SpriteGroupID`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SpriteGroupID(pub u32);
+
+impl SpriteGroupID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(1073741824);
+    /// Native `PoolID::Invalid()`.
+    pub const INVALID: Self = Self(4294967295);
+}

@@ -64,17 +64,17 @@ pub const DRD_BOTH: u8 = DisallowedRoadDirections::DRD_BOTH.0;
 
 /// Native `RoadTramType : bool`; true denotes the tram mask.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadTramType(pub bool);
 
 /// Native `RoadType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadType(pub u8);
 
 /// Native `RoadBits` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadBits(pub u8);
 
 #[allow(non_upper_case_globals)]
@@ -176,3 +176,26 @@ impl RoadTypes {
         Self(1_u64 << element.0)
     }
 }
+
+impl RoadTypes {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: RoadType) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+/// Native `RoadTypeLabel`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RoadTypeLabel(pub u32);
+
+crate::base_bitset_type::impl_bitset_ops!(RoadTypes);
+crate::base_bitset_type::impl_bitset_ops!(RoadBits);
+crate::base_bitset_type::impl_bitset_ops!(RoadTramTypes);
+crate::base_bitset_type::impl_bitset_ops!(DisallowedRoadDirections);

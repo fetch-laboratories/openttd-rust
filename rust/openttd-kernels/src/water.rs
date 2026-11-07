@@ -26,8 +26,7 @@ pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
 use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
-        self, ClearGroundType, FloodingBehaviour, Foundation, RailGroundType, Services, Slope,
-        Track, TreeGround,
+        self, ClearGroundType, Foundation, RailGroundType, Services, Slope, Track, TreeGround,
     },
     vehicle::{VehicleRef, VehicleServices},
 };
@@ -852,7 +851,7 @@ extern "C" fn unused_region_context() -> crate::water_regions::Context {
 
 /// Native `FloodingBehaviour` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FloodingBehaviour(pub u8);
 
 #[allow(non_upper_case_globals)]

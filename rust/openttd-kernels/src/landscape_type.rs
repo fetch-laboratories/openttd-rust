@@ -13,7 +13,7 @@ pub const TOYLAND: u8 = LandscapeType::Toyland.0;
 
 /// Native `LandscapeType : uint8_t`; every underlying byte remains valid.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LandscapeType(pub u8);
 
 impl LandscapeType {
@@ -48,3 +48,18 @@ impl LandscapeTypes {
         Self((1_u64 << element.0) as u8)
     }
 }
+
+impl LandscapeTypes {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: LandscapeType) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(LandscapeTypes);

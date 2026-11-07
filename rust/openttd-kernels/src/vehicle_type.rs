@@ -14,6 +14,7 @@ pub const VEH_ROAD: u8 = VehicleType::VEH_ROAD.0;
 pub const VEH_SHIP: u8 = VehicleType::VEH_SHIP.0;
 /// `VEH_AIRCRAFT`.
 pub const VEH_AIRCRAFT: u8 = VehicleType::VEH_AIRCRAFT.0;
+/// Acceleration due to gravity: 9.8 m/s² in native units.
 pub const GROUND_ACCELERATION: u32 = 9800;
 /// `AccelerationModel::AM_ORIGINAL`.
 pub const AM_ORIGINAL: u8 = 0;
@@ -28,7 +29,7 @@ pub use crate::vehicle_base::VehicleRecord as OpenTTDVehicle;
 
 /// Native `VehicleType`, including unnamed uint8 values.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VehicleType(pub u8);
 
 impl VehicleType {
@@ -153,3 +154,32 @@ impl VehicleID {
     /// Native `PoolID::End()`.
     pub const END: Self = Self(1044480);
 }
+
+impl DepotCommandFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: DepotCommandFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl VehicleRandomTriggers {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: VehicleRandomTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(DepotCommandFlags);
+crate::base_bitset_type::impl_bitset_ops!(VehicleRandomTriggers);

@@ -32,7 +32,7 @@ pub const INVALID_RAILTYPES: u64 = u64::MAX;
 
 /// Native `RailType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailType(pub u8);
 
 #[allow(non_upper_case_globals)]
@@ -68,3 +68,28 @@ impl RailTypes {
         Self(1_u64 << element.0)
     }
 }
+
+impl RailTypes {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: RailType) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+/// Native `RailTypeLabel`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RailTypeLabel(pub u32);
+
+impl RailTypes {
+    /// All-types sentinel.
+    pub const INVALID_RAILTYPES: Self = Self(u64::MAX);
+}
+
+crate::base_bitset_type::impl_bitset_ops!(RailTypes);

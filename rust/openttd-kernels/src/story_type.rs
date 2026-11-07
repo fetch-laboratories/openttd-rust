@@ -2,15 +2,17 @@
 //! Types and constants from `story_type.h`.
 #![allow(missing_docs)]
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StoryPageID(pub u16);
 impl StoryPageID {
+    /// Native `INVALID`.
     pub const INVALID: Self = Self(u16::MAX);
 }
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StoryPageElementID(pub u16);
 impl StoryPageElementID {
+    /// Native `INVALID`.
     pub const INVALID: Self = Self(u16::MAX);
 }
 #[repr(C)]

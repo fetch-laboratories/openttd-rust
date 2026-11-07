@@ -40,13 +40,13 @@ pub const INVALID_TILE: u32 = TileIndex::INVALID.0;
 pub const MAX_TILE_HEIGHT: u32 = 255;
 
 /// `TROPICZONE_NORMAL`.
-pub const TROPICZONE_NORMAL: u8 = 0;
+pub const TROPICZONE_NORMAL: u8 = TropicZone::TROPICZONE_NORMAL.0;
 
 /// `TROPICZONE_DESERT`.
-pub const TROPICZONE_DESERT: u8 = 1;
+pub const TROPICZONE_DESERT: u8 = TropicZone::TROPICZONE_DESERT.0;
 
 /// `TROPICZONE_RAINFOREST`.
-pub const TROPICZONE_RAINFOREST: u8 = 2;
+pub const TROPICZONE_RAINFOREST: u8 = TropicZone::TROPICZONE_RAINFOREST.0;
 /// `TILE_UNIT_MASK`.
 pub const TILE_UNIT_MASK: u32 = TILE_SIZE - 1;
 
@@ -61,7 +61,7 @@ impl TileIndex {
 
 /// Native `TileType`, including unnamed uint8 values.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TileType(pub u8);
 impl TileType {
     /// Native `MP_CLEAR`.
@@ -92,3 +92,18 @@ impl TileType {
 pub const MAX_MAP_HEIGHT_LIMIT: u32 = MAX_TILE_HEIGHT;
 /// `DEF_SNOWLINE_HEIGHT`.
 pub const DEF_SNOWLINE_HEIGHT: u8 = 10;
+
+/// Native `TropicZone`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TropicZone(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl TropicZone {
+    /// Normal tropiczone
+    pub const TROPICZONE_NORMAL: Self = Self(0);
+    /// Tile is desert
+    pub const TROPICZONE_DESERT: Self = Self(1);
+    /// Rainforest tile
+    pub const TROPICZONE_RAINFOREST: Self = Self(2);
+}

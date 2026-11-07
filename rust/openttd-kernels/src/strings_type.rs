@@ -8,7 +8,7 @@
 //! `strings_type.h` values. `services.cpp` asserts every value.
 
 /// `INVALID_STRING_ID`; `CMD_ERROR` is `CommandCost(INVALID_STRING_ID)`.
-pub const INVALID_STRING_ID: u32 = 0xFFFF;
+pub const INVALID_STRING_ID: u32 = StringID::INVALID_STRING_ID.0;
 /// `SPECSTR_TOWNNAME_START`, the first built-in town-name generator string.
 pub const SPECSTR_TOWNNAME_START: u32 = 0x20C0;
 
@@ -18,7 +18,7 @@ pub const BUILTIN_TOWNNAME_GENERATOR_COUNT: u32 = 21;
 /// Bits per string tab (`TAB_SIZE_BITS`).
 pub const TAB_SIZE_BITS: u32 = 11;
 /// First tab of GRF strings (`TEXT_TAB_NEWGRF_START`).
-pub const TEXT_TAB_NEWGRF_START: u32 = 64;
+pub const TEXT_TAB_NEWGRF_START: u32 = StringTab::TEXT_TAB_NEWGRF_START.0 as u32;
 /// Maximum GRF text entries (`TAB_SIZE_NEWGRF`).
 pub const TAB_SIZE_NEWGRF: usize = (1 << TAB_SIZE_BITS) * 256;
 /// `MakeStringID(TEXT_TAB_NEWGRF_START, index)`.
@@ -39,4 +39,46 @@ pub struct StringIndexInTab(pub u32);
 impl StringID {
     /// Invalid string ID.
     pub const INVALID_STRING_ID: Self = Self(0xFFFF);
+}
+
+/// Native `TextDirection`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TextDirection(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl TextDirection {
+    /// Text is written left-to-right by default
+    pub const TD_LTR: Self = Self(0);
+    /// Text is written right-to-left by default
+    pub const TD_RTL: Self = Self(1);
+}
+
+/// Native `StringTab`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StringTab(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl StringTab {
+    /// Native `TEXT_TAB_TOWN`.
+    pub const TEXT_TAB_TOWN: Self = Self(4);
+    /// Native `TEXT_TAB_INDUSTRY`.
+    pub const TEXT_TAB_INDUSTRY: Self = Self(9);
+    /// Native `TEXT_TAB_STATION`.
+    pub const TEXT_TAB_STATION: Self = Self(12);
+    /// Native `TEXT_TAB_SPECIAL`.
+    pub const TEXT_TAB_SPECIAL: Self = Self(14);
+    /// Native `TEXT_TAB_OLD_CUSTOM`.
+    pub const TEXT_TAB_OLD_CUSTOM: Self = Self(15);
+    /// Native `TEXT_TAB_VEHICLE`.
+    pub const TEXT_TAB_VEHICLE: Self = Self(16);
+    /// Native `TEXT_TAB_OLD_NEWGRF`.
+    pub const TEXT_TAB_OLD_NEWGRF: Self = Self(26);
+    /// End of language files.
+    pub const TEXT_TAB_END: Self = Self(32);
+    /// Start of GameScript supplied strings.
+    pub const TEXT_TAB_GAMESCRIPT_START: Self = Self(32);
+    /// Start of NewGRF supplied strings.
+    pub const TEXT_TAB_NEWGRF_START: Self = Self(64);
 }

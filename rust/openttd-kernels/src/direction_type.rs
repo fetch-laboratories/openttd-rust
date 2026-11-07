@@ -61,7 +61,9 @@ pub const INVALID_AXIS: u8 = Axis::INVALID_AXIS.0;
 /// `AXIS_END`.
 pub const AXIS_END: u8 = Axis::AXIS_END.0;
 
+/// Native `DIRDIFF_REVERSE`.
 pub const DIRDIFF_REVERSE: u8 = DirDiff::DIRDIFF_REVERSE.0;
+/// Native `DIRDIFF_SAME`.
 pub const DIRDIFF_SAME: u8 = DirDiff::DIRDIFF_SAME.0;
 
 /// `DIRDIFF_90RIGHT`.
@@ -71,7 +73,7 @@ pub const DIRDIFF_90RIGHT: u8 = DirDiff::DIRDIFF_90RIGHT.0;
 pub const DIRDIFF_90LEFT: u8 = DirDiff::DIRDIFF_90LEFT.0;
 /// Native `Axis`, including unnamed uint8 values.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Axis(pub u8);
 
 impl Axis {
@@ -89,7 +91,7 @@ impl Axis {
 /// across FFI, including source sentinels and values outside named variants.
 /// Native `DiagDirection` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DiagDirection(pub u8);
 
 /// Native `Direction`, retaining every underlying `u8` value.
@@ -226,3 +228,37 @@ impl DiagDirections {
         Self((1_u64 << element.0) as u8)
     }
 }
+
+impl Directions {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: Direction) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl DiagDirections {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: DiagDirection) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl Directions {
+    /// All eight directions.
+    pub const DIRECTIONS_ALL: Self = Self(u8::MAX);
+}
+
+crate::base_bitset_type::impl_bitset_ops!(Directions);
+crate::base_bitset_type::impl_bitset_ops!(DiagDirections);

@@ -26,33 +26,37 @@ pub const OT_CONDITIONAL: u8 = OrderType::OT_CONDITIONAL.0;
 /// `OT_IMPLICIT`.
 pub const OT_IMPLICIT: u8 = OrderType::OT_IMPLICIT.0;
 /// `INVALID_VEH_ORDER_ID`.
-pub const INVALID_VEH_ORDER_ID: u8 = 0xFF;
+pub const INVALID_VEH_ORDER_ID: u8 = VehicleOrderID::INVALID_VEH_ORDER_ID.0;
 /// `OrderLoadType::FullLoad` and `FullLoadAny`.
-pub const OLFB_FULL_LOAD: u8 = 2;
-pub const OLFB_FULL_LOAD_ANY: u8 = 3;
+pub const OLFB_FULL_LOAD: u8 = OrderLoadType::FullLoad.0;
+/// Native `OLFB_FULL_LOAD_ANY`.
+pub const OLFB_FULL_LOAD_ANY: u8 = OrderLoadType::FullLoadAny.0;
 /// `OrderDepotTypeFlag::PartOfOrders`.
-pub const ODTF_PART_OF_ORDERS: u8 = 1 << 1;
+pub const ODTF_PART_OF_ORDERS: u8 =
+    OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::PartOfOrders).0;
 /// `OrderDepotActionFlag::Halt`.
-pub const ODATF_HALT: u8 = 1 << 0;
+pub const ODATF_HALT: u8 = OrderDepotActionFlags::from_element(OrderDepotActionFlag::Halt).0;
 /// `OrderDepotActionFlag::NearestDepot`.
-pub const ODATF_NEAREST_DEPOT: u8 = 1 << 1;
+pub const ODATF_NEAREST_DEPOT: u8 =
+    OrderDepotActionFlags::from_element(OrderDepotActionFlag::NearestDepot).0;
 /// `OrderLoadType::NoLoad`.
-pub const OLFB_NO_LOAD: u8 = 4;
+pub const OLFB_NO_LOAD: u8 = OrderLoadType::NoLoad.0;
 /// `OrderUnloadType::Unload`.
-pub const OUFB_UNLOAD: u8 = 1;
+pub const OUFB_UNLOAD: u8 = OrderUnloadType::Unload.0;
 /// `OrderUnloadType::Transfer`.
-pub const OUFB_TRANSFER: u8 = 2;
+pub const OUFB_TRANSFER: u8 = OrderUnloadType::Transfer.0;
 /// `OrderUnloadType::NoUnload`.
-pub const OUFB_NO_UNLOAD: u8 = 4;
+pub const OUFB_NO_UNLOAD: u8 = OrderUnloadType::NoUnload.0;
 
 /// `OrderDepotTypeFlag::Service`.
-pub const ODTF_SERVICE: u8 = 1 << 0;
+pub const ODTF_SERVICE: u8 = OrderDepotTypeFlags::from_element(OrderDepotTypeFlag::Service).0;
 /// `OrderNonStopFlag::NoIntermediate`.
-pub const ONSF_NO_INTERMEDIATE: u8 = 1 << 0;
+pub const ONSF_NO_INTERMEDIATE: u8 =
+    OrderNonStopFlags::from_element(OrderNonStopFlag::NoIntermediate).0;
 
 /// Native `OrderType : uint8_t`, including every unnamed byte pattern.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OrderType(pub u8);
 
 #[allow(non_upper_case_globals)]
@@ -244,3 +248,46 @@ impl VehicleOrderID {
     /// Invalid order index within a vehicle.
     pub const INVALID_VEH_ORDER_ID: Self = Self(0xFF);
 }
+
+impl OrderNonStopFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: OrderNonStopFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl OrderDepotTypeFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: OrderDepotTypeFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl OrderDepotActionFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: OrderDepotActionFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(OrderNonStopFlags);
+crate::base_bitset_type::impl_bitset_ops!(OrderDepotTypeFlags);
+crate::base_bitset_type::impl_bitset_ops!(OrderDepotActionFlags);

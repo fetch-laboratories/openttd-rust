@@ -17,11 +17,11 @@ pub struct Source {
 }
 impl Source {
     /// `SourceType::Industry`.
-    pub const INDUSTRY: u8 = 0;
+    pub const INDUSTRY: u8 = SourceType::Industry.0;
     /// `SourceType::Town`.
-    pub const TOWN: u8 = 1;
+    pub const TOWN: u8 = SourceType::Town.0;
     /// `SourceType::Headquarters`.
-    pub const HEADQUARTERS: u8 = 2;
+    pub const HEADQUARTERS: u8 = SourceType::Headquarters.0;
     /// A town source.
     #[must_use]
     pub const fn town(id: u16) -> Self {

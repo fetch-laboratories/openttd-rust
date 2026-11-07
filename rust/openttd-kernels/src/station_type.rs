@@ -6,16 +6,27 @@
  */
 
 //! Shared `station_type.h` constants, asserted by native compilation.
+/// Native `NEW_STATION`.
 pub const NEW_STATION: u16 = StationID::NEW.0;
+/// Native `INVALID_STATION`.
 pub const INVALID_STATION: u16 = StationID::INVALID.0;
+/// Native `RAIL_WAYPOINT`.
 pub const RAIL_WAYPOINT: u8 = StationType::RailWaypoint.0;
+/// Native `ROAD_WAYPOINT`.
 pub const ROAD_WAYPOINT: u8 = StationType::RoadWaypoint.0;
+/// Native `BUOY`.
 pub const BUOY: u8 = StationType::Buoy.0;
-pub const FACILITY_TRAIN: u8 = 1;
-pub const FACILITY_TRUCK: u8 = 2;
-pub const FACILITY_BUS: u8 = 4;
-pub const FACILITY_AIRPORT: u8 = 8;
-pub const FACILITY_DOCK: u8 = 16;
+/// Native `FACILITY_TRAIN`.
+pub const FACILITY_TRAIN: u8 = StationFacilities::from_element(StationFacility::Train).0;
+/// Native `FACILITY_TRUCK`.
+pub const FACILITY_TRUCK: u8 = StationFacilities::from_element(StationFacility::TruckStop).0;
+/// Native `FACILITY_BUS`.
+pub const FACILITY_BUS: u8 = StationFacilities::from_element(StationFacility::BusStop).0;
+/// Native `FACILITY_AIRPORT`.
+pub const FACILITY_AIRPORT: u8 = StationFacilities::from_element(StationFacility::Airport).0;
+/// Native `FACILITY_DOCK`.
+pub const FACILITY_DOCK: u8 = StationFacilities::from_element(StationFacility::Dock).0;
+/// Native `MAX_LENGTH_STATION_NAME_CHARS`.
 pub const MAX_LENGTH_STATION_NAME_CHARS: usize = 32;
 
 /// `StationType::Truck`.
@@ -26,30 +37,45 @@ pub const STATION_AIRPORT: u8 = StationType::Airport.0;
 pub const STATION_BUS: u8 = StationType::Bus.0;
 
 /// `StationAnimationTrigger` values shared by its existing callers.
-pub const SAT_BUILT: u8 = 0;
-pub const SAT_NEW_CARGO: u8 = 1;
-pub const SAT_CARGO_TAKEN: u8 = 2;
-pub const SAT_VEHICLE_ARRIVES: u8 = 3;
-pub const SAT_VEHICLE_DEPARTS: u8 = 4;
-pub const SAT_VEHICLE_LOADS: u8 = 5;
-pub const SAT_ACCEPTANCE_TICK: u8 = 6;
-pub const SAT_PATH_RESERVATION: u8 = 8;
+pub const SAT_BUILT: u8 = StationAnimationTrigger::Built.0;
+/// Native `SAT_NEW_CARGO`.
+pub const SAT_NEW_CARGO: u8 = StationAnimationTrigger::NewCargo.0;
+/// Native `SAT_CARGO_TAKEN`.
+pub const SAT_CARGO_TAKEN: u8 = StationAnimationTrigger::CargoTaken.0;
+/// Native `SAT_VEHICLE_ARRIVES`.
+pub const SAT_VEHICLE_ARRIVES: u8 = StationAnimationTrigger::VehicleArrives.0;
+/// Native `SAT_VEHICLE_DEPARTS`.
+pub const SAT_VEHICLE_DEPARTS: u8 = StationAnimationTrigger::VehicleDeparts.0;
+/// Native `SAT_VEHICLE_LOADS`.
+pub const SAT_VEHICLE_LOADS: u8 = StationAnimationTrigger::VehicleLoads.0;
+/// Native `SAT_ACCEPTANCE_TICK`.
+pub const SAT_ACCEPTANCE_TICK: u8 = StationAnimationTrigger::AcceptanceTick.0;
+/// Native `SAT_PATH_RESERVATION`.
+pub const SAT_PATH_RESERVATION: u8 = StationAnimationTrigger::PathReservation.0;
 /// `AirportAnimationTrigger` values.
-pub const AAT_BUILT: u8 = 0;
-pub const AAT_NEW_CARGO: u8 = 2;
-pub const AAT_CARGO_TAKEN: u8 = 3;
-pub const AAT_ACCEPTANCE_TICK: u8 = 4;
-pub const AAT_AIRPLANE_TOUCHDOWN: u8 = 5;
+pub const AAT_BUILT: u8 = AirportAnimationTrigger::Built.0;
+/// Native `AAT_NEW_CARGO`.
+pub const AAT_NEW_CARGO: u8 = AirportAnimationTrigger::NewCargo.0;
+/// Native `AAT_CARGO_TAKEN`.
+pub const AAT_CARGO_TAKEN: u8 = AirportAnimationTrigger::CargoTaken.0;
+/// Native `AAT_ACCEPTANCE_TICK`.
+pub const AAT_ACCEPTANCE_TICK: u8 = AirportAnimationTrigger::AcceptanceTick.0;
+/// Native `AAT_AIRPLANE_TOUCHDOWN`.
+pub const AAT_AIRPLANE_TOUCHDOWN: u8 = AirportAnimationTrigger::AirplaneTouchdown.0;
 
 /// `StationRandomTrigger` values: native resolvers retain reseed policy.
-pub const SRT_NEW_CARGO: u8 = 0;
-pub const SRT_CARGO_TAKEN: u8 = 1;
-pub const SRT_VEHICLE_ARRIVES: u8 = 2;
-pub const SRT_VEHICLE_DEPARTS: u8 = 3;
-pub const SRT_VEHICLE_LOADS: u8 = 4;
+pub const SRT_NEW_CARGO: u8 = StationRandomTrigger::NewCargo.0;
+/// Native `SRT_CARGO_TAKEN`.
+pub const SRT_CARGO_TAKEN: u8 = StationRandomTrigger::CargoTaken.0;
+/// Native `SRT_VEHICLE_ARRIVES`.
+pub const SRT_VEHICLE_ARRIVES: u8 = StationRandomTrigger::VehicleArrives.0;
+/// Native `SRT_VEHICLE_DEPARTS`.
+pub const SRT_VEHICLE_DEPARTS: u8 = StationRandomTrigger::VehicleDeparts.0;
+/// Native `SRT_VEHICLE_LOADS`.
+pub const SRT_VEHICLE_LOADS: u8 = StationRandomTrigger::VehicleLoads.0;
 
 /// `StationRandomTrigger::PathReservation`.
-pub const SRT_PATH_RESERVATION: u8 = 5;
+pub const SRT_PATH_RESERVATION: u8 = StationRandomTrigger::PathReservation.0;
 
 /// `StationHadVehicleOfType::HVOT_WAYPOINT`.
 pub const HVOT_WAYPOINT: u8 = StationHadVehicleOfType::HVOT_WAYPOINT.0;
@@ -102,18 +128,18 @@ pub const STATION_OILRIG: u8 = StationType::Oilrig.0;
 pub const STATION_DOCK: u8 = StationType::Dock.0;
 
 /// `StationAnimationTrigger::TileLoop`.
-pub const SAT_TILE_LOOP: u8 = 7;
+pub const SAT_TILE_LOOP: u8 = StationAnimationTrigger::TileLoop.0;
 /// `AirportAnimationTrigger::TileLoop`.
-pub const AAT_TILE_LOOP: u8 = 1;
+pub const AAT_TILE_LOOP: u8 = AirportAnimationTrigger::TileLoop.0;
 
 /// Native station tile kind (uint8).
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StationType(pub u8);
 
 /// Native `RoadStopType : uint8_t` (bus 0, truck 1).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadStopType(pub u8);
 
 #[allow(non_upper_case_globals)]
@@ -337,3 +363,66 @@ impl StationID {
     /// Join an adjacent station.
     pub const ADJACENT: Self = Self(0xFFFE);
 }
+
+impl StationFacilities {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: StationFacility) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl StationRandomTriggers {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: StationRandomTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl StationAnimationTriggers {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: StationAnimationTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl AirportAnimationTriggers {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: AirportAnimationTrigger) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl StationFacility {
+    /// Fake facility for display of recently removed station signs.
+    pub const STATION_FACILITY_GHOST: Self = Self(6);
+}
+
+crate::base_bitset_type::impl_bitset_ops!(StationFacilities);
+crate::base_bitset_type::impl_bitset_ops!(StationRandomTriggers);
+crate::base_bitset_type::impl_bitset_ops!(StationAnimationTriggers);
+crate::base_bitset_type::impl_bitset_ops!(AirportAnimationTriggers);
+crate::base_bitset_type::impl_bitset_ops!(StationHadVehicleOfType);

@@ -7,30 +7,55 @@
 
 //! Native `track_type.h` values used by movement policies.
 #![allow(missing_docs)]
+/// Native `TRACK_BIT_NONE`.
 pub const TRACK_BIT_NONE: u8 = TrackBits::TRACK_BIT_NONE.0;
+/// Native `INVALID_TRACKDIR`.
 pub const INVALID_TRACKDIR: u8 = Trackdir::INVALID_TRACKDIR.0;
+/// Native `TRACK_BIT_X`.
 pub const TRACK_BIT_X: u8 = TrackBits::TRACK_BIT_X.0;
+/// Native `TRACK_BIT_Y`.
 pub const TRACK_BIT_Y: u8 = TrackBits::TRACK_BIT_Y.0;
+/// Native `TRACK_BIT_UPPER`.
 pub const TRACK_BIT_UPPER: u8 = TrackBits::TRACK_BIT_UPPER.0;
+/// Native `TRACK_BIT_LOWER`.
 pub const TRACK_BIT_LOWER: u8 = TrackBits::TRACK_BIT_LOWER.0;
+/// Native `TRACK_BIT_LEFT`.
 pub const TRACK_BIT_LEFT: u8 = TrackBits::TRACK_BIT_LEFT.0;
+/// Native `TRACK_BIT_RIGHT`.
 pub const TRACK_BIT_RIGHT: u8 = TrackBits::TRACK_BIT_RIGHT.0;
+/// Native `TRACK_BIT_ALL`.
 pub const TRACK_BIT_ALL: u8 = TrackBits::TRACK_BIT_ALL.0;
+/// Native `TRACK_BIT_WORMHOLE`.
 pub const TRACK_BIT_WORMHOLE: u8 = TrackBits::TRACK_BIT_WORMHOLE.0;
+/// Native `TRACK_BIT_DEPOT`.
 pub const TRACK_BIT_DEPOT: u8 = TrackBits::TRACK_BIT_DEPOT.0;
+/// Native `TRACK_UPPER`.
 pub const TRACK_UPPER: u8 = Track::TRACK_UPPER.0;
+/// Native `TRACK_LOWER`.
 pub const TRACK_LOWER: u8 = Track::TRACK_LOWER.0;
+/// Native `TRACKDIR_BIT_X_NE`.
 pub const TRACKDIR_BIT_X_NE: u16 = TrackdirBits::TRACKDIR_BIT_X_NE.0;
+/// Native `TRACKDIR_BIT_Y_SE`.
 pub const TRACKDIR_BIT_Y_SE: u16 = TrackdirBits::TRACKDIR_BIT_Y_SE.0;
+/// Native `TRACKDIR_BIT_UPPER_E`.
 pub const TRACKDIR_BIT_UPPER_E: u16 = TrackdirBits::TRACKDIR_BIT_UPPER_E.0;
+/// Native `TRACKDIR_BIT_LOWER_E`.
 pub const TRACKDIR_BIT_LOWER_E: u16 = TrackdirBits::TRACKDIR_BIT_LOWER_E.0;
+/// Native `TRACKDIR_BIT_LEFT_S`.
 pub const TRACKDIR_BIT_LEFT_S: u16 = TrackdirBits::TRACKDIR_BIT_LEFT_S.0;
+/// Native `TRACKDIR_BIT_RIGHT_S`.
 pub const TRACKDIR_BIT_RIGHT_S: u16 = TrackdirBits::TRACKDIR_BIT_RIGHT_S.0;
+/// Native `TRACKDIR_BIT_X_SW`.
 pub const TRACKDIR_BIT_X_SW: u16 = TrackdirBits::TRACKDIR_BIT_X_SW.0;
+/// Native `TRACKDIR_BIT_Y_NW`.
 pub const TRACKDIR_BIT_Y_NW: u16 = TrackdirBits::TRACKDIR_BIT_Y_NW.0;
+/// Native `TRACKDIR_BIT_UPPER_W`.
 pub const TRACKDIR_BIT_UPPER_W: u16 = TrackdirBits::TRACKDIR_BIT_UPPER_W.0;
+/// Native `TRACKDIR_BIT_LOWER_W`.
 pub const TRACKDIR_BIT_LOWER_W: u16 = TrackdirBits::TRACKDIR_BIT_LOWER_W.0;
+/// Native `TRACKDIR_BIT_LEFT_N`.
 pub const TRACKDIR_BIT_LEFT_N: u16 = TrackdirBits::TRACKDIR_BIT_LEFT_N.0;
+/// Native `TRACKDIR_BIT_RIGHT_N`.
 pub const TRACKDIR_BIT_RIGHT_N: u16 = TrackdirBits::TRACKDIR_BIT_RIGHT_N.0;
 
 /// `TRACK_BIT_HORZ`.
@@ -83,17 +108,17 @@ pub const TRACKDIR_RIGHT_N: u8 = Trackdir::TRACKDIR_RIGHT_N.0;
 
 /// Native `Trackdir` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Trackdir(pub u8);
 
 /// Native `Track` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Track(pub u8);
 
 /// Native `TrackBits` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TrackBits(pub u8);
 
 #[allow(non_upper_case_globals)]
@@ -238,3 +263,6 @@ impl TrackdirBits {
     /// Flag for an invalid trackdirbit value
     pub const INVALID_TRACKDIR_BIT: Self = Self(65535);
 }
+
+crate::base_bitset_type::impl_bitset_ops!(TrackBits);
+crate::base_bitset_type::impl_bitset_ops!(TrackdirBits);

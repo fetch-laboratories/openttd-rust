@@ -41,7 +41,7 @@ pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: u32) -> Option<u8> {
 
 /// Native `TreeGround` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TreeGround(pub u8);
 
 #[allow(non_upper_case_globals)]

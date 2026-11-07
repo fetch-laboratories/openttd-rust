@@ -122,12 +122,12 @@ impl crate::map_func::World<'_> {
 
 /// Native `RailTileType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTileType(pub u8);
 
 /// Native `RailGroundType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailGroundType(pub u8);
 
 #[allow(non_upper_case_globals)]
