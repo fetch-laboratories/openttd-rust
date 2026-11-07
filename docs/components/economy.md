@@ -143,3 +143,9 @@
 - Separate live colour reads, inheritance, command rejection, cache/admin/GUI/vehicle updates and effect order remain unchanged. Native company/vehicle storage, livery record layout and scalar ABI are retained.
 - Checks: original operations/order review and combined exact-head Full. Archive equivalence is unclaimed; inherited colour, mod, historical-save and GUI-schedule limits remain on #156.
 - PRs: #767, integrated in #769. Other Company/economy cleanup stays open.
+
+## Original Cargo flow statistics vocabulary (#734)
+
+- Existing flow-statistic helpers use the original names and explanations with canonical StationID and CargoType values. Cumulative keys, unrestricted bounds, sentinel handling, flow invalidation/restriction/release and post-join reconciliation keep their operations and order.
+- Flow/FlowMap identities, scalar adapters, allocation/drop staging, callbacks and native facade contracts remain unchanged. Checks are original operations/order review and exact-head Full; archive equivalence is unclaimed and inherited Cargo qualifications remain on #156.
+- PRs: #770, integrated in #773. Payment, registry and cargotype vocabulary remain in the cleanup workset.
