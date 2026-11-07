@@ -483,7 +483,7 @@ impl<'a> Founding<'a> {
     }
 }
 /// Assign the town layout (`town_cmd.cpp::Town::InitializeLayout`).
-/// `layout` is the desired layout. If TL_RANDOM, pick one based on TileHash.
+/// `layout` is the desired layout. If `TL_RANDOM`, pick one based on `TileHash`.
 unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) {
     let result = if layout == TownLayout::TL_RANDOM {
         let xy = unsafe { super::position(state) };

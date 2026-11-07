@@ -44,9 +44,9 @@ use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
 
 /// The town only needs this cargo in the winter (any amount).
-pub const TOWN_GROWTH_WINTER: u32 = 0xFFFFFFFE;
+pub const TOWN_GROWTH_WINTER: u32 = 0xFFFF_FFFE;
 /// The town needs the cargo for growth when on desert (any amount).
-pub const TOWN_GROWTH_DESERT: u32 = 0xFFFFFFFF;
+pub const TOWN_GROWTH_DESERT: u32 = 0xFFFF_FFFF;
 
 pub use crate::town_type::TownId;
 #[repr(C)]
