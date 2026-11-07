@@ -361,6 +361,107 @@ pub struct CommandServicesTable {
     pub waypoint_layout_init: extern "C" fn(*mut WaypointLayout, *const RailSpec, u8),
     pub waypoint_view_invalidate: extern "C" fn(*mut BaseStation),
 }
+// Call-local helper contexts contain the original inputs and live native result
+// slots. Mutable terrain/station scratch is reborrowed for one helper invocation;
+// no world-state borrow is retained across a command or callback.
+struct StationBridgeCheck<'a> {
+    out: Cost<'a>,
+    tile: u32,
+    info: BridgeSpan,
+    kind: u8,
+    layout: u8,
+    bridge_height: i32,
+    disallowed: u32,
+}
+
+struct JoiningStation<'a> {
+    out: Cost<'a>,
+    existing: u16,
+    target: u16,
+    adjacent: bool,
+    area: TileArea,
+    waypoint: bool,
+    road: bool,
+    overbuild_error: u32,
+}
+
+struct RailStationLandCheck<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    tile: u32,
+    north: u32,
+    allowed: &'a mut i32,
+    flags: u16,
+    axis: u8,
+    est: &'a mut u16,
+    rt: u8,
+    affected: &'a mut Vec<*mut crate::services::Train>,
+    spec: *const RailSpec,
+    length: u8,
+    tracks: u8,
+}
+
+struct RoadStopLandCheck<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    tile: u32,
+    allowed: &'a mut i32,
+    spec: *const RoadSpec,
+    flags: u16,
+    invalid: u8,
+    drive: bool,
+    kind: u8,
+    axis: u8,
+    est: &'a mut u16,
+    rt: u8,
+}
+
+struct RoadStopCost<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    area: TileArea,
+    flags: u16,
+    drive: bool,
+    kind: u8,
+    spec: *const RoadSpec,
+    axis: u8,
+    dir: u8,
+    est: &'a mut u16,
+    rt: u8,
+    unit: i64,
+}
+
+struct RailStationRemoval<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    error: Cost<'a>,
+    area: TileArea,
+    flags: u16,
+    unit: i64,
+    keep: bool,
+    waypoint: bool,
+}
+
+struct RoadStopRemoval<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    error: Cost<'a>,
+    flags: u16,
+    area: TileArea,
+    waypoint: bool,
+    remove_road: bool,
+}
+
+struct StationOwnerChange<'a> {
+    ownership: &'a crate::tile_owner::Context,
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    error: Cost<'a>,
+    tile: u32,
+    old: u8,
+    new: u8,
+}
+
 struct Ctx<'a> {
     s: &'a CommandServicesTable,
     shared: &'a Services,
@@ -537,13 +638,15 @@ impl<'a> Ctx<'a> {
     }
     fn bridge_ok(
         &self,
-        out: Cost<'_>,
-        tile: u32,
-        info: BridgeSpan,
-        kind: u8,
-        layout: u8,
-        bridge_height: i32,
-        disallowed: u32,
+        StationBridgeCheck {
+            out,
+            tile,
+            info,
+            kind,
+            layout,
+            bridge_height,
+            disallowed,
+        }: StationBridgeCheck<'_>,
     ) {
         let height = if usize::from(layout) < info.size {
             // SAFETY: native immutable span, checked index; no references survive.
@@ -576,15 +679,15 @@ impl<'a> Ctx<'a> {
             return out.zero();
         }
         let south = (self.s.southern_bridge_end)(tile);
-        self.bridge_ok(
+        self.bridge_ok(StationBridgeCheck {
             out,
             tile,
-            (self.s.default_bridge_info)(kind),
+            info: (self.s.default_bridge_info)(kind),
             kind,
             layout,
-            self.bridge_height(south),
-            self.s.strings.demolish_bridge,
-        );
+            bridge_height: self.bridge_height(south),
+            disallowed: self.s.strings.demolish_bridge,
+        });
     }
 }
 
@@ -634,15 +737,15 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
     } else {
         unsafe { (c.s.road_bridge_info)(spec) }
     };
-    c.bridge_ok(
-        c.c(out),
+    c.bridge_ok(StationBridgeCheck {
+        out: c.c(out),
         tile,
         info,
         kind,
         layout,
-        c.bridge_height(south),
-        c.s.strings.demolish_bridge,
-    );
+        bridge_height: c.bridge_height(south),
+        disallowed: c.s.strings.demolish_bridge,
+    });
 }
 
 /// Source uint8 tolerance-distance truncation and noise reduction.
@@ -699,15 +802,15 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
         }
         _ => (),
     }
-    c.bridge_ok(
-        c.c(out),
+    c.bridge_ok(StationBridgeCheck {
+        out: c.c(out),
         tile,
         info,
         kind,
-        (c.shared.station_gfx)(tile),
-        height,
-        0xffff,
-    );
+        layout: (c.shared.station_gfx)(tile),
+        bridge_height: height,
+        disallowed: 0xffff,
+    });
 }
 
 impl Ctx<'_> {
@@ -797,14 +900,16 @@ impl Ctx<'_> {
     }
     fn join(
         &self,
-        out: Cost<'_>,
-        existing: u16,
-        target: u16,
-        adjacent: bool,
-        area: TileArea,
-        waypoint: bool,
-        road: bool,
-        overbuild_error: u32,
+        JoiningStation {
+            out,
+            existing,
+            target,
+            adjacent,
+            area,
+            waypoint,
+            road,
+            overbuild_error,
+        }: JoiningStation<'_>,
     ) -> *mut BaseStation {
         crate::witness::hit(crate::witness::STATION_CMD_JOIN);
         let mut st = std::ptr::null_mut();
@@ -1264,19 +1369,21 @@ impl Ctx<'_> {
     }
     fn flat_rail(
         &self,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        tile: u32,
-        north: u32,
-        allowed: &mut i32,
-        flags: u16,
-        axis: u8,
-        est: &mut u16,
-        rt: u8,
-        affected: &mut Vec<*mut crate::services::Train>,
-        spec: *const RailSpec,
-        length: u8,
-        tracks: u8,
+        RailStationLandCheck {
+            cost,
+            ret,
+            tile,
+            north,
+            allowed,
+            flags,
+            axis,
+            est,
+            rt,
+            affected,
+            spec,
+            length,
+            tracks,
+        }: RailStationLandCheck<'_>,
     ) {
         let invalid = if axis == 0 { 5 } else { 10 };
         let slope_callback = !spec.is_null() && (self.s.rail_spec_info)(spec).slope_callback;
@@ -1412,15 +1519,15 @@ impl Ctx<'_> {
         } else {
             unsafe { (self.s.rail_bridge_info)(spec) }
         };
-        self.bridge_ok(
+        self.bridge_ok(StationBridgeCheck {
             out,
             tile,
             info,
             kind,
-            gfx.0,
-            self.bridge_height(south),
-            self.s.strings.demolish_bridge,
-        );
+            layout: gfx.0,
+            bridge_height: self.bridge_height(south),
+            disallowed: self.s.strings.demolish_bridge,
+        });
     }
     fn build_rail(
         &self,
@@ -1492,21 +1599,21 @@ impl Ctx<'_> {
             // flat_rail needs two command slots; preserve the accumulated amount
             // through the independent native result slot used by this helper.
             let saved = cost.money();
-            self.flat_rail(
+            self.flat_rail(RailStationLandCheck {
                 cost,
                 ret,
-                t,
-                tile,
-                &mut allowed,
+                tile: t,
+                north: tile,
+                allowed: &mut allowed,
                 flags,
                 axis,
-                &mut est,
+                est: &mut est,
                 rt,
-                &mut affected,
+                affected: &mut affected,
                 spec,
                 length,
                 tracks,
-            );
+            });
             if !cost.ok() {
                 return;
             }
@@ -1532,16 +1639,16 @@ impl Ctx<'_> {
                 }
             }
         }
-        let st = self.join(
-            ret,
-            est,
+        let st = self.join(JoiningStation {
+            out: ret,
+            existing: est,
             target,
             adjacent,
             area,
-            false,
-            false,
-            self.s.strings.remove_station,
-        );
+            waypoint: false,
+            road: false,
+            overbuild_error: self.s.strings.remove_station,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -1862,14 +1969,16 @@ impl Ctx<'_> {
 
     fn remove_rail_area(
         &self,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        error: Cost<'_>,
-        area: TileArea,
-        flags: u16,
-        unit: i64,
-        keep: bool,
-        waypoint: bool,
+        RailStationRemoval {
+            cost,
+            ret,
+            error,
+            area,
+            flags,
+            unit,
+            keep,
+            waypoint,
+        }: RailStationRemoval<'_>,
     ) -> Vec<*mut BaseStation> {
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_RAIL_AREA);
         let mut quantity = 0_i32;
@@ -2001,13 +2110,13 @@ impl Ctx<'_> {
         if start >= size || end >= size {
             return cost.error(INVALID_STRING_ID);
         }
-        let affected = self.remove_rail_area(
+        let affected = self.remove_rail_area(RailStationRemoval {
             cost,
             ret,
             error,
-            TileArea::between(self.map(), start, end),
+            area: TileArea::between(self.map(), start, end),
             flags,
-            crate::company::price(usize::from(
+            unit: crate::company::price(usize::from(
                 (if waypoint {
                     Price::PR_CLEAR_WAYPOINT_RAIL
                 } else {
@@ -2017,7 +2126,7 @@ impl Ctx<'_> {
             )),
             keep,
             waypoint,
-        );
+        });
         if !cost.ok() || waypoint {
             return;
         }
@@ -2064,13 +2173,13 @@ impl Ctx<'_> {
                 continue;
             }
             let total = cost.money();
-            self.remove_rail_area(
+            self.remove_rail_area(RailStationRemoval {
                 cost,
                 ret,
                 error,
-                TileArea { tile, w: 1, h: 1 },
+                area: TileArea { tile, w: 1, h: 1 },
                 flags,
-                crate::company::price(usize::from(
+                unit: crate::company::price(usize::from(
                     (if waypoint {
                         Price::PR_CLEAR_WAYPOINT_RAIL
                     } else {
@@ -2078,9 +2187,9 @@ impl Ctx<'_> {
                     })
                     .0,
                 )),
-                false,
+                keep: false,
                 waypoint,
-            );
+            });
             if !cost.ok() {
                 return;
             }
@@ -2198,30 +2307,32 @@ impl Ctx<'_> {
         } else {
             unsafe { (self.s.road_bridge_info)(spec) }
         };
-        self.bridge_ok(
+        self.bridge_ok(StationBridgeCheck {
             out,
             tile,
             info,
             kind,
-            gfx.0,
-            self.bridge_height(south),
-            self.s.strings.demolish_bridge,
-        );
+            layout: gfx.0,
+            bridge_height: self.bridge_height(south),
+            disallowed: self.s.strings.demolish_bridge,
+        });
     }
     fn flat_road(
         &self,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        tile: u32,
-        allowed: &mut i32,
-        spec: *const RoadSpec,
-        flags: u16,
-        invalid: u8,
-        drive: bool,
-        kind: u8,
-        axis: u8,
-        est: &mut u16,
-        rt: u8,
+        RoadStopLandCheck {
+            cost,
+            ret,
+            tile,
+            allowed,
+            spec,
+            flags,
+            invalid,
+            drive,
+            kind,
+            axis,
+            est,
+            rt,
+        }: RoadStopLandCheck<'_>,
     ) {
         self.check_buildable(ret, tile, invalid, allowed, !drive, false);
         if !ret.ok() {
@@ -2367,18 +2478,20 @@ impl Ctx<'_> {
     }
     fn road_cost(
         &self,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        area: TileArea,
-        flags: u16,
-        drive: bool,
-        kind: u8,
-        spec: *const RoadSpec,
-        axis: u8,
-        dir: u8,
-        est: &mut u16,
-        rt: u8,
-        unit: i64,
+        RoadStopCost {
+            cost,
+            ret,
+            area,
+            flags,
+            drive,
+            kind,
+            spec,
+            axis,
+            dir,
+            est,
+            rt,
+            unit,
+        }: RoadStopCost<'_>,
     ) {
         let invalid = if drive {
             if axis == 0 { 5 } else { 10 }
@@ -2389,11 +2502,11 @@ impl Ctx<'_> {
         cost.set(0);
         for tile in area.tiles(self.map()) {
             let total = cost.money();
-            self.flat_road(
+            self.flat_road(RoadStopLandCheck {
                 cost,
                 ret,
                 tile,
-                &mut allowed,
+                allowed: &mut allowed,
                 spec,
                 flags,
                 invalid,
@@ -2402,7 +2515,7 @@ impl Ctx<'_> {
                 axis,
                 est,
                 rt,
-            );
+            });
             if !cost.ok() {
                 return;
             }
@@ -2518,22 +2631,33 @@ impl Ctx<'_> {
             }
         };
         let mut est = StationID::INVALID.0;
-        self.road_cost(
-            cost, ret, area, flags, drive, kind, spec, axis, dir, &mut est, rt, unit,
-        );
+        self.road_cost(RoadStopCost {
+            cost,
+            ret,
+            area,
+            flags,
+            drive,
+            kind,
+            spec,
+            axis,
+            dir,
+            est: &mut est,
+            rt,
+            unit,
+        });
         if !cost.ok() {
             return;
         }
-        let st = self.join(
-            ret,
-            est,
+        let st = self.join(JoiningStation {
+            out: ret,
+            existing: est,
             target,
             adjacent,
             area,
-            false,
-            false,
-            self.s.strings.remove_road_stop,
-        );
+            waypoint: false,
+            road: false,
+            overbuild_error: self.s.strings.remove_road_stop,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -2928,13 +3052,15 @@ impl Ctx<'_> {
     }
     fn remove_generic_road(
         &self,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        error: Cost<'_>,
-        flags: u16,
-        area: TileArea,
-        waypoint: bool,
-        remove_road: bool,
+        RoadStopRemoval {
+            cost,
+            ret,
+            error,
+            flags,
+            area,
+            waypoint,
+            remove_road,
+        }: RoadStopRemoval<'_>,
     ) {
         cost.set(0);
         error.error(self.s.strings.no_station);
@@ -3038,7 +3164,15 @@ impl Ctx<'_> {
                 h: u16::from(height),
             }
         };
-        self.remove_generic_road(cost, ret, error, flags, area, waypoint, remove_road);
+        self.remove_generic_road(RoadStopRemoval {
+            cost,
+            ret,
+            error,
+            flags,
+            area,
+            waypoint,
+            remove_road,
+        });
     }
 }
 
@@ -3303,16 +3437,16 @@ impl Ctx<'_> {
             (self.cost.error_param)(cost.0, message, u64::from((authority.town_index)(refused)));
             return;
         }
-        let mut st = self.join(
-            ret,
-            StationID::INVALID.0,
+        let mut st = self.join(JoiningStation {
+            out: ret,
+            existing: StationID::INVALID.0,
             target,
             adjacent,
             area,
-            false,
-            false,
-            self.s.strings.remove_station,
-        );
+            waypoint: false,
+            road: false,
+            overbuild_error: self.s.strings.remove_station,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3739,16 +3873,16 @@ impl Ctx<'_> {
             w: if dir & 1 == 0 { 2 } else { 1 },
             h: if dir & 1 == 0 { 1 } else { 2 },
         };
-        let mut st = self.join(
-            ret,
-            StationID::INVALID.0,
+        let mut st = self.join(JoiningStation {
+            out: ret,
+            existing: StationID::INVALID.0,
             target,
             adjacent,
             area,
-            false,
-            false,
-            self.s.strings.remove_station,
-        );
+            waypoint: false,
+            road: false,
+            overbuild_error: self.s.strings.remove_station,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -4286,13 +4420,15 @@ impl Ctx<'_> {
     }
     fn change_owner(
         &self,
-        ownership: &crate::tile_owner::Context,
-        cost: Cost<'_>,
-        ret: Cost<'_>,
-        error: Cost<'_>,
-        tile: u32,
-        old: u8,
-        new: u8,
+        StationOwnerChange {
+            ownership,
+            cost,
+            ret,
+            error,
+            tile,
+            old,
+            new,
+        }: StationOwnerChange<'_>,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_CHANGE_OWNER);
         if crate::map_func::World::new(self.shared).any_road_stop_tile(tile) {
@@ -4420,15 +4556,15 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
     new: u8,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.change_owner(
+    c.change_owner(StationOwnerChange {
         ownership,
-        c.c(ownership.cost),
-        c.c(ownership.ret),
-        c.c(ownership.error),
+        cost: c.c(ownership.cost),
+        ret: c.c(ownership.ret),
+        error: c.c(ownership.error),
         tile,
         old,
         new,
-    );
+    });
 }
 
 impl Ctx<'_> {
