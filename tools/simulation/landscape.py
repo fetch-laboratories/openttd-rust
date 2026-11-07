@@ -4,7 +4,7 @@ import struct
 import zlib
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, NotRequired, cast
+from typing import Any, NotRequired
 
 from . import core, objects, trees
 from .console_adapter import prepared_console
@@ -580,7 +580,9 @@ def scheduler_gap() -> None:
     evidence_replacements.run_rust(
         "rust:lib:movement::evidence_tests::extreme_coordinates_match_original"
     )
-    print("movement foundation/extreme-coordinate gap: 19608 unchanged-body cases passed")
+    print(
+        "movement foundation/extreme-coordinate gap: 19608 unchanged-body cases passed"
+    )
 
     binary = out / "landscape-loop-gap"
     probe.compile(
