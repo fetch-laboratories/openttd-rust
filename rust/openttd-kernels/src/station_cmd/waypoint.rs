@@ -8,7 +8,8 @@
 //! Complete waypoint command policy; shared station operations are called directly.
 //! Native pointers are opaque, synchronous and serialized by the game-state mutex.
 use super::{
-    BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, SignSearch, TileArea, sign_visit,
+    BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, JoiningStation, RoadStopCost,
+    SignSearch, TileArea, sign_visit,
 };
 use crate::base_station_base::StationRectMode;
 use crate::command_type::DoCommandFlag;
@@ -345,16 +346,16 @@ impl Ctx<'_> {
             }
             tile = tile.wrapping_add(offset);
         }
-        let mut wp = self.join(
-            ret,
+        let mut wp = self.join(JoiningStation {
+            out: ret,
             existing,
             target,
             adjacent,
             area,
-            true,
-            false,
-            self.s.strings.remove_rail_waypoint,
-        );
+            waypoint: true,
+            road: false,
+            overbuild_error: self.s.strings.remove_rail_waypoint,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -527,35 +528,35 @@ impl Ctx<'_> {
             )
         };
         let mut existing = INVALID_STATION;
-        self.road_cost(
+        self.road_cost(RoadStopCost {
             cost,
             ret,
             area,
             flags,
-            true,
-            ROAD_WAYPOINT,
+            drive: true,
+            kind: ROAD_WAYPOINT,
             spec,
             axis,
-            crate::direction_func::axis_to_diag_dir(axis, |ok| {
+            dir: crate::direction_func::axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
             }),
-            &mut existing,
-            INVALID_ROADTYPE,
+            est: &mut existing,
+            rt: INVALID_ROADTYPE,
             unit,
-        );
+        });
         if !cost.ok() {
             return;
         }
-        let mut wp = self.join(
-            ret,
+        let mut wp = self.join(JoiningStation {
+            out: ret,
             existing,
             target,
             adjacent,
             area,
-            true,
-            true,
-            self.s.strings.remove_road_waypoint,
-        );
+            waypoint: true,
+            road: true,
+            overbuild_error: self.s.strings.remove_road_waypoint,
+        });
         if !ret.ok() {
             return cost.take(ret);
         }

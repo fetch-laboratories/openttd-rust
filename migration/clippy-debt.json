@@ -1423,9 +1423,6 @@
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | too_many_lines | 4a33eacd5fa65f2b2e28": [
       181
     ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl < ' a > Ctx < ' a >::fn bridge_ok | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_airport | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
     ],
@@ -1463,7 +1460,7 @@
       15
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_road | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      281
+      292
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | excessive_nesting | 009e9b5843c7653c03de": [
       6
@@ -1474,14 +1471,8 @@
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | excessive_nesting | f52d5ba1aefd83d18483": [
       5
     ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn change_owner | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_rail | excessive_nesting | 62b1fb52ba57ba7554bb": [
       7
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_rail | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      14
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | excessive_nesting | 15d6c43d2b2b13ce3ec0": [
       5,
@@ -1495,14 +1486,8 @@
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | excessive_nesting | 55d474f845abce6d3d90": [
       6
     ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      13
-    ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn flat_road | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      141
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn join | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
+      155
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_dock | excessive_nesting | 60a13ed3dcbb292fa4eb": [
       5
@@ -1516,14 +1501,8 @@
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_generic_road | excessive_nesting | 8c6e648e48006686af61": [
       5
     ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_generic_road | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_rail_area | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_rail_area | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      111
+      121
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_rail_command | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
@@ -1557,9 +1536,6 @@
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn retarget_road_vehicles | excessive_nesting | 54f24a608eb438bed699": [
       5
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn road_cost | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      13
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn shrink | excessive_nesting | 3319cf42d65d92e221a9": [
       5
