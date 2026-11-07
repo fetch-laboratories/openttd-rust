@@ -176,6 +176,8 @@ unsafe fn reduce(p: *mut Packet, amount: u32) {
 unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
     // Delay setting the origin until first pickup: creation at a station does
     // not yet tell us the tile at which the cargo will be picked up.
+    // SAFETY: the synchronous service table keeps the shared map view live;
+    // these coordinate reads neither call back nor yield.
     let world = crate::map_func::World::new(unsafe { &*s.shared });
     let x = world.dimensions.tile_x(at) as i16;
     let y = world.dimensions.tile_y(at) as i16;
@@ -501,6 +503,7 @@ fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> 
         }
     } else if via == station {
         DELIVER
+    // SAFETY: the caller supplies a live next-hop span for this synchronous choice.
     } else if unsafe { next.contains(via) } {
         KEEP
     } else {
@@ -560,6 +563,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_new(p: *const Packet) -> *mut
     Box::into_raw(Box::new(if p.is_null() {
         Packet::default()
     } else {
+        // SAFETY: a non-null input points to a live canonical packet for this copy.
         unsafe { read(p) }
     }))
 }
@@ -598,6 +602,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
 ) -> u32 {
     let p = unsafe { read(p) };
     let s = unsafe { *s };
+    // SAFETY: the synchronous service table keeps the shared map view live;
+    // these coordinate reads neither call back nor yield.
     let world = crate::map_func::World::new(unsafe { &*s.shared });
     let x = world.dimensions.tile_x(at);
     let y = world.dimensions.tile_y(at);
@@ -1833,35 +1839,43 @@ mod tests {
             },
             9,
         );
-        unsafe {
-            let packet = openttd_rust_cargo_packet_new(std::ptr::null());
-            assert_eq!((*packet).source_xy, u32::MAX);
-            assert_eq!((*packet).first_station, INVALID);
-            assert_eq!((*packet).next_hop, INVALID);
-            assert_eq!((*packet).source_id, INVALID);
-            assert_eq!((*packet).count, 0);
-            assert_eq!((*packet).periods_in_transit, 0);
-            assert_eq!((*packet).feeder_share, 0);
-            assert_eq!((*packet).source_type, 0);
-            assert_eq!((*packet).in_vehicle, 0);
-            assert_eq!(((*packet).travelled_x, (*packet).travelled_y), (0, 0));
-            // A station transfer covers (20, 20) without travel in a vehicle.
-            tile(packet, service, 5 + 10 * 512, true);
-            tile(packet, service, 20 + 30 * 512, false);
-            tile(packet, service, 40 + 50 * 512, true);
-            assert_eq!((*packet).source_xy, 5 + 10 * 512);
-            assert_eq!(((*packet).travelled_x, (*packet).travelled_y), (25, 30));
-            assert_eq!(
-                openttd_rust_cargo_packet_distance(packet, &raw const service, 100 + 100 * 512),
-                145
-            );
-            // Paid distance cannot exceed the direct source-to-destination distance.
-            assert_eq!(
-                openttd_rust_cargo_packet_distance(packet, &raw const service, 5 + 10 * 512),
-                0
-            );
-            openttd_rust_cargo_packet_destroy(packet);
-        }
+        // SAFETY: null selects default construction without reading an input packet.
+        let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
+        // SAFETY: this test owns the live packet until its final destruction.
+        let observed = unsafe { read(packet) };
+        assert_eq!(observed.source_xy, u32::MAX);
+        assert_eq!(observed.first_station, INVALID);
+        assert_eq!(observed.next_hop, INVALID);
+        assert_eq!(observed.source_id, INVALID);
+        assert_eq!(observed.count, 0);
+        assert_eq!(observed.periods_in_transit, 0);
+        assert_eq!(observed.feeder_share, 0);
+        assert_eq!(observed.source_type, 0);
+        assert_eq!(observed.in_vehicle, 0);
+        assert_eq!((observed.travelled_x, observed.travelled_y), (0, 0));
+        // A station transfer covers (20, 20) without travel in a vehicle.
+        // SAFETY: the test owns the live packet and the installed rectangular map.
+        unsafe { tile(packet, service, 5 + 10 * 512, true) };
+        // SAFETY: the same packet and map remain live after loading.
+        unsafe { tile(packet, service, 20 + 30 * 512, false) };
+        // SAFETY: the same packet and map remain live after unloading.
+        unsafe { tile(packet, service, 40 + 50 * 512, true) };
+        // SAFETY: the owned packet remains live; this read retains no borrow.
+        let observed = unsafe { read(packet) };
+        assert_eq!(observed.source_xy, 5 + 10 * 512);
+        assert_eq!((observed.travelled_x, observed.travelled_y), (25, 30));
+        // SAFETY: packet, service table and map remain live for the synchronous read.
+        let distance = unsafe {
+            openttd_rust_cargo_packet_distance(packet, &raw const service, 100 + 100 * 512)
+        };
+        assert_eq!(distance, 145);
+        // Paid distance cannot exceed the direct source-to-destination distance.
+        // SAFETY: the same packet, service table and map remain live.
+        let distance =
+            unsafe { openttd_rust_cargo_packet_distance(packet, &raw const service, 5 + 10 * 512) };
+        assert_eq!(distance, 0);
+        // SAFETY: this test destroys its owned packet exactly once, after all reads.
+        unsafe { openttd_rust_cargo_packet_destroy(packet) };
     }
 
     #[test]
