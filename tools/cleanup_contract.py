@@ -36,6 +36,18 @@ def reviewed(
     return False
 
 
+def associated_pull(pulls: list[dict[str, Any]], head: str) -> dict[str, Any] | None:
+    return next(
+        (
+            pull
+            for pull in pulls
+            if pull["head"]["sha"] == head
+            and (pull["state"] == "open" or pull.get("merged_at"))
+        ),
+        None,
+    )
+
+
 def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
     """Read PR body and both ordinary comments and submitted review bodies."""
     head = git("rev-parse", "HEAD").strip()
@@ -57,16 +69,17 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
     number = pull.get("number")
     if not number:
         pulls = json.loads(gh("api", f"repos/{repository}/commits/{head}/pulls"))
-        candidate = next(
-            (p for p in pulls if p["state"] == "open" or p.get("merged_at")), None
-        )
+        candidate = associated_pull(pulls, head)
         number = candidate["number"] if candidate else None
         if candidate:
             head = candidate["head"]["sha"]
     if number is None:
         return "", [], [], head
     prefix = f"repos/{repository}"
-    body = json.loads(gh("api", f"{prefix}/pulls/{number}"))["body"] or ""
+    current = json.loads(gh("api", f"{prefix}/pulls/{number}"))
+    if current["head"]["sha"] != head:
+        raise ValueError("PR head changed since the captured checkout")
+    body = current["body"] or ""
     author = ATTRIBUTION.search(body)
     comments: list[str] = []
     for endpoint in (f"issues/{number}/comments", f"pulls/{number}/reviews"):

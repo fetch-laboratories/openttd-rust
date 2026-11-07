@@ -54,12 +54,28 @@ def nodes(node: "Node") -> Iterator["Node"]:
         yield from nodes(child)
 
 
+def parser_input(text: str) -> bytes:
+    """Normalize rustc pretty-printer syntax outside the grammar's surface.
+
+    Expression lint attributes and builtin # offset_of are compiler-generated
+    expressions, not boundary declarations. Keep their operands and positions.
+    """
+    data = text.encode()
+    for pattern in (
+        rb'\bunsafe(?=\s+extern\s*"[^"\n]+"\s*\{)',
+        rb"\#\[allow\(non_exhaustive_omitted_patterns\)\]",
+    ):
+        data = re.sub(pattern, lambda match: b" " * len(match[0]), data)
+    return re.sub(
+        rb"\bbuiltin\s*#\s*offset_of(?=\s*\()",
+        lambda match: b"offset_of!" + b" " * (len(match[0]) - 10),
+        data,
+    )
+
+
 def syntax_trees(files: dict[str, str]) -> dict[str, Node]:
     trees = {
-        path: PARSER.parse(
-            re.sub(rb'\bunsafe(?=\s+extern\s*"[^"\n]+"\s*\{)', b"      ", text.encode())
-        ).root_node
-        for path, text in files.items()
+        path: PARSER.parse(parser_input(text)).root_node for path, text in files.items()
     }
     for path, tree in trees.items():
         if tree.has_error:

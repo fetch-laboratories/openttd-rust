@@ -12,7 +12,7 @@ from types import ModuleType
 from unittest.mock import patch
 
 from baseline_ratchet import debt_errors
-from cleanup_contract import reviewed
+from cleanup_contract import associated_pull, reviewed
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 
@@ -240,6 +240,16 @@ class GrowthTests(unittest.TestCase):
                 }
             )
 
+    def test_compiler_pretty_syntax_keeps_boundary_declarations(self) -> None:
+        text = '#[unsafe(no_mangle)] pub extern "C" fn entry() { if #[allow(non_exhaustive_omitted_patterns)] match a { true => false, _ => true } {} let _ = builtin # offset_of(Binding<A, B>, entry); } struct S { callback: extern "C" fn() }'
+        rows = boundary_ids({"rust/expanded.rs": text}, expanded=True)
+        self.assertEqual(rows["exports"], {"rust/expanded.rs | entry"})
+        self.assertEqual(rows["callback_slots"], {"rust/expanded.rs | S.callback"})
+        with self.assertRaisesRegex(ValueError, "parse error"):
+            boundary_ids(
+                {"rust/expanded.rs": "fn x() { builtin # unknown(); }"}, expanded=True
+            )
+
     def test_real_metrics_distinguish_original_test_lines(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -272,6 +282,12 @@ class GrowthTests(unittest.TestCase):
                 rows = GROWTH.METRICS.growth_inventory("HEAD")
                 self.assertEqual(rows["tests_cpp"], {"src/tests/x.cpp": 1})
                 self.assertEqual(rows["tools_cpp"], {"tools/x.cpp": 1})
+
+    def test_commit_association_cannot_accept_another_pr_head(self) -> None:
+        wrong = {"head": {"sha": "other"}, "state": "open"}
+        merged = {"head": {"sha": "tested"}, "state": "closed", "merged_at": "date"}
+        self.assertEqual(associated_pull([wrong, merged], "tested"), merged)
+        self.assertIsNone(associated_pull([wrong], "tested"))
 
     def test_review_requires_head_payload_and_different_agent(self) -> None:
         delta = {"counter": "exports", "old": 1, "new": 2, "added": {"x": 1}}
