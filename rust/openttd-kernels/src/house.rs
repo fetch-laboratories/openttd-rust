@@ -2,32 +2,51 @@
 //! Shared values from `house.h`. Native specification storage and raw adapters remain shared.
 /// The house has reached the final stage of construction.
 pub const TOWN_HOUSE_COMPLETED: u8 = 3;
+/// No house class is assigned.
 pub const HOUSE_NO_CLASS: u16 = 0;
+/// Offset for new houses.
 pub const NEW_HOUSE_OFFSET: u16 = 110;
+/// Invalid house ID sentinel.
 pub const INVALID_HOUSE_ID: u16 = u16::MAX;
 /// `HouseZone::TownEdge`.
 pub const HOUSE_ZONE_TOWN_EDGE: u8 = HouseZone::TownEdge.0;
 
 /// House capacity and size/availability bits from `house.h`.
 pub const NUM_HOUSES: u16 = 4096;
+/// Number of supported houses per `NewGRF`.
 pub const NUM_HOUSES_PER_GRF: u32 = NUM_HOUSES as u32;
+/// Maximum number of cargoes accepted by a tile.
 pub const HOUSE_NUM_ACCEPTS: u8 = 16;
+/// Original number of accepted cargo types.
 pub const HOUSE_ORIGINAL_NUM_ACCEPTS: u8 = 3;
+/// Raw compatibility view of the north-tile size mask.
 pub const BUILDING_HAS_1_TILE: u8 = BuildingFlags::BUILDING_HAS_1_TILE.0;
+/// Raw compatibility view of the multitile north-tile size mask.
 pub const BUILDING_HAS_2_TILES: u8 = BuildingFlags::BUILDING_HAS_2_TILES.0;
+/// Raw compatibility view of the four-tile north-tile size mask.
 pub const BUILDING_HAS_4_TILES: u8 = BuildingFlags::BUILDING_HAS_4_TILES.0;
+/// Raw compatibility bit for `BuildingFlag::IsChurch`.
 pub const BUILDING_IS_CHURCH: u8 = BuildingFlags::from_element(BuildingFlag::IsChurch).0;
+/// Raw compatibility bit for `BuildingFlag::IsStadium`.
 pub const BUILDING_IS_STADIUM: u8 = BuildingFlags::from_element(BuildingFlag::IsStadium).0;
+/// Raw compatibility view of all town-zone bits.
 pub const HZ_ZONE_ALL: u16 = HouseZones::HZ_ZONE_ALL.0;
+/// Raw compatibility view of all climate bits.
 pub const HZ_CLIMATE_ALL: u16 = HouseZones::HZ_CLIMATE_ALL.0;
 
 /// Individual `BuildingFlag` values and footprint masks from `house.h`.
 pub const BUILDING_NOT_SLOPED: u8 = BuildingFlags::from_element(BuildingFlag::NotSloped).0;
+/// Raw compatibility bit for `BuildingFlag::Size2x1`.
 pub const BUILDING_SIZE_2X1: u8 = BuildingFlags::from_element(BuildingFlag::Size2x1).0;
+/// Raw compatibility bit for `BuildingFlag::Size1x2`.
 pub const BUILDING_SIZE_1X2: u8 = BuildingFlags::from_element(BuildingFlag::Size1x2).0;
+/// Raw compatibility bit for `BuildingFlag::Size2x2`.
 pub const BUILDING_SIZE_2X2: u8 = BuildingFlags::from_element(BuildingFlag::Size2x2).0;
+/// Raw compatibility bit for `BuildingFlag::IsAnimated`.
 pub const BUILDING_IS_ANIMATED: u8 = BuildingFlags::from_element(BuildingFlag::IsAnimated).0;
+/// Raw compatibility view of footprints extending along X.
 pub const BUILDING_2_TILES_X: u8 = BuildingFlags::BUILDING_2_TILES_X.0;
+/// Raw compatibility view of footprints extending along Y.
 pub const BUILDING_2_TILES_Y: u8 = BuildingFlags::BUILDING_2_TILES_Y.0;
 
 /// `GetClimateMaskForLandscape`, with the native unreachable landscape domain.
