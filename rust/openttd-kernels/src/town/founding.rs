@@ -359,7 +359,7 @@ impl<'a> Founding<'a> {
             update_radius(town.state);
         }
         engine.update_rate(u32::from(town.id.0));
-        super::policy::update_max_pass(self.leaves, town.state);
+        super::policy::update_town_max_pass(self.leaves, town.state);
         observed!((self.s.update_noise)());
         super::openttd_rust_town_generating_exchange_abi(previous);
     }
