@@ -114,65 +114,65 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 
 	uint8_t GetState() const
 	{
-		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 0));
+		return this->rust_state->state;
 	}
 	void SetState(uint8_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 0, value);
+		this->rust_state->state = value;
 	}
 
 	uint8_t GetFrame() const
 	{
-		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 1));
+		return this->rust_state->frame;
 	}
 	void SetFrame(uint8_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 1, value);
+		this->rust_state->frame = value;
 	}
 
 	uint16_t GetBlockedCounter() const
 	{
-		return static_cast<uint16_t>(openttd_rust_road_get(this->rust_state.get(), 2));
+		return this->rust_state->blocked_ctr;
 	}
 	void SetBlockedCounter(uint16_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 2, value);
+		this->rust_state->blocked_ctr = value;
 	}
 
 	uint8_t GetOvertaking() const
 	{
-		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 3));
+		return this->rust_state->overtaking;
 	}
 	void SetOvertaking(uint8_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 3, value);
+		this->rust_state->overtaking = value;
 	}
 
 	uint8_t GetOvertakingCounter() const
 	{
-		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 4));
+		return this->rust_state->overtaking_ctr;
 	}
 	void SetOvertakingCounter(uint8_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 4, value);
+		this->rust_state->overtaking_ctr = value;
 	}
 
 	uint16_t GetCrashedCounter() const
 	{
-		return static_cast<uint16_t>(openttd_rust_road_get(this->rust_state.get(), 5));
+		return this->rust_state->crashed_ctr;
 	}
 	void SetCrashedCounter(uint16_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 5, value);
+		this->rust_state->crashed_ctr = value;
 	}
 
 	uint8_t GetReverseCounter() const
 	{
-		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 6));
+		return this->rust_state->reverse_ctr;
 	}
 	void SetReverseCounter(uint8_t value)
 	{
-		openttd_rust_road_set(this->rust_state.get(), 6, value);
+		this->rust_state->reverse_ctr = value;
 	}
 
 	RoadVehPathCache CopyPath() const

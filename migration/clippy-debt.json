@@ -1112,6 +1112,9 @@
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       53
     ],
+    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 0ae90050885e8b179b33": [
+      5
+    ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 19149e8f3e1fb0099414": [
       5
     ],
@@ -1127,9 +1130,6 @@
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 616b594e8609f1a782d1": [
       5
     ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 63d5c77ae241ec9380a1": [
-      5
-    ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | a22264e51a21a60d0257": [
       7
     ],
@@ -1142,10 +1142,7 @@
       5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      338
-    ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn overtake | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      101
+      337
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | excessive_nesting | 12e75f9a27c9630a6bb7": [
       5

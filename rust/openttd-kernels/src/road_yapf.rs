@@ -166,6 +166,7 @@ struct Search<'a> {
     reuse_scratch: bool,
 }
 impl Search<'_> {
+    #[cfg(test)]
     fn new(
         input: Input,
         leaves: Leaves,
@@ -769,54 +770,6 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
     search.result(INVALID_TRACKDIR, found)
 }
 
-/// Heap probe for tie and removal order, which no saved state records.
-/// Spans are initialized, disjoint, live, and at most `isize::MAX`; indices and
-/// membership follow Include/Remove preconditions. Uses the actual search heap.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
-    input: *const Input,
-    leaves: *const Leaves,
-    costs: *const i32,
-    nodes: usize,
-    commands: *const u32,
-    values: *const i32,
-    count: usize,
-    output: *mut u32,
-) {
-    // SAFETY: Native fixture supplies initialized descriptors and valid spans.
-    let mut search = unsafe { Search::new(*input, *leaves, std::ptr::null(), false, 0) };
-    for i in 0..nodes {
-        let mut node = Node::new(i as u32, 0, None, false);
-        // SAFETY: costs spans exactly nodes initialized elements.
-        node.estimate = unsafe { costs.add(i).read() };
-        search.arena.push(node);
-    }
-    for i in 0..count {
-        // SAFETY: commands and values both have count initialized elements.
-        let (command, value) = unsafe { (commands.add(i).read(), values.add(i).read()) };
-        match command {
-            0 => search.include(value as usize),
-            1 => search.remove(value as usize),
-            2 => {
-                let node = search.heap.first().unwrap();
-                search.remove(node);
-                // SAFETY: output spans count exclusive writable elements.
-                unsafe {
-                    output.add(i).write(node as u32);
-                }
-                continue;
-            }
-            _ => unreachable!(),
-        }
-        // SAFETY: Same exclusive output span; no pointer is retained.
-        unsafe {
-            output
-                .add(i)
-                .write(search.heap.first().map_or(u32::MAX, |n| n as u32));
-        }
-    }
-}
-
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRoadYapfInput" ["probe"] => Input {
@@ -863,4 +816,92 @@ crate::abi::layouts! {
         calcs,
         distance,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Input, Leaves, Node, Search, Tile};
+    use crate::vehicle::OpenTTDVehicle;
+    use std::ffi::c_void;
+
+    extern "C" fn unexpected_random(_: *mut c_void) -> u32 {
+        unreachable!()
+    }
+    extern "C" fn unexpected_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        unreachable!()
+    }
+    unsafe extern "C" fn unexpected_tile(_: *const OpenTTDVehicle, _: u32, _: u8, _: bool) -> Tile {
+        unreachable!()
+    }
+    unsafe extern "C" fn unexpected_closest(_: *const OpenTTDVehicle, _: u16, _: u8) -> u32 {
+        unreachable!()
+    }
+
+    #[test]
+    fn original_heap_ties_and_arbitrary_removal() {
+        // Replaces the native heap probe with the same operations on Search's heap.
+        // Expected results were captured from unchanged OpenTTD 15.3
+        // (14ec60f248547d4d062a1160f0fc26d742319888), misc/binaryheap.hpp,
+        // using the former native fixture's CBinaryHeapT loop. Saves do not
+        // expose these intermediate ties, internal/last removals and replacements.
+        let shared =
+            crate::services::fixture(std::ptr::null_mut(), unexpected_random, unexpected_industry);
+        let leaves = Leaves {
+            shared: &raw const shared,
+            tile: unexpected_tile,
+            closest: unexpected_closest,
+        };
+        let input = Input {
+            map_x: 0,
+            map_y: 0,
+            tile: 0,
+            dest_tile: 0,
+            max_nodes: 0,
+            slope: 0,
+            crossing: 0,
+            stop: 0,
+            occupied: 0,
+            bay: 0,
+            curve: 0,
+            order_destination: 0,
+            order_type: 0,
+            bus: 0,
+            articulated: 0,
+            trackdir: 0,
+        };
+        let mut search = Search::new(input, leaves, std::ptr::null(), false, 0);
+        for estimate in [100, 100, 100, 50, 100, 200, 50, 100] {
+            let mut node = Node::new(0, 0, None, false);
+            node.estimate = estimate;
+            search.arena.push(node);
+        }
+        let commands = [
+            0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 2,
+        ];
+        let values = [
+            0, 1, 2, 3, 4, 5, 6, 7, 1, 7, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0,
+        ];
+        let expected = [
+            0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 1, 0, 4, 2, 7, 5, 1, 1, 1,
+        ];
+        for ((command, value), expected) in commands.into_iter().zip(values).zip(expected) {
+            let actual = match command {
+                0 => {
+                    search.include(value);
+                    search.heap.first().unwrap()
+                }
+                1 => {
+                    search.remove(value);
+                    search.heap.first().unwrap()
+                }
+                2 => {
+                    let first = search.heap.first().unwrap();
+                    search.remove(first);
+                    first
+                }
+                _ => unreachable!(),
+            };
+            assert_eq!(actual, expected);
+        }
+    }
 }
