@@ -17759,76 +17759,13 @@
     "rust/openttd-kernels/src/rail_yapf.rs | impl TrainFacts::fn read | undocumented_unsafe_blocks | 1b643360343fdd971435": [
       1
     ],
-    "rust/openttd-kernels/src/road.rs | fn blocked_counter | undocumented_unsafe_blocks | cb9dcafcb357e6571cf0": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn clear_removed_drive_stop | cast_possible_truncation | 374539b0528459141c2d": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn clear_removed_drive_stop | multiple_unsafe_ops_per_block | 2da2906899eab86afbdd": [
-      2
-    ],
-    "rust/openttd-kernels/src/road.rs | fn clear_removed_drive_stop | undocumented_unsafe_blocks | 0a98554d7f96232b3bf5": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn clear_removed_drive_stop | undocumented_unsafe_blocks | 583525954d65efd10ea8": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn clear_removed_drive_stop | undocumented_unsafe_blocks | d1a070f65c1070eb93ae": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn crashed_counter | undocumented_unsafe_blocks | ea519a284a1a97d33461": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn get_frame | cast_possible_truncation | f34ef7fb1139270ccb4d": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn get_frame | undocumented_unsafe_blocks | 6df0f54c5e35cb6e51dd": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn get_state | cast_possible_truncation | 3315d7833d3f60c046d5": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn get_state | undocumented_unsafe_blocks | c0215a8538788904d54b": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn narrow | cast_possible_truncation | 3df985c46070211a9af2": [
-      1
-    ],
     "rust/openttd-kernels/src/road.rs | fn openttd_rust_road_calendar_day | multiple_unsafe_ops_per_block | fa3d5dbda49240b0fd9b": [
       3
     ],
     "rust/openttd-kernels/src/road.rs | fn openttd_rust_road_path_replace | multiple_unsafe_ops_per_block | b19e0293572e99920ca4": [
       4
     ],
-    "rust/openttd-kernels/src/road.rs | fn openttd_rust_road_set | cast_possible_truncation | 3df985c46070211a9af2": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn openttd_rust_road_set | multiple_unsafe_ops_per_block | aad5cb79536c673a5444": [
-      2
-    ],
-    "rust/openttd-kernels/src/road.rs | fn overtaking | cast_possible_truncation | bdb365b4d0d11b90335f": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn overtaking | undocumented_unsafe_blocks | f5a9925da640669b3237": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn overtaking_counter | cast_possible_truncation | 5891a7f4878cb47c143a": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn overtaking_counter | undocumented_unsafe_blocks | 3ecec354e3d187a1bd29": [
-      1
-    ],
     "rust/openttd-kernels/src/road.rs | fn set_depot_state | undocumented_unsafe_blocks | c697bec52cd2ea163eeb": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn set_frame | undocumented_unsafe_blocks | a2be8acc510d7862f58d": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn set_state | undocumented_unsafe_blocks | 7c838948fd0059f247fb": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | fn state_of | cast_possible_truncation | 28165242b4972ef92ea5": [
       1
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn arrive_load | multiple_unsafe_ops_per_block | 6ce8580d3468d3971d57": [
@@ -17879,15 +17816,11 @@
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn economy_day | undocumented_unsafe_blocks | ffa5d54f0e635502d243": [
       1
     ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | cast_possible_truncation | 2270801e33c72e7fb084": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | cast_possible_truncation | 338ffe7dd72e339215a6": [
-      1
-    ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       53
+    ],
+    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 0ae90050885e8b179b33": [
+      5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 19149e8f3e1fb0099414": [
       5
@@ -17904,9 +17837,6 @@
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 616b594e8609f1a782d1": [
       5
     ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | 63d5c77ae241ec9380a1": [
-      5
-    ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | excessive_nesting | a22264e51a21a60d0257": [
       7
     ],
@@ -17919,7 +17849,7 @@
       5
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn individual | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      338
+      337
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn leave_depot | undocumented_unsafe_blocks | eb96876d34f8b81bc7bc": [
       1
@@ -17929,9 +17859,6 @@
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn new | multiple_unsafe_ops_per_block | 3ba5aa23a5d143b3c273": [
       5
-    ],
-    "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn overtake | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      101
     ],
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn path | cast_possible_truncation | 23b6d0ed3ab4bc32e54d": [
       1
@@ -18033,16 +17960,7 @@
     "rust/openttd-kernels/src/road.rs | impl Game < ' _ >::fn visual_effect_and_speed | cast_sign_loss | f3280602854506fa2cb2": [
       1
     ],
-    "rust/openttd-kernels/src/road.rs | impl Part::fn frame | cast_possible_truncation | ab561cd52723045ea10c": [
-      1
-    ],
     "rust/openttd-kernels/src/road.rs | impl Part::fn new | undocumented_unsafe_blocks | ac506133d3425066d865": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | impl Part::fn overtaking | cast_possible_truncation | 04109fe27cb4c5c61e33": [
-      1
-    ],
-    "rust/openttd-kernels/src/road.rs | impl Part::fn state | cast_possible_truncation | c5fdb1aa3e4739e80c8c": [
       1
     ],
     "rust/openttd-kernels/src/road/availability.rs | fn engine_types | multiple_unsafe_ops_per_block | 5b501ff6b35e9299489d": [
@@ -18334,34 +18252,6 @@
       1
     ],
     "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_depot | multiple_unsafe_ops_per_block | e9d56812f3db751ff8b8": [
-      2
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | cast_possible_truncation | 0a99c20db30eb8674dc5": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | cast_possible_truncation | 43d7abc97f761058a057": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | cast_possible_truncation | 6ff790e5dafba97a3237": [
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | cast_sign_loss | 62d62d76181b3079c463": [
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | multiple_unsafe_ops_per_block | 505d157fd8fd319c8c7f": [
-      4
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | multiple_unsafe_ops_per_block | 62c3d15384574845d265": [
-      2
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | multiple_unsafe_ops_per_block | 72a9332ae5c176dd0038": [
-      2
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | multiple_unsafe_ops_per_block | 884d35df44a6407b698e": [
-      2
-    ],
-    "rust/openttd-kernels/src/road_yapf.rs | fn openttd_rust_road_yapf_heap_probe | multiple_unsafe_ops_per_block | c3a40c29dddf0ed9ca2e": [
       2
     ],
     "rust/openttd-kernels/src/road_yapf.rs | impl Search < ' _ >::fn calc_cost | cast_possible_truncation | 74f0f6186349cd9dfed6": [

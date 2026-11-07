@@ -106,7 +106,7 @@ static void RoadBoundary()
 	probe.ground.state->flags = 3;
 	t.physics.base_crash = [](OpenTTDVehicle *u, bool flooded) noexcept -> uint32_t {
 		CHECK(u == RoadAbiHandle() && !flooded);
-		openttd_rust_road_set(road_abi_probe->state, 0, 64);
+		road_abi_probe->state->state = 64;
 		CHECK(road_abi_probe->ground.state->flags == 0);
 		return 7;
 	};
@@ -123,7 +123,7 @@ static void RoadBoundary()
 	/* Leaving reads the record's direction and the ground total length. */
 	probe.ground.state->cache.cached_total_length = 8;
 	CHECK(openttd_rust_road_crash(v, probe.state, false, &t.leaves) == 8);
-	CHECK(openttd_rust_road_get(probe.state, 5) == 1 && probe.entries.east.occupied == 0);
+	CHECK(probe.state->crashed_ctr == 1 && probe.entries.east.occupied == 0);
 
 	/* Entries nested in a NewGRF property callback see and change the same owner. */
 
@@ -204,11 +204,11 @@ static void RoadBoundary()
 	openttd_rust_economy_prices()[1] = old_price;
 
 	/* A non-station order must not read its destination at the bay stopping frame. */
-	openttd_rust_road_set(probe.state, 0, 32);
-	openttd_rust_road_set(probe.state, 1, 20);
-	openttd_rust_road_set(probe.state, 6, 1); // Skip nearby-vehicle traversal.
+	probe.state->state = 32;
+	probe.state->frame = 20;
+	probe.state->reverse_ctr = 1; // Skip nearby-vehicle traversal.
 	road_abi_vehicle.subtype = 1;
-	const uint16_t rd = openttd_rust_road_drive_entry(0, 32, 21);
+	const uint16_t rd = 5 | (7 << 8); // Pinned original road state 32, frame 21.
 	CHECK((rd & 0xC0) == 0 && (rd & 15) < 15);
 	road_abi_vehicle.x_pos = (rd & 15) + 1; road_abi_vehicle.y_pos = (rd >> 8) & 15;
 
@@ -236,10 +236,10 @@ static void RoadBoundary()
 
 
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
-	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);
+	CHECK(probe.state->state == 36 && probe.stop->status == 0x7F);
 	probe.stop->entries = nullptr;
-	openttd_rust_road_set(probe.state, 0, 0);
-	openttd_rust_road_set(probe.state, 6, 0);
+	probe.state->state = 0;
+	probe.state->reverse_ctr = 0;
 
 	/* Visual eligibility precedes lookup; effect reentry changes the later speed inputs. */
 	static std::unique_ptr<ControllerOrders> road_orders;
@@ -273,7 +273,7 @@ static void RoadBoundary()
 	emission_vehicle.play_vehicle_sound = [](OpenTTDVehicle *u, VehicleSoundEvent event) noexcept {
 		auto &p = *road_abi_probe;
 		CHECK(p.visual_stage == 1 && p.visual_eligible && event == VSE_VISUAL_EFFECT); p.visual_stage = 3;
-		openttd_rust_road_set(p.state, 3, 1);
+		p.state->overtaking = 1;
 		openttd_rust_road_set_dest(u, p.state, 100);
 		p.speed = 0; road_abi_vehicle.subspeed = 0;
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
@@ -383,7 +383,7 @@ static void RoadBoundary()
 
 	road_abi_vehicle.next = nullptr; road_abi_second.next = nullptr;
 	/* Crash animation reads the next link after the turn/viewport callback. */
-	openttd_rust_road_set(probe.state, 5, 0);
+	probe.state->crashed_ctr = 0;
 	probe.status = 128;
 	t.physics.viewport = [](OpenTTDVehicle *u, bool force, bool delta) noexcept { CHECK(u == RoadAbiHandle() && u->direction < 8 && force && delta); ++road_abi_probe->turns; };
 	road_abi_vehicle.tick_counter = 7;
@@ -392,8 +392,8 @@ static void RoadBoundary()
 	CHECK(probe.turns == 1 && world.draws == 1);
 
 	/* The final-part deletion returns its copied alive result only. */
-	openttd_rust_road_set(probe.state, 0, 0);
-	openttd_rust_road_set(probe.state, 5, 2219);
+	probe.state->state = 0;
+	probe.state->crashed_ctr = 2219;
 
 
 	static OpenTTDVehicle crash_record{};
@@ -516,14 +516,14 @@ static void RoadServiceBoundary()
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;
 		RoadServiceHandle(0)->dest_tile = 42;
-		openttd_rust_road_set(probe.head, 0, 254);
-		openttd_rust_road_set(probe.tail, 0, moving ? 254 : 1);
+		probe.head->state = 254;
+		probe.tail->state = moving ? 254 : 1;
 		openttd_rust_road_path_push(probe.head, {10, 10815});
 		day();
 		CHECK(RoadServiceHandle(0)->dest_tile == probe.tile && openttd_rust_road_path_size(probe.head) == 0);
 	}
 	CHECK(probe.depot_orders == 2 && probe.services == 0 && world.draws == 0);
-	openttd_rust_road_set(probe.tail, 0, 254);
+	probe.tail->state = 254;
 	day();
 	CHECK(probe.services == 1 && probe.depot_orders == 2);
 	probe.depot_tile = false;
