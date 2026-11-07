@@ -34,6 +34,7 @@ def command_gap() -> None:
     # The exact Rust test verifies the complete input matrix and this count.
     print("company financial command gap: 40320 unchanged-reference cases passed")
 
+
 class Scenario(core.Scenario):
     companies: NotRequired[str]
     company_setup: NotRequired[bool]
