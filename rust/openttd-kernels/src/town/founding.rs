@@ -411,9 +411,9 @@ impl<'a> Founding<'a> {
                 }
                 w::hit(w::TOWN_ZERO_GROWTH);
                 let cur_company =
-                    CompanyID(observed!((self.leaves.exchange_company)(CompanyID::TOWN.0)));
+                    observed!((self.leaves.exchange_company)(u32::from(CompanyID::TOWN.0)));
                 observed!((self.s.delete_town)(town.id));
-                observed!((self.leaves.exchange_company)(cur_company.0));
+                observed!((self.leaves.exchange_company)(cur_company));
                 // Creating and deleting resets allocation checks. We could allocate on entry,
                 // but must check again when assertions are enabled.
                 observed!((self.s.assert_allocation)());
