@@ -21,6 +21,8 @@ class Node(Protocol):
 
     def child_by_field_name(self, name: str) -> "Node": ...
 
+    def children_by_field_name(self, name: str) -> list["Node"]: ...
+
     @property
     def start_point(self) -> tuple[int, int]: ...
 
@@ -97,7 +99,12 @@ def callback(
         return False
     if node.type == "function_type":
         return bool(re.search(rb'\bextern\s*(?:"C(?:-unwind)?")?\s*fn\b', node.text))
-    if node.type in ("type_identifier", "scoped_type_identifier"):
+    if node.type in (
+        "type_identifier",
+        "scoped_type_identifier",
+        "identifier",
+        "scoped_identifier",
+    ):
         name = node.text.decode().split("::")[-1]
         if name in aliases and name not in seen:
             # Associated types may be callbacks in some implementations and ()
@@ -116,6 +123,7 @@ def qualified(node: Node) -> str:
         if parent.type in (
             "struct_item",
             "enum_item",
+            "enum_variant",
             "union_item",
             "mod_item",
             "impl_item",
@@ -157,11 +165,26 @@ def boundary_ids(
             if node.type == "type_item":
                 name = node.child_by_field_name("name").text.decode()
                 aliases.setdefault(name, []).append(node.child_by_field_name("type"))
+            elif node.type == "use_as_clause":
+                name = node.child_by_field_name("alias").text.decode()
+                aliases.setdefault(name, []).append(node.child_by_field_name("path"))
     result: dict[str, set[str]] = {"exports": set(), "callback_slots": set()}
     for path, tree in trees.items():
         for node in nodes(tree):
             collect_node(path, node, aliases, result, expanded=expanded)
     return result
+
+
+def tuple_callbacks(node: Node, aliases: dict[str, list[Node]]) -> set[str]:
+    slots = {
+        index
+        for index, field in enumerate(node.children_by_field_name("type"))
+        if callback(field, aliases)
+    }
+    owner = qualified(node)
+    if slots and not owner:
+        raise ValueError("unclassified tuple callback owner")
+    return {f"{owner}.{index}" for index in slots}
 
 
 def collect_node(
@@ -184,6 +207,10 @@ def collect_node(
             raise ValueError(f"unclassified callback field in {path}")
         field = node.child_by_field_name("name").text.decode()
         result["callback_slots"].add(f"{path} | {owner}.{field}")
+    elif node.type == "ordered_field_declaration_list":
+        result["callback_slots"].update(
+            f"{path} | {slot}" for slot in tuple_callbacks(node, aliases)
+        )
     elif node.type in ("macro_definition", "macro_invocation"):
         if expanded and node.type == "macro_definition":
             return  # The compiler emitted each expansion separately.

@@ -247,6 +247,29 @@ class PolicyTests(unittest.TestCase):
 
 
 class GrowthTests(unittest.TestCase):
+    def test_import_aliases_and_tuple_callback_fields_count_growth(self) -> None:
+        before = boundary_ids({"rust/x.rs": "struct S { value: u8 }"})
+        after = boundary_ids(
+            {
+                "rust/x.rs": 'mod a { pub type Callback = extern "C" fn(); } use a::Callback as Renamed; use Renamed as Twice; struct S { callback: Twice } #[repr(C)] struct Tuple(pub u8, pub Twice, pub Option<Renamed>); #[repr(C)] enum E { First(Twice), Second(Twice) }'
+            }
+        )
+        self.assertEqual(
+            after["callback_slots"],
+            {
+                "rust/x.rs | S.callback",
+                "rust/x.rs | Tuple.1",
+                "rust/x.rs | Tuple.2",
+                "rust/x.rs | E::First.0",
+                "rust/x.rs | E::Second.0",
+            },
+        )
+        growth = GROWTH.increases(
+            {"callback_slots": dict.fromkeys(before["callback_slots"], 1)},
+            {"callback_slots": dict.fromkeys(after["callback_slots"], 1)},
+        )
+        self.assertEqual(growth[0]["new"], 5)
+
     def test_each_counter_is_independent(self) -> None:
         for counter in (
             "tools_cpp",
