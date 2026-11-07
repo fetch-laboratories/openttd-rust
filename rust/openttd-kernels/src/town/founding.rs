@@ -371,7 +371,7 @@ impl<'a> Founding<'a> {
             w::hit(w::TOWN_GROWTH);
             engine.grow(
                 u32::from(town.id.0),
-                TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS,
+                u32::from(TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS),
             );
             i = i.wrapping_sub(1);
             if i == 0 {
