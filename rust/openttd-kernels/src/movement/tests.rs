@@ -1,12 +1,12 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Frozen observations from the unchanged original, replacing MovementGap in
-//! tools/simulation/landscape-loop-reference.cpp. The existing landscape.py
-//! extractor supplied slope_func.h, track helpers/tables, GetRailFoundation,
-//! GetRoadFoundation, GetPartialPixelZ, GetTileSlopeGivenHeight,
-//! GetTilePixelSlopeOutsideMap, GetSlopePixelZ_Void and GetSlopePixelZOutsideMap.
-//! The original-only runner used MovementGap's identical inputs and height shim;
+//! Frozen observations from the unchanged original, replacing `MovementGap` in
+//! `tools/simulation/landscape-loop-reference.cpp`. The existing `landscape.py`
+//! extractor supplied `slope_func.h`, track helpers/tables, `GetRailFoundation`,
+//! `GetRoadFoundation`, `GetPartialPixelZ`, `GetTileSlopeGivenHeight`,
+//! `GetTilePixelSlopeOutsideMap`, `GetSlopePixelZ_Void` and `GetSlopePixelZOutsideMap`.
+//! The original-only runner used `MovementGap`'s identical inputs and height shim;
 //! no candidate function or output contributed an expected value. Native ABI
-//! round trips remain in ground_protocol.hpp and landscape_protocol.hpp.
+//! round trips remain in `ground_protocol.hpp` and `landscape_protocol.hpp`.
 
 use super::{CallbackFoundation, MovementServices, MovementVehicle, ObjectFoundation, VehicleRef};
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, fixture};
@@ -214,7 +214,9 @@ fn extreme_coordinates_match_original() {
                 {
                     // SAFETY: Initialized tables and allocation remain live for
                     // this entry; callbacks neither reset nor yield the map.
-                    let actual = unsafe { super::openttd_rust_movement_outside_z(&movement, x, y) };
+                    let actual = unsafe {
+                        super::openttd_rust_movement_outside_z(&raw const movement, x, y)
+                    };
                     assert_eq!(
                         actual,
                         expected[3 + index],
