@@ -13,40 +13,37 @@
 use crate::direction_func::dir_to_diag_dir;
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
 use crate::road::State as RoadState;
+use crate::roadstop_base::{RoadStopStatusFlag as StatusFlag, RoadStopStatusFlags as StatusFlags};
 use crate::roadveh::{
     RVS_USING_SECOND_BAY as USING_SECOND_BAY, RVSB_IN_DT_ROAD_STOP as IN_DT_ROAD_STOP,
     RVSB_IN_ROAD_STOP as IN_ROAD_STOP,
 };
-use crate::services::{Map, RoadStopType, Services};
+use crate::services::{Map, Services};
 use crate::station::BaseStation;
+use crate::station_type::RoadStopType;
 use crate::tile_type::{MP_STATION, TILE_SIZE};
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::VS_CRASHED;
 
-/// `RoadStopStatusFlag::Bay0Free`.
-const BAY0_FREE: u8 = 1 << 0;
-/// `RoadStopStatusFlag::Bay1Free`.
-const BAY1_FREE: u8 = 1 << 1;
-/// `RoadStopStatusFlag::BaseEntry`.
-const BASE_ENTRY: u8 = 1 << 6;
-/// `RoadStopStatusFlag::EntryBusy`.
-const ENTRY_BUSY: u8 = 1 << 7;
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
-#[allow(clippy::cast_possible_truncation)] // TILE_SIZE is 16.
 const TILE_UNITS: u16 = TILE_SIZE as u16;
 
 /// `RoadStop::Entry`: one drive-through entry point in tile units.
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct Entry {
+    /// The length of the stop in tile units.
     pub length: u16,
+    /// The amount of occupied stop in tile units.
     pub occupied: u16,
 }
 /// `RoadStop::Entries`: both entry points of one drive-through line.
 #[repr(C)]
 #[derive(Default)]
 pub struct Entries {
+    /// Vehicles that entered from the east.
     pub east: Entry,
+    /// Vehicles that entered from the west.
     pub west: Entry,
 }
 /// One allocation per native shell: the saved status byte and the shared
@@ -97,7 +94,6 @@ pub struct RoadStopServices {
 }
 
 /// Map dimensions read at the entry's use.
-#[allow(clippy::cast_possible_truncation)] // Map::LogX() is at most 12.
 fn map(s: &Services) -> Map {
     s.map()
 }
@@ -132,6 +128,8 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
     let world = crate::map_func::World::new(s);
     while !stop.is_null() {
         let tile = (stops.tile)(stop);
+        // The vehicle needs a compatible road type, and articulated vehicles
+        // cannot use a standard bay stop.
         if crate::road_map::has_tile_any_road_type(&world, tile, (movement.road_compatible)(v))
             && (!world.bay_stop(tile) || !(ground.has_articulated)(v))
         {
@@ -144,7 +142,9 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
     Box::into_raw(Box::new(State {
-        status: BAY0_FREE | BAY1_FREE,
+        status: StatusFlags::from_element(StatusFlag::Bay0Free)
+            .with(StatusFlag::Bay1Free)
+            .0,
         entries: std::ptr::null_mut(),
     }))
 }
@@ -156,19 +156,19 @@ pub unsafe extern "C" fn openttd_rust_road_stop_destroy(state: *mut State) {
     // SAFETY: Caller transfers the owner; `delete nullptr` is a no-op.
     unsafe {
         let state = Box::from_raw(state);
-        if state.status & BASE_ENTRY != 0 && !state.entries.is_null() {
+        if StatusFlags(state.status).test(StatusFlag::BaseEntry) && !state.entries.is_null() {
             drop(Box::from_raw(state.entries));
         }
     }
 }
 
-fn status(state: *mut State) -> u8 {
+fn status(state: *mut State) -> StatusFlags {
     // SAFETY: Live owner; the load ends before any service.
-    unsafe { (*state).status }
+    unsafe { StatusFlags((*state).status) }
 }
-fn set_status(state: *mut State, status: u8) {
+fn set_status(state: *mut State, status: StatusFlags) {
     // SAFETY: Live owner, serialized game thread.
-    unsafe { (*state).status = status }
+    unsafe { (*state).status = status.0 }
 }
 fn entries(state: *mut State) -> *mut Entries {
     // SAFETY: Live owner; the load ends before any service.
@@ -236,7 +236,7 @@ pub(crate) fn at(s: &Services, tile: u32) -> *mut State {
     get_by_tile(
         s,
         tile,
-        crate::services::RoadStopType(crate::map_func::World::new(s).road_stop_type(tile)),
+        RoadStopType(crate::map_func::World::new(s).road_stop_type(tile)),
     )
     .1
 }
@@ -248,19 +248,19 @@ pub(crate) fn entry_read(state: *mut State, dir: u8) -> Entry {
 }
 /// `RoadStop::HasFreeBay`.
 pub(crate) fn has_free_bay(state: *mut State) -> bool {
-    status(state) & (BAY0_FREE | BAY1_FREE) != 0
+    status(state).any(StatusFlags::from_element(StatusFlag::Bay0Free).with(StatusFlag::Bay1Free))
 }
 /// `RoadStop::IsFreeBay`.
 pub(crate) fn is_free_bay(state: *mut State, nr: u8) -> bool {
     match nr {
-        0 => status(state) & BAY0_FREE != 0,
-        1 => status(state) & BAY1_FREE != 0,
+        0 => status(state).test(StatusFlag::Bay0Free),
+        1 => status(state).test(StatusFlag::Bay1Free),
         _ => unreachable!("original IsFreeBay NOT_REACHED"),
     }
 }
 /// `RoadStop::IsEntranceBusy`.
 pub(crate) fn is_entrance_busy(state: *mut State) -> bool {
-    status(state) & ENTRY_BUSY != 0
+    status(state).test(StatusFlag::EntryBusy)
 }
 /// `RoadStop::SetEntranceBusy`.
 pub(crate) fn set_entrance_busy(state: *mut State, busy: bool) {
@@ -268,15 +268,16 @@ pub(crate) fn set_entrance_busy(state: *mut State, busy: bool) {
     set_status(
         state,
         if busy {
-            status | ENTRY_BUSY
+            status.with(StatusFlag::EntryBusy)
         } else {
-            status & !ENTRY_BUSY
+            status.without(StatusFlag::EntryBusy)
         },
     );
 }
 /// `RoadStop::AllocateBay`.
 fn allocate_bay(state: *mut State) -> u8 {
     debug_assert!(has_free_bay(state));
+    // Find the first free bay.
     let mut bay_nr = 0;
     while !is_free_bay(state, bay_nr) {
         bay_nr += 1;
@@ -288,30 +289,30 @@ fn allocate_bay(state: *mut State) -> u8 {
 fn allocate_drive_through_bay(state: *mut State, nr: u8) {
     set_status(
         state,
-        status(state)
-            & !match nr {
-                0 => BAY0_FREE,
-                1 => BAY1_FREE,
-                _ => unreachable!("original AllocateDriveThroughBay NOT_REACHED"),
-            },
+        status(state).without(match nr {
+            0 => StatusFlag::Bay0Free,
+            1 => StatusFlag::Bay1Free,
+            _ => unreachable!("original AllocateDriveThroughBay NOT_REACHED"),
+        }),
     );
 }
 /// `RoadStop::FreeBay`.
 fn free_bay(state: *mut State, nr: u8) {
     set_status(
         state,
-        status(state)
-            | match nr {
-                0 => BAY0_FREE,
-                1 => BAY1_FREE,
-                _ => unreachable!("original FreeBay NOT_REACHED"),
-            },
+        status(state).with(match nr {
+            0 => StatusFlag::Bay0Free,
+            1 => StatusFlag::Bay1Free,
+            _ => unreachable!("original FreeBay NOT_REACHED"),
+        }),
     );
 }
 
 /// `RoadStop::Entry::Enter`.
 fn enter_entry(entry: *mut Entry, total_length: u16) {
-    // SAFETY: Live shared entry; RVs may run through each other, so no bound.
+    // We cannot assert occupied < length: road vehicles may run through each
+    // other when trying to prevent an infinite jam.
+    // SAFETY: Live shared entry; uint16_t arithmetic.
     unsafe { (*entry).occupied = (*entry).occupied.wrapping_add(total_length) };
 }
 /// `RoadStop::Entry::Leave`.
@@ -337,6 +338,8 @@ pub(crate) unsafe fn enter(
     if crate::map_func::World::new(s).bay_stop(xy) {
         // SAFETY: The shared road ground table is static.
         let ground = unsafe { &*t.ground };
+        // For normal (non drive-through) stops, check for a busy entrance,
+        // no free bays or an articulated vehicle.
         if is_entrance_busy(state) || !has_free_bay(state) || (ground.has_articulated)(v) {
             crate::witness::hit(crate::witness::ROAD_STOP_ENTER_REFUSED);
             return false;
@@ -344,6 +347,7 @@ pub(crate) unsafe fn enter(
         // SAFETY: Caller's live road owner; no service runs during these stores.
         unsafe {
             crate::road::set_state(road, crate::road::get_state(road) | IN_ROAD_STOP);
+            // Allocate a bay and update the road state.
             let bay_nr = allocate_bay(state);
             crate::witness::hit(if bay_nr == 0 {
                 crate::witness::ROAD_STOP_ENTER_BAY0
@@ -356,10 +360,12 @@ pub(crate) unsafe fn enter(
                 (rv_state & !(1 << USING_SECOND_BAY)) | (bay_nr << USING_SECOND_BAY),
             );
         }
+        // Mark the station entrance as busy.
         set_entrance_busy(state, true);
         return true;
     }
     crate::witness::hit(crate::witness::ROAD_STOP_ENTER_DRIVE);
+    // Vehicles entering a drive-through stop from the normal side use bay 0.
     let e = entry(
         state,
         dir_to_diag_dir(v.direction(), |ok| {
@@ -367,6 +373,7 @@ pub(crate) unsafe fn enter(
         }),
     );
     enter_entry(e, total_length(v));
+    // Indicate a drive-through stop.
     // SAFETY: Caller's live road owner; no service runs during the store.
     unsafe {
         crate::road::set_state(road, crate::road::get_state(road) | IN_DT_ROAD_STOP);
@@ -388,10 +395,12 @@ pub(crate) unsafe fn leave(
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_BAY);
         // SAFETY: Caller's live road owner, read before any store.
         let rv_state = unsafe { crate::road::get_state(road) };
+        // Vehicle is leaving a road-stop tile; mark its bay as free.
         free_bay(state, (rv_state >> USING_SECOND_BAY) & 1);
         set_entrance_busy(state, false);
     } else {
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_DRIVE);
+        // Otherwise just leave the drive-through entry cache.
         let e = entry(
             state,
             dir_to_diag_dir(v.direction(), |ok| {
@@ -433,7 +442,7 @@ fn entry_direction(east: bool, axis: u8) -> u8 {
 
 /// `RoadStop::Entry::Rebuild` from the base stop at `xy`, returning the entry.
 fn rebuild_entry(s: &Services, xy: u32, state: *mut State, east: bool) -> Entry {
-    debug_assert!(status(state) & BASE_ENTRY != 0);
+    debug_assert!(status(state).test(StatusFlag::BaseEntry));
     let t = table(s);
     // SAFETY: The shared vehicle table is static.
     let vehicle = unsafe { &*t.vehicle };
@@ -486,7 +495,7 @@ fn rebuild(s: &Services, xy: u32, state: *mut State, east: bool) {
 /// `RoadStop::MakeDriveThrough` for the stop at `xy`.
 pub(crate) fn make_drive_through(s: &Services, xy: u32, state: *mut State) {
     debug_assert!(entries(state).is_null());
-    let rst = crate::services::RoadStopType(crate::map_func::World::new(s).road_stop_type(xy));
+    let rst = RoadStopType(crate::map_func::World::new(s).road_stop_type(xy));
     let axis = crate::map_func::World::new(s).drive_through_axis(xy);
     let offset = map(s).offs_by_axis(axis);
 
@@ -516,7 +525,7 @@ pub(crate) fn make_drive_through(s: &Services, xy: u32, state: *mut State) {
         if south && !entries(rs_south).is_null() {
             crate::witness::hit(crate::witness::ROAD_STOP_MAKE_MERGE);
             // There more southern tiles too, they must 'join' us too.
-            set_status(rs_south, status(rs_south) & !BASE_ENTRY);
+            set_status(rs_south, status(rs_south).without(StatusFlag::BaseEntry));
             let southern = entries(rs_south);
             // SAFETY: Distinct live entries; the southern block is freed below.
             unsafe {
@@ -548,13 +557,13 @@ pub(crate) fn make_drive_through(s: &Services, xy: u32, state: *mut State) {
         crate::witness::hit(crate::witness::ROAD_STOP_MAKE_PARENT);
         // There is one to the south, but not to the north... so we become 'parent'.
         set_entries(state, entries(rs_south));
-        set_status(state, status(state) | BASE_ENTRY);
-        set_status(rs_south, status(rs_south) & !BASE_ENTRY);
+        set_status(state, status(state).with(StatusFlag::BaseEntry));
+        set_status(rs_south, status(rs_south).without(StatusFlag::BaseEntry));
     } else {
         crate::witness::hit(crate::witness::ROAD_STOP_MAKE_ALONE);
         // We are the only... so we are automatically the master.
         set_entries(state, Box::into_raw(Box::default()));
-        set_status(state, status(state) | BASE_ENTRY);
+        set_status(state, status(state).with(StatusFlag::BaseEntry));
     }
 
     // Now update the lengths.
@@ -565,7 +574,7 @@ pub(crate) fn make_drive_through(s: &Services, xy: u32, state: *mut State) {
 /// `RoadStop::ClearDriveThrough` for the stop at `xy`.
 pub(crate) fn clear_drive_through(s: &Services, xy: u32, state: *mut State) {
     debug_assert!(!entries(state).is_null());
-    let rst = crate::services::RoadStopType(crate::map_func::World::new(s).road_stop_type(xy));
+    let rst = RoadStopType(crate::map_func::World::new(s).road_stop_type(xy));
     let axis = crate::map_func::World::new(s).drive_through_axis(xy);
     let offset = map(s).offs_by_axis(axis);
 
@@ -597,7 +606,7 @@ pub(crate) fn clear_drive_through(s: &Services, xy: u32, state: *mut State) {
             crate::witness::hit(crate::witness::ROAD_STOP_CLEAR_SPLIT);
             // There are more southern tiles too, they must be split;
             // first make the new southern 'base'.
-            set_status(rs_south, status(rs_south) | BASE_ENTRY);
+            set_status(rs_south, status(rs_south).with(StatusFlag::BaseEntry));
             set_entries(rs_south, Box::into_raw(Box::default()));
 
             // Keep track of the base because we need it later on.
@@ -619,11 +628,14 @@ pub(crate) fn clear_drive_through(s: &Services, xy: u32, state: *mut State) {
                 north_tile = north_tile.wrapping_sub(offset);
             }
 
-            // Rebuild both parts from scratch instead of maintaining a vehicle list.
+            // We cannot easily determine how full each part is. Rebuild from
+            // scratch instead of maintaining a vehicle list: this removes its
+            // maintenance and is faster in real games unless millions of stops
+            // are split and merged every tick.
             rebuild(s, base_tile, rs_south_base, true);
             rebuild(s, base_tile, rs_south_base, false);
 
-            debug_assert!(status(rs_north) & BASE_ENTRY != 0);
+            debug_assert!(status(rs_north).test(StatusFlag::BaseEntry));
             rebuild(s, rs_north_xy, rs_north, true);
             rebuild(s, rs_north_xy, rs_north, false);
         } else {
@@ -634,7 +646,7 @@ pub(crate) fn clear_drive_through(s: &Services, xy: u32, state: *mut State) {
     } else if south {
         crate::witness::hit(crate::witness::ROAD_STOP_CLEAR_HEAD);
         // There is only something to the south. Hand over the base entry.
-        set_status(rs_south, status(rs_south) | BASE_ENTRY);
+        set_status(rs_south, status(rs_south).with(StatusFlag::BaseEntry));
         sub_length(entries(rs_south), TILE_UNITS);
     } else {
         crate::witness::hit(crate::witness::ROAD_STOP_CLEAR_LAST);
@@ -644,13 +656,13 @@ pub(crate) fn clear_drive_through(s: &Services, xy: u32, state: *mut State) {
     }
 
     // Make sure we don't get used for something 'incorrect'.
-    set_status(state, status(state) & !BASE_ENTRY);
+    set_status(state, status(state).without(StatusFlag::BaseEntry));
     set_entries(state, std::ptr::null_mut());
 }
 
 /// `RoadStop::Entry::CheckIntegrity` of `rs->GetEntry(dir)`.
 fn check_integrity(s: &Services, xy: u32, state: *mut State, dir: u8) {
-    if status(state) & BASE_ENTRY == 0 {
+    if !status(state).test(StatusFlag::BaseEntry) {
         return;
     }
     crate::witness::hit(crate::witness::ROAD_STOP_INTEGRITY);
@@ -723,6 +735,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
     // SAFETY: Caller's contract.
     let s = unsafe { &*s };
     let t = table(s);
+    // Construct the drive-through entries before rebuilding their data.
     let mut index = 0;
     loop {
         let rs = (t.pool_next)(index);
@@ -740,7 +753,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
         if rs.state.is_null() {
             break;
         }
-        if status(rs.state) & BASE_ENTRY != 0 {
+        if status(rs.state).test(StatusFlag::BaseEntry) {
             crate::witness::hit(crate::witness::ROAD_STOP_AFTER_LOAD);
             rebuild(s, rs.xy, rs.state, true);
             rebuild(s, rs.xy, rs.state, false);

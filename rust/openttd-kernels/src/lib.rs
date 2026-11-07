@@ -133,6 +133,7 @@ mod road_map;
 mod road_stop;
 pub mod road_type;
 mod road_yapf;
+pub mod roadstop_base;
 mod roadveh;
 mod script_host;
 mod script_list;
