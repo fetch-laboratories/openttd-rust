@@ -1546,3 +1546,7 @@ crate::abi::layouts! {
         industry_callback,
     };
 }
+
+#[cfg(test)]
+#[path = "movement/tests.rs"]
+mod evidence_tests;
