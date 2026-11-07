@@ -2895,19 +2895,18 @@ mod policy_tests {
     #[test]
     fn histories_match_original_policy_corpus() {
         let mut rows = Vec::new();
-        for count in [1, 3, 4, 61] {
-            for production in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
-                for transported in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
-                    for stride in [0_u32, 17, 0x4000_0000, 0x8000_0000] {
-                        let history = supplied_history(count, production, transported, stride);
-                        let result = sum_history(&history);
-                        rows.push(format!(
-                            "H {count} {production} {transported} {stride} {} {}",
-                            result.production, result.transported
-                        ));
-                    }
-                }
-            }
+        // Exact 4 x 5 x 5 x 4 input order from CompareHistories.
+        for case in 0..400 {
+            let count = [1, 3, 4, 61][case / 100];
+            let production = [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX][(case / 20) % 5];
+            let transported = [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX][(case / 4) % 5];
+            let stride = [0_u32, 17, 0x4000_0000, 0x8000_0000][case % 4];
+            let history = supplied_history(count, production, transported, stride);
+            let result = sum_history(&history);
+            rows.push(format!(
+                "H {count} {production} {transported} {stride} {} {}",
+                result.production, result.transported
+            ));
         }
         check_rows('H', &rows, 400);
     }
