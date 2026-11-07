@@ -13,42 +13,48 @@
 )]
 
 use super::townname_data::{
-    CZG_FREE, CZG_NFREE, CZG_PNEUT, CZG_SNEUT, NAME_ADDITIONAL_ENGLISH_1A,
-    NAME_ADDITIONAL_ENGLISH_1B1, NAME_ADDITIONAL_ENGLISH_1B2, NAME_ADDITIONAL_ENGLISH_1B3A,
-    NAME_ADDITIONAL_ENGLISH_1B3B, NAME_ADDITIONAL_ENGLISH_2, NAME_ADDITIONAL_ENGLISH_3,
-    NAME_ADDITIONAL_ENGLISH_PREFIX, NAME_AUSTRIAN_A1, NAME_AUSTRIAN_A2, NAME_AUSTRIAN_A3,
-    NAME_AUSTRIAN_A4, NAME_AUSTRIAN_A5, NAME_AUSTRIAN_A6, NAME_AUSTRIAN_B1, NAME_AUSTRIAN_B2,
-    NAME_AUSTRIAN_F1, NAME_AUSTRIAN_F2, NAME_CATALAN_1F, NAME_CATALAN_1M, NAME_CATALAN_2F,
-    NAME_CATALAN_2M, NAME_CATALAN_3, NAME_CATALAN_PREF, NAME_CATALAN_REAL, NAME_CATALAN_RIVER1,
-    NAME_CZECH_ADJ, NAME_CZECH_PATMOD, NAME_CZECH_REAL, NAME_CZECH_SUBST_ENDING,
-    NAME_CZECH_SUBST_FULL, NAME_CZECH_SUBST_POSTFIX, NAME_CZECH_SUBST_STEM, NAME_CZECH_SUFFIX,
-    NAME_DANISH_1, NAME_DANISH_2, NAME_DANISH_3, NAME_DUTCH_1, NAME_DUTCH_2, NAME_DUTCH_3,
-    NAME_DUTCH_4, NAME_DUTCH_5, NAME_FINNISH_1, NAME_FINNISH_2, NAME_FINNISH_3, NAME_FINNISH_REAL,
-    NAME_FRENCH_REAL, NAME_GERMAN_1, NAME_GERMAN_2, NAME_GERMAN_3_AM, NAME_GERMAN_3_AN_DER,
-    NAME_GERMAN_4_AM, NAME_GERMAN_4_AN_DER, NAME_GERMAN_PRE, NAME_GERMAN_REAL, NAME_HUNGARIAN_1,
-    NAME_HUNGARIAN_2, NAME_HUNGARIAN_3, NAME_HUNGARIAN_4, NAME_HUNGARIAN_REAL, NAME_ITALIAN_1F,
-    NAME_ITALIAN_1M, NAME_ITALIAN_2, NAME_ITALIAN_2I, NAME_ITALIAN_3, NAME_ITALIAN_PREF,
-    NAME_ITALIAN_REAL, NAME_ITALIAN_RIVER1, NAME_ITALIAN_RIVER2, NAME_NORWEGIAN_1,
-    NAME_NORWEGIAN_2, NAME_NORWEGIAN_REAL, NAME_ORIGINAL_ENGLISH_1, NAME_ORIGINAL_ENGLISH_2,
-    NAME_ORIGINAL_ENGLISH_3, NAME_ORIGINAL_ENGLISH_4, NAME_ORIGINAL_ENGLISH_5,
-    NAME_ORIGINAL_ENGLISH_6, NAME_POLISH_1_F, NAME_POLISH_1_M, NAME_POLISH_1_N, NAME_POLISH_2_F,
-    NAME_POLISH_2_M, NAME_POLISH_2_N, NAME_POLISH_2_O, NAME_POLISH_3_F, NAME_POLISH_3_M,
-    NAME_POLISH_3_N, NAME_ROMANIAN_REAL, NAME_SILLY_1, NAME_SILLY_2, NAME_SLOVAK_REAL,
-    NAME_SPANISH_REAL, NAME_SWEDISH_1, NAME_SWEDISH_2, NAME_SWEDISH_2A, NAME_SWEDISH_2B,
-    NAME_SWEDISH_2C, NAME_SWEDISH_3, NAME_SWISS_REAL, NAME_TURKISH_MIDDLE, NAME_TURKISH_PREFIX,
-    NAME_TURKISH_REAL, NAME_TURKISH_SUFFIX,
+    CZG_FREE, CZG_NFREE, CZG_PNEUT, CZG_SNEUT, CzechChooseFlag, CzechChooseFlags,
+    NAME_ADDITIONAL_ENGLISH_1A, NAME_ADDITIONAL_ENGLISH_1B1, NAME_ADDITIONAL_ENGLISH_1B2,
+    NAME_ADDITIONAL_ENGLISH_1B3A, NAME_ADDITIONAL_ENGLISH_1B3B, NAME_ADDITIONAL_ENGLISH_2,
+    NAME_ADDITIONAL_ENGLISH_3, NAME_ADDITIONAL_ENGLISH_PREFIX, NAME_AUSTRIAN_A1, NAME_AUSTRIAN_A2,
+    NAME_AUSTRIAN_A3, NAME_AUSTRIAN_A4, NAME_AUSTRIAN_A5, NAME_AUSTRIAN_A6, NAME_AUSTRIAN_B1,
+    NAME_AUSTRIAN_B2, NAME_AUSTRIAN_F1, NAME_AUSTRIAN_F2, NAME_CATALAN_1F, NAME_CATALAN_1M,
+    NAME_CATALAN_2F, NAME_CATALAN_2M, NAME_CATALAN_3, NAME_CATALAN_PREF, NAME_CATALAN_REAL,
+    NAME_CATALAN_RIVER1, NAME_CZECH_ADJ, NAME_CZECH_PATMOD, NAME_CZECH_REAL,
+    NAME_CZECH_SUBST_ENDING, NAME_CZECH_SUBST_FULL, NAME_CZECH_SUBST_POSTFIX,
+    NAME_CZECH_SUBST_STEM, NAME_CZECH_SUFFIX, NAME_DANISH_1, NAME_DANISH_2, NAME_DANISH_3,
+    NAME_DUTCH_1, NAME_DUTCH_2, NAME_DUTCH_3, NAME_DUTCH_4, NAME_DUTCH_5, NAME_FINNISH_1,
+    NAME_FINNISH_2, NAME_FINNISH_3, NAME_FINNISH_REAL, NAME_FRENCH_REAL, NAME_GERMAN_1,
+    NAME_GERMAN_2, NAME_GERMAN_3_AM, NAME_GERMAN_3_AN_DER, NAME_GERMAN_4_AM, NAME_GERMAN_4_AN_DER,
+    NAME_GERMAN_PRE, NAME_GERMAN_REAL, NAME_HUNGARIAN_1, NAME_HUNGARIAN_2, NAME_HUNGARIAN_3,
+    NAME_HUNGARIAN_4, NAME_HUNGARIAN_REAL, NAME_ITALIAN_1F, NAME_ITALIAN_1M, NAME_ITALIAN_2,
+    NAME_ITALIAN_2I, NAME_ITALIAN_3, NAME_ITALIAN_PREF, NAME_ITALIAN_REAL, NAME_ITALIAN_RIVER1,
+    NAME_ITALIAN_RIVER2, NAME_NORWEGIAN_1, NAME_NORWEGIAN_2, NAME_NORWEGIAN_REAL,
+    NAME_ORIGINAL_ENGLISH_1, NAME_ORIGINAL_ENGLISH_2, NAME_ORIGINAL_ENGLISH_3,
+    NAME_ORIGINAL_ENGLISH_4, NAME_ORIGINAL_ENGLISH_5, NAME_ORIGINAL_ENGLISH_6, NAME_POLISH_1_F,
+    NAME_POLISH_1_M, NAME_POLISH_1_N, NAME_POLISH_2_F, NAME_POLISH_2_M, NAME_POLISH_2_N,
+    NAME_POLISH_2_O, NAME_POLISH_3_F, NAME_POLISH_3_M, NAME_POLISH_3_N, NAME_ROMANIAN_REAL,
+    NAME_SILLY_1, NAME_SILLY_2, NAME_SLOVAK_REAL, NAME_SPANISH_REAL, NAME_SWEDISH_1,
+    NAME_SWEDISH_2, NAME_SWEDISH_2A, NAME_SWEDISH_2B, NAME_SWEDISH_2C, NAME_SWEDISH_3,
+    NAME_SWISS_REAL, NAME_TURKISH_MIDDLE, NAME_TURKISH_PREFIX, NAME_TURKISH_REAL,
+    NAME_TURKISH_SUFFIX,
 };
 
 // GB(..., 16) masks after shifting, and ClampTo<uint16_t> saturates the table size.
 fn seed_chance(shift: u8, max: usize, seed: u32) -> usize {
     ((((seed >> shift) & 0xffff) * max.min(u16::MAX as usize) as u32) >> 16) as usize
 }
+// SeedModChance gives a much more even distribution than SeedChance; this is
+// visible in Czech prefixes. The never-use-modulo warning applies to linear
+// congruential generators, and Random() is not one. --pasky
+// TODO: Perhaps use it for all the name generators? --pasky
 fn seed_mod_chance(shift: u8, max: usize, seed: u32) -> usize {
     (seed >> shift) as usize % max
 }
 fn seed_chance_bias(shift: u8, max: usize, seed: u32, bias: i32) -> i32 {
     (seed_chance(shift, max + bias as usize, seed) as u32).wrapping_sub(bias as u32) as i32
 }
+// Replace English curses and ugly letter combinations with nicer ones.
 fn replace_english_words(builder: &mut String, original: bool) {
     if original {
         for (org, rep) in [("Ce", "Ke"), ("Ci", "Ki")] {
@@ -69,6 +75,7 @@ fn replace_english_words(builder: &mut String, original: bool) {
         ("Brar", "Over"),
         ("Wrar", if original { "Inve" } else { "Stan" }),
     ] {
+        // "Fart" never occurs with English (Original).
         if original && org == "Fart" {
             continue;
         }
@@ -79,16 +86,19 @@ fn replace_english_words(builder: &mut String, original: bool) {
 }
 
 fn english_original(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let mut i = seed_chance_bias(0, NAME_ORIGINAL_ENGLISH_1.len(), seed, 50);
     if i >= 0 {
         builder.push_str(NAME_ORIGINAL_ENGLISH_1[i as usize]);
     }
 
+    // Mandatory middle segments.
     builder.push_str(NAME_ORIGINAL_ENGLISH_2[seed_chance(4, NAME_ORIGINAL_ENGLISH_2.len(), seed)]);
     builder.push_str(NAME_ORIGINAL_ENGLISH_3[seed_chance(7, NAME_ORIGINAL_ENGLISH_3.len(), seed)]);
     builder.push_str(NAME_ORIGINAL_ENGLISH_4[seed_chance(10, NAME_ORIGINAL_ENGLISH_4.len(), seed)]);
     builder.push_str(NAME_ORIGINAL_ENGLISH_5[seed_chance(13, NAME_ORIGINAL_ENGLISH_5.len(), seed)]);
 
+    // Optional last segment.
     i = seed_chance_bias(15, NAME_ORIGINAL_ENGLISH_6.len(), seed, 60);
     if i >= 0 {
         builder.push_str(NAME_ORIGINAL_ENGLISH_6[i as usize]);
@@ -98,6 +108,7 @@ fn english_original(builder: &mut String, seed: u32) {
 }
 
 fn english_additional(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let mut i = seed_chance_bias(0, NAME_ADDITIONAL_ENGLISH_PREFIX.len(), seed, 50);
     if i >= 0 {
         builder.push_str(NAME_ADDITIONAL_ENGLISH_PREFIX[i as usize]);
@@ -131,6 +142,7 @@ fn english_additional(builder: &mut String, seed: u32) {
         NAME_ADDITIONAL_ENGLISH_2[seed_chance(14, NAME_ADDITIONAL_ENGLISH_2.len(), seed)],
     );
 
+    // Optional last segment.
     i = seed_chance_bias(15, NAME_ADDITIONAL_ENGLISH_3.len(), seed, 60);
     if i >= 0 {
         builder.push_str(NAME_ADDITIONAL_ENGLISH_3[i as usize]);
@@ -140,6 +152,7 @@ fn english_additional(builder: &mut String, seed: u32) {
 }
 
 fn austrian(builder: &mut String, seed: u32) {
+    // Bad, Maria, Gross, ...
     let mut i = seed_chance_bias(0, NAME_AUSTRIAN_A1.len(), seed, 15);
     if i >= 0 {
         builder.push_str(NAME_AUSTRIAN_A1[i as usize]);
@@ -149,21 +162,26 @@ fn austrian(builder: &mut String, seed: u32) {
 
     i = seed_chance(4, 6, seed) as i32;
     if i >= 4 {
+        // Kaisers-kirchen.
         builder.push_str(NAME_AUSTRIAN_A2[seed_chance(7, NAME_AUSTRIAN_A2.len(), seed)]);
         builder.push_str(NAME_AUSTRIAN_A3[seed_chance(13, NAME_AUSTRIAN_A3.len(), seed)]);
     } else if i >= 2 {
+        // St. Johann.
         builder.push_str(NAME_AUSTRIAN_A5[seed_chance(7, NAME_AUSTRIAN_A5.len(), seed)]);
         builder.push_str(NAME_AUSTRIAN_A6[seed_chance(9, NAME_AUSTRIAN_A6.len(), seed)]);
-        j = 1;
+        j = 1; // More likely to have an " an der " or " am ".
     } else {
+        // Zell.
         builder.push_str(NAME_AUSTRIAN_A4[seed_chance(7, NAME_AUSTRIAN_A4.len(), seed)]);
     }
 
     i = seed_chance(1, 6, seed) as i32;
     if i >= 4 - j {
+        // an der Donau (rivers).
         builder.push_str(NAME_AUSTRIAN_F1[seed_chance(4, NAME_AUSTRIAN_F1.len(), seed)]);
         builder.push_str(NAME_AUSTRIAN_F2[seed_chance(5, NAME_AUSTRIAN_F2.len(), seed)]);
     } else if i >= 2 - j {
+        // am Dachstein (mountains).
         builder.push_str(NAME_AUSTRIAN_B1[seed_chance(4, NAME_AUSTRIAN_B1.len(), seed)]);
         builder.push_str(NAME_AUSTRIAN_B2[seed_chance(5, NAME_AUSTRIAN_B2.len(), seed)]);
     }
@@ -172,11 +190,13 @@ fn austrian(builder: &mut String, seed: u32) {
 fn german(builder: &mut String, seed: u32) {
     let seed_derivative = seed_chance(7, 28, seed);
 
+    // Optional prefix.
     if seed_derivative == 12 || seed_derivative == 19 {
         let i = seed_chance(2, NAME_GERMAN_PRE.len(), seed);
         builder.push_str(NAME_GERMAN_PRE[i]);
     }
 
+    // Mandatory middle segments, including the option of a hardcoded name.
     let mut i = seed_chance(3, NAME_GERMAN_REAL.len() + NAME_GERMAN_1.len(), seed);
     if i < NAME_GERMAN_REAL.len() {
         builder.push_str(NAME_GERMAN_REAL[i]);
@@ -187,6 +207,7 @@ fn german(builder: &mut String, seed: u32) {
         builder.push_str(NAME_GERMAN_2[i]);
     }
 
+    // Optional suffix.
     if seed_derivative == 24 {
         i = seed_chance(9, NAME_GERMAN_4_AN_DER.len() + NAME_GERMAN_4_AM.len(), seed);
         if i < NAME_GERMAN_4_AN_DER.len() {
@@ -213,11 +234,13 @@ fn silly(builder: &mut String, seed: u32) {
 }
 
 fn swedish(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let i = seed_chance_bias(0, NAME_SWEDISH_1.len(), seed, 50);
     if i >= 0 {
         builder.push_str(NAME_SWEDISH_1[i as usize]);
     }
 
+    // Mandatory middle segments, including the option of a hardcoded name.
     if seed_chance(4, 5, seed) >= 3 {
         builder.push_str(NAME_SWEDISH_2[seed_chance(7, NAME_SWEDISH_2.len(), seed)]);
     } else {
@@ -230,11 +253,13 @@ fn swedish(builder: &mut String, seed: u32) {
 }
 
 fn dutch(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let i = seed_chance_bias(0, NAME_DUTCH_1.len(), seed, 50);
     if i >= 0 {
         builder.push_str(NAME_DUTCH_1[i as usize]);
     }
 
+    // Mandatory middle segments, including the option of a hardcoded name.
     if seed_chance(6, 9, seed) > 4 {
         builder.push_str(NAME_DUTCH_2[seed_chance(9, NAME_DUTCH_2.len(), seed)]);
     } else {
@@ -246,12 +271,15 @@ fn dutch(builder: &mut String, seed: u32) {
 }
 
 fn finnish(builder: &mut String, seed: u32) {
+    // Select randomly whether the name should consist of one or two parts.
     if seed_chance(0, 15, seed) >= 10 {
         builder.push_str(NAME_FINNISH_REAL[seed_chance(2, NAME_FINNISH_REAL.len(), seed)]);
         return;
     }
 
     if seed_chance(0, 15, seed) >= 5 {
+        // Combine NAME_FINNISH_1 with "la"/"lä". NAME_FINNISH_2 is a separate
+        // table because its names are not good for this purpose.
         let sel = seed_chance(0, NAME_FINNISH_1.len(), seed);
         builder.push_str(NAME_FINNISH_1[sel]);
 
@@ -268,6 +296,8 @@ fn finnish(builder: &mut String, seed: u32) {
         return;
     }
 
+    // Combine NAME_FINNISH_1 or NAME_FINNISH_2 with NAME_FINNISH_3.
+    // The reason for separate first-part tables is explained above.
     let sel = seed_chance(2, NAME_FINNISH_1.len() + NAME_FINNISH_2.len(), seed);
     if sel >= NAME_FINNISH_1.len() {
         builder.push_str(NAME_FINNISH_2[sel - NAME_FINNISH_1.len()]);
@@ -279,6 +309,7 @@ fn finnish(builder: &mut String, seed: u32) {
 }
 
 fn polish(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let i = seed_chance(
         0,
         NAME_POLISH_2_O.len()
@@ -342,13 +373,18 @@ fn slovak(builder: &mut String, seed: u32) {
 }
 
 fn norwegian(builder: &mut String, seed: u32) {
+    // First four seed bits decide whether to use a real name: 3/16 chance,
+    // bits 0 to 3.
     if seed_chance(0, 15, seed) < 3 {
+        // Use seven bits for the real-name table index: bits 4 to 10.
         builder.push_str(NAME_NORWEGIAN_REAL[seed_chance(4, NAME_NORWEGIAN_REAL.len(), seed)]);
         return;
     }
 
+    // Use seven bits for the first fake part: bits 4 to 10.
     builder.push_str(NAME_NORWEGIAN_1[seed_chance(4, NAME_NORWEGIAN_1.len(), seed)]);
 
+    // Use seven bits for the last fake part: bits 11 to 17.
     builder.push_str(NAME_NORWEGIAN_2[seed_chance(11, NAME_NORWEGIAN_2.len(), seed)]);
 }
 
@@ -358,14 +394,17 @@ fn hungarian(builder: &mut String, seed: u32) {
         return;
     }
 
+    // Optional first segment.
     let mut i = seed_chance(3, NAME_HUNGARIAN_1.len() * 3, seed);
     if i < NAME_HUNGARIAN_1.len() {
         builder.push_str(NAME_HUNGARIAN_1[i]);
     }
 
+    // Mandatory middle segments.
     builder.push_str(NAME_HUNGARIAN_2[seed_chance(3, NAME_HUNGARIAN_2.len(), seed)]);
     builder.push_str(NAME_HUNGARIAN_3[seed_chance(6, NAME_HUNGARIAN_3.len(), seed)]);
 
+    // Optional last segment.
     i = seed_chance(10, NAME_HUNGARIAN_4.len() * 3, seed);
     if i < NAME_HUNGARIAN_4.len() {
         builder.push_str(NAME_HUNGARIAN_4[i]);
@@ -377,11 +416,13 @@ fn swiss(builder: &mut String, seed: u32) {
 }
 
 fn danish(builder: &mut String, seed: u32) {
+    // Optional first segment.
     let i = seed_chance_bias(0, NAME_DANISH_1.len(), seed, 50);
     if i >= 0 {
         builder.push_str(NAME_DANISH_1[i as usize]);
     }
 
+    // Middle segments were removed: this gives much more realistic names.
     builder.push_str(NAME_DANISH_2[seed_chance(7, NAME_DANISH_2.len(), seed)]);
     builder.push_str(NAME_DANISH_3[seed_chance(16, NAME_DANISH_3.len(), seed)]);
 }
@@ -394,9 +435,11 @@ fn turkish(builder: &mut String, seed: u32) {
             builder
                 .push_str(NAME_TURKISH_PREFIX[seed_mod_chance(2, NAME_TURKISH_PREFIX.len(), seed)]);
 
+            // Middle segment.
             builder
                 .push_str(NAME_TURKISH_MIDDLE[seed_mod_chance(4, NAME_TURKISH_MIDDLE.len(), seed)]);
 
+            // Optional suffix.
             if seed_mod_chance(0, 7, seed) == 0 {
                 builder.push_str(
                     NAME_TURKISH_SUFFIX[seed_mod_chance(10, NAME_TURKISH_SUFFIX.len(), seed)],
@@ -419,6 +462,7 @@ fn turkish(builder: &mut String, seed: u32) {
 
 fn italian(builder: &mut String, seed: u32) {
     if seed_mod_chance(0, 6, seed) == 0 {
+        // Real city names.
         builder.push_str(NAME_ITALIAN_REAL[seed_mod_chance(4, NAME_ITALIAN_REAL.len(), seed)]);
         return;
     }
@@ -426,13 +470,16 @@ fn italian(builder: &mut String, seed: u32) {
     let mascul_femin_italian = ["o", "a"];
 
     if seed_mod_chance(0, 8, seed) == 0 {
+        // Prefix.
         builder.push_str(NAME_ITALIAN_PREF[seed_mod_chance(11, NAME_ITALIAN_PREF.len(), seed)]);
     }
 
     let i = seed_chance(0, 2, seed);
     if i == 0 {
+        // Masculine form.
         builder.push_str(NAME_ITALIAN_1M[seed_mod_chance(4, NAME_ITALIAN_1M.len(), seed)]);
     } else {
+        // Feminine form.
         builder.push_str(NAME_ITALIAN_1F[seed_mod_chance(4, NAME_ITALIAN_1F.len(), seed)]);
     }
 
@@ -445,8 +492,10 @@ fn italian(builder: &mut String, seed: u32) {
 
     if seed_mod_chance(15, 4, seed) == 0 {
         if seed_mod_chance(5, 2, seed) == 0 {
+            // Generic suffix.
             builder.push_str(NAME_ITALIAN_3[seed_mod_chance(4, NAME_ITALIAN_3.len(), seed)]);
         } else {
+            // River-name suffix.
             builder
                 .push_str(NAME_ITALIAN_RIVER1[seed_mod_chance(4, NAME_ITALIAN_RIVER1.len(), seed)]);
             builder.push_str(
@@ -458,27 +507,33 @@ fn italian(builder: &mut String, seed: u32) {
 
 fn catalan(builder: &mut String, seed: u32) {
     if seed_mod_chance(0, 3, seed) == 0 {
+        // Real city names.
         builder.push_str(NAME_CATALAN_REAL[seed_mod_chance(4, NAME_CATALAN_REAL.len(), seed)]);
         return;
     }
 
     if seed_mod_chance(0, 2, seed) == 0 {
+        // Prefix.
         builder.push_str(NAME_CATALAN_PREF[seed_mod_chance(11, NAME_CATALAN_PREF.len(), seed)]);
     }
 
     let i = seed_chance(0, 2, seed);
     if i == 0 {
+        // Masculine form.
         builder.push_str(NAME_CATALAN_1M[seed_mod_chance(4, NAME_CATALAN_1M.len(), seed)]);
         builder.push_str(NAME_CATALAN_2M[seed_mod_chance(11, NAME_CATALAN_2M.len(), seed)]);
     } else {
+        // Feminine form.
         builder.push_str(NAME_CATALAN_1F[seed_mod_chance(4, NAME_CATALAN_1F.len(), seed)]);
         builder.push_str(NAME_CATALAN_2F[seed_mod_chance(11, NAME_CATALAN_2F.len(), seed)]);
     }
 
     if seed_mod_chance(15, 5, seed) == 0 {
         if seed_mod_chance(5, 2, seed) == 0 {
+            // Generic suffix.
             builder.push_str(NAME_CATALAN_3[seed_mod_chance(4, NAME_CATALAN_3.len(), seed)]);
         } else {
+            // River-name suffix.
             builder
                 .push_str(NAME_CATALAN_RIVER1[seed_mod_chance(4, NAME_CATALAN_RIVER1.len(), seed)]);
         }
@@ -488,13 +543,17 @@ fn catalan(builder: &mut String, seed: u32) {
 // Czech generator and tables copyright Petr Baudis 2005 (GPL).
 #[allow(clippy::too_many_lines, clippy::if_not_else)]
 fn czech(builder: &mut String, seed: u32) {
+    // 1:3 chance to use a real name.
     if seed_mod_chance(0, 4, seed) == 0 {
         builder.push_str(NAME_CZECH_REAL[seed_mod_chance(4, NAME_CZECH_REAL.len(), seed)]);
         return;
     }
+    // Probability of prefixes/suffixes:
+    // 0..11 prefix, 12..13 prefix+suffix, 14..17 suffix, 18..31 nothing.
     let prob_tails = seed_mod_chance(2, 32, seed);
     let mut do_prefix = prob_tails < 12;
     let do_suffix = prob_tails > 11 && prob_tails < 17;
+    // IDs of the respective parts.
     let mut prefix = 0;
     let mut suffix = 0;
     let mut ending = 0;
@@ -505,38 +564,46 @@ fn czech(builder: &mut String, seed: u32) {
     if do_suffix {
         suffix = seed_mod_chance(7, NAME_CZECH_SUFFIX.len(), seed);
     }
+    // 3:1 chance to use a dynamic substantive.
     let mut stem = seed_mod_chance(
         9,
         NAME_CZECH_SUBST_FULL.len() + 3 * NAME_CZECH_SUBST_STEM.len(),
         seed,
     );
     let dynamic_subst = stem >= NAME_CZECH_SUBST_FULL.len();
+    // The selection criteria.
     let mut gender;
     let mut choose;
 
     if !dynamic_subst {
+        // That was easy!
         let s = NAME_CZECH_SUBST_FULL[stem];
         gender = s.gender;
         choose = s.choose;
     } else {
+        // Load the substantive.
         stem -= NAME_CZECH_SUBST_FULL.len();
         stem %= NAME_CZECH_SUBST_STEM.len();
         let s = NAME_CZECH_SUBST_STEM[stem];
         gender = s.gender;
         choose = s.choose;
         let allow = s.allow;
+        // Load the postfix: 1:1 chance that a postfix will be inserted.
         postfix = seed_mod_chance(14, NAME_CZECH_SUBST_POSTFIX.len() * 2, seed);
-        if choose & 2 != 0 {
+        if choose.test(CzechChooseFlag::Postfix) {
+            // Always get a real postfix.
             postfix %= NAME_CZECH_SUBST_POSTFIX.len();
         }
-        if choose & 4 != 0 {
+        if choose.test(CzechChooseFlag::NoPostfix) {
+            // Always drop a postfix.
             postfix += NAME_CZECH_SUBST_POSTFIX.len();
         }
-        choose |= if postfix < NAME_CZECH_SUBST_POSTFIX.len() {
-            2
+        choose = choose.with(if postfix < NAME_CZECH_SUBST_POSTFIX.len() {
+            CzechChooseFlags::from_element(CzechChooseFlag::Postfix)
         } else {
-            4
-        };
+            CzechChooseFlags::from_element(CzechChooseFlag::NoPostfix)
+        });
+        // Locate the array segment containing a good gender.
         let mut ending_start = -1i32;
         let mut ending_stop = -1i32;
         let mut pos = 0;
@@ -556,28 +623,34 @@ fn czech(builder: &mut String, seed: u32) {
             pos += 1;
         }
         if ending_stop < 0 {
+            // All the endings matched.
             ending_stop = pos as i32 - 1;
         }
+        // Make a sequential map of the items with a good mask.
         let mut map = [0usize; NAME_CZECH_SUBST_ENDING.len()];
         let mut count = 0;
         for pos in ending_start..=ending_stop {
             let e = NAME_CZECH_SUBST_ENDING[pos as usize];
-            if e.choose & choose == choose && e.allow & allow != 0 {
+            if e.choose.all(choose) && e.allow.any(allow) {
                 map[count] = pos as usize;
                 count += 1;
             }
         }
-        // The unchanged tables guarantee a matching real gender for every stem/seed.
+        // Load the ending. The unchanged tables guarantee a matching real gender for every stem/seed.
         ending = map[seed_mod_chance(16, count, seed)];
+        // Override possible CZG_*FREE: this must be a real gender, otherwise
+        // adjective modification would overflow the suffix table.
         gender = NAME_CZECH_SUBST_ENDING[ending].gender;
     }
-    if do_prefix && NAME_CZECH_ADJ[prefix].choose & choose != choose {
+    if do_prefix && !NAME_CZECH_ADJ[prefix].choose.all(choose) {
+        // Throw away a non-matching prefix.
         do_prefix = false;
     }
+    // Now finally construct the name.
     if do_prefix {
         let a = NAME_CZECH_ADJ[prefix];
         builder.push_str(a.name);
-        builder.push_str(NAME_CZECH_PATMOD[gender][a.pattern]);
+        builder.push_str(NAME_CZECH_PATMOD[gender.0 as usize][a.pattern.0 as usize]);
         builder.push(' ');
     }
     if dynamic_subst {
@@ -585,6 +658,7 @@ fn czech(builder: &mut String, seed: u32) {
         if postfix < NAME_CZECH_SUBST_POSTFIX.len() {
             let poststr = NAME_CZECH_SUBST_POSTFIX[postfix];
             let endstr = NAME_CZECH_SUBST_ENDING[ending].name;
+            // Kill "avava" and "Jananna"-like cases.
             // Original compares the second UTF-8 byte, including accented endings.
             if poststr.as_bytes()[1] != b'v' || poststr.as_bytes()[1] != endstr.as_bytes()[1] {
                 builder.push_str(poststr);
@@ -600,7 +674,10 @@ fn czech(builder: &mut String, seed: u32) {
     }
 }
 
-const GENERATORS: [fn(&mut String, u32); 21] = [
+/// Type for all town-name generators: the builder and the town-name seed.
+type TownNameGenerator = fn(&mut String, u32);
+
+const GENERATORS: [TownNameGenerator; 21] = [
     english_original,
     french,
     german,
