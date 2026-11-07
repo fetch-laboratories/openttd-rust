@@ -115,16 +115,12 @@ fn slot(d: Descriptor, age: u32) -> u32 {
 }
 
 pub(crate) fn update(mask: u64, d: Descriptor, month: u32) -> u64 {
-    update_record(mask, d, month).unwrap_or(mask)
-}
-
-fn update_record(mask: u64, d: Descriptor, month: u32) -> Option<u64> {
     if has_bit(mask, u32::from(d.last).wrapping_sub(1))
         || !month.is_multiple_of(u32::from(d.total_division))
         || (d.division != 1
             && !has_bit(mask, u32::from(d.first).wrapping_sub(u32::from(d.division))))
     {
-        return None;
+        return mask;
     }
     let window = (1_u64 << d.records) - 1;
     // GB returns uint (32 bits) even when its input is uint64; retain truncation.
@@ -133,7 +129,7 @@ fn update_record(mask: u64, d: Descriptor, month: u32) -> Option<u64> {
     let extracted = u32::from_le_bytes([low[0], low[1], low[2], low[3]]);
     let shifted = (u64::from(extracted) << 1) | 1;
     // SB clears the window, then ORs the supplied bits without a second mask.
-    Some((mask & !(window << d.first)) | (shifted << d.first))
+    (mask & !(window << d.first)) | (shifted << d.first)
 }
 
 /// Rust-owned scalar state; C++ owns every history/scratch element and operation.
@@ -420,24 +416,6 @@ impl HistoryRange {
         }
     }
 
-    unsafe fn update_valid(&self, mask: *mut u64, month: u32) {
-        /* Update for subdivisions first. */
-        // SAFETY: The native caller keeps the immutable range chain live.
-        if let Some(child) = unsafe { self.hr.as_ref() } {
-            // SAFETY: Child and mask share the enclosing call's validity contract.
-            unsafe { child.update_valid(mask, month) };
-        }
-        // SAFETY: The mask is live and exclusively accessible at this observation.
-        let current = unsafe { mask.read() };
-        // SAFETY: The immutable native range chain is live.
-        let descriptor = unsafe { self.descriptor() };
-        // Preserve the original guards and GB's uint truncation in the shared node operation.
-        if let Some(updated) = update_record(current, descriptor, month) {
-            // SAFETY: No borrow or callback spans this native mask write.
-            unsafe { mask.write(updated) };
-        }
-    }
-
     unsafe fn is_valid(&self, mask: u64, age: u32) -> bool {
         // SAFETY: The immutable native range chain is live.
         let descriptor = unsafe { self.descriptor() };
@@ -449,55 +427,6 @@ impl HistoryRange {
             return unsafe { child.is_valid(mask, start(descriptor, age, month)) };
         }
         age < u32::from(self.periods) && has_bit(mask, slot(descriptor, age))
-    }
-
-    unsafe fn rotate<T: HistoryElement>(&self, history: *mut T, mask: u64, month: u32) {
-        // SAFETY: The immutable native range chain is live.
-        if let Some(child) = unsafe { self.hr.as_ref() } {
-            // SAFETY: The same history allocation and original child range are valid.
-            unsafe { child.rotate(history, mask, month) };
-        }
-        if !month.is_multiple_of(u32::from(self.total_division)) {
-            return;
-        }
-        let first = usize::from(self.first);
-        let last = usize::from(self.last);
-        for target in (first + 1..last).rev() {
-            // SAFETY: Original move_backward visits these initialized slots in reverse order.
-            let source = unsafe { history.add(target - 1) };
-            // SAFETY: The selected source is an initialized history element.
-            let source = unsafe { source.read() };
-            // SAFETY: No history borrow spans this write; the range bounds are native preconditions.
-            let target = unsafe { history.add(target) };
-            // SAFETY: The selected target is writable and no input borrow remains.
-            unsafe { target.write(source) };
-        }
-        if self.total_division == 1 {
-            // SAFETY: Original first - 1 is a live history slot.
-            let source = unsafe { history.add(first - 1) };
-            // SAFETY: The selected source is an initialized history element.
-            let source = unsafe { source.read() };
-            // SAFETY: Original first is a live history slot; no borrow spans the write.
-            let target = unsafe { history.add(first) };
-            // SAFETY: The selected target is writable and no input borrow remains.
-            unsafe { target.write(source) };
-            // SAFETY: The current period is the initialized front element.
-            unsafe { history.write(T::default()) };
-        } else if has_bit(
-            mask,
-            u32::from(self.first).wrapping_sub(u32::from(self.division)),
-        ) {
-            let division = usize::from(self.division);
-            // SAFETY: The original reduction starts at this live history slot.
-            let inputs = unsafe { history.add(first - division) };
-            // SAFETY: Original reduction reads this initialized span; reducers have no callbacks.
-            let inputs = unsafe { std::slice::from_raw_parts(inputs, division) };
-            let result = T::sum(inputs);
-            // SAFETY: The input borrow ended before assigning the original target slot.
-            let target = unsafe { history.add(first) };
-            // SAFETY: The selected target is writable and no input borrow remains.
-            unsafe { target.write(result) };
-        }
     }
 
     unsafe fn get<T: HistoryElement>(
@@ -548,24 +477,6 @@ impl HistoryRange {
     }
 }
 
-/// Update the mask, observing subdivision writes before each parent.
-///
-/// # Safety
-/// `mask` is live/exclusive; `hr` is a live immutable acyclic native range chain.
-/// Original valid-index, divisor and shift preconditions apply to every node.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_update_valid(
-    mask: *mut u64,
-    hr: *const HistoryRange,
-    month: u32,
-) {
-    // SAFETY: Caller grants the native range chain's lifetime.
-    let hr = unsafe { &*hr };
-    // SAFETY: Caller grants the original mask and range preconditions.
-    unsafe { hr.update_valid(mask, month) };
-}
-
 /// Test first-child validity without extracting data.
 ///
 /// # Safety
@@ -581,25 +492,6 @@ pub unsafe extern "C" fn openttd_rust_history_is_valid(
     let hr = unsafe { &*hr };
     // SAFETY: Caller grants the original range and bit-index preconditions.
     u8::from(unsafe { hr.is_valid(mask, age) })
-}
-
-/// Rotate industry produced/accepted history using its canonical pair layout.
-///
-/// # Safety
-/// `history` contains the original initialized record array, exclusively accessible;
-/// `hr` meets the immutable range-chain and original index/divisor/shift contract.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_rotate_industry(
-    history: *mut crate::industry::Pair,
-    mask: u64,
-    hr: *const HistoryRange,
-    month: u32,
-) {
-    // SAFETY: Caller grants the native range chain's lifetime.
-    let hr = unsafe { &*hr };
-    // SAFETY: Caller grants the canonical array and original range preconditions.
-    unsafe { hr.rotate(history, mask, month) };
 }
 
 /// Query industry produced/accepted history, preserving nested reduction rounding.
@@ -620,25 +512,6 @@ pub unsafe extern "C" fn openttd_rust_history_get_industry(
     let hr = unsafe { &*hr };
     // SAFETY: Caller grants the initialized array/result and original range preconditions.
     unsafe { hr.get(history, mask, age, result) }.into()
-}
-
-/// Rotate town supplied history using its canonical element layout.
-///
-/// # Safety
-/// `history` contains the original initialized record array, exclusively accessible;
-/// `hr` meets the immutable range-chain and original index/divisor/shift contract.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_rotate_town(
-    history: *mut crate::town::SuppliedHistory,
-    mask: u64,
-    hr: *const HistoryRange,
-    month: u32,
-) {
-    // SAFETY: Caller grants the native range chain's lifetime.
-    let hr = unsafe { &*hr };
-    // SAFETY: Caller grants the canonical array and original range preconditions.
-    unsafe { hr.rotate(history, mask, month) };
 }
 
 /// Query town supplied history, preserving nested reduction and aliasing order.

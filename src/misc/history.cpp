@@ -24,7 +24,17 @@
  */
 void UpdateValidHistory(ValidHistoryMask &valid_history, const HistoryRange &hr, uint cur_month)
 {
-	openttd_rust_history_update_valid(&valid_history, &hr, cur_month);
+	/* Update for subdivisions first. */
+	if (hr.hr != nullptr) UpdateValidHistory(valid_history, *hr.hr, cur_month);
+
+	/* No need to update if our last entry is marked valid. */
+	if (HasBit(valid_history, hr.last - 1)) return;
+	/* Is it the right time for this history range? */
+	if (cur_month % hr.total_division != 0) return;
+	/* Is the previous history range valid yet? */
+	if (hr.division != 1 && !HasBit(valid_history, hr.first - hr.division)) return;
+
+	SB(valid_history, hr.first, hr.records, GB(valid_history, hr.first, hr.records) << 1ULL | 1ULL);
 }
 
 /**

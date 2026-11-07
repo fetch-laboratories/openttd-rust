@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file history_adapter.hpp Typed production history operations. */
+/** @file history_adapter.hpp Typed production history queries. */
 #ifndef RUST_HISTORY_ADAPTER_HPP
 #define RUST_HISTORY_ADAPTER_HPP
 #include "history_ffi.h"
@@ -17,21 +17,13 @@ template <typename T> struct Operations;
 
 struct IndustryOperations {
 	using Element = OpenTTDIndustryPair;
-	static constexpr auto Rotate = openttd_rust_history_rotate_industry;
 	static constexpr auto Get = openttd_rust_history_get_industry;
 };
 
 struct TownOperations {
 	using Element = OpenTTDTownSuppliedHistory;
-	static constexpr auto Rotate = openttd_rust_history_rotate_town;
 	static constexpr auto Get = openttd_rust_history_get_town;
 };
-
-template <typename T>
-void Rotate(HistoryData<T> &history, ValidHistoryMask mask, const HistoryRange &hr, uint month)
-{
-	Operations<T>::Rotate(reinterpret_cast<typename Operations<T>::Element *>(history.data()), mask, &hr, month);
-}
 
 template <typename T>
 bool Get(const HistoryData<T> &history, ValidHistoryMask mask, const HistoryRange &hr, uint age, T &result)

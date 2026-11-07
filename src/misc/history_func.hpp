@@ -42,11 +42,6 @@ T SumHistory(typename std::span<const T> history);
 template <typename T>
 void RotateHistory(HistoryData<T> &history, ValidHistoryMask valid_history, const HistoryRange &hr, uint cur_month)
 {
-	if constexpr (requires { typename RustHistory::Operations<T>::Element; }) {
-		RustHistory::Rotate(history, valid_history, hr, cur_month);
-		return;
-	}
-
 	if (hr.hr != nullptr) RotateHistory(history, valid_history, *hr.hr, cur_month);
 	if (cur_month % hr.total_division != 0) return;
 

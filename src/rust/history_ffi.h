@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file history_ffi.h Direct operations on native history ranges and canonical elements. */
+/** @file history_ffi.h Direct queries on native history ranges and canonical elements. */
 #ifndef RUST_HISTORY_FFI_H
 #define RUST_HISTORY_FFI_H
 #include <stdint.h>
@@ -59,11 +59,8 @@ struct OpenTTDRustHistoryQuery { bool is_valid, in_range; };
  * preconditions. Arrays contain HISTORY_RECORDS initialized elements in their
  * canonical layout. Result may alias an element. Calls allocate nothing, retain
  * no pointers, and never unwind. Native fatal handling stays outside Rust. */
-void openttd_rust_history_update_valid(uint64_t *mask, const HistoryRange *hr, uint32_t month) noexcept;
 uint8_t openttd_rust_history_is_valid(uint64_t mask, const HistoryRange *hr, uint32_t age) noexcept;
-void openttd_rust_history_rotate_industry(OpenTTDIndustryPair *history, uint64_t mask, const HistoryRange *hr, uint32_t month) noexcept;
 OpenTTDRustHistoryQuery openttd_rust_history_get_industry(const OpenTTDIndustryPair *history, uint64_t mask, const HistoryRange *hr, uint32_t age, OpenTTDIndustryPair *result) noexcept;
-void openttd_rust_history_rotate_town(OpenTTDTownSuppliedHistory *history, uint64_t mask, const HistoryRange *hr, uint32_t month) noexcept;
 OpenTTDRustHistoryQuery openttd_rust_history_get_town(const OpenTTDTownSuppliedHistory *history, uint64_t mask, const HistoryRange *hr, uint32_t age, OpenTTDTownSuppliedHistory *result) noexcept;
 #ifdef __cplusplus
 }
