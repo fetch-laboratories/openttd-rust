@@ -15,22 +15,78 @@ use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
 use crate::direction_type::INVALID_DIAGDIR;
-use crate::services::{Axis, Map, RailMapServices, Services, SignalType, TrackBits};
+use crate::direction_type::{
+    Axis, DIAGDIR_BEGIN, DIAGDIR_END, DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW,
+};
+use crate::map_func::Map;
+use crate::services::{RailMapServices, Services};
+use crate::signal_func::SigSegState;
+use crate::signal_type::{SignalState, SignalType};
+use crate::track_type::TrackBits;
 use std::ffi::c_uint;
 
-const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
-const SEARCH_ONE: [u8; 6] = [0, 1, 0, 1, 2, 1];
-const SEARCH_TWO: [u8; 6] = [2, 3, 3, 2, 3, 0];
-const TRAIN: u16 = 1 << 0;
-const EXIT: u16 = 1 << 1;
-const MULTI_EXIT: u16 = 1 << 2;
-const GREEN: u16 = 1 << 3;
-const MULTI_GREEN: u16 = 1 << 4;
-const FULL: u16 = 1 << 5;
-const PBS: u16 = 1 << 6;
-const SPLIT: u16 = 1 << 7;
-const ENTER: u16 = 1 << 8;
-const MULTI_ENTER: u16 = 1 << 9;
+// Maximums used for updating signal blocks.
+const SIG_TBU_SIZE: usize = 64; // Number of signals entering the block.
+const SIG_TBD_SIZE: usize = 256; // Number of intersections: open nodes in the current block.
+const SIG_GLOB_SIZE: usize = 128; // Number of open blocks; a block can be opened more than once until detected.
+const SIG_GLOB_UPDATE: usize = 64; // Items in the global set that force an update.
+
+// Incident track bits for the given entering direction.
+const ENTERDIR_TO_TRACKBITS: [TrackBits; 4] = [
+    TrackBits::TRACK_BIT_3WAY_NE,
+    TrackBits::TRACK_BIT_3WAY_SE,
+    TrackBits::TRACK_BIT_3WAY_SW,
+    TrackBits::TRACK_BIT_3WAY_NW,
+];
+const SEARCH_DIR_1: [u8; 6] = [
+    DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_SW, DIAGDIR_SE,
+];
+const SEARCH_DIR_2: [u8; 6] = [
+    DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NW, DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_NE,
+];
+/// Current signal block state flags from `signal.cpp`; all raw byte values remain representable.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+struct SigFlag(u8);
+impl SigFlag {
+    /// `SigFlag::Train`: train found in segment.
+    const TRAIN: Self = Self(0);
+    /// `SigFlag::Exit`: exit signal found.
+    const EXIT: Self = Self(1);
+    /// `SigFlag::MultiExit`: two or more exits found.
+    const MULTI_EXIT: Self = Self(2);
+    /// `SigFlag::Green`: green exit signal found.
+    const GREEN: Self = Self(3);
+    /// `SigFlag::MultiGreen`: two or more green exits found.
+    const MULTI_GREEN: Self = Self(4);
+    /// `SigFlag::Full`: some buffer was full; do not continue.
+    const FULL: Self = Self(5);
+    /// `SigFlag::Pbs`: PBS signal found.
+    const PBS: Self = Self(6);
+    /// `SigFlag::Split`: track merge or split found.
+    const SPLIT: Self = Self(7);
+    /// `SigFlag::Enter`: signal entering the block found.
+    const ENTER: Self = Self(8);
+    /// `SigFlag::MultiEnter`: two or more signals entering the block found.
+    const MULTI_ENTER: Self = Self(9);
+}
+/// Original `EnumBitSet<SigFlag, uint16_t>`, including unnamed bits.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct SigFlags(u16);
+impl SigFlags {
+    const TRAIN: Self = Self(1 << SigFlag::TRAIN.0);
+    const EXIT: Self = Self(1 << SigFlag::EXIT.0);
+    const MULTI_EXIT: Self = Self(1 << SigFlag::MULTI_EXIT.0);
+    const GREEN: Self = Self(1 << SigFlag::GREEN.0);
+    const MULTI_GREEN: Self = Self(1 << SigFlag::MULTI_GREEN.0);
+    const FULL: Self = Self(1 << SigFlag::FULL.0);
+    const PBS: Self = Self(1 << SigFlag::PBS.0);
+    const SPLIT: Self = Self(1 << SigFlag::SPLIT.0);
+    const ENTER: Self = Self(1 << SigFlag::ENTER.0);
+    const MULTI_ENTER: Self = Self(1 << SigFlag::MULTI_ENTER.0);
+}
+crate::base_bitset_type::impl_bitset_ops!(SigFlags);
 
 /// Spatial occupancy, diagnostics and original Company assertion services.
 #[repr(C)]
@@ -51,9 +107,11 @@ struct Item {
     tile: u32,
     dir: u8,
 }
+/// Set of tile/direction items. No tree structure is used because it would
+/// cause slowdowns in the most usual cases (`signal.cpp::SmallSet`).
 struct SmallSet<const N: usize> {
-    count: usize,
-    overflowed: bool,
+    count: usize,     // Actual number of units.
+    overflowed: bool, // Did we try to overflow the set?
     data: [Item; N],
 }
 impl<const N: usize> SmallSet<N> {
@@ -64,10 +122,12 @@ impl<const N: usize> SmallSet<N> {
             data: [Item { tile: 0, dir: 0 }; N],
         }
     }
+    /// Reset variables to default values.
     fn reset(&mut self) {
         self.count = 0;
         self.overflowed = false;
     }
+    /// Try to remove the first instance of the given tile and direction.
     fn remove(&mut self, item: Item) -> bool {
         for i in 0..self.count {
             if self.data[i] == item {
@@ -78,9 +138,11 @@ impl<const N: usize> SmallSet<N> {
         }
         false
     }
-    fn contains(&self, item: Item) -> bool {
+    /// Find whether the tile/direction element is in the set (`IsIn`).
+    fn is_in(&self, item: Item) -> bool {
         self.data[..self.count].contains(&item)
     }
+    /// Add a tile/direction; set the overflow flag if the set was full.
     fn add(&mut self, item: Item) -> bool {
         if self.count == N {
             self.overflowed = true;
@@ -90,6 +152,7 @@ impl<const N: usize> SmallSet<N> {
         self.count += 1;
         true
     }
+    /// Read the last added element; return no element if the set was empty.
     fn get(&mut self) -> Option<Item> {
         if self.count == 0 {
             return None;
@@ -99,9 +162,9 @@ impl<const N: usize> SmallSet<N> {
     }
 }
 struct State {
-    tbu: SmallSet<64>,
-    tbd: SmallSet<256>,
-    global: SmallSet<128>,
+    tbu: SmallSet<SIG_TBU_SIZE>,
+    tbd: SmallSet<SIG_TBD_SIZE>,
+    global: SmallSet<SIG_GLOB_SIZE>,
     last_owner: u8,
 }
 static STATE: GameState<State> = GameState::new(State {
@@ -161,7 +224,7 @@ fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailS
     let mut r = RailSignalPresence {
         signals: view.has_signals(tile),
         track: false,
-        kind: SignalType(crate::signal_type::SIGTYPE_BLOCK),
+        kind: SignalType::SIGTYPE_BLOCK,
         forward: false,
         reverse: false,
     };
@@ -188,7 +251,7 @@ fn signal_update(w: &World<'_>, tile: u32, td: u8) -> RailSignalUpdate {
     let kind = view.signal_type(tile, crate::track_func::trackdir_to_track(td));
     let mut r = RailSignalUpdate {
         kind: SignalType(kind),
-        reservations: TrackBits(0),
+        reservations: TrackBits::TRACK_BIT_NONE,
     };
     if pbs(kind) {
         r.reservations = read!(w, rail, rail_reservation, tile);
@@ -211,14 +274,15 @@ fn crossing_admission(w: &World<'_>, tile: u32, owner: u8) -> RailCrossingAdmiss
     }
     r
 }
-fn track_bits(status: u32) -> u8 {
-    ((status | (status >> 8)) & 0x3f) as u8
+fn track_status_to_track_bits(status: u32) -> u8 {
+    crate::track_func::track_status_to_track_bits(status)
 }
+// Raw scalar adapter: this existing path does not issue a direction assertion.
 fn reverse(dir: u8) -> u8 {
-    dir ^ 2
+    crate::direction_func::reverse_diag_dir(dir, |_| {})
 }
-fn presignal_exit(kind: u8) -> bool {
-    kind == 2 || kind == 3
+fn is_presignal_exit(kind: u8) -> bool {
+    SignalType(kind) == SignalType::SIGTYPE_EXIT || SignalType(kind) == SignalType::SIGTYPE_COMBO
 }
 fn overflow_tbu() {
     debug!(
@@ -267,20 +331,27 @@ fn source_assert(w: &World<'_>, condition: bool) {
         read!(w, native, assert_condition, condition);
     }
 }
-fn maybe_add(w: &World<'_>, next: Item, previous: Item) -> bool {
+/// Remove the new and reverse directions from the global set: they need not
+/// be checked again. Remove the reverse direction from the todo set too. This
+/// is the core of avoiding a second visit to a tile. Return false only if adding
+/// the new direction would overrun the todo buffer (`MaybeAddToTodoSet` and
+/// its in-place `CheckAddToTodoSet` operations).
+fn maybe_add_to_todo_set(w: &World<'_>, next: Item, previous: Item) -> bool {
     access(|s| {
-        s.global.remove(next);
-        s.global.remove(previous);
+        s.global.remove(next); // It can be in Global but not in Todo.
+        s.global.remove(previous); // Remove in all cases.
     });
-    source_assert(w, access(|s| !s.tbd.contains(next)));
+    source_assert(w, access(|s| !s.tbd.is_in(next)));
     let add = access(|s| !s.tbd.remove(previous));
     !add || add_tbd(next)
 }
+// The unfiltered branch is IsTrainAndNotInDepot: a train on rail, outside a
+// depot. The filtered branch retains EnsureNoTrainOnTrackBits occupancy policy.
 fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
     // SAFETY: Static services and live shells; signal scans do not delete vehicles.
     let vs = unsafe { &*w.native.vehicles };
     vs.any_on_tile(tile, |v| {
-        if v.vehicle_type() != crate::vehicle::VehicleType::TRAIN.0 {
+        if v.vehicle_type() != crate::vehicle_type::VehicleType::TRAIN.0 {
             return false;
         }
         crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
@@ -290,18 +361,20 @@ fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
         })
     })
 }
-fn train_on_tile(w: &World<'_>, tile: u32, flags: &mut u16) {
-    if *flags & TRAIN == 0 && occupied(w, tile, None) {
-        *flags |= TRAIN;
+fn train_on_tile(w: &World<'_>, tile: u32, flags: &mut SigFlags) {
+    if *flags & SigFlags::TRAIN == SigFlags(0) && occupied(w, tile, None) {
+        *flags |= SigFlags::TRAIN;
         crate::witness::hit(crate::witness::SIGNAL_TRAIN);
     }
 }
+/// Search the signal block belonging to the owner (`ExploreSegment`).
 #[allow(clippy::too_many_lines)]
-fn explore(w: &World<'_>, owner: u8) -> u16 {
-    let mut flags = 0;
+fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
+    let mut flags = SigFlags(0);
     while let Some(Item { mut tile, mut dir }) = access(|s| s.tbd.get()) {
         crate::witness::hit(crate::witness::SIGNAL_TILES);
-        let old_tile = tile;
+        let old_tile = tile; // Tile we are leaving.
+        // Expected new exit direction for a straight line.
         let mut exitdir = if dir == INVALID_DIAGDIR {
             INVALID_DIAGDIR
         } else {
@@ -309,6 +382,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
         };
         match read!(w, shared, tile_type, tile) {
             MP_RAILWAY => {
+                // Do not propagate signals on others' tiles (remove for track sharing).
                 if read!(w, shared, tile_owner, tile) != owner {
                     crate::witness::hit(crate::witness::SIGNAL_OWNER_BARRIER);
                     continue;
@@ -316,93 +390,116 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 let geometry = read!(w, rail, traversal, tile);
                 if geometry.depot {
                     if dir == INVALID_DIAGDIR {
+                        // From inside: a train just entered or left the depot.
                         crate::witness::hit(crate::witness::SIGNAL_DEPOT);
                         train_on_tile(w, tile, &mut flags);
                         exitdir = w.view().rail_depot_dir(tile);
                         tile = w.map.add_diag(tile, exitdir);
                         dir = reverse(exitdir);
                     } else if dir == w.view().rail_depot_dir(tile) {
+                        // Entered a depot.
                         train_on_tile(w, tile, &mut flags);
                         continue;
                     } else {
                         continue;
                     }
                 } else {
-                    source_assert(w, dir < 4);
-                    let mut tracks = geometry.tracks.0;
-                    let masked = tracks & ENTER_TRACKS[usize::from(dir)];
-                    if tracks == 0x0c || tracks == 0x30 {
+                    source_assert(w, dir < DIAGDIR_END);
+                    let mut tracks = geometry.tracks; // Track bits of the tile.
+                    let masked = tracks & ENTERDIR_TO_TRACKBITS[usize::from(dir)]; // Only incident track bits.
+                    // There is exactly one incident track, no need to check.
+                    if tracks == TrackBits::TRACK_BIT_HORZ || tracks == TrackBits::TRACK_BIT_VERT {
                         tracks = masked;
-                        if flags & TRAIN == 0 && occupied(w, tile, Some(tracks)) {
-                            flags |= TRAIN;
+                        // If no train was detected yet and the track is not clear, set the train flag.
+                        if flags & SigFlags::TRAIN == SigFlags(0)
+                            && occupied(w, tile, Some(tracks.0))
+                        {
+                            flags |= SigFlags::TRAIN;
                             crate::witness::hit(crate::witness::SIGNAL_TRAIN);
                         }
                     } else {
-                        if masked == 0 {
+                        if masked == TrackBits::TRACK_BIT_NONE {
+                            // No incident track.
                             continue;
                         }
                         train_on_tile(w, tile, &mut flags);
                     }
-                    if tracks.count_ones() > 1 {
-                        flags |= SPLIT;
+                    // Is this a track merge or split?
+                    if tracks.0.count_ones() > 1 {
+                        flags |= SigFlags::SPLIT;
                         crate::witness::hit(crate::witness::SIGNAL_SPLIT);
                     }
-                    let td = ((u32::from(tracks) * 0x101)
+                    let td = ((u32::from(tracks.0) * 0x101)
                         & u32::from(crate::track_func::diagdir_reaches_trackdirs(
                             crate::direction_func::reverse_diag_dir(dir, |ok| {
                                 crate::movement::native_assert(w.shared, ok);
                             }),
                         )))
                     .trailing_zeros() as u8;
-                    let signal = signal_presence(w, tile, masked, td);
+                    let signal = signal_presence(w, tile, masked.0, td);
                     if signal.signals {
+                        // Exactly one track, not zero: there is an exit from this tile.
                         if signal.track {
-                            let kind = signal.kind.0;
-                            let back = td ^ 8;
+                            // Check the whole track, rather than only the trackdir.
+                            let kind = signal.kind;
+                            let back = crate::track_func::reverse_trackdir(td);
+                            // Add the reverse direction to the to-be-updated set for any
+                            // conventional signal. A changed pre-signal exit will later add
+                            // its block to the to-be-done set.
                             if signal.reverse {
-                                if pbs(kind) {
-                                    flags |= PBS;
+                                if pbs(kind.0) {
+                                    flags |= SigFlags::PBS;
                                     crate::witness::hit(crate::witness::SIGNAL_PBS);
                                 }
-                                if flags & ENTER != 0 {
-                                    flags |= MULTI_ENTER;
+                                if flags & SigFlags::ENTER != SigFlags(0) {
+                                    flags |= SigFlags::MULTI_ENTER;
                                     crate::witness::hit(crate::witness::SIGNAL_MULTI_ENTER);
                                 }
-                                flags |= ENTER;
+                                flags |= SigFlags::ENTER;
                                 if !add_tbu(Item { tile, dir: back }) {
-                                    return flags | FULL;
+                                    return flags | SigFlags::FULL;
                                 }
                             }
-                            if signal.forward && kind == 4 {
-                                flags |= PBS;
+                            if signal.forward && kind == SignalType::SIGTYPE_PBS {
+                                flags |= SigFlags::PBS;
                             }
-                            if flags & MULTI_GREEN == 0 && presignal_exit(kind) && signal.forward {
-                                if flags & EXIT != 0 {
-                                    flags |= MULTI_EXIT;
+                            // Check a pre-signal exit in our direction until two green exits are found.
+                            if flags & SigFlags::MULTI_GREEN == SigFlags(0)
+                                && is_presignal_exit(kind.0)
+                                && signal.forward
+                            {
+                                if flags & SigFlags::EXIT != SigFlags(0) {
+                                    flags |= SigFlags::MULTI_EXIT;
                                     crate::witness::hit(crate::witness::SIGNAL_MULTI_EXIT);
                                 }
-                                flags |= EXIT;
+                                flags |= SigFlags::EXIT;
                                 crate::witness::hit(crate::witness::SIGNAL_EXIT);
-                                if w.view().signal_state_by_trackdir(tile, td) == 1 {
-                                    if flags & GREEN != 0 {
-                                        flags |= MULTI_GREEN;
+                                if w.view().signal_state_by_trackdir(tile, td)
+                                    == SignalState::SIGNAL_STATE_GREEN.0
+                                {
+                                    if flags & SigFlags::GREEN != SigFlags(0) {
+                                        flags |= SigFlags::MULTI_GREEN;
                                         crate::witness::hit(crate::witness::SIGNAL_MULTI_GREEN);
                                     }
-                                    flags |= GREEN;
+                                    flags |= SigFlags::GREEN;
                                     crate::witness::hit(crate::witness::SIGNAL_GREEN_EXIT);
                                 }
                             }
                             continue;
                         }
                     }
-                    for exit in 0..4 {
-                        if exit != dir && tracks & ENTER_TRACKS[usize::from(exit)] != 0 {
+                    for exit in DIAGDIR_BEGIN..DIAGDIR_END {
+                        // Test all possible exit directions.
+                        if exit != dir
+                            && (tracks & ENTERDIR_TO_TRACKBITS[usize::from(exit)])
+                                != TrackBits::TRACK_BIT_NONE
+                        {
                             let next = Item {
                                 tile: w.map.add_diag(tile, exit),
                                 dir: reverse(exit),
                             };
-                            if !maybe_add(w, next, Item { tile, dir: exit }) {
-                                return flags | FULL;
+                            if !maybe_add_to_todo_set(w, next, Item { tile, dir: exit }) {
+                                return flags | SigFlags::FULL;
                             }
                         }
                     }
@@ -410,6 +507,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 }
             }
             MP_STATION => {
+                // Reject a different axis or a blocked (eye-candy) station tile.
                 let station = read!(w, rail, station_admission, tile, owner, dir);
                 if !station.rail
                     || station.owner != owner
@@ -423,6 +521,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 tile = w.map.add_diag(tile, exitdir);
             }
             MP_ROAD => {
+                // The crossing road axis must differ from our entering axis.
                 let crossing = crossing_admission(w, tile, owner);
                 if !crossing.crossing || crossing.owner != owner || (dir & 1) == crossing.axis.0 {
                     continue;
@@ -433,12 +532,15 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
             }
             MP_TUNNELBRIDGE => {
                 let wormhole = read!(w, rail, wormhole_admission, tile, owner);
-                if wormhole.owner != owner || wormhole.transport.0 != 0 {
+                if wormhole.owner != owner
+                    || wormhole.transport != crate::transport_type::TransportType::TRANSPORT_RAIL
+                {
                     continue;
                 }
                 crate::witness::hit(crate::witness::SIGNAL_WORMHOLE);
                 let direction = wormhole.direction.0;
                 if dir == INVALID_DIAGDIR {
+                    // Incoming from the wormhole.
                     train_on_tile(w, tile, &mut flags);
                     dir = direction;
                     exitdir = reverse(direction);
@@ -448,14 +550,14 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                         continue;
                     }
                     train_on_tile(w, tile, &mut flags);
-                    tile = read!(w, rail, other_tunnel_bridge_end, tile);
+                    tile = read!(w, rail, other_tunnel_bridge_end, tile); // Skip to the exit tile.
                     dir = INVALID_DIAGDIR;
                     exitdir = INVALID_DIAGDIR;
                 }
             }
             _ => continue,
         }
-        if !maybe_add(
+        if !maybe_add_to_todo_set(
             w,
             Item { tile, dir },
             Item {
@@ -463,38 +565,58 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 dir: exitdir,
             },
         ) {
-            return flags | FULL;
+            return flags | SigFlags::FULL;
         }
     }
     flags
 }
-fn update_around(w: &World<'_>, flags: u16) {
+/// Update signals around the segment in the to-be-updated set.
+fn update_signals_around_segment(w: &World<'_>, flags: SigFlags) {
     while let Some(Item { tile, dir: td }) = access(|s| s.tbu.get()) {
-        let track = td & 7;
+        let track = crate::track_func::trackdir_to_track(td);
         let observation = signal_update(w, tile, td);
-        let kind = observation.kind.0;
-        let mut new_state = 1;
-        if pbs(kind) && observation.reservations.0 & (1 << track) != 0 {
+        let kind = observation.kind;
+        let mut new_state = SignalState::SIGNAL_STATE_GREEN;
+        // The reserve/unreserve process handles the state of reserved path signals.
+        if pbs(kind.0) && observation.reservations.0 & (1 << track) != 0 {
             crate::witness::hit(crate::witness::SIGNAL_RESERVED_SKIP);
             continue;
         }
-        if flags & TRAIN != 0 || (pbs(kind) && flags & (SPLIT | MULTI_ENTER) != 0) {
-            new_state = 0;
-        } else if kind == 3 && w.view().has_signal_on_trackdir(tile, td ^ 8) {
+        // Turn red for a train, or a path signal with a junction or multiple ways in.
+        if flags & SigFlags::TRAIN != SigFlags(0)
+            || (pbs(kind.0) && flags & (SigFlags::SPLIT | SigFlags::MULTI_ENTER) != SigFlags(0))
+        {
+            new_state = SignalState::SIGNAL_STATE_RED;
+            // For a bidirectional combo, do not count the other direction as an exit.
+        } else if kind == SignalType::SIGTYPE_COMBO
+            && w.view()
+                .has_signal_on_trackdir(tile, crate::track_func::reverse_trackdir(td))
+        {
             crate::witness::hit(crate::witness::SIGNAL_COMBO);
-            if flags & MULTI_EXIT != 0
-                && (flags & GREEN == 0
-                    || (flags & MULTI_GREEN == 0
-                        && w.view().signal_state_by_trackdir(tile, td ^ 8) == 1))
+            // At least one more exit, with no green exit, or this is the only green exit.
+            if flags & SigFlags::MULTI_EXIT != SigFlags(0)
+                && (flags & SigFlags::GREEN == SigFlags(0)
+                    || (flags & SigFlags::MULTI_GREEN == SigFlags(0)
+                        && w.view().signal_state_by_trackdir(
+                            tile,
+                            crate::track_func::reverse_trackdir(td),
+                        ) == SignalState::SIGNAL_STATE_GREEN.0))
             {
-                new_state = 0;
+                new_state = SignalState::SIGNAL_STATE_RED;
                 crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
             }
-        } else if (kind == 1 || kind == 3) && flags & EXIT != 0 && flags & GREEN == 0 {
-            new_state = 0;
+            // Entry signal, at least one exit, no green exit.
+        } else if (kind == SignalType::SIGTYPE_ENTRY || kind == SignalType::SIGTYPE_COMBO)
+            && flags & SigFlags::EXIT != SigFlags(0)
+            && flags & SigFlags::GREEN == SigFlags(0)
+        {
+            new_state = SignalState::SIGNAL_STATE_RED;
         }
-        if new_state != w.view().signal_state_by_trackdir(tile, td) {
-            if presignal_exit(kind) {
+        // Only when the state changes.
+        if new_state != SignalState(w.view().signal_state_by_trackdir(tile, td)) {
+            // For pre-signal exits, add the block globally without checking for a
+            // full global set: update all signals first.
+            if is_presignal_exit(kind.0) {
                 add_global(Item {
                     tile,
                     dir: crate::track_func::trackdir_to_exitdir(
@@ -503,12 +625,13 @@ fn update_around(w: &World<'_>, flags: u16) {
                 });
                 crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);
             }
-            read!(w, rail, set_signal_state, tile, td, new_state);
+            read!(w, rail, set_signal_state, tile, td, new_state.0);
             read!(w, shared, mark_dirty, tile);
             crate::witness::hit(crate::witness::SIGNAL_CHANGED);
         }
     }
 }
+/// Reset all sets after one set overflowed.
 fn reset_sets() {
     access(|s| {
         s.tbu.reset();
@@ -516,16 +639,21 @@ fn reset_sets() {
         s.global.reset();
     });
 }
-fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
+/// Update global buffered blocks and return the state of the first block.
+fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
     read!(w, native, assert_company, owner);
     crate::witness::hit(crate::witness::SIGNAL_UPDATES);
     let mut first = true;
-    let mut state = 0; // SIGSEG_FREE
+    let mut state = SigSegState::SIGSEG_FREE; // Value to return.
     while let Some(Item { mut tile, mut dir }) = access(|s| s.global.get()) {
         source_assert(w, access(|s| s.tbu.count == 0));
         source_assert(w, access(|s| s.tbd.count == 0));
+        // Signal updates leave railway tiles with signals here. Other entries
+        // come from rail construction/removal, trains entering/leaving a block,
+        // or a train leaving a depot.
         let kind = read!(w, shared, tile_type, tile);
         if kind == MP_TUNNELBRIDGE {
+            // Optimization assertions: do not update signals when unnecessary.
             if w.native.assertions {
                 read!(w, native, assert_wormhole_start, tile, dir);
             }
@@ -533,6 +661,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 tile,
                 dir: INVALID_DIAGDIR,
             });
+            // Safely start from the wormhole centre at both ends.
             let other = read!(w, rail, other_tunnel_bridge_end, tile);
             add_tbd(Item {
                 tile: other,
@@ -550,13 +679,13 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 dir: INVALID_DIAGDIR,
             });
         } else if (kind == MP_RAILWAY || kind == MP_STATION || kind == MP_ROAD)
-            && (track_bits(crate::movement::track_status(
+            && (track_status_to_track_bits(crate::movement::track_status(
                 w.shared,
                 tile,
-                0,
+                crate::transport_type::TRANSPORT_RAIL,
                 0,
                 INVALID_DIAGDIR,
-            )) & ENTER_TRACKS[usize::from(dir)])
+            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
                 != 0
         {
             add_tbd(Item { tile, dir });
@@ -567,86 +696,95 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         } else {
             tile = w.map.add_diag(tile, dir);
             dir = reverse(dir);
-            if (track_bits(crate::movement::track_status(
+            if (track_status_to_track_bits(crate::movement::track_status(
                 w.shared,
                 tile,
-                0,
+                crate::transport_type::TRANSPORT_RAIL,
                 0,
                 INVALID_DIAGDIR,
-            )) & ENTER_TRACKS[usize::from(dir)])
+            )) & ENTERDIR_TO_TRACKBITS[usize::from(dir)].0)
                 == 0
             {
+                // Removing a rail unconnected at one or both ends reaches here.
                 crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
                 continue;
             }
             add_tbd(Item { tile, dir });
         }
+        // These one or two items should neither overflow nor leave the set empty.
         source_assert(w, access(|s| !s.tbd.overflowed));
         source_assert(w, access(|s| s.tbd.count != 0));
-        let flags = explore(w, owner);
+        let flags = explore_segment(w, owner);
         if first {
             first = false;
-            if flags & PBS != 0 {
-                state = 2;
-            }
-            // SIGSEG_PBS
-            else if flags & TRAIN != 0
-                || (flags & EXIT != 0 && flags & GREEN == 0)
-                || flags & FULL != 0
+            if flags & SigFlags::PBS != SigFlags(0) {
+                state = SigSegState::SIGSEG_PBS;
+            } else if flags & SigFlags::TRAIN != SigFlags(0)
+                || (flags & SigFlags::EXIT != SigFlags(0) && flags & SigFlags::GREEN == SigFlags(0))
+                || flags & SigFlags::FULL != SigFlags(0)
             {
-                state = 1;
+                state = SigSegState::SIGSEG_FULL;
             }
         }
-        if flags & FULL != 0 {
+        // Do nothing more when any buffer was full.
+        if flags & SigFlags::FULL != SigFlags(0) {
             reset_sets();
             crate::witness::hit(crate::witness::SIGNAL_RESET);
             break;
         }
-        update_around(w, flags);
+        update_signals_around_segment(w, flags);
     }
     state
 }
-fn add_track(w: &World<'_>, tile: u32, track: u8, owner: u8) {
+/// Add a track to the signal update buffer at both ends.
+fn add_track_to_signal_buffer(w: &World<'_>, tile: u32, track: u8, owner: u8) {
+    // Do not allow signal updates for two companies in one run.
     source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
     access(|s| s.last_owner = owner);
     add_global(Item {
         tile,
-        dir: SEARCH_ONE[usize::from(track)],
+        dir: SEARCH_DIR_1[usize::from(track)],
     });
     add_global(Item {
         tile,
-        dir: SEARCH_TWO[usize::from(track)],
+        dir: SEARCH_DIR_2[usize::from(track)],
     });
     force_flush(w);
 }
 fn force_flush(w: &World<'_>) {
-    if access(|s| s.global.count >= 64) {
+    if access(|s| s.global.count >= SIG_GLOB_UPDATE) {
+        // Too many items: force an update.
         crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
-        update_buffer(w, access(|s| s.last_owner));
+        update_signals_in_buffer(w, access(|s| s.last_owner));
         access(|s| s.last_owner = INVALID_OWNER);
     }
 }
-fn flush(w: &World<'_>) {
+/// Update signals in the buffer, called from outside (`UpdateSignalsInBuffer()`).
+fn flush_signal_buffer(w: &World<'_>) {
     if access(|s| s.global.count != 0) {
-        update_buffer(w, access(|s| s.last_owner));
+        update_signals_in_buffer(w, access(|s| s.last_owner));
         access(|s| s.last_owner = INVALID_OWNER);
     }
 }
-fn add_side(w: &World<'_>, tile: u32, side: u8, owner: u8) {
+/// Add one side of a tile to the signal update buffer.
+fn add_side_to_signal_buffer(w: &World<'_>, tile: u32, side: u8, owner: u8) {
+    // Do not allow signal updates for two companies in one run.
     source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
     access(|s| s.last_owner = owner);
     add_global(Item { tile, dir: side });
     force_flush(w);
 }
-fn segment(w: &World<'_>, tile: u32, side: u8, owner: u8) -> u8 {
+/// Update from one side of a tile, checking the neighbouring opposite side too.
+fn update_signals_on_segment(w: &World<'_>, tile: u32, side: u8, owner: u8) -> SigSegState {
     source_assert(w, access(|s| s.global.count == 0));
     add_global(Item { tile, dir: side });
-    update_buffer(w, owner)
+    update_signals_in_buffer(w, owner)
 }
-fn both(w: &World<'_>, tile: u32, track: u8, owner: u8) {
+/// Update segments at both ends of an existent or non-existent track.
+fn set_signals_on_both_dir(w: &World<'_>, tile: u32, track: u8, owner: u8) {
     source_assert(w, access(|s| s.global.count == 0));
-    add_track(w, tile, track, owner);
-    update_buffer(w, owner);
+    add_track_to_signal_buffer(w, tile, track, owner);
+    update_signals_in_buffer(w, owner);
 }
 // SAFETY for every exported entry: immutable tables outlive the synchronous
 // invocation. Game-state mutex is held; callbacks do not retain any Rust owner
@@ -681,7 +819,7 @@ pub unsafe extern "C" fn openttd_rust_signal_flush(
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
     let w = unsafe { world(shared, rail, native, log_x) };
-    flush(&w);
+    flush_signal_buffer(&w);
 }
 /// Queue both ends of a track and preserve the 64-entry forced flush.
 /// # Safety
@@ -698,7 +836,7 @@ pub unsafe extern "C" fn openttd_rust_signal_add_track(
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
     let w = unsafe { world(shared, rail, native, log_x) };
-    add_track(&w, tile, track, owner);
+    add_track_to_signal_buffer(&w, tile, track, owner);
 }
 /// Queue one side with the original owner lifetime and forced flush.
 /// # Safety
@@ -715,7 +853,7 @@ pub unsafe extern "C" fn openttd_rust_signal_add_side(
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
     let w = unsafe { world(shared, rail, native, log_x) };
-    add_side(&w, tile, side, owner);
+    add_side_to_signal_buffer(&w, tile, side, owner);
 }
 /// Update a segment, returning the classification of the first explored block.
 /// # Safety
@@ -732,9 +870,9 @@ pub unsafe extern "C" fn openttd_rust_signal_segment(
 ) -> u8 {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
     let w = unsafe { world(shared, rail, native, log_x) };
-    let state = segment(&w, tile, side, owner);
+    let state = update_signals_on_segment(&w, tile, side, owner);
     crate::witness::hit(crate::witness::SIGNAL_CLASSIFICATION_BYTES);
-    state
+    state.0
 }
 /// Update both track ends with the original private flush owner lifetime.
 /// # Safety
@@ -751,7 +889,7 @@ pub unsafe extern "C" fn openttd_rust_signal_both(
 ) {
     crate::witness::hit(crate::witness::SIGNAL_ENTRIES);
     let w = unsafe { world(shared, rail, native, log_x) };
-    both(&w, tile, track, owner);
+    set_signals_on_both_dir(&w, tile, track, owner);
 }
 
 /// Call-scoped diagnostic image of the private signal work sets. No live map or
@@ -878,19 +1016,19 @@ impl Context {
         unsafe { world(self.shared, self.rail, self.native, self.log_x) }
     }
     pub(crate) fn segment(self, tile: u32, side: u8, owner: u8) -> u8 {
-        segment(&self.world(), tile, side, owner)
+        update_signals_on_segment(&self.world(), tile, side, owner).0
     }
     pub(crate) fn both(self, tile: u32, track: u8, owner: u8) {
-        both(&self.world(), tile, track, owner);
+        set_signals_on_both_dir(&self.world(), tile, track, owner);
     }
     pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
-        add_track(&self.world(), tile, track, owner);
+        add_track_to_signal_buffer(&self.world(), tile, track, owner);
     }
     pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {
-        add_side(&self.world(), tile, side, owner);
+        add_side_to_signal_buffer(&self.world(), tile, side, owner);
     }
     pub(crate) fn flush(self) {
-        flush(&self.world());
+        flush_signal_buffer(&self.world());
     }
 }
 /// Acquire call-scoped context while counting its real Rust-to-native crossing.
