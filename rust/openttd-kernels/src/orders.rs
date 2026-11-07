@@ -26,16 +26,18 @@
     clippy::collapsible_match
 )]
 use crate::company_type::OWNER_NONE;
+use crate::depot_type::DepotID;
 use crate::order_type::{
     OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
     OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
-    OUFB_TRANSFER, OUFB_UNLOAD,
+    OUFB_TRANSFER, OUFB_UNLOAD, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
+use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
-use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN, VehicleType};
 use std::ffi::c_void;
 
 /// Opaque live native `OrderList`; never dereferenced by Rust.
@@ -2701,7 +2703,7 @@ pub unsafe extern "C" fn openttd_rust_order_location(
     let g = Game(leaves);
 
     let input = load(input);
-    u64::from(g.location(input, v, airport != 0))
+    u64::from(g.get_location(input, v, airport != 0).0)
 }
 
 #[unsafe(no_mangle)]
@@ -2714,7 +2716,7 @@ pub unsafe extern "C" fn openttd_rust_order_distance(
 ) -> u64 {
     let control = Control { g: Game(leaves) };
     let g = control.g;
-    u64::from(g.distance(previous, current, v, depth))
+    u64::from(g.get_order_distance(VehicleOrderID(previous), VehicleOrderID(current), v, depth))
 }
 
 #[unsafe(no_mangle)]
@@ -2978,55 +2980,81 @@ impl Game {
         };
         if skip { order.flags } else { u8::MAX }
     }
-    fn location(self, order: Order, v: *mut c_void, airport: bool) -> u32 {
-        match order.kind() {
-            OT_GOTO_STATION | OT_GOTO_WAYPOINT | OT_IMPLICIT => {
-                (if airport && self.vehicle_type(v) == u64::from(VEH_AIRCRAFT) {
-                    self.airport_tile(order.destination)
-                } else {
-                    self.base_station_tile(order.destination)
-                }) as u32
+    /// Returns a tile somewhat representing the order destination (not suitable for pathfinding).
+    /// `airport` gets the airport tile rather than the station location for aircraft.
+    /// Returns the destination of the order, or `INVALID_TILE` if none.
+    fn get_location(self, order: Order, v: *mut c_void, airport: bool) -> TileIndex {
+        match OrderType(order.kind()) {
+            OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_WAYPOINT | OrderType::OT_IMPLICIT => {
+                TileIndex(
+                    (if airport && self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
+                        self.airport_tile(order.destination)
+                    } else {
+                        self.base_station_tile(order.destination)
+                    }) as u32,
+                )
             }
-            OT_GOTO_DEPOT => {
-                if order.destination == u16::MAX {
-                    return u32::MAX;
+            OrderType::OT_GOTO_DEPOT => {
+                if DepotID(order.destination) == DepotID::INVALID {
+                    return TileIndex::INVALID;
                 }
-                (if self.vehicle_type(v) == u64::from(VEH_AIRCRAFT) {
-                    self.station_tile(order.destination)
-                } else {
-                    self.depot_tile(order.destination)
-                }) as u32
+                TileIndex(
+                    (if self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
+                        self.station_tile(order.destination)
+                    } else {
+                        self.depot_tile(order.destination)
+                    }) as u32,
+                )
             }
-            _ => u32::MAX,
+            _ => TileIndex::INVALID,
         }
     }
-    fn distance(self, previous: u8, current: u8, v: *mut c_void, depth: i32) -> u32 {
+    /// Get the distance between two orders of a vehicle. Conditional orders are resolved
+    /// and the bigger distance of the two order branches is returned.
+    fn get_order_distance(
+        self,
+        previous: VehicleOrderID,
+        current: VehicleOrderID,
+        v: *mut c_void,
+        depth: i32,
+    ) -> u32 {
         let list = self.orders(v);
         // This source helper indexes the full stored span, not GetOrderAt's
         // uint8 count. Oversized save-loaded lists can still have conditional
         // destinations beyond their narrowed GetNumOrders value.
-        let order = self.stored_order(list, usize::from(current));
-        if order.kind() == OT_CONDITIONAL {
+        let order = self.stored_order(list, usize::from(current.0));
+        if OrderType(order.kind()) == OrderType::OT_CONDITIONAL {
             if depth > i32::from(self.count(v)) {
                 return 0;
             }
-            let d1 = self.distance(previous, order.flags, v, depth.wrapping_add(1)) as i32;
-            let d2 = self.distance(
+            let d1 = self.get_order_distance(
                 previous,
-                self.next_index(list, current),
+                VehicleOrderID(order.flags),
+                v,
+                depth.wrapping_add(1),
+            ) as i32;
+            let d2 = self.get_order_distance(
+                previous,
+                VehicleOrderID(self.next_index(list, current.0)),
                 v,
                 depth.wrapping_add(1),
             ) as i32;
             return d1.max(d2) as u32;
         }
-        let prev = self.location(self.stored_order(list, usize::from(previous)), v, true);
-        let cur = self.location(order, v, true);
-        if prev == u32::MAX || cur == u32::MAX {
+        let prev = self.get_location(self.stored_order(list, usize::from(previous.0)), v, true);
+        let cur = self.get_location(order, v, true);
+        if prev == TileIndex::INVALID || cur == TileIndex::INVALID {
             return 0;
         }
-        // SAFETY: location resolved live destination tiles and the invalid sentinel
+        // SAFETY: get_location resolved live destination tiles and the invalid sentinel
         // was excluded above. The vehicle shell is live; no owner borrow spans either call.
-        unsafe { (self.0.distance)(prev, cur, u8::from(self.vehicle_type(v) == 3)) as u32 }
+        unsafe {
+            (self.0.distance)(
+                prev.0,
+                cur.0,
+                u8::from(self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0)),
+            ) as u32
+        }
     }
 }
 impl Control {
@@ -3925,7 +3953,12 @@ impl Game {
             if matches!(
                 self.order(list, i).unwrap().kind(),
                 OT_GOTO_STATION | OT_GOTO_DEPOT | OT_GOTO_WAYPOINT
-            ) && self.distance(i, self.next_index(list, i), src, 0) > max
+            ) && self.get_order_distance(
+                VehicleOrderID(i),
+                VehicleOrderID(self.next_index(list, i)),
+                src,
+                0,
+            ) > max
             {
                 return false;
             }
