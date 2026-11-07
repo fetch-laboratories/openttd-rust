@@ -206,15 +206,15 @@ impl ImportServices {
         }
         // Now that the towns have been created, grow them to their target populations.
         for (town_id, state, population) in towns {
+            // Grow a constant number of houses, rather than basing growth on town size,
+            // so the try limit applies predictably regardless of road layout and geography.
+            const HOUSES_TO_GROW: u32 = 10;
             // Grid towns can grow almost forever, but wandering roads randomly gets
             // less efficient. An arbitrary limit yields about 4900 houses on a flat
             // 3x3 grid, or 2800 houses with "Better roads".
             let mut try_limit: i32 = 1000;
             // Repeated failed growth attempts only waste time.
             let mut fail_limit: i32 = 10;
-            // Grow a constant number of houses, rather than basing growth on town size,
-            // so the try limit applies predictably regardless of road layout and geography.
-            const HOUSES_TO_GROW: u32 = 10;
             loop {
                 // SAFETY: The founded town's owner lives through expansion; each read ends before Post.
                 let before = unsafe { super::num_houses(state) };
