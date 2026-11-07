@@ -47,8 +47,9 @@ pub struct VehStates(pub u8);
 impl VehStates {
     /// Set containing the named state (the element is a bit position).
     #[must_use]
+    #[allow(clippy::cast_possible_truncation)] // Native uint8_t storage truncates the 64-bit mask.
     pub const fn from_element(element: VehState) -> Self {
-        Self(1 << element.0)
+        Self((1_u64 << element.0) as u8)
     }
     /// Native bit-set union.
     #[must_use]
@@ -227,21 +228,27 @@ crate::abi::shared_records! {
         pub previous: *mut VehicleRecord,
         /// NOSAVE `Vehicle::first`.
         pub first: *mut VehicleRecord,
+        /// Current tile index.
         pub tile: TileIndex,
+        /// Tile the vehicle is heading for. For airports and train stations it
+        /// need not belong to the destination station, but can estimate distance.
         pub dest_tile: TileIndex,
+        /// Counter to occasionally play a vehicle sound.
         pub motion_counter: u32,
         pub x_pos: i32,
         pub y_pos: i32,
         pub z_pos: i32,
+        /// Type of engine used for this vehicle.
         pub engine_type: EngineID,
         pub cur_speed: u16,
         pub cargo_cap: u16,
         pub refit_cap: u16,
+        /// Ticks until cargo is aged next.
         pub cargo_age_counter: u16,
         pub last_station_visited: StationID,
-        /// `VehicleCache::cached_max_speed`.
+        /// Maximum consist speed: minimum of all vehicles' maximum speeds.
         pub cached_max_speed: u16,
-        /// `VehicleCache::cached_cargo_age_period`.
+        /// Number of ticks before carried cargo is aged.
         pub cached_cargo_age_period: u16,
         /// `BaseVehicle::type`.
         pub r#type: VehicleType,
@@ -399,6 +406,7 @@ impl crate::vehicle::VehicleRef {
             }
             next = v.next();
         }
+        // The last articulated part of this engine has now been passed.
         next
     }
     /// `Train::GetNextUnit`: next real vehicle, excluding articulated parts and

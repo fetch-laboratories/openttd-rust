@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared constants from `vehicle_func.h`.
 #![allow(unsafe_code)]
+use crate::station_type::{StationFacilities, StationFacility};
 use crate::vehicle_type::VehicleType;
 
 /// Special values for `Vehicle::spritenum` and vehicle-info `image_index`.
@@ -38,31 +39,40 @@ pub(crate) fn can_engine_use_station(
     let world = unsafe { &*s.commands().station };
     match kind {
         VehicleType::VEH_TRAIN => {
-            (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_TRAIN != 0
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::Train).0
+                != 0
         }
         VehicleType::VEH_ROAD => {
             // We need the vehicle to know actual station use, but without road
             // vehicle facilities the station certainly cannot be used.
             (world.facilities)(st.cast_mut())
-                & (crate::station_type::FACILITY_BUS | crate::station_type::FACILITY_TRUCK)
+                & StationFacilities::from_element(StationFacility::BusStop)
+                    .with(StationFacilities::from_element(StationFacility::TruckStop))
+                    .0
                 != 0
         }
         VehicleType::VEH_SHIP => {
-            (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_DOCK != 0
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::Dock).0
+                != 0
         }
         VehicleType::VEH_AIRCRAFT => {
-            (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_AIRPORT != 0 && {
-                let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
-                let flag = if crate::vehicle::EngineRef::of(e).aircraft_subtype()
-                    & crate::engine_type::AIR_CTOL
-                    != 0
-                {
-                    crate::airport::FTA_AIRPLANES
-                } else {
-                    crate::airport::FTA_HELICOPTERS
-                };
-                (s.fta_flags)(fta) & flag != 0
-            }
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::Airport).0
+                != 0
+                && {
+                    let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
+                    let flag = if crate::vehicle::EngineRef::of(e).aircraft_subtype()
+                        & crate::engine_type::AIR_CTOL
+                        != 0
+                    {
+                        crate::airport::FTA_AIRPLANES
+                    } else {
+                        crate::airport::FTA_HELICOPTERS
+                    };
+                    (s.fta_flags)(fta) & flag != 0
+                }
         }
         _ => false,
     }
