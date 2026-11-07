@@ -32,6 +32,8 @@ use crate::direction_func::dir_to_diag_dir as diag;
 use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
+use crate::raw_field::{read_field, write_field};
+use crate::road_data;
 use crate::roadveh::{
     RVSB_IN_DEPOT as DEPOT, RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP,
     RVSB_WORMHOLE,
@@ -49,20 +51,24 @@ use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use std::ptr::NonNull;
 
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
-/// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
-const STATE: usize = 0;
-const FRAME: usize = 1;
-const BLOCKED: usize = 2;
-const OVERTAKING: usize = 3;
-const OVERTAKING_CTR: usize = 4;
-const CRASHED: usize = 5;
-const REVERSE_CTR: usize = 6;
-
-/// Exact scalar path entry; padding is never read.
-/// Native declaration for a metadata link to this module's private owner.
-#[repr(C)]
-pub struct OpenTTDRoadState {
-    _private: [u8; 0],
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical road fields, with the original widths and zero defaults.
+    /// This is the first member of the stable allocation; the path stays Rust-private.
+    #[derive(Default)]
+    "OpenTTDRoadState" ["road_state"] => pub struct OpenTTDRoadState {
+        /// `RoadVehicleStates`.
+        pub state: u8,
+        pub frame: u8,
+        pub blocked_ctr: u16,
+        /// `RVSB_DRIVE_SIDE` when overtaking, otherwise zero.
+        pub overtaking: u8,
+        /// Length of the current overtake attempt.
+        pub overtaking_ctr: u8,
+        /// Crash animation counter; see `RoadVehIsCrashed`.
+        pub crashed_ctr: u16,
+        pub reverse_ctr: u8,
+    }
 }
 
 #[repr(C)]
@@ -72,9 +78,10 @@ pub struct PathElement {
     pub tile: u32,
 }
 /// One allocation per ordinary/indexed-load C++ shell.
+#[repr(C)]
 #[derive(Default)]
 pub struct State {
-    scalars: [u16; 7],
+    pub fields: OpenTTDRoadState,
     pub(crate) path: Vec<PathElement>,
 }
 
@@ -89,49 +96,23 @@ pub unsafe extern "C" fn openttd_rust_road_destroy(state: *mut State) {
         drop(Box::from_raw(state));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_get(state: *const State, field: u8) -> u16 {
-    // SAFETY: Game-thread caller supplies a live owner and selector 0..6.
-    unsafe { (*state).scalars[field as usize] }
-}
-/// Original `RoadVehicle::SetState`, also used by the native selector facade.
+/// Original `RoadVehicle::SetState`, over the canonical field.
 /// # Safety
 /// The serialized native shell owns this live state for the whole scalar access.
 pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
-    unsafe {
-        (*state).scalars[STATE] = u16::from(value);
-    }
+    write_field!(state, fields.state, value);
 }
 /// Original `RoadVehicle::GetState`.
 /// # Safety
 /// The serialized native shell owns this live state for the whole scalar access.
 pub(crate) unsafe fn get_state(state: *const State) -> u8 {
-    unsafe { (*state).scalars[STATE] as u8 }
+    read_field!(state, fields.state)
 }
 /// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)`.
 /// # Safety
 /// A live serialized road owner; the scalar access ends before any callback.
 pub(crate) unsafe fn set_depot_state(state: *mut State) {
     unsafe { set_state(state, DEPOT) };
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_set(state: *mut State, field: u8, value: u16) {
-    // SAFETY: Exclusive game-thread access, with no retained owner reference.
-    unsafe {
-        if usize::from(field) == STATE {
-            set_state(state, value as u8);
-        } else {
-            (*state).scalars[field as usize] = narrow(field as usize, value);
-        }
-    }
-}
-/// Fields 2 and 5 are `uint16_t`; the others are `uint8_t`.
-fn narrow(field: usize, value: u16) -> u16 {
-    if field == BLOCKED || field == CRASHED {
-        value
-    } else {
-        u16::from(value as u8)
-    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_path_size(state: *const State) -> usize {
@@ -410,22 +391,14 @@ impl Part {
     fn ground(self, state: *mut crate::ground_vehicle::State) -> crate::ground_vehicle::Owner {
         crate::ground_vehicle::Owner::for_road(state, self.s.as_ptr())
     }
-    fn get(self, field: usize) -> u16 {
-        // SAFETY: Live owner; the place read ends before any service call.
-        unsafe { (*self.s.as_ptr()).scalars[field] }
-    }
-    fn set(self, field: usize, value: u16) {
-        // SAFETY: Live owner, game thread; no reference outlives this store.
-        unsafe { (*self.s.as_ptr()).scalars[field] = narrow(field, value) }
-    }
     fn state(self) -> u8 {
-        self.get(STATE) as u8
+        read_field!(self.s.as_ptr(), fields.state)
     }
     fn frame(self) -> u8 {
-        self.get(FRAME) as u8
+        read_field!(self.s.as_ptr(), fields.frame)
     }
     fn overtaking(self) -> u8 {
-        self.get(OVERTAKING) as u8
+        read_field!(self.s.as_ptr(), fields.overtaking)
     }
     fn path_len(self) -> usize {
         // SAFETY: Live owner, short accessor only.
@@ -454,7 +427,7 @@ impl Part {
 /// Read the state scalar of a part known only by its owner pointer.
 fn state_of(s: *mut State) -> u8 {
     // SAFETY: Live owner supplied by a native traversal for this dispatch only.
-    unsafe { (*s).scalars[STATE] as u8 }
+    read_field!(s, fields.state)
 }
 
 /// Fields consumed together by `CanBuildTramTrackOnTile`.
@@ -688,7 +661,7 @@ impl Game<'_> {
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
     fn close(&self, v: Part, z: i32, x: i32, y: i32, dir: u8, update: bool) -> Option<Candidate> {
-        if v.get(REVERSE_CTR) != 0 {
+        if read_field!(v.s.as_ptr(), fields.reverse_ctr) != 0 {
             return None;
         }
         let mut best: Option<Candidate> = None;
@@ -758,12 +731,12 @@ impl Game<'_> {
             self.vs.any_near(x, y, 8, offer);
         }
         if best_diff == u32::MAX {
-            v.set(BLOCKED, 0);
+            write_field!(v.s.as_ptr(), fields.blocked_ctr, 0);
             return None;
         }
         if update {
-            let counter = v.get(BLOCKED).wrapping_add(1);
-            v.set(BLOCKED, counter);
+            let counter = read_field!(v.s.as_ptr(), fields.blocked_ctr).wrapping_add(1);
+            write_field!(v.s.as_ptr(), fields.blocked_ctr, counter);
             if counter > 1480 {
                 return None;
             }
@@ -883,15 +856,13 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
-        v.set(
-            OVERTAKING_CTR,
-            if ur.cur_speed == 0 || ur.status & VS_STOPPED != 0 {
-                17
-            } else {
-                0
-            },
-        );
-        v.set(OVERTAKING, 16);
+        let overtaking_ctr = if ur.cur_speed == 0 || ur.status & VS_STOPPED != 0 {
+            17
+        } else {
+            0
+        };
+        write_field!(v.s.as_ptr(), fields.overtaking_ctr, overtaking_ctr);
+        write_field!(v.s.as_ptr(), fields.overtaking, 16);
     }
     /// `RoadVehGetSlidingDirection`.
     fn sliding(s: &Step, x: i32, y: i32) -> u8 {
@@ -981,7 +952,11 @@ impl Game<'_> {
                 unsafe { crate::road_stop::leave_vehicle(self.ss, v.v, v.s.as_ptr()) };
             }
         }
-        v.set(CRASHED, if flooded { 2000 } else { 1 });
+        write_field!(
+            v.s.as_ptr(),
+            fields.crashed_ctr,
+            if flooded { 2000 } else { 1 }
+        );
         victims
     }
     /// `RoadVehCheckTrainCrash`, starting with the front part's observation.
@@ -1034,8 +1009,8 @@ impl Game<'_> {
     }
     /// `RoadVehIsCrashed` with this tick's counter.
     fn crashed(&self, v: Part, tick: u8) -> bool {
-        let counter = v.get(CRASHED).wrapping_add(1);
-        v.set(CRASHED, counter);
+        let counter = read_field!(v.s.as_ptr(), fields.crashed_ctr).wrapping_add(1);
+        write_field!(v.s.as_ptr(), fields.crashed_ctr, counter);
         if counter == 2 {
             crate::effect::openttd_rust_effect_create_rel(
                 v.v.0.as_ptr(),
@@ -1221,7 +1196,7 @@ impl Game<'_> {
             REVERSE[usize::from(entry)]
         } else {
             let mut forced = None;
-            if v.get(REVERSE_CTR) != 0 {
+            if read_field!(v.s.as_ptr(), fields.reverse_ctr) != 0 {
                 let mut reverse = true;
                 if s.tram {
                     let bits = service!(self.l.any_road_bits)(v.v, tile, false);
@@ -1229,7 +1204,7 @@ impl Game<'_> {
                     reverse = (bits & straight) == straight || bits == (8 >> entry);
                 }
                 if reverse {
-                    v.set(REVERSE_CTR, 0);
+                    write_field!(v.s.as_ptr(), fields.reverse_ctr, 0);
                     if s.tile != tile {
                         forced = Some(REVERSE[usize::from(entry)]);
                     }
@@ -1326,7 +1301,7 @@ impl Game<'_> {
         let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
             crate::movement::native_assert(self.ss, ok);
         });
-        let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
+        let rd = road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
             if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT && d.tile == (v.v).dest_tile() {
@@ -1342,8 +1317,8 @@ impl Game<'_> {
             (v.v).write_speed(0);
         }
         v.v.set_hidden(false);
-        v.set(STATE, u16::from(tdir));
-        v.set(FRAME, 6);
+        write_field!(v.s.as_ptr(), fields.state, tdir);
+        write_field!(v.s.as_ptr(), fields.frame, 6);
         v.v.write_x(x);
         v.v.write_y(y);
         // SAFETY: The newly visible shell survives depot exit.
@@ -1443,12 +1418,12 @@ impl Game<'_> {
     ) -> bool {
         if v.overtaking() != 0 {
             if service!(self.ss.tile_type)(s.tile) == MP_STATION {
-                v.set(OVERTAKING, 0);
+                write_field!(v.s.as_ptr(), fields.overtaking, 0);
             } else {
-                let counter = v.get(OVERTAKING_CTR).wrapping_add(1) as u8;
-                v.set(OVERTAKING_CTR, u16::from(counter));
+                let counter = read_field!(v.s.as_ptr(), fields.overtaking_ctr).wrapping_add(1);
+                write_field!(v.s.as_ptr(), fields.overtaking_ctr, counter);
                 if counter >= 35 && v.state() < STOP && straight(v.state()) {
-                    v.set(OVERTAKING, 0);
+                    write_field!(v.s.as_ptr(), fields.overtaking, 0);
                 }
             }
         }
@@ -1486,7 +1461,7 @@ impl Game<'_> {
         }
         let state = v.state();
         let movement = if state & 64 != 0 { state & 9 } else { state };
-        let rd = crate::road_data::entry(
+        let rd = road_data::entry(
             s.tram,
             (usize::from(movement) + self.side()) ^ usize::from(v.overtaking()),
             usize::from(v.frame()) + 1,
@@ -1516,7 +1491,7 @@ impl Game<'_> {
             loop {
                 let mut start_frame = 0;
                 if reversing(dir) {
-                    v.set(OVERTAKING, 0);
+                    write_field!(v.s.as_ptr(), fields.overtaking, 0);
                     if s.tram {
                         let needed: u8 = [2, 1, 8, 4][usize::from(((dir >> 2) & 2) | (dir & 1))];
                         let big = v
@@ -1552,10 +1527,10 @@ impl Game<'_> {
                         tile = s.tile;
                     }
                 }
-                let pos = crate::road_data::entry(
+                let pos = road_data::entry(
                     s.tram,
                     (usize::from(dir) + self.side()) ^ usize::from(v.overtaking()),
-                    start_frame,
+                    start_frame.into(),
                 );
                 let (x, y) = self.tile_xy(tile, pos);
                 let new_dir = Self::sliding(s, x, y);
@@ -1604,8 +1579,8 @@ impl Game<'_> {
                     let before = world.road_type(old_tile, tram);
                     let after = world.road_type(tile, tram);
                     s.tile = tile;
-                    v.set(STATE, u16::from(dir));
-                    v.set(FRAME, start_frame as u16);
+                    write_field!(v.s.as_ptr(), fields.state, dir);
+                    write_field!(v.s.as_ptr(), fields.frame, start_frame);
                     if before != after {
                         if s.front {
                             self.update_cache(v, false);
@@ -1639,7 +1614,7 @@ impl Game<'_> {
                 Self::set_speed(v, s, 0);
                 return false;
             }
-            let pos = crate::road_data::entry(s.tram, self.side() + usize::from(dir), start_frame);
+            let pos = road_data::entry(s.tram, self.side() + usize::from(dir), start_frame.into());
             let (x, y) = self.tile_xy(s.tile, pos);
             let new_dir = Self::sliding(s, x, y);
             if s.front {
@@ -1655,8 +1630,8 @@ impl Game<'_> {
                 Self::set_speed(v, s, 0);
                 return false;
             }
-            v.set(STATE, u16::from(dir));
-            v.set(FRAME, start_frame as u16);
+            write_field!(v.s.as_ptr(), fields.state, dir);
+            write_field!(v.s.as_ptr(), fields.frame, start_frame);
             if new_dir != s.direction {
                 self.set_direction(v, s, new_dir);
             }
@@ -1722,8 +1697,7 @@ impl Game<'_> {
         // The frame test is pure and decides most drive-through passes without a read.
         if s.front
             && ((in_range(state, STOP, STOP + 16)
-                && crate::road_data::_ROAD_STOP_STOP_FRAME
-                    [usize::from(state - STOP) + self.side()]
+                && road_data::_ROAD_STOP_STOP_FRAME[usize::from(state - STOP) + self.side()]
                     == frame)
                 || (in_range(state, DT_STOP, DT_STOP + 16)
                     && frame == 11
@@ -1737,13 +1711,13 @@ impl Game<'_> {
                     if crate::road_stop::continuation(self.ss, s.tile, next)
                         && self.has_road(v.v, next)
                     {
-                        v.set(FRAME, u16::from(frame) + 1);
+                        write_field!(v.s.as_ptr(), fields.frame, frame.wrapping_add(1));
                         self.move_to(v, ground, s, (x, y), true, false);
                         return true;
                     }
                 }
                 crate::road_stop::set_entrance_busy(rs, false);
-                v.set(STATE, u16::from(state | 4));
+                write_field!(v.s.as_ptr(), fields.state, state | 4);
                 (v.v).write_last_station(station);
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile)
                     || (service!(self.vs.order_type)(v.v) == OT_GOTO_STATION
@@ -1779,7 +1753,7 @@ impl Game<'_> {
             service!(self.vs.order_free)(v.v);
         }
         if e.flags & VETS_ENTERED_WORMHOLE == 0 {
-            v.set(FRAME, u16::from(v.frame()) + 1);
+            write_field!(v.s.as_ptr(), fields.frame, v.frame().wrapping_add(1));
         }
         self.move_to(v, ground, s, (x, y), false, true);
         true
@@ -1866,9 +1840,9 @@ impl Game<'_> {
         status: u8,
         tick: u8,
     ) -> bool {
-        let reverse = v.get(REVERSE_CTR);
+        let reverse = read_field!(v.s.as_ptr(), fields.reverse_ctr);
         if reverse != 0 {
-            v.set(REVERSE_CTR, reverse - 1);
+            write_field!(v.s.as_ptr(), fields.reverse_ctr, reverse - 1);
         }
         if status & VS_CRASHED != 0
             || self.train_crash(
@@ -2158,7 +2132,7 @@ impl Game<'_> {
         if day & 7 == 0 {
             unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
         }
-        if v.get(BLOCKED) == 0 {
+        if read_field!(v.s.as_ptr(), fields.blocked_ctr) == 0 {
             unsafe { self.vs.maintain(v.v, maintenance::check_vehicle_breakdown) };
         }
         self.service(v);
@@ -2204,7 +2178,7 @@ impl Game<'_> {
             return false;
         }
         if execute {
-            v.set(REVERSE_CTR, 180);
+            write_field!(v.s.as_ptr(), fields.reverse_ctr, 180);
             service!(self.vs.reset_depot_unbunching)(v.v);
         }
         true
@@ -2465,14 +2439,7 @@ pub(crate) unsafe fn slope_pixel(
 /// Shared modern/legacy afterload road-stop frame query, retaining original indexes.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_stop_frame(index: u32) -> u8 {
-    crate::road_data::_ROAD_STOP_STOP_FRAME[index as usize]
-}
-
-/// Narrow unchanged-reference table comparison for the corpus's tram-table gap.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_drive_entry(tram: u8, state: u8, frame: u8) -> u16 {
-    let (x, y) = crate::road_data::entry(tram != 0, state as usize, frame as usize);
-    u16::from(x) | (u16::from(y) << 8)
+    road_data::_ROAD_STOP_STOP_FRAME[index as usize]
 }
 
 /// Construction removal clears only drive-through stop state bits. The raw
@@ -2480,12 +2447,9 @@ pub extern "C" fn openttd_rust_road_drive_entry(tram: u8, state: u8, frame: u8) 
 /// # Safety
 /// `state` is live and serialized by the game-state mutex.
 pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
-    let p = unsafe { (&raw mut (*state).scalars).cast::<u16>().add(STATE) };
-    let value = unsafe { p.read() } as u8;
+    let value = read_field!(state, fields.state);
     if value & DT_STOP != 0 {
-        unsafe {
-            p.write(u16::from(value & 9));
-        }
+        write_field!(state, fields.state, value & 9);
     }
 }
 
@@ -2546,15 +2510,13 @@ pub(crate) fn is_in_depot(state: *mut State) -> bool {
 /// # Safety
 /// The serialized live shell owns this state for this scalar access.
 pub(crate) unsafe fn get_frame(s: *const State) -> u8 {
-    unsafe { (*s).scalars[FRAME] as u8 }
+    read_field!(s, fields.frame)
 }
 /// `RoadVehicle::SetFrame` on the canonical owner.
 /// # Safety
 /// The serialized live shell owns this state for this scalar access.
 pub(crate) unsafe fn set_frame(s: *mut State, frame: u8) {
-    unsafe {
-        (*s).scalars[FRAME] = u16::from(frame);
-    }
+    write_field!(s, fields.frame, frame);
 }
 
 impl Game<'_> {
@@ -2575,19 +2537,19 @@ impl Game<'_> {
 
 /// `RoadVehicle::GetBlockedCounter`; live serialized owner, no borrow spans reentry.
 pub(crate) unsafe fn blocked_counter(state: *const State) -> u16 {
-    unsafe { (*state).scalars[BLOCKED] }
+    read_field!(state, fields.blocked_ctr)
 }
 /// `RoadVehicle::GetOvertaking`; live serialized owner, no borrow spans reentry.
 pub(crate) unsafe fn overtaking(state: *const State) -> u8 {
-    unsafe { (*state).scalars[OVERTAKING] as u8 }
+    read_field!(state, fields.overtaking)
 }
 /// `RoadVehicle::GetOvertakingCounter`; live serialized owner, no borrow spans reentry.
 pub(crate) unsafe fn overtaking_counter(state: *const State) -> u8 {
-    unsafe { (*state).scalars[OVERTAKING_CTR] as u8 }
+    read_field!(state, fields.overtaking_ctr)
 }
 /// `RoadVehicle::GetCrashedCounter`; live serialized owner, no borrow spans reentry.
 pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
-    unsafe { (*state).scalars[CRASHED] }
+    read_field!(state, fields.crashed_ctr)
 }
 
 /// `RoadVehicle::GetCurrentMaxSpeed`.
@@ -2625,3 +2587,6 @@ pub(crate) use availability::*;
 
 /// `RoadTypeSpriteGroup::ROTSG_END`.
 pub const ROTSG_END: u8 = 12;
+
+#[cfg(test)]
+mod tests;

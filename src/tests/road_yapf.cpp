@@ -9,7 +9,6 @@
 #include "../stdafx.h"
 #include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
-#include "../misc/binaryheap.hpp"
 #include "../pathfinder/pathfinder_type.h"
 #include "../track_func.h"
 #include "../roadveh.h"
@@ -21,7 +20,6 @@
 #include "../safeguards.h"
 
 namespace {
-struct HeapNode { int32_t estimate; bool operator<(const HeapNode &other) const { return this->estimate < other.estimate; } };
 OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
 uint16_t fixture_dirs = 1;
 OpenTTDFixtureMap movement_map{6, 4096};
@@ -60,29 +58,6 @@ const OpenTTDRoadYapfLeaves probe_leaves{
 	.tile = ProbeTile,
 	.closest = RoadProbeClosest,
 };
-}
-
-TEST_CASE("Road YAPF native heap ties and arbitrary removal", "[road][rust]")
-{
-	/* Equal estimates, both internal/last removal, open-node replacement and
-	 * mixed-cost pops: save chunks do not expose the intermediate heap order. */
-	const std::array<int32_t, 8> costs{100, 100, 100, 50, 100, 200, 50, 100};
-	std::array<HeapNode, 8> nodes;
-	for (size_t i = 0; i < nodes.size(); ++i) nodes[i].estimate = costs[i];
-	const std::array<uint32_t, 23> commands{0,0,0,0,0,0,0,0,1,1,0,0,2,2,2,2,2,2,2,2,0,0,2};
-	const std::array<int32_t, 23> values{0,1,2,3,4,5,6,7,1,7,1,7,0,0,0,0,0,0,0,0,1,2,0};
-	std::array<uint32_t, commands.size()> actual{}, expected{};
-	CBinaryHeapT<HeapNode> heap(8);
-	for (size_t i = 0; i < commands.size(); ++i) {
-		if (commands[i] == 0) heap.Include(&nodes[values[i]]);
-		if (commands[i] == 1) heap.Remove(heap.FindIndex(nodes[values[i]]));
-		if (commands[i] == 2) expected[i] = heap.Shift() - nodes.data();
-		else expected[i] = heap.IsEmpty() ? UINT32_MAX : heap.Begin() - nodes.data();
-	}
-	const OpenTTDRoadYapfInput input{};
-	const auto &leaves = probe_leaves;
-	openttd_rust_road_yapf_heap_probe(&input, &leaves, costs.data(), costs.size(), commands.data(), values.data(), commands.size(), actual.data());
-	REQUIRE(actual == expected);
 }
 
 TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")

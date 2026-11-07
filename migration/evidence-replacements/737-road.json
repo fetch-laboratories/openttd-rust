@@ -1,0 +1,27 @@
+[
+  {
+    "retires": [
+      "ctest:Road vehicles - original movement and stop tables"
+    ],
+    "oracle": "OpenTTD 15.3, pinned commit 14ec60f248547d4d062a1160f0fc26d742319888, src/table/roadveh_movement.h. The unchanged original supplies all 96 non-null road/tram rows (2080 frame pairs) in road/tests/movement-oracle.txt and all 32 stop-frame values. These retain the former native fixture's exhaustive table observation, including the corpus's tram/articulated table gap; they do not establish controller coverage for those vehicles.",
+    "observations": {
+      "Every reachable original road/tram movement-table entry, including row selection and frame order": [
+        "rust:lib:road::tests::original_movement_and_stop_tables"
+      ],
+      "Every original road-stop stopping frame": [
+        "rust:lib:road::tests::original_movement_and_stop_tables"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "ctest:Road YAPF native heap ties and arbitrary removal"
+    ],
+    "oracle": "OpenTTD 15.3, pinned commit 14ec60f248547d4d062a1160f0fc26d742319888, src/misc/binaryheap.hpp. The expected 23-element trace was captured by compiling the unchanged CBinaryHeapT with the former native fixture's costs, commands, values and native reference loop. The Rust replacement executes Search::include/remove on the actual production search heap. No expected value comes from the Rust heap.",
+    "observations": {
+      "Intermediate heap minima and popped identities for equal estimates, internal/last removal, open-node replacement and mixed-cost pops, including observations absent from saved state": [
+        "rust:lib:road_yapf::tests::original_heap_ties_and_arbitrary_removal"
+      ]
+    }
+  }
+]

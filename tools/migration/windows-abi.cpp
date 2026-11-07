@@ -147,11 +147,18 @@ static void Calls()
 		openttd_rust_town_destroy(owner);
 	}
 	std::unique_ptr<OpenTTDRoadState, decltype(&openttd_rust_road_destroy)> road(openttd_rust_road_new(), openttd_rust_road_destroy);
-	for (uint8_t field = 0; field < 7; ++field) {
-		CHECK(openttd_rust_road_get(road.get(), field) == 0);
-		openttd_rust_road_set(road.get(), field, 65535);
-		CHECK(openttd_rust_road_get(road.get(), field) == (field == 2 || field == 5 ? 65535 : 255));
-	}
+	const auto check_road_field = [](auto &field) {
+		CHECK(field == 0);
+		field = static_cast<std::remove_reference_t<decltype(field)>>(UINT16_MAX);
+		CHECK(field == std::numeric_limits<std::remove_reference_t<decltype(field)>>::max());
+	};
+	check_road_field(road->state);
+	check_road_field(road->frame);
+	check_road_field(road->blocked_ctr);
+	check_road_field(road->overtaking);
+	check_road_field(road->overtaking_ctr);
+	check_road_field(road->crashed_ctr);
+	check_road_field(road->reverse_ctr);
 	CHECK(openttd_rust_road_path_size(road.get()) == 0);
 	const OpenTTDRoadPathElement road_path[] = {{255, UINT32_MAX}, {9, 123456}};
 	openttd_rust_road_path_replace(road.get(), road_path, 2);
