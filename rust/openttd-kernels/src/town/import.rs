@@ -3,10 +3,12 @@
 //! attempts, failure signs and bounded expansion. File reading, JSON parsing and
 //! each feature's typed extraction stay native; Rust asks for one feature at a
 //! time, so a malformed later feature leaves earlier towns founded and unexpanded.
+use super::State;
 use super::founding::{FoundingServices, Tile, TownLayout, TownSize};
-use super::{State, TownId};
 use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
 use crate::services::Services;
+use crate::tile_type::TileIndex;
+use crate::town_type::TownID;
 use crate::town_type::{TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TSZ_SMALL};
 
 #[repr(C)]
@@ -17,9 +19,13 @@ pub struct Frame {
 /// One validated feature; the native frame keeps its name until the next `feature` call.
 #[repr(C)]
 pub struct Feature {
+    /// Target population; original `population`.
     pub population: u32,
+    /// Original `x_proportion`: proportion 0..1 of the maximum X coordinate.
     pub x: f32,
+    /// Original `y_proportion`: proportion 0..1 of the maximum Y coordinate.
     pub y: f32,
+    /// Original `is_city`: whether to create a city.
     pub city: bool,
 }
 
@@ -50,11 +56,11 @@ pub struct ImportServices {
     pub named_error: extern "C" fn(u32, u32, *const Frame),
     pub failed_warning: extern "C" fn(u32, u32),
     /// `Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, ...)`, returning the town ID.
-    pub found: extern "C" fn(*const Frame, Tile, TownSize, bool, TownLayout, bool, u32) -> TownId,
+    pub found: extern "C" fn(*const Frame, Tile, TownSize, bool, TownLayout, bool, u32) -> TownID,
     /// `Command<CMD_PLACE_SIGN>::Post`.
     pub place_sign: extern "C" fn(Tile, *const Frame),
     /// `Command<CMD_EXPAND_TOWN>::Post`.
-    pub expand: extern "C" fn(TownId, u32, u8),
+    pub expand: extern "C" fn(TownID, u32, u8),
 }
 
 impl ImportServices {
@@ -62,87 +68,94 @@ impl ImportServices {
         (unsafe { &*self.shared }.show_error)(self.strings.load_failed, self.strings.json_format);
     }
 
-    /// The target tile, with the original float products and unsigned conversions.
+    /// `LoadTownData`: find the target tile with the original float products and unsigned conversions.
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
     )]
-    pub(crate) fn target(&self, rotation: u8, x: f32, y: f32) -> Tile {
+    pub(crate) fn target(&self, rotation: u8, x_proportion: f32, y_proportion: f32) -> TileIndex {
         let s = unsafe { &*self.shared };
         let map = s.map();
         let max_x = map.max_x() as f32;
         let max_y = (s.map_max_y)() as f32;
         match rotation {
-            HM_CLOCKWISE => Tile(map.tile_xy((x * max_x) as u32, (y * max_y) as u32)),
+            HM_CLOCKWISE => {
+                // Tile coordinates align with what we expect.
+                TileIndex(map.tile_xy((x_proportion * max_x) as u32, (y_proportion * max_y) as u32))
+            }
             HM_COUNTER_CLOCKWISE => {
+                // Tile coordinates are rotated and must be adjusted.
                 // AArch64 compilers contract the original subtraction and multiplication.
                 #[cfg(target_arch = "aarch64")]
-                let rotated_x = (-y).mul_add(max_x, 1.0);
+                let rotated_x = (-y_proportion).mul_add(max_x, 1.0);
                 #[cfg(not(target_arch = "aarch64"))]
-                let rotated_x = 1.0 - y * max_x;
+                let rotated_x = 1.0 - y_proportion * max_x;
                 // Emscripten and AArch64 clamp the original negative float-to-uint conversion to zero.
                 #[cfg(any(target_os = "emscripten", target_arch = "aarch64"))]
                 let tile_x = rotated_x as u32;
                 // x86 compilers truncate through a signed integer, retaining the low 32 bits.
                 #[cfg(not(any(target_os = "emscripten", target_arch = "aarch64")))]
                 let tile_x = (rotated_x as i64) as u32;
-                Tile(map.tile_xy(tile_x, (x * max_y) as u32))
+                TileIndex(map.tile_xy(tile_x, (x_proportion * max_y) as u32))
             }
             _ => {
                 (s.not_reached)();
-                Tile(0)
+                TileIndex(0)
             }
         }
     }
 
-    /// Spiral founding attempts around the target, excluding the target itself.
-    fn found(&self, frame: *mut Frame, target: Tile, feature: &Feature) -> TownId {
+    /// `LoadTownData` founding loop: seek a suitable tile up to 16 tiles away.
+    /// The target may be water, blocked, or a steep slope the founding command cannot terraform.
+    /// `SpiralTileSequence(target_tile, 16, 0, 0)` excludes the target itself.
+    fn found(&self, frame: *mut Frame, target_tile: TileIndex, feature: &Feature) -> TownID {
         let s = unsafe { &*self.shared };
         let layout = (unsafe { &*self.founding }.layout_setting)();
         let map = s.map();
         let size_y = (s.map_max_y)().wrapping_add(1);
         let mut spiral = crate::spiral::hole(
-            map.tile_x(target.0),
-            map.tile_y(target.0),
+            map.tile_x(target_tile.0),
+            map.tile_y(target_tile.0),
             16,
             0,
             0,
             map.size_x(),
             size_y,
         );
-        let mut town = TownId::INVALID;
+        let mut town_id = TownID::INVALID;
         while !spiral.is_end() {
-            let tile = Tile(map.tile_xy(spiral.x, spiral.y));
-            town = (self.found)(
+            let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
+            town_id = (self.found)(
                 frame,
-                tile,
+                Tile(tile.0),
                 TownSize(TSZ_SMALL),
                 feature.city,
                 layout,
                 false,
                 0,
             );
-            if town != TownId::INVALID {
+            // Check if the command succeeded.
+            if town_id != TownID::INVALID {
                 break;
             }
             spiral = spiral.advance(map.size_x(), size_y);
         }
-        town
+        town_id
     }
 
-    fn import(&self, frame: *mut Frame, rotation: u8) {
-        // Grid towns can grow almost forever, so growth is capped; ten houses a
-        // step keeps the try limit predictable whatever the road layout.
-        const HOUSES_TO_GROW: u32 = 10;
+    /// `genworld.cpp::LoadTownData`: found towns, then expand to target populations.
+    fn load_town_data(&self, frame: *mut Frame, rotation: u8) {
+        // Load the JSON file as a string, parse it, and check that the result is an array.
         if !(self.load)(frame) {
             self.format_error();
             return;
         }
         let shared = unsafe { &*self.shared };
-        let mut towns: Vec<(TownId, *mut State, u32)> = Vec::new();
+        let mut towns: Vec<(TownID, *mut State, u32)> = Vec::new();
         let mut failed_towns: u32 = 0;
         let mut index = 0;
+        // Iterate through towns and attempt to found them.
         loop {
             let mut feature = Feature {
                 population: 0,
@@ -150,47 +163,63 @@ impl ImportServices {
                 y: 0.0,
                 city: false,
             };
+            // Ensure the feature is an object and its fields exist with the correct types.
             match (self.feature)(frame, index, &raw mut feature) {
                 FEATURE_OK => {}
                 FEATURE_END => break,
                 FEATURE_NAMED_MALFORMED => {
+                    // Other malformed fields let us tell the player which town is the problem.
                     (self.named_error)(self.strings.load_failed, self.strings.town_format, frame);
                     return;
                 }
                 _ => {
+                    // A malformed town name permits only a general warning.
                     self.format_error();
                     return;
                 }
             }
             index += 1;
+            // Check for improper coordinates and warn the player.
             if feature.x <= 0.0 || feature.y <= 0.0 || feature.x >= 1.0 || feature.y >= 1.0 {
                 (self.named_error)(self.strings.load_failed, self.strings.bad_coordinate, frame);
                 return;
             }
-            let target = self.target(rotation, feature.x, feature.y);
-            let town = self.found(frame, target, &feature);
-            if town == TownId::INVALID {
-                (self.place_sign)(target, frame);
+            // Find the target tile for the town.
+            let target_tile = self.target(rotation, feature.x, feature.y);
+            let town_id = self.found(frame, target_tile, &feature);
+            if town_id == TownID::INVALID {
+                // Leave a sign at the intended location and count the failure, so the
+                // player can diagnose heightmap misalignment or place rough-terrain towns manually.
+                (self.place_sign)(Tile(target_tile.0), frame);
                 failed_towns = failed_towns.wrapping_add(1);
                 continue;
             }
             towns.push((
-                town,
-                (shared.town_owner_by_id)(u32::from(town.0)),
+                town_id,
+                (shared.town_owner_by_id)(u32::from(town_id.0)),
                 feature.population,
             ));
         }
+        // Tell the player how many towns could not be founded.
         if failed_towns > 0 {
             (self.failed_warning)(self.strings.failed_towns, failed_towns);
         }
-        for (town, state, population) in towns {
+        // Now that the towns have been created, grow them to their target populations.
+        for (town_id, state, population) in towns {
+            // Grid towns can grow almost forever, but wandering roads randomly gets
+            // less efficient. An arbitrary limit yields about 4900 houses on a flat
+            // 3x3 grid, or 2800 houses with "Better roads".
             let mut try_limit: i32 = 1000;
+            // Repeated failed growth attempts only waste time.
             let mut fail_limit: i32 = 10;
+            // Grow a constant number of houses, rather than basing growth on town size,
+            // so the try limit applies predictably regardless of road layout and geography.
+            const HOUSES_TO_GROW: u32 = 10;
             loop {
                 // SAFETY: The founded town's owner lives through expansion; each read ends before Post.
                 let before = unsafe { super::num_houses(state) };
                 (self.expand)(
-                    town,
+                    town_id,
                     HOUSES_TO_GROW,
                     TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS,
                 );
@@ -220,7 +249,7 @@ pub unsafe extern "C" fn openttd_rust_load_town_data(
     frame: *mut Frame,
     rotation: u8,
 ) {
-    unsafe { &*services }.import(frame, rotation);
+    unsafe { &*services }.load_town_data(frame, rotation);
 }
 
 crate::abi::layouts! {
