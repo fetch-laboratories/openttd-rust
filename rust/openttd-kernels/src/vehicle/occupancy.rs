@@ -94,7 +94,7 @@ pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Ma
             v,
             links,
             get_tile_hash_for_tile(map, TileIndex(v.tile())),
-        )
+        );
     };
 }
 #[inline]
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_on_advance(s: &VehicleServices, 
     }
 }
 /// Iterate over all vehicles near a given world coordinate.
-/// This only works for vehicles with proper Vehicle::Tile, so only ground vehicles outside wormholes.
+/// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside wormholes.
 /// The order is non-deterministic. Processing must not depend on the order.
 /// Integer fields preserve native unsigned arithmetic and
 /// `Rect::Contains` wrap, including extreme coordinates in the default probe.
