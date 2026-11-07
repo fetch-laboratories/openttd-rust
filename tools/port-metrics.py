@@ -368,6 +368,112 @@ def boundary(head: str) -> BoundaryMetrics:
     return dict(exports=exports, callback_slots=slots)
 
 
+_EXPANDED: dict[str, str] = {}
+
+
+def expanded_rust(revision: str) -> str:
+    """Use the pinned compiler to expand macros, including test-only syntax.
+
+    -Zunpretty needs RUSTC_BOOTSTRAP but does not compile/link game behavior.
+    Snapshots are archive extractions, never another Git checkout.
+    """
+    import migration
+
+    key = git(
+        "rev-parse",
+        *[
+            f"{revision}:{path}"
+            for path in ("rust", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml")
+        ],
+    )
+    if key in _EXPANDED:
+        return _EXPANDED[key]
+    output = ROOT / ".local/growth-inputs"
+    output.mkdir(parents=True, exist_ok=True)
+    cache = output / (
+        hashlib.sha256((key + Path(__file__).read_text()).encode()).hexdigest() + ".rs"
+    )
+    if cache.is_file():
+        return cache.read_text()
+    archive = subprocess.check_output(["git", "archive", revision], cwd=ROOT)
+    with tempfile.TemporaryDirectory(dir=output) as directory:
+        source = Path(directory)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(source, filter="data")
+        env = migration.environment()
+        env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo-growth")
+        env["RUSTC_BOOTSTRAP"] = "1"
+        expanded = subprocess.check_output(
+            [
+                "cargo",
+                "rustc",
+                "-p",
+                "openttd-kernels",
+                "--lib",
+                "--locked",
+                "--",
+                "--cfg",
+                "test",
+                "-Zunpretty=expanded",
+            ],
+            cwd=source,
+            env=env,
+            text=True,
+        )
+
+    cache.write_text(expanded)
+    _EXPANDED[key] = expanded
+    return expanded
+
+
+def growth_inventory(head: str) -> dict[str, dict[str, int]]:
+    """Independent cleanup counters, sharing this metric's code-line semantics.
+
+    The AST inventory closes aliases/unprefixed exports; boundary() remains the
+    historical syntactic series and is reported separately by the caller.
+    """
+    from rust_syntax import boundary_ids
+
+    files = {
+        path: show(head, path)
+        for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines()
+        if path.endswith(".rs")
+    }
+    has_crate = bool(show(head, "rust/openttd-kernels/Cargo.toml"))
+    identities = (
+        boundary_ids({"rust/expanded.rs": expanded_rust(head)}, expanded=True)
+        if has_crate
+        else boundary_ids(files)
+    )
+    evidence = evidence_cpp(head)
+    glue: dict[str, set[int]] = {}
+    source_metrics(BASELINE, head, glue_lines=glue)
+    result = {
+        "tools_cpp": {
+            row["path"]: row["lines"]
+            for row in evidence["files"]
+            if row["path"].startswith("tools/")
+        },
+        "tests_cpp": {
+            path: len(lines)
+            for path, lines in glue.items()
+            if path.startswith("src/tests/")
+        },
+        "exports": dict.fromkeys(sorted(identities["exports"]), 1),
+        "callback_slots": dict.fromkeys(sorted(identities["callback_slots"]), 1),
+        "generated_records": {
+            name: len(code_lines(text, name))
+            for name, text in generated_records(head).items()
+        },
+        "outside_cpp": {
+            row["path"]: row["lines"]
+            for row in evidence["files"]
+            if not row["path"].startswith("tools/")
+        },
+    }
+    return result
+
+
 def source_metrics(
     base: str,
     head: str = "HEAD",

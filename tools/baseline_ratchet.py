@@ -48,3 +48,29 @@ def main(
     count = sum(len(names) for _, names in errors)
     print(f"{summary.format(count=len(hits))}; {count} errors")
     return int(count > 0)
+
+
+def debt_errors(
+    current: dict[str, list[int]],
+    baseline: dict[str, list[int]],
+    previous: dict[str, list[int]],
+) -> list[str]:
+    """Compare stable sites, including multiplicity and measured magnitude.
+
+    Values are sorted magnitudes, one per distinct compiler site (deduplicated
+    across Cargo targets). Removing a site cannot pay for another site's growth.
+    """
+    errors = []
+    for label, left, right in (
+        ("new site", current, baseline),
+        ("stale row", baseline, current),
+        ("baseline growth", baseline, previous),
+    ):
+        for key in sorted(left):
+            values = sorted(left[key], reverse=True)
+            allowed = sorted(right.get(key, []), reverse=True)
+            if len(values) > len(allowed) or any(
+                value > limit for value, limit in zip(values, allowed, strict=False)
+            ):
+                errors.append(f"{label}: {key}: {values} exceeds {allowed}")
+    return errors
