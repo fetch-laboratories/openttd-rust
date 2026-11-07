@@ -13,13 +13,13 @@
 #include <cstddef>
 #include "services_ffi.h"
 #include "vehicle_ffi.h"
+#include "abi-record-road_state.h"
 /** Entries take a live vehicle handle and its owner; consist links carry both.
  * Both languages access common and ground fields in their canonical records. Leaves are typed noexcept
  * services; visitors run synchronously in pool order and stop when they return
  * false. Ground pointers name separate stable allocations, surviving controller
  * callbacks that cannot destroy the current shell; advancing a changed chain
  * reacquires both owners. No owner or path borrow spans a service; panics abort. */
-struct OpenTTDRoadState;
 struct OpenTTDGroundState;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadCommandSlot;
@@ -82,17 +82,14 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_road_turn_abi(OpenTTDVehicle *, OpenTTDRo
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_turn(OpenTTDVehicle *a0, OpenTTDRoadState *a1, bool a2, const OpenTTDRoadLeaves *a3) { return openttd_rust_road_turn_abi(a0, a1, a2, a3) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_road_trackdir(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 /* Each ordinary or indexed-load shell owns one zero-created state, destroyed once after
- * PreDestructor, also during pool cleanup. Scalars 0..6: state:u8, frame:u8, blocked:u16,
- * overtaking:u8, overtaking-counter:u8, crashed:u16, reverse:u8; set narrows to source widths.
+ * PreDestructor, also during pool cleanup. The generated fields are the allocation's
+ * canonical prefix; its path remains private to Rust.
  * Save/load stages fields and path outside Rust frames and commits partial loads on unwind.
  * Path access has std::vector's index/nonempty preconditions; replacement copies in forward order,
  * with a null input allowed for zero count. */
 OpenTTDRoadState *OPENTTD_RUST_CALL openttd_rust_road_new();
 void OPENTTD_RUST_CALL openttd_rust_road_destroy(OpenTTDRoadState *);
-uint16_t OPENTTD_RUST_CALL openttd_rust_road_get(const OpenTTDRoadState *, uint8_t);
-void OPENTTD_RUST_CALL openttd_rust_road_set(OpenTTDRoadState *, uint8_t, uint16_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_road_stop_frame(uint32_t);
-uint16_t OPENTTD_RUST_CALL openttd_rust_road_drive_entry(uint8_t, uint8_t, uint8_t);
 size_t OPENTTD_RUST_CALL openttd_rust_road_path_size(const OpenTTDRoadState *);
 OpenTTDRoadPathElement OPENTTD_RUST_CALL openttd_rust_road_path_get(const OpenTTDRoadState *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_road_path_replace(OpenTTDRoadState *, const OpenTTDRoadPathElement *, size_t);

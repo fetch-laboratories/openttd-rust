@@ -1,0 +1,16 @@
+[
+  {
+    "retires": [
+      "source:tools/simulation/landscape-loop-reference.cpp"
+    ],
+    "oracle": "OpenTTD 15.3 at 14ec60f248547d4d062a1160f0fc26d742319888, unchanged pinned reference. The existing landscape.py extractor supplied original foundation, slope and outside-coordinate bodies to a reference-only GCC 13.3.0 Linux x86_64 runner. Frozen foundation-oracle.txt and coordinate-oracle.txt preserve every MovementGap input/result: 19 slopes, all 256 masks, four 64/4096 map shapes and 13 by 10 signed-coordinate extrema. This is a partial source transfer: the native scheduler/reentry/mutation probe remains in the same file. No candidate output generated expectations.",
+    "observations": {
+      "9728 rail and road foundation results including impossible raw masks": [
+        "rust:lib:movement::evidence_tests::foundations_match_original"
+      ],
+      "9880 production outside-coordinate results including signed extrema and rectangular map shapes": [
+        "rust:lib:movement::evidence_tests::extreme_coordinates_match_original"
+      ]
+    }
+  }
+]

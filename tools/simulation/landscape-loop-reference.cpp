@@ -15,10 +15,6 @@
 #include <tuple>
 #include <cassert>
 #include <optional>
-#include "rust/movement_ffi.h"
-#include "slope_type.h"
-#include "track_type.h"
-#include "road_type.h"
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
@@ -30,17 +26,8 @@
 [[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
 
 namespace LandscapeReference {
-// Avoid ADL into the candidate header helpers while calling pinned originals.
-#define CornerToTrackBits ReferenceCornerToTrackBits
-#define TracksOverlap ReferenceTracksOverlap
 #undef lengthof
 static unsigned int log_x, log_y;
-using uint = unsigned int;
-static constexpr uint TILE_SIZE = 16, TILE_HEIGHT = 8;
-static constexpr uint8_t MP_VOID = 7;
-#define NOT_REACHED() std::abort()
-#include "movement-foundation-reference.inc"
-
 static constexpr uint8_t native_types[]{5, 10, 10, 5}; // Other kinds dispatch to Rust owners.
 static uint64_t observed_hash, observed_count;
 static bool rust_run, reenter, nested;
@@ -84,24 +71,9 @@ static void ReferenceStation(TileIndex tile) { LandscapeStationLoop(tile.base())
 static void ReferenceObject(TileIndex tile) { Object(tile.base()); }
 static uint8_t GetTileType(uint32_t tile) { return Type(tile); }
 static uint8_t GetTileType(TileIndex tile) { return Type(tile.base()); }
-static uint TileHeightOutsideMap(int x, int y) {
-	const uint tx = std::clamp(x, 0, int(Map::SizeX() - 1));
-	const uint ty = std::clamp(y, 0, int(Map::SizeY() - 1));
-	return tiles[(ty << log_x) + tx].height;
-}
-#include "movement-height-reference.inc"
-static int GetSlopePixelZ(int x, int y, bool ground) {
-	assert(!ground);
-	auto [slope, z] = GetTilePixelSlopeOutsideMap(uint32_t(x) >> 4, uint32_t(y) >> 4);
-	return z + GetPartialPixelZ(x & 15, y & 15, slope);
-}
-struct TileTypeProcs { void (*tile_loop_proc)(TileIndex); int (*get_slope_z_proc)(TileIndex, uint, uint, bool) = nullptr; };
-static int GetSlopePixelZ_Void(TileIndex, uint, uint, bool);
-static const TileIndex INVALID_TILE{UINT32_MAX};
-static const TileTypeProcs movement_void{nullptr, GetSlopePixelZ_Void};
+struct TileTypeProcs { void (*tile_loop_proc)(TileIndex); };
 static const TileTypeProcs procs[2] = {{ReferenceStation}, {ReferenceObject}};
-static const TileTypeProcs * const _tile_type_procs[16] = {nullptr, nullptr, nullptr, nullptr, nullptr, &procs[0], nullptr, &movement_void, nullptr, nullptr, &procs[1]};
-#include "movement-coordinate-reference.inc"
+static const TileTypeProcs * const _tile_type_procs[16] = {nullptr, nullptr, nullptr, nullptr, nullptr, &procs[0], nullptr, nullptr, nullptr, nullptr, &procs[1]};
 static TileIndex _cur_tileloop_tile;
 #include <cassert>
 #include "landscape-loop-reference.inc"
@@ -164,46 +136,8 @@ static void NativeVisit(uint32_t tile, uint8_t kind) noexcept
 		if (rust_run) RustRun(); else RunTileLoop();
 	}
 }
-/* These states cannot be built through commands, so the default gap probe sets them. */
-static void MovementGap()
-{
-	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};
-	unsigned cases = 0;
-	for (Slope slope : slopes) for (uint bits = 0; bits < 256; bits++) {
-		if (openttd_rust_rail_foundation(slope, static_cast<TrackBits>(bits), [](bool ok) noexcept { assert(ok); }) != GetRailFoundation(slope, static_cast<TrackBits>(bits))) std::abort();
-		if (openttd_rust_road_foundation(slope, static_cast<RoadBits>(bits), [](bool ok) noexcept { assert(ok); }) != GetRoadFoundation(slope, static_cast<RoadBits>(bits))) std::abort();
-		cases += 2;
-	}
-	OpenTTDSharedServices world{};
-	world.map = &map_statics;
-	world.map_max_x = []() noexcept { return Map::SizeX() - 1; };
-	world.map_max_y = []() noexcept { return Map::SizeY() - 1; };
-	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
-	OpenTTDMovementServices movement{};
-	movement.shared = &world;
-	for (uint x_bits : {6U, 12U}) for (uint y_bits : {6U, 12U}) {
-		log_x = x_bits; log_y = y_bits;
-		tiles = std::make_unique<BaseTile[]>(1U << (log_x + log_y));
-		extended = std::make_unique<TileExtendedStorage[]>(1U << (log_x + log_y));
-		map_size = 1U << (log_x + log_y);
-		for (uint i = 0; i < (1U << (log_x + log_y)); ++i) tiles[i].height = 3;
-		for (Slope slope : slopes) {
-		tiles[0].height = 3 + ((slope & SLOPE_N) != 0);
-		tiles[1].height = 3 + ((slope & SLOPE_W) != 0);
-		tiles[1U << log_x].height = 3 + ((slope & SLOPE_E) != 0);
-		tiles[(1U << log_x) + 1].height = 3 + ((slope & SLOPE_S) != 0);
-		for (int x : {INT32_MIN, -65537, -16, -1, 0, 1, 15, 16, 1023, 1024, 65535, 65536, INT32_MAX}) for (int y : {INT32_MIN, -16, -1, 0, 15, 1023, 1024, 65535, 65536, INT32_MAX}) {
-			int expected = GetSlopePixelZOutsideMap(x, y);
-			if (openttd_rust_movement_outside_z(&movement, x, y) != expected) std::abort();
-			cases++;
-		}
-	}
-	}
-	std::printf("movement foundation/extreme-coordinate gap: %u unchanged-body cases passed\n", cases);
-}
 void Main()
 {
-	MovementGap();
 	shared.tile_type = Type;
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	unsigned cases = 0;
