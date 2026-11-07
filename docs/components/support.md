@@ -63,10 +63,10 @@
 - Limits: `DivideApprox` has potentially overflowing signed intermediates requiring separate work.
 - PRs: #36.
 
-## Generic history structural engine
+## History queries
 
-- Rust owns: History validity, rotation scheduling and query traversal.
-- C++ keeps: `HistoryRange`, typed `HistoryData`, `SumHistory` specializations, graph fillers and `GetAndResetAccumulatedAverage`.
+- Rust owns: canonical town/industry monthly history operations and reducers, first-child validity, and direct typed industry/town queries. Three query entries replace the old structural instruction exchange; the internal scalar descriptor remains for monthly operations.
+- C++ keeps: native range construction, history layouts and save adapters, graph fillers, accumulated averages, and original generic update/rotation/query helpers for remaining nonproduction instantiations. Their retained native evidence remains debt under #736.
 - Checks: `python3 tools/history-comparison.py`.
 - PRs: #32.
 

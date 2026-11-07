@@ -23,8 +23,10 @@ from validation_execution import run_logged
 ROOT = Path(__file__).resolve().parents[1]
 LOGS = ROOT / ".local/comparison-logs"
 TIMEOUT_SECONDS = 1200
-# Summary lines; compiler diagnostics start with a path, file:line or space.
-INVENTORY = re.compile(r"^(?![^\s:]+:\d+:)[A-Za-z].*(?:\bpassed\b|cases: \d+$)")
+# Driver summaries, excluding Cargo's test counts and compiler diagnostics.
+INVENTORY = re.compile(
+    r"^(?!test result:)(?![^\s:]+:\d+:)[A-Za-z].*(?:\bpassed\b|cases: \d+$)"
+)
 
 
 def run(tool: Path) -> tuple[Path, int, float, Path]:

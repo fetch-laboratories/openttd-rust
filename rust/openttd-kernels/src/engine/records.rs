@@ -307,3 +307,74 @@ pub unsafe extern "C" fn openttd_rust_engine_construct(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt::Write;
+
+    #[test]
+    fn out_of_range_prototypes_match_original() {
+        // Frozen Engine(type, UINT16_MAX) observations from unchanged 15.3,
+        // 14ec60f248547d4d062a1160f0fc26d742319888, GNU/Linux x86_64.
+        // All inputs take the out-of-range path; the production constructor must
+        // return before reading any of the original specification table pointers.
+        let tables = Defaults {
+            info: std::ptr::null(),
+            rail: std::ptr::null(),
+            road: std::ptr::null(),
+            ship: std::ptr::null(),
+            aircraft: std::ptr::null(),
+            counts: [116, 88, 11, 41],
+            offsets: [0, 116, 204, 215],
+            first_names: [0; 4],
+        };
+        let mut observed = String::new();
+        for kind in [
+            VehicleType::TRAIN,
+            VehicleType::ROAD,
+            VehicleType::SHIP,
+            VehicleType::AIRCRAFT,
+        ] {
+            let mut record = super::super::Lifecycle::default();
+            // SAFETY: A unique live record, a company vehicle type and an index
+            // outside every original table. The constructor reads no table data.
+            unsafe {
+                openttd_rust_engine_construct(&raw mut record, &tables, kind, u16::MAX);
+            }
+            assert_eq!(record.vehicle_info_type.0, kind.0);
+            assert!(!record.info.cargo_label.mixed);
+            let extra = match kind {
+                VehicleType::TRAIN => {
+                    // SAFETY: The constructor has installed the rail variant.
+                    let rail = unsafe { record.vehicle_info.rail };
+                    assert_eq!(rail.railtypes, 1);
+                    rail.railveh_type
+                }
+                // SAFETY: Each arm reads only the variant installed for kind.
+                VehicleType::ROAD => unsafe { record.vehicle_info.road }.tractive_effort,
+                // SAFETY: The constructor has installed the ship variant.
+                VehicleType::SHIP => unsafe { record.vehicle_info.ship }.acceleration,
+                // SAFETY: The constructor has installed the aircraft variant.
+                VehicleType::AIRCRAFT => unsafe { record.vehicle_info.aircraft }.subtype,
+                _ => unreachable!(),
+            };
+            writeln!(
+                observed,
+                "prototype {} {} {} {} {} {} {}",
+                record.r#type.0,
+                record.info.base_life,
+                record.info.cargo_type,
+                record.info.cargo_label.value,
+                record.info.cargo_age_period,
+                record.info.variant_id.0,
+                extra
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            observed,
+            include_str!("records/prototype-oracle.txt").replace("\r\n", "\n")
+        );
+    }
+}

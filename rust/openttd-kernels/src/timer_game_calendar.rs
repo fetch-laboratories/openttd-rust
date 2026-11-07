@@ -10,7 +10,7 @@ use crate::timer_game_common::{self as common, *};
 use crate::timer_game_tick::DAY_TICKS;
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CalendarYear(pub i32);
 pub const DEF_MINUTES_PER_YEAR: u32 = 12;
 pub const FROZEN_MINUTES_PER_YEAR: u32 = 0;
@@ -80,3 +80,8 @@ pub(crate) unsafe fn elapsed(
     }
     true
 }
+
+/// Explicit C ABI carrier for a native calendar Date, converted in C++.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CalendarDate(pub i32);

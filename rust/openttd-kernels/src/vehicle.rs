@@ -27,24 +27,11 @@ pub use crate::vehicle_type::OpenTTDVehicle;
 /// including sentinels and unnamed values, without Rust enum validity constraints.
 pub use crate::vehicle_type::VehicleType;
 
-/// Native `OrderType : uint8_t`, including every unnamed byte pattern.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct OrderType(pub u8);
+/// Compatibility import of the original header type.
+pub use crate::order_type::OrderType;
 
-/// Native `RailVehicleTypes : uint8_t`, with the same unrestricted byte domain.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RailVehicleTypes(pub u8);
-
-impl RailVehicleTypes {
-    /// Native `RAILVEH_SINGLEHEAD`.
-    pub const SINGLEHEAD: Self = Self(0);
-    /// Native `RAILVEH_MULTIHEAD`.
-    pub const MULTIHEAD: Self = Self(1);
-    /// Native `RAILVEH_WAGON`.
-    pub const WAGON: Self = Self(2);
-}
+/// Compatibility import of the original header type.
+pub use crate::engine_type::RailVehicleTypes;
 
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
@@ -105,8 +92,8 @@ pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 pub const SND_DEPARTURE_OLD_RV_1: u16 = 23;
 pub const SND_DEPARTURE_OLD_RV_2: u16 = 24;
 /// `HVOT_BUS` and `HVOT_TRUCK`.
-pub const HVOT_BUS: u8 = 1 << 2;
-pub const HVOT_TRUCK: u8 = 1 << 3;
+pub const HVOT_BUS: u8 = crate::station_type::StationHadVehicleOfType::HVOT_BUS.0;
+pub const HVOT_TRUCK: u8 = crate::station_type::StationHadVehicleOfType::HVOT_TRUCK.0;
 
 /// `GetNewVehiclePos` result.
 #[repr(C)]

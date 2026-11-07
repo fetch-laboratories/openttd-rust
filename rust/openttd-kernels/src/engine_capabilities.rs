@@ -694,3 +694,62 @@ pub(crate) unsafe fn unknown_callback(
     let grfid = unsafe { openttd_rust_engine_grfid(s, e) };
     unsafe { ((*((s.loading)())).unknown_refit)(grfid, callback.0, result) };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::Lifecycle;
+    use crate::engine::records::{
+        AircraftVehicleInfo, RailVehicleInfo, RoadVehicleInfo, ShipVehicleInfo, VehicleInfo,
+    };
+    /// Carry the original native capability fixture's observations across reader retirement.
+    /// Decision results were observed from unchanged `Engine::CanCarryCargo` at
+    /// 14ec60f248547d4d062a1160f0fc26d742319888 for these exact six inputs.
+    #[test]
+    fn carrying_and_config_preserve_type_and_zero_capacity_gates() {
+        for (kind, capacity, cargo, observed_cargo, carries) in [
+            (VehicleType::TRAIN, 0, 0, 255, false),
+            (VehicleType::TRAIN, 255, 0, 0, true),
+            (VehicleType::ROAD, 0, 0, 255, false),
+            (VehicleType::ROAD, 255, 255, 255, false),
+            (VehicleType::SHIP, 0, 0, 0, true),
+            (VehicleType::AIRCRAFT, 0, 255, 255, false),
+        ] {
+            let mut record = Lifecycle::default();
+            record.r#type = kind;
+            record.vehicle_info_type = kind;
+            record.vehicle_info = match kind {
+                VehicleType::TRAIN => VehicleInfo {
+                    rail: RailVehicleInfo {
+                        capacity,
+                        ..RailVehicleInfo::default()
+                    },
+                },
+                VehicleType::ROAD => VehicleInfo {
+                    road: RoadVehicleInfo {
+                        capacity,
+                        ..RoadVehicleInfo::default()
+                    },
+                },
+                VehicleType::SHIP => VehicleInfo {
+                    ship: ShipVehicleInfo::default(),
+                },
+                VehicleType::AIRCRAFT => VehicleInfo {
+                    aircraft: AircraftVehicleInfo::default(),
+                },
+                _ => unreachable!(),
+            };
+            record.info.cargo_type = cargo;
+            let engine = EngineRef::of(&raw const record);
+            let carrying = engine.carrying();
+            assert_eq!(can_carry(carrying), carries);
+            assert_eq!(carrying.kind.0, kind.0);
+            assert_eq!(carrying.ground_capacity, capacity);
+            assert_eq!(carrying.default_cargo, observed_cargo);
+            record.info.callback_mask = 24;
+            record.info.misc_flags = 96;
+            let config = engine.capacity_config(60000);
+            assert_eq!((config.id, config.callbacks, config.misc), (60000, 24, 96));
+        }
+    }
+}

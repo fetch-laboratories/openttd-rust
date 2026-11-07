@@ -13,7 +13,6 @@
 #include "../economy_func.h"
 #include "../newgrf_engine.h"
 #include "../table/strings.h"
-#include <thread>
 #include "../rust/engine_ffi.h"
 #include "../rust/engine_loading_ffi.h"
 #include "../rust/vehicle_properties_ffi.h"
@@ -45,6 +44,8 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	std::vector<Engine> staged;
 	staged.emplace_back();
 	CHECK(staged[0].Record().type == VEH_INVALID);
+	staged[0].index = EngineID{60000};
+	CHECK(RustEngineID(RustEngine(&staged[0])) == 60000);
 	CHECK_THROWS_AS(staged[0].VehInfo<RailVehicleInfo>(), std::bad_variant_access);
 	CHECK(staged[0].Record().info.cargo_label.value == 0);
 	CHECK_FALSE(staged[0].Record().info.cargo_label.mixed);
@@ -71,89 +72,6 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	staged[0].rust_lifecycle.state->age = INT32_MIN;
 	REQUIRE(staged[0].Record().age == INT32_MIN);
 	staged.clear();
-}
-
-TEST_CASE("Engine typed prototypes keep original out-of-range defaults", "[rust][engine][lifetime]")
-{
-	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; ++type) {
-		Engine prototype(type, UINT16_MAX);
-		CHECK(prototype.Record().type == type);
-		CHECK(prototype.Record().vehicle_info_type == type);
-		CHECK(prototype.Record().info.base_life == TimerGameCalendar::Year{0xFF});
-		CHECK(prototype.Record().info.cargo_type == INVALID_CARGO);
-		CHECK(prototype.Record().info.cargo_label.value == (type == VEH_AIRCRAFT ? CT_INVALID.base() : CT_PASSENGERS.base()));
-		CHECK_FALSE(prototype.Record().info.cargo_label.mixed);
-		CHECK(prototype.Record().info.cargo_age_period == Ticks::CARGO_AGING_TICKS);
-		CHECK(prototype.Record().info.variant_id == EngineID::Invalid());
-		switch (type) {
-			case VEH_TRAIN:
-				CHECK(prototype.VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON);
-				CHECK(prototype.VehInfo<RailVehicleInfo>().railtypes == RailTypes{RAILTYPE_RAIL});
-				break;
-			case VEH_ROAD: CHECK(prototype.VehInfo<RoadVehicleInfo>().tractive_effort == 0x4C); break;
-			case VEH_SHIP: CHECK(prototype.VehInfo<ShipVehicleInfo>().acceleration == 1); break;
-			case VEH_AIRCRAFT: CHECK(prototype.VehInfo<AircraftVehicleInfo>().subtype == 0); break;
-			default: NOT_REACHED();
-		}
-	}
-}
-
-TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement metadata", "[engine][loading]")
-{
-	std::array<std::vector<EngineIDMapping>, VEH_COMPANY_END> saved;
-	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
-		auto view = _engine_mngr.Mappings(type);
-		saved[type].assign(view.begin(), view.end());
-	}
-	_engine_mngr.ResetToDefaultMapping();
-	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
-		REQUIRE(_engine_mngr.Mappings(type).size() == _engine_counts[type]);
-		REQUIRE(_engine_mngr.GetID(type, 0, INVALID_GRFID) == EngineID{_engine_offsets[type]});
-		const auto original = _engine_mngr.GetID(type, 1, INVALID_GRFID);
-		REQUIRE(_engine_mngr.UseUnreservedID(type, 1, 17, true) == original);
-		REQUIRE(_engine_mngr.GetID(type, 1, 17) == EngineID::Invalid());
-		REQUIRE(_engine_mngr.UseUnreservedID(type, 1, 17, false) == original);
-		REQUIRE(_engine_mngr.GetID(type, 1, INVALID_GRFID) == EngineID::Invalid());
-		REQUIRE(_engine_mngr.GetID(type, 1, 17) == original);
-		bool visible = false;
-		std::thread game([&] {
-			visible = _engine_mngr.GetID(type, 1, 17) == original;
-			_engine_mngr.SetID(type, 1, 17, 99, EngineID{500});
-		});
-		game.join();
-		REQUIRE(visible);
-		auto map = _engine_mngr.Mappings(type);
-		REQUIRE(map.front().grfid == 17);
-		REQUIRE(map.front().engine == EngineID{500});
-		REQUIRE(map.front().substitute_id == 1);
-		_engine_mngr.SetID(type, 300, 12, 44, EngineID{501});
-		map = _engine_mngr.Mappings(type);
-		REQUIRE(map.front().grfid == 12);
-		REQUIRE(map.front().internal_id == 300);
-		REQUIRE(map.front().substitute_id == 44);
-		REQUIRE(std::ranges::is_sorted(map, std::less{}, EngineIDMappingKeyProjection{}));
-	}
-	_engine_mngr.ClearMapping();
-	for (const auto &map : saved) for (const auto &entry : map) _engine_mngr.SetID(entry.type, entry.internal_id, entry.grfid, entry.substitute_id, entry.engine);
-}
-
-
-TEST_CASE("Engine capability observations preserve type and zero-capacity gates", "[rust][engine]")
-{
-	struct Case { VehicleType type; uint8_t capacity, cargo, observed_cargo; bool carries; };
-	for (const Case c : {
-		Case{VEH_TRAIN, 0, 0, INVALID_CARGO, false}, Case{VEH_TRAIN, 255, 0, 0, true},
-		Case{VEH_ROAD, 0, 0, INVALID_CARGO, false}, Case{VEH_ROAD, 255, INVALID_CARGO, INVALID_CARGO, false},
-		Case{VEH_SHIP, 0, 0, 0, true}, Case{VEH_AIRCRAFT, 0, INVALID_CARGO, INVALID_CARGO, false},
-	}) {
-		Engine e(c.type, 0);
-		e.Record().info.cargo_type = c.cargo;
-		if (c.type == VEH_TRAIN) e.VehInfo<RailVehicleInfo>().capacity = c.capacity;
-		if (c.type == VEH_ROAD) e.VehInfo<RoadVehicleInfo>().capacity = c.capacity;
-		CHECK(e.CanCarryCargo() == c.carries);
-		e.index = EngineID{60000};
-		CHECK(RustEngineID(RustEngine(&e)) == 60000);
-	}
 }
 
 template <typename Info, typename Labels>

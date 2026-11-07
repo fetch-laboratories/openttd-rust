@@ -28,25 +28,30 @@ mod byte_strings;
 mod cargo_flow;
 mod cargo_payment;
 mod cargomonitor;
-mod cargopacket;
+pub mod cargopacket;
 mod command;
 mod command_func;
 mod command_post;
-mod command_type;
+pub mod command_type;
 mod company;
 mod company_identity;
 mod company_manager_face;
-mod company_type;
+pub mod company_type;
 mod consumer;
 mod control_codes;
 mod debug;
 mod direction_func;
-mod direction_type;
+pub mod direction_type;
 mod disaster;
 mod disaster_vehicle;
 mod economy_func;
-mod economy_type;
+pub mod economy_type;
 mod engine_type;
+/// Native engine scalar domains; native record fields remain internal.
+pub use engine_type::{
+    EngineClass, EngineFlag, EngineFlags, EngineID, EngineMiscFlag, EngineMiscFlags,
+    ExtraEngineFlag, ExtraEngineFlags, RailVehicleTypes, VehicleAccelerationModel,
+};
 mod follow_track;
 mod game_state;
 mod genland;
@@ -54,20 +59,21 @@ mod genworld;
 mod geometry_type;
 mod ground;
 mod ground_vehicle;
+pub mod group_type;
 mod heightmap;
 mod history;
 mod history_type;
 mod house;
-mod industry_type;
+pub mod industry_type;
 mod industrytype;
 mod integer;
 mod kdtree;
 mod landscape;
 mod landscape_generation;
-mod landscape_type;
+pub mod landscape_type;
 mod linkgraph;
 mod linkgraph_schedule;
-mod linkgraph_type;
+pub mod linkgraph_type;
 mod map_func;
 mod map_type;
 mod math;
@@ -78,9 +84,10 @@ mod network_config;
 mod newgrf;
 mod newgrf_act2;
 mod newgrf_animation_base;
+pub mod newgrf_badge_type;
 pub mod newgrf_bytereader;
-mod newgrf_callbacks;
-mod newgrf_commons;
+pub mod newgrf_callbacks;
+pub mod newgrf_commons;
 mod newgrf_config;
 mod newgrf_engine;
 mod newgrf_generic;
@@ -89,20 +96,25 @@ mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_specs;
 mod newgrf_spritegroup;
+/// Canonical sprite-group pool identity.
+pub use newgrf_spritegroup::SpriteGroupID;
+pub mod newgrf_text_type;
 /// Shared pool allocation policy and canonical native views.
 pub mod pool;
 mod settings_type;
 
 mod newgrf_station;
 mod newgrf_storage;
+/// Canonical persistent-storage pool identity.
+pub use newgrf_storage::PersistentStorageID;
 mod newgrf_text;
 mod newgrf_townname;
 mod node_hash;
-mod object_type;
+pub mod object_type;
 mod objects;
-mod openttd;
+pub mod openttd;
 mod order_func;
-mod order_type;
+pub mod order_type;
 mod overflowsafe_type;
 pub(crate) mod packet;
 mod pathfinder_func;
@@ -119,7 +131,7 @@ mod road_data;
 mod road_func;
 mod road_map;
 mod road_stop;
-mod road_type;
+pub mod road_type;
 mod road_yapf;
 mod roadveh;
 mod script_host;
@@ -135,8 +147,9 @@ pub mod services_assert;
 mod ship_control;
 mod signal;
 mod signal_func;
-mod signal_type;
+pub mod signal_type;
 mod slope_func;
+pub mod slope_type;
 mod snow_line;
 mod sound_type;
 mod sprites;
@@ -147,26 +160,26 @@ mod station_cmd;
 mod station_lifecycle;
 mod station_map;
 mod station_service;
-mod station_type;
+pub mod station_type;
 mod string_func;
 mod string_services;
-mod string_type;
+pub mod string_type;
 mod string_validation;
-mod strings_type;
+pub mod strings_type;
 mod tgp;
 mod tile_cmd;
 mod tile_loop;
 mod tile_owner;
-mod tile_type;
+pub mod tile_type;
 mod town;
 mod town_map;
-mod town_type;
+pub mod town_type;
 mod townname;
 mod townname_data;
 mod townname_type;
 mod track_func;
-mod track_type;
-mod transport_type;
+pub mod track_type;
+pub mod transport_type;
 mod tree_cmd;
 mod trees;
 mod tunnelbridge;
@@ -176,6 +189,10 @@ mod vehicle;
 mod vehicle_base;
 mod vehicle_transactions;
 mod vehicle_type;
+/// Native vehicle type and flag domains; native record fields remain internal.
+pub use vehicle_type::{
+    DepotCommandFlag, DepotCommandFlags, VehicleRandomTrigger, VehicleRandomTriggers, VehicleType,
+};
 mod vehiclelist;
 mod viewport_func;
 mod water;
@@ -773,101 +790,6 @@ pub extern "C" fn openttd_rust_soft_clamp(
     math::soft_clamp(value, min, max, width, is_signed != 0)
 }
 
-pub use history::{Descriptor as HistoryDescriptor, Step as HistoryStep};
-
-/// Allocate a scalar history engine; the contract is in `history_ffi.h`.
-///
-/// Month is explicit for update and rotation and the current global phase for validity;
-/// query phase is supplied after C++ constructs each scratch array. Destroy the handle once.
-#[allow(unsafe_code)] // Export attribute only; the descriptor token is never dereferenced.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_history_create(
-    mode: u8,
-    token: usize,
-    mask: u64,
-    age: u32,
-    month: u32,
-) -> *mut std::ffi::c_void {
-    Box::into_raw(Box::new(history::Engine::new(
-        mode, token, mask, age, month,
-    )))
-    .cast()
-}
-
-#[allow(unsafe_code)] // One exclusive handle borrow, never kept across an extern call.
-unsafe fn history_engine<'a>(handle: *mut std::ffi::c_void) -> &'a mut history::Engine {
-    // SAFETY: Each caller requires a live uniquely accessible Rust engine handle.
-    unsafe { &mut *handle.cast::<history::Engine>() }
-}
-
-/// Return the next structural instruction; execute all typed work after returning.
-///
-/// # Safety
-/// Handle is live, nonnull, created by `openttd_rust_history_create`, and exclusively accessible
-/// during the call. Follow the Describe/phase/completion protocol; no C++ callback
-/// occurs in Rust, and no history or scratch allocation is borrowed. No concurrent
-/// handle use or descriptor mutation; panic aborts and the C ABI never unwinds.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_next(handle: *mut std::ffi::c_void) -> HistoryStep {
-    // SAFETY: Caller grants this engine's exclusive borrow until return.
-    unsafe { history_engine(handle) }.next()
-}
-
-/// Supply immutable scalar fields for the most recent Describe instruction.
-///
-/// # Safety
-/// The handle contract is the same as `openttd_rust_history_next`. Descriptor identity/fields
-/// come from the requested live C++ object, child token from its actual pointer;
-/// no C++ layout is reinterpreted by Rust. Both descriptor objects remain live.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_describe(
-    handle: *mut std::ffi::c_void,
-    descriptor: HistoryDescriptor,
-) {
-    // SAFETY: The caller gives unique access to the waiting engine.
-    unsafe { history_engine(handle) }.describe(descriptor);
-}
-
-/// Supply the live global query phase after constructing every typed scratch element.
-///
-/// # Safety
-/// The handle contract is the same as `openttd_rust_history_next`. Call only immediately after
-/// a `PrepareScratch` instruction and before requesting its children.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_phase(handle: *mut std::ffi::c_void, month: u32) {
-    // SAFETY: The caller gives unique access to the waiting query engine.
-    unsafe { history_engine(handle) }.phase(month);
-}
-
-/// Finish one typed leaf/reduction assignment and return its OR validity.
-///
-/// # Safety
-/// The handle contract is the same as `openttd_rust_history_next`. Call only after successfully
-/// executing Leaf or `QueryReduce`; C++ destroys its scratch scope before any later
-/// typed operation or phase read. On a typed exception destroy the owner instead.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_complete(handle: *mut std::ffi::c_void) -> u8 {
-    // SAFETY: The caller gives unique access after the typed assignment completes.
-    u8::from(unsafe { history_engine(handle) }.complete_query())
-}
-
-/// Destroy scalar Rust storage, including on C++ typed-operation exceptions.
-///
-/// # Safety
-/// Handle is live/non-null, created by `openttd_rust_history_create`, and destroyed exactly once
-/// with no active access. C++ never deletes this allocation; no typed storage or
-/// descriptor object is freed. Panic aborts and this function never unwinds.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_history_destroy(handle: *mut std::ffi::c_void) {
-    // SAFETY: The uniquely owned handle returns its allocation to Rust exactly once.
-    drop(unsafe { Box::from_raw(handle.cast::<history::Engine>()) });
-}
-
 mod abi;
 
 /// Return size, alignment and offsets by native type name; unknown names/items return MAX.
@@ -1163,10 +1085,10 @@ pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
 mod cargo_registry;
-mod cargo_type;
-mod cargotype;
+pub mod cargo_type;
+pub mod cargotype;
 mod container_func;
-mod source_type;
+pub mod source_type;
 mod subsidy_base;
 mod tilearea;
 mod timer_game_calendar;
@@ -1174,7 +1096,7 @@ mod timer_game_common;
 mod timer_game_economy;
 mod timer_game_tick;
 
-mod subsidy_type;
+pub mod subsidy_type;
 
 pub mod landscape_cmd;
 
@@ -1194,7 +1116,7 @@ mod type_availability;
 
 mod gfx_type;
 mod house_definition;
-mod newgrf_animation_type;
+pub mod newgrf_animation_type;
 mod override_manager;
 
 mod industry_map;
@@ -1224,20 +1146,20 @@ mod tunnel_map;
 
 mod depot_cmd;
 mod depot_map;
-mod depot_type;
+pub mod depot_type;
 mod session;
 
 mod fileio_type;
 mod saveload;
 
-mod goal_type;
-mod league_type;
+pub mod goal_type;
+pub mod league_type;
 mod objectives;
 mod settings_table;
 mod signs_cmd;
-mod signs_type;
+pub mod signs_type;
 mod story_base;
-mod story_type;
+pub mod story_type;
 mod void_map;
 mod window_type;
 
@@ -1255,6 +1177,8 @@ mod network_internal;
 mod network_lifecycle;
 mod network_socket;
 mod network_tcp;
-mod network_type;
+pub mod network_type;
 mod tcp_content_type;
+/// Native content slot and protocol value domains.
+pub use tcp_content_type::{ContentID, ContentType, PacketContentType};
 mod tcp_game;

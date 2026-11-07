@@ -25,7 +25,7 @@ pub const RATING_BRIBE_DOWN_TO: i32 = -50;
 
 /// Native `TownID`; all uint16 values remain representable.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TownId(pub u16);
 
 /// Opaque native `Town`; valid only while its native pool shell lives.
@@ -45,3 +45,13 @@ pub const TSZ_SMALL: u8 = 0;
 pub const TOWN_EXPAND_BUILDINGS: u8 = 1 << 0;
 /// `TownExpandModes{TownExpandMode::Roads}`.
 pub const TOWN_EXPAND_ROADS: u8 = 1 << 1;
+
+impl TownId {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}
+
+/// Original header spelling for the existing town identity.
+pub use TownId as TownID;
