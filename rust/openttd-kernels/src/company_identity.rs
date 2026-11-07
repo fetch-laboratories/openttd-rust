@@ -478,24 +478,27 @@ pub extern "C" fn openttd_rust_company_colour_abi(
     }
     u8::from(true)
 }
-fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
+/// Shared implementation of `CmdRenameCompany` and `CmdRenamePresident`.
+fn rename_company_or_president(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
+    use crate::company_type::{MAX_LENGTH_COMPANY_NAME_CHARS, MAX_LENGTH_PRESIDENT_NAME_CHARS};
     let reset = text.size == 0;
     if !reset {
         let limit = if president {
-            crate::company_type::MAX_LENGTH_PRESIDENT_NAME_CHARS
+            MAX_LENGTH_PRESIDENT_NAME_CHARS
         } else {
-            crate::company_type::MAX_LENGTH_COMPANY_NAME_CHARS
+            MAX_LENGTH_COMPANY_NAME_CHARS
         };
         if (s.shared.utf8_length)(text.data, text.size) >= limit {
             return 1;
         }
+        // IsUniqueCompanyName / IsUniquePresidentName: ignore empty names in the pool.
         if !companies(s, |c| {
-            let n = if president {
+            let name = if president {
                 (s.president)(c)
             } else {
                 (s.name)(c)
             };
-            n.size == 0 || !n.same_bytes(text)
+            name.size == 0 || !name.same_bytes(text)
         }) {
             return 2;
         }
@@ -503,9 +506,13 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
     if execute {
         let id = CompanyID((s.shared.current_company)());
         let c = (s.company)(id);
+        // An empty text clears the selected name, resetting it to the default.
         if president {
             (s.set_president)(c, text);
-            if !reset && (s.name_id)(c) == s.strings.unnamed && (s.name)(c).size == 0 {
+            if !reset
+                && StringID((s.name_id)(c)) == StringID(s.strings.unnamed)
+                && (s.name)(c).size == 0
+            {
                 (s.rename_transport)(text);
             }
             (s.president_windows)();
@@ -517,11 +524,12 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
         let mut slot = NameStorage::new();
         let mut names = Names::new(s, &mut slot);
         names.render(
-            if president {
+            StringID(if president {
                 s.strings.president
             } else {
                 s.strings.company
-            },
+            })
+            .0,
             u32::from(id.0),
         );
         if president {
@@ -532,13 +540,19 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
     }
     0
 }
+/// `CmdRenameCompany`: change the name of the company.
+/// `execute` selects the operation; `text` is the new name or empty to reset to the default.
+/// Returns the raw command result: success, error, or name-must-be-unique error.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_rename(s: &Services, text: ByteSpan, execute: bool) -> u8 {
-    rename(s, text, execute, false)
+    rename_company_or_president(s, text, execute, false)
 }
+/// `CmdRenamePresident`: change the name of the president.
+/// `execute` selects the operation; `text` is the new name or empty to reset to the default.
+/// Returns the raw command result: success, error, or name-must-be-unique error.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_president_rename(s: &Services, text: ByteSpan, execute: bool) -> u8 {
-    rename(s, text, execute, true)
+    rename_company_or_president(s, text, execute, true)
 }
 /// Determines the livery scheme for a vehicle.
 /// `engine_type` is the vehicle engine; `parent_engine_type` is the front vehicle's
