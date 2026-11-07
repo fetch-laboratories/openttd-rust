@@ -75,6 +75,7 @@ fn foundations_match_original() {
     assert_eq!(cases, 9728);
 }
 
+#[cfg(test)]
 thread_local! {
     static DIMENSIONS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
 }
