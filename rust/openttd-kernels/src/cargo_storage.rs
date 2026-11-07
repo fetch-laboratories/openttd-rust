@@ -1827,6 +1827,50 @@ mod tests {
         }
     }
 
+    extern "C" fn deny_allocation() -> u8 {
+        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("packet", 0)));
+        0
+    }
+
+    #[test]
+    fn split_denied_preserves_packet_before_share_arithmetic() {
+        // Captured from the unchanged 15.3 CargoPacket::Split body at
+        // 14ec60f248547d4d062a1160f0fc26d742319888 using the retiring
+        // cargo-split-reference.cpp reference branch, before its deletion.
+        let service = Services {
+            can_allocate: deny_allocation,
+            ..services()
+        };
+        let mut cases = 0;
+        for row in include_str!("cargo_storage/split-denied-oracle.txt").lines() {
+            let row: Vec<i64> = row.split_whitespace().map(|v| v.parse().unwrap()).collect();
+            let [count, feeder, amount, calls] = row[..] else {
+                panic!("invalid original split observation")
+            };
+            let mut packet = Packet {
+                count: u16::try_from(count).unwrap(),
+                feeder_share: feeder,
+                ..Packet::default()
+            };
+            CAPACITY_CALLS.with(|log| log.borrow_mut().clear());
+            // SAFETY: The stack packet and synchronous fixture table remain live.
+            let part = unsafe {
+                openttd_rust_cargo_packet_split(
+                    &raw mut packet,
+                    &raw const service,
+                    u32::try_from(amount).unwrap(),
+                )
+            };
+            assert!(part.is_null());
+            assert_eq!(i64::from(packet.count), count);
+            assert_eq!(packet.feeder_share, feeder);
+            CAPACITY_CALLS
+                .with(|log| assert_eq!(i64::try_from(log.borrow().len()).unwrap(), calls));
+            cases += 1;
+        }
+        assert_eq!(cases, 48);
+    }
+
     #[test]
     fn canonical_packet_defaults_and_rectangular_map_coordinates() {
         let service = services();
