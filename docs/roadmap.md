@@ -4,32 +4,40 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-07, integration 125)
+## Where the fork stands (2026-11-07, integration 129; paused)
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-Development remains in the cleanup stage (user, 2026-11-06). This stocktake records integration 125, `78d4234849` (#799), combining reviewed Town command and engine-replacement vocabulary. Exact-head Full, all four renewed contracts and the tested/merged-tree check pass. Main has no known source regression. C++ and all six guarded counters hold. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) is accepted on clean `46864a207c`, with seven nonempty canonical exit comparisons and all six policy records below band. Profiles 113/119 remain retained. The user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). Next regular stocktake/profile is 131 and next platform cadence is 130.
+Development is paused at the user's request in the cleanup stage. Code main is integration 129, `7b6887f43d` (#803); pre-pause main is `5df157bfb1`. The source/evidence review, corrected Industry case inventory and exact-head Full/tested-tree verification pass. The delivery update below uses retained reports for 127–129, not a new measurement or regular profile. No confirmed source regression or rollback is known. Post-merge Quick/CI - Build on `7b6887f43d` and Quick on `5df157bfb1` are pending at the recorded 16:28 UTC pause state; later results do not resume work. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) remains accepted on clean `46864a207c`, with seven nonempty canonical exit comparisons and all six policy records below band. Profiles 113/119 remain retained. The user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). Next regular stocktake/profile is 131; platform cadence 130 follows that integration's eventual delivery.
 
-| Measured quantity | Integration 125 |
+| Measured quantity | Integration 129 |
 | --- | ---: |
 | Original C++ remaining | 221,645 |
 | Fork source glue, including generated records | 34,923 |
 | Compiled source and generated records C++ | 256,568 |
-| Tracked tools C++ evidence | 17,336 |
+| Tracked tools C++ evidence | 16,869 |
 | ABI-generated non-record C++ evidence | 5,522 |
-| Measured fork C++ series (scope below) | 279,426 |
+| Measured fork C++ series (scope below) | 278,959 |
 | Original C++ retired | 62,710 of 284,355 (22.05%) |
 | Simulation C++ retired | 41,550 of 61,148 (67.95%) |
 | Expanded Rust exports / callback fields | 1,709 / 3,418 |
 | Historical regex exports / callback slots | 1,553 / 3,376 |
 | Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 |
-| Retained Clippy keys / diagnostics | 672 / 765 |
+| Retained Clippy keys / diagnostics | 664 / 757 |
 | Ruff keys / diagnostics | 296 / 296 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 146,421 / 63,816 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,272 |
 
-Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. The measured ABI-generated C++ is 6,137 lines: 615 record declarations within source glue and 5,522 non-record evidence lines included above. Version 2 does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings. Their volume is unknown; the 279,426-line series is not a complete all-generated native inventory. This coverage follow-up belongs to #736; unmeasured support is not an exemption or deletion credit. Historical regex and expanded boundary series have different scopes. The one shared final report was collected at the Full-tested 125 candidate, whose merged tree is identical; no third census was run. Shared-accessor baselines retain 117 rows, rebound callees 314 and orphan exports 40. Clippy retains five approved families; Ruff retains 296 keys / 296 diagnostics. The accepted Town formatting row integrated in 120; 122 carries only the coastal depth-6 identity, and 125 changes the existing Town magnitude from 112 to 116. Surviving rows, source provenance and thresholds remain intact.
+Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. The measured ABI-generated C++ is 6,137 lines: 615 record declarations within source glue and 5,522 non-record evidence lines included above. Version 2 does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings. Their volume is unknown; the 278,959-line series covers only the listed native inventory. This scope-completeness follow-up belongs to #736; unmeasured support earns no deletion credit. Historical regex and expanded boundary series have different scopes. The one shared final report was collected at the Full-tested 129 candidate, whose merged tree is identical. Raw GLOBAL Rust/tooling inventories also include oracle text and native support; implementation source and frozen data are separate below. Shared-accessor baselines retain 117 rows, rebound callees 314 and orphan exports 40. Clippy retains five approved families. Integration 128 retires eight actual parameter-count rows with three individually reviewed line-count carries, leaving 664 keys / 757 diagnostics. Ruff remains at 296 keys / 296 diagnostics. Unrelated rows, provenance and thresholds remain intact.
 
-Since accepted stocktake 119, net fork-C++ removal is zero and original/simulation retirement is unchanged. The actual merge-to-merge window is 8,315 seconds (0.096238 days), giving zero net C++ lines removed per day; this vocabulary-only window supplies no forward removal forecast. Actual Rust additions across 120–125 total 536 code lines, with 417 removed and net +119. GLOBAL Rust also rises by 119, a distinct inventory measure. Tooling and C++ change are zero. Six reviewed batches integrated, while the Clippy inventory changed from 671 keys / 764 diagnostics to 672 / 765 through accepted source-formatting debt. A fresh cleanup plan selects W Town/Industry policy evidence and F Company financial-command evidence under #736, then eight Station helper contexts under #735, released after the reviewed Train/Cargo integration 126. The first two estimate 437 to 517 counted C++ code lines removed, with unmeasured extracted support disclosed separately; the third targets eight real parameter-count diagnostics. These are source estimates, not deletion receipts. No phase, anchor or lint threshold is reset. Train limits #797 and Cargo runtime #798 subsequently integrated in 126 (#800), with all three renewed contracts and exact-head Full/tree passing after one visible unchanged-code validation retry. The earlier reference content-protocol failure and inconclusive static diagnosis remain retained; no source repair or causal claim is made. Company financial-command evidence #802 subsequently integrated in 127 (`0c8a0f8a05`), retiring 127 tracked C++ code lines and preserving all 40,320 original cases. Station helper contexts #801 subsequently integrated in 128 (`5d43172624`), retiring all eight selected parameter-count sites with three exact line-count carries, no C++/boundary growth and exact-head Full/tree passing. Town/Industry policy evidence #803 subsequently integrated in 129 (`7b6887f43d`), removing 340 counted C++ evidence lines with the complete original observations preserved in production Rust tests. Root fixed the missing Industry summary; the default comparison inventory, exact-head Full and tested/merged tree pass. The reviewed housekeeping safety fix #805 is next. Locked #565 WIP remains retained.
+| Delivered checkpoint | Rust executable code +/− | Python code +/− | Tracked C++ code +/− | Frozen oracle bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 127: Company finance #802 (`0c8a0f8a05`) | 268 / 0 | 4 / 53 | 0 / 127 | 976,283 |
+| 128: eight Station helper contexts #801 (`5d43172624`) | 310 / 200 | 0 / 0 | 0 / 0 | 0 |
+| 129: Town/Industry policy #803 (`7b6887f43d`) | 895 / 0 | 16 / 44 | 3 / 343 | 1,095,202 |
+
+These three deliveries retire **467 counted fork C++ code lines**, within the two evidence families' earlier 437 to 517 estimate, while compiled production C++, original/simulation retirement and boundary counters hold. Their combined Rust executable cost is 1,473 added / 200 removed (net +1,273), Python net −77, and frozen oracle data 2,071,485 bytes. Finance preserves all 40,320 original cases; policy preserves all 21,128 cases and 55,056,680 ordered Industry resolver pairs. Actual native calling-boundary, tunnel, history and lifetime evidence stays. The exact integrating diff corrects the prior policy Python table from 18/46 to 16/44 without changing net −28 or source/raw reports. Its raw Rust additions of 22,029 split into 895 executable lines and 21,134 classified oracle-text lines. No new census was run for this pause.
+
+The preceding 119–125 vocabulary window had zero net C++ removal; 126 also held C++ while restoring Train/Cargo vocabulary. The cleanup pivot to complete evidence families and real parameter-count retirement now supplies the reductions above. The earlier reference content-protocol failure and inconclusive static diagnosis remain retained after 126's one unchanged-code Full retry; no source repair or causal claim is made. #805's reviewed housekeeping safety fix is paused before delivery. Its ranked successors are unstarted static estimates, not commissioned work. No phase, anchor or lint threshold is reset. Locked #565 WIP remains retained.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
@@ -69,7 +77,7 @@ All seven nonempty canonical exit-save comparisons pass, including drawing; all 
 | Mean cyclomatic complexity | 4.08 | 3.83 |
 | Code in copy-paste clones | 4.5% | 2.3% |
 
-Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 765 current diagnostics are not comparable to the initial broader lint inventory.
+Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 757 current diagnostics are not comparable to the initial broader lint inventory.
 
 ## Course (user, 2026-11-06)
 
@@ -290,25 +298,39 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Current code main is integration 129, `7b6887f43d` (#803): complete selected Town/Industry policy observations now exercise production Rust, 340 counted C++ evidence lines retire, and independent review, the corrected default summary inventory and exact-head Full/tested-tree verification pass. Together with 127, measured fork C++ falls by 467 lines from stocktake 125 to 278,959; original/simulation retirement and boundary counters hold. Clippy remains 664 keys / 757 diagnostics after Station integration 128. The reviewed detached-head housekeeping fix #805 is ready for finalized-base adoption and root Full. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) and platform 125 remain accepted; next regular stocktake/profile is 131 and platform cadence 130. Earlier network failures and inconclusive diagnostics remain retained. Integration and rollback procedures live in the [root workflow](root-workflow.md).
+Paused at the user's request. Normal work stopped at the recorded 2026-11-07 16:28 UTC state. Code main is integration 129, `7b6887f43d`; pre-pause main is `5df157bfb1`. This docs-only pause moves main without advancing code. There is no merge or rollback to perform during wind-down, no running child, and no newly commissioned implementation, branch or brief. Later CI or background completion does not restart normal work; explicit user resume is required.
 
-| Work | Owner | Next action |
-| --- | --- | --- |
-| Company finance #802 | Delivered | Integration 127 retires the complete 40,320-case financial-command probe and extraction hook. Native boundary/lifetime/game evidence stays; parent F remains open. |
-| #736 W policy evidence #803 | Delivered | Integration 129 retires the selected policy probe code while preserving all six complete matrices, retained tunnel and actual native ABI/generic history/lifetime evidence. Remaining W families stay open. |
-| Remaining #736 F | Root selects next bounded family | Company financial-command evidence is integrated in 127. Other company/native ownership/error and remaining cargo/fleet/engine/order/clock evidence remain on the stream checklist. |
-| #735 P1 Station helpers #801 | Delivered | Integration 128 retires eight helper parameter-count rows. Other P1 contexts and command/FFI records remain open. |
-| Housekeeping detached-head safety #804 / #805 | Root | Independent review and 23 housekeeping tests pass. Preserve the two reviewed Python blobs on final base adoption; root owns the final report and Full. Source cost +33/−2 Python code lines, net +31. Until integrated, verify remote retention before every removal. |
-| Next cleanup selections | Root | A fresh static plan ranks remaining complete families under #736 F and #737 V. Confirm source/evidence boundaries and live reservations before commissioning; no implementation or later phase is selected by that plan alone. |
-| Metric scope completeness | Root / #736 shared tooling | Account for unlisted extracted/embedded C++ and separate .rs/.py implementation from oracle text and native support in raw path-based inventories. Keep existing raw reports/provenance and distinguish corrections from deletions; no third census. |
-| #693 / #736 P network evidence | Root | Keep all failed and passing traces and bounded original/original nonreproduction. The initial #800 content failure is distinct from prior final reconnect/multiplayer stalls. No stacks/connector state proved a cause; the previous two-run authorization remains exhausted. |
-| Remaining cleanup streams | Root selects bounded checkpoints | Continue the issue checklists in their existing dependency order. Wrapper closure, evidence/boundary remainder and authorized rule-corpus work remain open; no later phase is selected. |
+| Work / state at pause | Next action on explicit resume |
+| --- | --- |
+| #804 / #805, `root/804-detached-housekeeping`, head `7fac379c436cb7d879c409c38d420776afd92daf` over `5df157bfb1` | Keep `.local/worktrees/root-804-detached-housekeeping`. Both Python blobs equal reviewed `df984cab30`; all 23 housekeeping tests and prior Python/gate receipts pass. Review carries. The pause commit moves base under strict protection: adopt the new main tip preserving those blobs, then obtain exact-head Full and the final report before protected merge. Platform cadence 130 follows delivery. |
+| #805 Full `42391323158` and Quick | In progress at the recorded pause state; do not wait or infer merge readiness from later success. Keep the request at `.local/ci-requests/130-full.json`. Read results only after resume and update base before final integration validation. |
+| Metrics job `24514`, `.local/130-final-measure.sh` | Running for pre-pause head `7fac379c43`; do not wait. Keep all outputs. This is not #805's final integrating report; the actual resume head needs that report. Completion does not restart wind-down. |
+| Main CI | Post-merge Quick validation and CI - Build on `7b6887f43d`, and Quick on `5df157bfb1`, are pending at the recorded pause state. No red run is known. CI on this new pause commit is unobserved; no wait or new request is authorized. |
+| Integrations 127–129 | Delivered with independent source/evidence review, exact-head Full and matching tested/merged trees. #736 F/W and #735 P1 remain open for their other families. No rollback occurred. |
+| Next cadence | Platform 130 after its delivery; next regular stocktake/profile 131. Profile/platform 125 remain accepted, with profiles 113/119 retained. |
+
+Unstarted ranked queue from the private after-128 static plan, retained at `.local/cleanup-after128-plan.json` and in `t3-20fec9ce`. No implementation, branch or brief was started for any item:
+
+| Rank | Queued family | Static estimate / condition |
+| ---: | --- | --- |
+| 1 | #736 F: complete cargo-income probe transfer | 80 to 90 counted C++ lines retired; preserve all 185,285 cases and actual native payment/lifetime checks. Estimated oracle data 1 to 6 MB; actual cost requires its first concrete checkpoint. |
+| 2 | #737 V: eight Orders field callbacks | 58 to 70 counted C++ lines retired and eight callback fields removed, using existing canonical records. Native shell conversion and protected fixtures stay. |
+| 3 | #736 F: Engine runtime evidence | 40 to 75 net counted C++ lines retired after preserving native ABI, alias, width and lifetime observations. Least certain estimate; fold into a larger same-file checkpoint if the native remainder erases the benefit. |
+
+The child slots were idle because the preceding owners and reviews had finished, while root serialized integration/report bookkeeping and the routing correction instead of refilling independent work. There was no quiet-host hold or resource/dependency block. That scheduling gap is recorded; the user's wind-down now expressly prohibits refilling. Mid-task messages use the child's verified `parentThreadId`, not a root found by title (`docs/team.md`).
+
+Remaining placement and limits:
+
+- Metric scope completeness stays with #736: account for unlisted extracted/embedded C++ and separate executable source, oracle text and native support. Preserve raw reports/provenance and distinguish coverage corrections from deletions.
+- Keep #693 / #736 P's failed and passing network traces and bounded original/original nonreproduction. The initial #800 content failure differs from prior reconnect/multiplayer stalls. No stacks/connector state proved a cause; the two-run authorization remains exhausted. No repair, retry or new diagnostic is selected.
+- The remaining #734–#738 cleanup stream checklists, wrapper closure, evidence/boundary remainder and authorized rule-corpus work remain open. No later phase is selected. Future root must verify source boundaries and live reservations before commissioning the static queue.
 
 Retained state for housekeeping:
 
-- Ordinary housekeeping may remove clean, pushed checkouts of the closed storage drafts and integrated cleanup components. Their heads and results are recorded on the issues and PRs.
-- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes; superseded profiles and steering audits follow ordinary housekeeping.
-- Keep `.local/worktrees/root-profile-125` with its accepted seven comparisons, raw Callgrind and frozen runtimes, and `.local/worktrees/root-profile-119` with its seven reports, raw Callgrind and frozen runtimes, plus `.local/worktrees/root-profile-113` for the accepted comparison. Profile 119 measures clean `4d3a1d1d41`, the docs successor of code integration 119; it does not measure code integration 120. Keep `.local/retained-network-693` with the failed Full artifact and bounded original/original evidence.
-- Dirty or staged trees need a decision before removal: `t3-3b491ddb` (five files), `t3-431c84b4` (locked #565 work), `t3-d78d5f8b` (locked native evidence), `t3-32cf4edc` (`tools/simulation/roads.py` staged), `t3-e130d5a3` (`migration/saves/README.md` staged).
-- Keep protected `.local/worktrees/root-docs-72` and the locked profile trees `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main.
-- Keep main `.local/integration-records/`, `.local/speed-pass/` anchors and frozen runtimes, and the simulation runs root listed in its checkpoint.
+- Keep #805's one checkout `.local/worktrees/root-804-detached-housekeeping`, its pushed branch/head above, and the planning checkout `t3-20fec9ce` with its private plan. Preserve every checkout with uncommitted or unpushed work.
+- Only the two user-named finished W checkouts, `t3-366d4384` and `t3-e935c6f1`, were removed in this wind-down, after proving their exact heads are merged or remotely retained and checking live-output guards. No broad housekeeping apply or ad hoc-log deletion followed. Until #805 integrates, manually verify Git retention before any removal; keep origin `preserve/housekeeping-foundation-6ab9c20e5d`.
+- Keep job `24514` outputs: `.local/130-whole-fork.json`, `.local/130-source.json`, `.local/130-growth.json`, `.local/130-final-measure.log`, `.local/130-whole-fork.stderr.log`, `.local/130-source.stderr.log`, `.local/130-growth.stderr.log`, and the script/request/metadata. Keep the source-head label; none is promoted to a final integration receipt during wind-down.
+- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
+- Keep `.local/retained-network-693` with the failed Full artifact, inconclusive diagnostics, passing traces and bounded original/original evidence. Keep main `.local/integration-records/`, `.local/speed-pass/` anchors, frozen runtimes and the retained simulation evidence.
+- Leave dirty/staged trees untouched: `t3-3b491ddb` (five files), locked #565 WIP `t3-431c84b4`, locked native evidence `t3-d78d5f8b`, `t3-32cf4edc` (`tools/simulation/roads.py` staged), and `t3-e130d5a3` (`migration/saves/README.md` staged).
+- Keep protected `.local/worktrees/root-docs-72` and locked `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main. Keep the pinned original and main's uncommitted user-owned `.codex/config.toml` unchanged.
