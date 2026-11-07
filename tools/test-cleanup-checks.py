@@ -212,7 +212,7 @@ class PolicyTests(unittest.TestCase):
         def acceptance(
             agent: str = "/review",
             sha: str = head,
-            payload: dict[str, str | int] | None = None,
+            payload: dict[str, str | int | float] | None = None,
         ) -> str:
             return (
                 f"Agent: {agent} | Model: test | Reasoning effort: high\n"
@@ -257,6 +257,33 @@ class PolicyTests(unittest.TestCase):
                     [dict(proposal, source_contract="")],
                     1,
                 ),
+                *(
+                    (
+                        [acceptance(payload=dict(proposal, **{key: value}))],
+                        [dict(proposal, **{key: value})],
+                        1,
+                    )
+                    for key, value in (
+                        ("before", False),
+                        ("before", 0.0),
+                        ("after", True),
+                        ("after", 1.0),
+                    )
+                ),
+                *(
+                    (
+                        [acceptance(payload=dict(proposal, **{key: " "}))],
+                        [dict(proposal, **{key: " "})],
+                        1,
+                    )
+                    for key in (
+                        "operation",
+                        "source_contract",
+                        "reason",
+                        "retiring_owner",
+                        "retirement_condition",
+                    )
+                ),
             ):
                 with (
                     patch.object(POLICY, "ROOT", root),
@@ -280,6 +307,11 @@ class PolicyTests(unittest.TestCase):
             "rust/x.rs | fn work | allow unused",
             "rust/x.rs | fn work | allow rust_2024_compatibility",
             "tools/x.py | work | noqa:F401",
+            *POLICY.rust_suppressions(
+                "rust/x.rs",
+                '#[allow(non_upper_case_globals)] #[doc="impl Native"] '
+                "pub mod nested { pub const OriginalName: u8 = 1; }",
+            ),
         ):
             exact = dict(proposal, site=forbidden)
             comment = (
@@ -298,6 +330,51 @@ class PolicyTests(unittest.TestCase):
                 list(POLICY.rust_suppressions("rust/x.rs", attribute + "\nfn x() {}")),
                 ["rust/x.rs | module | allow warnings"],
             )
+
+    def test_suppression_cannot_move_between_named_rust_targets(self) -> None:
+        import migration
+
+        source = (
+            "pub struct A; pub struct B;\n"
+            "impl A { #[allow(non_upper_case_globals)] pub const Original: u8 = 1; }\n"
+            "impl B { #[allow(non_upper_case_globals)] pub const Original: u8 = 1; }\n"
+            "pub mod a { #[allow(non_upper_case_globals)] pub const Original: u8 = 1; }\n"
+            "pub mod b { #[allow(non_upper_case_globals)] pub const Original: u8 = 1; }\n"
+            "#[allow(non_snake_case)] pub const fn First() {}\n"
+            "#[allow(non_snake_case)] pub const fn Second() {}\n"
+            '#[allow(non_upper_case_globals)] #[doc="impl Native"] '
+            "pub mod nested { pub const OriginalName: u8 = 1; }\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fixture.rs"
+            path.write_text(source)
+            subprocess.run(
+                [
+                    "rustc",
+                    "--crate-type",
+                    "lib",
+                    "-D",
+                    "warnings",
+                    "--out-dir",
+                    directory,
+                    str(path),
+                ],
+                check=True,
+                capture_output=True,
+                env=migration.environment(),
+            )
+        before = POLICY.rust_suppressions("rust/x.rs", source)
+        for first, second in (
+            ("impl A", "impl B"),
+            ("mod a", "mod b"),
+            ("fn First", "fn Second"),
+        ):
+            with self.subTest(first=first, second=second):
+                # Compare the two complete target identities, not line offsets.
+                sites = [site for site in before if first in site or second in site]
+                self.assertEqual(len(sites), 2)
+                self.assertTrue(all(before[site] == 1 for site in sites))
+                self.assertNotEqual(sites[0], sites[1])
 
     def test_discovered_ruff_overrides_cannot_hide_ordinary_diagnostics(self) -> None:
         for path, table in (

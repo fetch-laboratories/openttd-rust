@@ -13,6 +13,7 @@ from typing import Any
 
 from cleanup_contract import context, reviewed
 from code_lines import without_comments
+from rust_syntax import Node, nodes, syntax_trees
 from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,22 +116,62 @@ def config_errors(
     return errors
 
 
+def item_scope(node: Node) -> str:
+    """Name the actual attribute target and its enclosing named items."""
+    kinds = {
+        "function_item": "fn",
+        "function_signature_item": "fn",
+        "struct_item": "struct",
+        "enum_item": "enum",
+        "mod_item": "mod",
+        "trait_item": "trait",
+        "const_item": "const",
+        "static_item": "static",
+        "type_item": "type",
+        "union_item": "union",
+        "enum_variant": "variant",
+        "field_declaration": "field",
+    }
+    parts = []
+    current: Node | None = node
+    while current:
+        if current.type == "impl_item":
+            parts.append(" ".join(current.text.decode().split("{", 1)[0].split()))
+        elif current.type in kinds:
+            name = current.child_by_field_name("name")
+            if name:
+                parts.append(f"{kinds[current.type]} {name.text.decode()}")
+        elif current is node:
+            return "module"  # Non-item/macro token targets have no reviewed scope.
+        current = current.parent
+    return " > ".join(reversed(parts)) or "module"
+
+
+def attribute_scopes(path: str, text: str) -> dict[tuple[int, int], str]:
+    """Associate outer attributes with siblings, never text in later strings/items."""
+    scopes = {}
+    for parent in nodes(syntax_trees({path: text})[path]):
+        pending = []
+        for child in parent.named_children:
+            if child.type == "attribute_item":
+                pending.append(child.start_point)
+            elif pending and child.type not in ("line_comment", "block_comment"):
+                scope = item_scope(child)
+                scopes.update((point, scope) for point in pending)
+                pending.clear()
+    return scopes
+
+
 def rust_suppressions(path: str, text: str) -> Counter[str]:
     rows: Counter[str] = Counter()
-    clean = without_comments(text, path)
     masked = without_comments(text, path, strings=True)
+    scopes = attribute_scopes(path, text)
     for match in re.finditer(r"#\s*!?\s*\[([^\]]*)\]", masked, re.S):
         for allow in re.finditer(r"\b(allow|expect)\s*\(([^)]*)\)", match[1]):
             rules = re.sub(r",?\s*reason\s*=.*", "", allow[2], flags=re.S)
-            item = re.search(
-                r"\b(fn|struct|enum|mod|trait|impl|const|static|type|union)\s+([^\n{;]+)",
-                clean[match.end() :],
-            )
-            scope = (
-                " ".join(item[0].split()[:2]).split("(")[0].split("<")[0]
-                if item
-                else "module"
-            )
+            prefix = text[: match.start()]
+            point = (prefix.count("\n"), len(prefix.rsplit("\n", 1)[-1].encode()))
+            scope = scopes.get(point, "module")
             if re.match(r"#\s*!", masked[match.start() :]):
                 scope = "module"
             for rule in rules.split(","):
@@ -192,7 +233,11 @@ def accepted_suppression(
 ) -> bool:
     """Permit a reviewed Rust item operation, never a module or lint group."""
     path, scope, suppression = site.rsplit(" | ", 2)
-    if not path.endswith(".rs") or scope == "module" or scope.startswith("mod "):
+    if (
+        not path.endswith(".rs")
+        or scope == "module"
+        or scope.rsplit(" > ", 1)[-1].startswith("mod ")
+    ):
         return False
     rule = re.sub(r"\s+|r#", "", suppression.split(" ", 1)[1])
     if rule.rsplit("::", 1)[-1] in LINT_GROUPS:
@@ -213,6 +258,8 @@ def accepted_suppression(
         "retirement_condition",
     )
     for proposal in proposals:
+        if any(type(proposal.get(key)) is not int for key in ("before", "after")):
+            continue
         if any(proposal.get(key) != value for key, value in expected.items()):
             continue
         if all(
