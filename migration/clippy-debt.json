@@ -1996,13 +1996,13 @@
       1,
       1
     ],
-    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn breakdown_state | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       35
     ],
-    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn breakdown_state | excessive_nesting | 04de0d2d9354c39757d1": [
+    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 2d9c7113631916a5215d": [
       7
     ],
-    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn breakdown_state | excessive_nesting | 975ca35c9bbe06785d6d": [
+    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 265eff158a12ca11124e": [
       7
     ],
     "rust/openttd-kernels/src/vehicle/visits.rs | impl Refresher::fn refresh_links | excessive_nesting | 1eca456e7a209fcf6492": [
