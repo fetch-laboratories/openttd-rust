@@ -372,6 +372,9 @@ mod tests {
             )
             .unwrap();
         }
-        assert_eq!(observed, include_str!("records/prototype-oracle.txt"));
+        assert_eq!(
+            observed,
+            include_str!("records/prototype-oracle.txt").replace("\r\n", "\n")
+        );
     }
 }

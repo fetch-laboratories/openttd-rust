@@ -63,5 +63,8 @@ fn reservation_replacement_and_serialized_threads_match_original() {
     }
     // SAFETY: All worker threads have joined and registry views are owned snapshots.
     unsafe { openttd_rust_engine_mapping_clear() };
-    assert_eq!(observed, include_str!("mapping-oracle.txt"));
+    assert_eq!(
+        observed,
+        include_str!("mapping-oracle.txt").replace("\r\n", "\n")
+    );
 }
