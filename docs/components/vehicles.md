@@ -19,11 +19,11 @@
 
 ## Road vehicle control and private state
 
-- Rust owns: tick/day control, movement, blocking/overtaking, reversal, station/depot transitions, crash expiry, servicing, cache, seven scalars and path per shell; road YAPF (#124) writes that path.
-- C++ keeps: modern, split-vector and TTD/TTO save staging, shared visual-effect gate and tail, tick entry and counters.
-- Checks: default `roads-` simulation.
+- Rust owns: tick/day control, movement, blocking/overtaking, reversal, station/depot transitions, crash expiry, servicing, cache, seven scalars and path per shell; road YAPF (#124) writes that path. The seven scalars form the canonical generated shared prefix and both languages access them directly.
+- C++ keeps: shells/pool identity, modern, split-vector and TTD/TTO save staging, shared visual-effect gate and tail, tick entry and counters.
+- Checks: default `roads-` simulation, original movement-table observations in Rust, and native shared-field layout/default/maximum-value checks.
 - Limits: Gaps remain in legacy saves, custom NewGRFs, articulated/tram turns, sounds, and viewport pixels (#156).
-- PRs: #128, #215, #319, #332.
+- PRs: #128, #215, #319, #332; direct fields #744/#755.
 
 ## Ship controller and private state (#146)
 
@@ -139,9 +139,9 @@
 
 - Rust owns: track/depot searches, exit keys, nodes/maps/heap, traversal/cost, heuristic, limits, fallback, reconstruction and station-area trimming into the road controller path.
 - C++ keeps: map/pools/settings and station/stop observations.
-- Checks: `python3 tools/migration.py simulate roads --jobs 2`; native heap/depot transcripts against unchanged C++.
+- Checks: `python3 tools/migration.py simulate roads --jobs 2`; the original heap transcript in production Rust tests and retained native depot transcripts.
 - Limits: Gaps remain in arbitrary maps, NewGRFs, articulated/tram, waypoints, stop/loop/segment branches, and legacy saves (#156).
-- PRs: #135, #279, #289; scratch capacity #278.
+- PRs: #135, #279, #289; scratch capacity #278; heap evidence #744/#755.
 
 ## Vehicle visual emission, cache and effect creation (#466)
 
@@ -154,9 +154,9 @@
 
 - Rust owns: tile track status, admission, pixel height, foundation dispatch and tile policy, rail/road foundations, depot distances, portal frames and bridge entry preparation.
 - C++ keeps: map arrays, pools, vehicle shells, storage/setters and native callers. Road controllers use the shared map descriptor for track-status tile reads; other movement entries and water-subtype reads use typed services.
-- Checks: `python3 tools/migration.py rust-checks`, `build`, native ABI tests, rail/road/station scenarios and `python3 tools/landscape-comparison.py`.
+- Checks: `python3 tools/migration.py rust-checks`, `build`, native ABI tests, rail/road/station scenarios and `python3 tools/landscape-comparison.py`. Frozen original foundation/extreme-coordinate observations run against production Rust; the native scheduler comparison and mutation/reset observations remain.
 - Limits: Gaps remain in NewGRF foundations, train/ship bridges, road tunnels, partial-depot reversal timing, half-water, and extreme bridge-speed branches (#156).
-- PRs: #374, #517, #523.
+- PRs: #374, #517, #523; movement evidence #748/#755.
 
 ## Vehicle station/depot visits and route-link prediction (#349)
 
