@@ -20,6 +20,7 @@
     clippy::too_many_arguments,
     clippy::too_many_lines
 )]
+use crate::cargopacket::{CargoPacket, MoveToAction};
 use crate::vehicle::VehicleRef;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
@@ -135,10 +136,6 @@ impl NextHops {
         (0..self.length).any(|index| unsafe { self.at(index) } == key)
     }
 }
-const TRANSFER: usize = 0;
-const DELIVER: usize = 1;
-const KEEP: usize = 2;
-const LOAD: usize = crate::cargopacket::MTA_LOAD as usize;
 const INVALID: u16 = u16::MAX;
 
 pub(crate) fn share(p: Packet, amount: u32) -> i64 {
@@ -385,13 +382,14 @@ unsafe fn remove_cache(l: *mut List, p: Packet, amount: u32, action: Option<usiz
         }
     }
 }
+/// Checks whether the second packet can merge into the first, including MAX_COUNT.
 fn mergeable(a: Packet, b: Packet) -> bool {
     a.source_xy == b.source_xy
         && a.periods_in_transit == b.periods_in_transit
         && a.first_station == b.first_station
         && a.source_id == b.source_id
         && a.source_type == b.source_type
-        && u16::try_from(u32::from(a.count) + u32::from(b.count)).is_ok()
+        && u32::from(a.count) + u32::from(b.count) <= u32::from(CargoPacket::MAX_COUNT)
 }
 unsafe fn merge(p: *mut Packet, s: Services, other: *mut c_void) {
     let b = unsafe { packet(s, other) };
@@ -401,6 +399,10 @@ unsafe fn merge(p: *mut Packet, s: Services, other: *mut c_void) {
     }
     (s.destroy)(other);
 }
+/// Appends a packet, trying to merge it with another in its range first.
+/// Vehicle packets may be appended for keeping or loading; reserved packets must
+/// be loaded before adding directly to the keep range. Station packets join the
+/// range with the same next station. After appending, the packet may no longer exist.
 unsafe fn append(l: *mut List, s: Services, shell: *mut c_void, key: u16) {
     let p = unsafe { packet(s, shell) };
     let vehicle = unsafe { (*l).vehicle };
@@ -446,6 +448,7 @@ unsafe fn append(l: *mut List, s: Services, shell: *mut c_void, key: u16) {
             break;
         }
     }
+    // The packet could not be merged with another one.
     unsafe {
         insert(l, shell, key, None, false);
     }
@@ -494,48 +497,55 @@ unsafe fn forced_flow(
     }
     via
 }
-fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> usize {
+/// Chooses the action to perform with this packet at the current and next stations.
+fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> MoveToAction {
     if via == INVALID {
         if accepted && p.first_station != station {
-            DELIVER
+            MoveToAction::MTA_DELIVER
         } else {
-            KEEP
+            MoveToAction::MTA_KEEP
         }
     } else if via == station {
-        DELIVER
+        MoveToAction::MTA_DELIVER
     // SAFETY: the caller supplies a live next-hop span for this synchronous choice.
     } else if unsafe { next.contains(via) } {
-        KEEP
+        MoveToAction::MTA_KEEP
     } else {
-        TRANSFER
+        MoveToAction::MTA_TRANSFER
     }
 }
+/// Moves cargo between adjacent designations without changing the packets.
+/// Moving from MTA_DELIVER to MTA_TRANSFER also updates the next station.
 pub(crate) unsafe fn reassign(
     list: *mut List,
     services: Services,
-    from: usize,
-    to: usize,
+    from: MoveToAction,
+    to: MoveToAction,
     amount: u32,
 ) -> u32 {
     let meta = unsafe { fields(list) };
-    let amount = amount.min(meta.action_counts[from]);
-    if from == DELIVER && to == TRANSFER {
+    let amount = amount.min(meta.action_counts[from.0 as usize]);
+    if from == MoveToAction::MTA_DELIVER && to == MoveToAction::MTA_TRANSFER {
         let mut sum = 0_u32;
         let mut node = unsafe { first(list) };
-        while sum < meta.action_counts[TRANSFER].wrapping_add(amount) {
+        while sum < meta.action_counts[MoveToAction::MTA_TRANSFER.0 as usize].wrapping_add(amount) {
             let current = node.unwrap();
             let next = unsafe { after(list, current.token) };
             let owner = (services.packet)(current.shell);
             sum = sum.wrapping_add(u32::from(unsafe { read(owner) }.count));
-            if sum > meta.action_counts[TRANSFER] {
-                if sum > meta.action_counts[TRANSFER].wrapping_add(amount) {
+            if sum > meta.action_counts[MoveToAction::MTA_TRANSFER.0 as usize] {
+                if sum
+                    > meta.action_counts[MoveToAction::MTA_TRANSFER.0 as usize].wrapping_add(amount)
+                {
                     // Historical C++ expression adds max_move (rather than subtracts).
                     let part = unsafe {
                         split(
                             owner,
                             services,
-                            sum.wrapping_sub(meta.action_counts[TRANSFER])
-                                .wrapping_add(amount),
+                            sum.wrapping_sub(
+                                meta.action_counts[MoveToAction::MTA_TRANSFER.0 as usize],
+                            )
+                            .wrapping_add(amount),
                         )
                     };
                     sum = sum.wrapping_sub(u32::from(unsafe { packet(services, part) }.count));
@@ -551,9 +561,10 @@ pub(crate) unsafe fn reassign(
         }
     }
     unsafe {
-        (*list).fields.action_counts[from] =
-            (*list).fields.action_counts[from].wrapping_sub(amount);
-        (*list).fields.action_counts[to] = (*list).fields.action_counts[to].wrapping_add(amount);
+        (*list).fields.action_counts[from.0 as usize] =
+            (*list).fields.action_counts[from.0 as usize].wrapping_sub(amount);
+        (*list).fields.action_counts[to.0 as usize] =
+            (*list).fields.action_counts[to.0 as usize].wrapping_add(amount);
     }
     amount
 }
@@ -737,16 +748,22 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stored(l: *const List) -> u32 {
     unsafe {
         (*l).fields
             .count
-            .wrapping_sub((*l).fields.action_counts[LOAD])
+            .wrapping_sub((*l).fields.action_counts[MoveToAction::MTA_LOAD.0 as usize])
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_unload(l: *const List) -> u32 {
-    unsafe { (*l).fields.action_counts[TRANSFER].wrapping_add((*l).fields.action_counts[DELIVER]) }
+    unsafe {
+        (*l).fields.action_counts[MoveToAction::MTA_TRANSFER.0 as usize]
+            .wrapping_add((*l).fields.action_counts[MoveToAction::MTA_DELIVER.0 as usize])
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_remaining(l: *const List) -> u32 {
-    unsafe { (*l).fields.action_counts[KEEP].wrapping_add((*l).fields.action_counts[LOAD]) }
+    unsafe {
+        (*l).fields.action_counts[MoveToAction::MTA_KEEP.0 as usize]
+            .wrapping_add((*l).fields.action_counts[MoveToAction::MTA_LOAD.0 as usize])
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_key_count(l: *const List) -> usize {
@@ -857,6 +874,7 @@ pub(crate) unsafe fn age<const COUNTED: bool>(l: *mut List, s: *const Services) 
             );
         }
         let old = unsafe { read(p) };
+        // If we're at the maximum, then we can't increase no more.
         if old.periods_in_transit == u16::MAX {
             continue;
         }
@@ -883,9 +901,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_reassign(
     to: u8,
     amount: u32,
 ) -> u32 {
-    unsafe { reassign(l, *s, usize::from(from), usize::from(to), amount) }
+    unsafe { reassign(l, *s, MoveToAction(from), MoveToAction(to), amount) }
 }
 
+/// Stages cargo for unloading, sorting transferred, delivered and kept packets
+/// into consecutive chunks and updating the counts to reflect their sizes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
     l: *mut List,
@@ -903,9 +923,9 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
     let s = unsafe { *s };
     let next_slice = NextHops { data: next, length };
     unsafe {
-        (*l).fields.action_counts[TRANSFER] = 0;
-        (*l).fields.action_counts[DELIVER] = 0;
-        (*l).fields.action_counts[KEEP] = 0;
+        (*l).fields.action_counts[MoveToAction::MTA_TRANSFER.0 as usize] = 0;
+        (*l).fields.action_counts[MoveToAction::MTA_DELIVER.0 as usize] = 0;
+        (*l).fields.action_counts[MoveToAction::MTA_KEEP.0 as usize] = 0;
     }
     let mut deliver = None;
     let mut n = unsafe { first(l) };
@@ -922,14 +942,17 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
         let mut observed = unsafe { read(p) };
         let mut action;
         if unload == 4 {
-            action = KEEP;
+            action = MoveToAction::MTA_KEEP;
         } else if unload == 1 && accepted != 0 && observed.first_station != station {
-            action = DELIVER;
+            action = MoveToAction::MTA_DELIVER;
         } else if unload == 1 || unload == 2 {
-            action = TRANSFER;
+            action = MoveToAction::MTA_TRANSFER;
+            // We cannot send the cargo to any possible next hop or the current station.
             via = unsafe { forced_flow(s, ge, observed.first_station, station, next_slice) };
         } else {
             let map = (s.flow_map)(ge);
+            // Rewrite an invalid source station to some random other one to avoid
+            // keeping the cargo in the vehicle forever.
             if observed.first_station == INVALID && !map.is_null() {
                 let first = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, 0, 0) };
                 if first.found != 0 {
@@ -961,7 +984,9 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
                 }
             };
             action = choose(observed, via, station, accepted != 0, next_slice);
-            if restricted != 0 && action == TRANSFER {
+            if restricted != 0 && action == MoveToAction::MTA_TRANSFER {
+                // If the flow is restricted we can't transfer to it. Choose an
+                // unrestricted one instead.
                 via = unsafe {
                     crate::cargo_flow::flow_via(flow, 0, 0, 0, &raw mut restricted, || {
                         s.random_draw()
@@ -971,7 +996,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
             }
         }
         match action {
-            KEEP => {
+            MoveToAction::MTA_KEEP => {
                 unsafe {
                     insert(l, current.shell, 0, None, false);
                 }
@@ -979,13 +1004,14 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
                     deliver = unsafe { last(l).map(|n| n.token) };
                 }
             }
-            DELIVER => unsafe {
+            MoveToAction::MTA_DELIVER => unsafe {
                 insert(l, current.shell, 0, deliver, false);
             },
-            TRANSFER => {
+            MoveToAction::MTA_TRANSFER => {
                 unsafe {
                     insert(l, current.shell, 0, None, true);
                 }
+                // Add feeder share here to allow reusing the field for next station.
                 let credit = (s.pay)(
                     payment,
                     0,
@@ -1004,13 +1030,16 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
         }
         let count = u32::from(unsafe { read(p) }.count);
         unsafe {
-            (*l).fields.action_counts[action] =
-                (*l).fields.action_counts[action].wrapping_add(count);
+            (*l).fields.action_counts[action.0 as usize] =
+                (*l).fields.action_counts[action.0 as usize].wrapping_add(count);
         }
         sum = sum.wrapping_add(count);
     }
     let f = unsafe { fields(l) };
-    u8::from(f.action_counts[DELIVER] > 0 || f.action_counts[TRANSFER] > 0)
+    u8::from(
+        f.action_counts[MoveToAction::MTA_DELIVER.0 as usize] > 0
+            || f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize] > 0,
+    )
 }
 
 // Action selectors: 0 return, 1 transfer, 2 deliver, 3 shift, 4 remove vehicle,
@@ -1039,7 +1068,14 @@ unsafe fn action(
                 src,
                 original,
                 remove,
-                Some(if mode == 2 { DELIVER } else { KEEP }),
+                Some(
+                    if mode == 2 {
+                        MoveToAction::MTA_DELIVER
+                    } else {
+                        MoveToAction::MTA_KEEP
+                    }
+                    .0 as usize,
+                ),
             );
         }
         if mode == 2 {
@@ -1073,7 +1109,19 @@ unsafe fn action(
         0 | 1 => {
             unsafe {
                 tile((s.packet)(cp), s, at, false);
-                remove_cache(src, p, count, Some(if mode == 0 { LOAD } else { TRANSFER }));
+                remove_cache(
+                    src,
+                    p,
+                    count,
+                    Some(
+                        if mode == 0 {
+                            MoveToAction::MTA_LOAD
+                        } else {
+                            MoveToAction::MTA_TRANSFER
+                        }
+                        .0 as usize,
+                    ),
+                );
             }
             if mode == 0 {
                 unsafe {
@@ -1085,8 +1133,8 @@ unsafe fn action(
             }
         }
         3 => unsafe {
-            remove_cache(src, p, count, Some(KEEP));
-            append(dst, s, cp, KEEP as u16);
+            remove_cache(src, p, count, Some(MoveToAction::MTA_KEEP.0 as usize));
+            append(dst, s, cp, MoveToAction::MTA_KEEP.0 as u16);
         },
         5 => {
             if p.next_hop == avoid || p.next_hop == avoid2 {
@@ -1106,8 +1154,8 @@ unsafe fn action(
             }
             if src != dst {
                 unsafe {
-                    remove_cache(src, p, count, Some(TRANSFER));
-                    add_cache(dst, p, Some(TRANSFER));
+                    remove_cache(src, p, count, Some(MoveToAction::MTA_TRANSFER.0 as usize));
+                    add_cache(dst, p, Some(MoveToAction::MTA_TRANSFER.0 as usize));
                 }
             }
             unsafe {
@@ -1129,7 +1177,11 @@ unsafe fn action(
                     dst,
                     s,
                     cp,
-                    if mode == 6 { LOAD as u16 } else { KEEP as u16 },
+                    if mode == 6 {
+                        MoveToAction::MTA_LOAD.0 as u16
+                    } else {
+                        MoveToAction::MTA_KEEP.0 as u16
+                    },
                 );
             }
         }
@@ -1321,8 +1373,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
     if mode == 10 {
         let mut moved = 0_u32;
         let f = unsafe { fields(src) };
-        if f.action_counts[TRANSFER] > 0 {
-            let amount = f.action_counts[TRANSFER].min(amount);
+        if f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize] > 0 {
+            let amount = f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize].min(amount);
             let mut remaining = amount;
             unsafe {
                 walk(
@@ -1343,8 +1395,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
             moved = moved.wrapping_add(amount);
         }
         let f = unsafe { fields(src) };
-        if f.action_counts[TRANSFER] == 0 && f.action_counts[DELIVER] > 0 && moved < amount {
-            let amount = f.action_counts[DELIVER].min(amount - moved);
+        if f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize] == 0
+            && f.action_counts[MoveToAction::MTA_DELIVER.0 as usize] > 0
+            && moved < amount
+        {
+            let amount = f.action_counts[MoveToAction::MTA_DELIVER.0 as usize].min(amount - moved);
             let mut remaining = amount;
             unsafe {
                 walk(
@@ -1368,12 +1423,19 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
     }
     if mode == 6 || mode == 7 || mode == 8 {
         if mode == 7 {
-            let reserved = unsafe { fields(dst) }.action_counts[LOAD].min(amount);
+            let reserved =
+                unsafe { fields(dst) }.action_counts[MoveToAction::MTA_LOAD.0 as usize].min(amount);
             if reserved > 0 {
                 unsafe {
                     (*src).fields.reserved_count =
                         (*src).fields.reserved_count.wrapping_sub(reserved);
-                    reassign(dst, s, LOAD, KEEP, reserved);
+                    reassign(
+                        dst,
+                        s,
+                        MoveToAction::MTA_LOAD,
+                        MoveToAction::MTA_KEEP,
+                        reserved,
+                    );
                 }
                 return reserved;
             }
@@ -1443,8 +1505,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
     }
     let f = unsafe { fields(src) };
     let amount = amount.min(match mode {
-        0 => f.action_counts[LOAD],
-        5 => f.action_counts[TRANSFER],
+        0 => f.action_counts[MoveToAction::MTA_LOAD.0 as usize],
+        5 => f.action_counts[MoveToAction::MTA_TRANSFER.0 as usize],
         _ => f.count,
     });
     let mut remaining = amount;
@@ -2016,7 +2078,12 @@ mod tests {
                 crate::cargo_flow::openttd_rust_flow_destroy(flow);
             }
             for first in [10, 11, 12] {
-                append(vehicle, service, cargo(8, first, 0), KEEP as u16);
+                append(
+                    vehicle,
+                    service,
+                    cargo(8, first, 0),
+                    MoveToAction::MTA_KEEP.0 as u16,
+                );
             }
             let next = [100];
             assert_eq!(
@@ -2108,7 +2175,7 @@ mod tests {
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
             (*owner(original)).next_hop = 70;
-            append(vehicle, service, original, KEEP as u16);
+            append(vehicle, service, original, MoveToAction::MTA_KEEP.0 as u16);
             (*vehicle).fields.action_counts = [8, 0, 0, 0];
             let via = 90_u16;
             let flows = flow_fixture(via);
@@ -2200,11 +2267,20 @@ mod tests {
     #[test]
     fn all_forced_unloading_selectors() {
         let service = services();
-        for (selector, action) in [(4, KEEP), (1, DELIVER), (2, TRANSFER)] {
+        for (selector, action) in [
+            (4, MoveToAction::MTA_KEEP),
+            (1, MoveToAction::MTA_DELIVER),
+            (2, MoveToAction::MTA_TRANSFER),
+        ] {
             let vehicle = list(true);
             PAYMENT_LIST.with(|slot| slot.set(vehicle));
             unsafe {
-                append(vehicle, service, cargo(8, 10, 0), KEEP as u16);
+                append(
+                    vehicle,
+                    service,
+                    cargo(8, 10, 0),
+                    MoveToAction::MTA_KEEP.0 as u16,
+                );
                 openttd_rust_cargo_list_stage(
                     vehicle,
                     &raw const service,
@@ -2219,7 +2295,7 @@ mod tests {
                     5,
                 );
                 let meta = fields(vehicle);
-                assert_eq!(meta.action_counts[action], 8);
+                assert_eq!(meta.action_counts[action.0 as usize], 8);
                 assert_eq!(meta.action_counts.iter().sum::<u32>(), 8);
                 clean(vehicle);
             }
@@ -2334,7 +2410,7 @@ mod tests {
                     entry.list,
                     service,
                     cargo(1, index as u16 + 10, 0),
-                    KEEP as u16,
+                    MoveToAction::MTA_KEEP.0 as u16,
                 );
             }
             CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
@@ -2385,8 +2461,18 @@ mod tests {
         let source = [part(3), part(6)];
         link(&source);
         unsafe {
-            append(source[0].list, service, cargo(8, 10, 8), KEEP as u16);
-            append(source[1].list, service, cargo(1, 11, 1), KEEP as u16);
+            append(
+                source[0].list,
+                service,
+                cargo(8, 10, 8),
+                MoveToAction::MTA_KEEP.0 as u16,
+            );
+            append(
+                source[1].list,
+                service,
+                cargo(1, 11, 1),
+                MoveToAction::MTA_KEEP.0 as u16,
+            );
             assert_eq!(
                 cargo_capacity(&raw const capacity, head(&source[0]), None, 0, 0),
                 0
