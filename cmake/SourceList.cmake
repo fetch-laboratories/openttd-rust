@@ -44,5 +44,12 @@ endfunction()
 # For example: ADD_IF SDL_FOUND AND Allegro_FOUND
 #
 function(add_test_files)
-    _add_files_tgt(openttd_test ${ARGV})
+    set(files ${ARGV})
+    foreach(source IN LISTS EVIDENCE_RETIRED_SOURCES)
+        if(source MATCHES "^src/tests/")
+            string(REGEX REPLACE "^src/tests/" "" name "${source}")
+            list(REMOVE_ITEM files "${name}")
+        endif()
+    endforeach()
+    _add_files_tgt(openttd_test ${files})
 endfunction()

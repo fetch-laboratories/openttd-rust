@@ -162,6 +162,40 @@ class GeneratedAbiTests(unittest.TestCase):
                 self.assertIn(visits, ([], [(field, field) for field in cpp]))
                 self.assertNotIn("reinterpret_cast", visitor)
 
+    def test_new_layout_group_registers_without_shared_probe_edits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            probes = root / "tools/migration/windows-abi"
+            rust.mkdir(parents=True)
+            probes.mkdir(parents=True)
+            # Production schema declarations are the fixture, including the real
+            # native-test shared record; only group placement changes here.
+            fixture = ROOT / "rust/openttd-kernels/src/native_test_support.rs"
+            (rust / "fixture.rs").write_text(
+                fixture.read_text().replace('"record_test"', '"new_group"')
+            )
+            (rust / "tile_type.rs").write_text(
+                (ROOT / "rust/openttd-kernels/src/tile_type.rs").read_text()
+            )
+            (rust / "layout.rs").write_text(
+                'layouts! { "Native" ["local"] => Native {}; }'
+            )
+            (probes / "local.inc").write_text(
+                'static void Local() {\n#include "abi-layout-local.inc"\n}\nABI_PROBE(Local);\n'
+            )
+            fragments = GENERATOR["generate"](root)
+            self.assertEqual(
+                fragments["abi-layouts.inc"], '#include "abi-layout-new_group.inc"\n'
+            )
+            required = set(
+                re.findall(r'"([^"\n]+)",', fragments["abi-required-layouts.inc"])
+            )
+            self.assertEqual(required, {"Native", "OpenTTDAbiRecordFixture"})
+            self.assertEqual(
+                fragments["abi-probes.inc"], '#include "windows-abi/local.inc"\n'
+            )
+
     def test_generation_is_deterministic_and_build_directory_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(
