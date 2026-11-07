@@ -4,11 +4,11 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-07, stocktake 107)
+## Where the fork stands (2026-11-07, integration 107)
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-Development remains in the cleanup stage (user, 2026-11-06). Code main is integration 107, `c540d0788f` (#752). Exact-head Full passes; main has no known regression or integration hold. The approved Clippy correction and cargo/engine evidence transfers are integrated. Platform cadence 105 passed; the next is 110. The scheduled profile of 107 is next; until it finishes, [profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
+Development remains in the cleanup stage (user, 2026-11-06). Code main is integration 107, `c540d0788f` (#752). Exact-head Full passes; main has no known regression or integration hold. The approved Clippy correction and cargo/engine evidence transfers are integrated. Platform cadence 105 passed; the next is 110. The user skipped the remaining stocktake work and profile 107 (2026-11-07); [profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
 
 | Current measure | Integration 107 |
 | --- | ---: |
@@ -234,7 +234,7 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 
 ## Recurring
 
-- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). Stocktake 107 is recorded above; its profile is next. The next stocktake follows integration 113.
+- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. The next scheduled stocktake/profile follows integration 113.
 - Run the platform cadence after every fifth integration; 105 passed and the next follows integration 110. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -247,11 +247,10 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Code main is integration 107, `c540d0788f`. A, R0, cargo C, foundation F and history H are integrated, as are the narrowed Clippy policy and bounded cargo/engine evidence transfers. Their exact-head Full results pass; on-demand CI is restored after the Windows workflow repair. #746 is closed and F needs no further proof work. The scheduled merged-tip profile runs beside implementation; only a quiet timed collection would hold other builds. Integration and rollback procedures live in the [root workflow](root-workflow.md).
+Cleanup stage in progress. Code main is integration 107, `c540d0788f`. A, R0, cargo C, foundation F and history H are integrated, as are the narrowed Clippy policy and bounded cargo/engine evidence transfers. Their exact-head Full results pass; on-demand CI is restored after the Windows workflow repair. #746 is closed and F needs no further proof work. The user skipped stocktake/profile 107; continue the cleanup work below. Integration and rollback procedures live in the [root workflow](root-workflow.md).
 
 | Work | Owner | Next action |
 | --- | --- | --- |
-| Profile/stocktake 107, #275 | Root | Profile integrated `c540d0788f`, compare retained same-host anchors and record projections. No per-PR profile or anchor reset. |
 | #737 R, PR #744 | `/root/cleanup_737_road` | Adopt current main and the narrowed debt selection, preserving reviewed source; refresh exact contracts. Root handles acceptance and combines disjoint ready work for Full. No repeated whole-fork metric on a mechanical base update. |
 | #736 W1, PR #748 | `/root/cleanup_736_world_evidence` | Adopt current main, preserving the reviewed 19,608 movement observations. Root reserves one combined integrating-head report for its second measurement and final Full. Scheduler/native boundary evidence remains. |
 | #734 workset 01, Town/house | `/root/cleanup_734_town_house` | Start from integrated main. Reserve the 14-file workset and required type companions; first coherent checkpoint is town-name vocabulary/comments with table bytes, arithmetic and selection order preserved. |
