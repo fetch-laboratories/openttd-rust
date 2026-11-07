@@ -15,7 +15,7 @@ pub const TRANSPORT_WATER: u8 = TransportType::TRANSPORT_WATER.0;
 
 /// Native `TransportType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TransportType(pub u8);
 
 #[allow(non_upper_case_globals)]

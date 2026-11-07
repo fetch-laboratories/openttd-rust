@@ -9,3 +9,17 @@
 
 /// `VehicleCargoList::MTA_LOAD`.
 pub const MTA_LOAD: u8 = 3;
+
+/// Native `CargoPacketID`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CargoPacketID(pub u32);
+
+impl CargoPacketID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(16773120);
+    /// Native `PoolID::Invalid()`.
+    pub const INVALID: Self = Self(16777215);
+}

@@ -19,17 +19,17 @@ pub const SIGNAL_STATE_GREEN: u8 = SignalState::SIGNAL_STATE_GREEN.0;
 
 /// Native `SignalVariant` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SignalVariant(pub u8);
 
 /// Native `SignalType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SignalType(pub u8);
 
 /// Native `SignalState` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SignalState(pub u8);
 
 #[allow(non_upper_case_globals)]

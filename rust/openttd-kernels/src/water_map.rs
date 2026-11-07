@@ -236,7 +236,7 @@ mod tests {
 
 /// Native `WaterClass` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WaterClass(pub u8);
 
 #[allow(non_upper_case_globals)]

@@ -66,16 +66,17 @@ pub(crate) fn industry_tile_check_valid_new_id(id: u16) -> bool {
 /// Metadata read together by substitute-spec publication.
 #[repr(C)]
 pub struct SubstituteSpecIdentity {
+    /// GRF owning this definition.
     pub grfid: u32,
+    /// GRF-local specification ID.
     pub local: u16,
+    /// Original specification used as the substitute.
     pub substitute: u16,
 }
 /// `AirportTileOverrideManager::CheckValidNewID` excludes the layout marker.
 pub(crate) fn airport_tile_check_valid_new_id(id: u16) -> bool {
     id != 0xff
 }
-
-/// Keys of `StandardGRFFileProps`.
 
 /// Native `StandardSpriteGroup`, retaining every underlying `i32` value.
 #[repr(transparent)]

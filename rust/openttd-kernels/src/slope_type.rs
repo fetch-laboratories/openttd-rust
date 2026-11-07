@@ -7,14 +7,18 @@
 
 //! Shared definitions from `slope_type.h`.
 
-/// Native `Slope` representation; every byte pattern is retained.
+/// Slope corners use N/E/S/W, with north at the top of the tile. Four corner
+/// bits and one steep bit describe a continuous slope. Halftile slopes use
+/// another flag and two corner bits for the leveled side. Only one side of a
+/// steep slope can be leveled: halftile slopes span only one height level.
+/// Every underlying byte remains representable.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slope(pub u8);
 
 /// Native `Foundation` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Foundation(pub u8);
 
 /// `SLOPE_FLAT`.
@@ -190,3 +194,5 @@ impl Foundation {
     /// Used inside "rail_cmd.cpp" to indicate invalid slope/track combination.
     pub const FOUNDATION_INVALID: Self = Self(255);
 }
+
+crate::base_bitset_type::impl_bitset_ops!(Slope);

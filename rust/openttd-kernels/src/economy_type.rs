@@ -117,7 +117,7 @@ pub const PR_BUILD_LOCK: usize = Price::PR_BUILD_LOCK.0 as usize;
 
 /// Native `ExpensesType : uint8_t` carrier.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExpensesType(pub u8);
 
 /// Native `Price`, retaining every underlying `u8` value.
@@ -323,4 +323,12 @@ impl CargoPaymentID {
     pub const END: Self = Self(1044480);
     /// Native `PoolID::Invalid()`.
     pub const INVALID: Self = Self(1048575);
+}
+
+impl Price {
+    /// Index into native price arrays.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
 }

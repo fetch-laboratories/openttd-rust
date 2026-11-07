@@ -1,23 +1,37 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared constants of `industry_type.h`.
+/// Native `NUM_INDUSTRYTYPES`.
 pub const NUM_INDUSTRYTYPES: u8 = 240;
+/// Native `INVALID_INDUSTRY`.
 pub const INVALID_INDUSTRY: u16 = IndustryID::INVALID.0;
+/// Native `IT_INVALID`.
 pub const IT_INVALID: u8 = 0xff;
+/// Native `NEW_INDUSTRYTILEOFFSET`.
 pub const NEW_INDUSTRYTILEOFFSET: u16 = 175;
+/// Native `INVALID_INDUSTRYTILE`.
 pub const INVALID_INDUSTRYTILE: u16 = 512;
 
 /// Masks from `industrytype.h::IndustryBehaviour`.
 pub const BUILT_ON_WATER: u32 = 1 << 2;
+/// Native `PROD_MULTI_HANDLING`.
 pub const PROD_MULTI_HANDLING: u32 = 1 << 14;
 
+/// Native `NEW_INDUSTRYOFFSET`.
 pub const NEW_INDUSTRYOFFSET: u16 = 37;
+/// Native `NUM_INDUSTRYTILES`.
 pub const NUM_INDUSTRYTILES: u16 = 512;
 
+/// Native `NUM_INDUSTRYTYPES_PER_GRF`.
 pub const NUM_INDUSTRYTYPES_PER_GRF: u8 = 128;
+/// Native `NUM_INDUSTRYTILES_PER_GRF`.
 pub const NUM_INDUSTRYTILES_PER_GRF: u16 = 255;
+/// Native `INDUSTRY_NUM_INPUTS`.
 pub const INDUSTRY_NUM_INPUTS: usize = 16;
+/// Native `INDUSTRY_NUM_OUTPUTS`.
 pub const INDUSTRY_NUM_OUTPUTS: usize = 16;
+/// Native `INDUSTRY_ORIGINAL_NUM_INPUTS`.
 pub const INDUSTRY_ORIGINAL_NUM_INPUTS: usize = 3;
+/// Native `INDUSTRY_ORIGINAL_NUM_OUTPUTS`.
 pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: usize = 2;
 
 /// `IndustryBehaviour::AirplaneAttacks`.

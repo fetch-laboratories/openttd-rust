@@ -9,7 +9,7 @@
 
 /// GRF-internal string ID, distinct from an OpenTTD string ID.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GRFStringID(pub u32);
 
 impl GRFStringID {

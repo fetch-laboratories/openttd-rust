@@ -6,19 +6,18 @@
  */
 
 //! Shared `road_map.h` values.
-use crate::services::Roadside;
 use crate::tile_type::TileIndex;
 /// `Roadside::Trees`.
-pub const ROADSIDE_TREES: Roadside = Roadside(5);
+pub const ROADSIDE_TREES: Roadside = Roadside::Trees;
 /// `Roadside::Paved`.
-pub const ROADSIDE_PAVED: Roadside = Roadside(2);
+pub const ROADSIDE_PAVED: Roadside = Roadside::Paved;
 
 /// `RoadTileType::Normal`.
-pub const ROAD_TILE_NORMAL: u8 = 0;
+pub const ROAD_TILE_NORMAL: u8 = RoadTileType::Normal.0;
 /// `RoadTileType::Crossing`.
-pub const ROAD_TILE_CROSSING: u8 = 1;
+pub const ROAD_TILE_CROSSING: u8 = RoadTileType::Crossing.0;
 /// `RoadTileType::Depot`.
-pub const ROAD_TILE_DEPOT: u8 = 2;
+pub const ROAD_TILE_DEPOT: u8 = RoadTileType::Depot.0;
 
 /// `SetRoadTypeRoad` delegates to the canonical typed map setter.
 #[allow(clippy::inline_always)]
@@ -316,12 +315,12 @@ pub(crate) fn has_tile_any_road_type(
 
 /// Native `Roadside` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Roadside(pub u8);
 
 /// Native road tile kind.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadTileType(pub u8);
 
 #[allow(non_upper_case_globals)]

@@ -101,7 +101,7 @@ pub(crate) fn is_field_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
 
 /// Native `ClearGround` representation; every byte pattern is retained.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClearGround(pub u8);
 
 #[allow(non_upper_case_globals)]

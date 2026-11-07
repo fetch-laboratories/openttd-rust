@@ -45,7 +45,8 @@ pub const VE_OFFSET_COUNT: u8 = 4;
 pub const VE_TYPE_COUNT: u8 = 2;
 
 /// `EngineMiscFlag::NoDefaultCargoMultiplier`.
-pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 = 1 << 5;
+pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 =
+    EngineMiscFlags::from_element(EngineMiscFlag::NoDefaultCargoMultiplier).0;
 
 /// `AIR_HELI`.
 pub const AIR_HELI: u8 = 0;
@@ -56,7 +57,7 @@ pub const EC_ELECTRIC: u8 = EngineClass::EC_ELECTRIC.0;
 /// `EC_MAGLEV`.
 pub const EC_MAGLEV: u8 = EngineClass::EC_MAGLEV.0;
 /// `EngineMiscFlag::Uses2CC`.
-pub const USES_2CC: u8 = 1 << 1;
+pub const USES_2CC: u8 = EngineMiscFlags::from_element(EngineMiscFlag::Uses2CC).0;
 
 /// Canonical engine record; native shell identity is kept only for remaining native consumers.
 pub use crate::engine::Lifecycle as OpenTTDEngine;
@@ -77,24 +78,25 @@ impl EngineID {
 }
 
 /// `EngineMiscFlag::RailIsMU`.
-pub const RAIL_IS_MU: u8 = 1 << 2;
+pub const RAIL_IS_MU: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RailIsMU).0;
 /// `EngineMiscFlag::RoadIsTram`.
-pub const ROAD_IS_TRAM: u8 = 1;
+pub const ROAD_IS_TRAM: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RoadIsTram).0;
 /// `AIR_FAST`.
 pub const AIR_FAST: u8 = 2;
 
 /// `EngineMiscFlag::AutoRefit`.
-pub const AUTO_REFIT: u8 = 1 << 4;
+pub const AUTO_REFIT: u8 = EngineMiscFlags::from_element(EngineMiscFlag::AutoRefit).0;
 
 /// `EngineMiscFlag::RailTilts`.
-pub const RAIL_TILTS: u8 = 1;
+pub const RAIL_TILTS: u8 = EngineMiscFlags::from_element(EngineMiscFlag::RailTilts).0;
 
 /// `EngineMiscFlag::NoBreakdownSmoke`.
-pub const NO_BREAKDOWN_SMOKE: u8 = 1 << 6;
+pub const NO_BREAKDOWN_SMOKE: u8 =
+    EngineMiscFlags::from_element(EngineMiscFlag::NoBreakdownSmoke).0;
 
 /// Native `RailVehicleTypes : uint8_t`, with the same unrestricted byte domain.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailVehicleTypes(pub u8);
 
 impl RailVehicleTypes {
@@ -261,3 +263,46 @@ impl EngineID {
     /// Native `PoolID::End()`.
     pub const END: Self = Self(64000);
 }
+
+impl ExtraEngineFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: ExtraEngineFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl EngineMiscFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: EngineMiscFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+impl EngineFlags {
+    /// Native `BaseBitSet::Test`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn test(self, element: EngineFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+crate::base_bitset_type::impl_bitset_ops!(ExtraEngineFlags);
+crate::base_bitset_type::impl_bitset_ops!(EngineMiscFlags);
+crate::base_bitset_type::impl_bitset_ops!(EngineFlags);

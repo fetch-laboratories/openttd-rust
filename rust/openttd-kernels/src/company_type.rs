@@ -59,6 +59,7 @@ impl CompanyID {
 
 /// Native name limits, including the terminating character.
 pub const MAX_LENGTH_COMPANY_NAME_CHARS: usize = 32;
+/// Native `MAX_LENGTH_PRESIDENT_NAME_CHARS`.
 pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;
 
 /// Company allow-list addition.
