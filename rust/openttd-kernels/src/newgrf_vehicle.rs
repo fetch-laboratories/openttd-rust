@@ -671,7 +671,7 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
                 randomise(
                     s,
                     crate::vehicle::VehicleRef::of(v).first().0.as_ptr(),
-                    Trigger::AnyNewCargo as u8,
+                    Trigger::AnyNewCargo.0,
                     random,
                     false,
                 );
@@ -1599,15 +1599,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
     }
 }
 
-/// Vehicle random trigger domain from `newgrf_engine.h`.
-#[derive(Clone, Copy)]
-pub enum Trigger {
-    NewCargo = 0,
-    Depot = 1,
-    Empty = 2,
-    AnyNewCargo = 3,
-    Callback32 = 4,
-}
+/// Compatibility name for the original vehicle trigger element.
+pub use crate::vehicle_type::VehicleRandomTrigger as Trigger;
 /// `Train::tcache.cached_override = GetWagonOverrideSpriteSet(...)`.
 pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
     unsafe {
@@ -1619,7 +1612,7 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
 }
 /// Direct owner entry; the caller preserves the live shell through evaluation.
 pub(crate) unsafe fn trigger(vs: &VehicleServices, v: VehicleRef, trigger: Trigger) {
-    unsafe { openttd_rust_vehicle_randomise(&*(vs.newgrf)(), v.0.as_ptr(), trigger as u8) }
+    unsafe { openttd_rust_vehicle_randomise(&*(vs.newgrf)(), v.0.as_ptr(), trigger.0) }
 }
 /// Direct callback; `None` preserves purchase/clone-estimate contexts without a shell.
 pub(crate) unsafe fn callback(

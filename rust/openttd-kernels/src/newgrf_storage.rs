@@ -412,3 +412,17 @@ crate::abi::layouts! {
     "OpenTTDStorageReference" ["storage"] => StorageReference { owner, grfid };
     "OpenTTDIndustryStorage" ["storage"] => IndustryStorage { owner, valid };
 }
+
+/// Native `PersistentStorageID`, retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PersistentStorageID(pub u32);
+
+impl PersistentStorageID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(1_044_480);
+    /// Native `PoolID::Invalid()`.
+    pub const INVALID: Self = Self(1_048_575);
+}

@@ -147,9 +147,9 @@ fn bind_standard<S, T>(
     if spec.is_null() {
         grf_msg!(1, "MapSpriteGroup: {local} undefined, skipping.");
     } else if cargo.is_some() {
-        (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Purchase as u8, group);
+        (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Purchase.0 as u8, group);
     } else {
-        (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Default as u8, group);
+        (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Default.0 as u8, group);
         (table.set_file)(spec, unsafe { loading::file() });
         (table.set_local_id)(spec, local);
     }
@@ -168,9 +168,9 @@ unsafe fn bind_record(
     };
     unsafe {
         if cargo.is_some() {
-            (*props).spritegroups[StandardSpriteGroup::Purchase as usize] = group;
+            (*props).spritegroups[StandardSpriteGroup::Purchase.0 as usize] = group;
         } else {
-            (*props).spritegroups[StandardSpriteGroup::Default as usize] = group;
+            (*props).spritegroups[StandardSpriteGroup::Default.0 as usize] = group;
             // GRFFilePropsBase::SetGRFFile.
             let file = loading::file();
             (*props).grffile = file;
