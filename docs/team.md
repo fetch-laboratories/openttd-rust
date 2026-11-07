@@ -14,6 +14,7 @@ Readers: Root and user-invoked skills that spawn agents.
 ## Spawning
 
 - Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order, and reviewer briefs at the [review checklist](review-checklist.md); those agents read further docs only where these point.
+- Children send mid-task messages to their own `parentThreadId`, read from their thread metadata; never find root by searching thread titles.
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work.
 - Each review round, including re-review, gets a fresh reviewer who reads the PR's earlier attributed review reports.
 - Follow the host's orchestration rules: use native agents for compatible shared-checkout work completed in the same turn; use T3 delegation for background work, another provider or an isolated checkout. T3 creates and binds isolated checkouts. Follow its completion notifications and returned next action; do not poll a running delegate.
