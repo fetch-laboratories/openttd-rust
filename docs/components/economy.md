@@ -168,7 +168,7 @@
 
 - Climate setup, label rebuild/lookup and default-cargo classification use the original names and canonical cargo labels/types. The existing vector and ordered map retain their sole storage, unsigned comparison, raw domains and first-slot priority.
 - Native copy/publication, validity and label reads, mask/array writes and callback order remain unchanged. Raw pointer views, registry services and scalar interfaces retain their layouts and owners.
-- Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Finalisation, translation and other registry vocabulary remain in the cleanup workset.
+- Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Callback/sprite and other registry vocabulary remain in the cleanup workset.
 - PRs: #782, integrated in #785.
 
 ## Original engine livery vocabulary (#734)
@@ -183,3 +183,15 @@
 - The existing sorted-cargo initialisation body uses canonical CargoType and TownProductionEffect names and original comments. Native comparison, publication, reverse-index writes, per-town appends and the special-cargo break retain their existing order.
 - Raw services, registry storage and other helpers remain unchanged. Source operations/order review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited observation/container differences and coverage limits remain on #156.
 - PRs: #787, integrated in #789. Other Cargo registry families remain in the cleanup workset.
+
+## Original Company rename vocabulary (#734)
+
+- Company and president rename adapters retain one shared helper while adopting original command identities, canonical string identities and explanatory comments. Reset, length/uniqueness checks, execution guards, native name frames, automatic company naming and notifications preserve their captured operations and order.
+- Native company/name storage, raw service/record contracts and other Company families remain unchanged. Source review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited read-staging differences and coverage limits remain on #156.
+- PRs: #791, integrated in #794. Other Company/economy vocabulary remains in the cleanup workset.
+
+## Original Cargo loading policy vocabulary (#734)
+
+- Existing finalisation, translation-table selection, cargo translation, inverse mapping and fallback bodies use canonical cargo identities and original comments. Distinct pre-v7/usebit rules, eager reads, clear/traverse order, first matching label, narrowing, file reread and resize/write order remain unchanged.
+- Raw label/file/spec records, services and exports retain their shapes and owners. Source review and combined exact-head Full pass; archive equivalence is unclaimed. Inherited read-staging/container differences and coverage limits remain on #156.
+- PRs: #792, integrated in #794. Other registry callback/sprite vocabulary remains in the cleanup workset.

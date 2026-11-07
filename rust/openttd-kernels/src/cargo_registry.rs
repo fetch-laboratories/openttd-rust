@@ -12,13 +12,9 @@
 )]
 use crate::bitmath_func::{clr_bit64, set_bit64};
 use crate::cargo_type::{
-    CT_INVALID, CT_MAIL, CT_PASSENGERS, CargoLabel, CargoType, INVALID_CARGO, NUM_CARGO,
-    NUM_ORIGINAL_CARGO,
+    CT_INVALID, CargoLabel, CargoType, INVALID_CARGO, NUM_CARGO, NUM_ORIGINAL_CARGO,
 };
-use crate::cargotype::{
-    INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS, TownProductionEffect,
-    is_cargo_spec_valid,
-};
+use crate::cargotype::{NUM_TPE, TownProductionEffect, is_cargo_spec_valid};
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::CBID_NO_CALLBACK;
 use crate::newgrf_spritegroup::{self, State};
@@ -379,21 +375,26 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
     // _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs.
     (s.publish_standard)(data, nb_standard_cargo);
 }
+/// `FinaliseCargoArray`: check for invalid cargoes.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_finalise() {
     let s = services();
-    for cargo in 0..NUM_CARGO {
-        let cs = (s.spec)(cargo);
+    for cargo in 0..CargoType::NUM_CARGO.0 {
+        let cargo = CargoType(cargo);
+        let cs = (s.spec)(cargo.0);
         let info = (s.finalise_spec)(cs);
-        if info.effect == INVALID_TPE {
-            let label = info.label;
+        let town_production_effect = TownProductionEffect(info.effect);
+        if town_production_effect == TownProductionEffect::INVALID_TPE {
+            // Set default town production effect by cargo label.
+            let label = CargoLabel(info.label);
             (s.set_effect)(
                 cs,
                 match label {
-                    CT_PASSENGERS => TPE_PASSENGERS,
-                    CT_MAIL => TPE_MAIL,
-                    _ => TPE_NONE,
-                },
+                    CargoLabel::CT_PASSENGERS => TownProductionEffect::TPE_PASSENGERS,
+                    CargoLabel::CT_MAIL => TownProductionEffect::TPE_MAIL,
+                    _ => TownProductionEffect::TPE_NONE,
+                }
+                .0,
             );
         }
         if !is_cargo_spec_valid(info.bitnum) {
@@ -401,38 +402,51 @@ pub extern "C" fn openttd_rust_cargo_finalise() {
         }
     }
 }
+/// `GetCargoTranslationTable`: get the cargo translation table to use for the given GRF file.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_translation_table(file: Handle) -> Labels {
-    let info = (services().file)(file);
-    if info.labels.size != 0 {
-        info.labels
-    } else if info.version < 7 {
+    let grffile = (services().file)(file);
+    // Always use the translation table if it's installed.
+    if grffile.labels.size != 0 {
+        grffile.labels
+    } else if grffile.version < 7 {
+        // Pre-v7 use climate-dependent "slot" table.
         openttd_rust_cargo_climate_labels()
     } else {
+        // Otherwise use climate-independent "bitnum" table.
         openttd_rust_cargo_bitnum_labels()
     }
 }
+/// `GetCargoTranslation`: translate a GRF-local cargo slot/bitnum into a `CargoType`.
+/// `usebit` defines whether pre-v7 cargo is a bitnum (true) or cargo slot (false).
+/// For GRF version >= 7 cargo is always a translated cargo bit.
+/// Returns `CargoType` or `INVALID_CARGO` if the cargo is not available.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: bool) -> u8 {
-    let info = (services().file)(file);
-    let labels = if info.version < 7 && !usebit && !info.fallback {
+    let grffile = (services().file)(file);
+    // We can't use GetCargoTranslationTable here as the usebit flag changes behaviour.
+    // Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places..
+    let cargo_list = if grffile.version < 7 && !usebit && !grffile.fallback {
         openttd_rust_cargo_climate_labels()
-    } else if info.labels.size != 0 {
-        info.labels
+    } else if grffile.labels.size != 0 {
+        grffile.labels
     } else {
         openttd_rust_cargo_bitnum_labels()
     };
-    if usize::from(cargo) < labels.size {
-        openttd_rust_cargo_by_label(unsafe { labels.data.add(usize::from(cargo)).read() })
+    let cargo_type = if usize::from(cargo) < cargo_list.size {
+        let label = CargoLabel(unsafe { cargo_list.data.add(usize::from(cargo)).read() });
+        CargoType(openttd_rust_cargo_by_label(label.0))
     } else {
-        INVALID_CARGO
-    }
+        CargoType::INVALID_CARGO
+    };
+    cargo_type.0
 }
+/// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo translation table.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     let s = services();
     (s.clear_inverse)(file);
-    let labels = openttd_rust_cargo_translation_table(file);
+    let cargo_list = openttd_rust_cargo_translation_table(file);
     for (_, (cs, info)) in crate::cargotype::iterate(
         |cargo| {
             let cs = (s.spec)(cargo);
@@ -440,30 +454,39 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
         },
         |(_, info)| is_cargo_spec_valid(info.bitnum),
     ) {
-        let index = unsafe {
+        // Check the translation table for this cargo's label.
+        let label = CargoLabel(info.label);
+        let idx = unsafe {
             crate::container_func::find_index(
-                std::slice::from_raw_parts(labels.data, labels.size),
-                &info.label,
+                std::slice::from_raw_parts(cargo_list.data, cargo_list.size),
+                &label.0,
             )
         };
-        if index >= 0 {
-            (s.set_inverse)(file, (s.index)(cs), index as u8);
+        if idx >= 0 {
+            let cargo = CargoType((s.index)(cs));
+            (s.set_inverse)(file, cargo.0, idx as u8);
         }
     }
 }
+/// `MaybeInstallFallbackCargoLabel`: install a cargo label in a fallback cargo list,
+/// if a NewGRF-defined cargo list is not present. This allows this `NewGRF` to use its
+/// self-defined cargo types without needing an explicit translation table.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: u32, label: u32) {
+    let label = CargoLabel(label);
     let s = services();
     if (s.file)(file).labels.size == 0 {
-        let labels = openttd_rust_cargo_translation_table(file);
-        (s.assign_fallback)(file, labels);
+        // Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list.
+        let default_cargo_list = openttd_rust_cargo_translation_table(file);
+        (s.assign_fallback)(file, default_cargo_list);
     }
-    let info = (s.file)(file);
-    if info.fallback {
-        if info.labels.size < last as usize {
+    let grffile = (s.file)(file);
+    if grffile.fallback {
+        // Automatically fill fallback cargo list with the defined label, resizing as needed.
+        if grffile.labels.size < last as usize {
             (s.resize_fallback)(file, last as usize);
         }
-        (s.set_fallback)(file, id, label);
+        (s.set_fallback)(file, id, label.0);
     }
 }
 fn invocation(spec: Handle, callback: u16, param1: u32, param2: u32) -> Invocation {

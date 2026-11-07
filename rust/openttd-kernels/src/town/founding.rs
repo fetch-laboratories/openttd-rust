@@ -12,12 +12,14 @@ use super::{
     town_ticks_to_game_ticks, update_radius,
 };
 use crate::cargotype::TownAcceptanceEffect;
+use crate::clear_map::ClearGround;
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::landscape_type::LandscapeType;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, TownHandle};
 use crate::tile_type::{TileIndex, TileType};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 use crate::town_type::{RATING_INITIAL, TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TownID};
+use crate::tree_map::TreeGround;
 use crate::witness as w;
 use std::cell::OnceCell;
 
@@ -151,12 +153,14 @@ impl<'a> Founding<'a> {
             self.size_y(),
         )
     }
-    fn aligned(&self, tile: Tile, layout: TownLayout) -> bool {
+    /// Towns must all share a grid so their road networks mesh when they interpenetrate.
+    /// Tell whether the tile is properly aligned (`town_cmd.cpp::IsTileAlignedToGrid`).
+    fn is_tile_aligned_to_grid(&self, tile: TileIndex, layout: TownLayout) -> bool {
         let x = tile.0 % self.map().size_x();
         let y = tile.0 / self.map().size_x();
-        match layout.0 {
-            2 => x.is_multiple_of(3) && y.is_multiple_of(3),
-            3 => x.is_multiple_of(4) && y.is_multiple_of(4),
+        match layout {
+            TownLayout::TL_2X2_GRID => x.is_multiple_of(3) && y.is_multiple_of(3),
+            TownLayout::TL_3X3_GRID => x.is_multiple_of(4) && y.is_multiple_of(4),
             _ => true,
         }
     }
@@ -174,77 +178,105 @@ impl<'a> Founding<'a> {
             _ => tile,
         }
     }
-    fn placement_error(&self, tile: Tile, surrounding: bool) -> Option<u32> {
+    /// Check whether a town can be placed on the tile (`town_cmd.cpp::TownCanBePlacedHere`).
+    /// `check_surrounding` also requires surrounding tiles to be free.
+    /// Return no error if allowed, otherwise the native placement error.
+    fn town_can_be_placed_here(&self, tile: TileIndex, check_surrounding: bool) -> Option<u32> {
         w::hit(w::TOWN_PLACEMENT);
+        // Check if too close to the edge of map.
         if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
             return Some(self.s.edge_error);
         }
+        // Check distance to all other towns.
         if observed!(super::spatial::close(self.shared, tile.0, 20)) {
             return Some(self.s.close_error);
         }
-        let tile_type = observed!((self.shared.tile_type)(tile.0));
-        if (tile_type != 0 && tile_type != 4) || !observed!((self.s.flat)(tile)) {
+        // Can only build on clear flat areas, possibly with trees.
+        let tile_type = TileType(observed!((self.shared.tile_type)(tile.0)));
+        if (tile_type != TileType::MP_CLEAR && tile_type != TileType::MP_TREES)
+            || !observed!((self.s.flat)(tile))
+        {
             return Some(self.s.unsuitable_error);
         }
-        if surrounding {
-            let mut count = 0;
-            let height = observed!((self.shared.tile_z)(tile.0));
-            let mut spiral = self.spiral(tile, 5);
+        // We might want to make sure the town has enough room.
+        if check_surrounding {
+            const SEARCH_DIAMETER: u32 = 5; // Center tile of town + 2 tile radius.
+            // Half of the tiles in the search must be valid for the town to build upon.
+            const VALID_TILE_GOAL: u32 = (SEARCH_DIAMETER * SEARCH_DIAMETER) / 2;
+            let mut counter = 0;
+            let town_height = observed!((self.shared.tile_z)(tile.0));
+            let mut spiral = self.spiral(tile, SEARCH_DIAMETER);
             while !spiral.is_end() {
-                if count == 12 {
+                if counter == VALID_TILE_GOAL {
                     break;
                 }
-                let at = Tile(
+                let at = TileIndex(
                     spiral
                         .x
                         .wrapping_add(spiral.y.wrapping_mul(self.map().size_x())),
                 );
-                let valid = match observed!((self.shared.tile_type)(at.0)) {
-                    0 => observed!((self.shared.clear_ground)(at.0)).0 != 1,
-                    4 => observed!((self.shared.tree_ground)(at.0)).0 != 1,
+                let valid = match TileType(observed!((self.shared.tile_type)(at.0))) {
+                    // Don't allow rough tiles, as they are likely wetlands.
+                    TileType::MP_CLEAR => {
+                        observed!((self.shared.clear_ground)(at.0)) != ClearGround::CLEAR_ROUGH
+                    }
+                    // Don't allow rough trees, as they are likely wetlands.
+                    TileType::MP_TREES => {
+                        observed!((self.shared.tree_ground)(at.0)) != TreeGround::TREE_GROUND_ROUGH
+                    }
                     _ => false,
                 };
                 if valid
-                    && observed!((self.shared.tile_max_z)(at.0)) <= height.wrapping_add(1)
-                    && observed!((self.shared.tile_z)(at.0)) >= height.wrapping_sub(1)
+                    && observed!((self.shared.tile_max_z)(at.0)) <= town_height.wrapping_add(1)
+                    && observed!((self.shared.tile_z)(at.0)) >= town_height.wrapping_sub(1)
                 {
-                    count += 1;
+                    counter += 1;
                 }
                 spiral = spiral.advance(self.map().size_x(), self.size_y());
             }
-            if count < 12 {
+            if counter < VALID_TILE_GOAL {
                 return Some(self.s.unsuitable_error);
             }
         }
         None
     }
-    fn coastal(&self, tile: Tile, layout: TownLayout) -> Tile {
+    /// Find a good coastal town spot from a presumed water tile.
+    /// Avoid building too close to the edge, which inhibits city growth, with a
+    /// search within a search within a search. O(n*m^2), where n is how far to
+    /// search for land and m is how far inland to look for a flat spot.
+    /// `town_cmd.cpp::FindNearestGoodCoastalTownSpot`.
+    fn find_nearest_good_coastal_town_spot(
+        &self,
+        tile: TileIndex,
+        layout: TownLayout,
+    ) -> TileIndex {
         w::hit(w::TOWN_COAST);
         let mut coast = self.spiral(tile, 40);
         while !coast.is_end() {
-            let at = Tile(
+            let at = TileIndex(
                 coast
                     .x
                     .wrapping_add(coast.y.wrapping_mul(self.map().size_x())),
             );
-            if observed!((self.shared.tile_type)(at.0)) == 0 {
-                let mut furthest = Tile(u32::MAX);
-                let mut max_distance = 0;
+            // Find nearest land tile.
+            if TileType(observed!((self.shared.tile_type)(at.0))) == TileType::MP_CLEAR {
+                let mut furthest = TileIndex::INVALID;
+                let mut max_dist = 0;
                 let mut test = self.spiral(at, 10);
                 while !test.is_end() {
-                    let tile = Tile(
+                    let tile = TileIndex(
                         test.x
                             .wrapping_add(test.y.wrapping_mul(self.map().size_x())),
                     );
-                    if observed!((self.shared.tile_type)(tile.0)) == 0
+                    if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_CLEAR
                         && observed!((self.s.flat)(tile))
-                        && self.aligned(tile, layout)
-                        && self.placement_error(tile, true).is_none()
+                        && self.is_tile_aligned_to_grid(tile, layout)
+                        && self.town_can_be_placed_here(tile, true).is_none()
                     {
-                        let distance = observed!((self.s.water_distance)(tile, true));
-                        if distance > max_distance {
+                        let dist = observed!((self.s.water_distance)(tile, true));
+                        if dist > max_dist {
                             furthest = tile;
-                            max_distance = distance;
+                            max_dist = dist;
                         }
                     }
                     test = test.advance(self.map().size_x(), self.size_y());
@@ -253,7 +285,8 @@ impl<'a> Founding<'a> {
             }
             coast = coast.advance(self.map().size_x(), self.size_y());
         }
-        Tile(u32::MAX)
+        // If we get here just give up.
+        TileIndex::INVALID
     }
     /// Actually create a town (`town_cmd.cpp::DoCreateTown`).
     ///
@@ -419,10 +452,10 @@ impl<'a> Founding<'a> {
             // If the random tile is water, find suitable land nearby; otherwise evaluate it.
             let valid =
                 if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_WATER {
-                    tile = self.coastal(tile, layout);
+                    tile = self.find_nearest_good_coastal_town_spot(tile, layout);
                     tile != TileIndex::INVALID
                 } else {
-                    self.placement_error(tile, true).is_none()
+                    self.town_can_be_placed_here(tile, true).is_none()
                 };
             if valid {
                 // Allocate a town struct.
@@ -581,7 +614,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         return;
     }
     if !random {
-        if let Some(error) = f.placement_error(tile, false) {
+        if let Some(error) = f.town_can_be_placed_here(tile, false) {
             observed!((f.cost.error)(result, error));
             return;
         }
