@@ -130,3 +130,9 @@
 - Raw face bits, live style/variable tables, style/label writes, validation and world/interactive RNG selection retain their operations and order. Native face storage, strings, service tables and scalar interfaces remain unchanged.
 - Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; inherited face/input, historical-save and GUI limits remain on #156.
 - PRs: #762, integrated in #763. Remaining Company/economy vocabulary stays open.
+
+## Original CargoPacket movement vocabulary (#734)
+
+- Packet movement, staging and reservation comparisons use the canonical `MoveToAction` and existing `CargoPacket::MAX_COUNT`. Raw scalar adapters, combined station/action keys, list lifetime and cache update order remain unchanged; no second packet record or service is introduced.
+- Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed. Existing packet-precondition, historical-save and native lifetime limits remain on #156.
+- PRs: #761, integrated in #765. Flow, payment and registry vocabulary remain in the cleanup workset.

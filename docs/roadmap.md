@@ -4,31 +4,48 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-07, integration 107)
+## Where the fork stands (2026-11-07, integration 113)
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-Development remains in the cleanup stage (user, 2026-11-06). Code main is integration 107, `c540d0788f` (#752). Exact-head Full passes; main has no known regression or integration hold. The approved Clippy correction and cargo/engine evidence transfers are integrated. Platform cadence 105 passed; the next is 110. The user skipped the remaining stocktake work and profile 107 (2026-11-07); [profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
+Development remains in the cleanup stage (user, 2026-11-06). Code main is integration 113, `1b5be29b7d` (#765), combining reviewed Cargo packet and Town policy vocabulary. Exact-head Full passes and the merged tree matches the validated tree; there is no known regression or integration hold. Platform cadence 110 passed; the next is 115. The user skipped the remaining stocktake/profile 107. The scheduled merged-tip profile 113 is next; [profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the historical accepted profile, not a measurement of this tip.
 
-| Current measure | Integration 107 |
+| Current measure | Integration 113 |
 | --- | ---: |
 | Original C++ remaining | 221,645 |
-| Fork source glue, including generated records | 35,018 |
-| Compiled source and generated records C++ | 256,663 |
-| Tracked tools C++ evidence | 17,382 |
-| Other generated C++ evidence | 5,521 |
-| Total fork C++ | 279,566 |
+| Fork source glue, including generated records | 34,923 |
+| Compiled source and generated records C++ | 256,568 |
+| Tracked tools C++ evidence | 17,336 |
+| Other generated C++ evidence | 5,522 |
+| Total fork C++ | 279,426 |
 | Original C++ retired | 62,710 of 284,355 (22.05%) |
 | Simulation C++ retired | 41,550 of 61,148 (67.95%) |
-| Expanded Rust exports / callback fields | 1,713 / 3,418 |
-| Historical regex exports / callback slots | 1,557 / 3,376 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 42 |
-| Retained Clippy keys / diagnostics | 672 / 765 |
+| Expanded Rust exports / callback fields | 1,709 / 3,418 |
+| Historical regex exports / callback slots | 1,553 / 3,376 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 |
+| Retained Clippy keys / diagnostics | 671 / 764 |
 | Ruff keys / diagnostics | 296 / 296 |
+| Rust / tooling code totals | 145,925 / 63,816 |
 
-Fork-added C++ under `src/tests` accounts for 5,861 lines within source glue. The generated ABI census is 6,126 C++ code lines: 605 lines of record declarations within source glue and 5,521 other generated lines already included above. The historical regex and expanded boundary series have different scopes; do not combine them. These are metric-v2 counts carried through test/workflow-only repairs; all current growth checks pass without a baseline reset.
+Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. This current figure replaces the stale source-test breakdown in the previous snapshot; no historical test-subtotal delta is inferred. Generated C++ is 6,137 code lines: 615 record declarations within source glue and 5,522 other generated evidence lines already included above. Historical regex and expanded boundary series have different scopes; do not combine them. All current growth checks pass without a baseline reset. The shared final report for #761 and #764 was collected at their tested candidate; the merged source tree is identical, and no third census was run.
 
-Since the historical-102 checkpoint `e800717540`, total fork C++ fell by 189 lines: compiled C++ by 133 and outside evidence by 56. Original remaining rose by 40 because H restored generic native evidence, while source glue fell by 173; simulation retirement is unchanged. The checkpoint window is 19,500 seconds (0.225694 days), equivalent to 837 fewer fork C++ lines per day for this window, not a continuous throughput forecast. Integration 107 adds 278 Rust and 97 tooling code lines by the canonical source-diff counter; baseline data is separate. #747 removes 1,222,247 baseline bytes while preserving every retained row and provenance. Two component PRs remain unintegrated, #744 and #748; workset 01 is selected below.
+Since integration 107, total fork C++ fell by 140 code lines: compiled source/glue by 95 and outside evidence by 45 (tracked tools -46, generated +1). Original and simulation retirement are unchanged. The actual merge-to-merge window is 13,370 seconds (0.154745 days), equivalent to about 905 fewer fork C++ code lines per day for this short window, not a throughput forecast. Integration 113 adds 167 Rust code lines and no tooling or C++; its net global Rust change is +80. Global totals are not additions. Two reviewed component PRs remain unintegrated: order helpers #766 and Livery #767. Their final metrics and combined exact-head Full are next.
+
+| Source area / phase relationship | Original | Retired | Remaining | Fork glue |
+| --- | ---: | ---: | ---: | ---: |
+| Simulation logic (phase 1) | 47,424 | 38,338 | 9,086 | 6,556 |
+| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,388 |
+| NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,067 | 38,727 | 3,360 |
+| Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 551 |
+| GUI and platform (phase 5) | 64,120 | 415 | 63,705 | 465 |
+| Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
+| Data tables | 17,295 | 4,367 | 12,928 | 14 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,684 |
+| Boundary layer | 0 | 0 | 0 | 16,905 |
+
+These are source-area subtotals, not new ownership or phase-exit claims; pool save chunks remain with their storage owner. Phase 1's exit does not assert zero original source in its area. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference, rather than merely a coverage gap. #503 deep checks remain user-requested. The source-operation reviews and Full gates do not close those broader limits.
+
+The following counts and projections belong to accepted profile 100. Profile 113 results and any speed-policy action remain pending.
 
 | Scenario | Original Ir | Candidate Ir (100) | Accepted projection (100) |
 | --- | ---: | ---: | ---: |
@@ -50,7 +67,7 @@ Since the historical-102 checkpoint `e800717540`, total fork C++ fell by 189 lin
 | Mean cyclomatic complexity | 4.08 | 3.83 |
 | Code in copy-paste clones | 4.5% | 2.3% |
 
-Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 765 current diagnostics are not comparable to the initial broader lint inventory.
+Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 764 current diagnostics are not comparable to the initial broader lint inventory.
 
 ## Course (user, 2026-11-06)
 
@@ -69,7 +86,7 @@ Phase numbers name content; the execution order above sets the sequence. Phase 1
 | 1 | Cleanup | Streams #733 to #737 done, #736 except boundary checks tied to a later phase, #738 applied; lint and growth baselines shrinking | Current |
 | 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | Readers run in Rust with evidence for their observable outputs; VM and binding shims are named for phase 6 | Next; planned in the [work order](#after-cleanup) |
 | 3 | Phase 2: storage, each pool with its save/load chunks, then the map | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in [accepted placement](#accepted-reader-and-pool-placement-2026-11-03-after-integration-67) |
-| 4 to 6 | Support; GUI, drawing and platform; vendored and final retirement | As in [planning](planning.md#goal-and-phases) | Plans deferred until adjacent |
+| 4 to 6 | Support; GUI, drawing and platform; vendored and final retirement | As in [planning](planning.md#goal-and-phases) | #3; plans deferred until adjacent |
 
 ## Cleanup work order
 
@@ -231,11 +248,17 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 105 | Canonical native type foundation #734/#739 | `7c3fb4455a` | Source and exact lint reviews, accepted #746 proof disposition and exact-head Full/tree pass. C++ and boundary counts hold. Platform cadence passes. |
 | 106 | Three live typed history queries and protocol closure #737/#745 | `1e109c47a9` | Source/closure reviews and exact-head Full/tree pass. Compiled C++ -47, fork C++ -71 and exports -3; generic native evidence restored, so original retirement decreases by 40. |
 | 107 | Narrow lint debt and cargo/engine evidence #747/#751/#749/#750, combined #752 | `c540d0788f` | Source/evidence reviews and exact-head Full/tree pass after bounded CI repairs. Compiled C++ -77, outside evidence -35, fork C++ -112; boundary holds. Original retirement is unchanged. |
+| 108 | Direct road records and MovementGap evidence #744/#748, combined #755 | `b2e1f4ba` | Reviews and exact-head Full/tree pass. Compiled C++ -95, total fork -140 and exports -4; 19,608 movement observations preserved. |
+| 109 | Czech town-name vocabulary #754 | `3cc1d1593f` | Source/exact contract reviews and unchanged-head Full retry pass. Rust +404 added code lines; C++ and boundary hold. Initial inherited reconnect timeout remains disclosed. |
+| 110 | Industry, station and cargo-monitor vocabulary #753/#756/#757, combined #758 | `726c8c18f8` | Source/union reviews and exact-head Full/tree pass. Rust +2,077 added code lines; C++ and boundary hold. Platform cadence passes. |
+| 111 | House flags and property vocabulary #759 | `82e1166868` | Source/exact contract reviews and exact-head Full/tree pass. Rust +178 added code lines; C++ and boundary hold. |
+| 112 | Vehicle-list and manager-face vocabulary #760/#762, combined #763 | `dd457ef961` | Source/union reviews and exact-head Full/tree pass. Rust +131 added code lines; C++ and boundary hold. |
+| 113 | Cargo packet and Town policy vocabulary #761/#764, combined #765 | `1b5be29b7d` | Source/union reviews and exact-head Full/tree pass. Rust +167 added code lines; C++ and boundary hold. Stocktake recorded; scheduled profile pending. |
 
 ## Recurring
 
-- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. The next scheduled stocktake/profile follows integration 113.
-- Run the platform cadence after every fifth integration; 105 passed and the next follows integration 110. A new failure stops integrations.
+- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. Integration 113 stocktake is recorded; its scheduled profile is pending. The next regular stocktake/profile follows integration 119.
+- Run the platform cadence after every fifth integration; 110 passed and the next follows integration 115. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -247,14 +270,16 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Code main is integration 107, `c540d0788f`. A, R0, cargo C, foundation F and history H are integrated, as are the narrowed Clippy policy and bounded cargo/engine evidence transfers. Their exact-head Full results pass; on-demand CI is restored after the Windows workflow repair. #746 is closed and F needs no further proof work. The user skipped stocktake/profile 107; continue the cleanup work below. Integration and rollback procedures live in the [root workflow](root-workflow.md).
+Cleanup stage in progress. Code main is integration 113, `1b5be29b7d`; all exact-head Full gates and merged-tree checks through 113 pass. #746 is closed and F needs no further proof work. Road R and MovementGap W1 integrated in 108. #734 worksets 01 to 06 have bounded vocabulary checkpoints integrated through 113; none claims its whole stream complete. Platform cadence 110 passed; next 115. The user skipped stocktake/profile 107. The 113 stocktake facts reuse the final shared report; the scheduled merged-tip profile is next. Integration and rollback procedures live in the [root workflow](root-workflow.md).
 
 | Work | Owner | Next action |
 | --- | --- | --- |
-| #737 R, PR #744 | `/root/cleanup_737_road` | Adopt current main and the narrowed debt selection, preserving reviewed source; refresh exact contracts. Root handles acceptance and combines disjoint ready work for Full. No repeated whole-fork metric on a mechanical base update. |
-| #736 W1, PR #748 | `/root/cleanup_736_world_evidence` | Adopt current main, preserving the reviewed 19,608 movement observations. Root reserves one combined integrating-head report for its second measurement and final Full. Scheduler/native boundary evidence remains. |
-| #734 workset 01, Town/house | `/root/cleanup_734_town_house` | Start from integrated main. Reserve the 14-file workset and required type companions; first coherent checkpoint is town-name vocabulary/comments with table bytes, arithmetic and selection order preserved. |
-| #738 rule corpus | Root | Two docs checkpoints are pushed. The remaining orchestration-skill rows belong to an authorized navigation/steering pass. |
+| Integration 113 profile | Root | Start the merged-tip instruction profile under [speed policy](speed.md#policy); record seven semantic comparisons and six projections, then apply its triggers. No per-PR profiling or anchor reset. |
+| #734 workset 05, PR #766 | `/root/cleanup_734_orders_remaining` | Two original location/distance helpers and immediate callers are source-reviewed; local Cargo, cleanup and ABI checks pass. Preserve reviewed source on adoption; combine with disjoint ready #767 for final measurement and Full. |
+| #734 workset 06, PR #767 | `/root/cleanup_734_company_remaining` | Original Livery vocabulary and immediate callers are source-reviewed; local checks pass. Preserve source on adoption, share the final report and Full with #766. No exception proposals. |
+| #734 remaining Town and Cargo files | Root selects fresh bounded checkpoints | Town policy #764 and packet vocabulary #761 are integrated. Continue only unfinished workset files with no open-PR overlap; preserve already integrated monthly/history bodies and canonical types. |
+| #736 / #737 | Root selects disjoint batches | MovementGap and bounded cargo/engine evidence transfers are integrated; other evidence families and native boundaries remain. Road/history/cargo boundary cleanups are integrated; continue each stream's remaining ordered batch. |
+| #738 rule corpus | Root | Two docs checkpoints are pushed. Remaining orchestration-skill rows belong to an authorized navigation/steering pass. |
 
 Retained state for housekeeping:
 

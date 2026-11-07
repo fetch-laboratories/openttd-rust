@@ -124,3 +124,10 @@
 - Original explanations accompany the corresponding branches. Property reads, callbacks, diagnostics, GRF disabling and publication keep their order; native specs, defaults and GRF graphs remain owned by C++.
 - Checks: original operations/order source review and exact-head Full. The archive attempt differed, so archive equivalence is unclaimed. Inherited malformed-property, historical-save and scheduling limits remain on #156.
 - PRs: #759. The remaining town/house vocabulary work stays open.
+
+## Original Town production, road and removal-cost vocabulary (#734)
+
+- `UpdateTownMaxPass`, `CheckTownRoadTypes` and `HouseSpec::GetRemovalCost` use canonical cargo/effect IDs, full-width road-type masks, signed calendar dates and Money. The compatibility re-export preserves the unchanged generation caller and one helper body.
+- Passenger/mail random draws, live lookup order, road filtering and saturating removal-cost arithmetic keep the original operations and order. Monthly/history bodies, storage and scalar ABI remain unchanged.
+- Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; existing save, NewGRF and scheduling limits remain on #156.
+- PRs: #764, integrated in #765. Other Town vocabulary remains in the cleanup workset.
