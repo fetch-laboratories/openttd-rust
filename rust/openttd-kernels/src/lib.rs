@@ -1126,6 +1126,7 @@ pub mod type_registry;
 pub mod type_definitions;
 
 mod newgrf_class;
+mod newgrf_industries;
 pub mod newgrf_internal;
 pub mod newgrf_translation;
 

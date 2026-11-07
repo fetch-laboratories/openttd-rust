@@ -9,7 +9,9 @@
 //! on the invocation stack. Only progress cancellation returns early, to a native stack
 //! exception frame.
 use super::{Builder, Services, TYPES, place};
-use crate::industrytype;
+use crate::industry_type::IndustryType;
+use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
+use crate::newgrf_industries::IndustryAvailabilityCallType;
 
 pub use crate::industrytype::IndustrySpec as SpecHandle;
 #[repr(C)]
@@ -34,15 +36,20 @@ pub struct GenerationServices {
     pub missing_warning: unsafe extern "C" fn(*const SpecHandle),
 }
 fn probability(
-    kind: u8,
+    kind: IndustryType,
     water: Option<bool>,
     forced: &mut bool,
     s: &Services,
     g: &GenerationServices,
 ) -> u32 {
-    let spec = industrytype::industry(u16::from(kind));
-    let behaviour = water.map(|_| unsafe { (*spec).behaviour });
-    if water.is_some_and(|water| (behaviour.unwrap_or(0) & (1 << 2) != 0) != water) {
+    let spec = industrytype::industry(u16::from(kind.0));
+    let behaviour = water.map(|_| IndustryBehaviours(unsafe { (*spec).behaviour }));
+    if water.is_some_and(|water| {
+        (behaviour
+            .unwrap_or(IndustryBehaviours::EMPTY)
+            .test(IndustryBehaviour::BuiltOnWater))
+            != water
+    }) {
         return 0; // Source deliberately leaves the force output untouched here.
     }
     let (enabled, layouts) = unsafe { ((*spec).enabled, !(*spec).layouts.is_empty()) };
@@ -53,7 +60,12 @@ fn probability(
         return 0;
     }
     let chance = unsafe {
-        super::resolver::openttd_rust_industry_probability(kind, 0, u32::from(appear), s.resolver)
+        super::resolver::openttd_rust_industry_probability(
+            kind.0,
+            IndustryAvailabilityCallType::IACT_MAPGENERATION.0,
+            u32::from(appear),
+            s.resolver,
+        )
     };
     if chance == 0 {
         *forced = false;
@@ -61,13 +73,18 @@ fn probability(
     }
     let chance = chance.wrapping_mul(16);
     // CHECK_REFINERY and CHECK_OIL_RIG place industries at the map edge.
-    let chance = if matches!(unsafe { (*spec).check_proc }, 2 | 8) {
+    let chance = if matches!(
+        CheckProc(unsafe { (*spec).check_proc }),
+        CheckProc::CHECK_REFINERY | CheckProc::CHECK_OIL_RIG
+    ) {
         unsafe { (g.scale_by_size_1d)(chance) }
     } else {
         unsafe { (s.scale_by_map_size)(chance) }
     };
     *forced = chance > 0
-        && behaviour.unwrap_or_else(|| unsafe { (*spec).behaviour }) & (1 << 16) == 0
+        && !behaviour
+            .unwrap_or_else(|| IndustryBehaviours(unsafe { (*spec).behaviour }))
+            .test(IndustryBehaviour::NoBuildMapCreation)
         && !(g.environment.editor)();
     chance
 }
@@ -85,7 +102,13 @@ fn probabilities(water: bool, s: &Services, g: &GenerationServices) -> Probabili
         num_forced: 0,
     };
     for kind in 0..TYPES {
-        p.probs[kind] = probability(kind as u8, Some(water), &mut p.force_one[kind], s, g);
+        p.probs[kind] = probability(
+            IndustryType(kind as u8),
+            Some(water),
+            &mut p.force_one[kind],
+            s,
+            g,
+        );
         p.total = p.total.wrapping_add(u64::from(p.probs[kind]));
         if p.force_one[kind] {
             p.num_forced = p.num_forced.wrapping_add(1);
@@ -101,13 +124,14 @@ fn wanted(s: &Services, g: &GenerationServices) -> u32 {
         unsafe { (g.density)() }
     };
     if density == 6 {
-        unsafe { (g.custom_number)() }.min(64000)
+        unsafe { (g.custom_number)() }.min(u32::from(crate::industry_type::IndustryID::END.0))
     } else {
-        unsafe { (s.scale_by_map_size)(u32::from(AMOUNTS[density as usize])) }.min(64000)
+        unsafe { (s.scale_by_map_size)(u32::from(AMOUNTS[density as usize])) }
+            .min(u32::from(crate::industry_type::IndustryID::END.0))
     }
 }
 fn initial(
-    kind: u8,
+    kind: IndustryType,
     water: bool,
     hard: bool,
     context: *mut GenerationContext,
@@ -120,7 +144,12 @@ fn initial(
         unsafe { (s.restore_company)(company) };
         return false;
     }
-    place(kind, 0, hard, s);
+    place(
+        kind.0,
+        IndustryAvailabilityCallType::IACT_MAPGENERATION.0,
+        hard,
+        s,
+    );
     unsafe { (s.restore_company)(company) };
     true
 }
@@ -161,7 +190,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
         for kind in 0..TYPES {
             if p.force_one[kind] {
                 amount = amount.wrapping_sub(1);
-                if !initial(kind as u8, on_water, true, context, s, g) {
+                if !initial(IndustryType(kind as u8), on_water, true, context, s, g) {
                     return u8::from(false);
                 }
             }
@@ -173,7 +202,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
                 r = r.wrapping_sub(p.probs[kind]);
                 kind += 1;
             }
-            if !initial(kind as u8, on_water, false, context, s, g) {
+            if !initial(IndustryType(kind as u8), on_water, false, context, s, g) {
                 return u8::from(false);
             }
         }
@@ -196,7 +225,7 @@ pub unsafe extern "C" fn openttd_rust_industry_check(
             continue;
         }
         let mut forced = false;
-        let chance = probability(kind as u8, None, &mut forced, s, g);
+        let chance = probability(IndustryType(kind as u8), None, &mut forced, s, g);
         if chance == 0 || !forced {
             continue;
         }

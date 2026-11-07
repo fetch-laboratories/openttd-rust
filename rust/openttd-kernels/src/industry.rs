@@ -45,7 +45,7 @@ pub use policy::*;
 mod lifecycle;
 pub use lifecycle::*;
 const RECORDS: usize = 61;
-const TYPES: usize = 240;
+const TYPES: usize = crate::industry_type::NUM_INDUSTRYTYPES as usize;
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct Pair {
@@ -2342,4 +2342,70 @@ mod delivery_tests {
             assert_eq!((*history)[usize::from(LAST_MONTH)].first, 0);
         }
     }
+}
+
+/// Native `industry.h::IndustryControlFlag`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryControlFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryControlFlag {
+    /// Ignore rolls to decrease when evaluating industry production changes.
+    pub const NoProductionDecrease: Self = Self(0);
+    /// Ignore rolls to increase when evaluating industry production changes.
+    pub const NoProductionIncrease: Self = Self(1);
+    /// Prevent closure for production level or time since delivery, except an
+    /// already announced closure.
+    pub const NoClosure: Self = Self(2);
+    /// Production level is externally controlled.
+    pub const ExternalProdLevel: Self = Self(3);
+    /// Native `IndustryControlFlag::End`.
+    pub const End: Self = Self(4);
+}
+
+/// Native `IndustryControlFlags`; elements are `IndustryControlFlag` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryControlFlags(pub u8);
+impl IndustryControlFlags {
+    /// Native valid control bits.
+    pub const MASK: u8 = (1 << IndustryControlFlag::End.0) - 1;
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native bit set containing one element.
+    #[must_use]
+    pub const fn from_element(element: IndustryControlFlag) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryControlFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Consecutive economy years without production before a processing industry may close.
+pub const PROCESSING_INDUSTRY_ABANDONMENT_YEARS: crate::timer_game_economy::EconomyYear =
+    crate::timer_game_economy::EconomyYear(5);
+/// Production level indicating that the industry will actually close.
+pub const PRODLEVEL_CLOSURE: u8 = 0;
+/// Below this production level, the industry is set to be closing.
+pub const PRODLEVEL_MINIMUM: u8 = 4;
+/// Default level of a newly created industry.
+pub const PRODLEVEL_DEFAULT: u8 = 16;
+/// Industry running at full speed.
+pub const PRODLEVEL_MAXIMUM: u8 = 128;
+
+/// Native industry-directory invalidation reasons from `industry.h`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryDirectoryInvalidateWindowData(pub u8);
+impl IndustryDirectoryInvalidateWindowData {
+    /// Rebuild the directory.
+    pub const IDIWD_FORCE_REBUILD: Self = Self(0);
+    /// Update for a production change.
+    pub const IDIWD_PRODUCTION_CHANGE: Self = Self(1);
+    /// Resort the directory.
+    pub const IDIWD_FORCE_RESORT: Self = Self(2);
 }
