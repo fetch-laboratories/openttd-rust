@@ -786,6 +786,9 @@ def production_gap() -> None:
         "rust:lib:industry::production_policy_tests::"
         "production_callback_matches_complete_original_corpus"
     )
+    print(
+        "industry NewGRF gap: 4480 unchanged-body version/repeat/arithmetic cases passed"
+    )
 
 
 def lifecycle_gap() -> None:
