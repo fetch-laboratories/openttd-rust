@@ -310,9 +310,7 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
         ("authority", "authority_matches_original_policy_corpus", 14976),
         ("percent", "percent_transported_matches_original_policy_corpus", 36),
     ):
-        evidence_replacements.run_rust(
-            f"rust:lib:town::policy_tests::{name}"
-        )
+        evidence_replacements.run_rust(f"rust:lib:town::policy_tests::{name}")
         counts[f"{kind}_cases"] = count
     migration.ensure_reference()
     report = {
