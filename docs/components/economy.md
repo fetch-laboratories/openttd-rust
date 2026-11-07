@@ -149,3 +149,10 @@
 - Existing flow-statistic helpers use the original names and explanations with canonical StationID and CargoType values. Cumulative keys, unrestricted bounds, sentinel handling, flow invalidation/restriction/release and post-join reconciliation keep their operations and order.
 - Flow/FlowMap identities, scalar adapters, allocation/drop staging, callbacks and native facade contracts remain unchanged. Checks are original operations/order review and exact-head Full; archive equivalence is unclaimed and inherited Cargo qualifications remain on #156.
 - PRs: #770, integrated in #773. Payment, registry and cargotype vocabulary remain in the cleanup workset.
+
+## Original cargo payment vocabulary (#734)
+
+- Income and delivery bodies use the original helper, transit-decay and callback names, with canonical cargo and owner identities. Fixed-point constants retain the original widths and arithmetic; native record views and scalar adapters remain unchanged.
+- Delivery scans, destination insertion, refusal and acceptance observations, statistics, monitors, subsidy calculation, settlement and production flush keep their existing order. Native resolvers, world/pool storage and presentation remain in C++.
+- Limits: Existing callback-domain, overflow, historical-save, NewGRF and live presentation qualifications remain on #156. No additional ownership or coverage closure is claimed.
+- PRs: #775, integrated in #777. Other Cargo vocabulary remains in the cleanup workset.
