@@ -671,7 +671,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                 u32::from(kind) + 0x10
             };
             let cb = unsafe {
-                crate::cargo_registry::callback(
+                crate::cargo_registry::get_cargo_callback(
                     &*w.cargo_registry,
                     cargo,
                     crate::newgrf_callbacks::CBID_CARGO_STATION_RATING_CALC.0,

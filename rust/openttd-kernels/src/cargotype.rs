@@ -32,28 +32,36 @@ pub const NUM_TPE: u8 = TownProductionEffect::NUM_TPE.0;
 /// Town production effect from `cargotype.h`.
 pub const INVALID_TPE: u8 = TownProductionEffect::INVALID_TPE.0;
 
-/// Original `CargoSpec::IsValid`.
+/// Tests for validity of this cargospec (`CargoSpec::IsValid`).
+/// `assert(cs->IsValid())` can be triggered when GRF config is modified.
 #[must_use]
 pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
     bitnum != INVALID_CARGO_BITNUM
 }
 
-/// Default `CargoSpec::Iterate()` observes each slot when advancing, without retaining a world borrow.
+/// Returns an iterable ensemble of all valid `CargoSpec` (`CargoSpec::Iterate`).
+/// The default first slot is zero; each slot is observed when advancing, without a world borrow.
 pub(crate) fn iterate<T>(
     mut load: impl FnMut(u8) -> T,
     mut valid: impl FnMut(&T) -> bool,
 ) -> impl Iterator<Item = (u8, T)> {
     (0..crate::cargo_type::NUM_CARGO)
-        .map(move |cargo| (cargo, load(cargo)))
+        .map(move |cargo| {
+            let cargo = crate::cargo_type::CargoType(cargo);
+            (cargo.0, load(cargo.0))
+        })
         .filter(move |(_, spec)| valid(spec))
 }
 
 /// `CargoClass::Passengers`.
 pub const PASSENGERS: u16 = CargoClasses::from_element(CargoClass::Passengers).0;
-/// `IsCargoInClass` with classes read from the canonical native cargo spec.
+/// Does cargo have cargo class `cc`? (`IsCargoInClass`).
+/// Classes are read from the canonical native cargo spec; `requested` is a mask.
 #[must_use]
 pub const fn is_cargo_in_class(classes: u16, requested: u16) -> bool {
-    classes & requested != 0
+    let classes = CargoClasses(classes);
+    let cc = CargoClasses(requested);
+    classes.0 & cc.0 != CargoClasses::EMPTY.0
 }
 
 /// Native `TownAcceptanceEffect`, retaining every underlying `u8` value.

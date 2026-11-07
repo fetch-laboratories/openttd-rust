@@ -11,12 +11,12 @@
     clippy::cast_sign_loss
 )]
 use crate::bitmath_func::{clr_bit64, set_bit64};
-use crate::cargo_type::{
-    CT_INVALID, CargoLabel, CargoType, INVALID_CARGO, NUM_CARGO, NUM_ORIGINAL_CARGO,
-};
-use crate::cargotype::{NUM_TPE, TownProductionEffect, is_cargo_spec_valid};
+use crate::cargo_type::{CT_INVALID, CargoLabel, CargoType, NUM_CARGO, NUM_ORIGINAL_CARGO};
+use crate::cargotype::{NUM_TPE, TownAcceptanceEffect, TownProductionEffect, is_cargo_spec_valid};
 use crate::game_state::GameState;
-use crate::newgrf_callbacks::CBID_NO_CALLBACK;
+use crate::gfx_type::SpriteID;
+use crate::newgrf::GrfSpecFeature;
+use crate::newgrf_callbacks::{CBID_NO_CALLBACK, CallbackID};
 use crate::newgrf_spritegroup::{self, State};
 use std::{collections::BTreeMap, ffi::c_void, ptr};
 type Handle = *const c_void;
@@ -240,19 +240,22 @@ pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
 }
 /// Canonical `CargoSpec::label`, including duplicate labels in distinct slots.
 pub(crate) fn cargo_label(cargo: u8) -> u32 {
+    let cargo = CargoType(cargo);
     let s = services();
-    (s.label_spec)((s.spec)(cargo)).label
+    CargoLabel((s.label_spec)((s.spec)(cargo.0)).label).0
 }
+/// `IsDefaultCargo`: test if a cargo is a default cargo type.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_is_default_abi(cargo: u8) -> u8 {
+    let cargo_type = CargoType(cargo);
     let s = services();
-    let spec = (s.label_spec)((s.spec)(cargo));
+    let cs = (s.label_spec)((s.spec)(cargo_type.0));
     u8::from(
-        is_cargo_spec_valid(spec.bitnum)
+        is_cargo_spec_valid(cs.bitnum)
             && unsafe {
                 (*REGISTRY.get())
                     .default_cargo_labels
-                    .contains(&CargoLabel(spec.label))
+                    .contains(&CargoLabel(cs.label))
             },
     )
 }
@@ -271,26 +274,32 @@ pub extern "C" fn openttd_rust_cargo_bitnum_labels() -> Labels {
     }
 }
 
+/// Scalar count adapter for `CargoSpec::town_production_cargoes`.
 pub fn town_count(effect: u8) -> usize {
-    unsafe { (*REGISTRY.get()).town_production_cargoes[usize::from(effect)].len() }
+    let effect = TownProductionEffect(effect);
+    unsafe { (*REGISTRY.get()).town_production_cargoes[usize::from(effect.0)].len() }
 }
+/// Scalar cargo-index adapter for `CargoSpec::town_production_cargoes`.
 pub fn town_cargo(effect: u8, index: usize) -> u8 {
+    let effect = TownProductionEffect(effect);
     let spec = unsafe {
         let state = &*REGISTRY.get();
-        *state.town_production_cargoes[usize::from(effect)].get_unchecked(index)
+        *state.town_production_cargoes[usize::from(effect.0)].get_unchecked(index)
     };
-    (services().index)(spec)
+    CargoType((services().index)(spec)).0
 }
+/// Scalar production adapter for `CargoSpec::town_production_cargoes`.
 pub fn production(effect: u8, index: u32) -> ProductionCargo {
+    let effect = TownProductionEffect(effect);
     let spec = unsafe {
         let state = &*REGISTRY.get();
-        state.town_production_cargoes[usize::from(effect)]
+        state.town_production_cargoes[usize::from(effect.0)]
             .get(index as usize)
             .copied()
     };
     spec.map_or(
         ProductionCargo {
-            cargo: INVALID_CARGO,
+            cargo: CargoType::INVALID_CARGO.0,
             multiplier: 0,
         },
         |spec| (services().production)(spec),
@@ -489,18 +498,22 @@ pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: 
         (s.set_fallback)(file, id, label.0);
     }
 }
+/// Constructor of the cargo resolver (`CargoResolverObject`).
+/// The native frame uses this stack invocation for the synchronous resolution.
 fn invocation(spec: Handle, callback: u16, param1: u32, param2: u32) -> Invocation {
+    let callback = CallbackID(callback);
     let mut invocation = Invocation {
         label: 0,
         file: ptr::null(),
         root: ptr::null(),
-        callback,
+        callback: callback.0,
         param1,
         param2,
     };
     (services().invocation)(spec, &raw mut invocation);
     invocation
 }
+/// `GetCargoCallback`, preserving the supplied register span through the native frame.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_callback(
     callback: u16,
@@ -513,23 +526,36 @@ pub extern "C" fn openttd_rust_cargo_callback(
     let invocation = invocation(spec, callback, param1, param2);
     (services().callback_frame)(&raw const invocation, regs, count)
 }
-pub unsafe fn callback(s: &Services, cargo: u8, callback: u16, param1: u32, param2: u32) -> u16 {
+/// `GetCargoCallback` for runtime callers with an empty register span.
+pub unsafe fn get_cargo_callback(
+    s: &Services,
+    cargo: u8,
+    callback: u16,
+    param1: u32,
+    param2: u32,
+) -> u16 {
+    let cargo = CargoType(cargo);
+    let callback = CallbackID(callback);
     let mut invocation = Invocation {
         label: 0,
         file: ptr::null(),
         root: ptr::null(),
-        callback,
+        callback: callback.0,
         param1,
         param2,
     };
-    (s.invocation)((s.spec)(cargo), &raw mut invocation);
+    (s.invocation)((s.spec)(cargo.0), &raw mut invocation);
     (s.callback_frame)(&raw const invocation, ptr::null_mut(), 0)
 }
+/// Get the custom sprite for the given cargo type, or zero if not available.
+/// `GetCustomCargoSprite` constructs its cargo resolver with no callback.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_custom_sprite(spec: Handle) -> u32 {
     let invocation = invocation(spec, CBID_NO_CALLBACK.0, 0, 0);
-    (services().sprite_frame)(&raw const invocation)
+    let sprite: SpriteID = (services().sprite_frame)(&raw const invocation);
+    sprite
 }
+/// `CargoResolverObject::ResolveCallback` within the live native callback frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_evaluate_callback(
     invocation: *const Invocation,
@@ -546,6 +572,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_evaluate_callback(
         )
     }
 }
+/// `CargoResolverObject::Resolve<ResultSpriteGroup>` within the live native sprite frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_evaluate_sprite(
     invocation: *const Invocation,
@@ -557,19 +584,27 @@ pub unsafe extern "C" fn openttd_rust_cargo_evaluate_sprite(
     let result = unsafe {
         newgrf_spritegroup::openttd_rust_resolver_resolve(&*s.common, root, resolver, state, file)
     };
+    // ResolverResult alternative 2 is const ResultSpriteGroup*.
     if result.kind != 2 || result.group.is_null() {
         return 0;
     }
     let sprite = (s.sprite)(result.group);
-    if sprite.count == 0 { 0 } else { sprite.sprite }
+    if sprite.count == 0 {
+        0
+    } else {
+        let sprite: SpriteID = sprite.sprite;
+        sprite
+    }
 }
+/// `CargoResolverObject::GetFeature`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_feature() -> u8 {
-    crate::newgrf::GSF_CARGOES
+    GrfSpecFeature::GSF_CARGOES.0
 }
+/// `CargoResolverObject::GetDebugID`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_debug_id(invocation: *const Invocation) -> u32 {
-    unsafe { (*invocation).label }
+    unsafe { CargoLabel((*invocation).label).0 }
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -588,16 +623,22 @@ pub(crate) fn file_cargo_count(file: Handle) -> usize {
     (services().file)(file).labels.size
 }
 
+/// Determines the first active cargo slot with a certain town effect.
 /// `FindFirstCargoWithTownAcceptanceEffect`, in active cargo-slot order.
 pub(crate) fn first_town_acceptance(effect: u8) -> Option<u8> {
+    let effect = TownAcceptanceEffect(effect);
     let s = services();
     crate::cargotype::iterate(
         |cargo| (s.spec)(cargo),
         |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
     )
-    .find_map(|(cargo, _spec)| ((s.town_acceptance_effect)(cargo) == effect).then_some(cargo))
+    .find_map(|(cargo, _spec)| {
+        (TownAcceptanceEffect((s.town_acceptance_effect)(cargo)) == effect).then_some(cargo)
+    })
 }
 
+/// Scalar adapter for `CargoSpec::town_acceptance_effect`.
 pub(crate) fn town_acceptance(cargo: u8) -> u8 {
-    (services().town_acceptance_effect)(cargo)
+    let cargo = CargoType(cargo);
+    TownAcceptanceEffect((services().town_acceptance_effect)(cargo.0)).0
 }
