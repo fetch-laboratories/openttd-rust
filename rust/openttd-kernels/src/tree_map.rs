@@ -12,7 +12,7 @@ use crate::tile_type::MP_TREES;
 /// `TREE_COUNT_TOYLAND`.
 pub(crate) const TREE_COUNT_TOYLAND: u8 = 9;
 /// `TREE_GROUND_SHORE`.
-pub(crate) const TREE_GROUND_SHORE: u8 = 3;
+pub(crate) const TREE_GROUND_SHORE: u8 = TreeGround::TREE_GROUND_SHORE.0;
 #[inline]
 pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
     let fields = m.require_type(t, MP_TREES)?;

@@ -92,8 +92,8 @@ pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 pub const SND_DEPARTURE_OLD_RV_1: u16 = 23;
 pub const SND_DEPARTURE_OLD_RV_2: u16 = 24;
 /// `HVOT_BUS` and `HVOT_TRUCK`.
-pub const HVOT_BUS: u8 = 1 << 2;
-pub const HVOT_TRUCK: u8 = 1 << 3;
+pub const HVOT_BUS: u8 = crate::station_type::StationHadVehicleOfType::HVOT_BUS.0;
+pub const HVOT_TRUCK: u8 = crate::station_type::StationHadVehicleOfType::HVOT_TRUCK.0;
 
 /// `GetNewVehiclePos` result.
 #[repr(C)]
