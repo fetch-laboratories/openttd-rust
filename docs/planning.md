@@ -4,7 +4,7 @@ Readers: Root and agents selecting or planning work.
 
 ## Goal and phases
 
-- The destination is OpenTTD as a Rust program: every original C++ line retired, the game behaving as the original does, and root's agents getting there on their own. Distance includes remaining original and fork C++ in game, tools and tests, including generated code. Distinguish candidate dependencies from reference-only adapters, but keep all fork-authored C++ visible until retirement; only the separate pinned original is outside that inventory. [Metric scope](rust-migration.md#shared-code-checks-and-port-metrics) records the current limits.
+- Measure distance to [the destination](../AGENTS.md) with remaining original and fork C++ in game, tools and tests, including generated code. Distinguish candidate dependencies from reference-only adapters, but keep all fork-authored C++ visible until retirement; only the separate pinned original is outside that inventory. [Metric scope](rust-migration.md#shared-code-checks-and-port-metrics) records the current limits.
 - The roadmap sizes these overlapping phases with exit criteria (user, 2026-10-28):
   1. Port simulation logic: map generation, landscape and tile loops, towns, industries, vehicles, cargo, economy, link graph, pathfinding and commands that change them.
   2. Move simulation storage: every pool, then the map.

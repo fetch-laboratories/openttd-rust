@@ -11,7 +11,7 @@ Design: [#90](https://github.com/fetch-laboratories/openttd-rust/issues/90). Imp
 
 ## Options and decision
 
-Move component owners while retaining one shared-world store behind narrow operations until a selected storage port transfers it. A tick-by-tick mirror introduces two authorities and delayed mutations; transferring map and pools together requires changing references, polymorphic objects, save adapters and many callers.
+Ownership transfers follow [storage ports](../porting.md#storage-ports).
 
 Rust owns component-private state and control flow; C++ initially owns map arrays, live pools and shared services. Replaced original bodies live only in the pinned reference. #73 owns the temporary height map; #74 owns its computation snapshot, with scheduling, save/load and join in C++. Neither moves the global map or station pool. See [storage ports](../porting.md#storage-ports), [boundary](../porting.md#boundary) and [map access](../porting.md#map-access).
 
@@ -19,18 +19,17 @@ Rust owns component-private state and control flow; C++ initially owns map array
 
 - Resolve IDs under source lifetime rules: reacquiring an ID alone does not make reuse safe.
 - A C++ object pointer may be an opaque context, never a Rust view of an STL or pool object.
-- Document callback reentry and end affected world-storage access scopes before mutation, reallocation or destruction. See [boundary](../porting.md#boundary) for FFI and failure rules.
 - The P2016 profile measured 349M glue calls, 79 per vehicle tick, accounting for 99% of the gap to the original (#275).
 
 #213's post-tick contract exposes named native scalar addresses, not a Vehicle, container or bitset layout. `BaseBitSet::base_address` returns its actual `const Tstorage *`; the canonical typed vehicle service exposes front/current status addresses. Acquire after Tick survives, use at original branches under the game-state mutex, and discard before another Tick or fleet drain. Raw access ends before callbacks. Audited cargo/sound reentry cannot destroy shells, reset pools or yield the mutex. Native tests check types, address identity, source-order reads and permitted writes.
 
-The call-scoped pool descriptor exposes the actual slot array, initialized `data.size()` and canonical `first_unused` address. After an allocating callback, read `first_unused` before a cached slot; refresh the descriptor if it exceeds captured size, since every reallocation raises it beyond the old size. Selected callbacks cannot reset the pool; descriptors end before load, reset or fleet drain. Native tests compare growth, deletion, holes and reuse with PoolIterator. Tick retains a typed native facade and controller timing. This contract authorizes no other raw field access. Acceptance uses measured crossings, bytes and CPU and wall-time gates.
+The call-scoped pool descriptor exposes the actual slot array, initialized `data.size()` and canonical `first_unused` address. After an allocating callback, read `first_unused` before a cached slot; refresh the descriptor if it exceeds captured size, since every reallocation raises it beyond the old size. Selected callbacks cannot reset the pool; cursors cannot reset or yield, and descriptors end before load, reset or fleet drain. Native tests compare growth, deletion, holes and reuse with PoolIterator. Tick retains a typed native facade and controller timing. This contract authorizes no other raw field access. Report measured crossings and bytes; [speed policy](../speed.md#policy) applies.
 
 #325's aircraft movement carrier exposes canonical x/y/z, speed, direction and subtype scalar addresses; standalone position needs subtype and z. Acquire after loading/order processing establishes a live shell, excluding the deleting crash path; discard before a callback that can destroy or replace it. Read afresh at source branches after position, rotor and viewport mutations. Writes and virtual operations retain canonical services. The shared vehicle layer defines each address once; native tests prove identity and fresh reads. This grants no shared Vehicle storage migration, chain view or general raw API.
 
 #377 transfers the canonical tile bucket array and intrusive links. A stable native shell embeds a named FFI carrier exposed by a typed accessor. Bucket and link addresses remain stable until shell destruction or index reset. Under the mutex, an iterator retains its shell cursor and bounds and reads the live next link after callbacks. The current shell survives advancement; crash/flood callbacks may mutate links but cannot delete it. Reset ends cursors before load/pool reset and clears current-bucket pointers and buckets, retaining source stale links.
 
-#275 resolves one shell for normal-update link carrier and tile; removal acquires links alone. Near filtering observes x/y and carrier together, reads next on rejection and reacquires links after visitors. Aircraft and road reuse call-local map dimensions because synchronous controller callbacks cannot reset/load the map or yield the mutex; nested entries get fresh metadata. Train, ship and other entries read dimensions per update. Road movement lazily acquires the canonical tile descriptor once per entry for track-status tile type and normal-road bits/status/road-type reads, reloading after mutations; partial fixture tables retain the typed backend. Pixel heights, aircraft, standalone movement, train, ship, YAPF and water-region entries remain callback-backed pending #565, hottest first.
+#275 resolves one shell for normal-update link carrier and tile; removal acquires links alone. Near filtering observes x/y and carrier together, reads next on rejection and reacquires links after visitors. Aircraft and road reuse call-local map dimensions because synchronous controller callbacks cannot reset/load the map or yield the mutex; nested entries get fresh metadata. Train, ship and other entries read dimensions per update. Road movement lazily acquires the canonical tile descriptor once per entry for track-status tile type and normal-road bits/status/road-type reads, reloading after mutations; partial fixture tables retain the typed backend.
 
 ## Map access decision (#108, revised 2026-10-28)
 
@@ -40,7 +39,7 @@ C++ retains canonical allocation, setters and field-wise save adapters until the
 
 ### Shared map view (#274, extended by #565)
 
-The tile-type allocation/access descriptor has canonical base/extended pointers and count. The shared table holds the addresses of the canonical C++ map statics; entries load their current pointers, `log_x` and size without calling C++, retaining the native assertion policy. `map_func::World` is the one entry descriptor. Generated named ABI probes pin both layouts. See [map access](../porting.md#map-access) for field access, helper assertions and the game-loop interval proof. The view does not transfer storage.
+The descriptor has canonical base/extended pointers and count. Its shared table holds addresses of the native map statics; entries load their current pointers, `log_x` and size. Generated named ABI probes pin both layouts. [Map access](../porting.md#map-access) defines `map_func::World`, field access, native assertions and the game-loop interval proof; the view does not transfer storage.
 
 In `tile_loop.rs`, handlers may mutate tiles and pools, run landscape, road and crash commands and queue script events (`InsertEvent`), but cannot reset, load, report progress or run a script VM. They do not change map dimensions, climate, tree placement, tick counter, editor mode, road-rebuild or ambient settings; `_misc_grf_features` changes only on reset and GRF `ActionD` loading. A batch may read these settings, including the ambient feature gate, once and retain descriptor metadata across dispatch. Ambient callbacks retain their RNG position; the tree loop reads fields after them at source observation points. Threaded and arbitrary NewGRF corpus limits remain open in #156.
 
@@ -62,7 +61,7 @@ movement calls remain for later #565 batches; #560 owns the complete follower.
 
 ## Transferring shared storage
 
-Storage ports move every pool, then map arrays (user, 2026-10-28); vehicles are first (#563). Move each canonical owner, accessors, allocation/reset and destruction together. See [storage ports](../porting.md#storage-ports). A polymorphic C++ shell stays opaque to Rust and holds fields not yet migrated; each design places its shared record in or beside it. The map storage port moves the allocation without replacing C++ tile references. Pools retain ID, first-free, iteration and hook behavior; a compacting arena or generational IDs would change it. #566 measures drawing, which reads records every frame. A pool's storage is moved only when no Rust code reaches any of its fields through a service ([storage ports](../porting.md#storage-ports)); #656 moves the vehicle fields #570 leaves.
+Follow [storage ports](../porting.md#storage-ports). Polymorphic shells remain opaque. Moving map allocation must preserve C++ tile references; compacting pools or generation-checked IDs would change original behavior. Placement is decided [below](#later-pool-record-placement-634-635-decided-2026-11-05-after-integration-82).
 
 ## Saves and evidence
 
@@ -86,17 +85,15 @@ Game mode, switch request and pause-bit subobjects share one stable Rust allocat
 
 Agent: /root/storage563 | Model: gpt-6-astra | Reasoning effort: high.
 
-This is the selected phase 2 design; its first implementation issue is [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570).
+This design established [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570); the [roadmap](../roadmap.md#after-cleanup) queues remaining vehicle ownership.
 
-- The Rust-only build established by #581 is required. Each moved record then has one definition and no C++ fallback copy.
-- Use #564's metric for the next ranking round, not to rerank this selected design.
 - Complete all three checkpoints: shared records and native adaptation, retirement of the data boundary, and direct Tick dispatch. A record-only scaffold is incomplete.
 
 ### Records and identities
 
 - Keep the stable polymorphic C++ `Vehicle` shell and the native slot pool.
 - Allocate a stable Rust `VehicleRecord` beside every shell, including effects and disasters.
-- Define the record once with `repr(C)`, generate its C++ declaration and make it the target of typed Rust `VehicleRef`.
+- Typed Rust `VehicleRef` targets the canonical generated `VehicleRecord`.
 - Make `RustVehicle(native)` return the record and `VehicleOf(record)` read its opaque shell pointer. Neither crosses the boundary.
 - Keep `Vehicle *` in native station lists, orders, GUI selections, pool slots and virtual operations. A record pointer is not a shell pointer.
 - Audit reinterpret casts and legacy `void *` boundaries when changing the handle. Keep explicit shell conversion for legacy shell contexts.
@@ -156,13 +153,11 @@ This is the selected phase 2 design; its first implementation issue is [#570](ht
 - Allocate the lowest free bitmap bit at or after the native `first_free` word. Normal allocation advances `first_free`; indexed load allocation does not. Deletion does not lower the `first_unused` high-water mark.
 - Keep the order of `CanAllocateItem` assertion credit, publication before construction, null holes and indexed-load range/duplicate errors. Do not add a dense arena or mirrored ID directory.
 - Keep the live slot descriptor canonical. Slots contain native shells: resolve each shell once through the typed owner operation, or expose a generated slot view only when the slot owner moves. Do not reinterpret slots as record pointers.
-- Reread `first_unused` after an allocating callback and refresh the descriptor before accessing a slot beyond its captured extent. The cursor cannot reset or yield; fleet drain, load and reset end cursors and record access scopes.
 - Destroy in order: derived `PreDestructor` while its private owner is live, derived members, `Vehicle::~Vehicle`, base members, `Pool::FreeItem`.
 - Keep the common record alive through the base destructor, including recursive next deletion, occupancy removal, viewport-hash removal and news cleanup. Do not access derived owner links after their original destruction point.
 - During cleanup, set `cleaning` before ascending shell deletions. `PreDestructor` skips normal work, cargo receives `OnCleanPool`, free clears slots and counts, and bitmap clearing and `PostDestructor` are skipped.
 - Outside cleanup, free lowers `first_free`, clears the bit, then calls `PostDestructor`. Keep the pool default `Tcache=false`.
 - A later selected vehicle-pool port moves slots, bitmap and operations together. C++ retains a `PoolBase` registration facade, inline slot reads and hooks. This first port neither completes that work nor claims its savings.
-- Coordinate the remaining base-lifecycle candidate with record release and `SetNext`; do not create another owner.
 
 ### Save/load
 
@@ -202,25 +197,21 @@ This is the selected phase 2 design; its first implementation issue is [#570](ht
 - Remove `OpenTTDRoad` observation wrappers/carriers `TickRead`, `MaxSpeedRead`, `SpeedRead`, `SpeedPart`, `Link`, `LinkTile`, `Step`, `CrashPart`, `Entered`, `Candidate`, `PartRead`, `PathRead`, `StopRead`, `OvertakeRead`, `ArrivalRead`, `SoundRead`, `ServiceRead`, `TurnRead`, `TrackdirRead`, and corresponding `RoadSvc*`/`Road*Read` definitions. Read common/ground/order fields directly; use canonical typed road-type, engine, station and settings accessors for unmoved inputs. Keep operation results such as `RoadTrackChoice` and `RoadDepotResult`.
 - Remove moved fields and carriers from mixed aircraft/effect/disaster/ship observations. Keep operation results and canonical access to unmoved records.
 - Retire `OpenTTDVehiclePostTick` (12 declaration lines), `VehicleSchedulerTick` (13 body lines), its callback/binding, `RustRoadTickRead` (11 body lines) and four compiled native Tick facades in the dispatch checkpoint.
-- Treat the 64 declaration lines in named common observation carriers, PostTick and GroundViewportNext as source spans, not #564 code-line metrics or complete vehicle-header retirement. Report the actual whole-fork metric after consumers and generated declarations exist.
 
 ### Direct Tick dispatch and evidence
 
 - Match constructor dispatch kind in the Rust scheduler and call train, road, ship, aircraft, effect and disaster Rust Tick owners directly. Base Tick returns true.
 - On effect expiry, end the controller borrow and call the canonical native delete operation; remove the `RunEffect` trampoline.
-- Delete native Tick bodies and declarations without production callers. Fixtures must not keep orphan production exports alive.
 - Bind immutable controller service tables once at scheduler entry, preserving initialization dependencies.
 - Keep timing for every road and ship Tick, train front engines only, and normal aircraft only after the early gate.
 - Have a caller-owned native frame provide placement storage for `PerformanceAccumulator` and `OpenTTDRoadCommandSlot`. Typed begin/end operations construct and destroy them without calling Rust; Rust runs the controller between them.
 - Create road scratch lazily, reset and destroy it each road Tick, and never share it across nested entries. Finish timing and scratch destruction before the survival assertion. Preserve presentation timing without an allocation or a timer wrapper that calls back into Rust.
 - End field borrows before operations. After failure, access no dead record; after survival, reload type, first record and fields at source post-Tick branches.
-- Treat P2016 credits as estimates: declarations/native adaptation 0; direct train reads about 52.8M Ir (0.391%); dispatch/post-Tick about 63.4M Ir (0.469%); disjoint total about 116.2M Ir (0.860%). The implementation issue records profile counts, replacement allowances and uncertainty.
-- Do not add #275's wider opportunities again: 133M for dispatch and about 120M for train reads. Claim no viewport, #560 follower, #565 map, #555 repair or drawing savings. Allocation locality, register allocation and native drawing cost remain unmeasured.
+- Historical P2016 replacement estimates and excluded credits stay on [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570); [cost decisions](../planning.md#cost-decisions) and merged-tip [speed policy](../speed.md#policy) govern acceptance.
 - Extend vehicle/fleet/rail/road/ship/aircraft/effect/disaster scenarios and native fixtures for ordinary and indexed allocation, holes/growth/reuse during Tick, deletion of current and unvisited chain members, SetNext and multihead order, fresh fields after callbacks, writes from both languages, reload/cache rebuilding, timing gates and the survival assertion.
 - Move synthetic native virtual-Tick tests to the Rust traversal kernel with test-supplied work. Test production dispatch with real shells; do not retain an unused vtable trampoline or change layouts under `cfg(test)`.
 - Keep semantic decoders and both RNG streams unchanged. Use native ABI/lifetime checks for transient pointers and old-reference-width and invalid-reference fixtures for the save adapter.
 - Consume #560's integrated follower and `GetPlatformLength` interfaces without claiming its credit. #562 owns station lifecycle and native loading-list removal; preserve stable shell pointers and PreDestructor reentry.
-- Coordinate overlapping train/vehicle service files at final base update without an unmerged service dependency. Root sequences this implementation with the queued base vehicle lifecycle owner.
 - Root must obtain #566's reference/candidate image and instruction comparison before calling this port drawing-validated or integrating it. Implementation may proceed while #566 is underway; `-vnull` play cannot substitute. #566 is selected but has no integrated workload/result at this design checkpoint; the merged-tip profile will measure savings.
 
 ## Later pool record placement (#634, #635; decided 2026-11-05 after integration 82)
@@ -255,13 +246,14 @@ Later pool records sit beside their shells, as #570's do. The decision and its m
 
 ## Shared pool policy (#716)
 
-Root supplies one reusable Rust allocation/bookkeeping primitive for the selected
-station, town/industry/subsidy and vehicle owners. Its generated canonical
+Pool owners use the integrated shared Rust allocation/bookkeeping primitive
+from #716. Its generated canonical
 slot/descriptor storage carries shell and record identities, occupancy, cursors,
 counts, native assertion credit, cleaning and cache state. Typed IDs load records
 from slots directly; native consumers read the shared layout inline. Reuse the
-existing shared-layout/vector machinery where applicable, without a second
-metadata authority or stored field references.
+existing shared-record generator, NativeVec, PoolCore, NativeOps, PoolConfig,
+TypedPool and RustPool definitions, without a second metadata authority or
+stored field references.
 
 Native allocation/deallocation, pool-index access and actual shell destruction
 remain typed operations while C++ shells exist. Preserve publication before
@@ -271,28 +263,23 @@ ordering. No borrow spans hooks or storage invalidation. Indexed load errors
 return to C++ before `SlErrorCorruptFmt` can throw. Native registration and
 cleanup-mask order remain unchanged; borrowed resolver shells stay nonpooled.
 
-The first checkpoint supplies the reusable core and source-derived tests,
-without orphan exports or production-pool completion credit. Vehicle #714 is the initial typed-adoption target because its records are
-already integrated; the first ready selected owner may adopt the shared facade
-without waiting for another draft. #700/#704 and later pools use the same definition. Root coordinates
-one native compatibility facade when it has a production consumer. The native
-generic template remains until its final instantiation retires; credit that
-deletion once. Records, containers and control-flow completion remain separate
-obligations of each owner.
+Reuse one native compatibility facade under [integration](../root-workflow.md#integration).
+The native generic template remains until its final instantiation retires;
+credit that deletion once. Records, containers and control-flow completion
+remain separate obligations of each owner.
 
 All-pools-before-map includes the non-simulation Pool registrations:
 NetworkClientInfoPool and NetworkClientSocketPool transfer with #669 network
 core/discovery/resource ownership, NetworkAdminSocketPool with its admin owner,
-and SpriteGroupPool with GRF publication/lifetime. These phase-3 deliveries run
-beside phase 2 and supply actual allocation/bookkeeping/lifetime closure before
-map allocation. Native read-only iterator wrappers may remain with their named
+and SpriteGroupPool with GRF publication/lifetime. Readers precede simulation storage under the
+[execution order](../planning.md#goal-and-phases); these pools must supply actual
+allocation/bookkeeping/lifetime closure before map allocation. Native read-only iterator wrappers may remain with their named
 reader/support/GUI consumers; they are not a second mutable pool authority and
 retire with the final candidate-C++ consumers. Generic template deletion remains
 one final-use credit.
 
-The tested shell-identity BindRecordIfOwned extension from #719 is promoted
-unchanged through #704 Industry's first required real pooled/nonpooled adoption,
-unless root selects another earlier real consumer. Do not infer membership from
+Use #719's shared shell-identity BindRecordIfOwned extension where required.
+Do not infer membership from
 an uninitialized or copied index, or retire a caller-owned record when destroying
 a borrowed shell. Preserve the normal vehicle indexed path and original
 owner/drop timing. Pooled production shells bind and retire by index (steering
@@ -300,8 +287,7 @@ owner/drop timing. Pooled production shells bind and retire by index (steering
 fixture-only stack or copy shells rather than keeping the scan alive for them.
 At #719's head every production LinkGraph/Job shell is pooled, so the scan
 makes LGRP load and CleanPool quadratic. CargoPacket churn would make it a hot
-path. Other drafts reconcile the same
-pool.hpp definition at necessary updates; no extra support branch is required.
+path.
 
 ## Link graph and job storage (#717)
 
@@ -350,26 +336,20 @@ ENGS's 256 legacy names, EIDS ordering and ERNW's widths, next fixups, group gat
 60/71 and when-old gate 175 remain unchanged. The company renewal head keeps
 REF_ENGINE_RENEWS from version 19.
 
-The first checkpoint delivers canonical records, consumer adaptation and displaced
-routes, with an actual cost against the 400 to 750 net compiled-C++ estimate that
-already includes #497. Completion also requires actual pool policy and no Rust
-field read through a native service. Generic pool-template deletion receives credit
-once, at its last instantiation. Reuse engine/fleet ABI and lifetime fixtures,
+The estimate and checkpoint cost belong to [#637](https://github.com/fetch-laboratories/openttd-rust/issues/637).
+Reuse engine/fleet ABI and lifetime fixtures,
 engine/renewal/resolver/reload scenarios, newgrf-loading-bindings and properties
 observations, and existing drawing checks; extend only a concrete uncovered
-allocation or lifetime observation. Final independent review and exact-head Full
-remain the existing acceptance path.
+allocation or lifetime observation.
 
 ## Small simulation pools and ObjectSpec (#638 with #498)
 
-This selected phase-2 owner contains nine pools: Object, Depot, Sign, Goal,
+The phase-2 owner contains nine pools: Object, Depot, Sign, Goal,
 StoryPage, StoryPageElement, LeagueTable, LeagueTableElement and PersistentStorage.
 ObjectSpec global/per-file allocations and ordered publication are coupled #498,
-not another phase-3 owner. The combined estimate is 300 to 550 net compiled C++
-lines removed, including generated declarations, consumer rewrites and evidence.
-Use beside-shell records with no stored reference members or out-of-line
-record/shell conversion. Reuse the existing shared-record generator, NativeVec,
-PoolCore, NativeOps, PoolConfig, TypedPool and RustPool definitions.
+not another phase-3 owner. The estimate belongs to [#638](https://github.com/fetch-laboratories/openttd-rust/issues/638).
+Use the [placement decision](#later-pool-record-placement-634-635-decided-2026-11-05-after-integration-82)
+and [shared pool policy](#shared-pool-policy-716).
 
 | Allocation | Canonical Rust state and consumers | Lifetime and retained native owner |
 | --- | --- | --- |
@@ -397,10 +377,9 @@ has static legacy instances and tests use stack 16/256-value arrays. Its storage
 base initializes Rust payload before the PoolItem base; never read an uninitialized
 index or bind every base array. Preserve the actual native base-subobject address
 used by the registry. Reuse the one shell-identity binding extension from #719
-when required; root promotes coherent shared support rather than introducing a
-parallel helper or an unrelated whole-draft wait. Town/industry attachment
-vectors belong to #635; #638 owns the PSA payload and pool. Reconcile the existing
-create/destroy/reference table once with #704 and #700's airport consumers.
+under the [shared pool policy](#shared-pool-policy-716). Town/industry attachment
+vectors belong to #635; #638 owns the PSA payload and pool. Shared consumers use
+one create/destroy/reference table under [integration](../root-workflow.md#integration).
 
 ObjectSpec includes IgnoreObjectProperty, ObjectChangeInfo, ResetObjects,
 BindToClasses, SetEntitySpec and FinaliseObjectsArray. Reuse override_manager,
@@ -414,7 +393,8 @@ exhaustion logging/return, clear/shrink per-file payloads, then bind classes.
 ResetObjects does not reset mappings; persistent-NewGRF reset omits object manager;
 OBID resets separately. Register only the real global manager.
 
-Adapt existing save adapters without moving chunk orchestration from phase 3.
+Move each pool's save/load chunks with that pool in phase 2, following
+[the execution order](../planning.md#goal-and-phases).
 Preserve OBID/OBJS, DEPT, SIGN, GOAL, STPA/STPE, LEAT/LEAE and PSAC identity,
 widths, gates and index-plus-one references. This includes OBJS 148/155/186,
 DEPT 6/141/142, SIGN 5/6/83/84/103/164/171, goal 182, story 185, signed league
@@ -428,7 +408,6 @@ limits on #156.
 
 The first coherent checkpoint completes Depot/Sign records, owned names, native
 inline consumers, direct Rust routes and actual pool adoption while preserving
-cleanup and viewport notifications. Measure its cost against the whole-owner
-estimate; seven other pools and ObjectSpec remain explicit until completed.
-Existing focused checks, independent fixing review and root's exact-head Full
-apply; this creates no separate implementation or native-test gate.
+cleanup and viewport notifications. Seven other pools and ObjectSpec remain
+explicit until completed; [cost decisions](../planning.md#cost-decisions) and
+[integration](../root-workflow.md#integration) apply.

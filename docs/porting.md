@@ -17,7 +17,6 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Ownership ports
 
 - Prefer ports where Rust owns state and control flow. C++ keeps a thin facade and calls for shared operations (`Random`, allocation, progress, sound) and fields of records still stored in C++.
-- Delete replaced C++ bodies; every fork build requires Rust. Keep no `WITH_RUST` conditionals in `src/`; quick CI rejects them. The pinned reference remains for review. Drafts adopting #581 rerun the [recorded sweep](rust-migration.md#rust-only-source-sweep) over every touched `src/` file, including cleanly merged files.
 - Do not extract an algorithmic fragment while C++ keeps its state and loop unless the roadmap names it as a stepping stone.
 
 ## Storage ports
@@ -32,11 +31,9 @@ For agents writing or reviewing port code, tests and Python tools.
 - Reproduce the original over its whole reachable input domain; add no guards, assertions, rejections or fatal paths absent from it. Where C++ wraps or truncates, use `wrapping_*` operations or `as` casts. Release overflow checks and `panic = "abort"` may only back up operations that cannot overflow in the original. This applies to new work; track known existing divergences as issues.
 - Preserve state scope: a C++ global or static becomes a process-wide Rust static, never `thread_local!`. GUI input and single-player commands run on the main thread, the game loop on `ottd:game`, serialized by the game-state mutex; the single-threaded `-vnull` harness cannot reveal the difference.
 
-- Preserve the exact sequence of random draws; see [every agent](../AGENTS.md#every-agent).
-
 ## Boundary
 
-- Call `Random`, pool operations, other shared services and field accessors for records still stored in C++ directly through `noexcept` C++ wrappers. Preserve the original control flow. An escaping exception terminates.
+- Call `Random`, pool operations, other shared services and field accessors for records still stored in C++ directly through `noexcept` C++ wrappers. Preserve the original's decisions and the order of its observable effects; its function boundaries are not part of that. An escaping exception terminates.
 - Do not batch RNG or defer writes across callbacks. Keep source computation out of callback bodies.
 - Allocation failure, debug or log I/O errors, and paths needing developer-only defines such as `RANDOM_DEBUG` are environmental failures, not simulation behavior.
 - Use an action protocol to return control to C++ only where an exception can unwind through the call in ordinary play (script VMs, save/load errors). Name each such service. Reentry alone is not a reason: end every Rust borrow before a callback that can reenter Rust or mutate its state, then call directly.
@@ -44,18 +41,17 @@ For agents writing or reviewing port code, tests and Python tools.
 - Give each service its own typed `noexcept` function, not an opcode switch or positional array. Return real types on both sides. Use designated initializers for tables.
 - Access map and shared-layout record fields by field-sized raw load or store at the original observation point. For a record still stored in C++, resolve its owner once per entry. Use its shared typed field accessors.
 - The following are design faults. Fix them before integration regardless of timing. Root grants no exceptions.
-  - A reader or carrier written for one call site. Once #657's shared log helper integrates, this includes a service per `Debug` or `GrfMsg` message.
+  - A reader or carrier written for one call site, including a service per `Debug` or `GrfMsg` message.
   - Allocation on a hot path or per call where the original has none.
   - Opcode dispatch or whole-record copies.
   - A Rust-to-C++-to-Rust bounce into code Rust owns.
-- Pass C++ class types such as `PoolID` and `StrongType` as their base types: MSVC returns class types through a hidden pointer (#355). Existing ports convert under #168 and #199. Once #500's first PR adds shared `repr(transparent)` ID newtypes and opaque pool-pointer marker types in header modules, new ports adopt them from the start. The cleanup stage converts existing modules in batches with disjoint files ([code standards](#code-standards)).
+- Pass C++ class types such as `PoolID` and `StrongType` as their base types: MSVC returns class types through a hidden pointer (#355). Use the existing shared transparent ID newtypes and opaque pool-pointer marker types from their header modules. The cleanup stage converts existing modules in batches with disjoint files ([code standards](#code-standards)).
 
 ## Callees and shared accessors
 
 - Call the original helper, virtual method or named constant via its shared accessor or Rust port, not a hand-written equivalent. A raw store for a setter, a hand-written bound for `TileAddWrap`, or a literal for `INVALID_RAILTYPE` can diverge when the callee changes.
 - Port each inline helper or constant from an original header once into the shared Rust module named after that header; every port imports it there. Examples: `slope_func.h`, `map_func.h`, `tunnelbridge.h`, command flags and price indices.
 - Each shared accessor (vehicle field, map predicate, setting or constant) has one typed definition for every port; command ports share one set of command-check services. `tools/shared-accessors.py` rejects new copies in quick CI (#249). `tools/rebound-callees.py` rejects a callee directly bound into a second service table or a field forwarded from another table within its documented syntactic scope.
-- Neither checker sees macros or compound callbacks; reviewers grep those callees by hand ([review](workflow.md#review)).
 - A PR adding a shared accessor deletes integrated copies; one removing a caller deletes its orphaned export, declaration or callback field. Tests and harnesses do not keep a `WITH_RUST` body or `openttd_rust_*` export alive: move the fixture onto the Rust entry and delete the body.
 
 ## Map access
@@ -72,8 +68,6 @@ For agents writing or reviewing port code, tests and Python tools.
 - Any check cited by a doc or PR, such as a branch witness or reference probe, runs in default CI and fails when missing; an opt-in profile or `__main__`-only probe is not evidence.
 - Third-party game content used only as test input, such as BaNaNaS AIs, NewGRF sets and their libraries, stays out of Git and out of every CI artifact (the repository is public). Pin each package by name, version and SHA-256 in a manifest, fetch it from the BaNaNaS CDN into ignored `.local/` storage, cache it in CI and fetch it in each job that runs games, as [community AI inputs](../migration/community-ai/README.md) do. The fork then redistributes nothing, so GPL corresponding-source work is not needed for it (user, 2026-11-02). Saves may reference such content by ID and checksum.
 - Compare semantic state: screenshots alone and compressed-save byte equality cannot establish equivalent simulation. Screenshots and screen recordings attached to a PR can evidence graphical work (user, 2026-10-28). Retain small failures and explain discrepancies before accepting changes. Test success establishes covered behavior, not complete game equivalence.
-
-- Keep the reference worktree unchanged. Never change expected results together with candidate behavior; see [every agent](../AGENTS.md#every-agent).
 
 ## Code standards
 
