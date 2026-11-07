@@ -1829,10 +1829,10 @@
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn crossing_removed | excessive_nesting | dc2d4b9305b866aaada5": [
       5
     ],
-    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn current_max_speed::mod el | excessive_nesting | 1bbc3612a22f9e23da69": [
+    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn get_current_max_speed::mod el | excessive_nesting | 0d06fc01371dbcd17075": [
       4
     ],
-    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn curve_limit | excessive_nesting | 2839a77535b6b381d6fa": [
+    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn get_curve_speed_limit | excessive_nesting | 2839a77535b6b381d6fa": [
       6
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn handle_crashed | excessive_nesting | 4bcbfe1de16ae68a3637": [

@@ -85,6 +85,7 @@ pub const AM_REALISTIC: u8 = crate::vehicle_type::AccelerationModel::AM_REALISTI
 /// `INVALID_PRICE`.
 pub use crate::economy_type::INVALID_PRICE;
 /// `VEHICLE_LENGTH`.
+#[allow(clippy::cast_possible_truncation)] // Native uint constant is 8; retain the u8 compatibility surface.
 pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
 pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
