@@ -2982,7 +2982,7 @@ impl Game {
     }
     /// Returns a tile somewhat representing the order destination (not suitable for pathfinding).
     /// `airport` gets the airport tile rather than the station location for aircraft.
-    /// Returns the destination of the order, or INVALID_TILE if none.
+    /// Returns the destination of the order, or `INVALID_TILE` if none.
     fn get_location(self, order: Order, v: *mut c_void, airport: bool) -> TileIndex {
         match OrderType(order.kind()) {
             OrderType::OT_GOTO_STATION | OrderType::OT_GOTO_WAYPOINT | OrderType::OT_IMPLICIT => {
