@@ -14,76 +14,185 @@
 //! holds no reference to a record across a callback.
 #![allow(unsafe_code)]
 
-/// `GroundVehicleSubtypeFlags::GVSF_FRONT`.
-pub const GVSF_FRONT: u8 = 0;
-/// `GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART`.
-pub const GVSF_ARTICULATED_PART: u8 = 1;
-/// `GroundVehicleSubtypeFlags::GVSF_WAGON`.
-pub const GVSF_WAGON: u8 = 2;
-/// `GroundVehicleSubtypeFlags::GVSF_ENGINE`.
-pub const GVSF_ENGINE: u8 = 3;
-/// `GroundVehicleSubtypeFlags::GVSF_FREE_WAGON`.
-pub const GVSF_FREE_WAGON: u8 = 4;
-/// `GroundVehicleSubtypeFlags::GVSF_MULTIHEADED`.
-pub const GVSF_MULTIHEADED: u8 = 5;
+/// Vehicle state bit positions in `Vehicle::vehstatus`, from `vehicle_base.h`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehState(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl VehState {
+    /// Vehicle is not visible.
+    pub const Hidden: Self = Self(0);
+    /// Vehicle is stopped by the player.
+    pub const Stopped: Self = Self(1);
+    /// Vehicle is not clickable by the user (shadow vehicles).
+    pub const Unclickable: Self = Self(2);
+    /// Use default vehicle palette. See `DoDrawVehicle`.
+    pub const DefaultPalette: Self = Self(3);
+    /// Train is slowing down.
+    pub const TrainSlowing: Self = Self(4);
+    /// Vehicle is a shadow vehicle.
+    pub const Shadow: Self = Self(5);
+    /// Aircraft is broken down.
+    pub const AircraftBroken: Self = Self(6);
+    /// Vehicle is crashed.
+    pub const Crashed: Self = Self(7);
+}
+
+/// Native `EnumBitSet<VehState, uint8_t>`, retaining every stored bit.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehStates(pub u8);
+
+impl VehStates {
+    /// Set containing the named state (the element is a bit position).
+    #[must_use]
+    pub const fn from_element(element: VehState) -> Self {
+        Self(1 << element.0)
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// Native bit-set removal.
+    #[must_use]
+    pub const fn without(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+}
+
+/// Bit numbers indicating which `NewGRFCache` values are valid.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NewGRFCacheValidValues(pub u8);
+
+impl NewGRFCacheValidValues {
+    /// Set if the NewGRF var 40 currently stored is valid.
+    pub const NCVV_POSITION_CONSIST_LENGTH: Self = Self(0);
+    /// Set if the NewGRF var 41 currently stored is valid.
+    pub const NCVV_POSITION_SAME_ID_LENGTH: Self = Self(1);
+    /// Set if the NewGRF var 42 currently stored is valid.
+    pub const NCVV_CONSIST_CARGO_INFORMATION: Self = Self(2);
+    /// Set if the NewGRF var 43 currently stored is valid.
+    pub const NCVV_COMPANY_INFORMATION: Self = Self(3);
+    /// Set if the NewGRF var 4D currently stored is valid.
+    pub const NCVV_POSITION_IN_VEHICLE: Self = Self(4);
+    /// End of the bits.
+    pub const NCVV_END: Self = Self(5);
+}
+
+/// Models for spawning visual effects.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VisualEffectSpawnModel(pub u8);
+
+impl VisualEffectSpawnModel {
+    /// No visual effect.
+    pub const VESM_NONE: Self = Self(0);
+    /// Steam model.
+    pub const VESM_STEAM: Self = Self(1);
+    /// Diesel model.
+    pub const VESM_DIESEL: Self = Self(2);
+    /// Electric model.
+    pub const VESM_ELECTRIC: Self = Self(3);
+    /// End of the models.
+    pub const VESM_END: Self = Self(4);
+}
+
+/// Ground vehicle subtype bit positions. Defined here because common helpers
+/// need them; use the subtype access functions rather than accessing flags directly.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GroundVehicleSubtypeFlags(pub u8);
+
+impl GroundVehicleSubtypeFlags {
+    /// Leading engine of a consist.
+    pub const GVSF_FRONT: Self = Self(0);
+    /// Articulated part of an engine.
+    pub const GVSF_ARTICULATED_PART: Self = Self(1);
+    /// Wagon (not used for road vehicles).
+    pub const GVSF_WAGON: Self = Self(2);
+    /// Engine that can be a front engine, but may be behind another engine
+    /// (not used for road vehicles).
+    pub const GVSF_ENGINE: Self = Self(3);
+    /// First in a wagon chain in a depot (not used for road vehicles).
+    pub const GVSF_FREE_WAGON: Self = Self(4);
+    /// Engine is multiheaded (not used for road vehicles).
+    pub const GVSF_MULTIHEADED: Self = Self(5);
+}
+
+/// Raw compatibility bit positions for existing subtype consumers.
+pub const GVSF_FRONT: u8 = GroundVehicleSubtypeFlags::GVSF_FRONT.0;
+/// Raw compatibility bit position.
+pub const GVSF_ARTICULATED_PART: u8 = GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+/// Raw compatibility bit position.
+pub const GVSF_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_WAGON.0;
+/// Raw compatibility bit position.
+pub const GVSF_ENGINE: u8 = GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
+/// Raw compatibility bit position.
+pub const GVSF_FREE_WAGON: u8 = GroundVehicleSubtypeFlags::GVSF_FREE_WAGON.0;
+/// Raw compatibility bit position.
+pub const GVSF_MULTIHEADED: u8 = GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
 
 /// `HasBit(subtype, flag)`.
-const fn has(subtype: u8, flag: u8) -> bool {
-    subtype & (1 << flag) != 0
+const fn has(subtype: u8, flag: GroundVehicleSubtypeFlags) -> bool {
+    subtype & (1 << flag.0) != 0
 }
 /// `Vehicle::IsFrontEngine`; `ground` is `IsGroundVehicle()`.
 pub(crate) const fn is_front_engine(ground: bool, subtype: u8) -> bool {
-    ground && has(subtype, GVSF_FRONT)
+    ground && has(subtype, GroundVehicleSubtypeFlags::GVSF_FRONT)
 }
 /// `Vehicle::IsArticulatedPart`; `ground` is `IsGroundVehicle()`.
 pub(crate) const fn is_articulated_part(ground: bool, subtype: u8) -> bool {
-    ground && has(subtype, GVSF_ARTICULATED_PART)
+    ground && has(subtype, GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART)
 }
 
-/// `Vehicle::IsGroundVehicle`.
+/// `Vehicle::IsGroundVehicle`: true for a train or a road vehicle.
 pub(crate) const fn is_ground_vehicle(kind: u8) -> bool {
-    kind == crate::vehicle_type::VEH_TRAIN || kind == crate::vehicle_type::VEH_ROAD
+    let kind = VehicleType(kind);
+    kind.0 == VehicleType::VEH_TRAIN.0 || kind.0 == VehicleType::VEH_ROAD.0
 }
 
-/// `VehState::Hidden`.
-pub const VS_HIDDEN: u8 = 1 << 0;
-/// `VehState::Stopped`.
-pub const VS_STOPPED: u8 = 1 << 1;
-/// `VehStatus::TrainSlowing`.
-pub const VS_TRAIN_SLOWING: u8 = 1 << 4;
-/// `VehState::AircraftBroken`.
-pub const VS_AIRCRAFT_BROKEN: u8 = 1 << 6;
-/// `VehState::Crashed`.
-pub const VS_CRASHED: u8 = 1 << 7;
+/// Raw compatibility mask for `VehState::Hidden`.
+pub const VS_HIDDEN: u8 = VehStates::from_element(VehState::Hidden).0;
+/// Raw compatibility mask for `VehState::Stopped`.
+pub const VS_STOPPED: u8 = VehStates::from_element(VehState::Stopped).0;
+/// Raw compatibility mask for `VehState::Unclickable`.
+pub const VS_UNCLICKABLE: u8 = VehStates::from_element(VehState::Unclickable).0;
+/// Raw compatibility mask for `VehState::TrainSlowing`.
+pub const VS_TRAIN_SLOWING: u8 = VehStates::from_element(VehState::TrainSlowing).0;
+/// Raw compatibility mask for `VehState::Shadow`.
+pub const VS_SHADOW: u8 = VehStates::from_element(VehState::Shadow).0;
+/// Raw compatibility mask for `VehState::AircraftBroken`.
+pub const VS_AIRCRAFT_BROKEN: u8 = VehStates::from_element(VehState::AircraftBroken).0;
+/// Raw compatibility mask for `VehState::Crashed`.
+pub const VS_CRASHED: u8 = VehStates::from_element(VehState::Crashed).0;
 
-/// `NCVV_POSITION_CONSIST_LENGTH`.
-pub const NCVV_POSITION_CONSIST_LENGTH: u8 = 0;
-/// `NCVV_POSITION_SAME_ID_LENGTH`.
-pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = 1;
-/// `NCVV_CONSIST_CARGO_INFORMATION`.
-pub const NCVV_CONSIST_CARGO_INFORMATION: u8 = 2;
-/// `NCVV_COMPANY_INFORMATION`.
-pub const NCVV_COMPANY_INFORMATION: u8 = 3;
-/// `NCVV_POSITION_IN_VEHICLE`.
-pub const NCVV_POSITION_IN_VEHICLE: u8 = 4;
-/// `NCVV_END`.
-pub const NCVV_END: u8 = 5;
+/// Raw compatibility bit position for NewGRF var 40.
+pub const NCVV_POSITION_CONSIST_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_CONSIST_LENGTH.0;
+/// Raw compatibility bit position for NewGRF var 41.
+pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = NewGRFCacheValidValues::NCVV_POSITION_SAME_ID_LENGTH.0;
+/// Raw compatibility bit position for NewGRF var 42.
+pub const NCVV_CONSIST_CARGO_INFORMATION: u8 =
+    NewGRFCacheValidValues::NCVV_CONSIST_CARGO_INFORMATION.0;
+/// Raw compatibility bit position for NewGRF var 43.
+pub const NCVV_COMPANY_INFORMATION: u8 = NewGRFCacheValidValues::NCVV_COMPANY_INFORMATION.0;
+/// Raw compatibility bit position for NewGRF var 4D.
+pub const NCVV_POSITION_IN_VEHICLE: u8 = NewGRFCacheValidValues::NCVV_POSITION_IN_VEHICLE.0;
+/// Raw compatibility end of the cache-valid bits.
+pub const NCVV_END: u8 = NewGRFCacheValidValues::NCVV_END.0;
 
-/// `VESM_NONE`.
-pub const VESM_NONE: u8 = 0;
-/// `VESM_STEAM`.
-pub const VESM_STEAM: u8 = 1;
-/// `VESM_DIESEL`.
-pub const VESM_DIESEL: u8 = 2;
-/// `VESM_ELECTRIC`.
-pub const VESM_ELECTRIC: u8 = 3;
-/// `VESM_END`.
-pub const VESM_END: u8 = 4;
-
-/// `VehState::Unclickable`.
-pub const VS_UNCLICKABLE: u8 = 1 << 2;
-/// `VehState::Shadow`.
-pub const VS_SHADOW: u8 = 1 << 5;
+/// Raw compatibility visual-effect model.
+pub const VESM_NONE: u8 = VisualEffectSpawnModel::VESM_NONE.0;
+/// Raw compatibility visual-effect model.
+pub const VESM_STEAM: u8 = VisualEffectSpawnModel::VESM_STEAM.0;
+/// Raw compatibility visual-effect model.
+pub const VESM_DIESEL: u8 = VisualEffectSpawnModel::VESM_DIESEL.0;
+/// Raw compatibility visual-effect model.
+pub const VESM_ELECTRIC: u8 = VisualEffectSpawnModel::VESM_ELECTRIC.0;
+/// Raw compatibility end of the visual-effect models.
+pub const VESM_END: u8 = VisualEffectSpawnModel::VESM_END.0;
 
 use crate::company_type::CompanyID;
 use crate::engine_type::EngineID;
@@ -171,24 +280,24 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
         visual: std::ptr::null_mut(),
         previous: std::ptr::null_mut(),
         first: std::ptr::null_mut(),
-        tile: TileIndex(u32::MAX),
-        dest_tile: TileIndex(u32::MAX),
+        tile: TileIndex::INVALID,
+        dest_tile: TileIndex::INVALID,
         motion_counter: 0,
         x_pos: 0,
         y_pos: 0,
         z_pos: 0,
-        engine_type: EngineID(u16::MAX),
+        engine_type: EngineID::INVALID,
         cur_speed: 0,
         cargo_cap: 0,
         refit_cap: 0,
         cargo_age_counter: 1,
-        last_station_visited: StationID(u16::MAX),
+        last_station_visited: StationID::INVALID,
         cached_max_speed: 0,
         cached_cargo_age_period: 0,
         r#type: kind,
         subtype: 0,
-        owner: CompanyID(u8::MAX),
-        direction: u8::MAX,
+        owner: CompanyID::INVALID,
+        direction: crate::direction_type::Direction::INVALID_DIR.0,
         vehstatus: 0,
         subspeed: 0,
         acceleration: 0,
@@ -241,6 +350,7 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
     unsafe {
         let old = (*this).next;
         if !old.is_null() {
+            // We had an old next vehicle. Update the first and previous pointers.
             let mut v = old;
             while !v.is_null() {
                 (*v).first = old;
@@ -250,6 +360,7 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
         }
         (*this).next = next;
         if !next.is_null() {
+            // A new next vehicle. Update the first and previous pointers.
             let predecessor = (*next).previous;
             if !predecessor.is_null() {
                 (*predecessor).next = std::ptr::null_mut();
@@ -267,9 +378,11 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
 
 // VehicleRef's live-record contract permits field-sized raw reads between callbacks.
 impl crate::vehicle::VehicleRef {
+    /// `Vehicle::First`: first vehicle of this chain.
     pub(crate) fn first(self) -> Self {
         Self(std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), first)).unwrap())
     }
+    /// `Vehicle::Last`: last vehicle of this chain.
     pub(crate) fn last(self) -> Self {
         let mut v = self;
         while let Some(next) = v.next() {
@@ -277,6 +390,7 @@ impl crate::vehicle::VehicleRef {
         }
         v
     }
+    /// `Vehicle::GetNextVehicle`: next real (non-articulated part) vehicle.
     pub(crate) fn next_vehicle(self) -> Option<Self> {
         let mut next = self.next();
         while let Some(v) = next {
@@ -287,7 +401,8 @@ impl crate::vehicle::VehicleRef {
         }
         next
     }
-    /// `Train::GetNextUnit`; this record is a train.
+    /// `Train::GetNextUnit`: next real vehicle, excluding articulated parts and
+    /// the rear part of a dualheaded engine; this record is a train.
     pub(crate) fn next_unit(self) -> Option<Self> {
         let mut next = self.next_vehicle();
         if let Some(v) = next
@@ -297,7 +412,7 @@ impl crate::vehicle::VehicleRef {
         }
         next
     }
-    /// `Vehicle::GetPrevVehicle`.
+    /// `Vehicle::GetPrevVehicle`: previous real (non-articulated part) vehicle.
     pub(crate) fn previous_vehicle(self) -> Option<Self> {
         let mut previous = self.previous();
         while let Some(v) = previous {
@@ -308,7 +423,8 @@ impl crate::vehicle::VehicleRef {
         }
         previous
     }
-    /// `Train::GetPrevUnit`; this record is a train.
+    /// `Train::GetPrevUnit`: previous real vehicle, excluding articulated parts
+    /// and the rear part of a dualheaded engine; this record is a train.
     pub(crate) fn previous_unit(self) -> Option<Self> {
         let mut previous = self.previous_vehicle();
         if let Some(v) = previous
@@ -322,11 +438,11 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn is_articulated_part(self) -> bool {
         is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
     }
-    /// `Vehicle::HasEngineType`.
+    /// `Vehicle::HasEngineType`: whether `engine_type` has any meaning.
     pub(crate) fn has_engine_type(self) -> bool {
         match VehicleType(self.vehicle_type()) {
-            VehicleType::AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
-            VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP => true,
+            VehicleType::VEH_AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
+            VehicleType::VEH_TRAIN | VehicleType::VEH_ROAD | VehicleType::VEH_SHIP => true,
             _ => false,
         }
     }
@@ -334,7 +450,7 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn is_front_engine(self) -> bool {
         is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())
     }
-    /// `Vehicle::GetLastEnginePart`.
+    /// `Vehicle::GetLastEnginePart`: last part of an articulated engine.
     pub(crate) fn last_engine_part(self) -> Self {
         let mut v = self;
         while let Some(next) = v.next() {
@@ -387,17 +503,23 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: The bound visual owner lives throughout the source access interval.
         unsafe { visual.read() }
     }
+    /// `Vehicle::Next`; articulated parts are also counted as vehicles.
     pub(crate) fn next(self) -> Option<Self> {
         std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), next)).map(Self)
     }
+    /// `Vehicle::Previous`; articulated parts are also counted as vehicles.
     pub(crate) fn previous(self) -> Option<Self> {
         std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), previous)).map(Self)
     }
     pub(crate) fn set_hidden(self, value: bool) {
         self.write_status(if value {
-            self.status() | VS_HIDDEN
+            VehStates(self.status())
+                .with(VehStates::from_element(VehState::Hidden))
+                .0
         } else {
-            self.status() & !VS_HIDDEN
+            VehStates(self.status())
+                .without(VehStates::from_element(VehState::Hidden))
+                .0
         });
     }
     pub(crate) fn cargo_cap(self) -> u16 {
@@ -419,7 +541,8 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn aircraft_state(self) -> *mut crate::aircraft::AircraftState {
         crate::raw_field::read_field!(self.0.as_ptr(), aircraft)
     }
-    /// `Vehicle::Move(n)` from a nullable record.
+    /// `Vehicle::Move(n)` from a nullable record: return the vehicle at the
+    /// signed offset, or null if the offset is out of bounds.
     pub(crate) fn move_by(mut v: *mut VehicleRecord, n: i32) -> *mut VehicleRecord {
         let mut i = 0;
         while i != n && !v.is_null() {
@@ -437,7 +560,7 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn has_articulated_part(self) -> bool {
         self.next().is_some_and(Self::is_articulated_part)
     }
-    /// `GroundVehicle::GetFirstEnginePart`.
+    /// `Vehicle::GetFirstEnginePart`: first part of an articulated engine.
     pub(crate) fn first_engine_part(self) -> Self {
         let mut v = self;
         while v.is_articulated_part() {
@@ -613,9 +736,9 @@ mod record_tests {
     #[test]
     fn train_units_skip_articulated_parts_and_one_rear_head() {
         use crate::vehicle::VehicleRef;
-        let articulated = 1 << GVSF_ARTICULATED_PART;
-        let rear = 1 << GVSF_MULTIHEADED;
-        let engine = 1 << GVSF_ENGINE;
+        let articulated = 1 << GroundVehicleSubtypeFlags::GVSF_ARTICULATED_PART.0;
+        let rear = 1 << GroundVehicleSubtypeFlags::GVSF_MULTIHEADED.0;
+        let engine = 1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0;
         let records: Vec<_> = [
             engine,
             articulated,
