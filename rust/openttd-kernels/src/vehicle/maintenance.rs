@@ -19,9 +19,10 @@ use crate::engine_type::{EngineID, EngineMiscFlags, NO_BREAKDOWN_SMOKE};
 use crate::landscape_type::LandscapeType;
 use crate::newgrf_sound::VSE_BREAKDOWN;
 use crate::sound_type::SoundFx;
+use crate::strings_type::StringID;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_economy::DAYS_IN_ECONOMY_MONTH;
-use crate::vehicle_base::{GroundVehicleSubtypeFlags, VS_CRASHED, VS_STOPPED, VehState, VehStates};
+use crate::vehicle_base::{GroundVehicleSubtypeFlags, VehState, VehStates};
 use crate::{company::OpenTTDCompany, fleet, services};
 
 use crate::services::{CalendarDate, EconomyDate};
@@ -653,28 +654,31 @@ pub(crate) unsafe fn handle_breakdown_status(v: VehicleRef, base: &VehicleServic
         unsafe { handle_breakdown_result::<false>(v, base) }
     }
 }
-unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
+/// Update age of a vehicle.
+/// `v` is the vehicle to update.
+unsafe fn age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
-    let r = svc!(C, s.age, v);
-    let age = if r.age.0 < s.max_calendar_date.0 {
-        r.age.0 + 1
+    let fields = svc!(C, s.age, v);
+    let calendar_age = if fields.age.0 < s.max_calendar_date.0 {
+        CalendarDate(fields.age.0 + 1)
     } else {
         branch!(C, VEHICLE_MAINT_MAX_AGE);
-        r.age.0
+        fields.age
     };
-    if r.age.0 < s.max_calendar_date.0 {
-        svc!(C, s.age_write, v, CalendarDate(age));
+    if fields.age.0 < s.max_calendar_date.0 {
+        svc!(C, s.age_write, v, calendar_age);
     }
     let g = unsafe { &*s.group };
     if !unsafe { svc!(C, g.primary, v.shell().cast()) }
-        && (v.vehicle_type() != VehicleType::TRAIN.0 || v.subtype() & 8 == 0)
+        && (VehicleType(v.vehicle_type()) != VehicleType::VEH_TRAIN
+            || v.subtype() & (1 << GroundVehicleSubtypeFlags::GVSF_ENGINE.0) == 0)
     {
         return;
     }
-    let difference = age.wrapping_sub(r.max_age.0);
+    let age = calendar_age.0.wrapping_sub(fields.max_age.0);
     for anniversary in s.anniversaries {
-        if difference == anniversary.0 {
-            svc!(C, s.decay_write, v, r.decay.wrapping_shl(1));
+        if age == anniversary.0 {
+            svc!(C, s.decay_write, v, fields.decay.wrapping_shl(1));
             branch!(C, VEHICLE_MAINT_DECAY);
             break;
         }
@@ -682,41 +686,54 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     svc!(C, s.details_dirty, v);
     branch!(C, VEHICLE_MAINT_AGE);
     let warning = svc!(C, s.warning, v);
+    // Don't warn if warnings are disabled.
+    // Don't warn about vehicles which are non-primary (e.g., part of an articulated vehicle),
+    // don't belong to us, are crashed, or are stopped.
     if !warning.enabled
         || warning.has_previous
         || !warning.local
-        || warning.status & (VS_CRASHED | VS_STOPPED) != 0
+        || VehStates(warning.status).0
+            & VehStates::from_element(VehState::Crashed)
+                .with(VehStates::from_element(VehState::Stopped))
+                .0
+            != 0
     {
         return;
     }
-    let company = svc!(C, s.warning_company, v);
-    if company.renewal && (base.engine)(v).company_availability() != 0 {
+    let c = svc!(C, s.warning_company, v);
+    // Don't warn if a renew is active.
+    if c.renewal && (base.engine)(v).company_availability() != 0 {
         return;
     }
+    // Don't warn if a replacement is active.
     // SAFETY: warning_company supplies the live owner; availability only reads.
-    if unsafe { svc!(C, s.replacement_active, v, company.company) } {
+    if unsafe { svc!(C, s.replacement_active, v, c.company) } {
         return;
     }
-    let news = if difference == s.before_zero.0 {
+    let str = StringID(if age == s.before_zero.0 {
         s.news_getting_old
-    } else if difference == s.anniversaries[0].0 {
+    } else if age == s.anniversaries[0].0 {
         s.news_very_old
-    } else if difference > s.anniversaries[0].0 && difference % DAYS_IN_LEAP_YEAR == 0 {
+    } else if age > s.anniversaries[0].0 && age % DAYS_IN_LEAP_YEAR == 0 {
         s.news_very_old_and
     } else {
         return;
-    };
-    svc!(C, s.old_news, v, news);
+    });
+    svc!(C, s.old_news, v, str.0);
     branch!(C, VEHICLE_MAINT_OLD_NEWS);
 }
-unsafe fn economy_age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
+/// Update economy age of a vehicle.
+/// `v` is the vehicle to update.
+unsafe fn economy_age_vehicle_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
-    let r = svc!(C, s.economy_age, v);
-    if r.0 < s.max_economy_date.0 {
-        let age = EconomyDate(r.0 + 1);
-        svc!(C, s.economy_age_write, v, age);
+    let economy_age = svc!(C, s.economy_age, v);
+    if economy_age.0 < s.max_economy_date.0 {
+        let economy_age = EconomyDate(economy_age.0 + 1);
+        svc!(C, s.economy_age_write, v, economy_age);
         let g = unsafe { &*s.group };
-        if unsafe { svc!(C, g.primary, v.shell().cast()) } && age.0 == s.profit_min_age.0 + 1 {
+        if unsafe { svc!(C, g.primary, v.shell().cast()) }
+            && economy_age.0 == s.profit_min_age.0 + 1
+        {
             svc!(C, s.reached_min_age, v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }
@@ -724,7 +741,9 @@ unsafe fn economy_age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         branch!(C, VEHICLE_MAINT_MAX_AGE);
     }
 }
-unsafe fn decrease_value<const C: bool>(v: VehicleRef, base: &VehicleServices) {
+/// Decrease the value of a vehicle.
+/// `v` is the vehicle to devaluate.
+unsafe fn decrease_vehicle_value_impl<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
     let value = svc!(C, s.value, v);
     svc!(C, s.value_write, v, value.saturating_sub(value >> 8));
@@ -754,16 +773,16 @@ macro_rules! entry {
     };
 }
 entry!(openttd_rust_vehicle_service_depot, service_in_depot, reset);
-entry!(openttd_rust_vehicle_age, age_vehicle, age);
+entry!(openttd_rust_vehicle_age, age_vehicle, age_vehicle_impl);
 entry!(
     openttd_rust_vehicle_economy_age,
     economy_age_vehicle,
-    economy_age
+    economy_age_vehicle_impl
 );
 entry!(
     openttd_rust_vehicle_decrease_value,
     decrease_vehicle_value,
-    decrease_value
+    decrease_vehicle_value_impl
 );
 entry!(
     openttd_rust_vehicle_check_breakdown,
