@@ -17,7 +17,22 @@ pub const VEH_AIRCRAFT: u8 = VehicleType::VEH_AIRCRAFT.0;
 /// Acceleration due to gravity: 9.8 m/s² in native units.
 pub const GROUND_ACCELERATION: u32 = 9800;
 /// `AccelerationModel::AM_ORIGINAL`.
-pub const AM_ORIGINAL: u8 = 0;
+pub const AM_ORIGINAL: u8 = AccelerationModel::AM_ORIGINAL.0;
+
+/// The length of a vehicle in tile units.
+pub const VEHICLE_LENGTH: u32 = 8;
+
+/// Vehicle acceleration models, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AccelerationModel(pub u8);
+
+impl AccelerationModel {
+    /// Native `AM_ORIGINAL`.
+    pub const AM_ORIGINAL: Self = Self(0);
+    /// Native `AM_REALISTIC`.
+    pub const AM_REALISTIC: Self = Self(1);
+}
 
 /// End of vehicle types buildable by companies.
 pub const VEH_COMPANY_END: u8 = VehicleType::VEH_COMPANY_END.0;
