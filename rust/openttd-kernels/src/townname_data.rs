@@ -5,7 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Private built-in generator constants, copied without changing order or bytes.
+//! `table/townname.h`: built-in generator tables, in their original order.
+//! Name strings retain their original UTF-8 bytes.
 //! Czech tables and generator copyright Petr Baudis 2005 (GPL).
 
 pub(super) const NAME_ORIGINAL_ENGLISH_1: &[&str] = &["Great ", "Little ", "New ", "Fort "];
@@ -837,733 +838,768 @@ pub(super) const NAME_CZECH_REAL: &[&str] = &[
     "Znojmo",
 ];
 
+// [CzechGender][CzechPattern]: suffixes for adjectives.
 pub(super) const NAME_CZECH_PATMOD: &[[&str; 3]] = &[
-    ["í", "ý", "uv"],
-    ["í", "á", "ova"],
-    ["í", "é", "ovo"],
-    ["í", "é", "ovy"],
-    ["í", "é", "ovy"],
-    ["í", "á", "ova"],
+    /* CZG_SMASC */ ["í", "ý", "uv"],
+    /* CZG_SFEM */ ["í", "á", "ova"],
+    /* CZG_SNEUT */ ["í", "é", "ovo"],
+    /* CZG_PMASC */ ["í", "é", "ovy"],
+    /* CZG_PFEM */ ["í", "é", "ovy"],
+    /* CZG_PNEUT */ ["í", "á", "ova"],
 ];
 
-pub(super) const NAME_CZECH_ADJ: &[Adj] = &[
-    Adj {
+// Some items which should be common are doubled.
+pub(super) const NAME_CZECH_ADJ: &[CzechNameAdj] = &[
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Horn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Horn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Doln",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Doln",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Předn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Zadn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Kosteln",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Havran",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Říčn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_JARNI,
         choose: CZC_ANY,
         name: "Jezern",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Velk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Velk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Mal",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Mal",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Vysok",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Česk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Moravsk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Slováck",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Slezsk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Uhersk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Star",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Star",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Nov",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Nov",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Mlad",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Královsk",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Kamenn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Cihlov",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
         choose: CZC_ANY,
         name: "Divn",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Červen",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Červen",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Červen",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Zelen",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Žlut",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Siv",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Šed",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Bíl",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Bíl",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Modr",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Růžov",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_MLADY,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Čern",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Král",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Jan",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Karl",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Kryštof",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Jiřík",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Petr",
     },
-    Adj {
+    CzechNameAdj {
         pattern: CZP_PRIVL,
         choose: CZC_ANY,
         name: "Sud",
     },
 ];
 
-pub(super) const NAME_CZECH_SUBST_FULL: &[Subst] = &[
-    Subst {
+// Considered a stem for choose/allow matching purposes.
+pub(super) const NAME_CZECH_SUBST_FULL: &[CzechNameSubst] = &[
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Sedlec",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Brod",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Brod",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 0,
+        choose: CzechChooseFlags::EMPTY,
         name: "Úval",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Žďár",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Smrk",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Hora",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Lhota",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Lhota",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Hlava",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Lípa",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SNEUT,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Pole",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SNEUT,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Údolí",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PMASC,
         allow: CZA_ALL,
-        choose: 0,
+        choose: CzechChooseFlags::EMPTY,
         name: "Úvaly",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PFEM,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Luka",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PNEUT,
         allow: CZA_ALL,
-        choose: 1,
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Pole",
     },
 ];
 
-pub(super) const NAME_CZECH_SUBST_STEM: &[Subst] = &[
-    Subst {
+// TODO: More stems needed. --pasky
+pub(super) const NAME_CZECH_SUBST_STEM: &[CzechNameSubst] = &[
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 2,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Kostel",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 2,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Klášter",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 1,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Lhot",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 1,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Lhot",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 1,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Hur",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 6,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        choose: CzechChooseFlags::EMPTY,
         name: "Sedl",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 7,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Hrad",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 2,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::EMPTY,
         name: "Pras",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 2,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::EMPTY,
         name: "Baž",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 2,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::EMPTY,
         name: "Tes",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 2,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
+        choose: CzechChooseFlags::EMPTY,
         name: "Už",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 6,
-        choose: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Postfix),
         name: "Bř",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 6,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        choose: CzechChooseFlags::EMPTY,
         name: "Vod",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 6,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        choose: CzechChooseFlags::EMPTY,
         name: "Jan",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Prach",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Kunr",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Strak",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Vít",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Vyš",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Žat",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Žer",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Střed",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Harv",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Pruh",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Tach",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Písn",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Jin",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Jes",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Jar",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Sok",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Hod",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_NFREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Net",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Praž",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Nerat",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Kral",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::EMPTY,
         name: "Hut",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::NoPostfix),
         name: "Pan",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 7,
-        choose: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::NoPostfix),
         name: "Odstřed",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 7,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Mrat",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 4,
-        choose: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Colour),
         name: "Hlav",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 3,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle)),
+        choose: CzechChooseFlags::EMPTY,
         name: "Měř",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_FREE,
-        allow: 6,
-        choose: 0,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        choose: CzechChooseFlags::EMPTY,
         name: "Lip",
     },
 ];
 
+// Optional postfix inserted between stem and ending.
 pub(super) const NAME_CZECH_SUBST_POSTFIX: &[&str] =
     &["av", "an", "at", "ov", "on", "ot", "ev", "en", "et"];
 
-pub(super) const NAME_CZECH_SUBST_ENDING: &[Subst] = &[
-    Subst {
+// Both neuter genders must be at the end of this array!
+pub(super) const NAME_CZECH_SUBST_ENDING: &[CzechNameSubst] = &[
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 3,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle)),
         choose: CZC_ANY,
         name: "ec",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 3,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle)),
         choose: CZC_ANY,
         name: "ín",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 7,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
         choose: CZC_ANY,
         name: "ov",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 5,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
         choose: CZC_ANY,
         name: "kov",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 4,
-        choose: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Postfix),
         name: "ín",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 4,
-        choose: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Postfix),
         name: "ník",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SMASC,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "burk",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 1,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short),
         choose: CZC_ANY,
         name: "ka",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
         choose: CZC_ANY,
         name: "inka",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Middle),
         choose: CZC_ANY,
         name: "ná",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SFEM,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "ava",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PMASC,
-        allow: 4,
-        choose: 2,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
+        choose: CzechChooseFlags::from_element(CzechChooseFlag::Postfix),
         name: "íky",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PMASC,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "upy",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PMASC,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "olupy",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PFEM,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "avy",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PFEM,
-        allow: 7,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
         choose: CZC_ANY,
         name: "ice",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PFEM,
-        allow: 7,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short).with(
+            CzechAllowFlags::from_element(CzechAllowFlag::Middle)
+                .with(CzechAllowFlags::from_element(CzechAllowFlag::Long)),
+        ),
         choose: CZC_ANY,
         name: "ičky",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_PNEUT,
-        allow: 3,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle)),
         choose: CZC_ANY,
         name: "na",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SNEUT,
-        allow: 3,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Short)
+            .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle)),
         choose: CZC_ANY,
         name: "no",
     },
-    Subst {
+    CzechNameSubst {
         gender: CZG_SNEUT,
-        allow: 4,
+        allow: CzechAllowFlags::from_element(CzechAllowFlag::Long),
         choose: CZC_ANY,
         name: "iště",
     },
@@ -2607,29 +2643,115 @@ pub(super) const NAME_CATALAN_RIVER1: &[&str] = &[
     " de Francolí",
 ];
 
+/// Singular/plural grammatical genders from `table/townname.h`.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct CzechGender(pub u8);
+
+pub(super) const CZG_SMASC: CzechGender = CzechGender(0);
+pub(super) const CZG_SFEM: CzechGender = CzechGender(1);
+pub(super) const CZG_SNEUT: CzechGender = CzechGender(2);
+pub(super) const CZG_PMASC: CzechGender = CzechGender(3);
+pub(super) const CZG_PFEM: CzechGender = CzechGender(4);
+pub(super) const CZG_PNEUT: CzechGender = CzechGender(5);
+/// Special for substantive stems: the ending chooses the gender.
+pub(super) const CZG_FREE: CzechGender = CzechGender(6);
+/// Like `CZG_FREE`, but disallow `CZG_SNEUT`.
+pub(super) const CZG_NFREE: CzechGender = CzechGender(7);
+
+/// Adjective declension pattern from `table/townname.h`.
+#[repr(transparent)]
 #[derive(Clone, Copy)]
-pub(super) struct Subst {
-    pub gender: usize,
-    pub allow: u8,
-    pub choose: u8,
+pub(super) struct CzechPattern(pub u8);
+
+pub(super) const CZP_JARNI: CzechPattern = CzechPattern(0);
+pub(super) const CZP_MLADY: CzechPattern = CzechPattern(1);
+pub(super) const CZP_PRIVL: CzechPattern = CzechPattern(2);
+
+/// A substantive can choose only some adjectives/endings.
+/// At least one of these flags must be satisfied.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub(super) struct CzechAllowFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl CzechAllowFlag {
+    pub const Short: Self = Self(0);
+    pub const Middle: Self = Self(1);
+    pub const Long: Self = Self(2);
+}
+
+/// Native `EnumBitSet<CzechAllowFlag, uint8_t>`; elements are bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub(super) struct CzechAllowFlags(pub u8);
+
+impl CzechAllowFlags {
+    pub const fn from_element(element: CzechAllowFlag) -> Self {
+        Self(1 << element.0)
+    }
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+pub(super) const CZA_ALL: CzechAllowFlags = CzechAllowFlags::from_element(CzechAllowFlag::Short)
+    .with(CzechAllowFlags::from_element(CzechAllowFlag::Middle))
+    .with(CzechAllowFlags::from_element(CzechAllowFlag::Long));
+
+/// All these flags must be satisfied, in the stem-to-others direction.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub(super) struct CzechChooseFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl CzechChooseFlag {
+    pub const Colour: Self = Self(0);
+    /// Matched if a postfix was inserted.
+    pub const Postfix: Self = Self(1);
+    /// Matched if no postfix was inserted.
+    pub const NoPostfix: Self = Self(2);
+}
+
+/// Native `EnumBitSet<CzechChooseFlag, uint8_t>`; elements are bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub(super) struct CzechChooseFlags(pub u8);
+
+impl CzechChooseFlags {
+    pub const EMPTY: Self = Self(0);
+    pub const fn from_element(element: CzechChooseFlag) -> Self {
+        Self(1 << element.0)
+    }
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    pub const fn test(self, element: CzechChooseFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+    pub const fn all(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+pub(super) const CZC_ANY: CzechChooseFlags =
+    CzechChooseFlags::from_element(CzechChooseFlag::Colour)
+        .with(CzechChooseFlags::from_element(CzechChooseFlag::Postfix))
+        .with(CzechChooseFlags::from_element(CzechChooseFlag::NoPostfix));
+
+#[derive(Clone, Copy)]
+pub(super) struct CzechNameSubst {
+    pub gender: CzechGender,
+    pub allow: CzechAllowFlags,
+    pub choose: CzechChooseFlags,
     pub name: &'static str,
 }
 #[derive(Clone, Copy)]
-pub(super) struct Adj {
-    pub pattern: usize,
-    pub choose: u8,
+pub(super) struct CzechNameAdj {
+    pub pattern: CzechPattern,
+    pub choose: CzechChooseFlags,
     pub name: &'static str,
 }
-pub(super) const CZG_SMASC: usize = 0;
-pub(super) const CZG_SFEM: usize = 1;
-pub(super) const CZG_SNEUT: usize = 2;
-pub(super) const CZG_PMASC: usize = 3;
-pub(super) const CZG_PFEM: usize = 4;
-pub(super) const CZG_PNEUT: usize = 5;
-pub(super) const CZG_FREE: usize = 6;
-pub(super) const CZG_NFREE: usize = 7;
-pub(super) const CZP_JARNI: usize = 0;
-pub(super) const CZP_MLADY: usize = 1;
-pub(super) const CZP_PRIVL: usize = 2;
-pub(super) const CZA_ALL: u8 = 7;
-pub(super) const CZC_ANY: u8 = 7;
