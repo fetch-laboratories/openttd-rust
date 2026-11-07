@@ -29,7 +29,8 @@ class InventoryTests(unittest.TestCase):
         self.tree["comparisons"] = copy.deepcopy(RECORDED["comparisons"])
 
     def errors(self, base: hi.Inventory | None = None) -> list[str]:
-        return hi.errors(self.tree, self.recorded, base or RECORDED, open_issues)
+        expected = hi.registered_inventory(self.recorded, self.tree)
+        return hi.errors(self.tree, expected, base or RECORDED, open_issues)
 
     def test_unchanged_tree_matches_its_inventory(self) -> None:
         self.assertEqual(self.errors(), [])
@@ -106,7 +107,11 @@ class InventoryTests(unittest.TestCase):
             ):
                 with self.subTest(line=line):
                     inventory.write_text(original)
-                    (tools / driver).write_text(f"print({line!r})\n")
+                    (tools / driver).write_text(
+                        "print('test result: ok. 1 passed; 0 failed; 0 ignored; "
+                        "0 measured; 108 filtered out; finished in 0.00s')\n"
+                        f"print({line!r})\n"
+                    )
                     run = subprocess.run(
                         [sys.executable, str(tools / "run-comparisons.py"), "--record"],
                         cwd=root,
@@ -201,19 +206,29 @@ class ReplacementTests(unittest.TestCase):
     ) -> None:
         record = self.record()
         tree = copy.deepcopy(TREE)
+        archived = copy.deepcopy(RECORDED)
+        # Keep a legitimate earlier retirement while testing the next removal.
+        prior_source = "tools/simulation/already-retired.cpp"
+        archived["native_sources"].append(prior_source)
+        prior = dict(self.record(), retires=["source:" + prior_source])
+        registered = [*er.load(), prior]
         source = "src/tests/test_network_crypto.cpp"
         tree["native_sources"].remove(source)
         tree["native_tests"].remove(source)
-        with patch.object(er, "load", return_value=[record]):
-            expected = hi.registered_inventory(RECORDED, tree)
-            self.assertEqual(hi.errors(tree, expected, RECORDED), [])
-            self.assertEqual(hi.replacement_errors(tree, RECORDED), [])
-        with patch.object(er, "load", return_value=[]):
-            expected = hi.registered_inventory(RECORDED, tree)
+        with patch.object(er, "load", return_value=[*registered, record]):
+            expected = hi.registered_inventory(archived, tree)
+            self.assertEqual(hi.errors(tree, expected, archived), [])
+            self.assertEqual(hi.replacement_errors(tree, archived), [])
+        with patch.object(er, "load", return_value=registered):
+            expected = hi.registered_inventory(archived, tree)
             self.assertIn(
-                "native_sources differs", " ".join(hi.errors(tree, expected, RECORDED))
+                "native_sources differs", " ".join(hi.errors(tree, expected, archived))
             )
-            self.assertTrue(hi.replacement_errors(tree, RECORDED))
+            self.assertIn(
+                f"missing replacement contract: source:{source}",
+                hi.replacement_errors(tree, archived),
+            )
+        self.assertIn(prior_source, archived["native_sources"])
         self.assertIn(source, RECORDED["native_sources"])
 
     def test_empty_manifests_and_observations_fail(self) -> None:

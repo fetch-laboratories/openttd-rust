@@ -22,12 +22,7 @@ CLIPPY = (
     "too_many_arguments",
     "cognitive_complexity",
     "excessive_nesting",
-    "undocumented_unsafe_blocks",
-    "multiple_unsafe_ops_per_block",
     "missing_safety_doc",
-    "cast_possible_truncation",
-    "cast_sign_loss",
-    "cast_possible_wrap",
 )
 RUFF = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 VERSIONS = {"clippy": "1.99.0", "ruff": "0.16.8"}

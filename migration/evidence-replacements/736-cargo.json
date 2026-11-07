@@ -1,0 +1,9 @@
+[
+  {
+    "retires": ["source:tools/simulation/cargo-split-reference.cpp"],
+    "oracle": "Unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 src/cargopacket.cpp CargoPacket::Split, captured with the retiring fixture's reference branch before deletion. The 48 output rows are frozen in cargo_storage/split-denied-oracle.txt; no candidate output supplies expectations.",
+    "observations": {
+      "Denied pool capacity returns null after exactly one capacity call before feeder division or count/share mutation, including zero, oversized uint32 amounts and int64 boundaries (48 cases)": ["rust:lib:cargo_storage::tests::split_denied_preserves_packet_before_share_arithmetic"]
+    }
+  }
+]
