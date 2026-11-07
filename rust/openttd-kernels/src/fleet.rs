@@ -18,15 +18,19 @@
     clippy::many_single_char_names,
     clippy::struct_field_names
 )]
+use crate::command_type::DoCommandFlag;
+use crate::company_type::CompanyID;
 use crate::debug::debug;
+use crate::group_type::GroupID;
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
 use crate::vehicle_base::is_ground_vehicle;
+use crate::vehicle_type::{VehicleID, VehicleType};
 use std::collections::{BTreeMap, BTreeSet};
 const NONE: u32 = u32::MAX;
 /// `VehicleID::Invalid()` (`vehicle_type.h`), the list-selection sentinel.
-pub(crate) const INVALID_VEHICLE: u32 = 0xF_FFFF;
+pub(crate) const INVALID_VEHICLE: u32 = VehicleID::INVALID.0;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GroupFields {
@@ -329,7 +333,6 @@ impl GroupServices {
 const INVALID_GROUP: u16 = 65535;
 pub(crate) const DEFAULT_GROUP: u16 = 65534;
 pub(crate) const ALL_GROUP: u16 = 65533;
-const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;
 
@@ -993,57 +996,67 @@ unsafe fn add_vehicle_group(
     vli_valid: bool,
     out: *mut u16,
 ) -> u32 {
-    unsafe { out.write(INVALID_GROUP) };
-    let mut new = id;
-    if unsafe { group(w, new) }.is_null() && new != DEFAULT_GROUP && new != NEW_GROUP {
+    unsafe { out.write(GroupID::INVALID.0) };
+    let veh_id = VehicleID(veh_id);
+    let mut new = GroupID(id);
+    if unsafe { group(w, new.0) }.is_null()
+        && new != GroupID::DEFAULT_GROUP
+        && new != GroupID::NEW_GROUP
+    {
         return ERROR;
     }
     // The original's command-local `VehicleList`: generated from the
     // identifier, or holding the single named vehicle.
-    let list = if veh_id == INVALID_VEHICLE && vli_valid {
+    let list = if veh_id == VehicleID::INVALID && vli_valid {
         if !unsafe { (w.list_generate)(context) } || unsafe { (w.list_size)(context) } == 0 {
             return ERROR;
         }
         VehicleList::Generated(context)
     } else {
-        let v = unsafe { (w.vehicle)(veh_id) };
+        let v = unsafe { (w.vehicle)(veh_id.0) };
         if v.is_null() {
             return ERROR;
         }
         VehicleList::Single(v)
     };
     let first = unsafe { list.at(w, 0) };
-    let kind = record(w, first).vehicle_type();
-    let owner = unsafe { (w.current_company)() };
+    let kind = VehicleType(record(w, first).vehicle_type());
+    let owner = CompanyID(unsafe { (w.current_company)() });
     let size = unsafe { list.size(w) };
     for i in 0..size {
         let v = unsafe { list.at(w, i) };
-        if record(w, v).owner() != owner || !unsafe { (w.primary)(v) } {
+        if CompanyID(record(w, v).owner()) != owner || !unsafe { (w.primary)(v) } {
             return ERROR;
         }
     }
-    let g = unsafe { group(w, new) };
-    if !g.is_null() && (read_field!(g, owner) != owner || read_field!(g, vehicle_type) != kind) {
+    let g = unsafe { group(w, new.0) };
+    if !g.is_null()
+        && (CompanyID(read_field!(g, owner)) != owner
+            || VehicleType(read_field!(g, vehicle_type)) != kind)
+    {
         return ERROR;
     }
-    if new == NEW_GROUP {
-        let ret = unsafe { create_group(w, flags, kind, INVALID_GROUP, &raw mut new) };
+    if new == GroupID::NEW_GROUP {
+        // Create new group.
+        let ret = unsafe { create_group(w, flags, kind.0, GroupID::INVALID.0, &raw mut new.0) };
         if ret != OK {
-            unsafe { out.write(new) };
+            unsafe { out.write(new.0) };
             return ret;
         }
     }
-    if flags & 1 != 0 {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
         for i in 0..size {
             let vc = unsafe { list.at(w, i) };
-            let vehicle_id = unsafe { (w.vehicle_id)(vc) };
-            let v = unsafe { (w.vehicle)(vehicle_id) };
-            unsafe { add_vehicle(w, v, new) };
+            // VehicleList is const but we need to modify the vehicle.
+            let vehicle_id = VehicleID(unsafe { (w.vehicle_id)(vc) });
+            let v = unsafe { (w.vehicle)(vehicle_id.0) };
+            unsafe { add_vehicle(w, v, new.0) };
             if shared {
+                // Add vehicles in the shared order list as well.
                 let mut v2 = unsafe { (w.first_shared)(v) };
                 while !v2.is_null() {
-                    if unsafe { (w.vehicle_group)(v2) } != new {
-                        unsafe { add_vehicle(w, v2, new) };
+                    if GroupID(unsafe { (w.vehicle_group)(v2) }) != new {
+                        unsafe { add_vehicle(w, v2, new.0) };
                     }
                     v2 = unsafe { (w.next_shared)(v2) };
                 }
@@ -1051,12 +1064,13 @@ unsafe fn add_vehicle_group(
             unsafe { (w.depot_dirty)(v) };
         }
         unsafe {
-            update_autoreplace(w, owner);
-            (w.replace_dirty)(kind);
-            (w.list_dirty)(owner, kind);
+            update_autoreplace(w, owner.0);
+            // Update the Replace Vehicle Windows.
+            (w.replace_dirty)(kind.0);
+            (w.list_dirty)(owner.0, kind.0);
         }
     }
-    unsafe { out.write(new) };
+    unsafe { out.write(new.0) };
     OK
 }
 unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> u32 {
