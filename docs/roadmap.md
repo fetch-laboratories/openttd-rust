@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /overhaul (Claude Code, user-directed) | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Development is paused for a cleanup stage (user, 2026-11-06). Code main is integration 102 (`a0337694c4`); #722 integrated as 101 and #732 as 102. After 102, with metric v2 at implementation `f4e2c5b45420…` ([root's checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)): compiled source and generated records C++ 256,796; total fork C++ 279,755; original retired 62,750 of 284,355 (22.07%), simulation 41,550 of 61,148 (67.95%); C++ evidence 22,959; exports 1,563; callback slots 3,377. Main is green; no rollback or integration hold remains. [Profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
+Development is paused for a cleanup stage (user, 2026-11-06). Code main is integration 103 (`b7b6603f4c`); #722 integrated as 101, #732 as 102 and #733 as 103. After 102, with metric v2 at implementation `f4e2c5b45420…` ([root's checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)): compiled source and generated records C++ 256,796; total fork C++ 279,755; original retired 62,750 of 284,355 (22.07%), simulation 41,550 of 61,148 (67.95%); C++ evidence 22,959; exports 1,563; callback slots 3,377. Integration 103 changes no game code or C++ counts; its expanded boundary census is a separate corrected series, 1,719 exports and 3,419 callback fields. Main is green; no rollback or integration hold remains. [Profile 100](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889) remains the accepted profile:
 
 | Scenario | Original Ir | Candidate Ir (100) | Accepted projection (100) |
 | --- | ---: | ---: | ---: |
@@ -199,6 +199,7 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 100 | Const nearby StationList views #729 | `dbbb502073` | Two qualifiers, same descriptor/lifetime. Source review/exact Full/tree pass; counters unchanged. Profile100 accepted; cadence initializer repair integrates in101. |
 | 101 | Engine records/GRF/direct consumers #722 | `31478f303a` | Scoped reviews and exact Full42302553842/tree pass. Compiled C++−852, fork−973, original retired+380/net glue−472; callback slots−229. Actual pools/native consumers remain637/497. Main platform recovery42304912050 runs. |
 | 102 | Shared owned-bytes assignment and GRF price metadata #732 | `a0337694c4` | Review and exact-head Full passed; compiled C++ +2, fork +4. Necessary shared support, no retirement credit. |
+| 103 | Cleanup CI, lint/growth ratchets and refactor proof #733/#742 | `b7b6603f4c` | Three reviews and exact-head Full/tree match. Tooling +1,956 code lines; production Rust and C++ unchanged. |
 
 ## Recurring
 
@@ -215,15 +216,15 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint
 
-Cleanup stage in progress. Code main remains integration 102, `a0337694c4`, tree `4c81b596`. Root resumed the [cleanup work order](#cleanup-work-order); the four implementation slots are assigned below. All 42 open issues are placed, excluded return conditions remain unmet, and startup housekeeping reclaimed 872.7 MiB of eligible output. Integration and rollback procedures now live in the [root workflow](root-workflow.md).
+Cleanup stage in progress. Code main is integration 103, `b7b6603f4c`. A's checks are installed. R0 and cargo C combine in #743; road R and history H proceed in disjoint files. F's seven semantic comparisons match, but archive and exact instruction-count proof fail; [decision #746](https://github.com/fetch-laboratories/openttd-rust/issues/746) holds only F's integration and its reserved-file release. No proof rule is waived while it is open. Integration and rollback procedures live in the [root workflow](root-workflow.md).
 
 | Work | Owner | Next action |
 | --- | --- | --- |
-| #733 checks and refactor proof | `/root/cleanup_733_checks` | Finish the first cleanup draft, review and integrate before later cleanup PRs. |
-| #737 C cargo records | `/root/cleanup_737_cargo` | Replace packet copy/set and map-axis routes; expose canonical list access for V. |
-| #736 R0 evidence registration | `/root/cleanup_736_registration` | Establish replacement registration while preserving nonempty checks and existing observations. |
-| #734 F shared definitions | `/root/cleanup_734_foundation` | Freeze header types and compatibility re-exports; use #733's proof before integration. |
-| #738 rule corpus | Root | First docs checkpoint separates root procedures and removes stale or duplicate guidance. Finish remaining inventory rows and #733-dependent check documentation. |
+| #743: #736 R0 and #737 C | Root | Finish native completeness/growth repair, exact exception review, Quick and one combined Full. Component reviews and focused checks pass. |
+| #734 F, PR #739 | `/root/cleanup_734_foundation` | Resolve #746 before base/debt adoption or integration. Source and all 122 lint proposals are reviewed; no jobs remain. |
+| #737 R, PR #744 | `/root/cleanup_737_road` | Independent source/exception review, then serialized baseline and native-fixture adoption after #743. |
+| #737 H, PR #745 | `/root/cleanup_737_history` | Finish typed-path native evidence. Preserve generic fixture behavior; close the old protocol only when F releases `lib.rs`. |
+| #738 rule corpus | Root | Two docs checkpoints are pushed. The remaining orchestration-skill rows belong to an authorized navigation/steering pass. |
 
 Retained state from root's wind-down ([checkpoint](https://github.com/fetch-laboratories/openttd-rust/commit/e800717540)), for housekeeping:
 
