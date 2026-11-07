@@ -85,3 +85,10 @@
 - C++ keeps: Sign/depot records, pool and string storage, whole allocation/assignment/positioning/deletion and viewport operations, default depot naming and window refresh.
 - Limits: GUI pixels, threaded GUI scheduling, arbitrary mod layouts and historical save variants remain outside the targeted scenario evidence. Interactive RNG is unsaved; command evidence observes it after deterministic seeding.
 - PRs: #605.
+
+## Original signal header and segment vocabulary (#734)
+
+- Signal exploration and the fixed work sets use the original flags, segment-state names, track-bit masks and `SmallSet` helper vocabulary. Raw values, queue capacities, traversal order, callback observations and propagation decisions are preserved.
+- Map/pool storage, commands, rendering and native facades remain in C++; no service or interface is added.
+- Limits: Existing raw-domain and overflow qualifications, arbitrary mod layouts and threaded play remain on #156. Other signal/rail vocabulary remains in the cleanup workset.
+- PRs: #772, integrated in #776.

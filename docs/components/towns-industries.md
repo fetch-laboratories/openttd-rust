@@ -131,3 +131,10 @@
 - Passenger/mail random draws, live lookup order, road filtering and saturating removal-cost arithmetic keep the original operations and order. Monthly/history bodies, storage and scalar ABI remain unchanged.
 - Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; existing save, NewGRF and scheduling limits remain on #156.
 - PRs: #764, integrated in #765. Other Town vocabulary remains in the cleanup workset.
+
+## Original Town naming and import vocabulary (#734)
+
+- Existing name validation, custom-name handling and import bodies use the original helper names and explanatory comments. The shared `MAX_LENGTH_TOWN_NAME_CHARS` includes the terminating NUL; raw IDs, seed arithmetic, callback order and partial import effects are preserved.
+- Native parsing, file/JSON access, pool/map shells and presentation remain in C++. The cleanup adds no storage owner or interface.
+- Limits: Existing empty-spiral TownID and floating-conversion qualifications, arbitrary NewGRF names, malformed imports and historical-save domains remain on #156.
+- PRs: #768, integrated in #776. Other Town vocabulary remains in the cleanup workset.
