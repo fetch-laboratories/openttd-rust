@@ -1832,6 +1832,10 @@ mod tests {
         0
     }
 
+    extern "C" fn unexpected_allocation(_: *const Packet) -> *mut c_void {
+        panic!("denied Split must return before allocating a packet")
+    }
+
     #[test]
     fn split_denied_preserves_packet_before_share_arithmetic() {
         // Captured from the unchanged 15.3 CargoPacket::Split body at
@@ -1839,6 +1843,7 @@ mod tests {
         // cargo-split-reference.cpp reference branch, before its deletion.
         let service = Services {
             can_allocate: deny_allocation,
+            create: unexpected_allocation,
             ..services()
         };
         let mut cases = 0;
