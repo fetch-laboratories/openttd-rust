@@ -770,6 +770,117 @@ crate::abi::layouts! {
 }
 
 /// Class index limit from `newgrf_roadstop.h`.
-pub(crate) const ROADSTOP_CLASS_MAX: u16 = u16::MAX;
+pub(crate) const ROADSTOP_CLASS_MAX: u16 = RoadStopClassID::ROADSTOP_CLASS_MAX.0;
 /// Per-file definition limit from `newgrf_roadstop.h`.
 pub(crate) const NUM_ROADSTOPS_PER_GRF: u32 = u16::MAX as u32 - 1;
+
+/// Native road-stop class index, retaining every original uint16 value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopClassID(pub u16);
+impl RoadStopClassID {
+    /// Lowest valid class index.
+    pub const ROADSTOP_CLASS_BEGIN: Self = Self(0);
+    /// Default road-stop class.
+    pub const ROADSTOP_CLASS_DFLT: Self = Self(0);
+    /// Waypoint class.
+    pub const ROADSTOP_CLASS_WAYP: Self = Self(1);
+    /// Maximum number of classes.
+    pub const ROADSTOP_CLASS_MAX: Self = Self(u16::MAX);
+}
+/// Default road-stop class label.
+pub const ROADSTOP_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+/// Waypoint road-stop class label.
+pub const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
+
+/// Availability restriction in a road-stop spec; distinct from `RoadStopType`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopAvailabilityType(pub u8);
+impl RoadStopAvailabilityType {
+    /// Passenger (bus) stops only.
+    pub const ROADSTOPTYPE_PASSENGER: Self = Self(0);
+    /// Freight (truck) stops only.
+    pub const ROADSTOPTYPE_FREIGHT: Self = Self(1);
+    /// Both types of station road stop.
+    pub const ROADSTOPTYPE_ALL: Self = Self(2);
+    /// End of the valid availability range.
+    pub const ROADSTOPTYPE_END: Self = Self(3);
+}
+
+/// Native road-stop draw mode bit position.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopDrawMode(pub u8);
+#[allow(non_upper_case_globals)]
+impl RoadStopDrawMode {
+    /// Bay stops: draw the road itself.
+    pub const Road: Self = Self(0);
+    /// Drive-through stops: draw the road overlay, e.g. pavement.
+    pub const Overlay: Self = Self(1);
+    /// Waypoints: draw the sprite-layout ground tile on top of the road.
+    pub const WaypGround: Self = Self(2);
+}
+/// Native road-stop draw mode set, retaining all byte values.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopDrawModes(pub u8);
+impl RoadStopDrawModes {
+    /// Native `EnumBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, mode: RoadStopDrawMode) -> bool {
+        (self.0 as u64) & (1_u64 << mode.0) != 0
+    }
+}
+
+/// Native road-stop specification flag bit position.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopSpecFlag(pub u8);
+#[allow(non_upper_case_globals)]
+impl RoadStopSpecFlag {
+    /// Callback 141 needs random bits.
+    pub const Cb141RandomBits: Self = Self(0);
+    /// Do not show catenary.
+    pub const NoCatenary: Self = Self(2);
+    /// Stop is drive-through only.
+    pub const DriveThroughOnly: Self = Self(3);
+    /// No automatic road connection.
+    pub const NoAutoRoadConnection: Self = Self(4);
+    /// Only show in the road build menu.
+    pub const RoadOnly: Self = Self(5);
+    /// Only show in the tram build menu.
+    pub const TramOnly: Self = Self(6);
+    /// Read draw mode from register 0x100.
+    pub const DrawModeRegister: Self = Self(8);
+}
+/// Native uint8 specification flags, including unnamed bits.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopSpecFlags(pub u8);
+impl RoadStopSpecFlags {
+    /// Native `EnumBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, flag: RoadStopSpecFlag) -> bool {
+        (self.0 as u64) & (1_u64 << flag.0) != 0
+    }
+}
+
+/// Native road-stop view, retaining every original byte value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadStopView(pub u8);
+impl RoadStopView {
+    /// Bay road stop facing northeast.
+    pub const RSV_BAY_NE: Self = Self(0);
+    /// Bay road stop facing southeast.
+    pub const RSV_BAY_SE: Self = Self(1);
+    /// Bay road stop facing southwest.
+    pub const RSV_BAY_SW: Self = Self(2);
+    /// Bay road stop facing northwest.
+    pub const RSV_BAY_NW: Self = Self(3);
+    /// Drive-through stop on the X axis.
+    pub const RSV_DRIVE_THROUGH_X: Self = Self(4);
+    /// Drive-through stop on the Y axis.
+    pub const RSV_DRIVE_THROUGH_Y: Self = Self(5);
+}

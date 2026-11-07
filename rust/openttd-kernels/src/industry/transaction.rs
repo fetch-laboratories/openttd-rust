@@ -12,7 +12,25 @@ use super::{
     IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,
     Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
 };
-use crate::industrytype;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::{CompanyID, Owner};
+use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
+use crate::industry_type::{IT_INVALID, NUM_INDUSTRYTYPES};
+use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
+use crate::landscape_type::ARCTIC;
+use crate::newgrf_callbacks::{
+    CALLBACK_FAILED, IndustryCallbackMask, IndustryCallbackMasks, IndustryTileCallbackMask,
+    IndustryTileCallbackMasks,
+};
+use crate::newgrf_industries::IndustryAvailabilityCallType;
+use crate::slope_type::{
+    SLOPE_E, SLOPE_ELEVATED, SLOPE_FLAT, SLOPE_N, SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE,
+    SLOPE_STEEP, SLOPE_SW, SLOPE_W,
+};
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::{
+    INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_TREES, MP_VOID, TROPICZONE_DESERT, TROPICZONE_RAINFOREST,
+};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -119,12 +137,12 @@ impl Engine<'_> {
     fn succeeded(&self) -> bool {
         unsafe { (self.cost.success)(self.out) }
     }
-    fn company(&self) -> u8 {
-        unsafe { (self.p.current_company)() }
+    fn company(&self) -> Owner {
+        CompanyID(unsafe { (self.p.current_company)() })
     }
-    fn swap_company(&self, company: u8) -> u8 {
+    fn swap_company(&self, company: Owner) -> Owner {
         let original = self.company();
-        unsafe { (self.x.set_company)(company) };
+        unsafe { (self.x.set_company)(company.0) };
         original
     }
     fn map(&self) -> super::Map {
@@ -164,23 +182,23 @@ impl Engine<'_> {
             limit
         };
         unsafe {
-            (self.x.edge_distance)(tile, 0) < x
-                || (self.x.edge_distance)(tile, 3) < y
-                || (self.x.edge_distance)(tile, 2) < x
-                || (self.x.edge_distance)(tile, 1) < y
+            (self.x.edge_distance)(tile, DIAGDIR_NE) < x
+                || (self.x.edge_distance)(tile, DIAGDIR_NW) < y
+                || (self.x.edge_distance)(tile, DIAGDIR_SW) < x
+                || (self.x.edge_distance)(tile, DIAGDIR_SE) < y
         }
     }
     fn builtin_location(&self, tile: u32, spec: *const SpecHandle) -> bool {
-        match unsafe { (*spec).check_proc } {
-            1 => {
-                if self.map().landscape == 1
+        match CheckProc(unsafe { (*spec).check_proc }) {
+            CheckProc::CHECK_FOREST => {
+                if self.map().landscape == ARCTIC
                     && (self.s.shared().tile_z)(tile)
                         < i32::from(crate::snow_line::highest(self.s.shared())) + 2
                 {
                     return self.fail(self.e.forest);
                 }
             }
-            2 => {
+            CheckProc::CHECK_REFINERY => {
                 if !(self.g.environment.editor)()
                     && !self.edge(
                         self.offset(tile, 1, 1),
@@ -190,19 +208,31 @@ impl Engine<'_> {
                     return self.fail(self.e.positioned);
                 }
             }
-            3 => {
-                if self.map().landscape == 1
+            CheckProc::CHECK_FARM => {
+                if self.map().landscape == ARCTIC
                     && (self.s.shared().tile_z)(tile).wrapping_add(2)
                         >= i32::from(crate::snow_line::highest(self.s.shared()))
                 {
                     return self.fail(self.e.site);
                 }
             }
-            4 if (self.s.shared().tropic_zone)(tile) == 1 => return self.fail(self.e.site),
-            5 if (self.s.shared().tropic_zone)(tile) != 1 => return self.fail(self.e.desert),
-            6 if (self.s.shared().tropic_zone)(tile) != 2 => return self.fail(self.e.rainforest),
-            7 if (self.s.shared().tile_z)(tile) > 4 => return self.fail(self.e.lowland),
-            8 => {
+            CheckProc::CHECK_PLANTATION
+                if (self.s.shared().tropic_zone)(tile) == TROPICZONE_DESERT =>
+            {
+                return self.fail(self.e.site);
+            }
+            CheckProc::CHECK_WATER if (self.s.shared().tropic_zone)(tile) != TROPICZONE_DESERT => {
+                return self.fail(self.e.desert);
+            }
+            CheckProc::CHECK_LUMBERMILL
+                if (self.s.shared().tropic_zone)(tile) != TROPICZONE_RAINFOREST =>
+            {
+                return self.fail(self.e.rainforest);
+            }
+            CheckProc::CHECK_BUBBLEGEN if (self.s.shared().tile_z)(tile) > 4 => {
+                return self.fail(self.e.lowland);
+            }
+            CheckProc::CHECK_OIL_RIG => {
                 if (self.g.environment.editor)() && unsafe { (self.x.ignore_restrictions)() } {
                     return self.success();
                 }
@@ -236,7 +266,7 @@ impl Engine<'_> {
         let spec = industrytype::industry(u16::from(kind));
         let conflicting = unsafe { (*spec).conflicting };
         for other in conflicting {
-            if other == 255 {
+            if other == IT_INVALID {
                 continue;
             }
             for n in 0..self.registry_count(other) {
@@ -266,11 +296,13 @@ impl Engine<'_> {
     }
     fn allowed(&self, tile: u32, kind: u8, town: *const TownHandle) -> bool {
         let spec = industrytype::industry(u16::from(kind));
-        if unsafe { (*spec).behaviour } & 8 != 0 && unsafe { (self.x.population)(town) } < 1200 {
+        if IndustryBehaviours(unsafe { (*spec).behaviour }).test(IndustryBehaviour::Town1200More)
+            && unsafe { (self.x.population)(town) } < 1200
+        {
             return self.fail(self.e.population);
         }
         let spec = industrytype::industry(u16::from(kind));
-        if unsafe { (*spec).behaviour } & 32 != 0
+        if IndustryBehaviours(unsafe { (*spec).behaviour }).test(IndustryBehaviour::OnlyNearTown)
             && self.distance(unsafe { (self.x.town_position)(town) }, tile) > 9
         {
             return self.fail(self.e.near_town);
@@ -283,12 +315,13 @@ impl Engine<'_> {
             let part = super::layout_tile(layout, n);
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
             let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
-            if current == u32::MAX {
+            if current == INVALID_TILE {
                 return self.fail(self.e.site);
             }
             if gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 if !(self.s.shared().is_water_tile)(current)
-                    || crate::map_func::World::new(self.s.shared()).tile_slope(current) != 0
+                    || crate::map_func::World::new(self.s.shared()).tile_slope(current)
+                        != SLOPE_FLAT
                 {
                     return self.fail(self.e.site);
                 }
@@ -304,17 +337,21 @@ impl Engine<'_> {
                 if unsafe { (*spec).slopes_refused } & 32 == 0
                     && ((self.s.shared().has_water_class)(current)
                         && unsafe { (self.t.on_water)(current) })
-                        != (behaviour & 4 != 0)
+                        != (IndustryBehaviours(behaviour).test(IndustryBehaviour::BuiltOnWater))
                 {
                     return self.fail(self.e.site);
                 }
-                if behaviour & 0x18 != 0
-                    || (behaviour & 32 != 0 && (self.s.shared().tile_type)(current) == 3)
+                if behaviour
+                    & (IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).0
+                        | IndustryBehaviours::from_element(IndustryBehaviour::Town1200More).0)
+                    != 0
+                    || (IndustryBehaviours(behaviour).test(IndustryBehaviour::OnlyNearTown)
+                        && (self.s.shared().tile_type)(current) == MP_HOUSE)
                 {
-                    if (self.s.shared().tile_type)(current) != 3 {
+                    if (self.s.shared().tile_type)(current) != MP_HOUSE {
                         return self.fail(self.e.town);
                     }
-                    let company = self.swap_company(15);
+                    let company = self.swap_company(Owner::TOWN);
                     unsafe {
                         crate::landscape_cmd::clear_command(
                             &*self.context.command_checks,
@@ -322,7 +359,7 @@ impl Engine<'_> {
                             current,
                             0,
                         );
-                        (self.x.set_company)(company);
+                        (self.x.set_company)(company.0);
                     };
                     if !self.succeeded() {
                         return false;
@@ -333,7 +370,9 @@ impl Engine<'_> {
                             &*self.context.command_checks,
                             self.out.cast(),
                             current,
-                            2 | 16 | 512,
+                            DoCommandFlag::AUTO
+                                | DoCommandFlag::NO_TEST_TOWN_RATING
+                                | DoCommandFlag::NO_MODIFY_TOWN_RATING,
                         );
                     };
                     if !self.succeeded() {
@@ -364,7 +403,10 @@ impl Engine<'_> {
             let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 let spec = industrytype::tile(gfx);
-                if unsafe { (*spec).callback_mask & (1 << 4) != 0 } {
+                if unsafe {
+                    IndustryTileCallbackMasks((*spec).callback_mask)
+                        .test(IndustryTileCallbackMask::ShapeCheck)
+                } {
                     custom_shape = true;
                     self.shape_check(
                         tile,
@@ -389,6 +431,8 @@ impl Engine<'_> {
             }
         }
         *custom = custom_shape;
+        // Fully flat land is almost impossible in TerraGenesis. Check whether
+        // the platform can be levelled later (CheckIfCanLevelIndustryPlatform).
         if !refused
             || (unsafe { (self.x.terragenesis)() }
                 && unsafe { (self.c.generating)() }
@@ -403,7 +447,7 @@ impl Engine<'_> {
         let map = self.map();
         if tile.is_multiple_of(map.size_x)
             || tile / map.size_x == 0
-            || (self.s.shared().tile_type)(tile) == 7
+            || (self.s.shared().tile_type)(tile) == MP_VOID
         {
             return false;
         }
@@ -411,7 +455,8 @@ impl Engine<'_> {
             for x in 0..2 {
                 let walk = self.offset(tile, x - 1, y - 1);
                 let current = unsafe { (self.x.tile_height)(walk) };
-                if (self.s.shared().tile_type)(walk) != 0 && (self.s.shared().tile_type)(walk) != 4
+                if (self.s.shared().tile_type)(walk) != MP_CLEAR
+                    && (self.s.shared().tile_type)(walk) != MP_TREES
                 {
                     return false;
                 }
@@ -452,6 +497,7 @@ impl Engine<'_> {
         {
             return false;
         }
+        // Abort instead of clamping when the platform cannot expand within the map.
         let origin = self.offset(tile, -(platform as i32), -(platform as i32));
         let width = (max_x.wrapping_add(2).wrapping_add((2 * platform) as i32)) as u16;
         let height_area = (max_y.wrapping_add(2).wrapping_add((2 * platform) as i32)) as u16;
@@ -460,16 +506,20 @@ impl Engine<'_> {
         {
             return false;
         }
-        let company = self.swap_company(15);
+        // Terraform as OWNER_TOWN to disable autoslope and town ratings, regardless
+        // of whether the founder is a company or this is random/editor construction.
+        let company = self.swap_company(Owner::TOWN);
         for y in 0..u32::from(height_area) {
             for x in 0..u32::from(width) {
                 let walk = self.offset(origin, x as i32, y as i32);
                 let current = unsafe { (self.x.tile_height)(walk) };
                 if current != height {
                     if !self.surrounding(walk, height, 0) {
-                        unsafe { (self.x.set_company)(company) };
+                        unsafe { (self.x.set_company)(company.0) };
                         return false;
                     }
+                    // This test cannot account fully for height differences over one
+                    // without modifying the map.
                     unsafe {
                         crate::landscape_cmd::terraform_command(
                             &*self.context.command_checks,
@@ -477,22 +527,24 @@ impl Engine<'_> {
                             walk,
                             crate::slope_func::SLOPE_N,
                             current <= height,
-                            flags & !1,
+                            flags & !DoCommandFlag::EXECUTE,
                         )
                     };
                     if !self.succeeded() {
-                        unsafe { (self.x.set_company)(company) };
+                        unsafe { (self.x.set_company)(company.0) };
                         return false;
                     }
                 }
             }
         }
-        if flags & 1 != 0 {
+        if DoCommandFlags(flags).test(DoCommandFlag::Execute) {
             for y in 0..u32::from(height_area) {
                 for x in 0..u32::from(width) {
                     let walk = self.offset(origin, x as i32, y as i32);
                     let mut current = unsafe { (self.x.tile_height)(walk) };
                     while current != height {
+                        // Terraform for free: the test pass cannot calculate the
+                        // exact cost, and mismatched test/execute costs would assert.
                         unsafe {
                             crate::landscape_cmd::terraform_command(
                                 &*self.context.command_checks,
@@ -512,7 +564,7 @@ impl Engine<'_> {
                 }
             }
         }
-        unsafe { (self.x.set_company)(company) };
+        unsafe { (self.x.set_company)(company.0) };
         true
     }
     #[allow(clippy::too_many_arguments)]
@@ -602,7 +654,11 @@ impl Engine<'_> {
         if !free {
             return false;
         }
-        if unsafe { (*industrytype::industry(u16::from(kind))).callback_mask } & 8 != 0 {
+        if IndustryCallbackMasks(unsafe {
+            (*industrytype::industry(u16::from(kind))).callback_mask
+        })
+        .test(IndustryCallbackMask::Location)
+        {
             self.location_check(tile, kind, layout_index, random, bits, founder, creation);
         } else {
             self.builtin_location(tile, spec);
@@ -634,7 +690,7 @@ impl Engine<'_> {
         if !unsafe { (self.x.can_allocate)() } {
             return self.fail(self.e.too_many);
         }
-        if flags & 1 != 0 {
+        if DoCommandFlags(flags).test(DoCommandFlag::Execute) {
             let allocation = unsafe { (self.x.allocate)(tile) };
             unsafe { *industry = allocation.shell };
             if !custom {
@@ -697,7 +753,7 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
     }
     let result =
         unsafe { (e.x.resolve_location)(shell, call.tile, call.kind, call.random, call.creation) };
-    if result.callback == 0xffff {
+    if result.callback == CALLBACK_FAILED {
         e.success();
     } else {
         unsafe { (e.x.location_error)(e.out, &raw const result, call.spec) };
@@ -728,7 +784,7 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     }
     let parameter = (u32::from(call.creation) << 8) | call.layout_index as u32;
     let result = unsafe { (e.x.resolve_shape)(shell, call.current, call.gfx, parameter) };
-    if result.callback == 0xffff {
+    if result.callback == CALLBACK_FAILED {
         if !slope_refused(
             crate::map_func::World::new(e.s.shared()).tile_slope(call.current),
             unsafe { (*call.spec).slopes_refused },
@@ -748,24 +804,24 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     }
 }
 fn slope_refused(current: u8, refused: u8) -> bool {
-    if current & 16 != 0 {
+    if current & SLOPE_STEEP != 0 {
         return true;
     }
-    if current != 0 {
-        if refused & 16 != 0 {
+    if current != SLOPE_FLAT {
+        if refused & SLOPE_STEEP != 0 {
             return true;
         }
-        let complement = current ^ 15;
-        if refused & 1 != 0 && complement & 9 != 0 {
+        let complement = current ^ SLOPE_ELEVATED;
+        if refused & SLOPE_W != 0 && complement & SLOPE_NW != 0 {
             return true;
         }
-        if refused & 2 != 0 && complement & 0x0C != 0 {
+        if refused & SLOPE_S != 0 && complement & SLOPE_NE != 0 {
             return true;
         }
-        if refused & 4 != 0 && complement & 3 != 0 {
+        if refused & SLOPE_E != 0 && complement & SLOPE_SW != 0 {
             return true;
         }
-        if refused & 8 != 0 && complement & 6 != 0 {
+        if refused & SLOPE_N != 0 && complement & SLOPE_SE != 0 {
             return true;
         }
     }
@@ -805,34 +861,40 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     context: *const TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    if kind >= 240 {
-        e.fail(0xffff);
+    if kind >= NUM_INDUSTRYTYPES {
+        e.fail(INVALID_STRING_ID);
         return;
     }
+    // Check that this industry is available for the climate.
     let spec = industrytype::industry(u16::from(kind));
     if !unsafe { (*spec).enabled } || unsafe { (*spec).layouts.is_empty() } {
-        e.fail(0xffff);
+        e.fail(INVALID_STRING_ID);
         return;
     }
+    // Raw-material industry construction requires the corresponding setting.
     if !(e.g.environment.editor)()
-        && e.company() != 18
+        && e.company() != Owner::DEITY
         && unsafe { (e.x.raw_setting)() } == 0
         && unsafe { super::spec_raw((*spec).life_type) }
     {
-        e.fail(0xffff);
+        e.fail(INVALID_STRING_ID);
         return;
     }
     if !(e.g.environment.editor)()
         && unsafe {
             super::resolver::openttd_rust_industry_probability(
                 kind,
-                if e.company() == 18 { 1 } else { 2 },
+                if e.company() == Owner::DEITY {
+                    IndustryAvailabilityCallType::IACT_RANDOMCREATION.0
+                } else {
+                    IndustryAvailabilityCallType::IACT_USERCREATION.0
+                },
                 1,
                 e.s.resolver,
             )
         } == 0
     {
-        e.fail(0xffff);
+        e.fail(INVALID_STRING_ID);
         return;
     }
     // The local Randomizer is seeded twice with seed and Next is called once.
@@ -841,24 +903,34 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     let random = seed.rotate_right(3).wrapping_sub(1);
     let count = unsafe { (*spec).layouts.len() };
     e.fail(e.e.site);
-    let deity_prospect = e.company() == 18 && !fund;
+    let deity_prospect = e.company() == Owner::DEITY && !fund;
     let mut industry = ptr::null_mut();
     if deity_prospect
         || (!(e.g.environment.editor)()
-            && e.company() != 18
+            && e.company() != Owner::DEITY
             && unsafe { (e.x.raw_setting)() } == 2
             && unsafe { super::spec_raw((*spec).life_type) })
     {
-        if flags & 1 != 0 {
+        if DoCommandFlags(flags).test(DoCommandFlag::Execute) {
+            // A fuller map lowers the effective prospecting chance because a
+            // successful prospect still may find no buildable location.
             let succeeded =
                 deity_prospect || e.s.shared().random() <= unsafe { (*spec).prospecting_chance };
             if succeeded {
-                let creation = if e.company() == 18 { 1 } else { 3 };
-                let company = e.swap_company(15);
+                let creation = if e.company() == Owner::DEITY {
+                    IndustryAvailabilityCallType::IACT_RANDOMCREATION.0
+                } else {
+                    IndustryAvailabilityCallType::IACT_PROSPECTCREATION.0
+                };
+                // Build as OWNER_TOWN so the founder's owned land is not treated specially.
+                let company = e.swap_company(Owner::TOWN);
                 for _ in 0..5000 {
                     let map = e.map();
+                    // Keep random draws in separate statements: C++ parameter
+                    // evaluation order does not specify their order.
                     let candidate =
                         e.s.shared().random() & map.size_x.wrapping_mul(map.size_y).wrapping_sub(1);
+                    // Start with a random layout, then check each layout in turn.
                     let mut layout = e.s.shared().random_range(count as u32) as usize;
                     for _ in 0..count {
                         layout = layout.wrapping_add(1) % count;
@@ -870,7 +942,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
                             layout,
                             random,
                             bits,
-                            company,
+                            company.0,
                             creation,
                             &raw mut industry,
                         ) {
@@ -881,7 +953,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
                         break;
                     }
                 }
-                unsafe { (e.x.set_company)(company) };
+                unsafe { (e.x.set_company)(company.0) };
             }
             if !e.succeeded() && unsafe { (e.x.local_company)() } {
                 if succeeded {
@@ -892,9 +964,10 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
             }
         }
     } else {
+        // Check layouts successively, starting with the given layout.
         let mut layout = first_layout as usize;
         if layout >= count {
-            e.fail(0xffff);
+            e.fail(INVALID_STRING_ID);
             return;
         }
         for _ in 0..count {
@@ -907,8 +980,12 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
                 layout,
                 random,
                 bits,
-                e.company(),
-                if e.company() == 18 { 1 } else { 2 },
+                e.company().0,
+                if e.company() == Owner::DEITY {
+                    IndustryAvailabilityCallType::IACT_RANDOMCREATION.0
+                } else {
+                    IndustryAvailabilityCallType::IACT_USERCREATION.0
+                },
                 &raw mut industry,
             ) {
                 break;
@@ -918,7 +995,10 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
             return;
         }
     }
-    if flags & 1 != 0 && !industry.is_null() && !(e.g.environment.editor)() {
+    if DoCommandFlags(flags).test(DoCommandFlag::Execute)
+        && !industry.is_null()
+        && !(e.g.environment.editor)()
+    {
         super::advertise(industry.cast(), e.s);
     }
     let construction = unsafe {
@@ -928,7 +1008,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
             (e.x.raw_setting)(),
         )
     };
-    unsafe { (e.cost.expense_money)(out, 12, construction) };
+    unsafe { (e.cost.expense_money)(out, crate::economy_type::EXPENSES_OTHER, construction) };
 }
 /// # Safety
 /// Live stack result/output; source preconditions require a nonempty layout list.

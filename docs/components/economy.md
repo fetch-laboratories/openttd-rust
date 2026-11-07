@@ -115,3 +115,11 @@
 - C++ keeps: company shells and pool operations, current/local context and settings storage, key Add/Remove containers, encoded owner formatting, presentation and nested service commands.
 - Limits: Actual network packets, client/admin delivery, GUI rendering and terminating assertion paths remain outside the bounded native/reload evidence (#156). Interactive RNG is carried explicitly across reload because the save omits it.
 - PRs: #611.
+
+## Original station, road-stop and monitor vocabulary (#734)
+
+- Station and road-stop bodies use the original status, goods-state, rectangle, naming, graphics and specification elements and sets. `cargopacket::MoveToAction` supplies the original movement actions; `CargoPacket::MAX_COUNT` belongs to the existing packet record, with scalar adapters retained.
+- Cargo monitor keys and private accounting/encode/decode helpers use `CargoMonitorID`. Unsigned key ordering, overflow-safe amount updates, save iteration and callback observations remain unchanged; exported monitor keys and services stay scalar.
+- Native shells, pools, specs, attachments, vector owners and save facades remain with their existing owners. No C++ ownership, ABI or argument-struct change is included.
+- Checks: original operations/order source reviews and combined exact-head Full. Existing monitor, station and arbitrary-NewGRF coverage limits remain on #156. C++ and boundary counts hold.
+- PRs: #756 and #757, integrated in #758. The other five Cargo cleanup files remain pending.

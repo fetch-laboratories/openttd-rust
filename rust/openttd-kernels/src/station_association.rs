@@ -8,9 +8,11 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation
 )]
+use crate::cargo_type::CargoTypes;
 use crate::newgrf_class::Identity;
 use crate::station_cmd::{RailSpec, SpecIndex};
 use crate::station_type::BaseStation;
+use crate::station_type::StationAnimationTriggers;
 use crate::tile_type::TileIndex;
 use std::ptr;
 const NUM_STATIONSSPECS_PER_STATION: usize = 255;
@@ -50,6 +52,7 @@ pub(crate) fn allocate(
             valid: true,
         };
     }
+    // If the station does not exist yet, its first custom slot is available.
     if st.is_null() {
         return SpecIndex {
             value: 1,
@@ -67,6 +70,8 @@ pub(crate) fn allocate(
         i += 1;
     }
     if i == NUM_STATIONSSPECS_PER_STATION {
+        // As a final effort with a full list, reuse the same spec. This can make
+        // slightly wrong-looking stations, but reaching the limit is unlikely.
         for i in 1..count.min(NUM_STATIONSSPECS_PER_STATION) {
             if unsafe { (s.spec)(st, i) } == spec {
                 return SpecIndex {
@@ -87,19 +92,20 @@ pub(crate) fn allocate(
 }
 pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     let s = unsafe { &*native };
-    let mut anim = 0;
-    let mut cargo = 0;
+    let mut anim = StationAnimationTriggers::EMPTY;
+    let mut cargo = CargoTypes(0);
+    // Combine animation and cargo triggers for all station specs.
     for i in 0..unsafe { (s.count)(st) } {
         let spec = unsafe { (s.spec)(st, i) };
         if spec.is_null() {
             continue;
         }
         let triggers = unsafe { (s.triggers)(spec) };
-        anim |= triggers.animation;
-        cargo |= triggers.cargo;
+        anim |= StationAnimationTriggers(triggers.animation);
+        cargo.0 |= triggers.cargo;
     }
     unsafe {
-        (s.set_cached)(st, anim, cargo);
+        (s.set_cached)(st, anim.0, cargo.0);
     }
 }
 pub(crate) fn assign(
@@ -124,6 +130,7 @@ pub(crate) fn assign(
     cache(native, st);
 }
 pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u8) {
+    // Spec index zero is the default and can never be freed.
     if index == 0 {
         return;
     }
@@ -138,6 +145,7 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     let shared = unsafe { &*s.shared };
     let command = unsafe { &*(shared.station_commands)() };
     let map = shared.map();
+    // Check all station tiles for another use of this spec index.
     for y in 0..area.h {
         for x in 0..area.w {
             let tile = TileIndex(area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y))));
@@ -148,10 +156,12 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
             }
         }
     }
+    // This spec index is no longer in use; clear its slot.
     unsafe {
         (s.set_slot)(st, index, ptr::null(), 0, 0);
     }
     let count = unsafe { (s.count)(st) };
+    // If this was the highest index, shrink to the last remaining spec.
     if usize::from(index) == count - 1 {
         let mut num = count - 1;
         while num > 0 {

@@ -5,7 +5,9 @@
 use crate::debug::grf_msg;
 use crate::industrytype::{self, EMPTY_INDUSTRY, EMPTY_TILE, IndustrySpec, IndustryTileSpec};
 pub(crate) mod properties;
-use crate::industry_type::{INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS};
+use crate::industry_type::{
+    INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryType,
+};
 use crate::newgrf::CargoLabel;
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
@@ -87,20 +89,23 @@ pub unsafe fn publish(manager: *mut override_manager::Manager, spec: *mut Indust
     let props = unsafe { (*spec).grf_prop };
     let invalid = unsafe { (*manager).invalid };
     // The original narrows GetID and AddEntityID to IndustryType before testing it.
-    let mut id =
-        unsafe { override_manager::industry_id_for(manager, props.local_id, props.grfid) } as u8;
-    if u16::from(id) == invalid {
-        id = unsafe { allocate(manager, props.local_id, props.grfid, props.subst_id) } as u8;
+    let mut id = IndustryType(unsafe {
+        override_manager::industry_id_for(manager, props.local_id, props.grfid)
+    } as u8);
+    if u16::from(id.0) == invalid {
+        id = IndustryType(
+            unsafe { allocate(manager, props.local_id, props.grfid, props.subst_id) } as u8,
+        );
         unsafe { (*spec).grf_prop.override_id = invalid };
     }
-    if u16::from(id) == invalid {
+    if u16::from(id.0) == invalid {
         grf_msg!(
             1,
             "Industry.SetEntitySpec: Too many industries allocated. Ignoring."
         );
         return;
     }
-    let target = industrytype::industry(u16::from(id));
+    let target = industrytype::industry(u16::from(id.0));
     unsafe {
         *target = std::mem::replace(&mut *spec, EMPTY_INDUSTRY);
         (*target).enabled = true;

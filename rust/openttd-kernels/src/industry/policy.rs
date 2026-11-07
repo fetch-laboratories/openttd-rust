@@ -3,6 +3,7 @@
 //! retain formatting and publication. Shells, orders and specs remain live under the
 //! game-state mutex; every owner borrow ends before a resolver or presentation call.
 use super::{Builder, Industry, Pair, Services, produced, produced_count};
+use crate::cargo_type::CargoType;
 use crate::industry_type::{CUT_TREES, LIFE_EXTRACTIVE, LIFE_ORGANIC, LIFE_PROCESSING};
 use crate::order_type::{OT_GOTO_STATION, OUFB_TRANSFER, OUFB_UNLOAD};
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
@@ -17,22 +18,22 @@ pub enum Servicing {
     Company,
 }
 fn cargo_service(
-    cargo: u8,
+    cargo: CargoType,
     shell: *mut c_void,
     owner: *mut Industry,
     s: &Services,
     accepts: &mut bool,
     produces: &mut bool,
 ) {
-    if !super::valid(cargo) {
+    if !super::valid(cargo.0) {
         return;
     }
-    if unsafe { super::get_cargo_accepted(owner, cargo).is_some() }
-        && !unsafe { super::resolver::refuses(shell, owner, cargo, &*s.resolver) }
+    if unsafe { super::get_cargo_accepted(owner, cargo.0).is_some() }
+        && !unsafe { super::resolver::refuses(shell, owner, cargo.0, &*s.resolver) }
     {
         *accepts = true;
     }
-    if unsafe { super::get_cargo_produced(owner, cargo).is_some() } {
+    if unsafe { super::get_cargo_produced(owner, cargo.0).is_some() } {
         *produces = true;
     }
 }
@@ -61,7 +62,7 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
                 let mut part = Some(v);
                 while let Some(u) = part {
                     cargo_service(
-                        unsafe { (grf.cargo_type)(u.0.as_ptr()) },
+                        CargoType(unsafe { (grf.cargo_type)(u.0.as_ptr()) }),
                         shell,
                         owner,
                         s,
@@ -72,7 +73,7 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
                 }
             }
             VEH_ROAD | VEH_SHIP | VEH_AIRCRAFT => cargo_service(
-                unsafe { (grf.cargo_type)(v.0.as_ptr()) },
+                CargoType(unsafe { (grf.cargo_type)(v.0.as_ptr()) }),
                 shell,
                 owner,
                 s,

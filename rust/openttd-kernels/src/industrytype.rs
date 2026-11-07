@@ -15,9 +15,9 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 
 /// `NUM_LANDSCAPE`.
-pub const NUM_LANDSCAPE: usize = 4;
+pub const NUM_LANDSCAPE: usize = crate::landscape_type::NUM_LANDSCAPE as usize;
 /// `AnimationStatus::NoAnimation`.
-const NO_ANIMATION: u8 = 0xff;
+const NO_ANIMATION: u8 = crate::newgrf_animation_type::AnimationStatus::NoAnimation.0;
 
 /// A Rust-owned vector that native readers view in place as `RustVector<T>`. Native
 /// tables also build borrowed views with zero capacity, which Rust only clones.
@@ -419,7 +419,8 @@ pub(crate) unsafe fn reset(
         };
     }
     for spec in &mut specs[..usize::from(NEW_INDUSTRYOFFSET)] {
-        spec.enabled = spec.climate_availability & (1 << climate) != 0;
+        spec.enabled = crate::landscape_type::LandscapeTypes(spec.climate_availability)
+            .test(crate::landscape_type::LandscapeType(climate));
     }
     let tiles = unsafe { &mut *TILES.get() };
     for (gfx, spec) in tiles.iter_mut().enumerate() {
@@ -558,3 +559,211 @@ mod tests {
         );
     }
 }
+
+/// Native `industrytype.h::IndustryLifeType`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryLifeType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryLifeType {
+    /// Like mines
+    pub const Extractive: Self = Self(0);
+    /// Like forests
+    pub const Organic: Self = Self(1);
+    /// Like factories
+    pub const Processing: Self = Self(2);
+}
+
+/// Native `IndustryLifeTypes`; elements are `IndustryLifeType` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryLifeTypes(pub u8);
+impl IndustryLifeTypes {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native bit set containing one element.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: IndustryLifeType) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryLifeType) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Native `industrytype.h::CheckProc`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CheckProc(pub u8);
+impl CheckProc {
+    /// Always succeeds.
+    pub const CHECK_NOTHING: Self = Self(0);
+    /// %Industry should be build above snow-line in arctic climate.
+    pub const CHECK_FOREST: Self = Self(1);
+    /// %Industry should be positioned near edge of the map.
+    pub const CHECK_REFINERY: Self = Self(2);
+    /// %Industry should be below snow-line in arctic.
+    pub const CHECK_FARM: Self = Self(3);
+    /// %Industry should NOT be in the desert.
+    pub const CHECK_PLANTATION: Self = Self(4);
+    /// %Industry should be in the desert.
+    pub const CHECK_WATER: Self = Self(5);
+    /// %Industry should be in the rainforest.
+    pub const CHECK_LUMBERMILL: Self = Self(6);
+    /// %Industry should be in low land.
+    pub const CHECK_BUBBLEGEN: Self = Self(7);
+    /// Industries at sea should be positioned near edge of the map.
+    pub const CHECK_OIL_RIG: Self = Self(8);
+    /// End marker of the industry check procedures.
+    pub const CHECK_END: Self = Self(9);
+}
+
+/// Native `industrytype.h::IndustryConstructionType`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryConstructionType(pub u8);
+impl IndustryConstructionType {
+    /// in previous game version or without newindustries activated
+    pub const ICT_UNKNOWN: Self = Self(0);
+    /// either by user or random creation process
+    pub const ICT_NORMAL_GAMEPLAY: Self = Self(1);
+    /// during random map creation
+    pub const ICT_MAP_GENERATION: Self = Self(2);
+    /// while editing a scenario
+    pub const ICT_SCENARIO_EDITOR: Self = Self(3);
+}
+
+/// Native `industrytype.h::IndustryBehaviour`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryBehaviour(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryBehaviour {
+    /// periodically plants fields around itself (temp and arctic farms)
+    pub const PlantFields: Self = Self(0);
+    /// cuts trees and produce first output cargo from them (lumber mill)
+    pub const CutTrees: Self = Self(1);
+    /// is built on water (oil rig)
+    pub const BuiltOnWater: Self = Self(2);
+    /// can only be built in towns larger than 1200 inhabitants (temperate bank)
+    pub const Town1200More: Self = Self(3);
+    /// can only be built in towns (arctic/tropic banks, water tower)
+    pub const OnlyInTown: Self = Self(4);
+    /// is always built near towns (toy shop)
+    pub const OnlyNearTown: Self = Self(5);
+    /// Fields are planted around when built (all farms)
+    pub const PlantOnBuild: Self = Self(6);
+    /// do not increase production (oil wells) in the temperate climate
+    pub const DontIncrProd: Self = Self(7);
+    /// can only be built before 1950 (oil wells)
+    pub const Before1950: Self = Self(8);
+    /// can only be built after 1960 (oil rigs)
+    pub const After1960: Self = Self(9);
+    /// ai will attempt to establish air/ship routes to this industry (oil rig)
+    pub const AIAirShipRoutes: Self = Self(10);
+    /// can be exploded by a military airplane (oil refinery)
+    pub const AirplaneAttacks: Self = Self(11);
+    /// can be exploded by a military helicopter (factory)
+    pub const ChopperAttacks: Self = Self(12);
+    /// can cause a subsidence (coal mine, shaft that collapses)
+    pub const CanSubsidence: Self = Self(13);
+    /// The following behaviours are only for newindustries, not normal TTD behaviour.
+    /// Automatic production multiplier handling
+    pub const ProdMultiHandling: Self = Self(14);
+    /// Production callback needs random bits in var 10
+    pub const ProdCallbackRandom: Self = Self(15);
+    /// Do not force one instance of this type to appear on map generation
+    pub const NoBuildMapCreation: Self = Self(16);
+    /// Allow closing down the last instance of this type
+    pub const CanCloseLastInstance: Self = Self(17);
+    /// Allow produced/accepted cargoes callbacks to supply more than 2 and 3 types
+    pub const CargoTypesUnlimited: Self = Self(18);
+    /// Do not clamp production of passengers. (smooth economy only)
+    pub const NoPaxProdClamp: Self = Self(19);
+}
+
+/// Native `IndustryBehaviours`; elements are `IndustryBehaviour` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryBehaviours(pub u32);
+impl IndustryBehaviours {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native bit set containing one element.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: IndustryBehaviour) -> Self {
+        Self((1_u64 << element.0) as u32)
+    }
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryBehaviour) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Native `industrytype.h::IndustryTileSpecialFlag`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryTileSpecialFlag(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl IndustryTileSpecialFlag {
+    /// Callback 0x26 needs random bits
+    pub const NextFrameRandomBits: Self = Self(0);
+    /// Tile always accepts all cargoes the associated industry accepts
+    pub const AcceptsAllCargo: Self = Self(1);
+}
+
+/// Native `IndustryTileSpecialFlags`; elements are `IndustryTileSpecialFlag` bit positions.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryTileSpecialFlags(pub u8);
+impl IndustryTileSpecialFlags {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, element: IndustryTileSpecialFlag) -> bool {
+        (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+}
+
+/// Industries like power plants and banks.
+pub const INDUSTRYLIFE_BLACK_HOLE: IndustryLifeTypes = IndustryLifeTypes::EMPTY;
+
+/// Raw compatibility mask for `IndustryBehaviour::BuiltOnWater`.
+pub const BUILT_ON_WATER: u32 = IndustryBehaviours::from_element(IndustryBehaviour::BuiltOnWater).0;
+
+/// Raw compatibility mask for `IndustryBehaviour::ProdMultiHandling`.
+pub const PROD_MULTI_HANDLING: u32 =
+    IndustryBehaviours::from_element(IndustryBehaviour::ProdMultiHandling).0;
+
+/// Raw compatibility mask for `IndustryBehaviour::AirplaneAttacks`.
+pub const AIRPLANE_ATTACKS: u32 =
+    IndustryBehaviours::from_element(IndustryBehaviour::AirplaneAttacks).0;
+
+/// Raw compatibility mask for `IndustryBehaviour::ChopperAttacks`.
+pub const CHOPPER_ATTACKS: u32 =
+    IndustryBehaviours::from_element(IndustryBehaviour::ChopperAttacks).0;
+
+/// Raw compatibility mask for `IndustryBehaviour::CanSubsidence`.
+pub const CAN_SUBSIDENCE: u32 =
+    IndustryBehaviours::from_element(IndustryBehaviour::CanSubsidence).0;
+
+/// Raw compatibility mask for `IndustryBehaviour::CutTrees`.
+pub const CUT_TREES: u32 = IndustryBehaviours::from_element(IndustryBehaviour::CutTrees).0;
+
+/// Raw compatibility mask for `IndustryLifeType::Extractive`.
+pub const LIFE_EXTRACTIVE: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Extractive).0;
+
+/// Raw compatibility mask for `IndustryLifeType::Organic`.
+pub const LIFE_ORGANIC: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Organic).0;
+
+/// Raw compatibility mask for `IndustryLifeType::Processing`.
+pub const LIFE_PROCESSING: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Processing).0;

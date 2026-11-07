@@ -9,6 +9,8 @@ use crate::map_func::TileTypeAccess;
 use crate::road_map::{ROADSIDE_BARREN, ROADSIDE_GRASS, ROADSIDE_PAVED};
 use crate::services::{Map, Services as Shared};
 use crate::station::BaseStation;
+use crate::station_cmd::StationNaming;
+use crate::station_type::StationFacility;
 use crate::station_type::{
     AAT_TILE_LOOP, BUOY, FACILITY_AIRPORT, INVALID_STATION, RAIL_WAYPOINT, ROAD_WAYPOINT,
     SAT_TILE_LOOP, STATION_AIRPORT, STATION_BUS, STATION_DOCK, STATION_OILRIG, STATION_RAIL,
@@ -149,7 +151,12 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
     result
 }
 /// Complete `GenerateStationName`, including industry aliases and fallback exhaustion.
-pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Services) -> u32 {
+pub(crate) fn generate_name(
+    st: *mut BaseStation,
+    tile: u32,
+    class: StationNaming,
+    s: &Services,
+) -> u32 {
     let m = s.map_access();
     let map = s.shared.map();
     let size_y = (s.shared.map_max_y)() + 1;
@@ -175,6 +182,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             info.industries[usize::from(kind)] = true;
             let name = unsafe { (*Services::spec(kind)).station_name };
             if name != n.undefined {
+                // Filter other industry types sharing this station name.
                 for it in 0..NUM_INDUSTRYTYPES {
                     let spec = Services::spec(it);
                     if unsafe { (*spec).enabled && (*spec).station_name == name } {
@@ -205,9 +213,12 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             s.check(),
         );
         let spec = Services::spec(kind);
+        // Undefined means this industry does not name stations.
         if unsafe { (*spec).station_name } == n.undefined {
             continue;
         }
+        // Any industry supplying a name disables the standard oilfield/mines
+        // suffixes. A null name does only that.
         info.set_used(n.oilfield, s);
         info.set_used(n.mines, s);
         if info.industries[usize::from(kind)] {
@@ -219,11 +230,12 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         }
         break;
     }
+    // Nearby industries may already have reserved oilfield/mines names.
     let special = match class {
-        2 => Some(n.airport),
-        3 => Some(n.oilfield),
-        4 => Some(n.docks),
-        5 => Some(n.heliport),
+        StationNaming::STATIONNAMING_AIRPORT => Some(n.airport),
+        StationNaming::STATIONNAMING_OILRIG => Some(n.oilfield),
+        StationNaming::STATIONNAMING_DOCK => Some(n.docks),
+        StationNaming::STATIONNAMING_HELIPORT => Some(n.heliport),
         _ => None,
     };
     if let Some(name) = special
@@ -298,7 +310,12 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     n.fallback
 }
 /// `Station::AddFacility`; callers pass the original enum position.
-pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Services) {
+pub(crate) fn add_facility(
+    st: *mut BaseStation,
+    facility: StationFacility,
+    tile: u32,
+    s: &Services,
+) {
     let c = s.commands();
     let world = unsafe { &*c.station };
     if (world.facilities)(st) == 0 {
@@ -307,7 +324,7 @@ pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Se
             ((*s.roadstop).set_random_bits)(st, (s.shared.random)(std::ptr::null_mut()) as u16);
         }
     }
-    (c.set_facility_bits)(st, 1 << facility);
+    (c.set_facility_bits)(st, 1 << facility.0);
     (c.set_station_owner)(st, (s.shared.current_company)());
     (c.set_build_date)(st, crate::timer_game_common::calendar_date().0);
     (c.orders_dirty)();
