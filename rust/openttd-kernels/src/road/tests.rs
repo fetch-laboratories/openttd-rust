@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Replaces the native movement-table comparison. The oracle is transcribed from
-//! OpenTTD 15.3 (14ec60f248547d4d062a1160f0fc26d742319888), table/roadveh_movement.h.
+//! `OpenTTD` 15.3 (14ec60f248547d4d062a1160f0fc26d742319888), `table/roadveh_movement.h`.
 //! Each line is tram, state, then every original (x, y) byte pair in frame order.
 //! It covers the tram/articulated table gap without claiming controller coverage.
 
