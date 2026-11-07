@@ -172,7 +172,7 @@ impl SoundFx {
     /// Native `SND_END`.
     pub const SND_END: Self = Self(73);
 }
-/// Native `SoundID`, including all NewGRF indices and the invalid sentinel.
+/// Native `SoundID`, including all `NewGRF` indices and the invalid sentinel.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SoundID(pub u16);
