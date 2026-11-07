@@ -18,7 +18,6 @@ pub const TRANSPORT_WATER: u8 = TransportType::TRANSPORT_WATER.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TransportType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TransportType {
     /// Begin of the iterator.
     pub const TRANSPORT_BEGIN: Self = Self(0);

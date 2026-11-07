@@ -108,7 +108,6 @@ impl RailVehicleTypes {
     pub const WAGON: Self = Self::RAILVEH_WAGON;
 }
 
-#[allow(non_upper_case_globals)]
 impl RailVehicleTypes {
     /// indicates a "standalone" locomotive
     pub const RAILVEH_SINGLEHEAD: Self = Self(0);
@@ -123,7 +122,6 @@ impl RailVehicleTypes {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EngineClass(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl EngineClass {
     /// Steam rail engine.
     pub const EC_STEAM: Self = Self(0);

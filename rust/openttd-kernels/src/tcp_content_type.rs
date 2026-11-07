@@ -119,13 +119,12 @@ mod tests {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ContentType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl ContentType {
     /// Helper to mark the begin of the types
     pub const CONTENT_TYPE_BEGIN: Self = Self(1);
     /// The content consists of base graphics
     pub const CONTENT_TYPE_BASE_GRAPHICS: Self = Self(1);
-    /// The content consists of a NewGRF
+    /// The content consists of a `NewGRF`
     pub const CONTENT_TYPE_NEWGRF: Self = Self(2);
     /// The content consists of an AI
     pub const CONTENT_TYPE_AI: Self = Self(3);
@@ -154,7 +153,6 @@ impl ContentType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketContentType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl PacketContentType {
     /// Queries the content server for a list of info of a given content type
     pub const PACKET_CONTENT_CLIENT_INFO_LIST: Self = Self(0);

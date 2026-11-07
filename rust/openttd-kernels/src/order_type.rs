@@ -59,7 +59,6 @@ pub const ONSF_NO_INTERMEDIATE: u8 =
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OrderType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl OrderType {
     /// Native `OT_BEGIN`.
     pub const OT_BEGIN: Self = Self(0);

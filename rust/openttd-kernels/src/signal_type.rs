@@ -32,7 +32,6 @@ pub struct SignalType(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SignalState(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl SignalVariant {
     /// Light signal
     pub const SIG_ELECTRIC: Self = Self(0);
@@ -40,7 +39,6 @@ impl SignalVariant {
     pub const SIG_SEMAPHORE: Self = Self(1);
 }
 
-#[allow(non_upper_case_globals)]
 impl SignalType {
     /// block signal
     pub const SIGTYPE_BLOCK: Self = Self(0);
@@ -62,7 +60,6 @@ impl SignalType {
     pub const SIGTYPE_LAST_NOPBS: Self = Self(3);
 }
 
-#[allow(non_upper_case_globals)]
 impl SignalState {
     /// The signal is red
     pub const SIGNAL_STATE_RED: Self = Self(0);

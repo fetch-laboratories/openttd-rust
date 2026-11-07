@@ -99,7 +99,6 @@ pub struct DiagDirection(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Direction(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl Direction {
     /// Used to iterate
     pub const DIR_BEGIN: Self = Self(0);
@@ -130,7 +129,6 @@ impl Direction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DirDiff(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl DirDiff {
     /// Both directions faces to the same direction
     pub const DIRDIFF_SAME: Self = Self(0);
@@ -146,7 +144,6 @@ impl DirDiff {
     pub const DIRDIFF_45LEFT: Self = Self(7);
 }
 
-#[allow(non_upper_case_globals)]
 impl DiagDirection {
     /// Used for iterations
     pub const DIAGDIR_BEGIN: Self = Self(0);
@@ -160,7 +157,7 @@ impl DiagDirection {
     pub const DIAGDIR_NW: Self = Self(3);
     /// Used for iterations
     pub const DIAGDIR_END: Self = Self(4);
-    /// Flag for an invalid DiagDirection
+    /// Flag for an invalid `DiagDirection`
     pub const INVALID_DIAGDIR: Self = Self(255);
 }
 
@@ -169,7 +166,6 @@ impl DiagDirection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DiagDirDiff(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl DiagDirDiff {
     /// Used for iterations
     pub const DIAGDIRDIFF_BEGIN: Self = Self(0);
@@ -185,7 +181,6 @@ impl DiagDirDiff {
     pub const DIAGDIRDIFF_END: Self = Self(4);
 }
 
-#[allow(non_upper_case_globals)]
 impl Axis {
     /// The X axis
     pub const AXIS_X: Self = Self(0);

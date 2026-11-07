@@ -19,7 +19,7 @@ impl CargoPacketID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(16773120);
+    pub const END: Self = Self(16_773_120);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(16777215);
+    pub const INVALID: Self = Self(16_777_215);
 }

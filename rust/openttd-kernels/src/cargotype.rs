@@ -33,6 +33,7 @@ pub const NUM_TPE: u8 = TownProductionEffect::NUM_TPE.0;
 pub const INVALID_TPE: u8 = TownProductionEffect::INVALID_TPE.0;
 
 /// Original `CargoSpec::IsValid`.
+#[must_use]
 pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
     bitnum != INVALID_CARGO_BITNUM
 }
@@ -50,6 +51,7 @@ pub(crate) fn iterate<T>(
 /// `CargoClass::Passengers`.
 pub const PASSENGERS: u16 = CargoClasses::from_element(CargoClass::Passengers).0;
 /// `IsCargoInClass` with classes read from the canonical native cargo spec.
+#[must_use]
 pub const fn is_cargo_in_class(classes: u16, requested: u16) -> bool {
     classes & requested != 0
 }
@@ -59,7 +61,6 @@ pub const fn is_cargo_in_class(classes: u16, requested: u16) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TownAcceptanceEffect(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TownAcceptanceEffect {
     /// Native `TAE_BEGIN`.
     pub const TAE_BEGIN: Self = Self(0);
@@ -86,7 +87,6 @@ impl TownAcceptanceEffect {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TownProductionEffect(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TownProductionEffect {
     /// Town will not produce this cargo type.
     pub const TPE_NONE: Self = Self(0);

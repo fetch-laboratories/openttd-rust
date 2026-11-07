@@ -125,7 +125,6 @@ pub struct ExpensesType(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Price(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl Price {
     /// Native `PR_BEGIN`.
     pub const PR_BEGIN: Self = Self(0);
@@ -277,7 +276,6 @@ impl Price {
     pub const INVALID_PRICE: Self = Self(255);
 }
 
-#[allow(non_upper_case_globals)]
 impl ExpensesType {
     /// Construction costs.
     pub const EXPENSES_CONSTRUCTION: Self = Self(0);
@@ -320,9 +318,9 @@ impl CargoPaymentID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(1044480);
+    pub const END: Self = Self(1_044_480);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(1048575);
+    pub const INVALID: Self = Self(1_048_575);
 }
 
 impl Price {

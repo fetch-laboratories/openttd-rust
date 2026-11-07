@@ -121,7 +121,6 @@ impl AdminID {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetworkVehicleType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl NetworkVehicleType {
     /// Native `NETWORK_VEH_TRAIN`.
     pub const NETWORK_VEH_TRAIN: Self = Self(0);
@@ -142,7 +141,6 @@ impl NetworkVehicleType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ServerGameType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl ServerGameType {
     /// Native `SERVER_GAME_TYPE_LOCAL`.
     pub const SERVER_GAME_TYPE_LOCAL: Self = Self(0);
@@ -157,7 +155,6 @@ impl ServerGameType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClientID(pub u32);
 
-#[allow(non_upper_case_globals)]
 impl ClientID {
     /// Client is not part of anything
     pub const INVALID_CLIENT_ID: Self = Self(0);
@@ -172,7 +169,6 @@ impl ClientID {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DestType(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl DestType {
     /// Send message/notice to all clients (All)
     pub const DESTTYPE_BROADCAST: Self = Self(0);
@@ -187,7 +183,6 @@ impl DestType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetworkAction(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl NetworkAction {
     /// Native `NETWORK_ACTION_JOIN`.
     pub const NETWORK_ACTION_JOIN: Self = Self(0);
@@ -222,7 +217,6 @@ impl NetworkAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetworkErrorCode(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl NetworkErrorCode {
     /// Try to use this one like never
     pub const NETWORK_ERROR_GENERAL: Self = Self(0);
@@ -246,7 +240,7 @@ impl NetworkErrorCode {
     pub const NETWORK_ERROR_NAME_IN_USE: Self = Self(9);
     /// Native `NETWORK_ERROR_WRONG_PASSWORD`.
     pub const NETWORK_ERROR_WRONG_PASSWORD: Self = Self(10);
-    /// Happens in CLIENT_COMMAND
+    /// Happens in `CLIENT_COMMAND`
     pub const NETWORK_ERROR_COMPANY_MISMATCH: Self = Self(11);
     /// Native `NETWORK_ERROR_KICKED`.
     pub const NETWORK_ERROR_KICKED: Self = Self(12);

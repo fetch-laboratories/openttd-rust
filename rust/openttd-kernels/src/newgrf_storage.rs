@@ -422,7 +422,7 @@ impl PersistentStorageID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(1044480);
+    pub const END: Self = Self(1_044_480);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(1048575);
+    pub const INVALID: Self = Self(1_048_575);
 }

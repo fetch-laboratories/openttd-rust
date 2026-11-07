@@ -44,7 +44,6 @@ pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: u32) -> Option<u8> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TreeGround(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl TreeGround {
     /// normal grass
     pub const TREE_GROUND_GRASS: Self = Self(0);

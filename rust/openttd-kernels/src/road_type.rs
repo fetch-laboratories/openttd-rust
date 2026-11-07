@@ -77,7 +77,6 @@ pub struct RoadType(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadBits(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl RoadType {
     /// Used for iterations
     pub const ROADTYPE_BEGIN: Self = Self(0);
@@ -91,7 +90,6 @@ impl RoadType {
     pub const INVALID_ROADTYPE: Self = Self(63);
 }
 
-#[allow(non_upper_case_globals)]
 impl RoadTramType {
     /// Road road type.
     pub const RTT_ROAD: Self = Self(false);
@@ -104,7 +102,6 @@ impl RoadTramType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadTramTypes(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl RoadTramTypes {
     /// Road road type bit.
     pub const RTTB_ROAD: Self = Self(1);
@@ -112,7 +109,6 @@ impl RoadTramTypes {
     pub const RTTB_TRAM: Self = Self(2);
 }
 
-#[allow(non_upper_case_globals)]
 impl RoadBits {
     /// No road-part is build
     pub const ROAD_NONE: Self = Self(0);
@@ -147,7 +143,6 @@ impl RoadBits {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DisallowedRoadDirections(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl DisallowedRoadDirections {
     /// None of the directions are disallowed
     pub const DRD_NONE: Self = Self(0);
@@ -171,7 +166,6 @@ impl RoadTypes {
     pub const EMPTY: Self = Self(0);
     /// Set containing the named element (the element is a bit position).
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     pub const fn from_element(element: RoadType) -> Self {
         Self(1_u64 << element.0)
     }
@@ -181,7 +175,7 @@ impl RoadTypes {
     /// Native `BaseBitSet::Test`, with an element rather than a set mask.
     #[must_use]
     pub const fn test(self, element: RoadType) -> bool {
-        (self.0 as u64) & (1_u64 << element.0) != 0
+        self.0 & (1_u64 << element.0) != 0
     }
     /// Native bit-set union.
     #[must_use]

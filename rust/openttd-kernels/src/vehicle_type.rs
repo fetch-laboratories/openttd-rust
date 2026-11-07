@@ -58,7 +58,6 @@ impl VehicleID {
     pub const INVALID: Self = Self(0xFFFFF);
 }
 
-#[allow(non_upper_case_globals)]
 impl VehicleType {
     /// Native `VEH_BEGIN`.
     pub const VEH_BEGIN: Self = Self(0);
@@ -152,7 +151,7 @@ impl VehicleID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(1044480);
+    pub const END: Self = Self(1_044_480);
 }
 
 impl DepotCommandFlags {

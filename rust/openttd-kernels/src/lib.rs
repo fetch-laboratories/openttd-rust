@@ -46,7 +46,12 @@ mod disaster;
 mod disaster_vehicle;
 mod economy_func;
 pub mod economy_type;
-pub mod engine_type;
+mod engine_type;
+/// Native engine scalar domains; native record fields remain internal.
+pub use engine_type::{
+    EngineClass, EngineFlag, EngineFlags, EngineID, EngineMiscFlag, EngineMiscFlags,
+    ExtraEngineFlag, ExtraEngineFlags, RailVehicleTypes, VehicleAccelerationModel,
+};
 mod follow_track;
 mod game_state;
 mod genland;
@@ -183,7 +188,11 @@ mod tunnelbridge_map;
 mod vehicle;
 mod vehicle_base;
 mod vehicle_transactions;
-pub mod vehicle_type;
+mod vehicle_type;
+/// Native vehicle type and flag domains; native record fields remain internal.
+pub use vehicle_type::{
+    DepotCommandFlag, DepotCommandFlags, VehicleRandomTrigger, VehicleRandomTriggers, VehicleType,
+};
 mod vehiclelist;
 mod viewport_func;
 mod water;

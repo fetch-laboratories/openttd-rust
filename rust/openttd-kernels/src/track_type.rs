@@ -121,7 +121,6 @@ pub struct Track(pub u8);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TrackBits(pub u8);
 
-#[allow(non_upper_case_globals)]
 impl Track {
     /// Used for iterations
     pub const TRACK_BEGIN: Self = Self(0);
@@ -143,7 +142,6 @@ impl Track {
     pub const INVALID_TRACK: Self = Self(255);
 }
 
-#[allow(non_upper_case_globals)]
 impl TrackBits {
     /// No track
     pub const TRACK_BIT_NONE: Self = Self(0);
@@ -183,7 +181,6 @@ impl TrackBits {
     pub const TRACK_BIT_DEPOT: Self = Self(128);
 }
 
-#[allow(non_upper_case_globals)]
 impl Trackdir {
     /// Used for iterations
     pub const TRACKDIR_BEGIN: Self = Self(0);
@@ -230,7 +227,6 @@ impl Trackdir {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TrackdirBits(pub u16);
 
-#[allow(non_upper_case_globals)]
 impl TrackdirBits {
     /// No track build
     pub const TRACKDIR_BIT_NONE: Self = Self(0);
