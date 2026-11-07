@@ -40,7 +40,7 @@ impl TownId {
 }
 
 /// `TSZ_SMALL`.
-pub const TSZ_SMALL: u8 = 0;
+pub const TSZ_SMALL: u8 = TownSize::TSZ_SMALL.0;
 /// `TownExpandModes{TownExpandMode::Buildings}`.
 pub const TOWN_EXPAND_BUILDINGS: u8 = 1 << 0;
 /// `TownExpandModes{TownExpandMode::Roads}`.
@@ -58,3 +58,41 @@ pub use TownId as TownID;
 
 /// The maximum length of a town name in characters including '\0'.
 pub const MAX_LENGTH_TOWN_NAME_CHARS: u32 = 32;
+
+/// Supported initial town sizes from `town_type.h`, including unnamed byte values.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TownSize(pub u8);
+impl TownSize {
+    /// Small town.
+    pub const TSZ_SMALL: Self = Self(0);
+    /// Medium town.
+    pub const TSZ_MEDIUM: Self = Self(1);
+    /// Large town.
+    pub const TSZ_LARGE: Self = Self(2);
+    /// Random size, bigger than small, smaller than large.
+    pub const TSZ_RANDOM: Self = Self(3);
+    /// Number of available town sizes.
+    pub const TSZ_END: Self = Self(4);
+}
+
+/// Town layouts from `town_type.h`; saved and loaded as an eight-bit value.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TownLayout(pub u8);
+impl TownLayout {
+    /// First town layout.
+    pub const TL_BEGIN: Self = Self(0);
+    /// Original algorithm (minimum one tile between roads).
+    pub const TL_ORIGINAL: Self = Self(0);
+    /// Extended original algorithm (minimum two tiles between roads).
+    pub const TL_BETTER_ROADS: Self = Self(1);
+    /// Geometric 2x2 grid algorithm.
+    pub const TL_2X2_GRID: Self = Self(2);
+    /// Geometric 3x3 grid algorithm.
+    pub const TL_3X3_GRID: Self = Self(3);
+    /// Random town layout.
+    pub const TL_RANDOM: Self = Self(4);
+    /// Number of town layouts.
+    pub const NUM_TLS: Self = Self(5);
+}

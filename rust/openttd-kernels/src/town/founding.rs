@@ -10,7 +10,10 @@
 use super::{
     Engine, Leaves, State, TownId, TownRef, names, town_ticks_to_game_ticks, update_radius,
 };
+use crate::company_type::CompanyID;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, TownHandle};
+use crate::tile_type::{TileIndex, TileType};
+use crate::town_type::TownID;
 use crate::witness as w;
 use std::cell::OnceCell;
 
@@ -28,16 +31,9 @@ macro_rules! native_byte {
         pub struct $name(pub u8);
     )+ };
 }
-native_byte!(
-    TownSize,
-    TownLayout,
-    CompanyId,
-    TownFounding,
-    AcceptanceEffect
-);
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Tile(pub u32);
+native_byte!(CompanyId, TownFounding, AcceptanceEffect);
+pub use crate::tile_type::TileIndex as Tile;
+pub use crate::town_type::{TownLayout, TownSize};
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
@@ -160,12 +156,17 @@ impl<'a> Founding<'a> {
             _ => true,
         }
     }
-    fn align(&self, tile: Tile, layout: TownLayout) -> Tile {
+    // Towns must share a grid so their road networks mesh when they interpenetrate.
+    fn align_tile_to_grid(&self, tile: Tile, layout: TownLayout) -> Tile {
         let x = tile.0 % self.map().size_x();
         let y = tile.0 / self.map().size_x();
-        match layout.0 {
-            2 => Tile((x - x % 3).wrapping_add((y - y % 3).wrapping_mul(self.map().size_x()))),
-            3 => Tile((x & !3).wrapping_add((y & !3).wrapping_mul(self.map().size_x()))),
+        match layout {
+            TownLayout::TL_2X2_GRID => {
+                Tile((x - x % 3).wrapping_add((y - y % 3).wrapping_mul(self.map().size_x())))
+            }
+            TownLayout::TL_3X3_GRID => {
+                Tile((x & !3).wrapping_add((y & !3).wrapping_mul(self.map().size_x())))
+            }
             _ => tile,
         }
     }
@@ -363,20 +364,23 @@ impl<'a> Founding<'a> {
         observed!((self.s.update_noise)());
         super::openttd_rust_town_generating_exchange_abi(previous);
     }
-    unsafe fn random_town(
+    /// Create a random town somewhere in the world (`town_cmd.cpp::CreateRandomTown`).
+    unsafe fn create_random_town(
         &self,
         mut attempts: u32,
-        parts: u32,
+        townnameparts: u32,
         size: TownSize,
         city: bool,
         layout: TownLayout,
     ) -> Option<TownRef> {
+        // Editor or world generation is required by CMD_DELETE_TOWN.
         observed!((self.s.assert_random_context)());
         if !observed!((self.s.can_allocate)()) {
             return None;
         }
         loop {
-            let mut tile = self.align(
+            // Generate a tile index not too close to the edge.
+            let mut tile: TileIndex = self.align_tile_to_grid(
                 Tile(
                     self.random()
                         & self
@@ -387,24 +391,31 @@ impl<'a> Founding<'a> {
                 ),
                 layout,
             );
-            let valid = if observed!((self.shared.tile_type)(tile.0)) == 6 {
-                tile = self.coastal(tile, layout);
-                tile.0 != u32::MAX
-            } else {
-                self.placement_error(tile, true).is_none()
-            };
+            // If the random tile is water, find suitable land nearby; otherwise evaluate it.
+            let valid =
+                if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_WATER {
+                    tile = self.coastal(tile, layout);
+                    tile != TileIndex::INVALID
+                } else {
+                    self.placement_error(tile, true).is_none()
+                };
             if valid {
+                // Allocate a town struct.
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
-                    self.create(town, tile, parts, size, city, layout, false);
+                    self.create(town, tile, townnameparts, size, city, layout, false);
                 }
+                // A population still at zero means the placement was too bad to grow at all.
                 if unsafe { super::population(town.state) } > 0 {
                     return Some(town);
                 }
                 w::hit(w::TOWN_ZERO_GROWTH);
-                let company = observed!((self.leaves.exchange_company)(15));
+                let cur_company =
+                    CompanyID(observed!((self.leaves.exchange_company)(CompanyID::TOWN.0)));
                 observed!((self.s.delete_town)(town.id));
-                observed!((self.leaves.exchange_company)(company));
+                observed!((self.leaves.exchange_company)(cur_company.0));
+                // Creating and deleting resets allocation checks. We could allocate on entry,
+                // but must check again when assertions are enabled.
                 observed!((self.s.assert_allocation)());
             }
             w::hit(w::TOWN_RETRY);
@@ -415,17 +426,18 @@ impl<'a> Founding<'a> {
         }
         None
     }
-    fn default_number(&self) -> u32 {
-        const INITIAL: [u32; 4] = [5, 11, 23, 46];
-        let density = observed!((self.s.town_density)());
-        if density == 4 {
+    /// Calculate the map-size-scaled town density, or return the custom newgame count.
+    fn get_default_towns_for_map_size(&self) -> u32 {
+        const NUM_INITIAL_TOWNS: [u32; 4] = [5, 11, 23, 46]; // Very low, low, normal, high.
+        let number_towns = observed!((self.s.town_density)());
+        if u32::from(number_towns) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
             return u32::from(observed!((self.s.custom_number)()));
         }
         // Native setting's original array domain; no extra rejection is added.
-        let value = unsafe { *INITIAL.get_unchecked(usize::from(density)) };
+        let value = unsafe { *NUM_INITIAL_TOWNS.get_unchecked(usize::from(number_towns)) };
         observed!((self.s.scale_size)(value))
     }
-    unsafe fn generate_name(
+    unsafe fn generate_town_name(
         &self,
         name_frame: *mut names::NameFrame,
         scratch: *mut names::Names,
@@ -459,11 +471,12 @@ unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) 
         (*state).simulation.layout = result;
     }
 }
+/// `town_cmd.cpp::GetDefaultTownsForMapSize`.
 /// # Safety
 /// The immutable native tables and their pointed-to services remain live for this synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_default_number(s: *const FoundingServices) -> u32 {
-    unsafe { Founding::new(&*s) }.default_number()
+    unsafe { Founding::new(&*s) }.get_default_towns_for_map_size()
 }
 /// # Safety
 /// Tables, native stack frames, command cost and input bytes remain live for this call. Owners are supplied by the pool and no borrow crosses a callback.
@@ -564,7 +577,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             crate::road_cmd::openttd_rust_road_nearest_towns((*road).services, true);
         }
         let town = if random {
-            unsafe { f.random_town(20, parts, size, city, layout) }
+            unsafe { f.create_random_town(20, parts, size, city, layout) }
         } else {
             let town = observed!((f.s.allocate)(tile));
             unsafe {
@@ -596,6 +609,8 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         }
     }
 }
+/// Generate towns for the Scenario Editor Random Towns button or world generation.
+/// `has_number == false` uses the game settings (`town_cmd.cpp::GenerateTowns`).
 /// # Safety
 /// Tables and native stack frames remain live; result is writable. Only named progress services report cancellation; scratch drops before native rethrow.
 #[unsafe(no_mangle)]
@@ -611,25 +626,27 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
 ) -> u8 {
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
-    let mut current = 0_u32;
+    let mut current_number = 0_u32;
     let mut total = if has_number {
         number
-    } else if observed!((f.s.town_density)()) == 4 {
-        f.default_number()
+    } else if u32::from(observed!((f.s.town_density)())) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
+        f.get_default_towns_for_map_size()
     } else {
         observed!((f.s.scale_land)(
-            f.default_number().wrapping_add(f.random() & 7),
+            f.get_default_towns_for_map_size()
+                .wrapping_add(f.random() & 7),
         ))
     }
-    .clamp(1, 64000);
-    let mut parts = 0;
-    let mut scratch = names::Names::new();
+    .clamp(1, u32::from(TownID::END.0));
+    let mut townnameparts = 0;
+    let mut town_names = names::Names::new();
     w::hit(w::TOWN_ENTRIES);
     if !observed!((f.s.set_progress)(frame, total)) {
         w::hit(w::TOWN_CANCELLED);
         return u8::from(false);
     }
-    let mut town = observed!((f.names.next)(0));
+    // Pre-populate the name list with the names of towns already on the map.
+    let mut town = observed!((f.names.next)(u32::from(TownID::BEGIN.0)));
     while !town.shell.is_null() {
         let custom = unsafe { names::openttd_rust_town_name(town.state) };
         let name = if custom.size == 0 {
@@ -637,53 +654,65 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         } else {
             custom
         };
-        scratch.insert(unsafe { names::bytes(name) }.to_vec());
+        town_names.insert(unsafe { names::bytes(name) }.to_vec());
         town = observed!((f.names.next)(u32::from(town.id.0).wrapping_add(1)));
     }
+    // Randomise the city-status offset: at 1 in 4, ten towns may yield two or three cities.
     let larger_towns = observed!((f.s.larger_towns)());
-    let offset = if larger_towns == 0 {
+    let city_random_offset = if larger_towns == 0 {
         w::hit(w::TOWN_NO_CITIES);
         0
     } else {
         f.random() % u32::from(larger_towns)
     };
+    // The requested number is a suggestion, so creation cannot lock up on a crowded map.
     loop {
         let larger_towns = observed!((f.s.larger_towns)());
-        let city = larger_towns != 0 && offset.wrapping_add(current) % u32::from(larger_towns) == 0;
+        let city = larger_towns != 0
+            && city_random_offset.wrapping_add(current_number) % u32::from(larger_towns) == 0;
         if !observed!((f.s.increase_progress)(frame)) {
             w::hit(w::TOWN_CANCELLED);
             return u8::from(false);
         }
-        if unsafe { f.generate_name(name_frame, &raw mut scratch, &raw mut parts) }
-            && unsafe { f.random_town(20, parts, TownSize(3), city, layout) }.is_some()
+        // Get a unique town name, then try 20 times to create a random-sized town.
+        if unsafe { f.generate_town_name(name_frame, &raw mut town_names, &raw mut townnameparts) }
+            && unsafe {
+                f.create_random_town(20, townnameparts, TownSize::TSZ_RANDOM, city, layout)
+            }
+            .is_some()
         {
-            current = current.wrapping_add(1);
+            // If creation succeeded, raise the flag.
+            current_number = current_number.wrapping_add(1);
         }
         total = total.wrapping_sub(1);
         if total == 0 {
             break;
         }
     }
-    scratch.clear();
+    town_names.clear();
+    // Rebuild the town k-d tree so it is well balanced.
     observed!(crate::town::spatial::rebuild(f.shared));
-    if current != 0 {
+    if current_number != 0 {
         unsafe {
             result.write(true);
         }
         return u8::from(true);
     }
+    // No town was created. Give it a final, more aggressive try.
     w::hit(w::TOWN_FALLBACK);
-    let success = unsafe { f.generate_name(name_frame, std::ptr::null_mut(), &raw mut parts) }
-        && unsafe {
-            f.random_town(
-                10000,
-                parts,
-                TownSize(3),
-                observed!((f.s.larger_towns)()) != 0,
-                layout,
-            )
-        }
-        .is_some();
+    let success =
+        unsafe { f.generate_town_name(name_frame, std::ptr::null_mut(), &raw mut townnameparts) }
+            && unsafe {
+                f.create_random_town(
+                    10000,
+                    townnameparts,
+                    TownSize::TSZ_RANDOM,
+                    observed!((f.s.larger_towns)()) != 0,
+                    layout,
+                )
+            }
+            .is_some();
+    // If there are no towns at all while generating a new game, bail out.
     if !success
         && observed!((f.shared.town_count)()) == 0
         && !observed!((f.leaves.environment.editor)())
