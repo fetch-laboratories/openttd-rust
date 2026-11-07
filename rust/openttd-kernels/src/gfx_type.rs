@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared graphics constants from `gfx_type.h`.
 
+/// The number of a sprite, without mapping bits and colourtables.
+pub type SpriteID = u32;
+
 /// `MILLISECONDS_PER_TICK`.
 pub(crate) const MILLISECONDS_PER_TICK: u32 = 27;
 pub const COLOUR_RED: u8 = Colours::COLOUR_RED.0;
