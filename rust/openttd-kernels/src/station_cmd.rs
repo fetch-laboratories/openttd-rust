@@ -23,6 +23,8 @@ use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
 use crate::tilearea::TileArea;
 mod waypoint;
+use crate::newgrf_roadstop::RoadStopAvailabilityType;
+use crate::newgrf_station::station_spec::{TileFlag, TileFlags};
 use crate::rail_cmd::RailCommandServices;
 use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
@@ -30,7 +32,7 @@ use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_
 use crate::station::BaseStation;
 use crate::station_map::{GFX_DOCK_BASE_WATER_PART, StationGfx};
 use crate::station_service::World;
-use crate::station_type::StationFacility;
+use crate::station_type::{RoadStopType, StationFacility};
 use crate::town::AuthorityServices;
 use waypoint::WaypointLayout;
 
@@ -1348,7 +1350,12 @@ impl Ctx<'_> {
         } else {
             (self.s.tile_flags)(spec, gfx)
         };
-        (self.s.set_tile_flags)(tile, flags & 4 != 0, flags & 1 != 0, flags & 2 == 0);
+        (self.s.set_tile_flags)(
+            tile,
+            TileFlags(flags).test(TileFlag::Blocked),
+            TileFlags(flags).test(TileFlag::Pylons),
+            !TileFlags(flags).test(TileFlag::NoWires),
+        );
     }
     fn layout_gfx(custom: crate::services::ByteSpan, index: u32, tracks: u8, length: u8) -> u8 {
         if custom.size != 0 {
@@ -2393,8 +2400,16 @@ impl Ctx<'_> {
         let spec = crate::newgrf_class::roadstop::spec(class, u32::from(index));
         if !spec.is_null() {
             let info = (self.s.road_spec_info)(spec);
-            if (stop_type == 1 && info.stop_type != 1 && info.stop_type != 2)
-                || (stop_type == 0 && info.stop_type != 0 && info.stop_type != 2)
+            if (RoadStopType(stop_type) == RoadStopType::Truck
+                && RoadStopAvailabilityType(info.stop_type)
+                    != RoadStopAvailabilityType::ROADSTOPTYPE_FREIGHT
+                && RoadStopAvailabilityType(info.stop_type)
+                    != RoadStopAvailabilityType::ROADSTOPTYPE_ALL)
+                || (RoadStopType(stop_type) == RoadStopType::Bus
+                    && RoadStopAvailabilityType(info.stop_type)
+                        != RoadStopAvailabilityType::ROADSTOPTYPE_PASSENGER
+                    && RoadStopAvailabilityType(info.stop_type)
+                        != RoadStopAvailabilityType::ROADSTOPTYPE_ALL)
                 || (!drive && info.drive_only)
             {
                 return cost.error(0xffff);
@@ -2427,7 +2442,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        let truck = stop_type != 0;
+        let truck = RoadStopType(stop_type) != RoadStopType::Bus;
         let kind = if truck { 2 } else { 3 };
         let category = if truck { 13 } else { 12 };
         let unit = if spec.is_null() {

@@ -298,7 +298,7 @@ impl crate::map_func::World<'_> {
     #[inline(always)]
     pub(crate) fn station_gfx(&self, t: u32) -> u8 {
         self.check(self.kind(t) == MP_STATION);
-        StationGfx(Self::byte(self.types.m5(t))).0
+        Self::byte(self.types.m5(t))
     }
     /// `GetStationIndex`.
     #[allow(clippy::inline_always)]

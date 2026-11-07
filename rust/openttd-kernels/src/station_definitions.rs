@@ -13,12 +13,15 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
+use crate::cargo_type::{CargoType, CargoTypes};
 use crate::debug::grf_msg;
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::{CIR_DISABLED, CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
+use crate::newgrf_roadstop::{RoadStopAvailabilityType, RoadStopClassID, RoadStopDrawModes};
+use crate::newgrf_station::{StationClassID, StationSpecFlags};
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
@@ -117,12 +120,14 @@ unsafe fn station_change(
             );
             return Ok(CIR_INVALID_ID);
         }
+        // Allocate station specs if necessary.
         if (s.station_count)(file) < last as usize {
             (s.station_resize)(file, last);
         }
         let mut result = CIR_SUCCESS;
         for id in first..last {
             let mut spec = (s.station_get)(file, id);
+            // Only property 0x08 can allocate an undefined spec.
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
                     2,
@@ -136,13 +141,14 @@ unsafe fn station_change(
                     if spec.is_null() {
                         spec = (s.station_new)(file, id);
                     }
+                    // Class labels are read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
-                    let class = crate::newgrf_class::station::allocate(
+                    let class = StationClassID(crate::newgrf_class::station::allocate(
                         label,
                         crate::newgrf_station::STAT_CLASS_MAX,
                         s.empty_string,
-                    );
-                    (s.station_class)(spec, class);
+                    ));
+                    (s.station_class)(spec, class.0);
                 }
                 0x09 => {
                     let tiles = reader.extended()?;
@@ -151,6 +157,7 @@ unsafe fn station_change(
                     for tile in 0..tiles {
                         let layout = (s.station_render_append)(spec);
                         let fields = (action2.layout_storage)(layout);
+                        // Sprite sets are unknown, so there is no offset limit.
                         fields.consistent_max_offset.write(u32::from(u16::MAX));
                         if reader.has_data(4) && reader.peek_dword()? == 0 {
                             reader.skip(4)?;
@@ -169,6 +176,7 @@ unsafe fn station_change(
                             std::ptr::null_mut(),
                             std::ptr::null_mut(),
                         )?;
+                        // On error, bail out immediately: temporary GRF data is freed.
                         if crate::newgrf_loading::is_disabled() {
                             return Ok(CIR_DISABLED);
                         }
@@ -180,6 +188,7 @@ unsafe fn station_change(
                             }
                             let item = (s.sequence_append)(sequence);
                             let fields = (action2.sequence_storage)(item);
+                            // No relative bounding-box support.
                             fields.x.write(delta_x as i8);
                             fields.y.write(reader.byte()? as i8);
                             fields.z.write(reader.byte()? as i8);
@@ -198,6 +207,7 @@ unsafe fn station_change(
                                 std::ptr::null_mut(),
                                 std::ptr::null_mut(),
                             )?;
+                            // On error, bail out immediately: temporary GRF data is freed.
                             if crate::newgrf_loading::is_disabled() {
                                 return Ok(CIR_DISABLED);
                             }
@@ -205,6 +215,7 @@ unsafe fn station_change(
                         (s.layout_sequence_move)(layout, sequence);
                         (s.sequence_reset)(sequence);
                     }
+                    // Layouts must come in alternating X/Y pairs.
                     if (s.station_render_size)(spec) & 1 != 0 {
                         grf_msg!(
                             1,
@@ -248,6 +259,8 @@ unsafe fn station_change(
                         let data = reader.bytes(count)?;
                         let key = crate::newgrf_station::get_station_layout_key(number, length);
                         (s.station_custom_assign)(spec, key, data, count);
+                        // Clear the axis bit; the rest is validated during rendering
+                        // because the tile range is not yet known.
                         for index in 0..count {
                             let tile = data.add(index).read();
                             if tile & !1 != tile {
@@ -299,9 +312,9 @@ unsafe fn station_change(
                     } else {
                         u64::from(value)
                     };
-                    (s.station_cargo_triggers)(spec, cargo);
+                    (s.station_cargo_triggers)(spec, CargoTypes(cargo).0);
                 }
-                0x13 => (s.station_flags)(spec, reader.byte()?),
+                0x13 => (s.station_flags)(spec, StationSpecFlags(reader.byte()?).0),
                 0x16 => {
                     (s.shared().specs().station().animation().frames)(spec, reader.byte()?);
                     (s.shared().specs().station().animation().status)(spec, reader.byte()?);
@@ -329,6 +342,7 @@ unsafe fn station_change(
                             return Ok(CIR_DISABLED);
                         }
                     }
+                    // Layouts must come in alternating X/Y pairs.
                     if (s.station_render_size)(spec) & 1 != 0 {
                         grf_msg!(
                             1,
@@ -418,6 +432,7 @@ unsafe fn road_change(
         let mut result = CIR_SUCCESS;
         for id in first..last {
             let mut spec = (s.road_get)(file, id);
+            // Only property 0x08 can allocate an undefined spec.
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
                     1,
@@ -432,24 +447,25 @@ unsafe fn road_change(
                     if spec.is_null() {
                         spec = (s.road_new)(file, id);
                     }
+                    // Class labels are read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
-                    let class = crate::newgrf_class::roadstop::allocate(
+                    let class = RoadStopClassID(crate::newgrf_class::roadstop::allocate(
                         label,
                         crate::newgrf_roadstop::ROADSTOP_CLASS_MAX,
                         s.empty_string,
-                    );
-                    (s.road_class)(spec, class);
+                    ));
+                    (s.road_class)(spec, class.0);
                 }
-                0x09 => (s.road_stop_type)(spec, reader.byte()?),
+                0x09 => (s.road_stop_type)(spec, RoadStopAvailabilityType(reader.byte()?).0),
                 0x0a => (s.road_name)(spec, reader.word()?),
                 0x0b => (s.road_class_name)(spec, reader.word()?),
-                0x0c => (s.road_draw_mode)(spec, reader.byte()?),
+                0x0c => (s.road_draw_mode)(spec, RoadStopDrawModes(reader.byte()?).0),
                 0x0d => {
                     let cargo = crate::engine_loading::openttd_rust_engine_translate_refit(
                         reader.dword()?,
                         file,
                     );
-                    (s.road_cargo_triggers)(spec, cargo);
+                    (s.road_cargo_triggers)(spec, CargoTypes(cargo).0);
                 }
                 0x0e => {
                     (s.shared().specs().road_stop().animation().frames)(spec, reader.byte()?);
@@ -458,6 +474,8 @@ unsafe fn road_change(
                 0x0f => (s.shared().specs().road_stop().animation().speed)(spec, reader.byte()?),
                 0x10 => (s.shared().specs().road_stop().animation().triggers)(spec, reader.word()?),
                 0x11 => (s.road_callback_mask)(spec, reader.byte()?),
+                // Future-proofed as four bytes, though the original uses only
+                // two bytes worth of flags. Preserve the native narrowing point.
                 0x12 => (s.road_flags)(spec, reader.dword()?),
                 0x13 | 0x14 => {
                     let tiles = usize::from(reader.extended()?);
@@ -561,8 +579,8 @@ pub(crate) unsafe fn station_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file);
-    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+    let cargo = CargoType(crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file));
+    if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }
     let spec = unsafe { (s.station_get)(file, u32::from(id)) };
@@ -570,7 +588,7 @@ pub(crate) unsafe fn station_map_specific(
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
         unsafe {
-            (s.station_set_group)(spec, cargo, group);
+            (s.station_set_group)(spec, cargo.0, group);
         }
     }
 }
@@ -605,8 +623,8 @@ pub(crate) unsafe fn roadstop_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file);
-    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+    let cargo = CargoType(crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file));
+    if !crate::cargo_type::is_valid_cargo_type(cargo.0) {
         return;
     }
     let spec = unsafe { (s.road_get)(file, u32::from(id)) };
@@ -614,7 +632,7 @@ pub(crate) unsafe fn roadstop_map_specific(
         grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
         unsafe {
-            (s.road_set_group)(spec, cargo, group);
+            (s.road_set_group)(spec, cargo.0, group);
         }
     }
 }

@@ -80,6 +80,7 @@ impl StationRect {
         let x = c.map.tile_x(tile) as i32;
         let y = c.map.tile_y(tile) as i32;
         if self.is_empty() {
+            // We are adding the first station tile.
             if mode != RectMode::ADD_TEST {
                 self.left = x;
                 self.right = x;
@@ -87,12 +88,14 @@ impl StationRect {
                 self.bottom = y;
             }
         } else if !self.pt_in_extended_rect(x, y, 0) {
+            // The point is outside the existing rectangle; form the new spread.
             let new_rect = Self {
                 left: x.min(self.left),
                 top: y.min(self.top),
                 right: x.max(self.right),
                 bottom: y.max(self.bottom),
             };
+            // Check its dimensions against the configured maximum.
             let w = rect_width(new_rect.left, new_rect.right);
             let h = rect_height(new_rect.top, new_rect.bottom);
             if mode != RectMode::ADD_FORCE
@@ -133,6 +136,8 @@ impl StationRect {
     pub fn after_remove_tile(&mut self, id: StationID, tile: u32, c: &Ctx<'_>) -> bool {
         let mut x = c.map.tile_x(tile) as i32;
         let mut y = c.map.tile_y(tile) as i32;
+        // If the removed tile was on an edge, reduce that edge until the
+        // rectangle is empty or no further reduction is possible.
         loop {
             let left_edge = x == self.left;
             let right_edge = x == self.right;
@@ -736,6 +741,8 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         if radius == CA_NONE {
             continue;
         }
+        // No tile tests are needed in this sub-loop: every tile is simply
+        // added to the catchment set.
         let mut ta2 = TileArea { tile, w: 1, h: 1 };
         #[allow(clippy::cast_possible_wrap)]
         ta2.expand(radius as i32, c.map, c.size_y);
@@ -801,9 +808,11 @@ pub(crate) fn for_all_stations_around_tiles(
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, u32) -> bool,
 ) {
+    // With no stations, the scan cannot find anything.
     if (c.c.station_count)() == 0 {
         return;
     }
+    // Scan around the building using the maximum possible catchment.
     let mut seen = Vec::new();
     let max_c = if (c.c.modified_catchment)() {
         u32::from(MAX_CATCHMENT)
