@@ -211,10 +211,8 @@ pub(super) unsafe fn generate_town_name(
     w::hit(w::TOWN_NAME_EXHAUSTED);
     false
 }
-// Compatibility names for founding and rename callers outside this checkpoint.
+// Compatibility name for generation callers outside this checkpoint.
 pub(super) use generate_town_name as generate;
-pub(super) use is_unique_town_name as unique_custom;
-pub(super) use verify_town_name as verify;
 
 /// # Safety
 /// Tables, rendering frame and parameters remain live. Optional scratch is exclusively owned; rendering frames keep candidate and other bytes distinct.
