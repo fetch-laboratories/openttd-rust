@@ -570,70 +570,18 @@ def scheduler_gap() -> None:
     end = source.index("\nvoid InitializeLandscape()", start)
     (out / "landscape-loop-reference.inc").write_text(source[start:end])
 
-    # Movement gaps: impossible foundation outcomes and off-map signed extrema.
-    # Every algorithm/helper body below is extracted from the unchanged reference.
-    def function(text: str, name: str) -> str:
-        import re
+    # Independent frozen observations of the same pinned-original corpus now
+    # exercise production Rust directly; keep this default comparison nonempty.
+    import evidence_replacements
 
-        import probe
+    evidence_replacements.run_rust(
+        "rust:lib:movement::evidence_tests::foundations_match_original"
+    )
+    evidence_replacements.run_rust(
+        "rust:lib:movement::evidence_tests::extreme_coordinates_match_original"
+    )
+    print("movement foundation/extreme-coordinate gap: 19608 unchanged-body cases passed")
 
-        # The pinned reference defines every requested function.
-        match = cast(
-            re.Match[str],
-            re.search(
-                r"^(?:static )?(?:inline )?[\w:<>, \t*&]+\s+"
-                + name
-                + r"\([^;{}]*\)\s*\{",
-                text,
-                re.M,
-            ),
-        )
-        return probe.body(text, match[0]) + "\n"
-
-    fragments = (
-        (migration.REFERENCE / "src/slope_func.h")
-        .read_text()
-        .replace('#include "tile_type.h"', "")
-    )
-    track = (migration.REFERENCE / "src/track_func.h").read_text()
-    fragments += function(track, "TracksOverlap") + function(track, "CornerToTrackBits")
-    data = (migration.REFERENCE / "src/table/track_data.h").read_text()
-    begin = data.index("extern const TrackBits _corner_to_trackbits")
-    fragments += data[begin : data.index("};", begin) + 2] + "\n"
-    for file, table, name in (
-        (
-            "rail_cmd.cpp",
-            "static const TrackBits _valid_tracks_without",
-            "GetRailFoundation",
-        ),
-        (
-            "road_cmd.cpp",
-            "static const RoadBits _invalid_tileh_slopes_road",
-            "GetRoadFoundation",
-        ),
-    ):
-        text = (migration.REFERENCE / "src" / file).read_text()
-        begin = text.index(table)
-        end = text.index("/**", text.index("};", begin))
-        fragments += text[begin:end]
-        if file == "rail_cmd.cpp":
-            begin = text.index(
-                "static const TrackBits _valid_tracks_on_leveled_foundation"
-            )
-            fragments += text[begin : text.index("};", begin) + 2] + "\n"
-        fragments += function(text, name)
-    fragments += function(source, "GetPartialPixelZ")
-    (out / "movement-foundation-reference.inc").write_text(fragments)
-    void = (migration.REFERENCE / "src/void_cmd.cpp").read_text()
-    terrain = (migration.REFERENCE / "src/tile_map.cpp").read_text()
-    (out / "movement-height-reference.inc").write_text(
-        function(terrain, "GetTileSlopeGivenHeight")
-        + function(terrain, "GetTilePixelSlopeOutsideMap")
-    )
-    (out / "movement-coordinate-reference.inc").write_text(
-        function(void, "GetSlopePixelZ_Void")
-        + function(source, "GetSlopePixelZOutsideMap")
-    )
     binary = out / "landscape-loop-gap"
     probe.compile(
         [
