@@ -2087,7 +2087,7 @@ impl Engine<'_> {
         unsafe {
             update_radius(self.owner);
         }
-        policy::update_max_pass(self.leaves, self.owner);
+        policy::update_town_max_pass(self.leaves, self.owner);
     }
     fn tick_all(mut self) {
         if !(self.leaves.environment.editor)() {

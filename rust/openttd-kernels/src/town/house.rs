@@ -871,7 +871,7 @@ impl<'a> House<'a> {
             return;
         }
         let removal = (self.h.removal)(house);
-        (c.expense_money)(result, 0, super::policy::removal_cost(removal.factor));
+        (c.expense_money)(result, 0, super::policy::get_removal_cost(removal.factor));
         let rating = i32::from(removal.rating);
         let company = (self.s.current_company)();
         let authority = self.authority();
