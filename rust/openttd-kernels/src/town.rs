@@ -40,6 +40,9 @@ use crate::tile_type::{
 };
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
+/// Value for custom town number in difficulty settings (`town.h`).
+pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
+
 pub use crate::town_type::TownId;
 #[repr(C)]
 #[derive(Clone, Copy)]
