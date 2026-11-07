@@ -62,7 +62,7 @@ impl Colours {
     /// Native `COLOUR_PINK`.
     pub const COLOUR_PINK: Self = Self(2);
     /// Native `COLOUR_YELLOW`.
-    pub const COLOUR_YELLOW: Self = Self(3);
+    pub const COLOUR_YELLOW: Self = Self(Self::COLOUR_PINK.0 + 1);
     /// Native `COLOUR_RED`.
     pub const COLOUR_RED: Self = Self(4);
     /// Native `COLOUR_LIGHT_BLUE`.

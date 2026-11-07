@@ -149,28 +149,32 @@ fn cache_colour(id: CompanyID, colour: u8) {
 /// Generate a company colour.
 /// The original 100 draws precede weighting and pool-order colour elimination.
 pub(crate) fn generate_company_colour(s: &Services) -> u8 {
-    use crate::gfx_type::Colours;
+    use crate::gfx_type::{
+        COLOUR_BLUE, COLOUR_BROWN, COLOUR_CREAM, COLOUR_DARK_BLUE, COLOUR_DARK_GREEN, COLOUR_GREEN,
+        COLOUR_GREY, COLOUR_LIGHT_BLUE, COLOUR_MAUVE, COLOUR_ORANGE, COLOUR_PALE_GREEN,
+        COLOUR_PURPLE, COLOUR_WHITE, COLOUR_YELLOW, Colours,
+    };
     // Sorting weights for the company colours (_colour_sort).
     const COLOUR_SORT: [u8; Colours::COLOUR_END.0 as usize] =
         [2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1];
     // Similar colours, so we can try to prevent same coloured companies (_similar_colour).
     const SIMILAR_COLOUR: [[Colours; 2]; Colours::COLOUR_END.0 as usize] = [
-        [Colours::COLOUR_BLUE, Colours::COLOUR_LIGHT_BLUE], // COLOUR_DARK_BLUE
-        [Colours::COLOUR_GREEN, Colours::COLOUR_DARK_GREEN], // COLOUR_PALE_GREEN
+        [Colours(COLOUR_BLUE), Colours(COLOUR_LIGHT_BLUE)], // COLOUR_DARK_BLUE
+        [Colours(COLOUR_GREEN), Colours(COLOUR_DARK_GREEN)], // COLOUR_PALE_GREEN
         [Colours::INVALID_COLOUR, Colours::INVALID_COLOUR], // COLOUR_PINK
-        [Colours::COLOUR_ORANGE, Colours::INVALID_COLOUR],  // COLOUR_YELLOW
+        [Colours(COLOUR_ORANGE), Colours::INVALID_COLOUR],  // COLOUR_YELLOW
         [Colours::INVALID_COLOUR, Colours::INVALID_COLOUR], // COLOUR_RED
-        [Colours::COLOUR_DARK_BLUE, Colours::COLOUR_BLUE],  // COLOUR_LIGHT_BLUE
-        [Colours::COLOUR_PALE_GREEN, Colours::COLOUR_DARK_GREEN], // COLOUR_GREEN
-        [Colours::COLOUR_PALE_GREEN, Colours::COLOUR_GREEN], // COLOUR_DARK_GREEN
-        [Colours::COLOUR_DARK_BLUE, Colours::COLOUR_LIGHT_BLUE], // COLOUR_BLUE
-        [Colours::COLOUR_BROWN, Colours::COLOUR_ORANGE],    // COLOUR_CREAM
-        [Colours::COLOUR_PURPLE, Colours::INVALID_COLOUR],  // COLOUR_MAUVE
-        [Colours::COLOUR_MAUVE, Colours::INVALID_COLOUR],   // COLOUR_PURPLE
-        [Colours::COLOUR_YELLOW, Colours::COLOUR_CREAM],    // COLOUR_ORANGE
-        [Colours::COLOUR_CREAM, Colours::INVALID_COLOUR],   // COLOUR_BROWN
-        [Colours::COLOUR_WHITE, Colours::INVALID_COLOUR],   // COLOUR_GREY
-        [Colours::COLOUR_GREY, Colours::INVALID_COLOUR],    // COLOUR_WHITE
+        [Colours(COLOUR_DARK_BLUE), Colours(COLOUR_BLUE)],  // COLOUR_LIGHT_BLUE
+        [Colours(COLOUR_PALE_GREEN), Colours(COLOUR_DARK_GREEN)], // COLOUR_GREEN
+        [Colours(COLOUR_PALE_GREEN), Colours(COLOUR_GREEN)], // COLOUR_DARK_GREEN
+        [Colours(COLOUR_DARK_BLUE), Colours(COLOUR_LIGHT_BLUE)], // COLOUR_BLUE
+        [Colours(COLOUR_BROWN), Colours(COLOUR_ORANGE)],    // COLOUR_CREAM
+        [Colours(COLOUR_PURPLE), Colours::INVALID_COLOUR],  // COLOUR_MAUVE
+        [Colours(COLOUR_MAUVE), Colours::INVALID_COLOUR],   // COLOUR_PURPLE
+        [Colours(COLOUR_YELLOW), Colours(COLOUR_CREAM)],    // COLOUR_ORANGE
+        [Colours(COLOUR_CREAM), Colours::INVALID_COLOUR],   // COLOUR_BROWN
+        [Colours(COLOUR_WHITE), Colours::INVALID_COLOUR],   // COLOUR_GREY
+        [Colours(COLOUR_GREY), Colours::INVALID_COLOUR],    // COLOUR_WHITE
     ];
     // Initialize array.
     let mut colours =
