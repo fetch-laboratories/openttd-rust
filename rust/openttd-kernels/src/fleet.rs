@@ -333,7 +333,6 @@ impl GroupServices {
 const INVALID_GROUP: u16 = 65535;
 pub(crate) const DEFAULT_GROUP: u16 = 65534;
 pub(crate) const ALL_GROUP: u16 = 65533;
-const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;
 

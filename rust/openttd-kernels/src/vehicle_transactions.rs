@@ -21,9 +21,7 @@ use crate::order_type::{OT_GOTO_WAYPOINT, OT_IMPLICIT};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
 use crate::strings_type::INVALID_STRING_ID as ERROR;
 use crate::vehicle::VehicleType;
-use crate::vehiclelist::{
-    VL_DEPOT_LIST, VL_GROUP_LIST, VL_SHARED_ORDERS, VL_STANDARD, VL_STATION_LIST,
-};
+use crate::vehiclelist::VehicleListType;
 
 #[repr(C)]
 pub struct Target {
@@ -302,13 +300,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_list(
 
 unsafe fn generate_list<F: FnMut(*mut ())>(
     s: &SelectionServices,
-    kind: u8,
+    kind: VehicleListType,
     vehicle_type: u8,
     company: u8,
     index: u32,
     mut emit: F,
 ) -> bool {
-    if kind == VL_STATION_LIST || kind == VL_DEPOT_LIST {
+    if kind == VehicleListType::VL_STATION_LIST || kind == VehicleListType::VL_DEPOT_LIST {
         struct Find<'a, F> {
             s: &'a SelectionServices,
             vehicle_type: u8,
@@ -346,7 +344,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         let mut ctx = Find {
             s,
             vehicle_type,
-            depot: kind == VL_DEPOT_LIST,
+            depot: kind == VehicleListType::VL_DEPOT_LIST,
             destination: index as u16,
             emit: &mut emit,
         };
@@ -358,7 +356,8 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         );
         return true;
     }
-    if kind == VL_SHARED_ORDERS {
+    if kind == VehicleListType::VL_SHARED_ORDERS {
+        // Add all vehicles from this vehicle's shared order list.
         let mut v = unsafe { (s.groups.vehicle)(index) };
         if v.is_null()
             || unsafe {
@@ -374,7 +373,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         return true;
     }
-    if kind != VL_STANDARD && kind != VL_GROUP_LIST {
+    if kind != VehicleListType::VL_STANDARD && kind != VehicleListType::VL_GROUP_LIST {
         return false;
     }
     let mut from = 0;
@@ -386,7 +385,9 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         // Preserve the distinct predicate order of group and standard lists.
         if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
-            let selected = if kind == VL_GROUP_LIST && index as u16 != crate::fleet::ALL_GROUP {
+            let selected = if kind == VehicleListType::VL_GROUP_LIST
+                && index as u16 != crate::fleet::ALL_GROUP
+            {
                 unsafe {
                     (s.groups.primary)(v)
                         && crate::fleet::record(s.groups, v).owner() == company
@@ -422,9 +423,16 @@ pub unsafe extern "C" fn openttd_rust_vehicle_generate_list_abi(
 ) -> u8 {
     (s.list_clear)(list);
     u8::from(unsafe {
-        generate_list(s, kind, vehicle_type, company, index, |v| {
-            (s.list_push)(list, v);
-        })
+        generate_list(
+            s,
+            VehicleListType(kind),
+            vehicle_type,
+            company,
+            index,
+            |v| {
+                (s.list_push)(list, v);
+            },
+        )
     })
 }
 

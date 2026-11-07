@@ -193,7 +193,7 @@ mod vehicle_type;
 pub use vehicle_type::{
     DepotCommandFlag, DepotCommandFlags, VehicleRandomTrigger, VehicleRandomTriggers, VehicleType,
 };
-mod vehiclelist;
+pub mod vehiclelist;
 mod viewport_func;
 mod water;
 mod water_cmd;
