@@ -188,3 +188,9 @@
 - Both list-generation callers, unsupported-kind behavior, shared-order traversal, output clearing and callback order are preserved. Native identifier packing, vehicle/group ownership, storage and public scalar interfaces remain unchanged.
 - Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; inherited fleet and mass-command coverage limits remain on #156.
 - PRs: #760, integrated in #763. Remaining Orders/fleet vocabulary stays open.
+
+## Original order location and distance vocabulary (#734)
+
+- The existing location and order-distance helpers and their immediate callers use the original names, canonical IDs/coordinates and explanatory comments. Conditional traversal, recursive depth, signed casts, saved list-span handling, live lookups and aircraft-range caller order remain unchanged.
+- Native order/vector storage, scalar interfaces and services stay with their existing owners. Checks are original operations/order review and combined exact-head Full; archive equivalence is unclaimed and inherited oversized-list, branch and historical-save limits remain on #156.
+- PRs: #766, integrated in #769. Remaining Orders/fleet cleanup stays open.
