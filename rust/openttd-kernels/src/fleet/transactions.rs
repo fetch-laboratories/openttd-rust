@@ -7,8 +7,8 @@
 
 //! Whole autoreplace transactions. Native costs/seeds live in the caller's stack.
 use super::{
-    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_profit, add_replacement, group,
-    remove_replacement, replacement, update_autoreplace,
+    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_engine_replacement, add_profit,
+    engine_replacement, group, remove_engine_replacement, update_autoreplace,
 };
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
@@ -557,7 +557,7 @@ unsafe fn new_engine(
     let from = crate::fleet::record(gw, v).engine_id();
     let id = unsafe { (gw.vehicle_group)(v) };
     let mut old = false;
-    let mut engine = unsafe { replacement(gw, head, from, id, &raw mut old) };
+    let mut engine = unsafe { engine_replacement(gw, head, from, id, &raw mut old) };
     if !always && old && !unsafe { (w.needs_renew)(v, false) } {
         engine = INVALID_ENGINE;
     }
@@ -1213,12 +1213,12 @@ unsafe fn set_rule(
     }
     let head = unsafe { (gw.head)(company).cast::<*mut ()>() };
     let cost = if to == INVALID_ENGINE {
-        unsafe { remove_replacement(gw, head, from, id, flags) }
+        unsafe { remove_engine_replacement(gw, head, from, id, flags) }
     } else {
         if !unsafe { (w.engine_valid)(to) } || !unsafe { valid(w, gw, from, to, company) } {
             return ERROR;
         }
-        unsafe { add_replacement(gw, head, from, to, id, old, flags) }
+        unsafe { add_engine_replacement(gw, head, from, to, id, old, flags) }
     };
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
         unsafe { update_autoreplace(gw, company) };

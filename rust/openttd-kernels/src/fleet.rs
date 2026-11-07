@@ -21,6 +21,8 @@
 use crate::command_type::DoCommandFlag;
 use crate::company_type::CompanyID;
 use crate::debug::debug;
+use crate::engine_type::EngineID;
+use crate::group::{GroupFlag, GroupFlags};
 use crate::group_type::GroupID;
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
@@ -1197,43 +1199,68 @@ unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
         }
     }
 }
-unsafe fn get_replacement(w: &GroupServices, mut er: *mut (), engine: u16, id: u16) -> *mut Renew {
+/// Retrieves the `EngineRenew` that specifies the replacement of the given
+/// engine type from the given renewlist
+unsafe fn get_engine_replacement(
+    w: &GroupServices,
+    mut er: *mut (),
+    engine: u16,
+    id: u16,
+) -> *mut Renew {
+    let engine = EngineID(engine);
+    let id = GroupID(id);
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
         let target = read_field!(p, group_id);
-        if read_field!(p, from) == engine && unsafe { contains(w, id, target) } {
+        if EngineID(read_field!(p, from)) == engine && unsafe { contains(w, id.0, target) } {
             return p;
         }
         er = read_field!(p, next);
     }
     std::ptr::null_mut()
 }
-unsafe fn replacement(
+/// Retrieve the engine replacement in a given renewlist for an original engine type.
+/// `when_old` is set if the replacement should be done when old.
+/// Returns the engine type to replace with, or `EngineID::INVALID` if no
+/// replacement is in the list.
+unsafe fn engine_replacement(
     w: &GroupServices,
     er: *mut (),
     engine: u16,
     id: u16,
     when_old: *mut bool,
 ) -> u16 {
-    let mut p = unsafe { get_replacement(w, er, engine, id) };
+    let engine = EngineID(engine);
+    let id = GroupID(id);
+    let mut p = unsafe { get_engine_replacement(w, er, engine.0, id.0) };
     if p.is_null() {
-        let g = unsafe { group(w, id) };
-        if id == DEFAULT_GROUP || (!g.is_null() && read_field!(g, flags) & 1 == 0) {
-            p = unsafe { get_replacement(w, er, engine, ALL_GROUP) };
+        let g = unsafe { group(w, id.0) };
+        if id == GroupID::DEFAULT_GROUP
+            || (!g.is_null()
+                && !GroupFlags(read_field!(g, flags)).test(GroupFlag::ReplaceProtection))
+        {
+            // We didn't find anything useful in the vehicle's own group so we will try ALL_GROUP
+            p = unsafe { get_engine_replacement(w, er, engine.0, GroupID::ALL_GROUP.0) };
         }
     }
     if !when_old.is_null() {
-        let old =
-            !p.is_null() && (read_field!(p, to) == engine || read_field!(p, replace_when_old));
+        // Not replacing: false. When replacing with same model, only ever do it when old.
+        // Otherwise use player setting.
+        let old = !p.is_null()
+            && (EngineID(read_field!(p, to)) == engine || read_field!(p, replace_when_old));
         unsafe { when_old.write(old) };
     }
     if p.is_null() {
-        INVALID_GROUP
+        EngineID::INVALID.0
     } else {
         read_field!(p, to)
     }
 }
-unsafe fn add_replacement(
+/// Add an engine replacement to the given renewlist.
+/// `from` is the original engine type, `to` the replacement engine type, `id` the
+/// related group, `old` selects replacement when old or always, and `flags` are
+/// the calling command flags. Returns success or command error.
+unsafe fn add_engine_replacement(
     w: &GroupServices,
     head: *mut *mut (),
     from: u16,
@@ -1242,10 +1269,14 @@ unsafe fn add_replacement(
     old: bool,
     flags: u32,
 ) -> u32 {
-    let p = unsafe { get_replacement(w, head.read(), from, id) };
+    let from = EngineID(from);
+    let to = EngineID(to);
+    let id = GroupID(id);
+    // Check if the old vehicle is already in the list
+    let p = unsafe { get_engine_replacement(w, head.read(), from.0, id.0) };
     if !p.is_null() {
-        if flags & 1 != 0 {
-            write_field!(p, to, to);
+        if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
+            write_field!(p, to, to.0);
             write_field!(p, replace_when_old, old);
         }
         return OK;
@@ -1253,35 +1284,44 @@ unsafe fn add_replacement(
     if !unsafe { (w.renew_can_allocate)() } {
         return ERROR;
     }
-    if flags & 1 != 0 {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
+        // Insert before the first element
         let shell = unsafe { (w.renew_allocate)() };
         let p = unsafe { (w.renew_state)(shell).cast::<Renew>() };
-        write_field!(p, from, from);
-        write_field!(p, to, to);
-        write_field!(p, group_id, id);
+        write_field!(p, from, from.0);
+        write_field!(p, to, to.0);
+        write_field!(p, group_id, id.0);
         write_field!(p, replace_when_old, old);
         write_field!(p, next, unsafe { head.read() });
         unsafe { head.write(shell) };
     }
     OK
 }
-unsafe fn remove_replacement(
+/// Remove an engine replacement from a given renewlist.
+/// `engine` is the original engine type and `id` the related group.
+/// `flags` are the calling command flags. Returns success or command error.
+unsafe fn remove_engine_replacement(
     w: &GroupServices,
     head: *mut *mut (),
     engine: u16,
     id: u16,
     flags: u32,
 ) -> u32 {
+    let engine = EngineID(engine);
+    let id = GroupID(id);
     let mut er = unsafe { head.read() };
     let mut prev: *mut Renew = std::ptr::null_mut();
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
         let next = read_field!(p, next);
-        if read_field!(p, from) == engine && read_field!(p, group_id) == id {
-            if flags & 1 != 0 {
+        if EngineID(read_field!(p, from)) == engine && GroupID(read_field!(p, group_id)) == id {
+            if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
                 if prev.is_null() {
+                    // First element
+                    // The second becomes the new first element
                     unsafe { head.write(next) };
                 } else {
+                    // Cut this element out
                     write_field!(prev, next, next);
                 }
                 unsafe { (w.renew_delete)(er) };
@@ -1293,7 +1333,9 @@ unsafe fn remove_replacement(
     }
     ERROR
 }
-unsafe fn remove_all_replacements(w: &GroupServices, head: *mut *mut ()) {
+/// Remove all engine replacement settings for the company.
+/// The renewlist is empty on return.
+unsafe fn remove_all_engine_replacement(w: &GroupServices, head: *mut *mut ()) {
     let mut er = unsafe { head.read() };
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
@@ -1301,7 +1343,7 @@ unsafe fn remove_all_replacements(w: &GroupServices, head: *mut *mut ()) {
         unsafe { (w.renew_delete)(er) };
         er = next;
     }
-    unsafe { head.write(std::ptr::null_mut()) };
+    unsafe { head.write(std::ptr::null_mut()) }; // Empty list
 }
 
 /// Synchronous original fleet `update_children` control.
@@ -1640,7 +1682,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_replacement(
     old: *mut bool,
 ) -> u16 {
     let w = unsafe { &*services };
-    unsafe { replacement(w, head, engine, id, old) }
+    unsafe { engine_replacement(w, head, engine, id, old) }
 }
 /// Synchronous original fleet `add_replacement` control.
 /// # Safety
@@ -1657,7 +1699,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_add_replacement(
     flags: u32,
 ) -> u32 {
     let w = unsafe { &*services };
-    unsafe { add_replacement(w, head, from, to, id, old, flags) }
+    unsafe { add_engine_replacement(w, head, from, to, id, old, flags) }
 }
 /// Synchronous original fleet `remove_replacement` control.
 /// # Safety
@@ -1672,7 +1714,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_remove_replacement(
     flags: u32,
 ) -> u32 {
     let w = unsafe { &*services };
-    unsafe { remove_replacement(w, head, engine, id, flags) }
+    unsafe { remove_engine_replacement(w, head, engine, id, flags) }
 }
 /// Synchronous original fleet `remove_all_replacements` control.
 /// # Safety
@@ -1684,7 +1726,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_remove_all_replacements(
     head: *mut *mut (),
 ) {
     let w = unsafe { &*services };
-    unsafe { remove_all_replacements(w, head) }
+    unsafe { remove_all_engine_replacement(w, head) }
 }
 
 pub(crate) mod pending;
