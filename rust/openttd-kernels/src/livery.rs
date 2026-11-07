@@ -68,8 +68,6 @@ impl LiveryScheme {
     pub const LS_END: Self = Self(23);
 }
 
-/// Raw compatibility view of `LiveryScheme::LS_BEGIN`.
-pub const LS_BEGIN: u8 = LiveryScheme::LS_BEGIN.0;
 /// Raw compatibility view of `LiveryScheme::LS_DEFAULT`.
 pub const LS_DEFAULT: u8 = LiveryScheme::LS_DEFAULT.0;
 /// Raw compatibility view of `LiveryScheme::LS_STEAM`.
@@ -116,8 +114,6 @@ pub const LS_LARGE_PLANE: u8 = LiveryScheme::LS_LARGE_PLANE.0;
 pub const LS_PASSENGER_TRAM: u8 = LiveryScheme::LS_PASSENGER_TRAM.0;
 /// Raw compatibility view of `LiveryScheme::LS_FREIGHT_TRAM`.
 pub const LS_FREIGHT_TRAM: u8 = LiveryScheme::LS_FREIGHT_TRAM.0;
-/// Raw compatibility view of `LiveryScheme::LS_END`.
-pub const LS_END: u8 = LiveryScheme::LS_END.0;
 /// Mask for `Livery::Flag::Primary`.
 pub const PRIMARY: u8 = 1 << 0;
 /// Mask for `Livery::Flag::Secondary`.
