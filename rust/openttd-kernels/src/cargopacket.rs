@@ -8,7 +8,7 @@
 //! `cargopacket.h` constants shared by simulation owners.
 
 /// `VehicleCargoList::MTA_LOAD`.
-pub const MTA_LOAD: u8 = 3;
+pub const MTA_LOAD: u8 = MoveToAction::MTA_LOAD.0;
 
 /// Native `CargoPacketID`, retaining every underlying `u32` value.
 #[repr(transparent)]
@@ -22,4 +22,25 @@ impl CargoPacketID {
     pub const END: Self = Self(16_773_120);
     /// Native `PoolID::Invalid()`.
     pub const INVALID: Self = Self(16_777_215);
+}
+
+/// Native `CargoList::MoveToAction`, shared with `VehicleCargoList`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MoveToAction(pub u8);
+impl MoveToAction {
+    /// First movement action.
+    pub const MTA_BEGIN: Self = Self(0);
+    /// Transfer the cargo to the station.
+    pub const MTA_TRANSFER: Self = Self(0);
+    /// Deliver the cargo to some town or industry.
+    pub const MTA_DELIVER: Self = Self(1);
+    /// Keep the cargo in the vehicle.
+    pub const MTA_KEEP: Self = Self(2);
+    /// Load the cargo from the station.
+    pub const MTA_LOAD: Self = Self(3);
+    /// End of the movement action range.
+    pub const MTA_END: Self = Self(4);
+    /// Number of movement actions.
+    pub const NUM_MOVE_TO_ACTION: Self = Self::MTA_END;
 }

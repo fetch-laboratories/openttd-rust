@@ -16,6 +16,7 @@
     clippy::too_many_lines,
     clippy::too_many_arguments
 )]
+use crate::base_station_base::StationRectMode;
 use crate::debug::debug;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
@@ -27,9 +28,24 @@ use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
+use crate::station_map::StationGfx;
 use crate::station_service::World;
+use crate::station_type::StationFacility;
 use crate::town::AuthorityServices;
 use waypoint::WaypointLayout;
+
+/// Native station naming classes local to `station_cmd.cpp`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StationNaming(pub u8);
+impl StationNaming {
+    pub(crate) const STATIONNAMING_RAIL: Self = Self(0);
+    pub(crate) const STATIONNAMING_ROAD: Self = Self(1);
+    pub(crate) const STATIONNAMING_AIRPORT: Self = Self(2);
+    pub(crate) const STATIONNAMING_OILRIG: Self = Self(3);
+    pub(crate) const STATIONNAMING_DOCK: Self = Self(4);
+    pub(crate) const STATIONNAMING_HELIPORT: Self = Self(5);
+}
 
 impl CommandServicesTable {
     pub(crate) fn rail_area(&self, st: *const BaseStation) -> TileArea {
@@ -363,7 +379,13 @@ impl<'a> Ctx<'a> {
         unsafe { crate::station::rect((self.world().owner)(st)) }
     }
     /// `*out = st->rect.BeforeAddRect(area, mode)`.
-    fn before_add_rect(&self, out: Cost<'_>, st: *mut BaseStation, area: TileArea, mode: u8) {
+    fn before_add_rect(
+        &self,
+        out: Cost<'_>,
+        st: *mut BaseStation,
+        area: TileArea,
+        mode: StationRectMode,
+    ) {
         let c = self.catchment();
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
@@ -377,7 +399,13 @@ impl<'a> Ctx<'a> {
         }
     }
     /// `*out = st->rect.BeforeAddTile(tile, mode)`.
-    fn before_add_tile(&self, out: Cost<'_>, st: *mut BaseStation, tile: u32, mode: u8) {
+    fn before_add_tile(
+        &self,
+        out: Cost<'_>,
+        st: *mut BaseStation,
+        tile: u32,
+        mode: StationRectMode,
+    ) {
         let c = self.catchment();
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
@@ -859,7 +887,7 @@ impl Ctx<'_> {
         flags: u16,
         reuse: bool,
         area: TileArea,
-        name: u8,
+        name: StationNaming,
     ) -> *mut BaseStation {
         if st.is_null() && reuse {
             let mut search = DeletedSearch {
@@ -881,7 +909,7 @@ impl Ctx<'_> {
                 out.error(0xffff);
                 return st;
             }
-            self.before_add_rect(out, st, area, 0);
+            self.before_add_rect(out, st, area, StationRectMode::ADD_TEST);
             if !out.ok() {
                 return st;
             }
@@ -1343,7 +1371,14 @@ impl Ctx<'_> {
             6
         }
     }
-    fn rail_bridge(&self, out: Cost<'_>, tile: u32, spec: *const RailSpec, kind: u8, gfx: u8) {
+    fn rail_bridge(
+        &self,
+        out: Cost<'_>,
+        tile: u32,
+        spec: *const RailSpec,
+        kind: u8,
+        gfx: StationGfx,
+    ) {
         if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
@@ -1358,7 +1393,7 @@ impl Ctx<'_> {
             tile,
             info,
             kind,
-            gfx,
+            gfx.0,
             self.bridge_height(south),
             self.s.strings.demolish_bridge,
         );
@@ -1479,7 +1514,14 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let st = self.build_part(ret, st, flags, reuse, area, 0);
+        let st = self.build_part(
+            ret,
+            st,
+            flags,
+            reuse,
+            area,
+            StationNaming::STATIONNAMING_RAIL,
+        );
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -1525,7 +1567,7 @@ impl Ctx<'_> {
                         gfx = (cb as u8 & !1).wrapping_add(axis);
                     }
                 }
-                self.rail_bridge(ret, t, spec, 0, gfx);
+                self.rail_bridge(ret, t, spec, 0, StationGfx(gfx));
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -1561,7 +1603,9 @@ impl Ctx<'_> {
             return;
         }
         (self.s.set_train_area)(st, area);
-        crate::station_lifecycle::add_facility(st, 0, area.tile, unsafe { &*self.s.lifecycle });
+        crate::station_lifecycle::add_facility(st, StationFacility::Train, area.tile, unsafe {
+            &*self.s.lifecycle
+        });
         self.before_add_rect(
             ret,
             st,
@@ -1570,7 +1614,7 @@ impl Ctx<'_> {
                 w: u16::from(w),
                 h: u16::from(h),
             },
-            1,
+            StationRectMode::ADD_TRY,
         );
         crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
@@ -2079,7 +2123,14 @@ impl Ctx<'_> {
         (self.rail().road_infrastructure)(owner, rt, delta as u32);
         (self.command.infrastructure_dirty)(owner);
     }
-    fn road_bridge(&self, out: Cost<'_>, tile: u32, spec: *const RoadSpec, kind: u8, gfx: u8) {
+    fn road_bridge(
+        &self,
+        out: Cost<'_>,
+        tile: u32,
+        spec: *const RoadSpec,
+        kind: u8,
+        gfx: StationGfx,
+    ) {
         if !crate::map_func::World::new(self.shared).bridge_above(tile) {
             return out.zero();
         }
@@ -2094,7 +2145,7 @@ impl Ctx<'_> {
             tile,
             info,
             kind,
-            gfx,
+            gfx.0,
             self.bridge_height(south),
             self.s.strings.demolish_bridge,
         );
@@ -2125,11 +2176,11 @@ impl Ctx<'_> {
             tile,
             spec,
             kind,
-            if drive {
+            StationGfx(if drive {
                 4 + axis
             } else {
                 invalid.trailing_zeros() as u8
-            },
+            }),
         );
         if !ret.ok() {
             return cost.take(ret);
@@ -2367,6 +2418,7 @@ impl Ctx<'_> {
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
             return cost.error(0xffff);
         }
+        // Trams only have drive through stops.
         if !drive && !crate::road::road_type_is_road(rt) {
             return cost.error(0xffff);
         }
@@ -2418,7 +2470,14 @@ impl Ctx<'_> {
                 self.s.strings.too_many_bus
             });
         }
-        let st = self.build_part(ret, st, flags, reuse, area, 1);
+        let st = self.build_part(
+            ret,
+            st,
+            flags,
+            reuse,
+            area,
+            StationNaming::STATIONNAMING_ROAD,
+        );
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -2509,10 +2568,17 @@ impl Ctx<'_> {
                 (self.s.set_stop_next)(tail, stop);
             }
             self.area_add((self.s.stop_area)(st, truck), tile);
-            crate::station_lifecycle::add_facility(st, if truck { 1 } else { 2 }, tile, unsafe {
-                &*self.s.lifecycle
-            });
-            self.before_add_tile(ret, st, tile, 1);
+            crate::station_lifecycle::add_facility(
+                st,
+                if truck {
+                    StationFacility::TruckStop
+                } else {
+                    StationFacility::BusStop
+                },
+                tile,
+                unsafe { &*self.s.lifecycle },
+            );
+            self.before_add_tile(ret, st, tile, StationRectMode::ADD_TRY);
             let owner = (self.world().station_owner)(st);
             let id = (self.links().graphs.station_id)(st);
             if drive {
@@ -3160,9 +3226,9 @@ impl Ctx<'_> {
         let name = if (self.s.airport_airplanes)(crate::airport::get_airport(airport, unsafe {
             &*self.s.airport_runtime
         })) {
-            2
+            StationNaming::STATIONNAMING_AIRPORT
         } else {
-            5
+            StationNaming::STATIONNAMING_HELIPORT
         };
         st = self.build_part(ret, st, flags, reuse, area, name);
         if !ret.ok() {
@@ -3180,9 +3246,11 @@ impl Ctx<'_> {
         unsafe {
             noise_ptr.write(noise_ptr.read().wrapping_add(noise as u16));
         }
-        crate::station_lifecycle::add_facility(st, 3, tile, unsafe { &*self.s.lifecycle });
+        crate::station_lifecycle::add_facility(st, StationFacility::Airport, tile, unsafe {
+            &*self.s.lifecycle
+        });
         (self.s.set_airport_details)(st, airport, layout, rotation);
-        self.before_add_rect(ret, st, area, 1);
+        self.before_add_rect(ret, st, area, StationRectMode::ADD_TRY);
         let owner = (self.world().station_owner)(st);
         let id = (self.links().graphs.station_id)(st);
         for t in self.airport_tiles(spec, layout, tile) {
@@ -3579,15 +3647,24 @@ impl Ctx<'_> {
         if st.is_null() && distant {
             st = self.full_station(target);
         }
-        st = self.build_part(ret, st, flags, reuse, area, 4);
+        st = self.build_part(
+            ret,
+            st,
+            flags,
+            reuse,
+            area,
+            StationNaming::STATIONNAMING_DOCK,
+        );
         if !ret.ok() {
             return cost.take(ret);
         }
         if flags & 1 != 0 {
             self.area_add((self.s.ship_station_area)(st), tile);
             self.area_add((self.s.ship_station_area)(st), flat);
-            crate::station_lifecycle::add_facility(st, 4, tile, unsafe { &*self.s.lifecycle });
-            self.before_add_rect(ret, st, area, 1);
+            crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
+                &*self.s.lifecycle
+            });
+            self.before_add_rect(ret, st, area, StationRectMode::ADD_TRY);
             let owner = (self.world().station_owner)(st);
             if water == 1
                 && !((self.shared.has_water_class)(flat)
@@ -3751,7 +3828,12 @@ impl Ctx<'_> {
         );
         (self.s.set_string_id)(
             st,
-            crate::station_lifecycle::generate_name(st, tile, 3, unsafe { &*self.s.lifecycle }),
+            crate::station_lifecycle::generate_name(
+                st,
+                tile,
+                StationNaming::STATIONNAMING_OILRIG,
+                unsafe { &*self.s.lifecycle },
+            ),
         );
         (self.s.associate_industry)(st, tile);
         crate::animated_tile::openttd_rust_animation_delete(tile, false);
@@ -3767,7 +3849,7 @@ impl Ctx<'_> {
         (self.s.set_facilities)(st, 24);
         (self.s.set_build_date)(st, crate::timer_game_common::calendar_date().0);
         self.update_docking(st);
-        self.before_add_tile(ret, st, tile, 2);
+        self.before_add_tile(ret, st, tile, StationRectMode::ADD_FORCE);
         (self.s.virtual_coord)(st);
         // The industry tile became a station tile, which may change neighbouring
         // catchments. RecomputeCatchment cannot remove nearby industries here,

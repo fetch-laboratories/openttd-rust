@@ -14,6 +14,14 @@ use crate::station_type::{
 };
 use crate::tile_type::{MP_STATION, TileIndex};
 
+/// Native `StationGfx`, the byte index of station graphics.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StationGfx(pub u8);
+
+/// Offset for the dock water parts (`GFX_DOCK_BASE_WATER_PART`).
+pub const GFX_DOCK_BASE_WATER_PART: u8 = 4;
+
 /// `GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET`.
 pub const GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET: u8 = 4;
 
@@ -290,7 +298,7 @@ impl crate::map_func::World<'_> {
     #[inline(always)]
     pub(crate) fn station_gfx(&self, t: u32) -> u8 {
         self.check(self.kind(t) == MP_STATION);
-        Self::byte(self.types.m5(t))
+        StationGfx(Self::byte(self.types.m5(t))).0
     }
     /// `GetStationIndex`.
     #[allow(clippy::inline_always)]

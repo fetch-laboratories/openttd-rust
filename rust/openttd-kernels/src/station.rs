@@ -22,7 +22,7 @@
 
 pub(crate) mod spatial;
 
-use crate::base_station_base::{ADD_FORCE, ADD_TEST, ADD_TRY};
+use crate::base_station_base::StationRectMode;
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
 use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
@@ -39,6 +39,7 @@ use crate::station_type::{
 };
 use crate::tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_STATION};
 use crate::tilearea::TileArea;
+use StationRectMode as RectMode;
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
 pub use crate::station_type::Station;
@@ -75,11 +76,11 @@ impl StationRect {
     }
     /// `BeforeAddTile`; `false` is `STR_ERROR_STATION_TOO_SPREAD_OUT`.
     #[allow(clippy::cast_possible_wrap, clippy::many_single_char_names)]
-    pub fn before_add_tile(&mut self, tile: u32, mode: u8, c: &Ctx<'_>) -> bool {
+    pub fn before_add_tile(&mut self, tile: u32, mode: StationRectMode, c: &Ctx<'_>) -> bool {
         let x = c.map.tile_x(tile) as i32;
         let y = c.map.tile_y(tile) as i32;
         if self.is_empty() {
-            if mode != ADD_TEST {
+            if mode != RectMode::ADD_TEST {
                 self.left = x;
                 self.right = x;
                 self.top = y;
@@ -94,12 +95,13 @@ impl StationRect {
             };
             let w = rect_width(new_rect.left, new_rect.right);
             let h = rect_height(new_rect.top, new_rect.bottom);
-            if mode != ADD_FORCE && (w > i32::from((c.c.spread)()) || h > i32::from((c.c.spread)()))
+            if mode != RectMode::ADD_FORCE
+                && (w > i32::from((c.c.spread)()) || h > i32::from((c.c.spread)()))
             {
-                c.check(mode != ADD_TRY);
+                c.check(mode != RectMode::ADD_TRY);
                 return false;
             }
-            if mode != ADD_TEST {
+            if mode != RectMode::ADD_TEST {
                 *self = new_rect;
             }
         }
@@ -107,8 +109,17 @@ impl StationRect {
     }
     /// `BeforeAddRect`: an overlarge unforced rectangle succeeds without mutation;
     /// a failing second corner keeps the first corner's effect.
-    pub fn before_add_rect(&mut self, tile: u32, w: i32, h: i32, mode: u8, c: &Ctx<'_>) -> bool {
-        if mode == ADD_FORCE || (w <= i32::from((c.c.spread)()) && h <= i32::from((c.c.spread)())) {
+    pub fn before_add_rect(
+        &mut self,
+        tile: u32,
+        w: i32,
+        h: i32,
+        mode: StationRectMode,
+        c: &Ctx<'_>,
+    ) -> bool {
+        if mode == RectMode::ADD_FORCE
+            || (w <= i32::from((c.c.spread)()) && h <= i32::from((c.c.spread)()))
+        {
             let ok = self.before_add_tile(tile, mode, c);
             if ok {
                 return self.before_add_tile(c.map.tile_add_xy(tile, w - 1, h - 1), mode, c);
@@ -1080,7 +1091,7 @@ pub unsafe extern "C" fn openttd_rust_station_rect_before_add_tile_abi(
 ) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
-    let ok = copy.before_add_tile(tile, mode, &c);
+    let ok = copy.before_add_tile(tile, StationRectMode(mode), &c);
     unsafe { *r = copy };
     u8::from(ok)
 }
@@ -1098,7 +1109,7 @@ pub unsafe extern "C" fn openttd_rust_station_rect_before_add_rect_abi(
 ) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
-    let ok = copy.before_add_rect(tile, w, h, mode, &c);
+    let ok = copy.before_add_rect(tile, w, h, StationRectMode(mode), &c);
     unsafe { *r = copy };
     u8::from(ok)
 }
