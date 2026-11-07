@@ -473,8 +473,8 @@ impl Services {
         }
     }
     pub(crate) fn transfer(&self, old: u8, new: u8) {
-        let old = Owner(old);
-        let new = Owner(new);
+        let old: Owner = CompanyID(old);
+        let new: Owner = CompanyID(new);
         each(|id, state| {
             if unsafe { CompanyID((*state).awarded) } != old {
                 return;
@@ -596,7 +596,7 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     let cargo = CargoType(cargo);
     let flags = DoCommandFlags(flags);
     if !(s.can_allocate)()
-        || Owner((s.shared().current_company)()) != Owner::DEITY
+        || CompanyID((s.shared().current_company)()) != Owner::DEITY
         || cargo.0 >= NUM_CARGO
         || !(s.cargo_valid)(cargo.0)
         || !(s.valid_source)(src)
