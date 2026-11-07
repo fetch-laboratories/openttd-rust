@@ -497,6 +497,7 @@ impl Engine<'_> {
         {
             return false;
         }
+        // Abort instead of clamping when the platform cannot expand within the map.
         let origin = self.offset(tile, -(platform as i32), -(platform as i32));
         let width = (max_x.wrapping_add(2).wrapping_add((2 * platform) as i32)) as u16;
         let height_area = (max_y.wrapping_add(2).wrapping_add((2 * platform) as i32)) as u16;
@@ -505,6 +506,8 @@ impl Engine<'_> {
         {
             return false;
         }
+        // Terraform as OWNER_TOWN to disable autoslope and town ratings, regardless
+        // of whether the founder is a company or this is random/editor construction.
         let company = self.swap_company(Owner::TOWN);
         for y in 0..u32::from(height_area) {
             for x in 0..u32::from(width) {
@@ -515,6 +518,8 @@ impl Engine<'_> {
                         unsafe { (self.x.set_company)(company.0) };
                         return false;
                     }
+                    // This test cannot account fully for height differences over one
+                    // without modifying the map.
                     unsafe {
                         crate::landscape_cmd::terraform_command(
                             &*self.context.command_checks,
@@ -538,6 +543,8 @@ impl Engine<'_> {
                     let walk = self.offset(origin, x as i32, y as i32);
                     let mut current = unsafe { (self.x.tile_height)(walk) };
                     while current != height {
+                        // Terraform for free: the test pass cannot calculate the
+                        // exact cost, and mismatched test/execute costs would assert.
                         unsafe {
                             crate::landscape_cmd::terraform_command(
                                 &*self.context.command_checks,

@@ -76,8 +76,9 @@ fn probability(
         *forced = false;
         return 0;
     }
-    let chance = chance.wrapping_mul(16);
-    // CHECK_REFINERY and CHECK_OIL_RIG place industries at the map edge.
+    let chance = chance.wrapping_mul(16); // Increase precision.
+    // Coast length grows slower than map area, so scale coastal industries in one
+    // dimension. Scaling all other probabilities is harmless and keeps this simple.
     let chance = if matches!(
         CheckProc(unsafe { (*spec).check_proc }),
         CheckProc::CHECK_REFINERY | CheckProc::CHECK_OIL_RIG

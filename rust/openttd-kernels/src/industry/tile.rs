@@ -137,6 +137,7 @@ fn bigger(
     }
     let gfx = unsafe { (t.gfx)(tile) };
     if gfx >= crate::industry_type::NEW_INDUSTRYTILEOFFSET {
+        // New industries are already animated during construction.
         return;
     }
     match gfx {
@@ -386,6 +387,8 @@ pub(crate) unsafe fn tile_loop(
     if unsafe { (t.on_water)(tile) } {
         unsafe { crate::water::tree_industry_water_loop(tile, call, s.shared()) };
     }
+    // Removing an industry NewGRF can leave a formerly water-built industry
+    // vulnerable to flooding. The water loop may have replaced this tile.
     if (s.shared().tile_type)(tile) != MP_INDUSTRY {
         return;
     }
@@ -659,6 +662,8 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     let industry = unsafe { (t.industry)(tile) };
     let kind = unsafe { (*industry.owner).metadata.kind };
     let spec = industrytype::industry(u16::from(kind));
+    // Water, the editor and magic bulldozer may destroy industries. Water must
+    // not flood water-built industries such as oil rigs or tiles requiring water.
     if (unsafe { (p.current_company)() } != Owner::WATER.0
         && !(g.environment.editor)()
         && !unsafe { (p.magic_bulldozer)() })

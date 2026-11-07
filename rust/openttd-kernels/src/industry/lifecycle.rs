@@ -201,6 +201,7 @@ unsafe fn randomise_tile(
     }
     let waiting =
         IndustryRandomTriggers(unsafe { (w.random_triggers)(tile) } | (1_u8 << trigger.0));
+    // Store before resolving so variable 5F observes the waiting triggers.
     unsafe { (w.set_random_triggers)(tile, waiting.0) };
     let masks = unsafe { (w.resolve_reseed)(tile, spec.gfx, industry, waiting.0) };
     unsafe { (w.set_random_triggers)(tile, waiting.0 & !masks.used) };

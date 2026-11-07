@@ -646,6 +646,7 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     }
     let callbacks = unsafe { (*spec_of(owner)).callback_mask };
     let callback = IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::Production256Ticks);
+    // Scale the callback interval by the cargo scale percentage.
     if callback
         && unsafe {
             u32::from((*f).counter)
@@ -659,6 +660,8 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
         unsafe { (s.production_callback)(i, 1) };
         helper(owner, s, false);
     }
+    // Other production and special effects run every 256 ticks. Scaling their
+    // cargo amount preserves a trickle of production at low scale factors.
     if unsafe { !(*f).counter.is_multiple_of(256) } {
         return;
     }
@@ -890,6 +893,9 @@ fn protected(o: Observation, s: &Services) -> bool {
     !IndustryBehaviours(o.behaviour).test(IndustryBehaviour::CanCloseLastInstance)
         && unsafe { (s.type_count)(o.kind) } <= 1
 }
+const PERCENT_TRANSPORTED_60: u32 = 153;
+const PERCENT_TRANSPORTED_80: u32 = 204;
+
 fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
     let o = observe(owner);
     let f = fields(o.owner);
@@ -898,6 +904,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
     let mut standard = false;
     let mut suppress = false;
     let mut recalc = false;
+    // Industries with production callbacks use the original economy.
     let original = original_economy(o.callbacks, unsafe { (s.economy_type)() });
     let mut div = 0u8;
     let mut mul = 0u8;
@@ -914,6 +921,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
         let result = unsafe { (s.change_callback)(i, monthly, random) };
         let mut res = result.result;
         if res != CALLBACK_FAILED {
+            // A failed callback does nothing; a successful one may supply a custom message.
             suppress = res & 128 != 0;
             if res & 256 != 0 {
                 let grfid = unsafe { (*spec_of(owner)).grf_prop.grfid };
@@ -930,12 +938,15 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 0 => {}
                 1 => div = 1,
                 2 => mul = 1,
+                // Announce closure now; physical removal happens next month.
                 3 => close = true,
+                // Apply the standard random change as for a primary industry.
                 4 => standard = true,
                 5..=8 => div = (res - 3) as u8,
                 9..=12 => mul = (res - 7) as u8,
                 13 => increment = -1,
                 14 => increment = 1,
+                // Set the level from the third byte of register 0x100.
                 15 => {
                     unsafe {
                         (*f).prod_level = ((result.reg as u32 >> 16) & 255)
@@ -969,7 +980,8 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 } else {
                     0
                 };
-                if !only_decrease && (pct > 153) != chance(s, 1, 3) {
+                // Above 60% transported, increase with 66% probability; otherwise 33%.
+                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance(s, 1, 3) {
                     mul = 1;
                 } else {
                     div = 1;
@@ -992,18 +1004,23 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 let random = rand(s);
                 let old = unsafe { i32::from((*p).rate) };
                 let pct = unsafe { transported((*p).history[usize::from(LAST_MONTH)]) };
-                let mut mult = if pct > 153 { 1 } else { -1 };
+                // Above 60% transported, the multiplier is 1; otherwise it is -1.
+                let mut mult = if pct > PERCENT_TRANSPORTED_60 { 1 } else { -1 };
+                // Temperate oil wells always decrease. Other industries have a 33%
+                // decrease chance, reduced to 16% above 80% transported.
                 if only_decrease {
                     mult = -1;
-                } else if chance16_i(1, if pct > 204 { 6 } else { 3 }, random) {
+                } else if chance16_i(1, if pct > PERCENT_TRANSPORTED_80 { 6 } else { 3 }, random) {
                     mult *= -1;
                 }
                 let mut new = old;
+                // A 4.5% chance changes production by 3-23%, or at least one unit.
                 if chance16_i(1, 22, random >> 16) {
                     new = new.wrapping_add(
                         mult * (((range(s, 50) + 10) * old as u32) >> 8).max(1) as i32,
                     );
                 }
+                // Prevent overflow and excessive oil-rig passenger production.
                 new = new.clamp(1, 255);
                 if unsafe {
                     (*p).cargo
@@ -1014,6 +1031,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 {
                     new = new.clamp(0, 16);
                 }
+                // Overrides prevent applying a change in the forbidden direction.
                 if unsafe {
                     (IndustryControlFlags((*f).ctlflags)
                         .test(IndustryControlFlag::NoProductionDecrease)
@@ -1024,6 +1042,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
                 } {
                     continue;
                 }
+                // The lowest production rate must not cancel a pending closure.
                 if new == old && old > 1 {
                     close = false;
                     continue;
@@ -1103,6 +1122,7 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
             recalc = true;
         }
     }
+    // Outside the smooth economy, production rates must match the production level.
     if recalc {
         recompute(o.owner);
     }
