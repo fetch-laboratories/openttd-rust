@@ -592,6 +592,9 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
 // Preserve the complete source rating loop and its immediate mutation order.
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world: *const World) {
+    const WAITING_CARGO_THRESHOLD: u32 = 1 << 12;
+    const WAITING_CARGO_CUT_FACTOR: u32 = 1 << 6;
+    const MAX_WAITING_CARGO: u32 = 1 << 15;
     let w = unsafe { &*world };
     let state = (w.owner)(st);
     let mut waiting_changed = false;
@@ -763,9 +766,6 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
         }
         // Replace the old strict 4095 cap with increasingly aggressive
         // truncation as the amount of waiting cargo grows.
-        const WAITING_CARGO_THRESHOLD: u32 = 1 << 12;
-        const WAITING_CARGO_CUT_FACTOR: u32 = 1 << 6;
-        const MAX_WAITING_CARGO: u32 = 1 << 15;
         if waiting > WAITING_CARGO_THRESHOLD {
             waiting -= (waiting - WAITING_CARGO_THRESHOLD) / WAITING_CARGO_CUT_FACTOR;
             waiting = waiting.min(MAX_WAITING_CARGO);

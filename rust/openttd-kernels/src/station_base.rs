@@ -14,20 +14,20 @@ pub mod goods_entry {
     #[allow(non_upper_case_globals)]
     impl State {
         /// Currently accepts final deliveries; refreshed from surrounding-tile
-        /// acceptance >= 8/8 every STATION_ACCEPTANCE_TICKS.
+        /// acceptance >= 8/8 every `STATION_ACCEPTANCE_TICKS`.
         pub const Acceptance: Self = Self(0);
         /// Has a rating because cargo has waited here, supplied by surrounding
         /// tiles or unloaded/transferred without final delivery. Cleared after
-        /// 255 * STATION_RATING_TICKS without a pickup.
+        /// 255 * `STATION_RATING_TICKS` without a pickup.
         pub const Rating: Self = Self(1);
         /// A vehicle has made a final delivery here. Never cleared.
         pub const EverAccepted: Self = Self(2);
-        /// Final delivery last month; copied from CurrentMonth at month start.
+        /// Final delivery last month; copied from `CurrentMonth` at month start.
         pub const LastMonth: Self = Self(3);
         /// Final delivery this month; reset at the beginning of each month.
         pub const CurrentMonth: Self = Self(4);
-        /// Final delivery in the current STATION_ACCEPTANCE_TICKS interval;
-        /// reset every STATION_ACCEPTANCE_TICKS ticks.
+        /// Final delivery in the current `STATION_ACCEPTANCE_TICKS` interval;
+        /// reset every `STATION_ACCEPTANCE_TICKS` ticks.
         pub const AcceptedBigtick: Self = Self(5);
     }
 

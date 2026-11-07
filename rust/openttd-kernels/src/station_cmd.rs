@@ -28,7 +28,7 @@ use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
-use crate::station_map::StationGfx;
+use crate::station_map::{GFX_DOCK_BASE_WATER_PART, StationGfx};
 use crate::station_service::World;
 use crate::station_type::StationFacility;
 use crate::town::AuthorityServices;
@@ -3474,7 +3474,7 @@ impl Ctx<'_> {
             if !(self.shared.tile_valid)(next) {
                 continue;
             }
-            if self.dock(next) && (self.shared.station_gfx)(next) >= 4 {
+            if self.dock(next) && (self.shared.station_gfx)(next) >= GFX_DOCK_BASE_WATER_PART {
                 let st = self.full_station((self.shared.station_index)(next));
                 self.area_add((self.s.docking_area)(st), tile);
                 (self.s.set_docking)(tile, true);
@@ -3686,7 +3686,7 @@ impl Ctx<'_> {
         }
     }
     fn dock_land(&self, tile: u32) -> u32 {
-        if (self.shared.station_gfx)(tile) < 4 {
+        if (self.shared.station_gfx)(tile) < GFX_DOCK_BASE_WATER_PART {
             return tile;
         }
         for dir in 0..4 {
