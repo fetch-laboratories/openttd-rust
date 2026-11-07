@@ -5,16 +5,48 @@
 /// `INITIAL_STATION_RATING`.
 pub const INITIAL_STATION_RATING: u8 = 175;
 
-/// `GoodsEntry::State` positions from the native header.
-pub const GE_ACCEPTANCE: u8 = 0;
-pub const GE_RATING: u8 = 1;
-pub const GE_EVER_ACCEPTED: u8 = 2;
-pub const GE_LAST_MONTH: u8 = 3;
-pub const GE_CURRENT_MONTH: u8 = 4;
-pub const GE_ACCEPTED_BIGTICK: u8 = 5;
+/// Original nested `GoodsEntry` status vocabulary.
+pub mod goods_entry {
+    /// `GoodsEntry::State` bit positions.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct State(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl State {
+        /// Currently accepts final deliveries; refreshed from surrounding-tile
+        /// acceptance >= 8/8 every `STATION_ACCEPTANCE_TICKS`.
+        pub const Acceptance: Self = Self(0);
+        /// Has a rating because cargo has waited here, supplied by surrounding
+        /// tiles or unloaded/transferred without final delivery. Cleared after
+        /// 255 * `STATION_RATING_TICKS` without a pickup.
+        pub const Rating: Self = Self(1);
+        /// A vehicle has made a final delivery here. Never cleared.
+        pub const EverAccepted: Self = Self(2);
+        /// Final delivery last month; copied from `CurrentMonth` at month start.
+        pub const LastMonth: Self = Self(3);
+        /// Final delivery this month; reset at the beginning of each month.
+        pub const CurrentMonth: Self = Self(4);
+        /// Final delivery in the current `STATION_ACCEPTANCE_TICKS` interval;
+        /// reset every `STATION_ACCEPTANCE_TICKS` ticks.
+        pub const AcceptedBigtick: Self = Self(5);
+    }
+
+    /// `GoodsEntry::States`, retaining all bits in the saved status byte.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct States(pub u8);
+    impl States {
+        /// Native `EnumBitSet::Test`.
+        #[must_use]
+        pub const fn test(self, element: State) -> bool {
+            self.0 & (1 << element.0) != 0
+        }
+    }
+}
+
 /// `GoodsEntry::HasRating`.
 pub(crate) fn has_rating(status: u8) -> bool {
-    status & (1 << GE_RATING) != 0
+    goods_entry::States(status).test(goods_entry::State::Rating)
 }
 /// `GoodsEntry::HasVehicleEverTriedLoading`.
 pub(crate) fn has_vehicle_ever_tried_loading(last_speed: u8) -> bool {

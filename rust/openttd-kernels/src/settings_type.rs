@@ -83,3 +83,26 @@ impl SettingAddresses {
         used_liveries: std::ptr::null(),
     };
 }
+
+/// Native `settings_type.h::IndustryDensity`, retaining the full underlying integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryDensity(pub u8);
+impl IndustryDensity {
+    /// The game does not build industries.
+    pub const ID_FUND_ONLY: Self = Self(0);
+    /// Start with just the industries that must be present.
+    pub const ID_MINIMAL: Self = Self(1);
+    /// Very few industries at game start.
+    pub const ID_VERY_LOW: Self = Self(2);
+    /// Few industries at game start.
+    pub const ID_LOW: Self = Self(3);
+    /// Normal amount of industries at game start.
+    pub const ID_NORMAL: Self = Self(4);
+    /// Many industries at game start.
+    pub const ID_HIGH: Self = Self(5);
+    /// Custom number of industries.
+    pub const ID_CUSTOM: Self = Self(6);
+    /// Number of industry density settings.
+    pub const ID_END: Self = Self(7);
+}

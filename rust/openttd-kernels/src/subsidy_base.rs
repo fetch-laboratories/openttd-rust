@@ -16,5 +16,6 @@ pub const SUBSIDY_CARGO_MIN_POPULATION: u32 = 900;
 pub const SUBSIDY_MAX_PCT_TRANSPORTED: u8 = 42;
 /// Inclusive Manhattan route-distance limit.
 pub const SUBSIDY_MAX_DISTANCE: u32 = 70;
-/// Town centre scan radius.
+/// Extent around town centre for scanning cargo acceptance and production.
+/// Six tiles is approximately minimum catchment plus half the minimum station size.
 pub const SUBSIDY_TOWN_CARGO_RADIUS: i32 = 6;

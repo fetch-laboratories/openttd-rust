@@ -8,6 +8,7 @@
 //! Stack-owned cargo collector. Typed world iteration stays outside Rust.
 
 use crate::script_list::List;
+use crate::station_type::StationID;
 
 /// Scalar state pinned by `station_cargo_ffi.h` on 32/64-bit targets.
 #[repr(C)]
@@ -27,9 +28,9 @@ impl Collector {
         Self {
             amount: 0,
             previous: 0,
-            last_key: u16::MAX,
+            last_key: StationID::INVALID.0,
             other,
-            origin: u16::MAX,
+            origin: StationID::INVALID.0,
             selector,
             finalized: 0,
         }
