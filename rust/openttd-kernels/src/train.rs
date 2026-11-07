@@ -22,16 +22,21 @@
     clippy::collapsible_if,
     clippy::verbose_bit_mask
 )]
+use crate::direction_type::{DirDiff, Direction};
 use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
-    OT_NOTHING,
+    OT_NOTHING, OrderStopLocation, OrderType,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
+use crate::station_type::StationID;
 use crate::tile_map::is_tile_type;
-use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
+use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE, TILE_SIZE, TileIndex};
+use crate::track_type::TrackBits;
 use crate::train_state::State;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::{VehState, VehStates};
+use crate::vehicle_type::{AccelerationModel, VEHICLE_LENGTH};
 /// Native identity and canonical scalar owner, resolved together once per entry or link.
 /// Neither pointer permits a Rust borrow to survive a callback. Deletion invalidates both.
 /// Each entry keeps `owner` live and serialized for the `raw_field` accesses below.
@@ -654,46 +659,52 @@ impl Game<'_> {
             .write_max_speed((u64::from(max_speed)) as u16);
         id.set_cached_tilt(u64::from(tilt));
         id.set_cached_curve_speed_mod(u64::from(min_curve_mod as u16));
-        id.set_cached_max_curve_speed(u64::from(self.curve_limit(id)));
+        id.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(id)));
         crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
         if (id).front() != 0 {
             Self::update_acceleration(id);
             (self.leaves.consist_windows)(id);
         }
     }
-    fn curve_limit(&self, id: Handle) -> u16 {
-        let mut max_speed = i32::from(u16::MAX);
-        if (self.leaves.acc_model)(id) == 0 {
+    /// Computes train speed limit caused by curves.
+    /// Returns the imposed speed limit.
+    fn get_curve_speed_limit(&self, id: Handle) -> u16 {
+        let absolute_max_speed = i32::from(u16::MAX);
+        let mut max_speed = absolute_max_speed;
+        if (self.leaves.acc_model)(id) == u64::from(AccelerationModel::AM_ORIGINAL.0) {
             return max_speed as u16;
         }
-        let mut curves = [0_i32; 2];
+        let mut curvecount = [0_i32; 2];
+        // First find the curve speed limit.
         let (mut numcurve, mut sum, mut pos, mut lastpos) = (0_i32, 0_i32, 0_i32, -1_i32);
         let mut u = id;
         loop {
             let part_next: Handle = u.next();
-            let part_direction: u8 = u.vehicle().direction();
+            let this_dir = Direction(u.vehicle().direction());
             if part_next == Handle::NONE {
                 break;
             }
-            let diff = part_direction.wrapping_sub((part_next).vehicle().direction()) & 7;
-            if diff != 0 {
-                if diff == 7 {
-                    curves[0] = curves[0].wrapping_add(1);
+            let next_dir = Direction((part_next).vehicle().direction());
+            let dirdiff = DirDiff(this_dir.0.wrapping_sub(next_dir.0) & 7);
+            if dirdiff != DirDiff::DIRDIFF_SAME {
+                if dirdiff == DirDiff::DIRDIFF_45LEFT {
+                    curvecount[0] = curvecount[0].wrapping_add(1);
                 }
-                if diff == 1 {
-                    curves[1] = curves[1].wrapping_add(1);
+                if dirdiff == DirDiff::DIRDIFF_45RIGHT {
+                    curvecount[1] = curvecount[1].wrapping_add(1);
                 }
-                if diff == 7 || diff == 1 {
+                if dirdiff == DirDiff::DIRDIFF_45LEFT || dirdiff == DirDiff::DIRDIFF_45RIGHT {
                     if lastpos != -1 {
                         numcurve = numcurve.wrapping_add(1);
                         sum = sum.wrapping_add(pos.wrapping_sub(lastpos));
-                        if pos.wrapping_sub(lastpos) <= 8 && max_speed > 88 {
+                        if pos.wrapping_sub(lastpos) <= VEHICLE_LENGTH as i32 && max_speed > 88 {
                             max_speed = 88;
                         }
                     }
                     lastpos = pos;
                 }
-                if diff == 6 || diff == 2 {
+                // If we have a 90 degree turn, fix the speed limit to 60.
+                if dirdiff == DirDiff::DIRDIFF_90LEFT || dirdiff == DirDiff::DIRDIFF_90RIGHT {
                     max_speed = 61;
                 }
             }
@@ -704,96 +715,130 @@ impl Game<'_> {
             ))));
         }
         if numcurve > 0 && max_speed > 88 {
-            if curves == [1, 1] {
-                max_speed = i32::from(u16::MAX);
+            if curvecount == [1, 1] {
+                max_speed = absolute_max_speed;
             } else {
-                sum = sum.wrapping_add(7) / 8;
+                sum = sum.wrapping_add(VEHICLE_LENGTH as i32 - 1) / VEHICLE_LENGTH as i32;
                 sum /= numcurve;
                 let d = 13 - sum.clamp(1, 12);
                 max_speed = 232 - d * d;
             }
         }
-        if max_speed != i32::from(u16::MAX) {
+        if max_speed != absolute_max_speed {
+            // Apply the current railtype's curve speed advantage.
             max_speed = max_speed.wrapping_add(
                 (max_speed / 2).wrapping_mul((self.leaves.curve_advantage)(id) as i32),
             );
             if id.get_cached_tilt() != 0 {
+                // Apply max_speed bonus of 20% for a tilting train.
                 max_speed = max_speed.wrapping_add(max_speed / 5);
             }
+            // Apply max_speed modifier (cached value is fixed-point binary with 8 fractional bits)
+            // and clamp the result to an acceptable range.
             max_speed = max_speed.wrapping_add(
                 max_speed.wrapping_mul(i32::from(id.get_cached_curve_speed_mod() as i16)) / 256,
             );
-            max_speed = max_speed.clamp(2, i32::from(u16::MAX));
+            max_speed = max_speed.clamp(2, absolute_max_speed);
         }
         max_speed as u16
     }
-    fn stop_location(&self, id: Handle, station: u16, tile: u32) -> (i32, i32, i32) {
+    /// Get the stop location of (the center) of the front vehicle of a train at
+    /// a platform of a station. Returns the location calculated from the begin of
+    /// the station, the amount of 1/16th tiles ahead, and the station length.
+    fn get_train_stop_location(
+        &self,
+        id: Handle,
+        station_id: StationID,
+        tile: TileIndex,
+    ) -> (i32, i32, i32) {
         let world = crate::map_func::World::new(self.services);
         // SAFETY: The process-lifetime tables resolve the original Station::Get once.
         let stations = unsafe { &*(*((self.services.station_catchment)())).station };
-        let st = (stations.station)(station);
+        let st = (stations.station)(station_id.0);
         let dir = crate::direction_func::dir_to_diag_dir((id).vehicle().direction(), |ok| {
             world.check(ok);
         });
-        let ahead = (crate::follow_track::platform_length_station(&world, tile, dir) as i32)
-            .wrapping_mul(16);
-        let length = (crate::follow_track::platform_length_full(&world, st.base, tile) as i32)
-            .wrapping_mul(16);
+        let station_ahead = (crate::follow_track::platform_length_station(&world, tile.0, dir)
+            as i32)
+            .wrapping_mul(TILE_SIZE as i32);
+        let station_length = (crate::follow_track::platform_length_full(&world, st.base, tile.0)
+            as i32)
+            .wrapping_mul(TILE_SIZE as i32);
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));
         let v_total_length: u16 = read_field!(id.vehicle().ground_cache(), cached_total_length);
-        let v_order_destination: u16 = id.vehicle().current_order().destination;
-        let v_order: u8 = id.vehicle().current_order().kind();
-        let mut loc = 1;
-        if i32::from(v_total_length) >= length {
-            loc = 2;
-        } else if v_order == OT_GOTO_STATION && v_order_destination == station {
-            loc = (self.leaves.stop_location)(id);
+        let v_order_destination = StationID(id.vehicle().current_order().destination);
+        let v_order = OrderType(id.vehicle().current_order().kind());
+        // Default to the middle of the station for stations stops that are not in
+        // the order list like intermediate stations when non-stop is disabled.
+        let mut osl = u64::from(OrderStopLocation::Middle.0);
+        if i32::from(v_total_length) >= station_length {
+            // The train is longer than the station, make it stop at the far end of the platform.
+            osl = u64::from(OrderStopLocation::FarEnd.0);
+        } else if v_order == OrderType::OT_GOTO_STATION && v_order_destination == station_id {
+            osl = (self.leaves.stop_location)(id);
         }
-        let stop = match loc {
-            0 => i32::from(v_total_length),
-            1 => length.wrapping_sub(length.wrapping_sub(i32::from(v_total_length)) / 2),
-            _ => length,
+        // The stop location of the FRONT! of the train.
+        let stop = match osl {
+            value if value == u64::from(OrderStopLocation::NearEnd.0) => i32::from(v_total_length),
+            value if value == u64::from(OrderStopLocation::Middle.0) => station_length
+                .wrapping_sub(station_length.wrapping_sub(i32::from(v_total_length)) / 2),
+            _ => station_length,
         };
+        // Subtract half the front vehicle length of the train so we get the real
+        // stop location of the train.
         (
             stop.wrapping_sub((i32::from(v_length) + 1) / 2),
-            ahead,
-            length,
+            station_ahead,
+            station_length,
         )
     }
-    fn current_max_speed(&self, id: Handle) -> i32 {
-        let v_tile: u32 = id.vehicle().tile();
+    /// Calculates the maximum speed of the vehicle under its current conditions.
+    fn get_current_max_speed(&self, id: Handle) -> i32 {
+        let v_tile = TileIndex(id.vehicle().tile());
         let v_max_track_speed: u16 =
             read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
         let v_speed: u16 = id.vehicle().speed();
         let model = (self.leaves.acc_model)(id);
-        let mut max_speed = if model == 0 {
+        let mut max_speed = if model == u64::from(AccelerationModel::AM_ORIGINAL.0) {
             i32::from(v_max_track_speed)
         } else {
             id.get_cached_max_curve_speed() as i32
         };
-        if model == 1 && (self.leaves.is_station)(id, v_tile) != 0 {
-            let station = (self.leaves.station)(id, v_tile) as u16;
-            if crate::movement::should_stop(self.services, id.vehicle(), station) {
-                let (stop, ahead, length) = self.stop_location(id, station, v_tile);
-                let distance = ahead / 16 - length.wrapping_sub(stop) / 16;
-                if distance > 0 {
-                    let mut limit = 120;
-                    let delta = i32::from(v_speed) / distance.wrapping_add(1);
-                    if max_speed > i32::from(v_speed) - delta {
-                        limit = i32::from(v_speed) - delta / 10;
+        if model == u64::from(AccelerationModel::AM_REALISTIC.0)
+            && (self.leaves.is_station)(id, v_tile.0) != 0
+        {
+            let sid = StationID((self.leaves.station)(id, v_tile.0) as u16);
+            if crate::movement::should_stop(self.services, id.vehicle(), sid.0) {
+                let (stop_at, station_ahead, station_length) =
+                    self.get_train_stop_location(id, sid, v_tile);
+                // The distance to go is whatever is still ahead of the train minus the
+                // distance from the train's stop location to the end of the platform.
+                let distance_to_go = station_ahead / TILE_SIZE as i32
+                    - station_length.wrapping_sub(stop_at) / TILE_SIZE as i32;
+                if distance_to_go > 0 {
+                    let mut st_max_speed = 120;
+                    let delta_v = i32::from(v_speed) / distance_to_go.wrapping_add(1);
+                    if max_speed > i32::from(v_speed) - delta_v {
+                        st_max_speed = i32::from(v_speed) - delta_v / 10;
                     }
-                    limit = limit.max(25_i32.wrapping_mul(distance));
-                    max_speed = max_speed.min(limit);
+                    st_max_speed = st_max_speed.max(25_i32.wrapping_mul(distance_to_go));
+                    max_speed = max_speed.min(st_max_speed);
                 }
             }
         }
         let mut u = id;
         while u != Handle::NONE {
-            if model == 1 && u.get_track() == u64::from(DEPOT) {
+            if model == u64::from(AccelerationModel::AM_REALISTIC.0)
+                && u.get_track() == u64::from(TrackBits::TRACK_BIT_DEPOT.0)
+            {
                 max_speed = max_speed.min(61);
                 break;
             }
-            if u.get_track() == u64::from(WORMHOLE) && (u).vehicle().status() & 1 == 0 {
+            // Vehicle is on the middle part of a bridge.
+            if u.get_track() == u64::from(TrackBits::TRACK_BIT_WORMHOLE.0)
+                && VehStates((u).vehicle().status()).0 & VehStates::from_element(VehState::Hidden).0
+                    == 0
+            {
                 let tile = (u).vehicle().tile();
                 max_speed = max_speed.min((self.leaves.bridge_speed)(u, tile) as i32);
             }
@@ -805,18 +850,19 @@ impl Game<'_> {
             cached_max_track_speed
         )))
     }
+    /// Update acceleration of the train from the cached power and weight.
     fn update_acceleration(id: Handle) {
-        let v_power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
-        let v_weight: u32 = read_field!(id.vehicle().ground_cache(), cached_weight);
+        let power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
+        let weight: u32 = read_field!(id.vehicle().ground_cache(), cached_weight);
         // Clamp(int, int, int): the uint product converts to int first.
-        let accel = ((v_power / v_weight).wrapping_mul(4) as i32).clamp(1, 255);
+        let accel = ((power / weight).wrapping_mul(4) as i32).clamp(1, 255);
         write_field!((id).record, acceleration, accel as u8);
     }
     fn update_speed(&self, id: Handle) -> i32 {
         let v_status: u8 = id.vehicle().status();
         let v_acceleration: u8 = id.vehicle().acceleration();
         let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
-        let max = self.current_max_speed(id);
+        let max = self.get_current_max_speed(id);
         if (self.leaves.acc_model)(id) == 0 {
             crate::ground_vehicle::update_speed(
                 id.vehicle(),
@@ -1872,7 +1918,7 @@ impl Game<'_> {
             id = (id).next();
         }
         if changed {
-            first.set_cached_max_curve_speed(u64::from(self.curve_limit(first)));
+            first.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(first)));
         }
         true
     }
@@ -2305,7 +2351,7 @@ impl Game<'_> {
             if crate::vehicle_effect::openttd_rust_visual_eligible_abi(id.vehicle()) != 0 {
                 crate::vehicle_effect::openttd_rust_visual_show(
                     id.vehicle(),
-                    self.current_max_speed(id) as u32,
+                    self.get_current_max_speed(id) as u32,
                 );
             }
         }
@@ -2645,7 +2691,7 @@ pub unsafe extern "C" fn openttd_rust_train_curve_limit(
     services: *const Services,
 ) -> u16 {
     let g = entry_game!(leaves, services);
-    g.curve_limit(id)
+    g.get_curve_speed_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -2657,7 +2703,7 @@ pub unsafe extern "C" fn openttd_rust_train_current_max_speed(
     services: *const Services,
 ) -> i32 {
     let g = entry_game!(leaves, services);
-    g.current_max_speed(id)
+    g.get_current_max_speed(id)
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -3063,7 +3109,7 @@ pub(crate) fn stop_location(
     station: u16,
     tile: u32,
 ) -> (i32, i32, i32) {
-    Game::new(leaves, services).stop_location(id, station, tile)
+    Game::new(leaves, services).get_train_stop_location(id, StationID(station), TileIndex(tile))
 }
 /// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
 pub(crate) fn next_offset(id: Handle) -> i32 {

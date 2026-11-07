@@ -105,7 +105,7 @@ fn get_transported_goods_income(
             | (num_pieces.min(255) << 16)
             | (u32::from(transit_periods).min(255) << 24);
         let callback = unsafe {
-            crate::cargo_registry::callback(
+            crate::cargo_registry::get_cargo_callback(
                 &*s.registry,
                 cargo_type.0,
                 CBID_CARGO_PROFIT_CALC.0,

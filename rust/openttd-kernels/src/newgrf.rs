@@ -124,17 +124,57 @@ crate::abi::layouts! {
     "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
 }
 
-// Feature identities from newgrf.h, pinned by native static assertions.
-pub const GSF_SOUNDFX: u8 = 12;
-pub const GSF_CARGOES: u8 = 11;
-pub const GSF_END: u8 = 22;
+/// Native `newgrf.h::GrfSpecFeature`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GrfSpecFeature(pub u8);
 
-pub const GSF_INDUSTRYTILES: u8 = 9;
-pub const GSF_INDUSTRIES: u8 = 10;
+impl GrfSpecFeature {
+    pub const GSF_TRAINS: Self = Self(0);
+    pub const GSF_ROADVEHICLES: Self = Self(1);
+    pub const GSF_SHIPS: Self = Self(2);
+    pub const GSF_AIRCRAFT: Self = Self(3);
+    pub const GSF_STATIONS: Self = Self(4);
+    pub const GSF_CANALS: Self = Self(5);
+    pub const GSF_BRIDGES: Self = Self(6);
+    pub const GSF_HOUSES: Self = Self(7);
+    pub const GSF_GLOBALVAR: Self = Self(8);
+    pub const GSF_INDUSTRYTILES: Self = Self(9);
+    pub const GSF_INDUSTRIES: Self = Self(10);
+    pub const GSF_CARGOES: Self = Self(11);
+    pub const GSF_SOUNDFX: Self = Self(12);
+    pub const GSF_AIRPORTS: Self = Self(13);
+    pub const GSF_SIGNALS: Self = Self(14);
+    pub const GSF_OBJECTS: Self = Self(15);
+    pub const GSF_RAILTYPES: Self = Self(16);
+    pub const GSF_AIRPORTTILES: Self = Self(17);
+    pub const GSF_ROADTYPES: Self = Self(18);
+    pub const GSF_TRAMTYPES: Self = Self(19);
+    pub const GSF_ROADSTOPS: Self = Self(20);
+    pub const GSF_BADGES: Self = Self(21);
+    pub const GSF_END: Self = Self(22);
+    /// Unspecified feature, default badge.
+    pub const GSF_DEFAULT: Self = Self::GSF_END;
+    /// Fake town `GrfSpecFeature` for `NewGRF` debugging (parent scope).
+    pub const GSF_FAKE_TOWNS: Self = Self::GSF_END;
+    /// End of the fake features.
+    pub const GSF_FAKE_END: Self = Self(23);
+    pub const GSF_ORIGINAL_STRINGS: Self = Self(0x48);
+    /// An invalid spec feature.
+    pub const GSF_INVALID: Self = Self(0xFF);
+}
+
+// Feature identities from newgrf.h, pinned by native static assertions.
+pub const GSF_SOUNDFX: u8 = GrfSpecFeature::GSF_SOUNDFX.0;
+pub const GSF_CARGOES: u8 = GrfSpecFeature::GSF_CARGOES.0;
+pub const GSF_END: u8 = GrfSpecFeature::GSF_END.0;
+
+pub const GSF_INDUSTRYTILES: u8 = GrfSpecFeature::GSF_INDUSTRYTILES.0;
+pub const GSF_INDUSTRIES: u8 = GrfSpecFeature::GSF_INDUSTRIES.0;
 /// `GSF_RAILTYPES`.
-pub const GSF_RAILTYPES: u8 = 0x10;
+pub const GSF_RAILTYPES: u8 = GrfSpecFeature::GSF_RAILTYPES.0;
 /// `GSF_ROADTYPES`.
-pub const GSF_ROADTYPES: u8 = 0x12;
+pub const GSF_ROADTYPES: u8 = GrfSpecFeature::GSF_ROADTYPES.0;
 /// Unreserved engine mapping scope.
 pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
 
@@ -190,52 +230,52 @@ pub const GLS_INIT: u8 = 3;
 pub const GLS_RESERVE: u8 = 4;
 pub const GLS_ACTIVATION: u8 = 5;
 
-pub const GSF_GLOBALVAR: u8 = 8;
+pub const GSF_GLOBALVAR: u8 = GrfSpecFeature::GSF_GLOBALVAR.0;
 pub const SECOND_ROCKY_TILE_SET: u8 = 6;
 
 /// `GSF_TRAINS`.
-pub const GSF_TRAINS: u8 = 0;
+pub const GSF_TRAINS: u8 = GrfSpecFeature::GSF_TRAINS.0;
 
 /// `GSF_ROADVEHICLES`.
-pub const GSF_ROADVEHICLES: u8 = 1;
+pub const GSF_ROADVEHICLES: u8 = GrfSpecFeature::GSF_ROADVEHICLES.0;
 
 /// `GSF_SHIPS`.
-pub const GSF_SHIPS: u8 = 2;
+pub const GSF_SHIPS: u8 = GrfSpecFeature::GSF_SHIPS.0;
 
 /// `GSF_AIRCRAFT`.
-pub const GSF_AIRCRAFT: u8 = 3;
+pub const GSF_AIRCRAFT: u8 = GrfSpecFeature::GSF_AIRCRAFT.0;
 
 /// `GSF_STATIONS`.
-pub const GSF_STATIONS: u8 = 4;
+pub const GSF_STATIONS: u8 = GrfSpecFeature::GSF_STATIONS.0;
 
 /// `GSF_CANALS`.
-pub const GSF_CANALS: u8 = 5;
+pub const GSF_CANALS: u8 = GrfSpecFeature::GSF_CANALS.0;
 
 /// `GSF_HOUSES`.
-pub const GSF_HOUSES: u8 = 7;
+pub const GSF_HOUSES: u8 = GrfSpecFeature::GSF_HOUSES.0;
 
 /// `GSF_AIRPORTS`.
-pub const GSF_AIRPORTS: u8 = 13;
+pub const GSF_AIRPORTS: u8 = GrfSpecFeature::GSF_AIRPORTS.0;
 
 /// `GSF_OBJECTS`.
-pub const GSF_OBJECTS: u8 = 15;
+pub const GSF_OBJECTS: u8 = GrfSpecFeature::GSF_OBJECTS.0;
 
 /// `GSF_AIRPORTTILES`.
-pub const GSF_AIRPORTTILES: u8 = 17;
+pub const GSF_AIRPORTTILES: u8 = GrfSpecFeature::GSF_AIRPORTTILES.0;
 
 /// `GSF_TRAMTYPES`.
-pub const GSF_TRAMTYPES: u8 = 19;
+pub const GSF_TRAMTYPES: u8 = GrfSpecFeature::GSF_TRAMTYPES.0;
 
 /// `GSF_ROADSTOPS`.
-pub const GSF_ROADSTOPS: u8 = 20;
+pub const GSF_ROADSTOPS: u8 = GrfSpecFeature::GSF_ROADSTOPS.0;
 
 /// `GSF_BADGES`.
-pub const GSF_BADGES: u8 = 21;
+pub const GSF_BADGES: u8 = GrfSpecFeature::GSF_BADGES.0;
 
 /// `GSF_ORIGINAL_STRINGS`.
-pub const GSF_ORIGINAL_STRINGS: u8 = 0x48;
+pub const GSF_ORIGINAL_STRINGS: u8 = GrfSpecFeature::GSF_ORIGINAL_STRINGS.0;
 
 /// `CanalFeature::CF_END`.
 pub const CF_END: u16 = 9;
 /// `GSF_DEFAULT`.
-pub const GSF_DEFAULT: u8 = GSF_END;
+pub const GSF_DEFAULT: u8 = GrfSpecFeature::GSF_DEFAULT.0;
