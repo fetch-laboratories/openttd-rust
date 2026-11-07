@@ -201,3 +201,10 @@
 - Local predicates, state updates, constructor sentinels and station-use helpers adopt those names without changing field layouts, scalar exports, service contracts, native packing or effect order. All generated ABI inputs remain unchanged.
 - Checks: original operations/order review and exact-head Full. Archive equivalence is unclaimed; inherited ship-depot assertion and coverage limits remain on #156. Private-field/operator closure stays later.
 - PRs: #771, integrated in #773. Other Vehicle workset files remain pending.
+
+## Original renewal and servicing vocabulary (#734)
+
+- Renewal, servicing and automatic-servicing bodies use the original helper names, canonical vehicle states, subtype flags, engine/cargo identities and economy-month constant. Scalar maintenance observations and record layouts remain unchanged.
+- Age and interval comparisons, live engine/company/refit reads, per-unit traversal, funding tests and depot-order short circuits preserve their existing operations and order. Native shells, service observations and presentation remain in C++.
+- Limits: Existing cargo-predicate, historical-save, arbitrary NewGRF and scheduling qualifications remain on #156. Other maintenance families remain in the cleanup workset.
+- PRs: #774, integrated in #777.
