@@ -179,7 +179,7 @@ pub extern "C" fn openttd_rust_face_scale_bits(
 pub extern "C" fn openttd_rust_face_get_bits(
     s: &Services,
     var: *const FaceVar,
-    cmf: *mut CompanyManagerFace,
+    cmf: *mut Face,
 ) -> u32 {
     get_bits(s, var, unsafe { (s.bits)(cmf).read() })
 }
