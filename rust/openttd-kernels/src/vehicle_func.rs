@@ -1,13 +1,35 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared constants from `vehicle_func.h`.
 #![allow(unsafe_code)]
-/// Native custom sprite sentinel.
-pub const CUSTOM_VEHICLE_SPRITENUM: u8 = 0xfd;
-/// Native custom sprite sentinel.
-pub const CUSTOM_VEHICLE_SPRITENUM_REVERSED: u8 = 0xfe;
+use crate::station_type::{StationFacilities, StationFacility};
+use crate::vehicle_type::VehicleType;
+
+/// Special values for `Vehicle::spritenum` and vehicle-info `image_index`.
+/// The unscoped native enum uses an integer; stored sprite indices remain bytes.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CustomVehicleSpriteNum(pub u32);
+
+impl CustomVehicleSpriteNum {
+    /// Vehicle sprite from `NewGRF`.
+    pub const CUSTOM_VEHICLE_SPRITENUM: Self = Self(0xfd);
+    /// Vehicle sprite from `NewGRF` with reverse driving direction
+    /// (from the articulation callback).
+    pub const CUSTOM_VEHICLE_SPRITENUM_REVERSED: Self = Self(0xfe);
+}
+
+/// Raw stored-sprite compatibility sentinel.
+#[allow(clippy::cast_possible_truncation)] // Native enum stored in the sprite byte.
+pub const CUSTOM_VEHICLE_SPRITENUM: u8 = CustomVehicleSpriteNum::CUSTOM_VEHICLE_SPRITENUM.0 as u8;
+/// Raw stored-sprite compatibility sentinel for reverse driving direction.
+#[allow(clippy::cast_possible_truncation)] // Native enum stored in the sprite byte.
+pub const CUSTOM_VEHICLE_SPRITENUM_REVERSED: u8 =
+    CustomVehicleSpriteNum::CUSTOM_VEHICLE_SPRITENUM_REVERSED.0 as u8;
 
 /// Original engine overload of `CanVehicleUseStation`. Facility/type gates stay
 /// before airport selection; no world or engine borrow spans a native service.
+/// Road vehicles need the vehicle to determine actual station use; this overload
+/// returns true when at least one road-vehicle facility is available.
 pub(crate) fn can_engine_use_station(
     engine: u16,
     st: *const crate::station::BaseStation,
@@ -15,29 +37,44 @@ pub(crate) fn can_engine_use_station(
 ) -> bool {
     let e = (s.engine_if_valid)(engine);
     (s.check)(!e.is_null());
-    let kind = crate::vehicle::EngineRef::of(e).kind().0;
+    let kind = crate::vehicle::EngineRef::of(e).kind();
     let world = unsafe { &*s.commands().station };
     match kind {
-        0 => (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_TRAIN != 0,
-        1 => {
+        VehicleType::VEH_TRAIN => {
             (world.facilities)(st.cast_mut())
-                & (crate::station_type::FACILITY_BUS | crate::station_type::FACILITY_TRUCK)
+                & StationFacilities::from_element(StationFacility::Train).0
                 != 0
         }
-        2 => (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_DOCK != 0,
-        3 => {
-            (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_AIRPORT != 0 && {
-                let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
-                let flag = if crate::vehicle::EngineRef::of(e).aircraft_subtype()
-                    & crate::engine_type::AIR_CTOL
-                    != 0
-                {
-                    crate::airport::FTA_AIRPLANES
-                } else {
-                    crate::airport::FTA_HELICOPTERS
-                };
-                (s.fta_flags)(fta) & flag != 0
-            }
+        VehicleType::VEH_ROAD => {
+            // We need the vehicle to know actual station use, but without road
+            // vehicle facilities the station certainly cannot be used.
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::BusStop)
+                    .with(StationFacilities::from_element(StationFacility::TruckStop))
+                    .0
+                != 0
+        }
+        VehicleType::VEH_SHIP => {
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::Dock).0
+                != 0
+        }
+        VehicleType::VEH_AIRCRAFT => {
+            (world.facilities)(st.cast_mut())
+                & StationFacilities::from_element(StationFacility::Airport).0
+                != 0
+                && {
+                    let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
+                    let flag = if crate::vehicle::EngineRef::of(e).aircraft_subtype()
+                        & crate::engine_type::AIR_CTOL
+                        != 0
+                    {
+                        crate::airport::FTA_AIRPLANES
+                    } else {
+                        crate::airport::FTA_HELICOPTERS
+                    };
+                    (s.fta_flags)(fta) & flag != 0
+                }
         }
         _ => false,
     }
@@ -51,7 +88,7 @@ pub(crate) unsafe fn can_vehicle_use_station(
 ) -> bool {
     let vehicle =
         crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
-    if vehicle.vehicle_type() == 1 {
+    if VehicleType(vehicle.vehicle_type()) == VehicleType::VEH_ROAD {
         return !crate::road_stop::primary_for_vehicle(s.shared(), st.cast_mut(), vehicle)
             .is_null();
     }
@@ -61,5 +98,5 @@ pub(crate) unsafe fn can_vehicle_use_station(
 /// Original type admission for a company's vehicles.
 #[must_use]
 pub const fn is_company_buildable_vehicle_type(kind: u8) -> bool {
-    kind < crate::vehicle_type::VEH_COMPANY_END
+    VehicleType(kind).0 < VehicleType::VEH_COMPANY_END.0
 }
