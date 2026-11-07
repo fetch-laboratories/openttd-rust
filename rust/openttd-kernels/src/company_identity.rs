@@ -11,11 +11,11 @@
 use crate::company_type::{CompanyID, CompanyManagerFace, OpenTTDCompany};
 use crate::engine_type::{EngineID, OpenTTDEngine};
 use crate::livery::{
-    LS_BUS, LS_DEFAULT, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_END, LS_FREIGHT_SHIP,
-    LS_FREIGHT_TRAM, LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL,
-    LS_PASSENGER_SHIP, LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
+    LS_BUS, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_FREIGHT_SHIP, LS_FREIGHT_TRAM,
+    LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL, LS_PASSENGER_SHIP,
+    LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
     LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
-    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery, PRIMARY, SECONDARY,
+    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery, LiveryScheme, PRIMARY, SECONDARY,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
@@ -284,8 +284,10 @@ pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {
         }
     }
 }
-pub(crate) fn reset_livery(s: &Services, c: *mut OpenTTDCompany) {
-    for scheme in LS_DEFAULT..LS_END {
+/// Reset the livery schemes to the company's primary colour.
+/// Used on loading games without livery information and on new company start up.
+pub(crate) fn reset_company_livery(s: &Services, c: *mut OpenTTDCompany) {
+    for scheme in LiveryScheme::LS_BEGIN.0..LiveryScheme::LS_END.0 {
         let l = (s.livery)(c, scheme);
         write_field!(l, in_use, 0);
         write_field!(l, colour1, (s.colour)(c));
@@ -310,12 +312,13 @@ pub(crate) fn reset_livery(s: &Services, c: *mut OpenTTDCompany) {
 }
 pub(crate) fn set_startup_colour(s: &Services, c: *mut OpenTTDCompany, colour: u8) {
     (s.set_colour)(c, colour);
-    reset_livery(s, c);
+    reset_company_livery(s, c);
     cache_colour((s.company_id)(c), (s.colour)(c));
 }
-pub(crate) fn update_liveries(s: &Services, c: *mut OpenTTDCompany) {
-    let default = (s.livery)(c, LS_DEFAULT);
-    for scheme in 1..LS_END {
+/// Update liveries when the default scheme changes, for schemes with colours set to default.
+pub(crate) fn update_company_liveries(s: &Services, c: *mut OpenTTDCompany) {
+    let default = (s.livery)(c, LiveryScheme::LS_DEFAULT.0);
+    for scheme in 1..LiveryScheme::LS_END.0 {
         let l = (s.livery)(c, scheme);
         if read_field!(l, in_use) & PRIMARY == 0 {
             write_field!(l, colour1, read_field!(default, colour1));
@@ -330,11 +333,11 @@ pub(crate) fn update_liveries(s: &Services, c: *mut OpenTTDCompany) {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_reset_livery(s: &Services, c: *mut OpenTTDCompany) {
-    reset_livery(s, c);
+    reset_company_livery(s, c);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_update_liveries(s: &Services, c: *mut OpenTTDCompany) {
-    update_liveries(s, c);
+    update_company_liveries(s, c);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_manager_face_abi(
@@ -357,6 +360,7 @@ pub extern "C" fn openttd_rust_company_manager_face_abi(
     }
     u8::from(true)
 }
+/// Change the company colour for the selected livery scheme.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_colour_abi(
     s: &Services,
@@ -366,22 +370,28 @@ pub extern "C" fn openttd_rust_company_colour_abi(
     execute: bool,
 ) -> u8 {
     use crate::gfx_type::{COLOUR_END, INVALID_COLOUR};
-    if scheme >= LS_END || (colour >= COLOUR_END && colour != INVALID_COLOUR) {
+    let scheme = LiveryScheme(scheme);
+    if scheme >= LiveryScheme::LS_END || (colour >= COLOUR_END && colour != INVALID_COLOUR) {
         return u8::from(false);
     }
-    if scheme == LS_DEFAULT && colour == INVALID_COLOUR {
+    // Default scheme can't be reset to invalid.
+    if scheme == LiveryScheme::LS_DEFAULT && colour == INVALID_COLOUR {
         return u8::from(false);
     }
     let id = CompanyID((s.shared.current_company)());
     let c = (s.company)(id);
-    if scheme == LS_DEFAULT && primary && !companies(s, |cc| cc == c || (s.colour)(cc) != colour) {
+    // Ensure no two companies have the same primary colour.
+    if scheme == LiveryScheme::LS_DEFAULT
+        && primary
+        && !companies(s, |cc| cc == c || (s.colour)(cc) != colour)
+    {
         return u8::from(false);
     }
     if execute {
-        let l = (s.livery)(c, scheme);
-        let default = (s.livery)(c, LS_DEFAULT);
+        let l = (s.livery)(c, scheme.0);
+        let default = (s.livery)(c, LiveryScheme::LS_DEFAULT.0);
         let flag = if primary { PRIMARY } else { SECONDARY };
-        if scheme != LS_DEFAULT {
+        if scheme != LiveryScheme::LS_DEFAULT {
             let flags = read_field!(l, in_use);
             write_field!(
                 l,
@@ -398,8 +408,10 @@ pub extern "C" fn openttd_rust_company_colour_abi(
                 colour = read_field!(default, colour1);
             }
             write_field!(l, colour1, colour);
-            if scheme == LS_DEFAULT {
-                update_liveries(s, c);
+            // If setting the first colour of the default scheme, adjust the
+            // original and cached company colours too.
+            if scheme == LiveryScheme::LS_DEFAULT {
+                update_company_liveries(s, c);
                 cache_colour(id, colour);
                 (s.set_colour)(c, colour);
                 (s.admin_update)(id);
@@ -409,19 +421,22 @@ pub extern "C" fn openttd_rust_company_colour_abi(
                 colour = read_field!(default, colour2);
             }
             write_field!(l, colour2, colour);
-            if scheme == LS_DEFAULT {
-                update_liveries(s, c);
+            if scheme == LiveryScheme::LS_DEFAULT {
+                update_company_liveries(s, c);
             }
         }
         if read_field!(l, in_use) & (PRIMARY | SECONDARY) != 0 {
+            // If enabling a scheme, set the default scheme to be in use too.
             write_field!(default, in_use, read_field!(default, in_use) | PRIMARY);
         } else {
+            // Else loop through all schemes to see if any are left enabled.
+            // If not, disable the default scheme too.
             write_field!(
                 default,
                 in_use,
                 read_field!(default, in_use) & !(PRIMARY | SECONDARY)
             );
-            for i in LS_DEFAULT..LS_END {
+            for i in LiveryScheme::LS_DEFAULT.0..LiveryScheme::LS_END.0 {
                 if read_field!((s.livery)(c, i), in_use) & (PRIMARY | SECONDARY) != 0 {
                     write_field!(default, in_use, read_field!(default, in_use) | PRIMARY);
                     break;
@@ -430,7 +445,10 @@ pub extern "C" fn openttd_rust_company_colour_abi(
         }
         (s.reset_colourmap)();
         (s.shared.screen_dirty)();
+        // All graphs related to companies use the company colour.
+        // The smallmap owner view also stores the company colours.
         (s.colour_windows)();
+        // Company colour data is indirectly cached.
         let mut from = 0;
         while let Some(v) = (s.shared.vehicle_next)(from) {
             let shell = v.0.as_ptr();
