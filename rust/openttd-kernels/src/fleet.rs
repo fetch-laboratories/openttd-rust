@@ -1199,7 +1199,7 @@ unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
         }
     }
 }
-/// Retrieves the EngineRenew that specifies the replacement of the given
+/// Retrieves the `EngineRenew` that specifies the replacement of the given
 /// engine type from the given renewlist
 unsafe fn get_engine_replacement(
     w: &GroupServices,
