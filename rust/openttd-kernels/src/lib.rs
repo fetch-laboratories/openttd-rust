@@ -104,6 +104,9 @@ pub mod pool;
 mod settings_type;
 
 mod newgrf_station;
+pub use newgrf_station::{
+    STATION_CLASS_LABEL_DEFAULT, StationClassID, StationSpecFlag, StationSpecFlags, station_spec,
+};
 mod newgrf_storage;
 /// Canonical persistent-storage pool identity.
 pub use newgrf_storage::PersistentStorageID;
@@ -133,6 +136,7 @@ mod road_map;
 mod road_stop;
 pub mod road_type;
 mod road_yapf;
+pub mod roadstop_base;
 mod roadveh;
 mod script_host;
 mod script_list;
@@ -1110,6 +1114,11 @@ pub mod base_bitset_type;
 
 mod newgrf_airport;
 mod newgrf_roadstop;
+pub use newgrf_roadstop::{
+    ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_LABEL_WAYPOINT, RoadStopAvailabilityType,
+    RoadStopClassID, RoadStopDrawMode, RoadStopDrawModes, RoadStopSpecFlag, RoadStopSpecFlags,
+    RoadStopView,
+};
 
 mod rail;
 mod type_availability;

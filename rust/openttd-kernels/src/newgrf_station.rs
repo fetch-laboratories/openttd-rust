@@ -1075,4 +1075,80 @@ pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
 /// Waypoint class label from `newgrf_station.h`.
 pub(crate) const STATION_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
 /// Class index limit from `newgrf_station.h`.
-pub(crate) const STAT_CLASS_MAX: u16 = u16::MAX;
+pub(crate) const STAT_CLASS_MAX: u16 = StationClassID::STAT_CLASS_MAX.0;
+
+/// Native station class index, retaining every original uint16 value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StationClassID(pub u16);
+impl StationClassID {
+    /// Lowest valid class index.
+    pub const STAT_CLASS_BEGIN: Self = Self(0);
+    /// Default station class.
+    pub const STAT_CLASS_DFLT: Self = Self(0);
+    /// Waypoint class.
+    pub const STAT_CLASS_WAYP: Self = Self(1);
+    /// Maximum number of classes.
+    pub const STAT_CLASS_MAX: Self = Self(u16::MAX);
+}
+
+/// Default station class label.
+pub const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+
+/// Native station specification flag bit position.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StationSpecFlag(pub u8);
+#[allow(non_upper_case_globals)]
+impl StationSpecFlag {
+    /// Use a different sprite set for ground sprites.
+    pub const SeparateGround: Self = Self(0);
+    /// Divide cargo amount by station size.
+    pub const DivByStationSize: Self = Self(1);
+    /// Callback 141 needs random bits.
+    pub const Cb141RandomBits: Self = Self(2);
+    /// Draw custom foundations.
+    pub const CustomFoundations: Self = Self(3);
+    /// Extended foundation block instead of simple.
+    pub const ExtendedFoundations: Self = Self(4);
+}
+
+/// Native station specification flags, including unnamed bits.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StationSpecFlags(pub u8);
+impl StationSpecFlags {
+    /// Native `EnumBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, flag: StationSpecFlag) -> bool {
+        (self.0 as u64) & (1_u64 << flag.0) != 0
+    }
+}
+
+/// Original nested `StationSpec` tile flag vocabulary.
+pub mod station_spec {
+    /// Native tile flag bit position.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct TileFlag(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl TileFlag {
+        /// Tile should contain catenary pylons.
+        pub const Pylons: Self = Self(0);
+        /// Tile should not contain catenary wires.
+        pub const NoWires: Self = Self(1);
+        /// Tile is blocked to vehicles.
+        pub const Blocked: Self = Self(2);
+    }
+    /// Native station tile flags, including unnamed bits.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct TileFlags(pub u8);
+    impl TileFlags {
+        /// Native `EnumBitSet::Test`.
+        #[must_use]
+        pub const fn test(self, flag: TileFlag) -> bool {
+            (self.0 as u64) & (1_u64 << flag.0) != 0
+        }
+    }
+}
