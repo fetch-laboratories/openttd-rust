@@ -300,12 +300,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_list(
 
 unsafe fn generate_list<F: FnMut(*mut ())>(
     s: &SelectionServices,
-    kind: VehicleListType,
+    kind: u8,
     vehicle_type: u8,
     company: u8,
     index: u32,
     mut emit: F,
 ) -> bool {
+    let kind = VehicleListType(kind);
     if kind == VehicleListType::VL_STATION_LIST || kind == VehicleListType::VL_DEPOT_LIST {
         struct Find<'a, F> {
             s: &'a SelectionServices,
@@ -423,16 +424,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_generate_list_abi(
 ) -> u8 {
     (s.list_clear)(list);
     u8::from(unsafe {
-        generate_list(
-            s,
-            VehicleListType(kind),
-            vehicle_type,
-            company,
-            index,
-            |v| {
-                (s.list_push)(list, v);
-            },
-        )
+        generate_list(s, kind, vehicle_type, company, index, |v| {
+            (s.list_push)(list, v);
+        })
     })
 }
 
