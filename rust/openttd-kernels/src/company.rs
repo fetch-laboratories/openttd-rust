@@ -2399,3 +2399,300 @@ fn network_new(s: &Services, id: u8, client: Option<u32>) {
     });
     crate::network_lifecycle::new_company(f.lifecycle, f, company, info);
 }
+
+#[cfg(test)]
+mod financial_command_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::sync::Mutex;
+
+    const MONEY: [i64; 7] = [i64::MIN, -1, 0, 9_999, 10_000, 30_000_000, i64::MAX];
+    const LOANS: [i64; 4] = [0, 100_000, 300_000, i64::MAX];
+    const AMOUNTS: [i64; 9] = [
+        i64::MIN,
+        -1,
+        0,
+        9_999,
+        10_000,
+        10_001,
+        20_000_001,
+        2_000_000_001,
+        i64::MAX,
+    ];
+    const VARIANTS: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255];
+    // This is the only Rust unit test accessing ECONOMY.max_loan. Hold this
+    // lock for its entire run and restore the prior process-wide value on drop.
+    static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
+
+    struct Fixture {
+        owners: [*mut Finances; 3],
+        current: u8,
+        networking: bool,
+        trace: Vec<[i64; 3]>,
+    }
+    thread_local! {
+        static FIXTURE: RefCell<Fixture> = const { RefCell::new(Fixture {
+            owners: [std::ptr::null_mut(); 3],
+            current: 0,
+            networking: false,
+            trace: Vec::new(),
+        }) };
+    }
+
+    extern "C" fn current_company() -> u8 {
+        FIXTURE.with_borrow(|f| f.current)
+    }
+    extern "C" fn set_current_company(id: u8) {
+        FIXTURE.with_borrow_mut(|f| f.current = id);
+    }
+    extern "C" fn networking() -> bool {
+        FIXTURE.with_borrow(|f| f.networking)
+    }
+    extern "C" fn company_finances(id: u8) -> *mut Finances {
+        FIXTURE.with_borrow(|f| {
+            f.owners
+                .get(usize::from(id))
+                .copied()
+                .unwrap_or(std::ptr::null_mut())
+        })
+    }
+    extern "C" fn invalidate(id: u8) {
+        FIXTURE.with_borrow_mut(|f| f.trace.push([3, i64::from(id), 0]));
+    }
+    extern "C" fn message(id: u8, amount: i64) {
+        FIXTURE.with_borrow_mut(|f| f.trace.push([52, i64::from(id), amount]));
+    }
+    extern "C" fn animation(tile: u32, amount: i64) {
+        FIXTURE.with_borrow_mut(|f| f.trace.push([53, i64::from(tile), amount]));
+    }
+    // Real typed production table; no shared defaults or layout offsets.
+    const FINANCE: FinanceServices = FinanceServices {
+        current_company,
+        set_current_company,
+        networking,
+        company_finances,
+        invalidate_company_windows: invalidate,
+        give_money_message: message,
+        money_animation: animation,
+    };
+
+    struct Run {
+        old_max_loan: i64,
+    }
+    impl Run {
+        fn start() -> Self {
+            FIXTURE.with_borrow_mut(|f| {
+                assert!(f.owners.iter().all(|p| p.is_null()));
+                f.owners = std::array::from_fn(|_| openttd_rust_company_state_create());
+            });
+            // SAFETY: ECONOMY_LOCK serializes this sole test's global accesses.
+            // No finance callback accesses economy storage or retains a borrow.
+            let old_max_loan = unsafe { (*openttd_rust_economy_state()).max_loan };
+            unsafe { (*openttd_rust_economy_state()).max_loan = 300_000 };
+            Self { old_max_loan }
+        }
+    }
+    impl Drop for Run {
+        fn drop(&mut self) {
+            FIXTURE.with_borrow_mut(|f| {
+                for owner in std::mem::replace(&mut f.owners, [std::ptr::null_mut(); 3]) {
+                    // SAFETY: Each create result is owned exclusively by this test;
+                    // command calls and all raw finance accesses have finished.
+                    unsafe { openttd_rust_company_state_destroy(owner) };
+                }
+                f.trace.clear();
+            });
+            // SAFETY: The caller still holds ECONOMY_LOCK; no owner is borrowed.
+            unsafe { (*openttd_rust_economy_state()).max_loan = self.old_max_loan };
+        }
+    }
+
+    struct Case {
+        op: u8,
+        execute: bool,
+        money: i64,
+        loan: i64,
+        amount: i64,
+    }
+    impl Case {
+        fn from_row(index: usize, fields: &[i64]) -> Self {
+            // Verify full Cartesian coverage and original loop order rather than
+            // trusting the captured count or accepting duplicate/sample inputs.
+            let expected = [
+                21 + (index / 504) as i64,
+                ((index / 252) % 2) as i64,
+                MONEY[(index / 36) % 7],
+                LOANS[(index / 9) % 4],
+                AMOUNTS[index % 9],
+            ];
+            assert_eq!(fields[..5], expected);
+            Self {
+                op: fields[0] as u8,
+                execute: fields[1] != 0,
+                money: fields[2],
+                loan: fields[3],
+                amount: fields[4],
+            }
+        }
+
+        fn reset(&self, variant: u8) {
+            FIXTURE.with_borrow_mut(|f| {
+                f.current = if self.op >= 24 && variant != 0 {
+                    OWNER_DEITY
+                } else {
+                    0
+                };
+                f.networking = variant == 12;
+                f.trace.clear();
+                for &owner in &f.owners {
+                    // SAFETY: Finances contains only zero-valid scalar/array
+                    // fields, no function pointers. Owners are exclusive and
+                    // no command or callback runs until all resets finish.
+                    unsafe {
+                        owner.write(std::mem::zeroed());
+                        (*owner).money = self.money;
+                        (*owner).loan = self.loan;
+                        (*owner).max_loan = if variant == 2 {
+                            MAX_LOAN_LIMIT
+                        } else {
+                            i64::MIN
+                        };
+                    }
+                }
+            });
+        }
+
+        fn invoke(&self, variant: u8) -> Cost {
+            let id = if (self.op == 21 || self.op >= 24) && variant == 255 {
+                255
+            } else {
+                1
+            };
+            match self.op {
+                21 => openttd_rust_company_give_money(
+                    &FINANCE,
+                    variant != 13,
+                    self.amount,
+                    id,
+                    self.execute,
+                ),
+                22 => openttd_rust_company_increase_loan(
+                    &FINANCE,
+                    variant,
+                    self.amount,
+                    variant == 3,
+                    self.execute,
+                ),
+                23 => openttd_rust_company_decrease_loan(
+                    &FINANCE,
+                    variant,
+                    self.amount,
+                    variant == 3,
+                    self.execute,
+                ),
+                24 => openttd_rust_company_set_max_loan(&FINANCE, id, self.amount, self.execute),
+                25 => openttd_rust_company_change_bank_balance(
+                    &FINANCE,
+                    u32::from(variant % 2),
+                    self.amount,
+                    id,
+                    if variant == 14 { 0 } else { variant },
+                    self.execute,
+                ),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    fn observation(result: Cost) -> Vec<i64> {
+        FIXTURE.with_borrow(|f| {
+            let mut values = vec![
+                i64::from(result.error),
+                result.cost,
+                i64::from(result.expense),
+                result.param,
+                i64::from(f.current),
+            ];
+            for &owner in &f.owners {
+                // SAFETY: All synchronous production calls have returned. This
+                // test exclusively owns all three live canonical allocations.
+                let c = unsafe { &*owner };
+                values.extend([
+                    c.money,
+                    c.loan,
+                    c.max_loan,
+                    c.current.income,
+                    c.current.expenses,
+                ]);
+                values.extend(c.expenses.iter().flatten());
+            }
+            values.push(f.trace.len() as i64);
+            values.extend(f.trace.iter().flatten());
+            values
+        })
+    }
+
+    fn decode_observation(fields: &[&str]) -> Vec<i64> {
+        let mut values = Vec::new();
+        for token in fields {
+            if let Some((count, value)) = token.split_once('*') {
+                let count = count.parse::<usize>().unwrap();
+                assert!(count > 1 && count <= 138);
+                values.extend(std::iter::repeat_n(value.parse::<i64>().unwrap(), count));
+            } else {
+                values.push(token.parse().unwrap());
+            }
+        }
+        // Five result/context fields, 44 per company, and the trace count.
+        let trace_count = usize::try_from(values[137]).unwrap();
+        assert_eq!(values.len(), 138 + trace_count * 3);
+        values
+    }
+
+    #[test]
+    fn all_financial_commands_match_original() {
+        let _guard = ECONOMY_LOCK.lock().unwrap();
+        let _run = Run::start();
+        let mut dictionary = Vec::new();
+        let mut used = Vec::new();
+        let mut rows = 0;
+        let mut cases = 0;
+        for line in include_str!("company/financial-command-oracle.txt").lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+            let fields: Vec<_> = line.split_whitespace().collect();
+            match fields[0] {
+                "D" => {
+                    assert_eq!(rows, 0, "dictionary must precede cases");
+                    assert_eq!(fields[1].parse::<usize>().unwrap(), dictionary.len());
+                    dictionary.push(decode_observation(&fields[2..]));
+                    used.push(false);
+                }
+                "C" => {
+                    let values: Vec<i64> = fields[1..].iter().map(|v| v.parse().unwrap()).collect();
+                    assert_eq!(values.len(), 21);
+                    let case = Case::from_row(rows, &values);
+                    for (variant, &key) in VARIANTS.iter().zip(&values[5..]) {
+                        case.reset(*variant);
+                        let result = case.invoke(*variant);
+                        let key = usize::try_from(key).unwrap();
+                        assert_eq!(
+                            observation(result),
+                            dictionary[key],
+                            "row {rows}, variant {variant}"
+                        );
+                        used[key] = true;
+                        cases += 1;
+                    }
+                    rows += 1;
+                }
+                _ => panic!("unknown oracle record: {line}"),
+            }
+        }
+        assert_eq!(rows, 2_520);
+        assert_eq!(cases, 40_320);
+        assert_eq!(dictionary.len(), 4_219);
+        assert!(used.iter().all(|seen| *seen));
+    }
+}

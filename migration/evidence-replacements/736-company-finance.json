@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "source:tools/simulation/company-command-reference.cpp"
+    ],
+    "oracle": "Unchanged OpenTTD 15.3 at 14ec60f248547d4d062a1160f0fc26d742319888. Nine verbatim company_cmd.cpp/misc_cmd.cpp bodies extracted using archived companies.py::command_gap, compiled original-only with pinned original headers on GNU/Linux x86_64 using GCC 13.3.0, no candidate library or ABI queries. All 40320 existing inputs returned normally. financial-command-oracle.txt records provenance, complete lossless observations and capture/decoding instructions; independent round-trip reproduced every raw input/result byte before probe deletion. Native company ABI/lifetime fixtures and all game scenarios remain unchanged.",
+    "observations": {
+      "Complete give-money, increase/decrease loan, set maximum loan and change bank balance matrix: execute/test, Money extrema, loan limits, invalid raw modes/IDs/expenses, deity/network/settings gates, error/cost/expense/parameter, all three companies money/loan/max-loan/current income/current expenses and all 39 yearly expense buckets, restored current company and exact ordered invalidation/message/animation trace": [
+        "rust:lib:company::financial_command_tests::all_financial_commands_match_original"
+      ]
+    }
+  }
+]
