@@ -55,3 +55,6 @@ impl TownId {
 
 /// Original header spelling for the existing town identity.
 pub use TownId as TownID;
+
+/// The maximum length of a town name in characters including '\0'.
+pub const MAX_LENGTH_TOWN_NAME_CHARS: u32 = 32;
