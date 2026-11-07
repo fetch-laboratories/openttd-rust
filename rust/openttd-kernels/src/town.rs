@@ -2173,7 +2173,7 @@ pub(crate) unsafe fn tunnel(
 
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda
 // result narrows to int, then the final int sign-extends to the uint64 destination.
-fn sum_history(history: &[SuppliedHistory]) -> SuppliedHistory {
+pub(crate) fn sum_history(history: &[SuppliedHistory]) -> SuppliedHistory {
     let production = history.iter().fold(0_i32, |sum, h| {
         (sum as u64).wrapping_add(u64::from(h.production)) as i32
     }) as u64;
