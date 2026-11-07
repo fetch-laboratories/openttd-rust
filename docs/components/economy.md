@@ -123,3 +123,10 @@
 - Native shells, pools, specs, attachments, vector owners and save facades remain with their existing owners. No C++ ownership, ABI or argument-struct change is included.
 - Checks: original operations/order source reviews and combined exact-head Full. Existing monitor, station and arbitrary-NewGRF coverage limits remain on #156. C++ and boundary counts hold.
 - PRs: #756 and #757, integrated in #758. The other five Cargo cleanup files remain pending.
+
+## Original company face vocabulary (#734)
+
+- Face helpers use the original names and explanations. `company_type::CompanyManagerFace` is the opaque native marker; the existing `Face` name remains an alias.
+- Raw face bits, live style/variable tables, style/label writes, validation and world/interactive RNG selection retain their operations and order. Native face storage, strings, service tables and scalar interfaces remain unchanged.
+- Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; inherited face/input, historical-save and GUI limits remain on #156.
+- PRs: #762, integrated in #763. Remaining Company/economy vocabulary stays open.

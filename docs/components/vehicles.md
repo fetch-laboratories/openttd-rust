@@ -181,3 +181,10 @@
 - Checks: default road/crash/flood/reload, train collision, road-stop and fleet scenarios; fleet console against unchanged public iterator bodies.
 - Limits: Gaps remain in GUI and external articulated GRFs (#156).
 - PRs: #384, integrated in #391.
+
+## Original vehicle-list and fleet selection vocabulary (#734)
+
+- `VehicleListType` retains all raw byte values, original list kinds and the end marker. Existing scalar adapters remain available. Private list generation and group insertion use the original domain names and explanatory comments.
+- Both list-generation callers, unsupported-kind behavior, shared-order traversal, output clearing and callback order are preserved. Native identifier packing, vehicle/group ownership, storage and public scalar interfaces remain unchanged.
+- Checks: original operations/order source review and combined exact-head Full. Archive equivalence is unclaimed; inherited fleet and mass-command coverage limits remain on #156.
+- PRs: #760, integrated in #763. Remaining Orders/fleet vocabulary stays open.
