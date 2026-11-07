@@ -8,10 +8,9 @@
 /** @file cargo_storage.hpp Pool services and native cargo ownership facade. */
 #include "services_ffi.h"
 static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem(); }
-static void *CargoCreate(const OpenTTDCargoPacketFields *fields) noexcept { return new CargoPacket(*fields); }
+static void *CargoCreate(const OpenTTDCargoPacket *fields) noexcept { return new CargoPacket(*fields); }
 static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast<CargoPacket *>(shell)->RustOwner(); }
 static void CargoDestroy(void *shell) noexcept { delete static_cast<CargoPacket *>(shell); }
-static uint32_t CargoCoordinate(uint32_t tile, uint8_t axis) noexcept { return axis == 0 ? TileX(TileIndex(tile)) : TileY(TileIndex(tile)); }
 static int64_t CargoPay(void *context, uint8_t final, uint8_t cargo, const void *shell, uint32_t amount, uint32_t tile) noexcept
 {
 	CargoPayment *payment = static_cast<CargoPayment *>(context);
@@ -44,7 +43,6 @@ static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.create = CargoCreate,
 	.packet = CargoOwner,
 	.destroy = CargoDestroy,
-	.coordinate = CargoCoordinate,
 	.pay = CargoPay,
 	.origin = CargoOrigin,
 	.flow_map = CargoFlowMap,
@@ -52,27 +50,23 @@ static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.packet_next = CargoNextPacket,
 };
 
-CargoPacket::CargoPacket() : CargoPacket(OpenTTDCargoPacketFields{}) {}
-CargoPacket::CargoPacket(const OpenTTDCargoPacketFields &fields) : state(openttd_rust_cargo_packet_new(&fields)) {}
+CargoPacket::CargoPacket() : state(openttd_rust_cargo_packet_new(nullptr)) {}
+CargoPacket::CargoPacket(const OpenTTDCargoPacket &fields) : state(openttd_rust_cargo_packet_new(&fields)) {}
 CargoPacket::CargoPacket(StationID first, uint16_t count, Source source) : CargoPacket()
 {
-	auto f = this->Export();
+	auto &f = *this->state;
 	f.first_station = first.base(); f.count = count; f.source_id = source.id; f.source_type = to_underlying(source.type);
-	this->Import(f);
 }
 CargoPacket::CargoPacket(uint16_t count, uint16_t periods, StationID first, TileIndex tile, Money feeder) : CargoPacket()
 {
-	auto f = this->Export();
+	auto &f = *this->state;
 	f.count = count; f.periods_in_transit = periods; f.first_station = first.base(); f.source_xy = tile.base(); f.feeder_share = feeder.base();
-	this->Import(f);
 }
-CargoPacket::CargoPacket(uint16_t count, Money feeder, CargoPacket &original) : CargoPacket(original.Export())
+CargoPacket::CargoPacket(uint16_t count, Money feeder, CargoPacket &original) : CargoPacket(*original.state)
 {
-	auto f = this->Export(); f.count = count; f.feeder_share = feeder.base(); this->Import(f);
+	auto &f = *this->state; f.count = count; f.feeder_share = feeder.base();
 }
 CargoPacket::~CargoPacket() { openttd_rust_cargo_packet_destroy(this->state); }
-OpenTTDCargoPacketFields CargoPacket::Export() const { OpenTTDCargoPacketFields f; openttd_rust_cargo_packet_export(this->state, &f); return f; }
-void CargoPacket::Import(const OpenTTDCargoPacketFields &fields) { openttd_rust_cargo_packet_import(this->state, &fields); }
 CargoPacket *CargoPacket::Split(uint amount) { return static_cast<CargoPacket *>(openttd_rust_cargo_packet_split(this->state, &_cargo_storage_services, amount)); }
 void CargoPacket::Merge(CargoPacket *other) { openttd_rust_cargo_packet_merge(this->state, &_cargo_storage_services, other); }
 void CargoPacket::Reduce(uint amount) { openttd_rust_cargo_packet_reduce(this->state, amount); }

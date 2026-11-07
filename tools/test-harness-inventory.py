@@ -9,7 +9,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import evidence_replacements as er
 import harness_inventory as hi
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,6 +87,7 @@ class InventoryTests(unittest.TestCase):
             for name in (
                 "run-comparisons.py",
                 "harness_inventory.py",
+                "evidence_replacements.py",
                 "vcs.py",
                 "validation_execution.py",
             ):
@@ -98,7 +101,8 @@ class InventoryTests(unittest.TestCase):
             for line, code in (
                 ("", 1),
                 ("Fixture passed: 0 cases", 1),
-                ("Fixture passed: 2 cases", 0),
+                ("Fixture passed: 2 cases", 1),
+                ("Fixture passed: 4 cases", 0),
             ):
                 with self.subTest(line=line):
                     inventory.write_text(original)
@@ -136,6 +140,189 @@ class InventoryTests(unittest.TestCase):
                 'def check(s):\n    return s["name"], s.get("check_signs")\n'
             )
             self.assertEqual(hi.unread_keys([scenario], [source]), ["chekc_signs"])
+
+
+class ReplacementTests(unittest.TestCase):
+    # This existing production test checks the unchanged Monocypher vectors,
+    # rather than a test invented to echo the replacement manifest.
+    RUST = "rust:lib:crypto::tests::monocypher_known_answers"
+
+    def record(self) -> er.Replacement:
+        return {
+            "retires": [
+                "source:src/tests/test_network_crypto.cpp",
+                "ctest:crypto vectors",
+            ],
+            "oracle": "Pinned original Monocypher known-answer vectors.",
+            "observations": {"crypto known answers": [self.RUST]},
+        }
+
+    def test_reference_names_require_registered_nonempty_replacements(self) -> None:
+        record = self.record()
+        reference = {"crypto vectors", "retained original"}
+        candidate = {"retained original", er.ctest_name(self.RUST)}
+        self.assertEqual(er.errors([record], TREE["default"]), [])
+        self.assertEqual(er.ctest_errors(reference, candidate, [record]), [])
+        for records, names in (([], candidate), ([record], {"retained original"})):
+            self.assertIn(
+                "without executable replacement",
+                " ".join(er.ctest_errors(reference, names, records)),
+            )
+        record["observations"] = {
+            "crypto known answers": ["scenario:" + TREE["default"][0]]
+        }
+        self.assertIn(
+            "require Rust CTest", " ".join(er.errors([record], TREE["default"]))
+        )
+        self.assertTrue(er.ctest_errors(reference, candidate, [record]))
+
+    def test_source_target_and_driver_loss_cannot_be_recorded_away(self) -> None:
+        for key, identity in (
+            ("native_sources", "source"),
+            ("native_tests", "source"),
+            ("native_targets", "target"),
+            ("comparisons", "comparison"),
+            ("default", "scenario"),
+        ):
+            tree = copy.deepcopy(TREE)
+            entries = tree[key]
+            name = next(iter(entries))
+            if isinstance(entries, dict):
+                del entries[name]
+            else:
+                entries.remove(name)
+            self.assertIn(
+                f"missing replacement contract: {identity}:{name}",
+                hi.replacement_errors(tree, TREE),
+            )
+
+    def test_manifest_accounts_for_retirement_without_shared_inventory_edits(
+        self,
+    ) -> None:
+        record = self.record()
+        tree = copy.deepcopy(TREE)
+        source = "src/tests/test_network_crypto.cpp"
+        tree["native_sources"].remove(source)
+        tree["native_tests"].remove(source)
+        with patch.object(er, "load", return_value=[record]):
+            expected = hi.registered_inventory(RECORDED, tree)
+            self.assertEqual(hi.errors(tree, expected, RECORDED), [])
+            self.assertEqual(hi.replacement_errors(tree, RECORDED), [])
+        with patch.object(er, "load", return_value=[]):
+            expected = hi.registered_inventory(RECORDED, tree)
+            self.assertIn(
+                "native_sources differs", " ".join(hi.errors(tree, expected, RECORDED))
+            )
+            self.assertTrue(hi.replacement_errors(tree, RECORDED))
+        self.assertIn(source, RECORDED["native_sources"])
+
+    def test_empty_manifests_and_observations_fail(self) -> None:
+        record = self.record()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "migration/evidence-replacements/crypto.json"
+            path.parent.mkdir(parents=True)
+            for value in (
+                [],
+                [{}],
+                [{**record, "observations": {}}],
+                [{**record, "observations": {"crypto": []}}],
+                [{**record, "oracle": ""}],
+            ):
+                path.write_text(json.dumps(value))
+                with self.assertRaisesRegex(ValueError, "empty|incomplete"):
+                    er.load(root)
+            path.write_text(json.dumps([record]))
+            self.assertEqual(er.load(root), [record])
+
+    def test_destinations_must_be_default_scenarios_or_real_rust_targets(self) -> None:
+        for check in (
+            "scenario:missing",
+            "scenario:" + TREE["soak"][0],
+            "rust:missing:case",
+            "rust:lib:",
+            "rust:lib:--list",
+        ):
+            record = self.record()
+            record["observations"] = {"crypto known answers": [check]}
+            self.assertTrue(er.errors([record], TREE["default"]), check)
+        record = self.record()
+        record["retires"] = ["source:tools/migration/crypto-vectors.cpp"]
+        record["observations"] = {
+            "crypto known answers": ["scenario:" + TREE["default"][0]]
+        }
+        self.assertEqual(er.errors([record], TREE["default"]), [])
+
+    def test_cmake_registers_rust_and_filters_only_retired_native_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src/tests").mkdir(parents=True)
+            # Use the actual common CMake helper and existing native fixture names.
+            for name in ("history_func.cpp", "test_network_crypto.cpp"):
+                (root / "src/tests" / name).touch()
+            tools = root / "tools"
+            tools.mkdir()
+            shutil.copyfile(
+                ROOT / "tools/evidence_replacements.py", tools / "register.py"
+            )
+            # Configure hosts such as Emscripten cannot import the simulation
+            # runtime. Exercise the actual registration entry under that limit.
+            (tools / "simulation.py").write_text(
+                "raise ImportError('simulation runtime unavailable at configure')\n"
+            )
+            manifest = root / "migration/evidence-replacements/crypto.json"
+            manifest.parent.mkdir(parents=True)
+            record = self.record()
+            record["observations"]["crypto known answers"].append("scenario:missing")
+            manifest.write_text(json.dumps([record]))
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(tools / "register.py"),
+                    "--cmake",
+                    str(root / "replacements.cmake"),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            self.assertIn(
+                "not a default harness scenario",
+                " ".join(er.errors([record], TREE["default"])),
+            )
+            (root / "src/tests/CMakeLists.txt").write_text(
+                "add_test_files(history_func.cpp test_network_crypto.cpp)\n"
+            )
+            (root / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.17)\nproject(registration NONE)\n"
+                'enable_testing()\nset(CARGO_EXECUTABLE cargo)\nset(Python3_EXECUTABLE "'
+                + sys.executable
+                + '")\n'
+                'include("' + str(ROOT / "cmake/SourceList.cmake") + '")\n'
+                "include(replacements.cmake)\nadd_custom_target(openttd_test)\n"
+                "add_subdirectory(src/tests)\n"
+                "get_target_property(sources openttd_test SOURCES)\n"
+                'file(WRITE "${CMAKE_BINARY_DIR}/sources.txt" "${sources}")\n'
+            )
+            build = root / "build"
+            subprocess.run(
+                ["cmake", "-S", str(root), "-B", str(build)],
+                check=True,
+                capture_output=True,
+            )
+            sources = (build / "sources.txt").read_text().split(";")
+            self.assertEqual(sources, [str(root / "src/tests/history_func.cpp")])
+            inventory = json.loads(
+                subprocess.check_output(
+                    ["ctest", "--show-only=json-v1"], cwd=build, text=True
+                )
+            )
+            self.assertEqual(
+                [test["name"] for test in inventory["tests"]],
+                [er.ctest_name(self.RUST)],
+            )
+            self.assertEqual(
+                inventory["tests"][0]["command"][-2:], ["--run-rust", self.RUST]
+            )
 
 
 if __name__ == "__main__":

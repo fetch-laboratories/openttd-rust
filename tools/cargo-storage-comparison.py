@@ -26,6 +26,8 @@ def main() -> None:
             "initializer_list",
             "-I",
             probe.ROOT / "src",
+            "-I",
+            probe.BUILD / "generated-abi",
             source,
         ]
 
