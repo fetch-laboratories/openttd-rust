@@ -464,15 +464,23 @@ impl HistoryRange {
         let last = usize::from(self.last);
         for target in (first + 1..last).rev() {
             // SAFETY: Original move_backward visits these initialized slots in reverse order.
-            let source = unsafe { history.add(target - 1).read() };
+            let source = unsafe { history.add(target - 1) };
+            // SAFETY: The selected source is an initialized history element.
+            let source = unsafe { source.read() };
             // SAFETY: No history borrow spans this write; the range bounds are native preconditions.
-            unsafe { history.add(target).write(source) };
+            let target = unsafe { history.add(target) };
+            // SAFETY: The selected target is writable and no input borrow remains.
+            unsafe { target.write(source) };
         }
         if self.total_division == 1 {
             // SAFETY: Original first - 1 is a live history slot.
-            let source = unsafe { history.add(first - 1).read() };
+            let source = unsafe { history.add(first - 1) };
+            // SAFETY: The selected source is an initialized history element.
+            let source = unsafe { source.read() };
             // SAFETY: Original first is a live history slot; no borrow spans the write.
-            unsafe { history.add(first).write(source) };
+            let target = unsafe { history.add(first) };
+            // SAFETY: The selected target is writable and no input borrow remains.
+            unsafe { target.write(source) };
             // SAFETY: The current period is the initialized front element.
             unsafe { history.write(T::default()) };
         } else if has_bit(
@@ -480,12 +488,15 @@ impl HistoryRange {
             u32::from(self.first).wrapping_sub(u32::from(self.division)),
         ) {
             let division = usize::from(self.division);
+            // SAFETY: The original reduction starts at this live history slot.
+            let inputs = unsafe { history.add(first - division) };
             // SAFETY: Original reduction reads this initialized span; reducers have no callbacks.
-            let inputs =
-                unsafe { std::slice::from_raw_parts(history.add(first - division), division) };
+            let inputs = unsafe { std::slice::from_raw_parts(inputs, division) };
             let result = T::sum(inputs);
             // SAFETY: The input borrow ended before assigning the original target slot.
-            unsafe { history.add(first).write(result) };
+            let target = unsafe { history.add(first) };
+            // SAFETY: The selected target is writable and no input borrow remains.
+            unsafe { target.write(result) };
         }
     }
 
@@ -526,7 +537,9 @@ impl HistoryRange {
         if age < u32::from(self.periods) {
             let index = slot(descriptor, age) as usize;
             // SAFETY: The original range/age select a live initialized history slot.
-            let source = unsafe { history.add(index).read() };
+            let source = unsafe { history.add(index) };
+            // SAFETY: The selected source is an initialized history element.
+            let source = unsafe { source.read() };
             // SAFETY: Read completes before the potentially aliasing result write.
             unsafe { result.write(source) };
             return Some(has_bit(mask, slot(descriptor, age)));

@@ -211,6 +211,7 @@ pub unsafe extern "C" fn openttd_rust_industry_sum_history(
     history: *const Pair,
     count: usize,
 ) -> Pair {
+    // SAFETY: The caller supplies the original nonempty initialized canonical pair span.
     sum_history(unsafe { std::slice::from_raw_parts(history, count) })
 }
 pub(crate) fn sum_history(history: &[Pair]) -> Pair {
