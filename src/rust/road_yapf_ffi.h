@@ -34,9 +34,6 @@ struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, f
  * reads ground-vehicle center Z and speed, then CFollowTrackRoad limits for old_tile. */
 OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const OpenTTDVehicle *, uint32_t, uint8_t, uint16_t, uint8_t);
 OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const OpenTTDVehicle *, int32_t);
-/* Evidence-only actual-heap probe. Input/Leaves initialized; no leaf is invoked.
- * costs[nodes], commands[count], values[count] readable and output[count] writable
- * disjoint spans. Indices/membership satisfy the original heap preconditions. */
-void OPENTTD_RUST_CALL openttd_rust_road_yapf_heap_probe(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const int32_t *, size_t, const uint32_t *, const int32_t *, size_t, uint32_t *);
+
 }
 #endif

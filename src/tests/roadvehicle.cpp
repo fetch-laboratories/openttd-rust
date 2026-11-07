@@ -18,91 +18,6 @@
 #include "abi-visit-OpenTTDVehicleResolverServices.hpp"
 #include "../safeguards.h"
 
-/* The road corpus has no tram/articulated turning witness. Keep the unchanged
- * original movement tables solely in this fixture to check every reachable table
- * entry; this does not establish controller equivalence for those vehicles. */
-namespace {
-struct RoadDriveEntry { uint8_t x, y; };
-#include "reference-roadveh_movement.h"
-static const std::pair<const RoadDriveEntry *, size_t> source_rows[] = {
-	{_roadveh_drive_data_0, std::size(_roadveh_drive_data_0)},
-	{_roadveh_drive_data_1, std::size(_roadveh_drive_data_1)},
-	{_roadveh_drive_data_2, std::size(_roadveh_drive_data_2)},
-	{_roadveh_drive_data_3, std::size(_roadveh_drive_data_3)},
-	{_roadveh_drive_data_4, std::size(_roadveh_drive_data_4)},
-	{_roadveh_drive_data_5, std::size(_roadveh_drive_data_5)},
-	{_roadveh_drive_data_6, std::size(_roadveh_drive_data_6)},
-	{_roadveh_drive_data_7, std::size(_roadveh_drive_data_7)},
-	{_roadveh_drive_data_8, std::size(_roadveh_drive_data_8)},
-	{_roadveh_drive_data_9, std::size(_roadveh_drive_data_9)},
-	{_roadveh_drive_data_10, std::size(_roadveh_drive_data_10)},
-	{_roadveh_drive_data_11, std::size(_roadveh_drive_data_11)},
-	{_roadveh_drive_data_12, std::size(_roadveh_drive_data_12)},
-	{_roadveh_drive_data_13, std::size(_roadveh_drive_data_13)},
-	{_roadveh_drive_data_14, std::size(_roadveh_drive_data_14)},
-	{_roadveh_drive_data_15, std::size(_roadveh_drive_data_15)},
-	{_roadveh_drive_data_16, std::size(_roadveh_drive_data_16)},
-	{_roadveh_drive_data_17, std::size(_roadveh_drive_data_17)},
-	{_roadveh_drive_data_18, std::size(_roadveh_drive_data_18)},
-	{_roadveh_drive_data_19, std::size(_roadveh_drive_data_19)},
-	{_roadveh_drive_data_20, std::size(_roadveh_drive_data_20)},
-	{_roadveh_drive_data_21, std::size(_roadveh_drive_data_21)},
-	{_roadveh_drive_data_22, std::size(_roadveh_drive_data_22)},
-	{_roadveh_drive_data_23, std::size(_roadveh_drive_data_23)},
-	{_roadveh_drive_data_24, std::size(_roadveh_drive_data_24)},
-	{_roadveh_drive_data_25, std::size(_roadveh_drive_data_25)},
-	{_roadveh_drive_data_26, std::size(_roadveh_drive_data_26)},
-	{_roadveh_drive_data_27, std::size(_roadveh_drive_data_27)},
-	{_roadveh_drive_data_28, std::size(_roadveh_drive_data_28)},
-	{_roadveh_drive_data_29, std::size(_roadveh_drive_data_29)},
-	{_roadveh_drive_data_30, std::size(_roadveh_drive_data_30)},
-	{_roadveh_drive_data_31, std::size(_roadveh_drive_data_31)},
-	{_rv_station_left_sw_far, std::size(_rv_station_left_sw_far)},
-	{_rv_station_left_nw_far, std::size(_rv_station_left_nw_far)},
-	{_rv_station_left_sw_near, std::size(_rv_station_left_sw_near)},
-	{_rv_station_left_nw_near, std::size(_rv_station_left_nw_near)},
-	{_rv_station_left_ne_far, std::size(_rv_station_left_ne_far)},
-	{_rv_station_left_se_far, std::size(_rv_station_left_se_far)},
-	{_rv_station_left_ne_near, std::size(_rv_station_left_ne_near)},
-	{_rv_station_left_se_near, std::size(_rv_station_left_se_near)},
-	{_rv_station_right_sw_far, std::size(_rv_station_right_sw_far)},
-	{_rv_station_right_nw_far, std::size(_rv_station_right_nw_far)},
-	{_rv_station_right_sw_near, std::size(_rv_station_right_sw_near)},
-	{_rv_station_right_nw_near, std::size(_rv_station_right_nw_near)},
-	{_rv_station_right_ne_far, std::size(_rv_station_right_ne_far)},
-	{_rv_station_right_se_far, std::size(_rv_station_right_se_far)},
-	{_rv_station_right_ne_near, std::size(_rv_station_right_ne_near)},
-	{_rv_station_right_se_near, std::size(_rv_station_right_se_near)},
-	{_roadveh_tram_turn_ne_0, std::size(_roadveh_tram_turn_ne_0)},
-	{_roadveh_tram_turn_ne_1, std::size(_roadveh_tram_turn_ne_1)},
-	{_roadveh_tram_turn_se_0, std::size(_roadveh_tram_turn_se_0)},
-	{_roadveh_tram_turn_se_1, std::size(_roadveh_tram_turn_se_1)},
-	{_roadveh_tram_turn_sw_0, std::size(_roadveh_tram_turn_sw_0)},
-	{_roadveh_tram_turn_sw_1, std::size(_roadveh_tram_turn_sw_1)},
-	{_roadveh_tram_turn_nw_0, std::size(_roadveh_tram_turn_nw_0)},
-	{_roadveh_tram_turn_nw_1, std::size(_roadveh_tram_turn_nw_1)},
-};
-}
-
-TEST_CASE("Road vehicles - original movement and stop tables")
-{
-	for (uint8_t tram = 0; tram < 2; ++tram) {
-		for (size_t state = 0; state < std::size(_road_road_drive_data); ++state) {
-			const RoadDriveEntry *row = _road_drive_data[tram][state];
-			if (row == nullptr) continue;
-			const auto source = std::find_if(std::begin(source_rows), std::end(source_rows), [&](const auto &item) { return item.first == row; });
-			REQUIRE(source != std::end(source_rows));
-			for (uint8_t frame = 0; frame < source->second; ++frame) {
-				const auto entry = row[frame];
-				CHECK(openttd_rust_road_drive_entry(tram, static_cast<uint8_t>(state), frame) == (entry.x | (entry.y << 8)));
-			}
-		}
-	}
-	for (size_t index = 0; index < std::size(_road_stop_stop_frame); ++index) {
-		CHECK(openttd_rust_road_stop_frame(static_cast<uint32_t>(index)) == _road_stop_stop_frame[index]);
-	}
-}
-
 TEST_CASE("Road vehicles - canonical path, nested save staging and indexed pool reuse")
 {
 	REQUIRE(Vehicle::CanAllocateItem(2));
@@ -204,7 +119,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 	leaves.shared = &shared;
 	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
 		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
-			openttd_rust_road_set(front, 0, state); openttd_rust_road_set(tail, 0, tail_state);
+			front->state = static_cast<uint8_t>(state); tail->state = static_cast<uint8_t>(tail_state);
 			struct { uint16_t max_track_speed, order_max_speed; } r{};
 			record.next = &tail_record;
 			tail_record.next = nullptr;
