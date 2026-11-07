@@ -5,41 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Inline helpers of `slope_func.h` and the `slope_type.h` values they use.
+//! Inline helpers of `slope_func.h`.
 //! `services.cpp` asserts every value.
 
-/// `SLOPE_FLAT`.
-pub const SLOPE_FLAT: u8 = 0x00;
-/// `SLOPE_W`.
-pub const SLOPE_W: u8 = 0x01;
-/// `SLOPE_S`.
-pub const SLOPE_S: u8 = 0x02;
-/// `SLOPE_E`.
-pub const SLOPE_E: u8 = 0x04;
-/// `SLOPE_N`.
-pub const SLOPE_N: u8 = 0x08;
-/// `SLOPE_STEEP`.
-pub const SLOPE_STEEP: u8 = 0x10;
-/// `SLOPE_NW`.
-pub const SLOPE_NW: u8 = SLOPE_N | SLOPE_W;
-/// `SLOPE_SW`.
-pub const SLOPE_SW: u8 = SLOPE_S | SLOPE_W;
-/// `SLOPE_SE`.
-pub const SLOPE_SE: u8 = SLOPE_S | SLOPE_E;
-/// `SLOPE_NE`.
-pub const SLOPE_NE: u8 = SLOPE_N | SLOPE_E;
-/// `SLOPE_EW`.
-pub const SLOPE_EW: u8 = SLOPE_E | SLOPE_W;
-/// `SLOPE_WSE`.
-pub const SLOPE_WSE: u8 = SLOPE_W | SLOPE_S | SLOPE_E;
-/// `SLOPE_NS`.
-pub const SLOPE_NS: u8 = SLOPE_N | SLOPE_S;
-/// `SLOPE_ELEVATED`.
-pub const SLOPE_ELEVATED: u8 = SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_N;
-/// `SLOPE_HALFTILE`.
-pub const SLOPE_HALFTILE: u8 = 0x20;
-/// `SLOPE_HALFTILE_MASK`.
-pub const SLOPE_HALFTILE_MASK: u8 = 0xE0;
+/// Compatibility constants from the original type header.
+pub use crate::slope_type::*;
 
 /// `IsSteepSlope`.
 #[must_use]
@@ -110,15 +80,6 @@ pub fn get_inclined_slope_direction(s: u8) -> u8 {
     }
 }
 
-/// `FOUNDATION_NONE`.
-pub const FOUNDATION_NONE: u8 = 0;
-/// `FOUNDATION_LEVELED`.
-pub const FOUNDATION_LEVELED: u8 = 1;
-/// `FOUNDATION_INCLINED_X`.
-pub const FOUNDATION_INCLINED_X: u8 = 2;
-/// `FOUNDATION_INCLINED_Y`.
-pub const FOUNDATION_INCLINED_Y: u8 = 3;
-
 /// `RemoveHalftileSlope`.
 pub const fn remove_halftile_slope(s: u8) -> u8 {
     s & !SLOPE_HALFTILE_MASK
@@ -145,12 +106,6 @@ pub const fn inclined_foundation(axis: u8) -> u8 {
     }
 }
 
-/// `FOUNDATION_STEEP_LOWER`.
-pub const FOUNDATION_STEEP_LOWER: u8 = 4;
-/// `FOUNDATION_STEEP_BOTH`.
-pub const FOUNDATION_STEEP_BOTH: u8 = 5;
-/// `FOUNDATION_INVALID`.
-pub const FOUNDATION_INVALID: u8 = 255;
 /// `GetHighestSlopeCorner`; the caller supplies its non-returning failure operation.
 pub fn get_highest_slope_corner(s: u8, not_reached: impl FnOnce()) -> u8 {
     match remove_halftile_slope(s) {
@@ -201,21 +156,6 @@ pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
     }
     FOUNDATION_RAIL_W.wrapping_add(c)
 }
-
-/// `CORNER_W`.
-pub const CORNER_W: u8 = 0;
-/// `CORNER_S`.
-pub const CORNER_S: u8 = 1;
-/// `CORNER_E`.
-pub const CORNER_E: u8 = 2;
-/// `CORNER_N`.
-pub const CORNER_N: u8 = 3;
-/// `FOUNDATION_HALFTILE_W`.
-pub const FOUNDATION_HALFTILE_W: u8 = 6;
-/// `FOUNDATION_RAIL_W`.
-pub const FOUNDATION_RAIL_W: u8 = 10;
-/// `FOUNDATION_RAIL_N`.
-pub const FOUNDATION_RAIL_N: u8 = 13;
 
 #[cfg(test)]
 mod tests {
