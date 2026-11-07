@@ -4,11 +4,11 @@
 
 ## Built-in town-name generation
 
-- Rust owns: 21 built-in generators, seed selection, English replacements, Finnish vowels, Czech grammatical matching and constants.
+- Rust owns: 21 built-in generators, seed selection, English replacements, Finnish vowels, Czech grammatical matching and constants. Czech grammar uses the original byte-backed elements and flag sets; table bytes, seed arithmetic and append order are preserved. `TownNameGenerator` names the shared generator function type.
 - C++ keeps: NewGRF routing, settings and save/load; town founding (#246) owns retries/uniqueness.
 - Checks: harness samples seeds through read-only AI logs.
 - Limits: The checks do not cover all 21 * 2^32 combinations, allocator failures or NewGRF town-name behavior.
-- PRs: #98.
+- PRs: #98, #754.
 
 ## Town growth and lifecycle state
 
