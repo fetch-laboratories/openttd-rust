@@ -469,8 +469,7 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
         prop,
         &mut reader,
     )
-    .map(|result| result.0)
-    .unwrap_or(u8::MAX)
+    .map_or(u8::MAX, |result| result.0)
 }
 
 /// Check a house spec and disable it when invalid; following specs validate multitile houses.
@@ -645,7 +644,7 @@ pub fn publish(s: &Services, spec: Spec) {
     }
 }
 /// Add new houses only after all properties in their GRF file have been loaded,
-/// and check dates to emulate TTDPatch's early-year behavior.
+/// and check dates to emulate `TTDPatch`'s early-year behavior.
 pub fn finalise(s: &Services) {
     // TTDPatch pretends a pre-1930 date is 1930 when no houses start before then.
     // Rather than hard-code 1930, reset houses with the lowest introduction date
