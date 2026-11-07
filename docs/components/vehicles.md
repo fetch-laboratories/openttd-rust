@@ -208,3 +208,10 @@
 - Age and interval comparisons, live engine/company/refit reads, per-unit traversal, funding tests and depot-order short circuits preserve their existing operations and order. Native shells, service observations and presentation remain in C++.
 - Limits: Existing cargo-predicate, historical-save, arbitrary NewGRF and scheduling qualifications remain on #156. Other maintenance families remain in the cleanup workset.
 - PRs: #774, integrated in #777.
+
+## Original vehicle breakdown vocabulary (#734)
+
+- Breakdown eligibility, trigger and handling helpers use the original names, canonical vehicle/engine/climate states, sound values and smoke flag. Existing scalar entry points and the single helper bodies remain.
+- Reliability updates, short-circuit guards, shared RNG draws, live vehicle reads, sound fallback and breakdown effects preserve their operations and order. Native maintenance observations, records and ownership are unchanged.
+- Limits: Inherited observation differences, callback/lifetime, arbitrary NewGRF and scheduling qualifications remain on #156. Other maintenance families remain in the cleanup workset.
+- PRs: #781, integrated in #785.

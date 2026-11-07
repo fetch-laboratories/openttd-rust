@@ -163,3 +163,10 @@
 - The 100 colour draws, weighting/elimination, live company/name reads, retry sequence, native name frames and news/admin effects keep their existing order. Native company storage, raw records and scalar interfaces remain unchanged.
 - Limits: Raw invalid-index domains, arbitrary names/mods, historical saves, presentation and scheduling remain on #156. Other Company/economy bodies remain in the cleanup workset.
 - PRs: #778, integrated in #780.
+
+## Original Cargo registry setup and label vocabulary (#734)
+
+- Climate setup, label rebuild/lookup and default-cargo classification use the original names and canonical cargo labels/types. The existing vector and ordered map retain their sole storage, unsigned comparison, raw domains and first-slot priority.
+- Native copy/publication, validity and label reads, mask/array writes and callback order remain unchanged. Raw pointer views, registry services and scalar interfaces retain their layouts and owners.
+- Limits: Inherited eager label snapshots, duplicate-slot index reads and container-allocation differences remain separate from coverage gaps on #156. Sorting, finalisation, translation and other registry vocabulary remain in the cleanup workset.
+- PRs: #782, integrated in #785.
