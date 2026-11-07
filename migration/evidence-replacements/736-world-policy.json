@@ -1,0 +1,36 @@
+[
+  {
+    "retires": [
+      "source:tools/simulation/town-reference-gaps.cpp"
+    ],
+    "oracle": "PARTIAL SOURCE TRANSFER ONLY. The source and its 1508-case native tunnel bridge/matrix remain. Frozen town/policy-oracle.txt captures all five Compare policy matrices from the source-only branch of base 45843e22f6f718eec6e3aff67e884086fe7431ee using complete unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 town_cmd.cpp and town.h bodies before removal. GCC 13.3.0 Linux x86_64, C++20 -O2 -fno-strict-overflow. Rows retain full dimensions, operation order and all existing observations; no candidate linked. Native ABI/generic history, monthly/query fixtures stay. Policy-only generated extraction stops; CanRoadContinueIntoNextTile/GrowTownWithTunnel extraction remains, with no unmeasured volume credit.",
+    "observations": {
+      "400 supplied-history wrapping/int-accumulator/division cases": [
+        "rust:lib:town::policy_tests::histories_match_original_policy_corpus"
+      ],
+      "1129 rating operations: full fifteen-company state, have-ratings bits, validity/dirty counts, nested scratch reads and shell-address reuse": [
+        "rust:lib:town::policy_tests::ratings_match_original_policy_corpus"
+      ],
+      "107 radius cases: every squared zone radius through table, arithmetic and unsigned extremes": [
+        "rust:lib:town::policy_tests::radii_match_original_policy_corpus"
+      ],
+      "14976 authority cases: both removal kinds and real spatial station entry, command status/error/parameter and validity/closest counts, nested test-mode precedence": [
+        "rust:lib:town::policy_tests::authority_matches_original_policy_corpus"
+      ],
+      "36 transported-percent wrapping/clamping cases": [
+        "rust:lib:town::policy_tests::percent_transported_matches_original_policy_corpus"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/migration/industry-production-gap.cpp"
+    ],
+    "oracle": "Frozen industry/production-oracle.txt: complete unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 newgrf_industries.cpp IndustryProductionCallback, source-only capture before deleting the base 45843e22 probe, GCC 13.3.0 Linux x86_64 C++20 -O2 -fno-strict-overflow. All 4 versions x 5 levels x 4 behaviours x 4 resolver limits x 2 reasons x 7 signed amounts = 4480 cases. Each row stores full dimensions, RNG/errors/dirty, all six waiting values, parameter count and lossless affine runs count:first1:first2:delta1:delta2 modulo uint32; every pair is decoded and compared, including 65536 calls. No candidate output supplies expectations. Retains native destructor/alias/CommandCost lifetime fixtures and all actual ABI evidence; production-reference.inc generation stops without unmeasured extraction-volume credit.",
+    "observations": {
+      "Complete IndustryProductionCallback version/repeat/arithmetic policy, ordered resolver parameters, RNG, error/dirty counts and accepted/produced waiting values": [
+        "rust:lib:industry::production_policy_tests::production_callback_matches_complete_original_corpus"
+      ]
+    }
+  }
+]
