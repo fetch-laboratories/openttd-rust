@@ -48,7 +48,6 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 - A reviewed PR's base update needs no new review if CI passes and one of these conditions holds:
   - The update has no conflicts in `src/`, `rust/`, `tools/` or `.github/`.
   - It resolves every conflict by keeping both sides' lines unchanged. `git show --remerge-diff` removes only conflict markers.
-  - It reruns #581's recorded `unifdef` command over every touched `src/` file.
 - Root records the applicable condition on the PR. Such an update needs only CI: no recount, local build, proof or new evidence. Record metrics once, at the head that integrates. Otherwise a fresh reviewer checks and fixes only the conflict resolution.
 
 ## Integration

@@ -13,7 +13,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 - The original's types and named constants come from their header module; a literal standing for a named value is a finding. Code reaches a wrapper's raw integer only at ABI, save and bitfield boundaries.
 - The original's explanatory comments sit at the matching branch. Comments carry no review defence, history or dates.
-- Commands take their argument struct; helpers take context structs. A new Clippy `allow` needs a stated reason.
+- Commands take their argument struct; helpers take context structs.
 - Each helper has one port. Grep the callee of every new binding across `src/`, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`; each existing wrapper or binding is a finding.
 - Boundary design faults, fixed before integration with no exceptions: a carrier for one call site, opcode dispatch, whole-record copies, per-call allocation the original lacks, Rust-to-C++-to-Rust bounces, a moved field behind a service, a service routed through `Record()`.
 - Every replaced body, export, declaration and service field is deleted. Each orphan is a finding.

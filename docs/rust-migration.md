@@ -208,28 +208,3 @@ These commands read through the existing CI/`gh` helpers and metric. A matching 
 `tools/rust-only.py` rejects `WITH_RUST` conditionals in `src/` in quick CI.
 `WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
 The pinned original remains the oracle; do not sweep its worktree or `tools/`.
-
-Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). Without administrator access on
-Ubuntu, obtain package 2.12-1:
-
-```sh
-mkdir -p .local/unifdef
-(cd .local/unifdef && apt-get download unifdef=2.12-1 && \
-  dpkg-deb -x unifdef_2.12-1_amd64.deb extracted)
-.local/unifdef/extracted/usr/bin/unifdef -V
-python3 tools/rust-only.py --sweep --unifdef .local/unifdef/extracted/usr/bin/unifdef
-```
-
-The sweep invokes `unifdef -DWITH_RUST -m` on tracked files under `src/`
-containing `WITH_RUST`. Exit status 1 means changed, not failure. Version 2.12
-misparses C++ digit separators in `strings.cpp` and `station_cmd.cpp`; those two
-files use the additional `-t` flag, preserving their bytes outside directives.
-The two mixed `WITH_RUST && WITH_RUST_ABI_CHECKS` directives retain only the
-ABI-check term; unifdef 2.12 leaves these unknown expressions unchanged.
-A developer with unifdef on PATH can omit `--unifdef`.
-
-Surviving drafts merge PR-B's first parent, then PR-B. Rerun the sweep on **all**
-`src/` files the draft touches, including cleanly merged files. Pass the explicit
-file paths after `--sweep`, or rerun across all tracked `src/` files as above.
-The command refuses paths outside `src/`. Keep the reference unchanged and move
-any fallback-reading fixture to the pinned baseline before sweeping it.

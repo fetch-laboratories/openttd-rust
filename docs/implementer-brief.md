@@ -26,7 +26,7 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 ## Checks and commits
 
-- Before pushing, run your work order's focused checks, `python3 tools/migration.py rust-checks` and `python3 tools/preflight.py --base origin/rust-migration`. Run `tools/lint-ratchet.py clippy`, `tools/lint-ratchet.py ruff`, `tools/lint-policy.py` and `tools/growth-ratchet.py` with `python3` and the captured `--base-ref`; quick CI runs them on every push. A refactor claim uses `tools/refactor-proof.py`. Fix lint and ratchet failures; preserve faithful casts. See [quick cleanup checks](rust-migration.md#quick-cleanup-checks) for baselines, proof claims and exact-head exception contracts. An exception names the counter, the reason and what retires it, and needs reviewer acceptance.
+- Before pushing, run your work order's focused checks, `python3 tools/migration.py rust-checks` and `python3 tools/preflight.py --base origin/rust-migration`. Follow [quick cleanup checks](rust-migration.md#quick-cleanup-checks) for lint/growth ratchets, refactor proof and reviewed exception contracts. Fix failures while preserving the original's operations.
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
 - Commit coherent steps with a supported prefix (`Add:`, `Change:`, `Fix:`, `Doc:`, `Update:`). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
 - Finish with what you delivered, what stays in C++, exact commands, limits and the next action.
