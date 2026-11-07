@@ -1087,6 +1087,7 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod mappings;
     #[test]
     fn loading_state_and_order_queue_cross_serialized_threads() {
         unsafe {
