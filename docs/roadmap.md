@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-Development remains in the cleanup stage (user, 2026-11-06). This stocktake records integration 119, `03392da0d4` (#785); exact-head Full and the tested/merged-tree check pass. Current code main is integration 120, `1f8c1139d0` (#786), whose Town creation and engine-livery cleanup also passes exact-head Full/tree preservation. C++ and all six guarded counters hold. Main has no known source regression. [Profile 119](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6706829641) is accepted on clean `4d3a1d1d41`, with seven equal comparisons and six records below band. Profile 113 remains retained for comparison. The user skipped 107; next regular stocktake/profile is 125. Platform cadence 115 passed; [120 is running](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42371141030).
+Development remains in the cleanup stage (user, 2026-11-06). This stocktake records integration 119, `03392da0d4` (#785); exact-head Full and the tested/merged-tree check pass. Current code main is integration 121, `34ce361ff2` (#789), whose Cargo sorting and Vehicle aging/value cleanup passes exact-head Full/tree preservation. C++ and all six guarded counters hold. Main has no known source regression. [Profile 119](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6706829641) is accepted on clean `4d3a1d1d41`, with seven equal comparisons and six records below band. Profile 113 remains retained for comparison. The user skipped 107; next regular stocktake/profile is 125. Platform cadences 115 and [120 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42371141030); next platform cadence is 125.
 
 | Measured quantity | Integration 119 |
 | --- | ---: |
@@ -27,9 +27,9 @@ Development remains in the cleanup stage (user, 2026-11-06). This stocktake reco
 | Ruff keys / diagnostics | 296 / 296 |
 | GLOBAL Rust / tooling code totals | 146,302 / 63,816 |
 
-Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. Generated C++ is 6,137 lines: 615 record declarations within source glue and 5,522 other generated evidence lines included above. Historical regex and expanded boundary series have different scopes. The one shared final report was collected at the Full-tested 119 candidate, whose merged tree is identical; no third census was run. Integration 120 subsequently preserves these C++ and boundary totals, with GLOBAL Rust 146,313 and Clippy 672 keys / 765 diagnostics after the exact accepted Town row and livery identity/decrease changes.
+Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. Generated C++ is 6,137 lines: 615 record declarations within source glue and 5,522 other generated evidence lines included above. Historical regex and expanded boundary series have different scopes. The one shared final report was collected at the Full-tested 119 candidate, whose merged tree is identical; no third census was run. Integrations 120 and 121 preserve these C++ and boundary totals, with current GLOBAL Rust 146,329 and Clippy 672 keys / 765 diagnostics after the exact accepted Town row and livery identity/decrease changes in 120.
 
-Since accepted stocktake 113, net fork-C++ removal is zero, and original/simulation retirement is unchanged. The merge-to-merge window is 10,815 seconds (0.125174 days); this vocabulary-only window supplies no forward removal forecast. Actual Rust additions across 114–119 total 1,182 code lines; GLOBAL Rust rises by 377. These quantities are distinct. Integration 119 adds 133 code lines, net +24; integration 120 adds 151, net +11. Tooling/C++ change is zero. The two current unintegrated components are Cargo sorting #787 and Vehicle aging/value #788; the locked #565 WIP remains separate.
+Since accepted stocktake 113, net fork-C++ removal is zero, and original/simulation retirement is unchanged. The merge-to-merge window through 119 is 10,815 seconds (0.125174 days); this vocabulary-only window supplies no forward removal forecast. Actual Rust additions across 114–119 total 1,182 code lines; GLOBAL Rust rises by 377. These quantities are distinct. Integration 119 adds 133 code lines, net +24; integration 120 adds 151, net +11; integration 121 adds 68, net +16. Tooling/C++ change is zero. Town placement/coastal selection and Company/president renaming are selected as the next disjoint bounded continuations of #734 worksets 01 and 06. The locked #565 WIP remains separate.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
@@ -45,7 +45,7 @@ Since accepted stocktake 113, net fork-C++ removal is zero, and original/simulat
 
 These are source-area subtotals, not new ownership or phase-exit claims; pool save chunks remain with their storage owner. Phase 1's exit does not assert zero original source in its area. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference, rather than merely a coverage gap. #503 deep checks remain user-requested. The source-operation reviews and Full gates do not close those broader limits.
 
-These counts measure profile 119, not integration 120. Candidate compatibility digests match the retained Ubuntu 24.04 anchors and profile 113; reference digests/counts match 113. The selected Callgrind/LibVEX is 3.26.0 (dispatcher 3.22.0), with GCC 13.3.0. Historical manifests retain opaque compatibility digests rather than complete per-component diagnostics; the report records that provenance limit.
+The instruction counts below measure profile 119. Candidate compatibility digests match the retained Ubuntu 24.04 anchors and profile 113; reference digests/counts match 113. The selected Callgrind/LibVEX is 3.26.0 (dispatcher 3.22.0), with GCC 13.3.0. Historical manifests retain opaque compatibility digests rather than complete per-component diagnostics; the report records that provenance limit.
 
 | Scenario | Original Ir | Candidate Ir (119) | Projection (119) |
 | --- | ---: | ---: | ---: |
@@ -69,7 +69,7 @@ All seven canonical exit/full-log comparisons, including drawing, pass. Unchange
 | Mean cyclomatic complexity | 4.08 | 3.83 |
 | Code in copy-paste clones | 4.5% | 2.3% |
 
-Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 764 current diagnostics are not comparable to the initial broader lint inventory.
+Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 765 current diagnostics are not comparable to the initial broader lint inventory.
 
 ## Course (user, 2026-11-06)
 
@@ -262,12 +262,13 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 117 | Vehicle renewal/servicing and Cargo payment #774/#775, combined #777 | `43b913f4a5` | Source/union reviews, exact Cargo identity carry and Full/tree pass. Rust +172 added/net +48; tooling/C++ and guarded counters hold. |
 | 118 | Company and Town generation #778/#779, combined #780 | `2d05ea2ca6` | Five owner blobs preserved, source reviews and Full/tree pass. Rust +187 added/net +60; tooling/C++ and boundaries hold. |
 | 119 | Vehicle breakdown and Cargo registry setup/labels #781/#782, combined #785 | `03392da0d4` | Source/union reviews, three exact contracts and Full/tree pass. Rust +133 added/net +24; C++ and boundaries hold. Stocktake/profile accepted: seven comparisons equal, six records below band. |
-| 120 | Town creation and engine livery #783/#784, combined #786 | `1f8c1139d0` | Four owner blobs and exact ledger union preserved; two contracts and Full/tree pass. Rust +151 added/net +11; C++, tooling and guarded counters hold. Platform cadence running. |
+| 120 | Town creation and engine livery #783/#784, combined #786 | `1f8c1139d0` | Four owner blobs and exact ledger union preserved; two contracts and Full/tree pass. Rust +151 added/net +11; C++, tooling and guarded counters hold. Platform cadence passed. |
+| 121 | Cargo sorting and Vehicle aging/value #787/#788, combined #789 | `34ce361ff2` | Both reviewed blobs and complete ledgers preserved; clean union and exact-head Full/tree pass. Rust +68 added/net +16; tooling/C++ and all guarded counters hold. |
 
 ## Recurring
 
 - After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. Integration 119 stocktake/profile are accepted. The next regular stocktake/profile follows integration 125.
-- Run the platform cadence after every fifth integration; 115 passed and 120 is running. The next follows 125. A new failure stops integrations.
+- Run the platform cadence after every fifth integration; 115 and 120 passed. The next follows 125. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
