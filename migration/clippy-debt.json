@@ -9567,9 +9567,6 @@
     "rust/openttd-kernels/src/industry/policy.rs | fn openttd_rust_industry_forest_abi | undocumented_unsafe_blocks | 221a559da2c9a149eed0": [
       1
     ],
-    "rust/openttd-kernels/src/industry/policy.rs | fn openttd_rust_industry_sum_history | undocumented_unsafe_blocks | b0c31799e2827a77ff3d": [
-      1
-    ],
     "rust/openttd-kernels/src/industry/policy.rs | fn random_entry | cast_possible_truncation | 61712a1e69c28b6a750b": [
       1
     ],
