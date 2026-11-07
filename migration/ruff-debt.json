@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "version": "ruff 0.16.8",
-  "inventory_head": "77c60cd08f0fcc9be4fc1f6b7f33066dd99304a3",
+  "inventory_head": "9efb4368136f6c6cc2c8a333b185f8aa49c634e0",
   "sites": {
     "tools/auth-comparison.py | scenario | C901": [
       15
@@ -93,12 +93,6 @@
     "tools/housekeeping.py | worktree_refusal | PLR0912": [
       14
     ],
-    "tools/lint-policy.py | config_errors | C901": [
-      11
-    ],
-    "tools/lint-policy.py | suppressions | C901": [
-      11
-    ],
     "tools/migration.py | build_games | C901": [
       11
     ],
@@ -131,18 +125,6 @@
     ],
     "tools/probe.py | execute | PLR0913": [
       6
-    ],
-    "tools/refactor-proof.py | archive_sections | C901": [
-      15
-    ],
-    "tools/refactor-proof.py | archive_sections | PLR0915": [
-      57
-    ],
-    "tools/rust_syntax.py | boundary_ids | C901": [
-      23
-    ],
-    "tools/rust_syntax.py | boundary_ids | PLR0912": [
-      16
     ],
     "tools/script-list-comparison.py | main | C901": [
       17
