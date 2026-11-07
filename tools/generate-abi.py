@@ -365,15 +365,12 @@ def generate(root: Path = ROOT) -> dict[str, str]:
         for name in sorted(output)
         if name.startswith("abi-layout-") and name not in component_layouts
     ]
-    # The native consumer removes each name only after its Layout check passes.
-    # A skipped probe, conditional include or duplicate cannot hide a missing
-    # schema-declared check.
+    # Reuse the schema's Layout calls to populate required names; the native
+    # consumer supplies a name-only macro before including every group.
     output["abi-required-layouts.inc"] = [
-        f'"{name}",'
-        for name in sorted(
-            [record.cpp for entries in shared.values() for record in entries]
-            + [record.cpp for record in records]
-        )
+        f'#include "{name}"'
+        for name in sorted(output)
+        if name.startswith("abi-layout-")
     ]
     return {name: "\n".join(lines) + "\n" for name, lines in output.items()}
 

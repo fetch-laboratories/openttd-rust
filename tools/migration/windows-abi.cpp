@@ -74,6 +74,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -82,22 +83,13 @@
 
 #define CHECK(condition) do { if (!(condition)) { std::fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); std::abort(); } } while (0)
 
-static std::vector<std::string_view> &UncheckedLayouts()
-{
-	static std::vector<std::string_view> names{
-#include "abi-required-layouts.inc"
-	};
-	return names;
-}
+static std::set<std::string_view> _unchecked_layouts;
 
 /* The one table of Rust ABI layouts for FFI types; native game structure lists stay in their tests. */
 static void Layout(const char *name, std::initializer_list<size_t> values)
 {
 	CHECK(AbiLayoutMismatch(name, values) == -1);
-	auto &pending = UncheckedLayouts();
-	auto item = std::find(pending.begin(), pending.end(), name);
-	CHECK(item != pending.end());
-	pending.erase(item);
+	CHECK(_unchecked_layouts.erase(name) == 1);
 	std::printf("layout %s", name);
 	for (size_t value : values) std::printf(" %zu", value);
 	std::printf("\n");
@@ -506,10 +498,13 @@ static std::vector<void (*)()> &AbiProbes()
 
 int main()
 {
+#define Layout(name, ...) _unchecked_layouts.insert(name)
+#include "abi-required-layouts.inc"
+#undef Layout
 	Layouts();
 	for (void (*probe)() : AbiProbes()) probe();
-	for (auto name : UncheckedLayouts()) std::fprintf(stderr, "missing ABI layout: %s\n", name.data());
-	CHECK(UncheckedLayouts().empty());
+	for (auto name : _unchecked_layouts) std::fprintf(stderr, "missing ABI layout: %s\n", name.data());
+	CHECK(_unchecked_layouts.empty());
 
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);
