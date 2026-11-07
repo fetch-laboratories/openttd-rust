@@ -8,6 +8,8 @@
 //! Industry metadata commands and native shell ownership changes.
 //! Lookups resolve once; command checks and writes follow the native source order.
 use super::{Industry, ShellHandle};
+use super::{IndustryControlFlag, IndustryControlFlags, PRODLEVEL_MAXIMUM, PRODLEVEL_MINIMUM};
+use crate::company_type::{CompanyID, Owner};
 use crate::services::ByteSpan;
 
 #[repr(C)]
@@ -33,7 +35,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
         return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
-    if shell.is_null() || value & !15 != 0 {
+    if shell.is_null() || value & !IndustryControlFlags::MASK != 0 {
         return u8::from(false);
     }
     if execute {
@@ -55,7 +57,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     services: *const IndustryCommandServices,
 ) -> u8 {
     let s = unsafe { &*services };
-    if !unsafe { (s.deity)() } || !(4..=128).contains(&level) {
+    if !unsafe { (s.deity)() } || !(PRODLEVEL_MINIMUM..=PRODLEVEL_MAXIMUM).contains(&level) {
         return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
@@ -65,7 +67,8 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     if execute {
         let owner = unsafe { (s.owner)(shell) };
         unsafe {
-            (*owner).fields.ctlflags |= 8;
+            (*owner).fields.ctlflags |=
+                IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
             (*owner).fields.prod_level = level;
         }
         super::recompute(owner);
@@ -90,7 +93,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
     if shell.is_null() {
         return u8::from(false);
     }
-    if company != 16 && company != 255 && company != 18 && !unsafe { (s.valid_company)(company) } {
+    if CompanyID(company) != Owner::NONE
+        && CompanyID(company) != CompanyID::INVALID
+        && CompanyID(company) != Owner::DEITY
+        && !unsafe { (s.valid_company)(company) }
+    {
         return u8::from(false);
     }
     if execute {
@@ -137,7 +144,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
 pub(crate) unsafe fn openttd_rust_industry_change_owner(owner: *mut Industry, old: u8, new: u8) {
     unsafe {
         if (*owner).metadata.founder == old {
-            (*owner).metadata.founder = if new == 255 { 16 } else { new };
+            (*owner).metadata.founder = if CompanyID(new) == CompanyID::INVALID {
+                Owner::NONE.0
+            } else {
+                new
+            };
         }
         if (*owner).metadata.exclusive_supplier == old {
             (*owner).metadata.exclusive_supplier = new;

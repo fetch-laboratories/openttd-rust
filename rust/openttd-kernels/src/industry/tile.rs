@@ -13,12 +13,32 @@ use super::{
     ConstructionServices, GenerationServices, Industry, IndustryCost, IndustryCostServices,
     LifecycleServices, Services, SpecHandle,
 };
+use crate::cargo_type::INVALID_CARGO;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::Owner;
 use crate::economy_type::PR_BUILD_FOUNDATION;
-use crate::industrytype;
-/// `IndustryTileSpecialFlag::AcceptsAllCargo`.
-const ACCEPTS_ALL_CARGO: u8 = 1 << 1;
+use crate::industry_map::{
+    GFX_BUBBLE_CATCHER, GFX_BUBBLE_GENERATOR, GFX_COAL_MINE_TOWER_ANIMATED,
+    GFX_COAL_MINE_TOWER_NOT_ANIMATED, GFX_COPPER_MINE_CHIMNEY, GFX_COPPER_MINE_TOWER_ANIMATED,
+    GFX_COPPER_MINE_TOWER_NOT_ANIMATED, GFX_GOLD_MINE_TOWER_ANIMATED,
+    GFX_GOLD_MINE_TOWER_NOT_ANIMATED, GFX_OILRIG_1, GFX_OILWELL_ANIMATED_1, GFX_OILWELL_ANIMATED_3,
+    GFX_OILWELL_NOT_ANIMATED, GFX_PLASTIC_FOUNTAIN_ANIMATED_1, GFX_PLASTIC_FOUNTAIN_ANIMATED_8,
+    GFX_POWERPLANT_CHIMNEY, GFX_POWERPLANT_SPARKS, GFX_SUGAR_MINE_SIEVE, GFX_TOFFEE_QUARRY,
+    GFX_TOY_FACTORY,
+};
+use crate::industry_type::{
+    INDUSTRY_COMPLETED, INDUSTRY_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
+    IndustryAnimationTrigger, IndustryGfx, IndustryRandomTrigger,
+};
+use crate::industrytype::{
+    self, IndustryBehaviour, IndustryBehaviours, IndustryTileSpecialFlag, IndustryTileSpecialFlags,
+};
+use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::newgrf_callbacks::{CallbackID, IndustryTileCallbackMask, IndustryTileCallbackMasks};
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
+use crate::sound_type::{SoundFx, SoundID};
+use crate::tile_type::{MP_INDUSTRY, TILE_SIZE};
 use std::{ffi::c_void, ptr};
 
 /// The native `Industry` pool shell.
@@ -31,8 +51,8 @@ pub struct TileIndustry {
 pub use crate::industrytype::IndustryTileSpec as TileSpec;
 #[repr(C)]
 pub struct TileAcceptance {
-    pub cargo: [u8; 16],
-    pub amount: [i8; 16],
+    pub cargo: [u8; INDUSTRY_NUM_INPUTS],
+    pub amount: [i8; INDUSTRY_NUM_INPUTS],
     pub accepts_all: bool,
     pub accepts_callback: bool,
     pub amount_callback: bool,
@@ -64,17 +84,17 @@ pub struct TileServices {
 fn chance(s: &Services, a: u32, b: u32) -> bool {
     crate::random_func::chance16_i(a, b, s.shared().random())
 }
-fn sound(tile: u32, sound: u16, s: &Services) {
+fn sound(tile: u32, sound: SoundID, s: &Services) {
     if unsafe { s.shared().settings().ambient.read() } {
-        unsafe { (s.play_sound)(sound, tile) };
+        unsafe { (s.play_sound)(sound.0, tile) };
     }
 }
 fn dirty(tile: u32, s: &Services) {
     (s.shared().mark_dirty)(tile);
 }
 fn chimney(tile: u32, map: crate::services::Map, t: &TileServices) {
-    let x = map.tile_x(tile).wrapping_mul(16);
-    let y = map.tile_y(tile).wrapping_mul(16);
+    let x = map.tile_x(tile).wrapping_mul(TILE_SIZE);
+    let y = map.tile_y(tile).wrapping_mul(TILE_SIZE);
     let z = unsafe { (t.pixel_max_z)(tile) };
     crate::effect::openttd_rust_effect_create(
         x.wrapping_add(15) as i32,
@@ -100,8 +120,14 @@ fn bigger(
     unsafe {
         (c.set_construction_counter)(tile, 0);
         (c.set_construction_stage)(tile, stage);
-        super::openttd_rust_industry_animate_tile_abi(tile, 0, 0, s, l);
-        if stage == 3 {
+        super::openttd_rust_industry_animate_tile_abi(
+            tile,
+            IndustryAnimationTrigger::ConstructionStageChanged.0,
+            0,
+            s,
+            l,
+        );
+        if stage == INDUSTRY_COMPLETED as u8 {
             (t.set_completed)(tile);
         }
     }
@@ -111,13 +137,18 @@ fn bigger(
     }
     let gfx = unsafe { (t.gfx)(tile) };
     if gfx >= crate::industry_type::NEW_INDUSTRYTILEOFFSET {
+        // New industries are already animated during construction.
         return;
     }
     match gfx {
-        8 => chimney(tile, map, t),
-        24 => {
+        GFX_POWERPLANT_CHIMNEY => chimney(tile, map, t),
+        GFX_OILRIG_1 => {
+            // Do not require an industry tile after the first two GFX_OILRIG_1
+            // tiles. Build the station after checking both belong to this industry.
             let other = tile.wrapping_add(map.size_x());
-            if (s.shared().tile_type)(other) == 8 && unsafe { (t.gfx)(other) } == 24 {
+            if (s.shared().tile_type)(other) == MP_INDUSTRY
+                && unsafe { (t.gfx)(other) } == GFX_OILRIG_1
+            {
                 let own = unsafe { (t.industry_index)(tile) };
                 let other = unsafe { (t.industry_index)(other) };
                 if own == other {
@@ -125,11 +156,13 @@ fn bigger(
                 }
             }
         }
-        143 | 162 | 165 => unsafe {
+        GFX_TOY_FACTORY | GFX_BUBBLE_CATCHER | GFX_TOFFEE_QUARRY => unsafe {
             (t.set_frame)(tile, 0);
             (t.set_animation_loop)(tile, 0);
         },
-        148..=155 => crate::animated_tile::openttd_rust_animation_add(tile, false),
+        GFX_PLASTIC_FOUNTAIN_ANIMATED_1..=GFX_PLASTIC_FOUNTAIN_ANIMATED_8 => {
+            crate::animated_tile::openttd_rust_animation_add(tile, false);
+        }
         _ => {}
     }
 }
@@ -143,7 +176,7 @@ fn mine(tile: u32, s: &Services, t: &TileServices) {
             let frame = unsafe { (t.frame)(tile) };
             if frame & 0x40 == 0 {
                 unsafe { (t.set_frame)(tile, frame | 0x40) };
-                sound(tile, 9, s);
+                sound(tile, SoundFx::SND_0B_MINE.into(), s);
             }
             if state & 7 != 0 {
                 return;
@@ -185,17 +218,17 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
 ) {
     let (s, c, t) = unsafe { (&*s, &*c, &*t) };
     let gfx = unsafe { (t.gfx)(tile) };
-    if unsafe { (*industrytype::tile(gfx)).animation.status != 0xff } {
+    if unsafe { (*industrytype::tile(gfx)).animation.status != AnimationStatus::NoAnimation.0 } {
         crate::animated_tile::openttd_rust_animate_industry(tile);
         return;
     }
     match gfx {
-        174 if (s.shared().tick_counter)() & 1 == 0 => {
+        GFX_SUGAR_MINE_SIEVE if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             if unsafe { s.shared().settings().ambient.read() } {
                 match frame & 7 {
-                    2 => unsafe { (s.play_sound)(45, tile) },
-                    6 => unsafe { (s.play_sound)(41, tile) },
+                    2 => unsafe { (s.play_sound)(u16::from(SoundFx::SND_2D_SUGAR_MINE_1.0), tile) },
+                    6 => unsafe { (s.play_sound)(u16::from(SoundFx::SND_29_SUGAR_MINE_2.0), tile) },
                     _ => {}
                 }
             }
@@ -206,10 +239,10 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
         }
-        165 if (s.shared().tick_counter)() & 3 == 0 => {
+        GFX_TOFFEE_QUARRY if (s.shared().tick_counter)() & 3 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) };
             if unsafe { (t.toffee_offset)(frame) } == 0xff {
-                sound(tile, 48, s);
+                sound(tile, SoundFx::SND_30_TOFFEE_QUARRY.into(), s);
             }
             frame = frame.wrapping_add(1);
             if frame >= 70 {
@@ -219,7 +252,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
         }
-        162 if (s.shared().tick_counter)() & 1 == 0 => {
+        GFX_BUBBLE_CATCHER if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             if frame >= 40 {
                 frame = 0;
@@ -228,7 +261,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
         }
-        10 if (s.shared().tick_counter)() & 3 == 0 => {
+        GFX_POWERPLANT_SPARKS if (s.shared().tick_counter)() & 3 == 0 => {
             let frame = unsafe { (t.frame)(tile) };
             if frame == 6 {
                 unsafe {
@@ -240,12 +273,12 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             }
             dirty(tile, s);
         }
-        143 if (s.shared().tick_counter)() & 1 == 0 => {
+        GFX_TOY_FACTORY if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             match frame {
-                1 => sound(tile, 44, s),
-                23 => sound(tile, 43, s),
-                28 => sound(tile, 42, s),
+                1 => sound(tile, SoundFx::SND_2C_TOY_FACTORY_1.into(), s),
+                23 => sound(tile, SoundFx::SND_2B_TOY_FACTORY_2.into(), s),
+                28 => sound(tile, SoundFx::SND_2A_TOY_FACTORY_3.into(), s),
                 _ => {
                     if frame >= 50 {
                         let mut count =
@@ -262,19 +295,30 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
         }
-        148..=155 if (s.shared().tick_counter)() & 3 == 0 => {
-            unsafe { (t.set_gfx)(tile, if gfx < 155 { gfx.wrapping_add(1) } else { 148 }) };
+        GFX_PLASTIC_FOUNTAIN_ANIMATED_1..=GFX_PLASTIC_FOUNTAIN_ANIMATED_8
+            if (s.shared().tick_counter)() & 3 == 0 =>
+        {
+            unsafe {
+                (t.set_gfx)(
+                    tile,
+                    if gfx < GFX_PLASTIC_FOUNTAIN_ANIMATED_8 {
+                        gfx.wrapping_add(1)
+                    } else {
+                        GFX_PLASTIC_FOUNTAIN_ANIMATED_1
+                    },
+                );
+            };
             dirty(tile, s);
         }
-        30..=32 if (s.shared().tick_counter)() & 7 == 0 => {
+        GFX_OILWELL_ANIMATED_1..=GFX_OILWELL_ANIMATED_3 if (s.shared().tick_counter)() & 7 == 0 => {
             let stop = chance(s, 1, 7);
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             let mut gfx = gfx;
             let last = if frame == 4 {
                 frame = 0;
                 gfx = gfx.wrapping_add(1);
-                if gfx == 33 {
-                    gfx = 30;
+                if gfx == GFX_OILWELL_ANIMATED_3 + 1 {
+                    gfx = GFX_OILWELL_ANIMATED_1;
                     true
                 } else {
                     false
@@ -284,8 +328,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             };
             if last && stop {
                 unsafe {
-                    (t.set_gfx)(tile, 29);
-                    (c.set_construction_stage)(tile, 3);
+                    (t.set_gfx)(tile, GFX_OILWELL_NOT_ANIMATED);
+                    (c.set_construction_stage)(tile, INDUSTRY_COMPLETED as u8);
                     crate::animated_tile::openttd_rust_animation_delete(tile, false);
                 }
             } else {
@@ -296,20 +340,22 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             }
             dirty(tile, s);
         }
-        1 | 48 | 88 => mine(tile, s, t),
+        GFX_COAL_MINE_TOWER_ANIMATED
+        | GFX_COPPER_MINE_TOWER_ANIMATED
+        | GFX_GOLD_MINE_TOWER_ANIMATED => mine(tile, s, t),
         _ => {}
     }
 }
 fn bubble(tile: u32, s: &Services, map: crate::services::Map) {
-    sound(tile, 46, s);
+    sound(tile, SoundFx::SND_2E_BUBBLE_GENERATOR.into(), s);
     let dir = (s.shared().random() & 3) as usize;
     let x = map
         .tile_x(tile)
-        .wrapping_mul(16)
+        .wrapping_mul(TILE_SIZE)
         .wrapping_add([11_i32, 0, -4, -14][dir] as u32) as i32;
     let y = map
         .tile_y(tile)
-        .wrapping_mul(16)
+        .wrapping_mul(TILE_SIZE)
         .wrapping_add([-4_i32, -10, -4, 1][dir] as u32) as i32;
     let vehicle = crate::effect::openttd_rust_effect_create_above(
         x,
@@ -341,14 +387,16 @@ pub(crate) unsafe fn tile_loop(
     if unsafe { (t.on_water)(tile) } {
         unsafe { crate::water::tree_industry_water_loop(tile, call, s.shared()) };
     }
-    if (s.shared().tile_type)(tile) != 8 {
+    // Removing an industry NewGRF can leave a formerly water-built industry
+    // vulnerable to flooding. The water loop may have replaced this tile.
+    if (s.shared().tile_type)(tile) != MP_INDUSTRY {
         return;
     }
     let industry = unsafe { (t.industry)(tile) };
     unsafe {
         super::openttd_rust_industry_randomise_tile(
             tile,
-            0,
+            IndustryRandomTrigger::TileLoop.0,
             industry.shell.cast::<c_void>(),
             industry.owner,
             s,
@@ -368,7 +416,7 @@ pub(crate) unsafe fn tile_loop(
             super::openttd_rust_industry_animate_abi(
                 industry.owner,
                 (t.industry_index)(tile),
-                4,
+                IndustryAnimationTrigger::CargoDistributed.0,
                 map.size_x(),
                 s,
                 l,
@@ -376,7 +424,7 @@ pub(crate) unsafe fn tile_loop(
         } {
             let gfx = unsafe { (t.gfx)(tile) };
             let next = unsafe { u16::from((*industrytype::tile(gfx)).anim_production) };
-            if next != 255 {
+            if next != IndustryGfx::INDUSTRYTILE_NOANIM.0 {
                 unsafe {
                     (t.reset_construction)(tile);
                     (t.set_completed)(tile);
@@ -387,12 +435,20 @@ pub(crate) unsafe fn tile_loop(
             }
         }
     }
-    if unsafe { super::openttd_rust_industry_animate_tile_abi(tile, 1, 0, s, l) != 0 } {
+    if unsafe {
+        super::openttd_rust_industry_animate_tile_abi(
+            tile,
+            IndustryAnimationTrigger::TileLoop.0,
+            0,
+            s,
+            l,
+        ) != 0
+    } {
         return;
     }
     let gfx = unsafe { (t.gfx)(tile) };
     let next = unsafe { u16::from((*industrytype::tile(gfx)).anim_next) };
-    if next != 255 {
+    if next != IndustryGfx::INDUSTRYTILE_NOANIM.0 {
         unsafe {
             (t.reset_construction)(tile);
             (t.set_gfx)(tile, next);
@@ -402,12 +458,14 @@ pub(crate) unsafe fn tile_loop(
     }
     let mut gfx = unsafe { (t.gfx)(tile) };
     match gfx {
-        0 | 47 | 79 => {
+        GFX_COAL_MINE_TOWER_NOT_ANIMATED
+        | GFX_COPPER_MINE_TOWER_NOT_ANIMATED
+        | GFX_GOLD_MINE_TOWER_NOT_ANIMATED => {
             if (s.shared().tick_counter)() & 0x400 == 0 && chance(s, 1, 2) {
                 gfx = match gfx {
-                    0 => 1,
-                    47 => 48,
-                    _ => 88,
+                    GFX_COAL_MINE_TOWER_NOT_ANIMATED => GFX_COAL_MINE_TOWER_ANIMATED,
+                    GFX_COPPER_MINE_TOWER_NOT_ANIMATED => GFX_COPPER_MINE_TOWER_ANIMATED,
+                    _ => GFX_GOLD_MINE_TOWER_ANIMATED,
                 };
                 unsafe {
                     (t.set_gfx)(tile, gfx);
@@ -416,46 +474,48 @@ pub(crate) unsafe fn tile_loop(
                 }
             }
         }
-        29 => {
+        GFX_OILWELL_NOT_ANIMATED => {
             if chance(s, 1, 6) {
                 unsafe {
-                    (t.set_gfx)(tile, 30);
+                    (t.set_gfx)(tile, GFX_OILWELL_ANIMATED_1);
                     (t.set_frame)(tile, 0);
                     crate::animated_tile::openttd_rust_animation_add(tile, true);
                 }
             }
         }
-        1 | 48 | 88 => {
+        GFX_COAL_MINE_TOWER_ANIMATED
+        | GFX_COPPER_MINE_TOWER_ANIMATED
+        | GFX_GOLD_MINE_TOWER_ANIMATED => {
             if (s.shared().tick_counter)() & 0x400 == 0 {
                 gfx = match gfx {
-                    1 => 0,
-                    48 => 47,
-                    _ => 79,
+                    GFX_COAL_MINE_TOWER_ANIMATED => GFX_COAL_MINE_TOWER_NOT_ANIMATED,
+                    GFX_COPPER_MINE_TOWER_ANIMATED => GFX_COPPER_MINE_TOWER_NOT_ANIMATED,
+                    _ => GFX_GOLD_MINE_TOWER_NOT_ANIMATED,
                 };
                 unsafe {
                     (t.set_gfx)(tile, gfx);
                     (t.set_completed)(tile);
-                    (c.set_construction_stage)(tile, 3);
+                    (c.set_construction_stage)(tile, INDUSTRY_COMPLETED as u8);
                     crate::animated_tile::openttd_rust_animation_delete(tile, false);
                 }
                 dirty(tile, s);
             }
         }
-        10 => {
+        GFX_POWERPLANT_SPARKS => {
             if chance(s, 1, 3) {
-                sound(tile, 10, s);
+                sound(tile, SoundFx::SND_0C_POWER_STATION.into(), s);
                 crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
-        49 => {
+        GFX_COPPER_MINE_CHIMNEY => {
             crate::effect::openttd_rust_effect_create_above(
-                map.tile_x(tile).wrapping_mul(16).wrapping_add(6) as i32,
-                map.tile_y(tile).wrapping_mul(16).wrapping_add(6) as i32,
+                map.tile_x(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
+                map.tile_y(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
                 43,
                 crate::effectvehicle_func::EV_COPPER_MINE_SMOKE,
             );
         }
-        143 => {
+        GFX_TOY_FACTORY => {
             let industry = unsafe { (t.industry)(tile) };
             let delivered =
                 unsafe { ptr::read(ptr::addr_of!((*industry.owner).fields.was_cargo_delivered)) };
@@ -467,9 +527,9 @@ pub(crate) unsafe fn tile_loop(
                 }
             }
         }
-        161 => bubble(tile, s, map),
-        165 => crate::animated_tile::openttd_rust_animation_add(tile, true),
-        174 if chance(s, 1, 3) => {
+        GFX_BUBBLE_GENERATOR => bubble(tile, s, map),
+        GFX_TOFFEE_QUARRY => crate::animated_tile::openttd_rust_animation_add(tile, true),
+        GFX_SUGAR_MINE_SIEVE if chance(s, 1, 3) => {
             crate::animated_tile::openttd_rust_animation_add(tile, true);
         }
         _ => {}
@@ -491,23 +551,29 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     let gfx = unsafe { (t.gfx)(tile) };
     let spec = industrytype::tile(gfx);
     let industry = unsafe { (t.industry)(tile) };
+    // Start with this tile specification's cargoes and acceptance.
     let mut info = unsafe {
         TileAcceptance {
             cargo: (*spec).accepts_cargo,
             amount: (*spec).acceptance,
-            accepts_all: (*spec).special_flags & ACCEPTS_ALL_CARGO != 0,
-            accepts_callback: (*spec).callback_mask & (1 << 3) != 0,
-            amount_callback: (*spec).callback_mask & (1 << 2) != 0,
+            accepts_all: IndustryTileSpecialFlags((*spec).special_flags)
+                .test(IndustryTileSpecialFlag::AcceptsAllCargo),
+            accepts_callback: IndustryTileCallbackMasks((*spec).callback_mask)
+                .test(IndustryTileCallbackMask::AcceptCargo),
+            amount_callback: IndustryTileCallbackMasks((*spec).callback_mask)
+                .test(IndustryTileCallbackMask::CargoAcceptance),
         }
     };
     if info.accepts_all {
+        // Copy accepted cargoes from the industry itself. Insert a missing cargo
+        // into an invalid slot; if no slot exists, give up on that cargo.
         for n in 0..super::accepted_count(industry.owner) {
             let cargo = unsafe { (*super::accepted(industry.owner, n)).cargo };
             let Some(slot) = info
                 .cargo
                 .iter()
                 .position(|&c| c == cargo)
-                .or_else(|| info.cargo.iter().position(|&c| c == 255))
+                .or_else(|| info.cargo.iter().position(|&c| c == INVALID_CARGO))
             else {
                 continue;
             };
@@ -515,11 +581,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             info.amount[slot] = info.amount[slot].wrapping_add(8);
         }
     }
+    // A successful accepts callback replaces the complete accepts list.
     if info.accepts_callback {
-        let result = unsafe { (t.callback)(tile, gfx, 0x2c, 0, 0) };
+        let result =
+            unsafe { (t.callback)(tile, gfx, CallbackID::CBID_INDTILE_ACCEPT_CARGO.0, 0, 0) };
         if result != CALLBACK_FAILED {
-            info.cargo.fill(255);
-            for n in 0..3 {
+            info.cargo.fill(INVALID_CARGO);
+            for n in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 info.cargo[n] = crate::cargo_registry::openttd_rust_cargo_translate(
                     ((result >> (n * 5)) & 31) as u8,
                     unsafe { (*spec).grf_prop.grffile },
@@ -528,34 +596,41 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             }
         }
     }
+    // A successful acceptance callback replaces the complete acceptance list.
     if info.amount_callback {
-        let result = unsafe { (t.callback)(tile, gfx, 0x2b, 0, 0) };
+        let result =
+            unsafe { (t.callback)(tile, gfx, CallbackID::CBID_INDTILE_CARGO_ACCEPTANCE.0, 0, 0) };
         if result != CALLBACK_FAILED {
             info.amount.fill(0);
-            for n in 0..3 {
+            for n in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 info.amount[n] = ((result >> (n * 4)) & 15) as i8;
             }
         }
     }
-    for n in 0..16 {
+    for n in 0..INDUSTRY_NUM_INPUTS {
         let cargo = info.cargo[n];
         let amount = info.amount[n];
-        if cargo == 255 || amount <= 0 {
+        // Work only with valid cargoes.
+        if cargo == INVALID_CARGO || amount <= 0 {
             continue;
         }
+        // Add accepted cargo.
         unsafe {
             let entry = acceptance.add(usize::from(cargo));
             *entry = (*entry).wrapping_add(amount as u32);
         }
+        // Consider the always-accepted bit only if it is not already set.
         let bit = 1_u64.wrapping_shl(u32::from(cargo));
         if unsafe { *always_accepted } & bit != 0 {
             continue;
         }
+        // The industry's own acceptance prevents the always-accepted bit.
         if (0..super::accepted_count(industry.owner))
             .any(|slot| unsafe { (*super::accepted(industry.owner, slot)).cargo == cargo })
         {
             continue;
         }
+        // A cargo the industry itself does not accept is always accepted by the tile.
         unsafe { *always_accepted |= bit };
     }
 }
@@ -587,22 +662,25 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     let industry = unsafe { (t.industry)(tile) };
     let kind = unsafe { (*industry.owner).metadata.kind };
     let spec = industrytype::industry(u16::from(kind));
-    if (unsafe { (p.current_company)() } != 17
+    // Water, the editor and magic bulldozer may destroy industries. Water must
+    // not flood water-built industries such as oil rigs or tiles requiring water.
+    if (unsafe { (p.current_company)() } != Owner::WATER.0
         && !(g.environment.editor)()
         && !unsafe { (p.magic_bulldozer)() })
-        || flags & 2 != 0
-        || (unsafe { (p.current_company)() } == 17
-            && (unsafe { (*spec).behaviour } & 4 != 0
+        || DoCommandFlags(flags).test(DoCommandFlag::Auto)
+        || (unsafe { (p.current_company)() } == Owner::WATER.0
+            && (IndustryBehaviours(unsafe { (*spec).behaviour })
+                .test(IndustryBehaviour::BuiltOnWater)
                 || unsafe { (*industrytype::tile((t.gfx)(tile))).slopes_refused } & 32 != 0))
     {
-        if flags & 2 != 0 {
+        if DoCommandFlags(flags).test(DoCommandFlag::Auto) {
             unsafe { (p.object_in_way)(out, spec) };
         } else {
-            unsafe { (c.error)(out, 0xffff) };
+            unsafe { (c.error)(out, crate::strings_type::INVALID_STRING_ID) };
         }
         return;
     }
-    if flags & 1 != 0 {
+    if DoCommandFlags(flags).test(DoCommandFlag::Execute) {
         unsafe {
             (p.close_ai)(industry.shell);
             (p.close_game)(industry.shell);
@@ -610,7 +688,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
         }
     }
     let removal = unsafe { super::removal_cost((*spec).removal_cost_multiplier) };
-    unsafe { (c.expense_money)(out, 0, removal) };
+    unsafe { (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, removal) };
 }
 /// # Safety
 /// Native complete cost sink and live tile. The resolver can reenter; no owner or
@@ -636,12 +714,16 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
         {
             let gfx = unsafe { (t.gfx)(tile) };
             let spec = industrytype::tile(gfx);
-            let allowed = if unsafe { (*spec).callback_mask & (1 << 6) != 0 } {
-                let result = unsafe { (t.callback)(tile, gfx, 0x3c, 0, 0) };
+            let allowed = if unsafe {
+                IndustryTileCallbackMasks((*spec).callback_mask)
+                    .test(IndustryTileCallbackMask::Autoslope)
+            } {
+                let result =
+                    unsafe { (t.callback)(tile, gfx, CallbackID::CBID_INDTILE_AUTOSLOPE.0, 0, 0) };
                 result == CALLBACK_FAILED
                     || !(shared.grf_boolean_callback)(
                         unsafe { (*spec).grf_prop.grffile },
-                        0x3c,
+                        CallbackID::CBID_INDTILE_AUTOSLOPE.0,
                         result,
                     )
             } else {
@@ -649,7 +731,9 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             };
             if allowed {
                 let foundation = crate::company::price(PR_BUILD_FOUNDATION);
-                unsafe { (c.expense_money)(out, 0, foundation) };
+                unsafe {
+                    (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, foundation);
+                };
                 return;
             }
         }

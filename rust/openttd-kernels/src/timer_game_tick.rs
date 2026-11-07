@@ -10,3 +10,6 @@ pub const INDUSTRY_PRODUCE_TICKS: u32 = 256;
 
 /// `Ticks::CARGO_AGING_TICKS`.
 pub const CARGO_AGING_TICKS: u16 = 185;
+
+/// Cycle duration for the lumber mill's extra action.
+pub const INDUSTRY_CUT_TREE_TICKS: u32 = INDUSTRY_PRODUCE_TICKS * 2;

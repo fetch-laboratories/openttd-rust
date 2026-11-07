@@ -27,13 +27,13 @@ pub struct Context {
 }
 /// `CT_INVALID` as a default cargo label.
 const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
-    value: u32::MAX,
+    value: crate::cargo_type::CT_INVALID,
     mixed: false,
 };
 /// `INDUSTRYTILE_NOANIM`.
-const INDUSTRYTILE_NOANIM: u8 = 0xff;
+const INDUSTRYTILE_NOANIM: u8 = crate::industry_type::IndustryGfx::INDUSTRYTILE_NOANIM.0 as u8;
 /// `CheckProc::CHECK_NOTHING`.
-const CHECK_NOTHING: u8 = 0;
+const CHECK_NOTHING: u8 = industrytype::CheckProc::CHECK_NOTHING.0;
 /// `STR_NULL`.
 const STR_NULL: u32 = 0;
 /// `GRFFilePropsBase::SetGRFFile` with the context's non-null file.
