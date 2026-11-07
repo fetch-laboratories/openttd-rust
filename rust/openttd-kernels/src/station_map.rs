@@ -10,7 +10,7 @@ use crate::bitmath_func::{gb, has_bit, sb, toggle_bit};
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
 use crate::station_type::{
-    RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,
+    RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK, StationType,
 };
 use crate::tile_type::{MP_STATION, TileIndex};
 
@@ -29,14 +29,9 @@ pub const GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET: u8 = 4;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 #[allow(clippy::cast_possible_truncation)] // GB returns the original four-bit value.
-pub(crate) fn get_station_type(
-    m: &TileTypeAccess,
-    tile: TileIndex,
-) -> Option<crate::services::StationType> {
+pub(crate) fn get_station_type(m: &TileTypeAccess, tile: TileIndex) -> Option<StationType> {
     let fields = m.require_type(tile.0, MP_STATION)?;
-    Some(crate::services::StationType(
-        gb(u32::from(fields.m6()), 3, 4) as u8,
-    ))
+    Some(StationType(gb(u32::from(fields.m6()), 3, 4) as u8))
 }
 
 /// `IsDock`.

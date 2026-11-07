@@ -182,6 +182,7 @@ pub(crate) fn generate_name(
             info.industries[usize::from(kind)] = true;
             let name = unsafe { (*Services::spec(kind)).station_name };
             if name != n.undefined {
+                // Filter other industry types sharing this station name.
                 for it in 0..NUM_INDUSTRYTYPES {
                     let spec = Services::spec(it);
                     if unsafe { (*spec).enabled && (*spec).station_name == name } {
@@ -212,9 +213,12 @@ pub(crate) fn generate_name(
             s.check(),
         );
         let spec = Services::spec(kind);
+        // Undefined means this industry does not name stations.
         if unsafe { (*spec).station_name } == n.undefined {
             continue;
         }
+        // Any industry supplying a name disables the standard oilfield/mines
+        // suffixes. A null name does only that.
         info.set_used(n.oilfield, s);
         info.set_used(n.mines, s);
         if info.industries[usize::from(kind)] {
@@ -226,6 +230,7 @@ pub(crate) fn generate_name(
         }
         break;
     }
+    // Nearby industries may already have reserved oilfield/mines names.
     let special = match class {
         StationNaming::STATIONNAMING_AIRPORT => Some(n.airport),
         StationNaming::STATIONNAMING_OILRIG => Some(n.oilfield),

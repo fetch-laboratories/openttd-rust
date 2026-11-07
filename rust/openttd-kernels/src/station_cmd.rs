@@ -17,9 +17,19 @@
     clippy::too_many_arguments
 )]
 use crate::base_station_base::StationRectMode;
+use crate::command_type::DoCommandFlag;
+use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::debug::debug;
 use crate::direction_type::INVALID_DIAGDIR;
+use crate::economy_type::Price;
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
+use crate::road_type::INVALID_ROADTYPE;
+use crate::station_type::{
+    FACILITY_AIRPORT, FACILITY_BUS, FACILITY_DOCK, FACILITY_TRAIN, FACILITY_TRUCK, StationID,
+    StationType,
+};
+use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
 use crate::tilearea::TileArea;
 mod waypoint;
@@ -30,7 +40,7 @@ use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
-use crate::station_map::{GFX_DOCK_BASE_WATER_PART, StationGfx};
+use crate::station_map::{GFX_DOCK_BASE_WATER_PART, GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET, StationGfx};
 use crate::station_service::World;
 use crate::station_type::{RoadStopType, StationFacility};
 use crate::town::AuthorityServices;
@@ -512,7 +522,9 @@ impl<'a> Ctx<'a> {
                     return out.error(self.s.strings.flat_land);
                 }
             }
-            out.add_money(crate::company::price(57));
+            out.add_money(crate::company::price(usize::from(
+                Price::PR_BUILD_FOUNDATION.0,
+            )));
         }
         if *allowed_z < 0 {
             *allowed_z = flat_z;
@@ -805,7 +817,8 @@ impl Ctx<'_> {
             }
         };
         let filter = |p| !waypoint || (self.s.road_waypoint)(p) == road;
-        if existing != 0xffff {
+        // Look for an existing part before scanning adjacent company stations.
+        if existing != StationID::INVALID.0 {
             if adjacent && existing != target {
                 out.error(overbuild_error);
                 return st;
@@ -823,6 +836,8 @@ impl Ctx<'_> {
             around.expand(1, self.map(), (self.shared.map_max_y)() + 1);
             let current = (self.shared.current_company)();
             let mut closest = existing;
+            // Only stations owned by this company and accepted by the filter
+            // can join; two distinct IDs produce the multiple-adjoins error.
             for tile in around.tiles(self.map()) {
                 if (self.shared.tile_type)(tile) != MP_STATION {
                     continue;
@@ -835,20 +850,20 @@ impl Ctx<'_> {
                 {
                     continue;
                 }
-                if closest == 0xffff {
+                if closest == StationID::INVALID.0 {
                     closest = id;
                 } else if closest != id {
                     out.error(self.s.strings.adjoins_multiple);
                     return std::ptr::null_mut();
                 }
             }
-            st = if closest == 0xffff {
+            st = if closest == StationID::INVALID.0 {
                 std::ptr::null_mut()
             } else {
                 get(closest)
             };
         }
-        if st.is_null() && target != 0xffff {
+        if st.is_null() && target != StationID::INVALID.0 {
             st = get(target);
         }
         out.zero();
@@ -891,6 +906,7 @@ impl Ctx<'_> {
         area: TileArea,
         name: StationNaming,
     ) -> *mut BaseStation {
+        // Find a deleted station close to the new part when reuse is requested.
         if st.is_null() && reuse {
             let mut search = DeletedSearch {
                 c: self,
@@ -908,7 +924,7 @@ impl Ctx<'_> {
         }
         if !st.is_null() {
             if (self.world().station_owner)(st) != (self.shared.current_company)() {
-                out.error(0xffff);
+                out.error(INVALID_STRING_ID);
                 return st;
             }
             self.before_add_rect(out, st, area, StationRectMode::ADD_TEST);
@@ -920,7 +936,8 @@ impl Ctx<'_> {
                 out.error(self.s.strings.too_many_stations);
                 return st;
             }
-            if flags & 1 != 0 {
+            // Allocate and initialize a new station only during execution.
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 st = (self.s.new_station)(area.tile);
                 crate::station::spatial::insert(self.shared, st);
                 let town = crate::town::spatial::closest(self.shared, area.tile, u32::MAX);
@@ -959,7 +976,7 @@ impl Ctx<'_> {
         crate::witness::hit(crate::witness::STATION_CMD_RENAME);
         let st = self.full_station(id);
         if st.is_null() {
-            return out.error(0xffff);
+            return out.error(INVALID_STRING_ID);
         }
         unsafe {
             self.command
@@ -972,7 +989,7 @@ impl Ctx<'_> {
             if (self.shared.utf8_length)(text, length)
                 >= crate::station_type::MAX_LENGTH_STATION_NAME_CHARS
             {
-                return out.error(0xffff);
+                return out.error(INVALID_STRING_ID);
             }
             for index in 0..(self.world().pool_size)() {
                 let candidate = self.full_station(index as u16);
@@ -981,7 +998,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             (self.s.clear_cached_name)(st);
             if length == 0 {
                 (self.s.clear_name)(st);
@@ -997,21 +1014,21 @@ impl Ctx<'_> {
         crate::witness::hit(crate::witness::STATION_CMD_MOVE_NAME);
         let st = self.full_station(id);
         if st.is_null() {
-            out.error(0xffff);
-            return 0xffff;
+            out.error(INVALID_STRING_ID);
+            return StationID::INVALID.0;
         }
         let owner = (self.world().station_owner)(st);
-        if owner != 0x10 {
+        if owner != OWNER_NONE {
             unsafe {
                 self.command.ownership(out.0, owner, 0);
             }
             if !out.ok() {
-                return 0xffff;
+                return StationID::INVALID.0;
             }
         }
         if !self.rect_contains(st, tile) {
             out.error(self.s.strings.unsuitable);
-            return 0xffff;
+            return StationID::INVALID.0;
         }
         let mut search = SignSearch {
             c: self,
@@ -1024,9 +1041,9 @@ impl Ctx<'_> {
         });
         if search.other {
             out.error(self.s.strings.unsuitable);
-            return 0xffff;
+            return StationID::INVALID.0;
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             crate::station::spatial::move_sign(self.shared, st, tile);
             (self.s.virtual_coord)(st);
         }
@@ -1035,7 +1052,7 @@ impl Ctx<'_> {
     }
     fn shrink(&self, st: *mut BaseStation, mut area: TileArea, kind: u8) -> TileArea {
         let id = (self.links().graphs.station_id)(st);
-        let kind = if kind == 0 && !(self.world().is_station)(st) {
+        let kind = if kind == StationType::Rail.0 && !(self.world().is_station)(st) {
             7
         } else {
             kind
@@ -1143,11 +1160,11 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
     let out = c.c(out);
     let st = c.full_station(id);
     if st.is_null() {
-        return out.error(0xffff);
+        return out.error(INVALID_STRING_ID);
     }
     let owner = (c.world().station_owner)(st);
-    if (c.world().facilities)(st) & 8 == 0 || owner == 0x10 {
-        return out.error(0xffff);
+    if (c.world().facilities)(st) & FACILITY_AIRPORT == 0 || owner == OWNER_NONE {
+        return out.error(INVALID_STRING_ID);
     }
     unsafe {
         c.command.ownership(out.0, owner, 0);
@@ -1155,7 +1172,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
     if !out.ok() {
         return;
     }
-    if flags & 1 != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         (c.s.flip_airport_closed)(st);
         (c.s.closed_widget)(st);
     }
@@ -1177,7 +1194,7 @@ impl Ctx<'_> {
                 self.s.cost,
                 out.0,
                 tile,
-                flags & (1 << 4) != 0,
+                flags & DoCommandFlag::NO_TEST_TOWN_RATING != 0,
             );
         }
     }
@@ -1284,7 +1301,7 @@ impl Ctx<'_> {
                 return self.auto_clear(cost, tile);
             }
             let id = (self.shared.station_index)(tile);
-            if *est == 0xffff {
+            if *est == StationID::INVALID.0 {
                 *est = id;
             } else if *est != id {
                 cost.error(self.s.strings.adjoins_multiple);
@@ -1426,7 +1443,7 @@ impl Ctx<'_> {
             return;
         }
         if !crate::rail::val_param_rail_type(self.shared, rt) || axis >= 2 {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         if u32::from(class) >= crate::newgrf_class::station::count()
             || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(class))
@@ -1434,7 +1451,7 @@ impl Ctx<'_> {
             || length == 0
             || tracks == 0
         {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let (w, h) = if axis == 0 {
             (length, tracks)
@@ -1442,25 +1459,28 @@ impl Ctx<'_> {
             (tracks, length)
         };
         if !self.buildable_area(tile, u16::from(w), u16::from(h)) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
-        let reuse = target != 0xfffd;
+        let reuse = target != StationID::NEW.0;
         if !reuse {
-            target = 0xffff;
+            target = StationID::INVALID.0;
         }
-        if target != 0xffff && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
-            return cost.error(0xffff);
+        if target != StationID::INVALID.0
+            && (!(self.s.distant_join)() || self.full_station(target).is_null())
+        {
+            return cost.error(INVALID_STRING_ID);
         }
         let spread = (self.s.spread)();
         if h > spread || w > spread {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let mut area = TileArea {
             tile,
             w: u16::from(w),
             h: u16::from(h),
         };
-        let mut est = 0xffff;
+        let mut est = StationID::INVALID.0;
+        // Clearing may affect reservations on existing station tiles.
         let mut affected = Vec::new();
         let spec = crate::newgrf_class::station::spec(class, u32::from(index));
         let mut allowed = -1;
@@ -1500,10 +1520,14 @@ impl Ctx<'_> {
             }
             if !self.rail_station(t) || self.station_axis(t) != axis {
                 cost.add_money(tile_cost);
-                cost.add_money(crate::company::price(9));
+                cost.add_money(crate::company::price(usize::from(
+                    Price::PR_BUILD_STATION_RAIL.0,
+                )));
                 cost.add_money((self.rail().rail_build_cost)(rt));
                 if length_ready {
-                    cost.add_money(crate::company::price(10));
+                    cost.add_money(crate::company::price(usize::from(
+                        Price::PR_BUILD_STATION_RAIL_LENGTH.0,
+                    )));
                     length_ready = false;
                 }
             }
@@ -1550,6 +1574,7 @@ impl Ctx<'_> {
                 let t = tile
                     .wrapping_add(u32::from(i).wrapping_mul(track_delta))
                     .wrapping_add(u32::from(j).wrapping_mul(delta));
+                // There is no need to check the layout without a bridge above.
                 if !crate::map_func::World::new(self.shared).bridge_above(t) {
                     continue;
                 }
@@ -1562,24 +1587,27 @@ impl Ctx<'_> {
                 .wrapping_add(axis);
                 if !spec.is_null() {
                     let info = crate::newgrf_station::platform_info(gfx, length, tracks, j, i);
+                    // The station is not completely built yet, so no station
+                    // instance exists for this layout callback.
                     let cb = crate::newgrf_station::callback(
-                        0x24,
+                        CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
                         info,
                         0,
                         spec,
                         std::ptr::null_mut(),
                         u32::MAX,
                     );
-                    if cb != 0xffff && cb <= 255 {
+                    if cb != CALLBACK_FAILED && cb <= 255 {
                         gfx = (cb as u8 & !1).wrapping_add(axis);
                     }
                 }
-                self.rail_bridge(ret, t, spec, 0, StationGfx(gfx));
+                self.rail_bridge(ret, t, spec, StationType::Rail.0, StationGfx(gfx));
                 if !ret.ok() {
                     return cost.take(ret);
                 }
             }
         }
+        // Check whether a custom station spec can be allocated.
         let specindex = crate::station_association::allocate(self.s.rail_association, spec, st);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
@@ -1594,19 +1622,21 @@ impl Ctx<'_> {
             }
             if info.availability_callback {
                 let cb = crate::newgrf_station::callback(
-                    0x13,
+                    CallbackID::CBID_STATION_AVAILABILITY.0,
                     0,
                     0,
                     spec,
                     std::ptr::null_mut(),
                     u32::MAX,
                 );
-                if cb != 0xffff && !(self.s.rail_boolean)(spec, 0x13, cb) {
-                    return cost.error(0xffff);
+                if cb != CALLBACK_FAILED
+                    && !(self.s.rail_boolean)(spec, CallbackID::CBID_STATION_AVAILABILITY.0, cb)
+                {
+                    return cost.error(INVALID_STRING_ID);
                 }
             }
         }
-        if flags & 1 == 0 {
+        if flags & DoCommandFlag::EXECUTE == 0 {
             return;
         }
         (self.s.set_train_area)(st, area);
@@ -1625,6 +1655,7 @@ impl Ctx<'_> {
         );
         crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
+            // Include this spec in the cached animation trigger mask.
             (self.s.rail_triggers)(st, spec);
         }
         let owner = (self.world().station_owner)(st);
@@ -1687,14 +1718,14 @@ impl Ctx<'_> {
                         i,
                     );
                     let cb = crate::newgrf_station::callback(
-                        0x24,
+                        CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
                         info,
                         0,
                         spec,
                         std::ptr::null_mut(),
                         t,
                     );
-                    if cb != 0xffff {
+                    if cb != CALLBACK_FAILED {
                         if cb <= 255 {
                             (self.s.set_gfx)(t, (cb as u8 & !1).wrapping_add(axis));
                         } else {
@@ -1768,7 +1799,7 @@ impl Ctx<'_> {
             }
         }
         (self.s.mark_tiles)(st, false);
-        self.tiles_changed(st, true, 0);
+        self.tiles_changed(st, true, StationType::Rail.0);
     }
 }
 /// # Safety
@@ -1867,7 +1898,7 @@ impl Ctx<'_> {
             if st.is_null() {
                 continue;
             }
-            if (self.shared.current_company)() != 0x11 {
+            if (self.shared.current_company)() != OWNER_WATER {
                 unsafe {
                     self.command
                         .ownership(ret.0, (self.world().station_owner)(st), 0);
@@ -1879,9 +1910,11 @@ impl Ctx<'_> {
             }
             quantity += 1;
             if keep || crate::map_func::World::new(self.shared).station_blocked(tile) {
-                cost.add_money(crate::company::price(27).saturating_neg());
+                cost.add_money(
+                    crate::company::price(usize::from(Price::PR_CLEAR_RAIL.0)).saturating_neg(),
+                );
             }
-            if flags & 1 == 0 {
+            if flags & DoCommandFlag::EXECUTE == 0 {
                 continue;
             }
             let index = (self.s.custom_rail_index)(tile);
@@ -1935,11 +1968,11 @@ impl Ctx<'_> {
             crate::witness::hit(crate::witness::STATION_CMD_PARTIAL_RAIL);
         }
         for &st in &affected {
-            let area = self.shrink(st, self.s.rail_area(st), 0);
+            let area = self.shrink(st, self.s.rail_area(st), StationType::Rail.0);
             (self.s.set_train_area)(st, area);
             self.sign_coord(st);
             if area.tile == u32::MAX {
-                (self.s.reset_facilities)(st, 1);
+                (self.s.reset_facilities)(st, FACILITY_TRAIN);
                 (self.s.orders_dirty)();
                 (self.s.facility_widget)(st, 0);
                 (self.s.catchment_dirty)();
@@ -1966,7 +1999,7 @@ impl Ctx<'_> {
         }
         let size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
         if start >= size || end >= size {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let affected = self.remove_rail_area(
             cost,
@@ -1974,7 +2007,14 @@ impl Ctx<'_> {
             error,
             TileArea::between(self.map(), start, end),
             flags,
-            crate::company::price(if waypoint { 53 } else { 35 }),
+            crate::company::price(usize::from(
+                (if waypoint {
+                    Price::PR_CLEAR_WAYPOINT_RAIL
+                } else {
+                    Price::PR_CLEAR_STATION_RAIL
+                })
+                .0,
+            )),
             keep,
             waypoint,
         );
@@ -1999,7 +2039,7 @@ impl Ctx<'_> {
         st: *mut BaseStation,
         waypoint: bool,
     ) {
-        if (self.shared.current_company)() != 0x11 {
+        if (self.shared.current_company)() != OWNER_WATER {
             unsafe {
                 self.command
                     .ownership(cost.0, (self.world().station_owner)(st), 0);
@@ -2011,7 +2051,11 @@ impl Ctx<'_> {
         let area = self.s.rail_area(st);
         cost.set(0);
         let id = (self.links().graphs.station_id)(st);
-        let kind = if waypoint { 7 } else { 0 };
+        let kind = if waypoint {
+            StationType::RailWaypoint.0
+        } else {
+            StationType::Rail.0
+        };
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
                 || (self.shared.station_type)(tile).0 != kind
@@ -2026,7 +2070,14 @@ impl Ctx<'_> {
                 error,
                 TileArea { tile, w: 1, h: 1 },
                 flags,
-                crate::company::price(if waypoint { 53 } else { 35 }),
+                crate::company::price(usize::from(
+                    (if waypoint {
+                        Price::PR_CLEAR_WAYPOINT_RAIL
+                    } else {
+                        Price::PR_CLEAR_STATION_RAIL
+                    })
+                    .0,
+                )),
                 false,
                 waypoint,
             );
@@ -2047,8 +2098,8 @@ impl Ctx<'_> {
         tile: u32,
         waypoint: bool,
     ) {
-        if (self.shared.current_company)() == 0x11 {
-            return self.nested(cost, tile, 1, |flags| {
+        if (self.shared.current_company)() == OWNER_WATER {
+            return self.nested(cost, tile, DoCommandFlag::EXECUTE, |flags| {
                 self.remove_rail_command(cost, ret, error, flags, tile, 0, false, waypoint);
             });
         }
@@ -2059,7 +2110,7 @@ impl Ctx<'_> {
             self.full_station(id)
         };
         self.remove_rail_all_inner(cost, ret, error, flags, st, waypoint);
-        if !waypoint && flags & 1 != 0 {
+        if !waypoint && flags & DoCommandFlag::EXECUTE != 0 {
             self.recompute_catchment(st, false);
         }
     }
@@ -2184,7 +2235,7 @@ impl Ctx<'_> {
             spec,
             kind,
             StationGfx(if drive {
-                4 + axis
+                GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET + axis
             } else {
                 invalid.trailing_zeros() as u8
             }),
@@ -2206,7 +2257,7 @@ impl Ctx<'_> {
                 return cost.error(self.s.strings.drive_direction);
             }
             let id = (self.shared.station_index)(tile);
-            if *est == 0xffff {
+            if *est == StationID::INVALID.0 {
                 *est = id;
             } else if *est != id {
                 cost.error(self.s.strings.adjoins_multiple);
@@ -2232,11 +2283,11 @@ impl Ctx<'_> {
                 let road = self.road_type(tile, false);
                 if road != 63 {
                     let owner = self.road_owner(tile, false);
-                    if owner == 0x0f {
+                    if owner == OWNER_TOWN {
                         if !(self.s.stop_on_town_road)() {
                             return cost.error(self.s.strings.drive_town);
                         }
-                    } else if !(self.s.stop_on_competitor_road)() && owner != 0x10 {
+                    } else if !(self.s.stop_on_competitor_road)() && owner != OWNER_NONE {
                         unsafe {
                             self.command.ownership(ret.0, owner, 0);
                         }
@@ -2256,7 +2307,7 @@ impl Ctx<'_> {
                     if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
                         != 0
                         && owner != 0x0f
-                        && owner != 0x10
+                        && owner != OWNER_NONE
                     {
                         unsafe {
                             self.command.ownership(ret.0, owner, 0);
@@ -2384,18 +2435,18 @@ impl Ctx<'_> {
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_ROAD);
         if !crate::road::val_param_road_type(self.shared, rt) || dir >= 4 || stop_type >= 2 {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
-        let reuse = target != 0xfffd;
+        let reuse = target != StationID::NEW.0;
         if !reuse {
-            target = 0xffff;
+            target = StationID::INVALID.0;
         }
-        let distant = target != 0xffff;
+        let distant = target != StationID::INVALID.0;
         if u32::from(class) >= crate::newgrf_class::roadstop::count()
             || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::roadstop_label(class))
             || u32::from(index) >= crate::newgrf_class::roadstop::spec_count(class)
         {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let spec = crate::newgrf_class::roadstop::spec(class, u32::from(index));
         if !spec.is_null() {
@@ -2412,7 +2463,7 @@ impl Ctx<'_> {
                         != RoadStopAvailabilityType::ROADSTOPTYPE_ALL)
                 || (!drive && info.drive_only)
             {
-                return cost.error(0xffff);
+                return cost.error(INVALID_STRING_ID);
             }
         }
         let spread = (self.s.spread)();
@@ -2423,7 +2474,7 @@ impl Ctx<'_> {
             || length == 0
             || !self.buildable_area(tile, u16::from(width), u16::from(length))
         {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let area = TileArea {
             tile,
@@ -2431,11 +2482,11 @@ impl Ctx<'_> {
             h: u16::from(length),
         };
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         // Trams only have drive through stops.
         if !drive && !crate::road::road_type_is_road(rt) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let axis = dir & 1;
         self.authority(cost, tile, flags);
@@ -2443,22 +2494,30 @@ impl Ctx<'_> {
             return;
         }
         let truck = RoadStopType(stop_type) != RoadStopType::Bus;
-        let kind = if truck { 2 } else { 3 };
-        let category = if truck { 13 } else { 12 };
+        let kind = if truck {
+            StationType::Truck.0
+        } else {
+            StationType::Bus.0
+        };
+        let category = if truck {
+            Price::PR_BUILD_STATION_TRUCK
+        } else {
+            Price::PR_BUILD_STATION_BUS
+        };
         let unit = if spec.is_null() {
-            crate::company::price(usize::from(category))
+            crate::company::price(usize::from(category.0))
         } else {
             {
-                let factor = (self.s.road_spec_build_cost)(spec, category);
+                let factor = (self.s.road_spec_build_cost)(spec, category.0);
                 crate::economy_func::get_price(
-                    u32::from(category),
+                    u32::from(category.0),
                     u32::from(factor.multiplier),
                     factor.shift,
                     -4,
                 )
             }
         };
-        let mut est = 0xffff;
+        let mut est = StationID::INVALID.0;
         self.road_cost(
             cost, ret, area, flags, drive, kind, spec, axis, dir, &mut est, rt, unit,
         );
@@ -2527,11 +2586,11 @@ impl Ctx<'_> {
                     self.s.roadstop_resolver,
                 )
             };
-            if cb != 0xffff && !(self.s.road_boolean)(spec, cb) {
-                return cost.error(0xffff);
+            if cb != CALLBACK_FAILED && !(self.s.road_boolean)(spec, cb) {
+                return cost.error(INVALID_STRING_ID);
             }
         }
-        if flags & 1 == 0 {
+        if flags & DoCommandFlag::EXECUTE == 0 {
             return;
         }
         unsafe {
@@ -2705,7 +2764,7 @@ impl Ctx<'_> {
         } else {
             self.full_station(id)
         };
-        if (self.shared.current_company)() != 0x11 {
+        if (self.shared.current_company)() != OWNER_WATER {
             unsafe {
                 self.command
                     .ownership(cost.0, (self.world().station_owner)(st), 0);
@@ -2714,18 +2773,14 @@ impl Ctx<'_> {
                 return;
             }
         }
-        let truck = !waypoint && (self.shared.station_type)(tile).0 == 2;
+        let truck = !waypoint && (self.shared.station_type)(tile) == StationType::Truck;
         let (stop, stop_state) = if waypoint {
             (std::ptr::null_mut(), std::ptr::null_mut())
         } else {
-            crate::road_stop::get_by_tile(
-                self.shared,
-                tile,
-                crate::services::RoadStopType(u8::from(truck)),
-            )
+            crate::road_stop::get_by_tile(self.shared, tile, RoadStopType(u8::from(truck)))
         };
         if waypoint {
-            if flags & 32 == 0 {
+            if flags & DoCommandFlag::BANKRUPT == 0 {
                 unsafe {
                     self.command.no_vehicle(cost.0, tile);
                 }
@@ -2734,13 +2789,16 @@ impl Ctx<'_> {
                 }
             }
         } else if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
-            && flags & 32 != 0
+            && flags & DoCommandFlag::BANKRUPT != 0
         {
-            if flags & 1 != 0 {
+            // Bankrupt companies skip the drive-through vehicle-presence check.
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 self.vehicle().for_each_on_tile(tile, |vehicle| {
                     if vehicle.vehicle_type() == 1 {
                         let state = (self.s.road_vehicle_owner)(vehicle);
                         // SAFETY: Live road owner; no borrow crosses this access.
+                        // Vehicles may also turn on this tile. Clear only a
+                        // drive-through stop state, preserving turn-around bits.
                         unsafe { crate::road::clear_removed_drive_stop(state) };
                     }
                 });
@@ -2756,17 +2814,21 @@ impl Ctx<'_> {
         let spec = unsafe {
             crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile, self.s.roadstop_resolver)
         };
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             if !waypoint {
                 let head = (self.stops().head)(st, truck);
                 let next = (self.stops().next)(stop);
                 if head == stop {
                     (self.s.set_stop_head)(st, truck, next);
                     if next.is_null() {
-                        (self.s.reset_facilities)(st, if truck { 2 } else { 4 });
+                        (self.s.reset_facilities)(
+                            st,
+                            if truck { FACILITY_TRUCK } else { FACILITY_BUS },
+                        );
                         (self.s.orders_dirty)();
                     }
                 } else {
+                    // Tell the predecessor to skip the removed stop.
                     let mut pred = head;
                     while (self.stops().next)(pred) != stop {
                         pred = (self.stops().next)(pred);
@@ -2787,6 +2849,7 @@ impl Ctx<'_> {
             let specindex = (self.s.custom_road_index)(tile);
             (self.s.close_stop_inspect)(tile);
             if !waypoint && crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
+                // ClearDriveThrough clears the tile for us.
                 crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
                 crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
@@ -2798,7 +2861,15 @@ impl Ctx<'_> {
             }
             self.after_remove_tile(st, tile);
             if !waypoint && replacement < 0 {
-                self.tiles_changed(st, false, if truck { 2 } else { 3 });
+                self.tiles_changed(
+                    st,
+                    false,
+                    if truck {
+                        StationType::Truck.0
+                    } else {
+                        StationType::Bus.0
+                    },
+                );
             }
             (self.s.remove_stop_tile_data)(st, tile);
             if specindex as i32 != replacement {
@@ -2812,11 +2883,15 @@ impl Ctx<'_> {
             }
             if waypoint {
                 if replacement < 0 {
-                    let area = self.shrink(st, Self::area((self.s.road_waypoint_tile_area)(st)), 8);
+                    let area = self.shrink(
+                        st,
+                        Self::area((self.s.road_waypoint_tile_area)(st)),
+                        StationType::RoadWaypoint.0,
+                    );
                     (self.s.set_road_waypoint_area)(st, area);
                     self.sign_coord(st);
                     if area.tile == u32::MAX {
-                        (self.s.reset_facilities)(st, 6);
+                        (self.s.reset_facilities)(st, FACILITY_TRUCK | FACILITY_BUS);
                         (self.s.facility_widget)(st, 3);
                         (self.s.virtual_coord)(st);
                         self.delete_if_empty(st);
@@ -2831,14 +2906,18 @@ impl Ctx<'_> {
                 }
             }
         }
-        let category = if waypoint || truck { 38 } else { 37 };
+        let category = if waypoint || truck {
+            Price::PR_CLEAR_STATION_TRUCK
+        } else {
+            Price::PR_CLEAR_STATION_BUS
+        };
         cost.set(if spec.is_null() {
-            crate::company::price(usize::from(category))
+            crate::company::price(usize::from(category.0))
         } else {
             {
-                let factor = (self.s.road_spec_clear_cost)(spec, category);
+                let factor = (self.s.road_spec_clear_cost)(spec, category.0);
                 crate::economy_func::get_price(
-                    u32::from(category),
+                    u32::from(category.0),
                     u32::from(factor.multiplier),
                     factor.shift,
                     -4,
@@ -2863,12 +2942,12 @@ impl Ctx<'_> {
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
                 || !crate::map_func::World::new(self.shared).any_road_stop_tile(tile)
-                || ((self.shared.station_type)(tile).0 == 8) != waypoint
+                || ((self.shared.station_type)(tile) == StationType::RoadWaypoint) != waypoint
             {
                 continue;
             }
             let mut types = [63_u8; 2];
-            let mut owners = [0x10_u8; 2];
+            let mut owners = [OWNER_NONE; 2];
             let mut bits = 0;
             if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                 for tram in [false, true] {
@@ -2895,7 +2974,9 @@ impl Ctx<'_> {
             }
             cost.add_money(ret.money());
             success = true;
-            if flags & 1 != 0 && (types[0] != 63 || types[1] != 63) {
+            if flags & DoCommandFlag::EXECUTE != 0
+                && (types[0] != INVALID_ROADTYPE || types[1] != INVALID_ROADTYPE)
+            {
                 let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
                 let authority = unsafe { &*self.s.authority };
                 let town = (authority.town_index)(town);
@@ -2939,7 +3020,7 @@ impl Ctx<'_> {
             }
             let size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
             if start >= size || end >= size {
-                return cost.error(0xffff);
+                return cost.error(INVALID_STRING_ID);
             }
             TileArea::between(self.map(), start, end)
         } else {
@@ -2947,9 +3028,9 @@ impl Ctx<'_> {
                 || width == 0
                 || height == 0
                 || !self.buildable_area(start, u16::from(width), u16::from(height))
-                || (remove_road && flags & 32 != 0)
+                || (remove_road && flags & DoCommandFlag::BANKRUPT != 0)
             {
-                return cost.error(0xffff);
+                return cost.error(INVALID_STRING_ID);
             }
             TileArea {
                 tile: start,
@@ -3100,7 +3181,7 @@ impl Ctx<'_> {
             area.tile,
             area.tiles(self.map()).filter(|&t| {
                 (self.shared.tile_type)(t) == MP_STATION
-                    && (self.shared.station_type)(t).0 == 1
+                    && (self.shared.station_type)(t) == StationType::Airport
                     && (self.shared.station_index)(t) == id
             }),
         )
@@ -3127,16 +3208,16 @@ impl Ctx<'_> {
         adjacent: bool,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_AIRPORT);
-        let reuse = target != 0xfffd;
+        let reuse = target != StationID::NEW.0;
         if !reuse {
-            target = 0xffff;
+            target = StationID::INVALID.0;
         }
-        let distant = target != 0xffff;
+        let distant = target != StationID::INVALID.0;
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         if airport >= 128 {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         self.authority(cost, tile, flags);
         if !cost.ok() {
@@ -3148,7 +3229,7 @@ impl Ctx<'_> {
             || usize::from(layout) >= (self.s.airport_layout_count)(spec)
             || !crate::newgrf_airport::in_bounds(spec, layout, tile, runtime)
         {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let rotation = (self.s.airport_layout)(spec, layout).rotation;
         let size = (self.s.airport_size)(spec);
@@ -3207,7 +3288,7 @@ impl Ctx<'_> {
                     continue;
                 }
                 if (self.s.station_town)(st) == town
-                    && (self.world().facilities)(st) & 8 != 0
+                    && (self.world().facilities)(st) & FACILITY_AIRPORT != 0
                     && (self.s.airport_type)(st) != 9
                 {
                     count += 1;
@@ -3224,7 +3305,7 @@ impl Ctx<'_> {
         }
         let mut st = self.join(
             ret,
-            0xffff,
+            StationID::INVALID.0,
             target,
             adjacent,
             area,
@@ -3253,9 +3334,11 @@ impl Ctx<'_> {
             return cost.error(self.s.strings.close_airport);
         }
         for _ in self.airport_tiles(spec, layout, tile) {
-            cost.add_money(crate::company::price(11));
+            cost.add_money(crate::company::price(usize::from(
+                Price::PR_BUILD_STATION_AIRPORT.0,
+            )));
         }
-        if flags & 1 == 0 {
+        if flags & DoCommandFlag::EXECUTE == 0 {
             return;
         }
         unsafe {
@@ -3288,7 +3371,7 @@ impl Ctx<'_> {
             crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, id);
         }
         (self.s.airport_infrastructure)(owner, 1);
-        self.tiles_changed(st, true, 1);
+        self.tiles_changed(st, true, StationType::Airport.0);
         (self.s.station_view_invalidate)(st, -1);
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             (self.s.town_view_dirty)(nearest);
@@ -3297,7 +3380,7 @@ impl Ctx<'_> {
     fn remove_airport(&self, cost: Cost<'_>, ret: Cost<'_>, tile: u32, flags: u16) {
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_AIRPORT);
         let st = self.full_station((self.shared.station_index)(tile));
-        if (self.shared.current_company)() != 0x11 {
+        if (self.shared.current_company)() != OWNER_WATER {
             unsafe {
                 self.command
                     .ownership(cost.0, (self.world().station_owner)(st), 0);
@@ -3321,7 +3404,7 @@ impl Ctx<'_> {
                 return cost.error(self.s.strings.aircraft_in_way);
             }
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             for index in 0..(self.s.hangar_count)(
                 st,
                 crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
@@ -3348,7 +3431,7 @@ impl Ctx<'_> {
         let area = Self::area((self.s.airport_area)(st));
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
-                || (self.shared.station_type)(tile).0 != 1
+                || (self.shared.station_type)(tile) != StationType::Airport
                 || (self.shared.station_index)(tile) != id
             {
                 continue;
@@ -3359,21 +3442,23 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-            cost.add_money(crate::company::price(36));
-            if flags & 1 != 0 {
+            cost.add_money(crate::company::price(usize::from(
+                Price::PR_CLEAR_STATION_AIRPORT.0,
+            )));
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 crate::ground::clear_square(tile, self.shared);
                 (self.s.close_airport_tile_inspect)(tile);
             }
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             (self.s.delete_airport_storage)(st);
             self.after_remove_rect(st, area);
             (self.s.clear_airport)(st);
-            (self.s.reset_facilities)(st, 8);
+            (self.s.reset_facilities)(st, FACILITY_AIRPORT);
             (self.s.orders_dirty)();
             (self.s.station_view_invalidate)(st, -1);
             (self.s.airport_infrastructure)((self.world().station_owner)(st), u32::MAX);
-            self.tiles_changed(st, false, 1);
+            self.tiles_changed(st, false, StationType::Airport.0);
             (self.s.close_airport_inspect)(st);
         }
     }
@@ -3468,7 +3553,8 @@ pub unsafe extern "C" fn openttd_rust_station_build_airport(
 
 impl Ctx<'_> {
     fn dock(&self, tile: u32) -> bool {
-        (self.shared.tile_type)(tile) == MP_STATION && (self.shared.station_type)(tile).0 == 5
+        (self.shared.tile_type)(tile) == MP_STATION
+            && (self.shared.station_type)(tile) == StationType::Dock
     }
     fn possible_docking(&self, tile: u32) -> bool {
         match (self.shared.tile_type)(tile) {
@@ -3502,7 +3588,7 @@ impl Ctx<'_> {
                 }
             }
             if (self.shared.tile_type)(next) == MP_STATION
-                && (self.shared.station_type)(next).0 == 4
+                && (self.shared.station_type)(next) == StationType::Oilrig
             {
                 let st = self.full_station((self.shared.station_index)(next));
                 self.area_add((self.s.docking_area)(st), tile);
@@ -3579,13 +3665,13 @@ impl Ctx<'_> {
         adjacent: bool,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_DOCK);
-        let reuse = target != 0xfffd;
+        let reuse = target != StationID::NEW.0;
         if !reuse {
-            target = 0xffff;
+            target = StationID::INVALID.0;
         }
-        let distant = target != 0xffff;
+        let distant = target != StationID::INVALID.0;
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         let dir = get_inclined_slope_direction(slope);
@@ -3601,11 +3687,13 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        self.default_bridge_ok(cost, tile, 5, dir);
+        self.default_bridge_ok(cost, tile, StationType::Dock.0, dir);
         if !cost.ok() {
             return;
         }
-        cost.set(crate::company::price(14));
+        cost.set(crate::company::price(usize::from(
+            Price::PR_BUILD_STATION_DOCK.0,
+        )));
         crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
         if !ret.ok() {
             return cost.take(ret);
@@ -3617,7 +3705,12 @@ impl Ctx<'_> {
         {
             return cost.error(self.s.strings.unsuitable);
         }
-        self.default_bridge_ok(ret, flat, 5, 4 + (dir & 1));
+        self.default_bridge_ok(
+            ret,
+            flat,
+            StationType::Dock.0,
+            GFX_DOCK_BASE_WATER_PART + (dir & 1),
+        );
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3648,7 +3741,7 @@ impl Ctx<'_> {
         };
         let mut st = self.join(
             ret,
-            0xffff,
+            StationID::INVALID.0,
             target,
             adjacent,
             area,
@@ -3673,7 +3766,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             self.area_add((self.s.ship_station_area)(st), tile);
             self.area_add((self.s.ship_station_area)(st), flat);
             crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
@@ -3697,7 +3790,7 @@ impl Ctx<'_> {
                 water,
             );
             self.update_docking(st);
-            self.tiles_changed(st, true, 5);
+            self.tiles_changed(st, true, StationType::Dock.0);
         }
     }
     fn dock_land(&self, tile: u32) -> u32 {
@@ -3727,11 +3820,11 @@ impl Ctx<'_> {
             return;
         }
         if !self.dock(tile) {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let land = self.dock_land(tile);
         if land == u32::MAX {
-            return cost.error(0xffff);
+            return cost.error(INVALID_STRING_ID);
         }
         let water = self.map().add_diag(land, (self.shared.station_gfx)(land));
         unsafe {
@@ -3745,7 +3838,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if flags & 1 != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             crate::ground::clear_square(land, self.shared);
             (self.shared.mark_dirty)(land);
             unsafe {
@@ -3759,7 +3852,11 @@ impl Ctx<'_> {
             }
             self.after_remove_tile(st, land);
             self.after_remove_tile(st, water);
-            let area = self.shrink(st, Self::area((self.s.ship_station_area)(st)), 5);
+            let area = self.shrink(
+                st,
+                Self::area((self.s.ship_station_area)(st)),
+                StationType::Dock.0,
+            );
             (self.s.set_ship_area)(st, area);
             self.update_docking(st);
             if area.tile == u32::MAX {
@@ -3772,11 +3869,11 @@ impl Ctx<'_> {
                     },
                 );
                 (self.s.docking_clear)(st);
-                (self.s.reset_facilities)(st, 16);
+                (self.s.reset_facilities)(st, FACILITY_DOCK);
                 (self.s.orders_dirty)();
             }
             (self.s.station_infrastructure)(owner, u32::MAX - 1);
-            self.tiles_changed(st, false, 5);
+            self.tiles_changed(st, false, StationType::Dock.0);
             self.clear_docking_neighbours(land);
             self.clear_docking_neighbours(water);
             let id = (self.links().graphs.station_id)(st);
@@ -3802,7 +3899,9 @@ impl Ctx<'_> {
                         crate::vehicle::visits::leave_station(v, self.vehicle().visits());
                     }
                 }
-                if (self.vehicle().order_type)(v) == 1 && (self.world().facilities)(st) & 16 == 0 {
+                if (self.vehicle().order_type)(v) == 1
+                    && (self.world().facilities)(st) & FACILITY_DOCK == 0
+                {
                     let dest = unsafe {
                         crate::ship_control::openttd_rust_ship_station_destination(
                             identity.id,
@@ -3823,7 +3922,9 @@ impl Ctx<'_> {
                 }
             }
         }
-        cost.set(crate::company::price(39));
+        cost.set(crate::company::price(usize::from(
+            Price::PR_CLEAR_STATION_DOCK.0,
+        )));
         let _ = ret;
     }
     fn build_oilrig(&self, ret: Cost<'_>, tile: u32) {
@@ -3857,11 +3958,11 @@ impl Ctx<'_> {
             (self.links().graphs.station_id)(st),
             crate::map_func::World::new(self.shared).water_class(tile),
         );
-        (self.s.set_station_owner)(st, 0x10);
+        (self.s.set_station_owner)(st, OWNER_NONE);
         (self.s.set_airport_kind_rotation)(st, 9, 0);
         self.area_add((self.s.airport_area)(st), tile);
         self.area_add((self.s.ship_station_area)(st), tile);
-        (self.s.set_facilities)(st, 24);
+        (self.s.set_facilities)(st, FACILITY_AIRPORT | FACILITY_DOCK);
         (self.s.set_build_date)(st, crate::timer_game_common::calendar_date().0);
         self.update_docking(st);
         self.before_add_tile(ret, st, tile, StationRectMode::ADD_FORCE);
@@ -3904,7 +4005,10 @@ impl Ctx<'_> {
                 &*self.s.restoration,
             );
         }
-        assert!((self.world().facilities)(st) == 24 && (self.s.airport_type)(st) == 9);
+        assert!(
+            (self.world().facilities)(st) == (FACILITY_AIRPORT | FACILITY_DOCK)
+                && (self.s.airport_type)(st) == 9
+        );
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
             (self.s.clear_industry_neutral)(industry);
@@ -4071,12 +4175,12 @@ impl Ctx<'_> {
         cost.error(error);
     }
     fn can_remove_road_stop(&self, cost: Cost<'_>, tile: u32, flags: u16) {
-        if (self.shared.current_company)() == 0x11 {
+        if (self.shared.current_company)() == OWNER_WATER {
             return cost.zero();
         }
         if self.road_type(tile, true) != 63 {
             let owner = self.road_owner(tile, true);
-            if owner != 0x10 {
+            if owner != OWNER_NONE {
                 unsafe {
                     self.command.ownership(cost.0, owner, 0);
                 }
@@ -4087,7 +4191,7 @@ impl Ctx<'_> {
         }
         if self.road_type(tile, false) != 63 {
             let owner = self.road_owner(tile, false);
-            if owner == 0x0f {
+            if owner == OWNER_TOWN {
                 let bits = (self.shared.road_bits)(tile, 0, false);
                 unsafe {
                     crate::road_cmd::openttd_rust_road_allow_remove(
@@ -4095,7 +4199,7 @@ impl Ctx<'_> {
                         cost.0,
                         tile,
                         bits,
-                        0x0f,
+                        OWNER_TOWN,
                         0,
                         flags,
                         true,
@@ -4104,7 +4208,7 @@ impl Ctx<'_> {
                 if !cost.ok() {
                     return;
                 }
-            } else if owner != 0x10 {
+            } else if owner != OWNER_NONE {
                 unsafe {
                     self.command.ownership(cost.0, owner, 0);
                 }
@@ -4117,7 +4221,7 @@ impl Ctx<'_> {
     }
     fn clear(&self, cost: Cost<'_>, ret: Cost<'_>, error: Cost<'_>, tile: u32, flags: u16) {
         crate::witness::hit(crate::witness::STATION_CMD_CLEAR);
-        if flags & 2 != 0 {
+        if flags & DoCommandFlag::AUTO != 0 {
             return self.auto_clear(cost, tile);
         }
         match (self.shared.station_type)(tile).0 {
@@ -4141,7 +4245,7 @@ impl Ctx<'_> {
             }
             6 => self.remove_buoy(cost, tile, flags),
             5 => self.remove_dock(cost, ret, tile, flags),
-            _ => cost.error(0xffff),
+            _ => cost.error(INVALID_STRING_ID),
         }
     }
     fn terraform(&self, cost: Cost<'_>, tile: u32, flags: u16, z: i32, slope: u8) {
@@ -4173,7 +4277,9 @@ impl Ctx<'_> {
                 _ => false,
             };
             if allowed {
-                return cost.set(crate::company::price(57));
+                return cost.set(crate::company::price(usize::from(
+                    Price::PR_BUILD_FOUNDATION.0,
+                )));
             }
         }
         crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
@@ -4202,7 +4308,11 @@ impl Ctx<'_> {
                     (self.shared.set_road_owner)(
                         tile,
                         u8::from(tram),
-                        if new == 255 { 0x10 } else { new },
+                        if new == INVALID_OWNER {
+                            OWNER_NONE
+                        } else {
+                            new
+                        },
                     );
                 }
             }
@@ -4229,7 +4339,7 @@ impl Ctx<'_> {
                 }
                 _ => (),
             }
-            if kind != 6 && kind != 1 {
+            if kind != StationType::Buoy.0 && kind != StationType::Airport.0 {
                 (self.s.station_infrastructure)(old, u32::MAX);
                 (self.s.station_infrastructure)(new, 1);
             }
@@ -4237,31 +4347,37 @@ impl Ctx<'_> {
             (self.s.station_list_classes_invalidate)();
         } else if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
             let kind = (self.shared.station_type)(tile).0;
-            self.nested(cost, tile, 33, |flags| {
-                self.remove_road_command(
-                    cost,
-                    ret,
-                    error,
-                    flags,
-                    tile,
-                    tile,
-                    1,
-                    1,
-                    u8::from(kind == 2),
-                    false,
-                    kind == 8,
-                );
-            });
+            self.nested(
+                cost,
+                tile,
+                DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT,
+                |flags| {
+                    self.remove_road_command(
+                        cost,
+                        ret,
+                        error,
+                        flags,
+                        tile,
+                        tile,
+                        1,
+                        1,
+                        u8::from(kind == StationType::Truck.0),
+                        false,
+                        kind == StationType::RoadWaypoint.0,
+                    );
+                },
+            );
             assert_eq!((self.shared.tile_type)(tile), MP_ROAD);
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
             crate::landscape_cmd::clear_command(self.command, cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
-            if (kind == MP_WATER || (kind == MP_STATION && (self.shared.station_type)(tile).0 == 6))
+            if (kind == MP_WATER
+                || (kind == MP_STATION && (self.shared.station_type)(tile) == StationType::Buoy))
                 && (self.shared.tile_owner)(tile) == old
             {
-                (self.shared.set_tile_owner)(tile, 0x10);
+                (self.shared.set_tile_owner)(tile, OWNER_NONE);
             }
         }
     }
