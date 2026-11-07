@@ -117,3 +117,10 @@
 - C++ ownership, scalar ABI/save views and raw compatibility adapters remain. Private wrapper fields and unused operator/Default APIs belong to the later cleanup closure.
 - Checks: original operations/order source reviews and combined exact-head Full. Existing NewGRF, historical-save and presentation limits remain on #156; no C++ retirement is claimed.
 - PRs: #753, integrated in #758.
+
+## Original house flags and property vocabulary (#734)
+
+- House properties, validation, publication and climate selection use the original byte-backed flags/elements and word-backed town/climate zones. Raw constructors retain unnamed bits; scalar result adapters preserve all five original `ChangeInfoResult` values and read-failure handling.
+- Original explanations accompany the corresponding branches. Property reads, callbacks, diagnostics, GRF disabling and publication keep their order; native specs, defaults and GRF graphs remain owned by C++.
+- Checks: original operations/order source review and exact-head Full. The archive attempt differed, so archive equivalence is unclaimed. Inherited malformed-property, historical-save and scheduling limits remain on #156.
+- PRs: #759. The remaining town/house vocabulary work stays open.
