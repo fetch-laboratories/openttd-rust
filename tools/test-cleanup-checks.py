@@ -7,6 +7,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from baseline_ratchet import debt_errors
 from cleanup_contract import associated_pull, reviewed
 from rust_syntax import boundary_ids
 from source_fixture import initialize
+from vcs import git
 
 
 def load(name: str) -> ModuleType:
@@ -185,6 +187,39 @@ class DebtTests(unittest.TestCase):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_discovered_ruff_overrides_cannot_hide_ordinary_diagnostics(self) -> None:
+        for path, table in (
+            (".ruff.toml", "lint"),
+            ("tools/ruff.toml", "lint"),
+            ("tools/.ruff.toml", "lint"),
+            ("tools/pyproject.toml", "tool.ruff.lint"),
+        ):
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                initialize(
+                    root,
+                    {
+                        "ruff.toml": '[lint]\nselect=["F"]\n',
+                        "tools/x.py": "import unused\n",
+                    },
+                )
+                command = ["uvx", "--from", "ruff==0.16.8", "ruff", "check", "tools/"]
+                self.assertEqual(
+                    subprocess.run(command, cwd=root, capture_output=True).returncode, 1
+                )
+                (root / path).write_text(f'[{table}]\nignore=["F401"]\n')
+                subprocess.run(["git", "add", "."], cwd=root, check=True)
+                self.assertEqual(
+                    subprocess.run(command, cwd=root, capture_output=True).returncode, 0
+                )
+
+                with (
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
+                ):
+                    self.assertEqual(POLICY.main(), 1)
+
     def test_selection_exclusion_per_file_ignore_and_threshold(self) -> None:
         for before, after in (
             ({"lint": {"select": ["F", "B"]}}, {"lint": {"select": ["F"]}}),

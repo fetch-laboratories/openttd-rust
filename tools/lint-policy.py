@@ -16,6 +16,28 @@ from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
 RANK = {"allow": 0, "warn": 1, "deny": 2, "forbid": 3}
+CONFIG_NAMES = {
+    "Cargo.toml",
+    "ruff.toml",
+    ".ruff.toml",
+    "pyproject.toml",
+    "clippy.toml",
+    ".clippy.toml",
+    "rust-toolchain.toml",
+    "ty.toml",
+}
+
+
+def lint_config(path: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Include discovered overrides, excluding unrelated package metadata."""
+    if Path(path).name == "Cargo.toml":
+        return {
+            "lints": data.get("lints", {}),
+            "workspace": {"lints": data.get("workspace", {}).get("lints", {})},
+        }
+    if Path(path).name == "pyproject.toml":
+        return {name: data.get("tool", {}).get(name, {}) for name in ("ruff", "ty")}
+    return data
 
 
 def permitted_change(key: str, before: object, after: object) -> bool:
@@ -143,16 +165,7 @@ def main() -> int:
     old_paths = set(git("ls-tree", "-r", "--name-only", args.base_ref).splitlines())
     paths = set(git("ls-files").splitlines()) | old_paths
     for path in sorted(paths):
-        if not (
-            path.endswith("Cargo.toml")
-            or path
-            in (
-                "ruff.toml",
-                "migration/lints/clippy.toml",
-                "rust-toolchain.toml",
-                "ty.toml",
-            )
-        ):
+        if Path(path).name not in CONFIG_NAMES:
             continue
         before = (
             tomllib.loads(git("show", f"{args.base_ref}:{path}"))
@@ -162,15 +175,7 @@ def main() -> int:
         after = (
             tomllib.loads((ROOT / path).read_text()) if (ROOT / path).is_file() else {}
         )
-        # Package identity and dependencies do not configure lint policy.
-        if path.endswith("Cargo.toml"):
-            before = {
-                key: before[key] for key in ("lints", "workspace") if key in before
-            }
-            after = {key: after[key] for key in ("lints", "workspace") if key in after}
-            for value in (before, after):
-                if "workspace" in value:
-                    value["workspace"] = {"lints": value["workspace"].get("lints", {})}
+        before, after = lint_config(path, before), lint_config(path, after)
         if not before and path == "migration/lints/clippy.toml":
             # Bootstrap only these pinned thresholds, not an arbitrary config.
             expected = {
