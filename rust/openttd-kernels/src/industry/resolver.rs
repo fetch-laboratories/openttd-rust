@@ -5,10 +5,10 @@ use super::{Builder, Industry, LifecycleServices, SpecHandle, TileServices, Town
 use crate::debug::debug;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
-    BUILT_ON_WATER, INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET,
-    NUM_INDUSTRYTYPES, PROD_MULTI_HANDLING,
+    INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, IndustryID, IndustryType,
+    NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTYPES,
 };
-use crate::industrytype;
+use crate::industrytype::{self, IndustryBehaviour, IndustryBehaviours};
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_INDUSTRY_LOCATION, CBID_INDUSTRY_PROBABILITY, CBID_INDUSTRY_REFUSE_CARGO,
     INDUSTRY_PROBABILITY, INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
@@ -99,8 +99,8 @@ pub(crate) fn map_type(kind: u8, grfid: u32) -> u8 {
     }
     (unsafe { crate::override_manager::industry_id(u16::from(kind & 0x7f), grfid) }) as u8
 }
-fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
-    if !s.belongs(tile, id) {
+fn id_at_offset(tile: u32, id: IndustryID, grfid: u32, s: &ResolverServices) -> u32 {
+    if !s.belongs(tile, id.0) {
         return 0xffff;
     }
     let gfx = unsafe { (s.clean_gfx)(tile) };
@@ -153,15 +153,15 @@ unsafe fn registry_id(builder: *const Builder, kind: u8, n: usize) -> u16 {
 }
 fn closest(
     tile: u32,
-    kind: u8,
+    kind: IndustryType,
     current: &ResolverContext,
     builder: *const Builder,
     s: &ResolverServices,
     map: crate::map_func::Map,
 ) -> u32 {
     let mut best = u32::MAX;
-    for n in 0..unsafe { registry_count(builder, kind) } {
-        let id = unsafe { registry_id(builder, kind, n) };
+    for n in 0..unsafe { registry_count(builder, kind.0) } {
+        let id = unsafe { registry_id(builder, kind.0, n) };
         if id == current.id {
             continue;
         }
@@ -255,6 +255,7 @@ fn variable(
     witness::hit(witness::INDUSTRY_RESOLVER_VARIABLE);
     let callback = unsafe { (s.callback_id)(ro) };
     let i = c.owner;
+    // Variables available during the construction check.
     if callback == CBID_INDUSTRY_LOCATION {
         witness::hit(witness::INDUSTRY_RESOLVER_LOCATION);
         match variable {
@@ -266,23 +267,30 @@ fn variable(
                 };
                 return badges.resolve(s.shared(), ro, parameter);
             }
+            // Industry structure access.
             0x80 => return c.tile,
             0x81 => return (c.tile >> 8) & 255,
+            // Pointer to the associated town.
             0x82 => return town_id(c.town, s),
             0x83..=0x85 => debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic"),
+            // Selected layout number.
             0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
+            // Ground type.
             0x87 => return (s.shared().terrain_type)(c.tile),
+            // Town zone.
             0x88 => {
                 return u32::from(unsafe {
                     crate::town::radius_from_shell(s.shared(), c.town, c.tile)
                 });
             }
+            // Manhattan distance from the closest town.
             0x89 => {
                 return s
                     .map()
                     .distance_manhattan(town_tile(c.town, s), c.tile)
                     .min(255);
             }
+            // Lowest tile height.
             0x8a => {
                 return (s.shared().tile_z)(c.tile)
                     .wrapping_mul(if (s.shared().resolver_grf_version)(ro) >= 8 {
@@ -292,22 +300,26 @@ fn variable(
                     })
                     .clamp(0, 255) as u32;
             }
+            // Distance to the nearest water/land tile.
             0x8b => {
                 return unsafe {
                     (s.water_distance)(
                         c.tile,
-                        ResolverServices::behaviour(ResolverServices::spec((*i).metadata.kind))
-                            & BUILT_ON_WATER
-                            == 0,
+                        !IndustryBehaviours(ResolverServices::behaviour(ResolverServices::spec(
+                            (*i).metadata.kind,
+                        )))
+                        .test(IndustryBehaviour::BuiltOnWater),
                     )
                 };
             }
+            // Squared Euclidean distance from town.
             0x8d => {
                 return s
                     .map()
                     .distance_square(town_tile(c.town, s), c.tile)
                     .min(65535);
             }
+            // 32 random bits.
             0x8f => return c.random_bits,
             _ => {}
         }
@@ -317,13 +329,16 @@ fn variable(
         return unavailable(variable, available, false, true, callback, s);
     }
     match variable {
+        // Waiting cargo, only when one of these two production callback flags is set.
         0x40..=0x42 => {
             let callbacks = unsafe { (*spec).callback_mask };
             if callbacks & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) == 0
             {
                 return 0;
             }
-            let multiplier = if ResolverServices::behaviour(spec) & PROD_MULTI_HANDLING != 0 {
+            let multiplier = if IndustryBehaviours(ResolverServices::behaviour(spec))
+                .test(IndustryBehaviour::ProdMultiHandling)
+            {
                 let level = unsafe { (*i).fields.prod_level };
                 if level == 0 {
                     return 0;
@@ -337,13 +352,17 @@ fn variable(
                     / u16::from(multiplier),
             )
         }
+        // Manhattan distance to the closest dry/water tile.
         0x43 if c.tile != INVALID_TILE => unsafe {
             (s.water_distance)(
                 c.tile,
-                ResolverServices::behaviour(spec) & BUILT_ON_WATER == 0,
+                !IndustryBehaviours(ResolverServices::behaviour(spec))
+                    .test(IndustryBehaviour::BuiltOnWater),
             )
         },
+        // Layout number.
         0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
+        // Company information.
         0x45 => {
             let founder = unsafe { (*i).metadata.founder };
             {
@@ -351,14 +370,18 @@ fn variable(
                 u32::from(founder) | (u32::from(info.is_ai) << 16) | (u32::from(info.colours) << 24)
             }
         }
+        // Construction date in days, long format.
         0x46 => (unsafe { (*i).metadata.construction_date }) as u32,
+        // GameScript override flags.
         0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
+        // Industry ID at the parameter offset.
         0x60 => id_at_offset(
             unsafe { (s.nearby)(parameter as u8, (*i).metadata.tile, false) },
-            c.id,
+            IndustryID(c.id),
             (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
+        // Random tile bits at the parameter offset.
         0x61 if c.tile != INVALID_TILE => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, false) };
             if s.belongs(tile, c.id) {
@@ -367,6 +390,7 @@ fn variable(
                 0
             }
         }
+        // Land information for nearby tiles.
         0x62 if c.tile != INVALID_TILE => nearby_information(
             parameter as u8,
             c.tile,
@@ -375,6 +399,7 @@ fn variable(
             (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
+        // Animation stage of nearby tiles.
         0x63 if c.tile != INVALID_TILE => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, false) };
             if s.belongs(tile, c.id) {
@@ -383,14 +408,16 @@ fn variable(
                 u32::MAX
             }
         }
+        // Distance to the nearest industry of the given type.
         0x64 if c.tile != INVALID_TILE => {
             let kind = map_type(parameter as u8, unsafe { (*spec).grf_prop.grfid });
             if kind >= NUM_INDUSTRYTYPES {
                 u32::MAX
             } else {
-                closest(c.tile, kind, c, builder, s, s.map())
+                closest(c.tile, IndustryType(kind), c, builder, s, s.map())
             }
         }
+        // Town zone and Manhattan distance from the closest town.
         0x65 if c.tile != INVALID_TILE => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
             (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile) }) << 16)
@@ -398,10 +425,12 @@ fn variable(
                     .distance_manhattan(tile, town_tile(c.town, s))
                     .min(65535)
         }
+        // Squared Euclidean distance from the closest town.
         0x66 if c.tile != INVALID_TILE => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
             s.map().distance_square(tile, town_tile(c.town, s))
         }
+        // Industry count and nearest distance; 68 also filters by selected layout.
         0x67 | 0x68 => {
             let reg = if variable == 0x68 {
                 (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32
@@ -417,14 +446,18 @@ fn variable(
                 false,
             );
             let Some(slot) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
-                return 0;
+                return 0; // Invalid cargo.
             };
             let p = unsafe { &*super::produced(i, slot) };
             match variable {
                 0x69 => u32::from(p.waiting),
+                // Cargo produced so far this month.
                 0x6a => u32::from(p.history[usize::from(THIS_MONTH)].first),
+                // Cargo transported so far this month.
                 0x6b => u32::from(p.history[usize::from(THIS_MONTH)].second),
+                // Cargo produced last month.
                 0x6c => u32::from(p.history[usize::from(LAST_MONTH)].first),
+                // Cargo transported last month.
                 0x6d => u32::from(p.history[usize::from(LAST_MONTH)].second),
                 0x70 => u32::from(p.rate),
                 _ => u32::from(p.history[usize::from(LAST_MONTH)].pct_transported()),
@@ -437,7 +470,7 @@ fn variable(
                 false,
             );
             let Some(slot) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
-                return 0;
+                return 0; // Invalid cargo.
             };
             let a = unsafe { &*super::accepted(i, slot) };
             if variable == 0x6e {
@@ -454,6 +487,7 @@ fn variable(
             };
             badges.resolve(s.shared(), ro, parameter)
         }
+        // Persistent storage variable.
         0x7c => {
             // Resolve the native shell association once, then read the canonical
             // Rust payload directly. Temporary invalid-ID scopes can read PSA;
@@ -468,11 +502,13 @@ fn variable(
         }
         0x80 => unsafe { (*i).metadata.tile },
         0x81 => (unsafe { (*i).metadata.tile } >> 8) & 255,
+        // Pointer to the associated town.
         0x82 => town_id(c.town, s),
         0x83..=0x85 => {
             debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic");
             unavailable(variable, available, false, false, callback, s)
         }
+        // Industry x/y dimensions.
         0x86 => u32::from(unsafe { (*i).metadata.width }),
         0x87 => u32::from(unsafe { (*i).metadata.height }),
         0x88 | 0x89 => {
@@ -494,6 +530,7 @@ fn variable(
             u32::from(unsafe { (*super::get_accepted(i, usize::from(variable - 0x90))).cargo })
         }
         0x93 => u32::from(unsafe { (*i).fields.prod_level }),
+        // Production and transported totals for this month and last month.
         0x94..=0x9b | 0x9e..=0xa5 => {
             let (base, month) = if variable < 0x9c {
                 (0x94, THIS_MONTH)
@@ -514,6 +551,7 @@ fn variable(
                 value
             }
         }
+        // Fraction of cargo transported last month.
         0x9c | 0x9d => u32::from(unsafe {
             (*super::get_produced(i, usize::from(variable - 0x9c))).history[usize::from(LAST_MONTH)]
                 .pct_transported()
@@ -527,10 +565,13 @@ fn variable(
         0xaa => u32::from(unsafe { (*i).fields.counter }),
         0xab => u32::from(unsafe { (*i).fields.counter } >> 8),
         0xac => u32::from(unsafe { (*i).fields.was_cargo_delivered }),
+        // Construction date in days since 1920.
         0xb0 => unsafe { (*i).metadata.construction_date }
             .wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
+        // Construction type.
         0xb3 => u32::from(unsafe { (*i).metadata.construction_type }),
+        // Date of last accepted cargo in days since 1920.
         0xb4 => {
             let accepted = unsafe { &(*i).accepted };
             accepted.iter().map(|a| a.last_accepted).max()
@@ -552,6 +593,7 @@ fn tile_variable(
 ) -> u32 {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_VARIABLE);
     match variable {
+        // Construction state, from 0 to 3.
         0x40 => {
             if s.is_industry(c.tile) {
                 u32::from(unsafe { (s.tile().construction_stage)(c.tile) })
@@ -559,12 +601,16 @@ fn tile_variable(
                 0
             }
         }
+        // Terrain type.
         0x41 => (s.shared().terrain_type)(c.tile),
+        // Town zone in the nearest town.
         0x42 => {
             let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
         }
+        // Relative position.
         0x43 => relative_position(c.tile, unsafe { (*c.owner).metadata.tile }, s.map()),
+        // Animation frame; unlike a house frame, this can be any byte.
         0x44 => {
             if s.is_industry(c.tile) {
                 u32::from(unsafe { (s.tile().frame)(c.tile) })
@@ -572,6 +618,7 @@ fn tile_variable(
                 0
             }
         }
+        // Land information for nearby tiles.
         0x60 => nearby_information(
             parameter as u8,
             c.tile,
@@ -580,6 +627,7 @@ fn tile_variable(
             (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
+        // Animation stage of nearby tiles.
         0x61 => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
             if s.is_industry(tile)
@@ -590,9 +638,10 @@ fn tile_variable(
                 u32::MAX
             }
         }
+        // Industry tile ID at the offset.
         0x62 => id_at_offset(
             unsafe { (s.nearby)(parameter as u8, c.tile, true) },
-            c.id,
+            IndustryID(c.id),
             (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
@@ -601,7 +650,14 @@ fn tile_variable(
             let badges = unsafe { (*industrytype::tile(gfx)).badges.badge_view() };
             badges.resolve(s.shared(), ro, parameter)
         }
-        _ => unavailable(variable, available, true, false, 0, s),
+        _ => unavailable(
+            variable,
+            available,
+            true,
+            false,
+            crate::newgrf_callbacks::CallbackID::CBID_NO_CALLBACK.0,
+            s,
+        ),
     }
 }
 
@@ -800,9 +856,11 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
         };
         if result != CALLBACK_FAILED {
             if (s.shared().grf_file_version)(unsafe { (*spec).grf_prop.grffile }) < 8 {
+                // Disallow construction when the old callback returns nonzero.
                 if result != 0 {
                     default = 0;
                 }
+            // Use the returned probability; 0x100 keeps the default.
             } else if result < 0x100 {
                 default = u32::from(result);
             } else if result > 0x100 {

@@ -11,6 +11,7 @@ use super::{
     Accepted, Builder, GenerationServices, Industry, LifecycleServices, Map, Produced, Services,
     SpecHandle, accepted, fields, produced, produced_count, valid,
 };
+use crate::command_type::DoCommandFlag;
 use crate::company_type::{CompanyID, Owner};
 use crate::history_type::LAST_MONTH;
 use crate::industrytype::{self, IndustryBehaviour, IndustryBehaviours, IndustryConstructionType};
@@ -165,7 +166,11 @@ fn cargo_callbacks(
     let unlimited = IndustryBehaviours(unsafe { (*spec).behaviour })
         .test(IndustryBehaviour::CargoTypesUnlimited);
     let maxcargoes = if unlimited {
-        crate::industry_type::INDUSTRY_NUM_OUTPUTS
+        if output {
+            crate::industry_type::INDUSTRY_NUM_OUTPUTS
+        } else {
+            crate::industry_type::INDUSTRY_NUM_INPUTS
+        }
     } else if output {
         crate::industry_type::INDUSTRY_ORIGINAL_NUM_OUTPUTS
     } else {
@@ -185,6 +190,8 @@ fn cargo_callbacks(
             unsafe { (*spec).grf_prop.grffile },
             false,
         );
+        // Older GRFs rely on fixed cargo slot order and blank slots by returning
+        // undefined cargo indices. Keep an invalid slot without ending the callbacks.
         if !valid(cargo) && !unlimited {
             unsafe {
                 if output {
@@ -201,6 +208,7 @@ fn cargo_callbacks(
             }
             continue;
         }
+        // The cargo must occur in the specification; otherwise this is a GRF error.
         let in_spec = if output {
             lists.produced.contains(&cargo)
         } else {
@@ -217,6 +225,7 @@ fn cargo_callbacks(
                 (0..j).any(|n| (*accepted(owner, n)).cargo == cargo)
             }
         };
+        // Duplicate cargoes are also a GRF error.
         if duplicate {
             unsafe { (c.callback_error)(spec, callback, res) };
             break;
@@ -344,11 +353,13 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     };
     unsafe {
         (*owner).metadata.construction_type = construction_type.0;
+        // Zero means unknown (old save); known layouts are saved one-based.
         (*owner).metadata.selected_layout = r.layout_index.wrapping_add(1) as u8;
         (*owner).metadata.exclusive_supplier = CompanyID::INVALID.0;
         (*owner).metadata.exclusive_consumer = CompanyID::INVALID.0;
         (*f).prod_level = super::PRODLEVEL_DEFAULT;
     }
+    // Call callbacks after the regular fields are initialized.
     if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::ProdChangeBuild) {
         let random = s.shared().random();
         let res = unsafe {
@@ -445,7 +456,12 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             add_location(owner, tile, r.size_x);
             let water = unsafe { (c.water_class)(tile) };
             unsafe {
-                (c.clear_tile)(tile, (1 << 0) | (1 << 4) | (1 << 9));
+                (c.clear_tile)(
+                    tile,
+                    DoCommandFlag::EXECUTE
+                        | DoCommandFlag::NO_TEST_TOWN_RATING
+                        | DoCommandFlag::NO_MODIFY_TOWN_RATING,
+                );
             }
             let random = s.shared().random();
             unsafe {

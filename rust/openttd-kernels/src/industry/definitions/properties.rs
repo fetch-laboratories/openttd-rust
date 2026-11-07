@@ -27,7 +27,7 @@ pub struct Context {
 }
 /// `CT_INVALID` as a default cargo label.
 const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
-    value: u32::MAX,
+    value: crate::cargo_type::CT_INVALID,
     mixed: false,
 };
 /// `INDUSTRYTILE_NOANIM`.

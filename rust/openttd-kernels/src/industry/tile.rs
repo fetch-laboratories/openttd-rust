@@ -27,8 +27,8 @@ use crate::industry_map::{
     GFX_TOY_FACTORY,
 };
 use crate::industry_type::{
-    INDUSTRY_COMPLETED, INDUSTRY_NUM_INPUTS, IndustryAnimationTrigger, IndustryGfx,
-    IndustryRandomTrigger,
+    INDUSTRY_COMPLETED, INDUSTRY_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
+    IndustryAnimationTrigger, IndustryGfx, IndustryRandomTrigger,
 };
 use crate::industrytype::{
     self, IndustryBehaviour, IndustryBehaviours, IndustryTileSpecialFlag, IndustryTileSpecialFlags,
@@ -38,7 +38,7 @@ use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::newgrf_callbacks::{CallbackID, IndustryTileCallbackMask, IndustryTileCallbackMasks};
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::sound_type::{SoundFx, SoundID};
-use crate::tile_type::MP_INDUSTRY;
+use crate::tile_type::{MP_INDUSTRY, TILE_SIZE};
 use std::{ffi::c_void, ptr};
 
 /// The native `Industry` pool shell.
@@ -93,8 +93,8 @@ fn dirty(tile: u32, s: &Services) {
     (s.shared().mark_dirty)(tile);
 }
 fn chimney(tile: u32, map: crate::services::Map, t: &TileServices) {
-    let x = map.tile_x(tile).wrapping_mul(16);
-    let y = map.tile_y(tile).wrapping_mul(16);
+    let x = map.tile_x(tile).wrapping_mul(TILE_SIZE);
+    let y = map.tile_y(tile).wrapping_mul(TILE_SIZE);
     let z = unsafe { (t.pixel_max_z)(tile) };
     crate::effect::openttd_rust_effect_create(
         x.wrapping_add(15) as i32,
@@ -142,6 +142,8 @@ fn bigger(
     match gfx {
         GFX_POWERPLANT_CHIMNEY => chimney(tile, map, t),
         GFX_OILRIG_1 => {
+            // Do not require an industry tile after the first two GFX_OILRIG_1
+            // tiles. Build the station after checking both belong to this industry.
             let other = tile.wrapping_add(map.size_x());
             if (s.shared().tile_type)(other) == MP_INDUSTRY
                 && unsafe { (t.gfx)(other) } == GFX_OILRIG_1
@@ -348,11 +350,11 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map) {
     let dir = (s.shared().random() & 3) as usize;
     let x = map
         .tile_x(tile)
-        .wrapping_mul(16)
+        .wrapping_mul(TILE_SIZE)
         .wrapping_add([11_i32, 0, -4, -14][dir] as u32) as i32;
     let y = map
         .tile_y(tile)
-        .wrapping_mul(16)
+        .wrapping_mul(TILE_SIZE)
         .wrapping_add([-4_i32, -10, -4, 1][dir] as u32) as i32;
     let vehicle = crate::effect::openttd_rust_effect_create_above(
         x,
@@ -504,8 +506,8 @@ pub(crate) unsafe fn tile_loop(
         }
         GFX_COPPER_MINE_CHIMNEY => {
             crate::effect::openttd_rust_effect_create_above(
-                map.tile_x(tile).wrapping_mul(16).wrapping_add(6) as i32,
-                map.tile_y(tile).wrapping_mul(16).wrapping_add(6) as i32,
+                map.tile_x(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
+                map.tile_y(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
                 43,
                 crate::effectvehicle_func::EV_COPPER_MINE_SMOKE,
             );
@@ -546,6 +548,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     let gfx = unsafe { (t.gfx)(tile) };
     let spec = industrytype::tile(gfx);
     let industry = unsafe { (t.industry)(tile) };
+    // Start with this tile specification's cargoes and acceptance.
     let mut info = unsafe {
         TileAcceptance {
             cargo: (*spec).accepts_cargo,
@@ -559,6 +562,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
         }
     };
     if info.accepts_all {
+        // Copy accepted cargoes from the industry itself. Insert a missing cargo
+        // into an invalid slot; if no slot exists, give up on that cargo.
         for n in 0..super::accepted_count(industry.owner) {
             let cargo = unsafe { (*super::accepted(industry.owner, n)).cargo };
             let Some(slot) = info
@@ -573,12 +578,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             info.amount[slot] = info.amount[slot].wrapping_add(8);
         }
     }
+    // A successful accepts callback replaces the complete accepts list.
     if info.accepts_callback {
         let result =
             unsafe { (t.callback)(tile, gfx, CallbackID::CBID_INDTILE_ACCEPT_CARGO.0, 0, 0) };
         if result != CALLBACK_FAILED {
             info.cargo.fill(INVALID_CARGO);
-            for n in 0..3 {
+            for n in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 info.cargo[n] = crate::cargo_registry::openttd_rust_cargo_translate(
                     ((result >> (n * 5)) & 31) as u8,
                     unsafe { (*spec).grf_prop.grffile },
@@ -587,12 +593,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             }
         }
     }
+    // A successful acceptance callback replaces the complete acceptance list.
     if info.amount_callback {
         let result =
             unsafe { (t.callback)(tile, gfx, CallbackID::CBID_INDTILE_CARGO_ACCEPTANCE.0, 0, 0) };
         if result != CALLBACK_FAILED {
             info.amount.fill(0);
-            for n in 0..3 {
+            for n in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 info.amount[n] = ((result >> (n * 4)) & 15) as i8;
             }
         }
@@ -600,22 +607,27 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     for n in 0..INDUSTRY_NUM_INPUTS {
         let cargo = info.cargo[n];
         let amount = info.amount[n];
+        // Work only with valid cargoes.
         if cargo == INVALID_CARGO || amount <= 0 {
             continue;
         }
+        // Add accepted cargo.
         unsafe {
             let entry = acceptance.add(usize::from(cargo));
             *entry = (*entry).wrapping_add(amount as u32);
         }
+        // Consider the always-accepted bit only if it is not already set.
         let bit = 1_u64.wrapping_shl(u32::from(cargo));
         if unsafe { *always_accepted } & bit != 0 {
             continue;
         }
+        // The industry's own acceptance prevents the always-accepted bit.
         if (0..super::accepted_count(industry.owner))
             .any(|slot| unsafe { (*super::accepted(industry.owner, slot)).cargo == cargo })
         {
             continue;
         }
+        // A cargo the industry itself does not accept is always accepted by the tile.
         unsafe { *always_accepted |= bit };
     }
 }
@@ -671,7 +683,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
         }
     }
     let removal = unsafe { super::removal_cost((*spec).removal_cost_multiplier) };
-    unsafe { (c.expense_money)(out, 0, removal) };
+    unsafe { (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, removal) };
 }
 /// # Safety
 /// Native complete cost sink and live tile. The resolver can reenter; no owner or
@@ -706,7 +718,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
                 result == CALLBACK_FAILED
                     || !(shared.grf_boolean_callback)(
                         unsafe { (*spec).grf_prop.grffile },
-                        CallbackID::CBID_INDTILE_AUTOSLOPE,
+                        CallbackID::CBID_INDTILE_AUTOSLOPE.0,
                         result,
                     )
             } else {
@@ -714,7 +726,9 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             };
             if allowed {
                 let foundation = crate::company::price(PR_BUILD_FOUNDATION);
-                unsafe { (c.expense_money)(out, 0, foundation) };
+                unsafe {
+                    (c.expense_money)(out, crate::economy_type::EXPENSES_CONSTRUCTION, foundation)
+                };
                 return;
             }
         }
