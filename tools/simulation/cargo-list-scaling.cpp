@@ -6,7 +6,9 @@
  */
 
 /** @file cargo-list-scaling.cpp Bounded witness for lists larger than the play corpus. */
+#include "stdafx.h"
 #include "rust/cargo_storage_ffi.h"
+#include "rust/services_ffi.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -19,7 +21,6 @@ using Clock = std::chrono::steady_clock;
 static unsigned reads;
 static OpenTTDCargoPacket *Owner(void *p) noexcept { ++reads; return static_cast<OpenTTDCargoPacket *>(p); }
 static void Destroy(void *p) noexcept { openttd_rust_cargo_packet_destroy(static_cast<OpenTTDCargoPacket *>(p)); }
-static uint32_t Coordinate(uint32_t, uint8_t) noexcept { return 0; }
 static void Require(bool condition) { if (!condition) std::abort(); }
 static void Snapshot(void *context, uint16_t, void *shell) noexcept
 {
@@ -33,10 +34,9 @@ static std::vector<void *> Snapshot(OpenTTDCargoList *list)
 }
 static OpenTTDCargoPacket *Packet(unsigned age)
 {
-	OpenTTDCargoPacketFields fields;
-	fields.count = 1;
-	fields.periods_in_transit = age;
-	return openttd_rust_cargo_packet_new(&fields);
+	auto *packet = openttd_rust_cargo_packet_new(nullptr);
+	packet->count = 1; packet->periods_in_transit = age;
+	return packet;
 }
 static double Milliseconds(Clock::time_point start) { return std::chrono::duration<double, std::milli>(Clock::now() - start).count(); }
 
@@ -45,7 +45,12 @@ int main()
 	OpenTTDCargoStorageServices services{};
 	services.packet = Owner;
 	services.destroy = Destroy;
-	services.coordinate = Coordinate;
+	static const std::unique_ptr<TileBaseStorage[]> base;
+	static const std::unique_ptr<TileExtendedStorage[]> extended;
+	static const uint32_t size = 65536, log = 8;
+	static const OpenTTDMapStatics map{&base, &extended, &size, &log, &log, false};
+	static const OpenTTDSharedServices shared{.map = &map};
+	services.shared = &shared;
 	for (unsigned size : {1000U, 4000U, 16000U, 64000U}) {
 		auto *vehicle = openttd_rust_cargo_list_new(1);
 		for (unsigned i = 0; i < size; ++i) openttd_rust_cargo_list_insert(vehicle, 0, Packet(i));

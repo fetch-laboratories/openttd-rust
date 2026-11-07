@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+import evidence_replacements
 import vcs
 from simulation.configuration import Configuration, configure
 from validation_execution import file_lock, run_logged
@@ -620,9 +621,12 @@ def command_verify(execution: Execution) -> None:
                 ],
                 cwd=build,
             )
-    missing = inventories["reference"] - inventories["candidate"]
-    if missing:
-        raise RuntimeError(f"Candidate removed reference tests: {sorted(missing)}")
+    records = evidence_replacements.load()
+    errors = evidence_replacements.ctest_errors(
+        inventories["reference"], inventories["candidate"], records
+    )
+    if errors:
+        raise RuntimeError("\n".join(errors))
 
 
 def command_simulate(execution: Execution) -> None:

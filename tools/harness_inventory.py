@@ -10,6 +10,7 @@ tool reads fails. run-comparisons.py checks reported case counts at run time.
 
 import argparse
 import ast
+import copy
 import dataclasses
 import json
 import os
@@ -17,13 +18,20 @@ import re
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
+import evidence_replacements as replacements
 import vcs
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = "migration/harness-inventory.json"
 COUNT = re.compile(r"\b\d+\b")
+
+
+class NativeInventory(TypedDict):
+    native_sources: list[str]
+    native_tests: list[str]
+    native_targets: list[str]
 
 
 class Inventory(TypedDict):
@@ -32,6 +40,9 @@ class Inventory(TypedDict):
     comparisons: dict[str, list[str]]
     masks: list[str]
     known_failures: dict[str, str]
+    native_sources: NotRequired[list[str]]
+    native_tests: NotRequired[list[str]]
+    native_targets: NotRequired[list[str]]
 
 
 def discover() -> list[Path]:
@@ -94,6 +105,121 @@ def unread_keys(scenarios: Iterable[object], sources: Iterable[Path]) -> list[st
     )
 
 
+def native_inventory(ref: str | None = None) -> NativeInventory:
+    """Census tracked evidence and its existing CMake registration, without builds."""
+    paths = (
+        git(
+            "ls-tree", "-r", "--name-only", ref, "--", "tools", "src/tests"
+        ).splitlines()
+        if ref
+        else git("ls-files", "--", "tools", "src/tests").splitlines()
+    )
+    sources = [
+        path
+        for path in paths
+        if Path(path).suffix in replacements.NATIVE_SUFFIXES
+        and (ref is not None or (ROOT / path).is_file())
+    ]
+    test_cmake = (
+        git("show", f"{ref}:src/tests/CMakeLists.txt")
+        if ref
+        else (ROOT / "src/tests/CMakeLists.txt").read_text()
+    )
+    tests = [
+        f"src/tests/{name}"
+        for block in re.findall(r"add_test_files\((.*?)\)", test_cmake, re.S)
+        for name in block.split()
+        if Path(name).suffix in replacements.NATIVE_SUFFIXES
+    ]
+    # Existing literal CMake executable/library targets, including native Rust
+    # test support. Component Python probes are covered by source/driver IDs.
+    cmake_paths = [
+        "CMakeLists.txt",
+        *(
+            git("ls-tree", "-r", "--name-only", ref, "--", "cmake").splitlines()
+            if ref
+            else git("ls-files", "--", "cmake").splitlines()
+        ),
+    ]
+    targets = []
+    for path in cmake_paths:
+        if not path.endswith(("CMakeLists.txt", ".cmake")):
+            continue
+        text = git("show", f"{ref}:{path}") if ref else (ROOT / path).read_text()
+        targets += re.findall(
+            r"^\s*add_(?:executable|library)\(\s*([\w:.-]+)(?:\s|\))", text, re.M
+        )
+    if ref is None:
+        retired = {
+            item.removeprefix("source:")
+            for record in replacements.load()
+            for item in record["retires"]
+            if item.startswith("source:")
+        }
+        tests = [path for path in tests if path not in retired]
+    return {
+        "native_sources": sorted(sources),
+        "native_tests": sorted(tests),
+        "native_targets": sorted(targets),
+    }
+
+
+def replacement_errors(tree: Inventory, base: Inventory) -> list[str]:
+    records = replacements.load()
+    retired = [
+        f"{prefix}:{name}"
+        for key, prefix in (
+            ("native_sources", "source"),
+            ("native_tests", "source"),
+            ("native_targets", "target"),
+            ("comparisons", "comparison"),
+            ("default", "scenario"),
+            ("soak", "scenario"),
+        )
+        for name in sorted(set(base.get(key, [])) - set(tree.get(key, [])))
+    ]
+    return replacements.errors(records, tree["default"]) + replacements.missing(
+        retired, records
+    )
+
+
+def registered_inventory(recorded: Inventory, tree: Inventory) -> Inventory:
+    """Component manifests account for losses without rewriting shared history.
+
+    Keep the archived case/scenario/source inventories. Only a named replacement
+    contract can account for a removed entry or register a new scenario.
+    """
+    records = replacements.load()
+    retired = {item for record in records for item in record["retires"]}
+    expected = copy.deepcopy(recorded)
+    for key, prefix in (
+        ("native_sources", "source"),
+        ("native_tests", "source"),
+        ("native_targets", "target"),
+        ("default", "scenario"),
+        ("soak", "scenario"),
+    ):
+        expected[key] = [
+            name
+            for name in recorded.get(key, [])
+            if f"{prefix}:{name}" not in retired or name in tree.get(key, [])
+        ]
+    expected["comparisons"] = {
+        name: cases
+        for name, cases in recorded["comparisons"].items()
+        if f"comparison:{name}" not in retired or name in tree["comparisons"]
+    }
+    expected["default"] = sorted(
+        set(expected["default"])
+        | {
+            check.removeprefix("scenario:")
+            for check in replacements.destinations(records)
+            if check.startswith("scenario:")
+        }
+    )
+    return expected
+
+
 def tree_inventory() -> tuple[Inventory, list[str]]:
     """The tree's inventory without case lines, and its unread scenario keys."""
     from simulation import core
@@ -113,6 +239,10 @@ def tree_inventory() -> tuple[Inventory, list[str]]:
         masks=sorted(":".join(key) for key in core.MASKS),
         known_failures={":".join(k): v for k, v in core.KNOWN_FAILURES.items()},
     )
+    native = native_inventory()
+    inventory["native_sources"] = native["native_sources"]
+    inventory["native_tests"] = native["native_tests"]
+    inventory["native_targets"] = native["native_targets"]
     return inventory, unread_keys(soak, sources)
 
 
@@ -143,6 +273,9 @@ def errors(
         found.append(f"KNOWN_FAILURES differs from {INVENTORY}")
     if set(recorded["comparisons"]) != set(tree["comparisons"]):
         found.append(f"comparison drivers differ from {INVENTORY}")
+    for key in ("native_sources", "native_tests", "native_targets"):
+        if tree.get(key) != recorded.get(key):
+            found.append(f"{key} differs from {INVENTORY}")
     found += case_errors({}, recorded["comparisons"])
     found += [
         f"mask added or widened: {m}" for m in set(tree["masks"]) - set(base["masks"])
@@ -184,19 +317,53 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", default="origin/rust-migration")
     parser.add_argument(
-        "--write", action="store_true", help="record the tree, keeping case lines"
+        "--write",
+        action="store_true",
+        help="record additions, retaining archived evidence and case lines",
     )
     args = parser.parse_args()
     tree, unread = tree_inventory()
     recorded = load((ROOT / INVENTORY).read_text())
     if args.write:
-        for driver in tree["comparisons"]:
-            tree["comparisons"][driver] = recorded["comparisons"].get(driver, [])
+        for key in (
+            "default",
+            "soak",
+            "native_sources",
+            "native_tests",
+            "native_targets",
+        ):
+            tree[key] = sorted(set(tree.get(key, [])) | set(recorded.get(key, [])))
+        tree["comparisons"] = {
+            driver: recorded["comparisons"].get(driver, [])
+            for driver in sorted(
+                set(tree["comparisons"]) | set(recorded["comparisons"])
+            )
+        }
         write(tree)
         return 0
     tracked = git("ls-tree", "--name-only", args.base_ref, INVENTORY).strip()
     base = load(git("show", f"{args.base_ref}:{INVENTORY}")) if tracked else recorded
-    found = errors(tree, recorded, base)
+    if "native_sources" not in base:
+        native = native_inventory(args.base_ref)
+        base["native_sources"] = native["native_sources"]
+        base["native_tests"] = native["native_tests"]
+        base["native_targets"] = native["native_targets"]
+    expected = registered_inventory(recorded, tree)
+    found = errors(tree, expected, base)
+    for key in (
+        "default",
+        "soak",
+        "native_sources",
+        "native_tests",
+        "native_targets",
+        "comparisons",
+    ):
+        if set(base.get(key, [])) - set(recorded.get(key, [])):
+            found.append(
+                f"archived {key} removed; retain inventory and register replacements"
+            )
+    found += replacement_errors(tree, base)
+    found += case_errors(base["comparisons"], expected["comparisons"])
     found += [f"scenario key read by no tool: {key}" for key in unread]
     for line in removals(recorded, base):
         print(f"recorded removal: {line}")

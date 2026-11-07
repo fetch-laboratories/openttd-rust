@@ -37,13 +37,10 @@ int main()
 		for (uint amount : {0U, 1U, 11U, UINT32_MAX}) {
 			allocation_calls = 0;
 #ifdef WITH_RUST
-			OpenTTDCargoPacketFields fields;
-			fields.count = count; fields.feeder_share = feeder;
-			auto *packet = openttd_rust_cargo_packet_new(&fields);
+			auto *packet = openttd_rust_cargo_packet_new(nullptr);
+			packet->count = count; packet->feeder_share = feeder;
 			auto *part = openttd_rust_cargo_packet_split(packet, &services, amount);
-			OpenTTDCargoPacketFields after;
-			openttd_rust_cargo_packet_export(packet, &after);
-			assert(after.count == count && after.feeder_share == feeder);
+			assert(packet->count == count && packet->feeder_share == feeder);
 			openttd_rust_cargo_packet_destroy(packet);
 #else
 			CargoPacket packet(count, feeder);

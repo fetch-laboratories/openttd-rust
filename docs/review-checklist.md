@@ -11,7 +11,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 ## Code standards
 
-- The original's types and named constants come from their header module; a literal standing for a named value is a finding. Code reaches a wrapper's raw integer only at ABI, save and bitfield boundaries.
+- The original's types and named constants come from their header module. Code reaches the raw integer at ABI, save and bitfield boundaries and wherever the original uses the value as an integer (table indexing, arithmetic, bit scans); a literal standing for a named value is still a finding.
 - The original's explanatory comments sit at the matching branch. Comments carry no review defence, history or dates.
 - Commands take their argument struct; helpers take context structs.
 - Each helper has one port. Grep the callee of every new binding across `src/`, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`; each existing wrapper or binding is a finding.
@@ -26,7 +26,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 ## Cleanup PRs
 
-- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or identical semantic outputs with unchanged instruction counts on the profile scenarios. Every code difference is explained.
+- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or, where code differs, a source review showing each changed function performs the same operations in the same order, and exact-head Full.
 
 ## Report
 
