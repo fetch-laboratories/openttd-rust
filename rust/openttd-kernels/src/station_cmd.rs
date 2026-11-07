@@ -364,6 +364,7 @@ pub struct CommandServicesTable {
 // Call-local helper contexts contain the original inputs and live native result
 // slots. Mutable terrain/station scratch is reborrowed for one helper invocation;
 // no world-state borrow is retained across a command or callback.
+#[derive(Clone, Copy)]
 struct StationBridgeCheck<'a> {
     out: Cost<'a>,
     tile: u32,
@@ -374,6 +375,7 @@ struct StationBridgeCheck<'a> {
     disallowed: u32,
 }
 
+#[derive(Clone, Copy)]
 struct JoiningStation<'a> {
     out: Cost<'a>,
     existing: u16,
@@ -431,6 +433,7 @@ struct RoadStopCost<'a> {
     unit: i64,
 }
 
+#[derive(Clone, Copy)]
 struct RailStationRemoval<'a> {
     cost: Cost<'a>,
     ret: Cost<'a>,
@@ -442,6 +445,7 @@ struct RailStationRemoval<'a> {
     waypoint: bool,
 }
 
+#[derive(Clone, Copy)]
 struct RoadStopRemoval<'a> {
     cost: Cost<'a>,
     ret: Cost<'a>,
@@ -452,6 +456,7 @@ struct RoadStopRemoval<'a> {
     remove_road: bool,
 }
 
+#[derive(Clone, Copy)]
 struct StationOwnerChange<'a> {
     ownership: &'a crate::tile_owner::Context,
     cost: Cost<'a>,
