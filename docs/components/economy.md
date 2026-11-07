@@ -156,3 +156,10 @@
 - Delivery scans, destination insertion, refusal and acceptance observations, statistics, monitors, subsidy calculation, settlement and production flush keep their existing order. Native resolvers, world/pool storage and presentation remain in C++.
 - Limits: Existing callback-domain, overflow, historical-save, NewGRF and live presentation qualifications remain on #156. No additional ownership or coverage closure is claimed.
 - PRs: #775, integrated in #777. Other Cargo vocabulary remains in the cleanup workset.
+
+## Original Company generation vocabulary (#734)
+
+- Company colour, company name and president-name generation use the original helper names, typed local string/colour identities and explanatory comments. `gfx_type::Colours` supplies the complete byte-backed enumeration; existing scalar constants and helper reexports retain their callers.
+- The 100 colour draws, weighting/elimination, live company/name reads, retry sequence, native name frames and news/admin effects keep their existing order. Native company storage, raw records and scalar interfaces remain unchanged.
+- Limits: Raw invalid-index domains, arbitrary names/mods, historical saves, presentation and scheduling remain on #156. Other Company/economy bodies remain in the cleanup workset.
+- PRs: #778, integrated in #780.

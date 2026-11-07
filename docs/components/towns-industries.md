@@ -138,3 +138,10 @@
 - Native parsing, file/JSON access, pool/map shells and presentation remain in C++. The cleanup adds no storage owner or interface.
 - Limits: Existing empty-spiral TownID and floating-conversion qualifications, arbitrary NewGRF names, malformed imports and historical-save domains remain on #156.
 - PRs: #768, integrated in #776. Other Town vocabulary remains in the cleanup workset.
+
+## Original Town generation vocabulary (#734)
+
+- Generation, default-count, random-placement and immediate name/grid helpers use the original names and canonical IDs, layouts, sizes and difficulty constant. `TownSize` and `TownLayout` have one definition in `town_type`; founding reexports preserve existing caller paths. `Tile` reuses `TileIndex`.
+- Raw byte/word domains, count clamps, allocation/retry and RNG order, name scratch, progress/cancellation and scalar service contracts remain unchanged. Native map/pool/frame ownership stays in C++.
+- Limits: Existing deletion-assert ordering, invalid setting domains, final-fallback, NewGRF, historical-save and scheduling qualifications remain on #156. Other founding families remain in the cleanup workset.
+- PRs: #779, integrated in #780.
