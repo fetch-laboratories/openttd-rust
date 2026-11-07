@@ -1176,7 +1176,7 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     write_field!(c.finances, loan, loan);
     write_field!(c.finances, money, loan);
     if (s.prepare_new_company)(id, f.is_ai) {
-        crate::company_manager_face::random(
+        crate::company_manager_face::randomise_company_manager_face(
             s.identity.faces,
             (s.identity.face)(company),
             s.identity.randomizer,
