@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def normalize(value: str, renames: dict[str, str]) -> str:
     """Simultaneous raw-symbol rewrites, including section-name suffixes."""
+    if not renames:
+        return value
 
     def replace(match: re.Match[str]) -> str:
         symbol = match[0]
@@ -51,7 +53,7 @@ def section_header(header: re.Match[str], flags: str) -> dict[str, Any]:
         "size": int(size, 16),
         "alignment": alignment,
         "flags": flags.strip(),
-        "bytes": "",
+        "bytes": [],
         "relocations": [],
         "symbols": [],
         "selected": selected,
@@ -70,6 +72,7 @@ def dump_payload(
         if (
             len(fields) >= 5
             and fields[-3] in sections
+            and sections[fields[-3]]["selected"]
             and re.fullmatch(r"[0-9a-f]+", fields[0])
         ):
             fields[-1] = normalize(fields[-1], renames)
@@ -79,14 +82,20 @@ def dump_payload(
             sections[section]["symbols"].append(" ".join(fields))
     elif (
         current in sections
+        and sections[current]["selected"]
         and mode == "relocations"
         and re.match(r"^[0-9a-f]+\s+R_", line)
     ):
         fields[2] = normalize(fields[2], renames)
         sections[current]["relocations"].append(" ".join(fields))
-    elif current in sections and mode == "bytes" and re.match(r"^ [0-9a-f]+ ", line):
+    elif (
+        current in sections
+        and sections[current]["selected"]
+        and mode == "bytes"
+        and re.match(r"^ [0-9a-f]+ ", line)
+    ):
         # Four fixed-width hex groups precede objdump's ASCII rendering.
-        sections[current]["bytes"] += "".join(line.split(None, 1)[1][:35].split())
+        sections[current]["bytes"].append("".join(line.split(None, 1)[1][:35].split()))
 
 
 def object_sections(output: str, renames: dict[str, str]) -> Counter[str]:
@@ -114,6 +123,7 @@ def object_sections(output: str, renames: dict[str, str]) -> Counter[str]:
     result: Counter[str] = Counter()
     for name, row in sections.items():
         if row.pop("selected"):
+            row["bytes"] = "".join(row["bytes"])
             result[
                 json.dumps(dict(row, name=normalize(name, renames)), sort_keys=True)
             ] += 1
@@ -158,6 +168,8 @@ def compare(base: Path, head: Path, renames: dict[str, str]) -> bool:
     print(
         f"refactor proof: {sum(removed.values())} removed/changed; {sum(added.values())} added/changed object groups"
     )
+    if not renames:
+        return not removed and not added
     # A rename that names nothing is an invalid audit, even if archives match.
     used = "\n".join(archive_sections(base, {}))
     unused = [
