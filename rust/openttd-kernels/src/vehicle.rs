@@ -81,11 +81,11 @@ pub use crate::tile_cmd::CANNOT_ENTER as VETS_CANNOT_ENTER;
 pub use crate::tile_cmd::ENTERED_WORMHOLE as VETS_ENTERED_WORMHOLE;
 pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `AM_REALISTIC`.
-pub const AM_REALISTIC: u8 = 1;
+pub const AM_REALISTIC: u8 = crate::vehicle_type::AccelerationModel::AM_REALISTIC.0;
 /// `INVALID_PRICE`.
 pub use crate::economy_type::INVALID_PRICE;
 /// `VEHICLE_LENGTH`.
-pub const VEHICLE_LENGTH: u8 = 8;
+pub const VEHICLE_LENGTH: u8 = crate::vehicle_type::VEHICLE_LENGTH as u8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
 pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 /// `SND_19_DEPARTURE_OLD_RV_1` and `SND_1A_DEPARTURE_OLD_RV_2`.
