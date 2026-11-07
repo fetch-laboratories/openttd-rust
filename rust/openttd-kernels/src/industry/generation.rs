@@ -151,8 +151,8 @@ fn initial(
         return false;
     }
     place(
-        kind.0,
-        IndustryAvailabilityCallType::IACT_MAPGENERATION.0,
+        kind,
+        IndustryAvailabilityCallType::IACT_MAPGENERATION,
         hard,
         s,
     );

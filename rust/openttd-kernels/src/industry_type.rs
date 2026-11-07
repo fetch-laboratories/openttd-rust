@@ -82,11 +82,11 @@ impl IndustryID {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IndustryType(pub u8);
 impl IndustryType {
-    /// Maximum per NewGRF; bit 7 has special meaning in variables/callbacks.
+    /// Maximum per `NewGRF`; bit 7 has special meaning in variables/callbacks.
     pub const NUM_INDUSTRYTYPES_PER_GRF: Self = Self(128);
     /// Original number of industry types.
     pub const NEW_INDUSTRYOFFSET: Self = Self(37);
-    /// Total types; leaves room for IT_INVALID, IT_AI_UNKNOWN, IT_AI_TOWN, etc.
+    /// Total types; leaves room for `IT_INVALID`, `IT_AI_UNKNOWN`, `IT_AI_TOWN`, etc.
     pub const NUM_INDUSTRYTYPES: Self = Self(240);
     /// Invalid industry type.
     pub const IT_INVALID: Self = Self(0xff);

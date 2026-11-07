@@ -1183,3 +1183,21 @@ mod tcp_content_type;
 /// Native content slot and protocol value domains.
 pub use tcp_content_type::{ContentID, ContentType, PacketContentType};
 mod tcp_game;
+
+/// Native industry domain definitions; native owners and record access remain internal.
+pub use industry::{
+    IndustryControlFlag, IndustryControlFlags, IndustryDirectoryInvalidateWindowData,
+};
+/// Native builtin industry graphics vocabulary.
+pub use industry_map::IndustryGraphics;
+/// Native industry specification enums and flag sets.
+pub use industrytype::{
+    CheckProc, IndustryBehaviour, IndustryBehaviours, IndustryConstructionType, IndustryLifeType,
+    IndustryLifeTypes, IndustryTileSpecialFlag, IndustryTileSpecialFlags,
+};
+/// Native industry availability and legacy trigger vocabulary.
+pub use newgrf_industries::{IndustryAvailabilityCallType, IndustryTrigger};
+/// Native industry density setting vocabulary.
+pub use settings_type::IndustryDensity;
+/// Native sound indices; no sound data or ownership is exposed.
+pub use sound_type::{SoundFx, SoundID};

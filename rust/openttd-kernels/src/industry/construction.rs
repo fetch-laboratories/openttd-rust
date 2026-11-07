@@ -364,7 +364,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 .contains(&res)
             {
                 unsafe {
-                    (c.callback_error)(spec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res)
+                    (c.callback_error)(spec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
                 };
             } else {
                 unsafe {
