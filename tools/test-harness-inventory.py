@@ -107,7 +107,11 @@ class InventoryTests(unittest.TestCase):
             ):
                 with self.subTest(line=line):
                     inventory.write_text(original)
-                    (tools / driver).write_text(f"print({line!r})\n")
+                    (tools / driver).write_text(
+                        "print('test result: ok. 1 passed; 0 failed; 0 ignored; "
+                        "0 measured; 108 filtered out; finished in 0.00s')\n"
+                        f"print({line!r})\n"
+                    )
                     run = subprocess.run(
                         [sys.executable, str(tools / "run-comparisons.py"), "--record"],
                         cwd=root,
