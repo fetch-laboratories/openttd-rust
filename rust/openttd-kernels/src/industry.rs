@@ -2684,7 +2684,7 @@ mod production_policy_tests {
             unreachable!("unexpected Services::deity")
         }
         Services {
-            shared: shared,
+            shared,
             next_tick: unexpected_next_tick,
             location: unexpected_location,
             industry_sound: unexpected_industry_sound,

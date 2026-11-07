@@ -2667,6 +2667,7 @@ mod policy_tests {
     use crate::services::{CommandCost, CommandCostStorage};
     use std::cell::Cell;
     use std::fmt::Write;
+    use std::ptr;
 
     // Process-wide rating scratch also belongs to the existing cross-thread test.
     // Callback state is local to this fixture thread; no production storage changes.
@@ -3046,7 +3047,8 @@ mod policy_tests {
         r.mode(true);
         r.change(100, 1000, 0, [false; 3]);
         r.mode(true);
-        r.town = Box::default();
+        // Replace the canonical owner allocation while retaining its native shell key.
+        drop(std::mem::take(&mut r.town));
         r.reset(-100);
         r.change(1, 1000, 4, [false; 3]);
         r.mode(false);
@@ -3133,7 +3135,7 @@ mod policy_tests {
         crate::services::CommandCostServices {
             construct: unexpected_construct,
             destroy: unexpected_destroy,
-            zero: zero,
+            zero,
             error: unexpected_error,
             expense_money: unexpected_expense_money,
             error_param: error,
