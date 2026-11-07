@@ -24,6 +24,8 @@ def reviewed(
     proposal: dict[str, Any], comments: list[str], author: str, head: str
 ) -> bool:
     """Require another attributed agent to accept the exact payload and head."""
+    if not author:
+        return False
     for body in comments:
         attribution = ATTRIBUTION.search(body)
         if not attribution or attribution[1] == author:
@@ -55,7 +57,12 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
     number = pull.get("number")
     if not number:
         pulls = json.loads(gh("api", f"repos/{repository}/commits/{head}/pulls"))
-        number = next((p["number"] for p in pulls if p["state"] == "open"), None)
+        candidate = next(
+            (p for p in pulls if p["state"] == "open" or p.get("merged_at")), None
+        )
+        number = candidate["number"] if candidate else None
+        if candidate:
+            head = candidate["head"]["sha"]
     if number is None:
         return "", [], [], head
     prefix = f"repos/{repository}"

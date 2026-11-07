@@ -43,6 +43,7 @@ jobs:
       run: python3 tools/migration.py rust-checks --jobs 2
     - name: Force-warn Rust lint debt ratchet
       env:
+        GH_TOKEN: ${{ github.token }}
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/lint-ratchet.py clippy --base-ref "$BASE_REF"
     - name: Install nested collection probe dependency
@@ -61,6 +62,7 @@ jobs:
         PY
     - name: Python complexity debt and lint policy
       env:
+        GH_TOKEN: ${{ github.token }}
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: |
         python3 tools/lint-ratchet.py ruff --base-ref "$BASE_REF"
