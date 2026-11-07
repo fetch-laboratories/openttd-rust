@@ -15,7 +15,7 @@
 use super::{Breakdown, OrderType, VehicleRef, VehicleServices, VehicleType};
 use crate::cargo_type::{CargoType, CargoTypes};
 use crate::company_type::CompanyID;
-use crate::engine_type::{EngineID, EngineMiscFlag, EngineMiscFlags};
+use crate::engine_type::{EngineID, EngineMiscFlags, NO_BREAKDOWN_SMOKE};
 use crate::landscape_type::LandscapeType;
 use crate::newgrf_sound::VSE_BREAKDOWN;
 use crate::sound_type::SoundFx;
@@ -557,9 +557,7 @@ unsafe fn handle_breakdown_impl<const C: bool>(
                     svc!(C, base.play_sound, v, u16::from(sound.0));
                 }
                 if VehStates((v).status()).0 & VehStates::from_element(VehState::Hidden).0 == 0
-                    && EngineMiscFlags((base.engine)(v).misc()).0
-                        & EngineMiscFlags::from_element(EngineMiscFlag::NoBreakdownSmoke).0
-                        == 0
+                    && EngineMiscFlags((base.engine)(v).misc()).0 & NO_BREAKDOWN_SMOKE == 0
                 {
                     let u = crate::effect::openttd_rust_effect_create_rel(
                         v.0.as_ptr(),
