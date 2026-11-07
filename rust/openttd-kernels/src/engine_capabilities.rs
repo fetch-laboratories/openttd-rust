@@ -703,7 +703,7 @@ mod tests {
         AircraftVehicleInfo, RailVehicleInfo, RoadVehicleInfo, ShipVehicleInfo, VehicleInfo,
     };
     /// Carry the original native capability fixture's observations across reader retirement.
-    /// Decision results were observed from unchanged Engine::CanCarryCargo at
+    /// Decision results were observed from unchanged `Engine::CanCarryCargo` at
     /// 14ec60f248547d4d062a1160f0fc26d742319888 for these exact six inputs.
     #[test]
     fn carrying_and_config_preserve_type_and_zero_capacity_gates() {
