@@ -98,3 +98,20 @@ impl TownLayout {
     /// Number of town layouts.
     pub const NUM_TLS: Self = Self(5);
 }
+
+/// Town founding setting values; saved and loaded as an eight-bit value.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TownFounding(pub u8);
+impl TownFounding {
+    /// Used for iterations and limit testing.
+    pub const TF_BEGIN: Self = Self(0);
+    /// Forbidden.
+    pub const TF_FORBIDDEN: Self = Self(0);
+    /// Allowed.
+    pub const TF_ALLOWED: Self = Self(1);
+    /// Allowed, with custom town layout.
+    pub const TF_CUSTOM_LAYOUT: Self = Self(2);
+    /// Used for iterations and limit testing.
+    pub const TF_END: Self = Self(3);
+}

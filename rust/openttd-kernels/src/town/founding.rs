@@ -13,12 +13,16 @@ use super::{
 };
 use crate::cargotype::TownAcceptanceEffect;
 use crate::clear_map::ClearGround;
-use crate::company_type::{CompanyID, MAX_COMPANIES};
+use crate::company_type::{CompanyID, MAX_COMPANIES, OWNER_DEITY};
+use crate::economy_type::EXPENSES_OTHER;
 use crate::landscape_type::LandscapeType;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, TownHandle};
+use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{TileIndex, TileType};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
-use crate::town_type::{RATING_INITIAL, TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TownID};
+use crate::town_type::{
+    MAX_LENGTH_TOWN_NAME_CHARS, RATING_INITIAL, TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TownID,
+};
 use crate::tree_map::TreeGround;
 use crate::witness as w;
 use std::cell::OnceCell;
@@ -37,9 +41,9 @@ macro_rules! native_byte {
         pub struct $name(pub u8);
     )+ };
 }
-native_byte!(CompanyId, TownFounding, AcceptanceEffect);
+native_byte!(CompanyId, AcceptanceEffect);
 pub use crate::tile_type::TileIndex as Tile;
-pub use crate::town_type::{TownLayout, TownSize};
+pub use crate::town_type::{TownFounding, TownLayout, TownSize};
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
@@ -538,6 +542,7 @@ unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) 
 pub unsafe extern "C" fn openttd_rust_town_default_number(s: *const FoundingServices) -> u32 {
     unsafe { Founding::new(&*s) }.get_default_towns_for_map_size()
 }
+/// Found a town (`town_cmd.cpp::CmdFoundTown`).
 /// # Safety
 /// Tables, native stack frames, command cost and input bytes remain live for this call. Owners are supplied by the pool and no borrow crosses a callback.
 #[unsafe(no_mangle)]
@@ -551,47 +556,53 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     size: TownSize,
     city: bool,
     layout: TownLayout,
-    random: bool,
-    parts: u32,
+    random_location: bool,
+    townnameparts: u32,
     text: ByteSpan,
     execute: bool,
 ) {
-    const MULT: [[i32; 4]; 2] = [[15, 25, 40, 25], [20, 35, 55, 35]];
+    // Multidimensional arrays have to have defined length of non-first dimension.
+    #[allow(non_upper_case_globals)]
+    const price_mult: [[i32; 4]; 2] = [[15, 25, 40, 25], [20, 35, 55, 35]];
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
-    let parameters = unsafe { crate::townname_type::from_style(observed!((f.s.name_style)())) };
-    observed!((f.cost.error)(result, 0xffff));
-    if size.0 >= 4 || layout.0 >= 5 {
+    let par = unsafe { crate::townname_type::from_style(observed!((f.s.name_style)())) };
+    observed!((f.cost.error)(result, INVALID_STRING_ID));
+    if size.0 >= TownSize::TSZ_END.0 || layout.0 >= TownLayout::NUM_TLS.0 {
         w::hit(w::TOWN_INVALID);
         return;
     }
     let editor = observed!((f.leaves.environment.editor)());
-    let company = CompanyId(observed!((f.shared.current_company)()));
+    let company = CompanyID(observed!((f.shared.current_company)()));
     if editor {
         w::hit(w::TOWN_EDITOR);
     }
-    if company.0 == 0x12 {
+    if company.0 == OWNER_DEITY {
         w::hit(w::TOWN_DEITY);
     }
-    if !editor && company.0 != 0x12 {
+    // Some things are allowed only in the scenario editor and for game scripts.
+    if !editor && company.0 != OWNER_DEITY {
         let setting = observed!((f.s.found_setting)());
-        if setting.0 == 0 || size.0 == 2 || random {
+        if setting == TownFounding::TF_FORBIDDEN || size == TownSize::TSZ_LARGE || random_location {
             return;
         }
-        if setting.0 != 2 && layout != observed!((f.s.layout_setting)()) {
+        if setting != TownFounding::TF_CUSTOM_LAYOUT && layout != observed!((f.s.layout_setting)())
+        {
             return;
         }
-    } else if company.0 == 0x12 && random {
+    } else if company.0 == OWNER_DEITY && random_location {
+        // Random parameter is not allowed for Game Scripts.
         return;
     }
     if text.size == 0 {
+        // If supplied name is empty, townnameparts has to generate unique automatic name.
         if !unsafe {
-            names::verify(
+            names::verify_town_name(
                 f.names,
                 name_frame,
-                parts,
-                &raw const parameters,
+                townnameparts,
+                &raw const par,
                 std::ptr::null_mut(),
             )
         } {
@@ -600,20 +611,24 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             return;
         }
     } else {
-        if observed!((f.names.utf8_length)(text.data, text.size)) >= 32 {
+        // If name is not empty, it has to be unique custom name.
+        if observed!((f.names.utf8_length)(text.data, text.size))
+            >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+        {
             return;
         }
-        if !unsafe { names::unique_custom(f.names, text) } {
+        if !unsafe { names::is_unique_town_name(f.names, text) } {
             w::hit(w::TOWN_DUPLICATE);
             observed!((f.cost.error)(result, f.s.unique_error));
             return;
         }
     }
+    // Allocate town struct.
     if !observed!((f.s.can_allocate)()) {
         observed!((f.cost.error)(result, f.s.too_many_error));
         return;
     }
-    if !random {
+    if !random_location {
         if let Some(error) = f.town_can_be_placed_here(tile, false) {
             observed!((f.cost.error)(result, error));
             return;
@@ -621,27 +636,28 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     }
     observed!((f.s.initialize_cost)(
         result,
-        MULT[usize::from(city)][usize::from(size.0)],
+        price_mult[usize::from(city)][usize::from(size.0)],
     ));
+    // Create the town.
     if execute {
         if observed!((f.cost.money)(result))
             > crate::command::available_money(unsafe { &*f.s.command })
         {
             w::hit(w::TOWN_MONEY);
             observed!((f.s.money_deficit)(frame, result));
-            observed!((f.cost.expense_money)(result, 12, 0));
+            observed!((f.cost.expense_money)(result, EXPENSES_OTHER, 0));
             return;
         }
         let previous = observed!((f.s.exchange_generating)(true));
         unsafe {
             crate::road_cmd::openttd_rust_road_nearest_towns((*road).services, true);
         }
-        let town = if random {
-            unsafe { f.create_random_town(20, parts, size, city, layout) }
+        let town = if random_location {
+            unsafe { f.create_random_town(20, townnameparts, size, city, layout) }
         } else {
             let town = observed!((f.s.allocate)(tile));
             unsafe {
-                f.do_create_town(town, tile, parts, size, city, layout, true);
+                f.do_create_town(town, tile, townnameparts, size, city, layout, true);
             }
             Some(town)
         };
@@ -784,29 +800,32 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     }
     u8::from(true)
 }
+/// Rename a town (server-only; `town_cmd.cpp::CmdRenameTown`).
 /// # Safety
 /// Tables, command cost and input bytes remain live under the game mutex. Pool resolution supplies the sole owner; mutation ends before native callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rename(
     s: *const FoundingServices,
     result: *mut CommandCost,
-    id: TownId,
+    town_id: TownId,
     text: ByteSpan,
     execute: bool,
 ) {
     let f = unsafe { Founding::new(&*s) };
     w::hit(w::TOWN_ENTRIES);
     w::hit(w::TOWN_RENAME);
-    let town = observed!((f.s.resolve)(id));
-    observed!((f.cost.error)(result, 0xffff));
+    let town = observed!((f.s.resolve)(town_id));
+    observed!((f.cost.error)(result, INVALID_STRING_ID));
     if town.shell.is_null() {
         return;
     }
     if text.size != 0 {
-        if observed!((f.names.utf8_length)(text.data, text.size)) >= 32 {
+        if observed!((f.names.utf8_length)(text.data, text.size))
+            >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+        {
             return;
         }
-        if !unsafe { names::unique_custom(f.names, text) } {
+        if !unsafe { names::is_unique_town_name(f.names, text) } {
             w::hit(w::TOWN_DUPLICATE);
             observed!((f.cost.error)(result, f.s.unique_error));
             return;
