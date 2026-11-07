@@ -6,6 +6,8 @@
  */
 
 //! Shared town-rating constants from `town_type.h`.
+/// Initial rating.
+pub const RATING_INITIAL: i32 = 500;
 /// Rating increase for improving a town bridge.
 pub const RATING_TUNNEL_BRIDGE_UP_STEP: i32 = 50;
 /// Rating decrease for removing a town tunnel or bridge.

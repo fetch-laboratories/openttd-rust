@@ -8,12 +8,16 @@
 //! Complete town founding, placement and generation; owners are never borrowed
 //! across native callbacks. Cancellation returns to its native exception frame.
 use super::{
-    Engine, Leaves, State, TownId, TownRef, names, town_ticks_to_game_ticks, update_radius,
+    Engine, Leaves, State, TOWN_GROWTH_DESERT, TOWN_GROWTH_WINTER, TownId, TownRef, names,
+    town_ticks_to_game_ticks, update_radius,
 };
-use crate::company_type::CompanyID;
+use crate::cargotype::TownAcceptanceEffect;
+use crate::company_type::{CompanyID, MAX_COMPANIES};
+use crate::landscape_type::LandscapeType;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, TownHandle};
 use crate::tile_type::{TileIndex, TileType};
-use crate::town_type::TownID;
+use crate::timer_game_tick::TOWN_GROWTH_TICKS;
+use crate::town_type::{RATING_INITIAL, TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TownID};
 use crate::witness as w;
 use std::cell::OnceCell;
 
@@ -251,11 +255,16 @@ impl<'a> Founding<'a> {
         }
         Tile(u32::MAX)
     }
-    unsafe fn create(
+    /// Actually create a town (`town_cmd.cpp::DoCreateTown`).
+    ///
+    /// `town` is the town, `tile` is where to put it, and `townnameparts` is its name.
+    /// `size` is the preset size; `city` selects a city; `layout` is the road layout.
+    /// `manual` records whether the town was placed manually.
+    unsafe fn do_create_town(
         &self,
         town: TownRef,
-        tile: Tile,
-        parts: u32,
+        tile: TileIndex,
+        townnameparts: u32,
         size: TownSize,
         city: bool,
         layout: TownLayout,
@@ -265,7 +274,7 @@ impl<'a> Founding<'a> {
         if manual {
             w::hit(w::TOWN_MANUAL);
         }
-        if layout.0 == 2 || layout.0 == 3 {
+        if layout == TownLayout::TL_2X2_GRID || layout == TownLayout::TL_3X3_GRID {
             w::hit(w::TOWN_GRID);
         }
         let previous = super::openttd_rust_town_generating_exchange_abi(true) != 0;
@@ -287,29 +296,41 @@ impl<'a> Founding<'a> {
                 (self.leaves.house_count)() as usize,
             );
         };
+        // Spread growth across ticks so even if there are many
+        // similar towns they're unlikely to grow all in one tick.
         unsafe {
-            (*town.state).growth.counter = town.id.0 % 70;
+            (*town.state).growth.counter = town.id.0 % TOWN_GROWTH_TICKS;
             (*town.state).growth.rate = town_ticks_to_game_ticks(250);
         }
         // Town's native default initializes show_zone=false before this creation entry.
         super::spatial::insert(self.shared, town.id);
-        match observed!((self.leaves.climate)()) {
-            1 => {
-                if crate::cargo_registry::first_town_acceptance(5).is_some() {
+        // Set the default cargo requirement for town growth.
+        match LandscapeType(observed!((self.leaves.climate)())) {
+            LandscapeType::Arctic => {
+                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_FOOD.0)
+                    .is_some()
+                {
                     unsafe {
-                        (*town.state).simulation.goal[5] = 0xffff_fffe;
+                        (*town.state).simulation.goal
+                            [usize::from(TownAcceptanceEffect::TAE_FOOD.0)] = TOWN_GROWTH_WINTER;
                     }
                 }
             }
-            2 => {
-                if crate::cargo_registry::first_town_acceptance(5).is_some() {
+            LandscapeType::Tropic => {
+                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_FOOD.0)
+                    .is_some()
+                {
                     unsafe {
-                        (*town.state).simulation.goal[5] = u32::MAX;
+                        (*town.state).simulation.goal
+                            [usize::from(TownAcceptanceEffect::TAE_FOOD.0)] = TOWN_GROWTH_DESERT;
                     }
                 }
-                if crate::cargo_registry::first_town_acceptance(4).is_some() {
+                if crate::cargo_registry::first_town_acceptance(TownAcceptanceEffect::TAE_WATER.0)
+                    .is_some()
+                {
                     unsafe {
-                        (*town.state).simulation.goal[4] = u32::MAX;
+                        (*town.state).simulation.goal
+                            [usize::from(TownAcceptanceEffect::TAE_WATER.0)] = TOWN_GROWTH_DESERT;
                     }
                 }
             }
@@ -317,9 +338,9 @@ impl<'a> Founding<'a> {
         }
         unsafe {
             (*town.state).growth.funding = 0;
-            (*town.state).simulation.ratings = [500; 15];
+            (*town.state).simulation.ratings = [RATING_INITIAL as i16; MAX_COMPANIES as usize];
             (*town.state).simulation.have_ratings = 0;
-            (*town.state).simulation.exclusivity = u8::MAX;
+            (*town.state).simulation.exclusivity = CompanyID::INVALID.0;
             (*town.state).simulation.exclusive_counter = 0;
             (*town.state).simulation.statues = 0;
         }
@@ -328,14 +349,15 @@ impl<'a> Founding<'a> {
         unsafe {
             (*town.state).simulation.townnamegrfid = parameters.grfid;
             (*town.state).simulation.townnametype = parameters.kind;
-            (*town.state).simulation.townnameparts = parts;
+            (*town.state).simulation.townnameparts = townnameparts;
             initialize_layout(town.state, layout, self.map().size_x());
             (*town.state).simulation.larger_town = city;
         }
         let mut x = i32::from(size.0).wrapping_mul(16).wrapping_add(3);
-        if size.0 == 3 {
+        if size == TownSize::TSZ_RANDOM {
             x = (self.random() & 15).wrapping_add(8) as i32;
         }
+        // Don't create huge cities when founding town in-game.
         if city && (!manual || observed!((self.leaves.environment.editor)())) {
             x = x.wrapping_mul(i32::from(observed!((self.s.initial_city_size)())));
         }
@@ -344,12 +366,15 @@ impl<'a> Founding<'a> {
         unsafe {
             update_radius(town.state);
         }
-        let mut remaining = x.wrapping_mul(4);
+        let mut i = x.wrapping_mul(4);
         loop {
             w::hit(w::TOWN_GROWTH);
-            engine.grow(u32::from(town.id.0), 3);
-            remaining = remaining.wrapping_sub(1);
-            if remaining == 0 {
+            engine.grow(
+                u32::from(town.id.0),
+                u32::from(TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS),
+            );
+            i = i.wrapping_sub(1);
+            if i == 0 {
                 break;
             }
         }
@@ -403,7 +428,7 @@ impl<'a> Founding<'a> {
                 // Allocate a town struct.
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
-                    self.create(town, tile, townnameparts, size, city, layout, false);
+                    self.do_create_town(town, tile, townnameparts, size, city, layout, false);
                 }
                 // A population still at zero means the placement was too bad to grow at all.
                 if unsafe { super::population(town.state) } > 0 {
@@ -457,13 +482,15 @@ impl<'a> Founding<'a> {
         }
     }
 }
+/// Assign the town layout (`town_cmd.cpp::Town::InitializeLayout`).
+/// `layout` is the desired layout. If `TL_RANDOM`, pick one based on `TileHash`.
 unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) {
-    let result = if layout.0 == 4 {
+    let result = if layout == TownLayout::TL_RANDOM {
         let xy = unsafe { super::position(state) };
         let x = xy % size_x;
         let y = xy / size_x;
         let hash = ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6);
-        (hash % 4) as u8
+        (hash % u32::from(TownLayout::NUM_TLS.0 - 1)) as u8
     } else {
         layout.0
     };
@@ -581,7 +608,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         } else {
             let town = observed!((f.s.allocate)(tile));
             unsafe {
-                f.create(town, tile, parts, size, city, layout, true);
+                f.do_create_town(town, tile, parts, size, city, layout, true);
             }
             Some(town)
         };
