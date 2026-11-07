@@ -43,6 +43,11 @@ use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 /// Value for custom town number in difficulty settings (`town.h`).
 pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
 
+/// The town only needs this cargo in the winter (any amount).
+pub const TOWN_GROWTH_WINTER: u32 = 0xFFFFFFFE;
+/// The town needs the cargo for growth when on desert (any amount).
+pub const TOWN_GROWTH_DESERT: u32 = 0xFFFFFFFF;
+
 pub use crate::town_type::TownId;
 #[repr(C)]
 #[derive(Clone, Copy)]
