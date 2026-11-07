@@ -2698,10 +2698,10 @@ mod policy_tests {
     extern "C" fn company() -> u8 {
         COMPANY.get()
     }
-    extern "C" fn council() -> u8 {
+    extern "C" fn council_tolerance() -> u8 {
         COUNCIL.get()
     }
-    extern "C" fn cheat() -> bool {
+    extern "C" fn bulldozer() -> bool {
         CHEAT.get()
     }
     extern "C" fn distance() -> u8 {
@@ -2748,88 +2748,88 @@ mod policy_tests {
         services.map = crate::map_func::fixture::statics();
         services
     }
+    extern "C" fn unexpected_map_log_x() -> u32 {
+        unreachable!("unexpected Leaves::map_log_x")
+    }
+    extern "C" fn unexpected_growth_rate() -> u8 {
+        unreachable!("unexpected Leaves::growth_rate")
+    }
+    extern "C" fn unexpected_generating_world() -> bool {
+        unreachable!("unexpected Leaves::generating_world")
+    }
+    extern "C" fn unexpected_allow_crossings() -> bool {
+        unreachable!("unexpected Leaves::allow_crossings")
+    }
+    extern "C" fn unexpected_climate() -> u8 {
+        unreachable!("unexpected Leaves::climate")
+    }
+    extern "C" fn unexpected_road_flags(_: u8) -> u8 {
+        unreachable!("unexpected Leaves::road_flags")
+    }
+    extern "C" fn unexpected_house_availability(_: u16) -> HouseAvailability {
+        unreachable!("unexpected Leaves::house_availability")
+    }
+    extern "C" fn unexpected_house_placement(_: u16) -> HousePlacement {
+        unreachable!("unexpected Leaves::house_placement")
+    }
+    extern "C" fn unexpected_house_population(_: u16) -> u8 {
+        unreachable!("unexpected Leaves::house_population")
+    }
+    extern "C" fn unexpected_house_flags(_: u16) -> u8 {
+        unreachable!("unexpected Leaves::house_flags")
+    }
+    extern "C" fn unexpected_house_extra_flags(_: u16) -> u8 {
+        unreachable!("unexpected Leaves::house_extra_flags")
+    }
+    extern "C" fn unexpected_house_callbacks(_: u16) -> u16 {
+        unreachable!("unexpected Leaves::house_callbacks")
+    }
+    extern "C" fn unexpected_road_info(_: u8) -> RoadChoice {
+        unreachable!("unexpected Leaves::road_info")
+    }
+    extern "C" fn unexpected_resolve_owner(_: u32) -> *mut State {
+        unreachable!("unexpected Leaves::resolve_owner")
+    }
+    extern "C" fn unexpected_dirty_town(_: u32) {
+        unreachable!("unexpected Leaves::dirty_town")
+    }
+    extern "C" fn unexpected_terraform_price() -> i64 {
+        unreachable!("unexpected Leaves::terraform_price")
+    }
+    extern "C" fn unexpected_set_road_town(_: u32, _: u32) {
+        unreachable!("unexpected Leaves::set_road_town")
+    }
+    extern "C" fn unexpected_exchange_company(_: u32) -> u32 {
+        unreachable!("unexpected Leaves::exchange_company")
+    }
+    extern "C" fn unexpected_house_class(_: u16) -> u16 {
+        unreachable!("unexpected Leaves::house_class")
+    }
+    extern "C" fn unexpected_make_house(_: u32, _: u32, _: u32, _: u32) {
+        unreachable!("unexpected Leaves::make_house")
+    }
+    extern "C" fn unexpected_population_changed(_: u32) {
+        unreachable!("unexpected Leaves::population_changed")
+    }
+    extern "C" fn unexpected_house_count() -> u32 {
+        unreachable!("unexpected Leaves::house_count")
+    }
+    extern "C" fn unexpected_road_type_error(_: i32) {
+        unreachable!("unexpected Leaves::road_type_error")
+    }
+    extern "C" fn unexpected_next_town(_: u32) -> u32 {
+        unreachable!("unexpected Leaves::next_town")
+    }
+    extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
+        unreachable!("unexpected Leaves::build_bridge")
+    }
+    extern "C" fn unexpected_build_tunnel(_: u32, _: u32, _: u32) -> bool {
+        unreachable!("unexpected Leaves::build_tunnel")
+    }
+    extern "C" fn unexpected_assert_clear_house(_: bool) {
+        unreachable!("unexpected Leaves::assert_clear_house")
+    }
     fn leaves() -> Leaves {
-        extern "C" fn unexpected_map_log_x() -> u32 {
-            unreachable!("unexpected Leaves::map_log_x")
-        }
-        extern "C" fn unexpected_growth_rate() -> u8 {
-            unreachable!("unexpected Leaves::growth_rate")
-        }
-        extern "C" fn unexpected_generating_world() -> bool {
-            unreachable!("unexpected Leaves::generating_world")
-        }
-        extern "C" fn unexpected_allow_crossings() -> bool {
-            unreachable!("unexpected Leaves::allow_crossings")
-        }
-        extern "C" fn unexpected_climate() -> u8 {
-            unreachable!("unexpected Leaves::climate")
-        }
-        extern "C" fn unexpected_road_flags(_: u8) -> u8 {
-            unreachable!("unexpected Leaves::road_flags")
-        }
-        extern "C" fn unexpected_house_availability(_: u16) -> HouseAvailability {
-            unreachable!("unexpected Leaves::house_availability")
-        }
-        extern "C" fn unexpected_house_placement(_: u16) -> HousePlacement {
-            unreachable!("unexpected Leaves::house_placement")
-        }
-        extern "C" fn unexpected_house_population(_: u16) -> u8 {
-            unreachable!("unexpected Leaves::house_population")
-        }
-        extern "C" fn unexpected_house_flags(_: u16) -> u8 {
-            unreachable!("unexpected Leaves::house_flags")
-        }
-        extern "C" fn unexpected_house_extra_flags(_: u16) -> u8 {
-            unreachable!("unexpected Leaves::house_extra_flags")
-        }
-        extern "C" fn unexpected_house_callbacks(_: u16) -> u16 {
-            unreachable!("unexpected Leaves::house_callbacks")
-        }
-        extern "C" fn unexpected_road_info(_: u8) -> RoadChoice {
-            unreachable!("unexpected Leaves::road_info")
-        }
-        extern "C" fn unexpected_resolve_owner(_: u32) -> *mut State {
-            unreachable!("unexpected Leaves::resolve_owner")
-        }
-        extern "C" fn unexpected_dirty_town(_: u32) {
-            unreachable!("unexpected Leaves::dirty_town")
-        }
-        extern "C" fn unexpected_terraform_price() -> i64 {
-            unreachable!("unexpected Leaves::terraform_price")
-        }
-        extern "C" fn unexpected_set_road_town(_: u32, _: u32) {
-            unreachable!("unexpected Leaves::set_road_town")
-        }
-        extern "C" fn unexpected_exchange_company(_: u32) -> u32 {
-            unreachable!("unexpected Leaves::exchange_company")
-        }
-        extern "C" fn unexpected_house_class(_: u16) -> u16 {
-            unreachable!("unexpected Leaves::house_class")
-        }
-        extern "C" fn unexpected_make_house(_: u32, _: u32, _: u32, _: u32) {
-            unreachable!("unexpected Leaves::make_house")
-        }
-        extern "C" fn unexpected_population_changed(_: u32) {
-            unreachable!("unexpected Leaves::population_changed")
-        }
-        extern "C" fn unexpected_house_count() -> u32 {
-            unreachable!("unexpected Leaves::house_count")
-        }
-        extern "C" fn unexpected_road_type_error(_: i32) {
-            unreachable!("unexpected Leaves::road_type_error")
-        }
-        extern "C" fn unexpected_next_town(_: u32) -> u32 {
-            unreachable!("unexpected Leaves::next_town")
-        }
-        extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
-            unreachable!("unexpected Leaves::build_bridge")
-        }
-        extern "C" fn unexpected_build_tunnel(_: u32, _: u32, _: u32) -> bool {
-            unreachable!("unexpected Leaves::build_tunnel")
-        }
-        extern "C" fn unexpected_assert_clear_house(_: bool) {
-            unreachable!("unexpected Leaves::assert_clear_house")
-        }
         Leaves {
             map_log_x: unexpected_map_log_x,
             growth_rate: unexpected_growth_rate,
@@ -2879,6 +2879,19 @@ mod policy_tests {
             assert_eq!(a, e, "{kind} case {case}");
         }
     }
+    fn supplied_history(
+        count: usize,
+        production: u32,
+        transported: u32,
+        stride: u32,
+    ) -> Vec<SuppliedHistory> {
+        (0..count)
+            .map(|i| SuppliedHistory {
+                production: production.wrapping_add((i as u32).wrapping_mul(stride)),
+                transported: transported.wrapping_add((i as u32).wrapping_mul(stride)),
+            })
+            .collect()
+    }
     #[test]
     fn histories_match_original_policy_corpus() {
         let mut rows = Vec::new();
@@ -2886,14 +2899,7 @@ mod policy_tests {
             for production in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
                 for transported in [0_u32, 1, 0x7fff_ffff, 0x8000_0000, u32::MAX] {
                     for stride in [0_u32, 17, 0x4000_0000, 0x8000_0000] {
-                        let history: Vec<_> = (0..count)
-                            .map(|i| SuppliedHistory {
-                                production: production
-                                    .wrapping_add((i as u32).wrapping_mul(stride)),
-                                transported: transported
-                                    .wrapping_add((i as u32).wrapping_mul(stride)),
-                            })
-                            .collect();
+                        let history = supplied_history(count, production, transported, stride);
                         let result = sum_history(&history);
                         rows.push(format!(
                             "H {count} {production} {transported} {stride} {} {}",
@@ -3152,6 +3158,106 @@ mod policy_tests {
         }
     }
 
+    fn authority_result(
+        authority: &AuthorityServices,
+        services: &Services,
+        costs: &crate::services::CommandCostServices,
+        args: (u8, *const crate::services::TownHandle, bool),
+    ) -> Cost {
+        let (kind, shell, no_test) = args;
+        let mut cost = Cost::default();
+        let out = (&raw mut cost).cast();
+        // SAFETY: Real production dispatch; typed result and immutable tables
+        // outlive this call. No reference to the owner crosses a callback.
+        unsafe {
+            if kind == 2 {
+                openttd_rust_town_authority_station(authority, services, costs, out, 129, no_test);
+            } else {
+                openttd_rust_town_authority_remove(
+                    authority, services, costs, out, shell, no_test, kind,
+                );
+            }
+        }
+        cost
+    }
+    fn authority_case(town: *mut State, rows: &mut Vec<String>, case: usize) {
+        // Mixed-radix order is the retiring 3 x 4 x 2 x 2 x 2 x 26 x 2
+        // input nest. All three action kinds are still observed for every input.
+        let company = [0, 4, 255][case / 1664];
+        let council = ((case / 416) % 4) as u8;
+        let no_test = (case / 208) & 1 != 0;
+        let cheat = (case / 104) & 1 != 0;
+        let absent = (case / 52) & 1 != 0;
+        let rating = [
+            -32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64, 65, 111, 112, 113,
+            143, 144, 145, 207, 208, 209, 399, 400, 401, 32767,
+        ][(case / 2) % 26];
+        let testing = case & 1 != 0;
+        let services = shared();
+        let leaves = leaves();
+        let costs = costs();
+        let authority = AuthorityServices {
+            council_tolerance,
+            bulldozer,
+            authority_distance: distance,
+            town_index,
+            refusal: 19,
+        };
+        COMPANY.set(company);
+        COUNCIL.set(council);
+        CHEAT.set(cheat);
+        ABSENT.set(absent);
+        // SAFETY: Serialized local canonical owner; the field borrow ends here.
+        unsafe {
+            (*town).simulation.ratings.fill(rating);
+        }
+        if testing {
+            openttd_rust_town_rating_test(true);
+            openttd_rust_town_rating_test(true);
+            // SAFETY: Local owner/tables remain live, shell key is the owner address.
+            unsafe {
+                openttd_rust_town_change_rating(
+                    &raw const leaves,
+                    &raw const services,
+                    town,
+                    17,
+                    town as usize,
+                    company,
+                    -40000,
+                    -1000,
+                    false,
+                    cheat,
+                );
+            }
+        }
+        for kind in 0..3 {
+            VALID.set(0);
+            CLOSEST.set(0);
+            let shell = if absent {
+                ptr::null()
+            } else {
+                town.cast_const().cast()
+            };
+            let cost = authority_result(&authority, &services, &costs, (kind, shell, no_test));
+            rows.push(format!(
+                "A {} {company} {council} {} {} {} {rating} {} {kind} {} {} {} {} {}",
+                rows.len(),
+                u8::from(no_test),
+                u8::from(cheat),
+                u8::from(absent),
+                u8::from(testing),
+                u8::from(cost.ok),
+                cost.error,
+                cost.parameter,
+                VALID.get(),
+                CLOSEST.get()
+            ));
+        }
+        if testing {
+            openttd_rust_town_rating_test(false);
+            openttd_rust_town_rating_test(false);
+        }
+    }
     #[test]
     fn authority_matches_original_policy_corpus() {
         let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
@@ -3168,98 +3274,9 @@ mod policy_tests {
             },
             6,
         );
-        let services = shared();
-        let leaves = leaves();
-        let costs = costs();
-        let authority = AuthorityServices {
-            council_tolerance: council,
-            bulldozer: cheat,
-            authority_distance: distance,
-            town_index,
-            refusal: 19,
-        };
         let mut rows = Vec::new();
-        for company in [0, 4, 255] {
-            for council in 0..4 {
-                for no_test in [false, true] {
-                    for cheat in [false, true] {
-                        for absent in [false, true] {
-                            for rating in [
-                                -32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64,
-                                65, 111, 112, 113, 143, 144, 145, 207, 208, 209, 399, 400, 401,
-                                32767,
-                            ] {
-                                for testing in [false, true] {
-                                    COMPANY.set(company);
-                                    COUNCIL.set(council);
-                                    CHEAT.set(cheat);
-                                    ABSENT.set(absent);
-                                    town.simulation.ratings.fill(rating);
-                                    if testing {
-                                        openttd_rust_town_rating_test(true);
-                                        openttd_rust_town_rating_test(true);
-                                        // SAFETY: Local canonical owner and fixture callbacks, valid throughout.
-                                        unsafe {
-                                            openttd_rust_town_change_rating(
-                                                &raw const leaves,
-                                                &raw const services,
-                                                &raw mut town,
-                                                17,
-                                                (&raw const town) as usize,
-                                                company,
-                                                -40000,
-                                                -1000,
-                                                false,
-                                                cheat,
-                                            );
-                                        }
-                                    }
-                                    for kind in 0..3 {
-                                        VALID.set(0);
-                                        CLOSEST.set(0);
-                                        let mut cost = Cost::default();
-                                        let out = (&raw mut cost).cast();
-                                        let shell = if absent {
-                                            ptr::null()
-                                        } else {
-                                            (&raw const town).cast()
-                                        };
-                                        // SAFETY: Real production dispatch with typed stack result; no callback retains owner borrows.
-                                        unsafe {
-                                            if kind == 2 {
-                                                openttd_rust_town_authority_station(
-                                                    &raw const authority,
-                                                    &raw const services,
-                                                    &raw const costs,
-                                                    out,
-                                                    129,
-                                                    no_test,
-                                                );
-                                            } else {
-                                                openttd_rust_town_authority_remove(
-                                                    &raw const authority,
-                                                    &raw const services,
-                                                    &raw const costs,
-                                                    out,
-                                                    shell,
-                                                    no_test,
-                                                    kind,
-                                                );
-                                            }
-                                        }
-                                        rows.push(format!("A {} {company} {council} {} {} {} {rating} {} {kind} {} {} {} {} {}",
-                                rows.len(), u8::from(no_test), u8::from(cheat), u8::from(absent), u8::from(testing), u8::from(cost.ok), cost.error, cost.parameter, VALID.get(), CLOSEST.get()));
-                                    }
-                                    if testing {
-                                        openttd_rust_town_rating_test(false);
-                                        openttd_rust_town_rating_test(false);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        for case in 0..4992 {
+            authority_case(&raw mut town, &mut rows, case);
         }
         OWNER.set(ptr::null_mut());
         check_rows('A', &rows, 14976);
