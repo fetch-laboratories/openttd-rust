@@ -19,16 +19,16 @@ pub const RAILTYPE_END: u8 = RailType::RAILTYPE_END.0;
 pub const RAILTYPE_BEGIN: u8 = RailType::RAILTYPE_BEGIN.0;
 
 /// Native standard railtype labels.
-pub const RAILTYPE_LABEL_RAIL: u32 = u32::from_be_bytes(*b"RAIL");
+pub const RAILTYPE_LABEL_RAIL: u32 = RailTypeLabel::RAILTYPE_LABEL_RAIL.0;
 /// `RAILTYPE_LABEL_ELECTRIC`.
-pub const RAILTYPE_LABEL_ELECTRIC: u32 = u32::from_be_bytes(*b"ELRL");
+pub const RAILTYPE_LABEL_ELECTRIC: u32 = RailTypeLabel::RAILTYPE_LABEL_ELECTRIC.0;
 /// `RAILTYPE_LABEL_MONO`.
-pub const RAILTYPE_LABEL_MONO: u32 = u32::from_be_bytes(*b"MONO");
+pub const RAILTYPE_LABEL_MONO: u32 = RailTypeLabel::RAILTYPE_LABEL_MONO.0;
 /// `RAILTYPE_LABEL_MAGLEV`.
-pub const RAILTYPE_LABEL_MAGLEV: u32 = u32::from_be_bytes(*b"MGLV");
+pub const RAILTYPE_LABEL_MAGLEV: u32 = RailTypeLabel::RAILTYPE_LABEL_MAGLEV.0;
 
 /// `INVALID_RAILTYPES`, the original all-types sentinel for follower initialization.
-pub const INVALID_RAILTYPES: u64 = u64::MAX;
+pub const INVALID_RAILTYPES: u64 = RailTypes::INVALID_RAILTYPES.0;
 
 /// Native `RailType` with its unchanged uint8 representation.
 #[repr(transparent)]
@@ -91,3 +91,14 @@ impl RailTypes {
 }
 
 crate::base_bitset_type::impl_bitset_ops!(RailTypes);
+
+impl RailTypeLabel {
+    /// Standard railway label.
+    pub const RAILTYPE_LABEL_RAIL: Self = Self(u32::from_be_bytes(*b"RAIL"));
+    /// Electrified railway label.
+    pub const RAILTYPE_LABEL_ELECTRIC: Self = Self(u32::from_be_bytes(*b"ELRL"));
+    /// Monorail label.
+    pub const RAILTYPE_LABEL_MONO: Self = Self(u32::from_be_bytes(*b"MONO"));
+    /// Maglev label.
+    pub const RAILTYPE_LABEL_MAGLEV: Self = Self(u32::from_be_bytes(*b"MGLV"));
+}

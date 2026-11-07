@@ -114,7 +114,7 @@ mod tests {
     }
 }
 
-/// Native `ContentType`, retaining every underlying `u8` value.
+/// Native `ContentType`: these values are database keys. Every underlying byte is retained.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ContentType(pub u8);
@@ -148,7 +148,7 @@ impl ContentType {
     pub const INVALID_CONTENT_TYPE: Self = Self(255);
 }
 
-/// Native `PacketContentType`, retaining every underlying `u8` value.
+/// Native `PacketContentType`: packet order must not change. Every underlying byte is retained.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketContentType(pub u8);

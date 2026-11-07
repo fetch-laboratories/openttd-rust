@@ -43,9 +43,9 @@ pub const ROADTYPE_TRAM: u8 = RoadType::ROADTYPE_TRAM.0;
 /// `ROADTYPE_BEGIN`.
 pub const ROADTYPE_BEGIN: u8 = RoadType::ROADTYPE_BEGIN.0;
 /// `RTT_ROAD`.
-pub const RTT_ROAD: crate::services::RoadTramType = crate::services::RoadTramType(false);
+pub const RTT_ROAD: RoadTramType = RoadTramType::RTT_ROAD;
 /// `RTT_TRAM`.
-pub const RTT_TRAM: crate::services::RoadTramType = crate::services::RoadTramType(true);
+pub const RTT_TRAM: RoadTramType = RoadTramType::RTT_TRAM;
 
 /// `ROAD_NONE`.
 pub const ROAD_NONE: u8 = RoadBits::ROAD_NONE.0;
@@ -193,3 +193,10 @@ crate::base_bitset_type::impl_bitset_ops!(RoadTypes);
 crate::base_bitset_type::impl_bitset_ops!(RoadBits);
 crate::base_bitset_type::impl_bitset_ops!(RoadTramTypes);
 crate::base_bitset_type::impl_bitset_ops!(DisallowedRoadDirections);
+
+impl RoadTypeLabel {
+    /// Standard road label.
+    pub const ROADTYPE_LABEL_ROAD: Self = Self(u32::from_be_bytes(*b"ROAD"));
+    /// Tramway label.
+    pub const ROADTYPE_LABEL_TRAM: Self = Self(u32::from_be_bytes(*b"ELRL"));
+}

@@ -17,7 +17,7 @@ pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
 }
 
 /// `RailTileType::Normal`, asserted by native compilation.
-pub const RAIL_TILE_NORMAL: u8 = 0;
+pub const RAIL_TILE_NORMAL: u8 = RailTileType::Normal.0;
 /// `IsPbsSignal`, from `rail_map.h`.
 #[inline]
 pub const fn is_pbs_signal(kind: u8) -> bool {
@@ -25,11 +25,11 @@ pub const fn is_pbs_signal(kind: u8) -> bool {
 }
 
 /// `RailGroundType::HalfTileWater`.
-pub const RAIL_GROUND_HALF_TILE_WATER: u8 = 13;
+pub const RAIL_GROUND_HALF_TILE_WATER: u8 = RailGroundType::HalfTileWater.0;
 /// `RailTileType::Signals`.
-pub const RAIL_TILE_SIGNALS: u8 = 1;
+pub const RAIL_TILE_SIGNALS: u8 = RailTileType::Signals.0;
 /// `RailTileType::Depot`.
-pub const RAIL_TILE_DEPOT: u8 = 3;
+pub const RAIL_TILE_DEPOT: u8 = RailTileType::Depot.0;
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {

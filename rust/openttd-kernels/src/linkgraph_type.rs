@@ -8,7 +8,7 @@
 //! `linkgraph_type.h` values. `services.cpp` asserts every value.
 
 /// `INVALID_NODE`.
-pub const INVALID_NODE: u16 = u16::MAX;
+pub const INVALID_NODE: u16 = NodeID::INVALID_NODE.0;
 /// `LinkGraphID::Invalid()`.
 pub const INVALID_LINK_GRAPH: u16 = LinkGraphID::INVALID.0;
 
@@ -38,13 +38,13 @@ impl crate::pool::PoolId for LinkGraphJobID {
 pub struct EdgeUpdateModes(pub u8);
 impl EdgeUpdateModes {
     /// `EdgeUpdateMode::Increase`.
-    pub const INCREASE: Self = Self(1 << 0);
+    pub const INCREASE: Self = Self::from_element(EdgeUpdateMode::Increase);
     /// `EdgeUpdateMode::Refresh`.
-    pub const REFRESH: Self = Self(1 << 1);
+    pub const REFRESH: Self = Self::from_element(EdgeUpdateMode::Refresh);
     /// `EdgeUpdateMode::Restricted`.
-    pub const RESTRICTED: Self = Self(1 << 2);
+    pub const RESTRICTED: Self = Self::from_element(EdgeUpdateMode::Restricted);
     /// `EdgeUpdateMode::Unrestricted`.
-    pub const UNRESTRICTED: Self = Self(1 << 3);
+    pub const UNRESTRICTED: Self = Self::from_element(EdgeUpdateMode::Unrestricted);
     /// `EnumBitSet::Test`, for one named update mode.
     #[must_use]
     pub const fn test(self, mode: Self) -> bool {
@@ -75,7 +75,13 @@ impl LinkGraphJobID {
     pub const INVALID: Self = Self(65535);
 }
 
-/// Native `EdgeUpdateMode`, retaining every underlying `u8` value.
+/// Special link-update modes from `linkgraph_type.h`.
+/// Restricted links are served by vehicles with no-loading orders: cargo may
+/// arrive in those vehicles, but may not be generated or transferred at the
+/// source station. Separate restricted and unrestricted timestamps track when
+/// either service expires, making a link fully restricted or unrestricted.
+/// Refresh keeps a minimum capacity; Increase adds the supplied capacity.
+/// Every underlying byte remains representable.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EdgeUpdateMode(pub u8);
@@ -96,3 +102,19 @@ impl EdgeUpdateMode {
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeID(pub u16);
+
+impl EdgeUpdateModes {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `EnumBitSet` construction from one element (a bit position).
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: EdgeUpdateMode) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+}
+
+impl NodeID {
+    /// Native invalid node sentinel.
+    pub const INVALID_NODE: Self = Self(u16::MAX);
+}

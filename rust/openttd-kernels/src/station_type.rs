@@ -425,3 +425,20 @@ crate::base_bitset_type::impl_bitset_ops!(StationRandomTriggers);
 crate::base_bitset_type::impl_bitset_ops!(StationAnimationTriggers);
 crate::base_bitset_type::impl_bitset_ops!(AirportAnimationTriggers);
 crate::base_bitset_type::impl_bitset_ops!(StationHadVehicleOfType);
+
+#[allow(non_upper_case_globals)]
+impl RoadStopType {
+    /// A standard stop for buses.
+    pub const Bus: Self = Self(0);
+    /// A standard stop for trucks.
+    pub const Truck: Self = Self(1);
+    /// End of valid types.
+    pub const End: Self = Self(2);
+}
+
+impl StationID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}

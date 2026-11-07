@@ -471,6 +471,16 @@ impl StationCallbackMask {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RoadStopCallbackMask(pub u8);
 
+#[allow(non_upper_case_globals)]
+impl RoadStopCallbackMask {
+    /// Availability of road stop in construction window.
+    pub const Avail: Self = Self(0);
+    /// Use a custom next frame callback.
+    pub const AnimationNextFrame: Self = Self(1);
+    /// Customize the animation speed of the road stop.
+    pub const AnimationSpeed: Self = Self(2);
+}
+
 /// Native `HouseCallbackMask`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -597,10 +607,40 @@ impl IndustryTileCallbackMask {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectCallbackMask(pub u8);
 
+#[allow(non_upper_case_globals)]
+impl ObjectCallbackMask {
+    /// Decides slope suitability.
+    pub const SlopeCheck: Self = Self(0);
+    /// Decides next animation frame.
+    pub const AnimationNextFrame: Self = Self(1);
+    /// Decides animation speed.
+    pub const AnimationSpeed: Self = Self(2);
+    /// Decide the colour of the building.
+    pub const Colour: Self = Self(3);
+    /// Additional text in fund window.
+    pub const FundMoreText: Self = Self(4);
+    /// Decides allowance of autosloping.
+    pub const Autoslope: Self = Self(5);
+}
+
 /// Native `AirportTileCallbackMask`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AirportTileCallbackMask(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl AirportTileCallbackMask {
+    /// Decides next animation frame.
+    pub const AnimationNextFrame: Self = Self(0);
+    /// Decides animation speed.
+    pub const AnimationSpeed: Self = Self(1);
+    /// Decides slope suitability.
+    pub const ShapeCheck: Self = Self(4);
+    /// Decides if default foundations need to be drawn.
+    pub const DrawFoundations: Self = Self(5);
+    /// Decides allowance of autosloping.
+    pub const Autoslope: Self = Self(6);
+}
 
 /// Native `VehicleCallbackMasks`, retaining every underlying `u16` value.
 #[repr(transparent)]

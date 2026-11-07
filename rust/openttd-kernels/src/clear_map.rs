@@ -10,15 +10,15 @@
 use crate::map_func::{TileFields, TileTypeAccess};
 use crate::tile_type::MP_CLEAR;
 /// `ClearGround::CLEAR_GRASS`.
-pub(crate) const CLEAR_GRASS: u8 = 0;
+pub(crate) const CLEAR_GRASS: u8 = ClearGround::CLEAR_GRASS.0;
 /// `ClearGround::CLEAR_ROUGH`.
-pub(crate) const CLEAR_ROUGH: u8 = 1;
+pub(crate) const CLEAR_ROUGH: u8 = ClearGround::CLEAR_ROUGH.0;
 /// `ClearGround::CLEAR_ROCKS`.
-pub(crate) const CLEAR_ROCKS: u8 = 2;
+pub(crate) const CLEAR_ROCKS: u8 = ClearGround::CLEAR_ROCKS.0;
 /// `ClearGround::CLEAR_DESERT`.
-pub(crate) const CLEAR_DESERT: u8 = 5;
+pub(crate) const CLEAR_DESERT: u8 = ClearGround::CLEAR_DESERT.0;
 /// `ClearGround::CLEAR_FIELDS`.
-pub(crate) const CLEAR_FIELDS: u8 = 3;
+pub(crate) const CLEAR_FIELDS: u8 = ClearGround::CLEAR_FIELDS.0;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_snow_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {

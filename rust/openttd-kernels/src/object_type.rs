@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Consumed native header constants, asserted in services.cpp.
 /// Native `OBJECT_STATUE`.
-pub const OBJECT_STATUE: u16 = 2;
+pub const OBJECT_STATUE: u16 = ObjectType::OBJECT_STATUE.0;
 
 /// Native `ObjectID`, retaining every underlying `u32` value.
 #[repr(transparent)]
@@ -76,3 +76,24 @@ impl ObjectAnimationTriggers {
 pub struct ObjectType(pub u16);
 
 crate::base_bitset_type::impl_bitset_ops!(ObjectAnimationTriggers);
+
+impl ObjectType {
+    /// The large antenna.
+    pub const OBJECT_TRANSMITTER: Self = Self(0);
+    /// The nice lighthouse.
+    pub const OBJECT_LIGHTHOUSE: Self = Self(1);
+    /// Statue in towns.
+    pub const OBJECT_STATUE: Self = Self(2);
+    /// Owned land flag.
+    pub const OBJECT_OWNED_LAND: Self = Self(3);
+    /// Headquarters of a player.
+    pub const OBJECT_HQ: Self = Self(4);
+    /// Offset for new objects.
+    pub const NEW_OBJECT_OFFSET: Self = Self(5);
+    /// Number of supported objects overall.
+    pub const NUM_OBJECTS: Self = Self(64000);
+    /// Number of supported objects per NewGRF.
+    pub const NUM_OBJECTS_PER_GRF: Self = Self::NUM_OBJECTS;
+    /// An invalid object type.
+    pub const INVALID_OBJECT_TYPE: Self = Self(0xFFFF);
+}

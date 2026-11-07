@@ -65,27 +65,27 @@ impl TileIndex {
 pub struct TileType(pub u8);
 impl TileType {
     /// Native `MP_CLEAR`.
-    pub const CLEAR: Self = Self(0);
+    pub const MP_CLEAR: Self = Self(0);
     /// Native `MP_RAILWAY`.
-    pub const RAILWAY: Self = Self(1);
+    pub const MP_RAILWAY: Self = Self(1);
     /// Native `MP_ROAD`.
-    pub const ROAD: Self = Self(2);
+    pub const MP_ROAD: Self = Self(2);
     /// Native `MP_HOUSE`.
-    pub const HOUSE: Self = Self(3);
+    pub const MP_HOUSE: Self = Self(3);
     /// Native `MP_TREES`.
-    pub const TREES: Self = Self(4);
+    pub const MP_TREES: Self = Self(4);
     /// Native `MP_STATION`.
-    pub const STATION: Self = Self(5);
+    pub const MP_STATION: Self = Self(5);
     /// Native `MP_WATER`.
-    pub const WATER: Self = Self(6);
+    pub const MP_WATER: Self = Self(6);
     /// Native `MP_VOID`.
-    pub const VOID: Self = Self(7);
+    pub const MP_VOID: Self = Self(7);
     /// Native `MP_INDUSTRY`.
-    pub const INDUSTRY: Self = Self(8);
+    pub const MP_INDUSTRY: Self = Self(8);
     /// Native `MP_TUNNELBRIDGE`.
-    pub const TUNNELBRIDGE: Self = Self(9);
+    pub const MP_TUNNELBRIDGE: Self = Self(9);
     /// Native `MP_OBJECT`.
-    pub const OBJECT: Self = Self(10);
+    pub const MP_OBJECT: Self = Self(10);
 }
 
 /// `MAX_MAP_HEIGHT_LIMIT`.
@@ -105,4 +105,29 @@ impl TropicZone {
     pub const TROPICZONE_DESERT: Self = Self(1);
     /// Rainforest tile
     pub const TROPICZONE_RAINFOREST: Self = Self(2);
+}
+
+impl TileType {
+    /// Compatibility spelling for `MP_CLEAR`.
+    pub const CLEAR: Self = Self::MP_CLEAR;
+    /// Compatibility spelling for `MP_RAILWAY`.
+    pub const RAILWAY: Self = Self::MP_RAILWAY;
+    /// Compatibility spelling for `MP_ROAD`.
+    pub const ROAD: Self = Self::MP_ROAD;
+    /// Compatibility spelling for `MP_HOUSE`.
+    pub const HOUSE: Self = Self::MP_HOUSE;
+    /// Compatibility spelling for `MP_TREES`.
+    pub const TREES: Self = Self::MP_TREES;
+    /// Compatibility spelling for `MP_STATION`.
+    pub const STATION: Self = Self::MP_STATION;
+    /// Compatibility spelling for `MP_WATER`.
+    pub const WATER: Self = Self::MP_WATER;
+    /// Compatibility spelling for `MP_VOID`.
+    pub const VOID: Self = Self::MP_VOID;
+    /// Compatibility spelling for `MP_INDUSTRY`.
+    pub const INDUSTRY: Self = Self::MP_INDUSTRY;
+    /// Compatibility spelling for `MP_TUNNELBRIDGE`.
+    pub const TUNNELBRIDGE: Self = Self::MP_TUNNELBRIDGE;
+    /// Compatibility spelling for `MP_OBJECT`.
+    pub const OBJECT: Self = Self::MP_OBJECT;
 }
