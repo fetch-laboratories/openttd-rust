@@ -162,6 +162,102 @@ class GeneratedAbiTests(unittest.TestCase):
                 self.assertIn(visits, ([], [(field, field) for field in cpp]))
                 self.assertNotIn("reinterpret_cast", visitor)
 
+    def test_new_layout_group_registers_without_shared_probe_edits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            probes = root / "tools/migration/windows-abi"
+            rust.mkdir(parents=True)
+            probes.mkdir(parents=True)
+            # Production schema declarations are the fixture, including the real
+            # native-test shared record; only group placement changes here.
+            fixture = ROOT / "rust/openttd-kernels/src/native_test_support.rs"
+            (rust / "fixture.rs").write_text(
+                fixture.read_text().replace('"record_test"', '"new_group"')
+            )
+            (rust / "tile_type.rs").write_text(
+                (ROOT / "rust/openttd-kernels/src/tile_type.rs").read_text()
+            )
+            (rust / "layout.rs").write_text(
+                'layouts! { "Native" ["local"] => Native {}; }'
+            )
+            (probes / "local.inc").write_text(
+                'static void Local() {\n#include "abi-layout-local.inc"\n}\nABI_PROBE(Local);\n'
+            )
+            fragments = GENERATOR["generate"](root)
+            self.assertEqual(
+                fragments["abi-layouts.inc"], '#include "abi-layout-new_group.inc"\n'
+            )
+            self.assertEqual(
+                fragments["abi-required-layouts.inc"],
+                '#include "abi-layout-local.inc"\n#include "abi-layout-new_group.inc"\n',
+            )
+            self.assertEqual(
+                fragments["abi-probes.inc"], '#include "windows-abi/local.inc"\n'
+            )
+
+    def test_native_required_layouts_reject_missing_duplicate_and_extra(self) -> None:
+        native = (ROOT / "tools/migration/windows-abi.cpp").read_text()
+        guard = native[
+            native.index(
+                "static std::set<std::string_view> _unchecked_layouts;"
+            ) : native.index("static void Layouts()")
+        ]
+        setup = native[
+            native.index("#define Layout(name, ...)") : native.index("\n\tLayouts();")
+        ]
+        finish = native[
+            native.index("\tfor (auto name : _unchecked_layouts)") : native.index(
+                "\n\n\t/* Opaque owner"
+            )
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "fixture.rs").write_text(
+                'layouts! { fn abi_layout; "Native" ["local"] => Native {}; '
+                '"Other" ["elsewhere"] => Other {}; }\n'
+            )
+            GENERATOR["write_fragments"](root, GENERATOR["generate"](root))
+            source = root / "guard.cpp"
+            source.write_text(
+                "#include <set>\n#include <string_view>\n"
+                "#include <initializer_list>\n#include <cstdio>\n#include <cstdlib>\n"
+                "#define CHECK(value) do { if (!(value)) std::abort(); } while (0)\n"
+                # Isolate membership from layout values: even a name accepted by
+                # Rust metadata must belong to the required schema, not replace it.
+                "static int AbiLayoutMismatch(const char *, "
+                "std::initializer_list<size_t>) { return -1; }\n"
+                + guard
+                + "int main(int, char **argv) {\n"
+                + setup
+                + '\nstd::string_view mode = argv[1];\nLayout("Native", {});\n'
+                'if (mode == "duplicate") Layout("Native", {});\n'
+                'if (mode == "extra") Layout("Extra", {});\n'
+                'if (mode != "missing") Layout("Other", {});\n' + finish + "\n}\n"
+            )
+            executable = root / "guard"
+            subprocess.run(
+                [
+                    os.environ.get("CXX", "c++"),
+                    "-std=c++20",
+                    str(source),
+                    "-o",
+                    str(executable),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            for mode in ("complete", "missing", "duplicate", "extra"):
+                with self.subTest(mode=mode):
+                    result = subprocess.run(
+                        [str(executable), mode], capture_output=True, text=True
+                    )
+                    self.assertEqual(result.returncode == 0, mode == "complete")
+                    if mode == "missing":
+                        self.assertIn("missing ABI layout: Other", result.stderr)
+
     def test_generation_is_deterministic_and_build_directory_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(

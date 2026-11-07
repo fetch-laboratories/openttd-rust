@@ -20,16 +20,7 @@ struct OpenTTDCargoSource {
 	uint16_t id;
 	SourceType type;
 };
-struct OpenTTDCargoPacketFields {
-	int64_t feeder_share = 0;
-	uint32_t source_xy = UINT32_MAX;
-	uint16_t count = 0, periods_in_transit = 0, first_station = UINT16_MAX, next_hop = UINT16_MAX, source_id = UINT16_MAX;
-	int16_t travelled_x = 0, travelled_y = 0;
-	uint8_t source_type = 0, in_vehicle = 0;
-};
-/* Rust-allocated repr(C) packet with exactly these fields (ABI layout 280);
- * CAPA save/load addresses them in place between Rust calls. */
-struct OpenTTDCargoPacket : OpenTTDCargoPacketFields {};
+#include "abi-record-cargo_storage.h"
 struct OpenTTDCargoListFields {
 	uint64_t cargo_periods_in_transit;
 	int64_t feeder_share;
@@ -38,17 +29,15 @@ struct OpenTTDCargoListFields {
 /* Handles are opaque owners; C++ pool shells keep IDs and allocation order, and list nodes hold
  * pool-shell handles. Payment callbacks may reenter packet and list getters; raw owner accesses end
  * before them, and metadata writes keep their source order. Save/load writes packet fields in place;
- * import never dereferences
- * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call.
+ * list import never dereferences unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call.
  * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
  * next-hop storage stays live and stable for the call, with snapshot output confined to local exports. */
 struct OpenTTDSharedServices;
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	void *(*create)(const OpenTTDCargoPacketFields *) noexcept OPENTTD_SERVICE_DEFAULT(create);
+	void *(*create)(const OpenTTDCargoPacket *) noexcept OPENTTD_SERVICE_DEFAULT(create);
 	OpenTTDCargoPacket *(*packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
 	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	uint32_t (*coordinate)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(coordinate);
 	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
 	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);
 	OpenTTDCargoFlowMap *(*flow_map)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
@@ -70,11 +59,9 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
 void openttd_rust_cargo_invalidate(const OpenTTDCargoStorageServices *, uint16_t, uint8_t);
-OpenTTDCargoPacket *openttd_rust_cargo_packet_new(const OpenTTDCargoPacketFields *);
+/* Null initializes original packet defaults; non-null copies fields into a new allocation. */
+OpenTTDCargoPacket *openttd_rust_cargo_packet_new(const OpenTTDCargoPacket *);
 void openttd_rust_cargo_packet_destroy(OpenTTDCargoPacket *);
-void openttd_rust_cargo_packet_export(const OpenTTDCargoPacket *, OpenTTDCargoPacketFields *);
-void openttd_rust_cargo_packet_import(OpenTTDCargoPacket *, const OpenTTDCargoPacketFields *);
-void openttd_rust_cargo_packet_set(OpenTTDCargoPacket *, uint8_t, uint32_t);
 void openttd_rust_cargo_packet_tile(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t, uint8_t);
 void openttd_rust_cargo_packet_feeder(OpenTTDCargoPacket *, int64_t);
 int64_t openttd_rust_cargo_packet_share(const OpenTTDCargoPacket *, uint32_t);

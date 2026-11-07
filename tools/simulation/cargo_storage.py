@@ -163,6 +163,8 @@ def scaling_probe() -> None:
         "-O2",
         "-I",
         str(ROOT / "src"),
+        "-I",
+        str(build / "generated-abi"),
         str(fixture),
         str(migration.rust_archive(ROOT / "build-rust")),
         "-ldl",

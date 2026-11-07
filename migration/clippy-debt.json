@@ -2275,9 +2275,6 @@
     "rust/openttd-kernels/src/cargo_storage.rs | fn cargo_capacity | undocumented_unsafe_blocks | feed116a83f2c6a8b655": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn choose | undocumented_unsafe_blocks | 193925fb234b1c4697ce": [
-      1
-    ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn destination | multiple_unsafe_ops_per_block | 4d951822dc8dd306eada": [
       2
     ],
@@ -2651,22 +2648,10 @@
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_distance | undocumented_unsafe_blocks | d67c68d06c26865c2293": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_export | multiple_unsafe_ops_per_block | edfb9e4882f43336861c": [
-      2
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_export | undocumented_unsafe_blocks | edfb9e4882f43336861c": [
-      1
-    ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_feeder | multiple_unsafe_ops_per_block | 43c9d165f68b4715713e": [
       2
     ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_feeder | undocumented_unsafe_blocks | 43c9d165f68b4715713e": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_import | multiple_unsafe_ops_per_block | d6e4a8f9956ab53de8ca": [
-      2
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_import | undocumented_unsafe_blocks | d6e4a8f9956ab53de8ca": [
       1
     ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_merge | multiple_unsafe_ops_per_block | 510d61738274a2b0379a": [
@@ -2675,21 +2660,7 @@
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_merge | undocumented_unsafe_blocks | 510d61738274a2b0379a": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_new | undocumented_unsafe_blocks | e8cf7969c428c9c9eea7": [
-      1
-    ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_reduce | undocumented_unsafe_blocks | bdd2c71c9acc32e20ac8": [
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_set | cast_possible_truncation | 4afdd4b1724d34ff53b7": [
-      1,
-      1,
-      1
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_set | multiple_unsafe_ops_per_block | c5e741c0c5491afee7b6": [
-      3
-    ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_set | undocumented_unsafe_blocks | 3c4d188c406fed46732c": [
       1
     ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn openttd_rust_cargo_packet_share | undocumented_unsafe_blocks | 50395646dd27ca45e67b": [
@@ -2783,10 +2754,10 @@
     "rust/openttd-kernels/src/cargo_storage.rs | fn split | undocumented_unsafe_blocks | d67c68d06c26865c2293": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn tile | cast_possible_truncation | 26599d995f4545d7031e": [
+    "rust/openttd-kernels/src/cargo_storage.rs | fn tile | cast_possible_truncation | d7012ac30990151d5f73": [
       1
     ],
-    "rust/openttd-kernels/src/cargo_storage.rs | fn tile | cast_possible_truncation | 72cd3e3218ee8d372549": [
+    "rust/openttd-kernels/src/cargo_storage.rs | fn tile | cast_possible_truncation | d81b17c022b3f5d12f79": [
       1
     ],
     "rust/openttd-kernels/src/cargo_storage.rs | fn tile | multiple_unsafe_ops_per_block | ff2f32df762a2e0f3a65": [
