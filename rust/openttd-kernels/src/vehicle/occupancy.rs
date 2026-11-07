@@ -13,15 +13,24 @@
     clippy::cast_sign_loss
 )]
 use super::{OpenTTDVehicle, VehicleRef, VehicleServices};
+use crate::aircraft::AIR_SHADOW;
 use crate::game_state::GameState;
+use crate::strings_type::StringID;
+use crate::tile_type::TileIndex;
+use crate::track_type::TrackBits;
+use crate::vehicle_type::VehicleType;
 use crate::{map_func::Map, tile_type::TILE_SIZE};
 use std::ptr;
 
-const HASH_BITS: u8 = 7;
-const HASH_RES: u8 = 0;
-const HASH_SIZE: u32 = 1 << HASH_BITS;
-const HASH_MASK: u32 = HASH_SIZE - 1;
-const TOTAL: usize = (HASH_SIZE * HASH_SIZE) as usize;
+// Size of the hash, 6 = 64 x 64, 7 = 128 x 128. Larger sizes will (in theory) reduce hash
+// lookup times at the expense of memory usage.
+const TILE_HASH_BITS: u8 = 7;
+// Resolution of the hash, 0 = 1*1 tile, 1 = 2*2 tiles, 2 = 4*4 tiles, etc.
+// Profiling results show that 0 is fastest.
+const TILE_HASH_RES: u8 = 0;
+const TILE_HASH_SIZE: u32 = 1 << TILE_HASH_BITS;
+const TILE_HASH_MASK: u32 = TILE_HASH_SIZE - 1;
+const TOTAL_TILE_HASH_SIZE: usize = (TILE_HASH_SIZE * TILE_HASH_SIZE) as usize;
 type Shell = *mut OpenTTDVehicle;
 /// Field layout is shared, not the Vehicle layout. Native construction zeros it;
 /// the Rust owner alone changes links. Shell addresses never move while indexed.
@@ -31,25 +40,30 @@ pub struct Links {
     pub prev: *mut Shell,
     pub current: *mut Shell,
 }
-static BUCKETS: GameState<[Shell; TOTAL]> = GameState::new([ptr::null_mut(); TOTAL]);
-fn hash_1d(p: u32) -> u32 {
-    crate::bitmath_func::gb(p, HASH_RES, HASH_BITS)
+static VEHICLE_TILE_HASH: GameState<[Shell; TOTAL_TILE_HASH_SIZE]> =
+    GameState::new([ptr::null_mut(); TOTAL_TILE_HASH_SIZE]);
+/// Compute hash for 1D tile coordinate.
+fn get_tile_hash_1d(p: u32) -> u32 {
+    crate::bitmath_func::gb(p, TILE_HASH_RES, TILE_HASH_BITS)
 }
-fn increment(h: u32) -> u32 {
-    h.wrapping_add(1) & HASH_MASK
+/// Increment 1D hash to next bucket.
+fn inc_tile_hash_1d(h: u32) -> u32 {
+    h.wrapping_add(1) & TILE_HASH_MASK
 }
-fn compose(x: u32, y: u32) -> usize {
-    (x | (y << HASH_BITS)) as usize
+/// Compose two 1D hashes into 2D hash.
+fn compose_tile_hash(hx: u32, hy: u32) -> usize {
+    (hx | (hy << TILE_HASH_BITS)) as usize
 }
-fn bucket(x: u32, y: u32) -> *mut Shell {
-    BUCKETS
+/// Compute hash for tile coordinate.
+fn get_tile_hash(x: u32, y: u32) -> *mut Shell {
+    VEHICLE_TILE_HASH
         .get()
         .cast::<Shell>()
-        .wrapping_add(compose(hash_1d(x), hash_1d(y)))
+        .wrapping_add(compose_tile_hash(get_tile_hash_1d(x), get_tile_hash_1d(y)))
 }
 #[inline]
-fn tile_bucket(map: Map, tile: u32) -> *mut Shell {
-    bucket(map.tile_x(tile), map.tile_y(tile))
+fn get_tile_hash_for_tile(map: Map, tile: TileIndex) -> *mut Shell {
+    get_tile_hash(map.tile_x(tile.0), map.tile_y(tile.0))
 }
 unsafe fn handle(shell: Shell) -> VehicleRef {
     VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(shell) })
@@ -63,7 +77,7 @@ unsafe fn next(s: &VehicleServices, shell: Shell) -> Shell {
 #[inline]
 pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
     if remove {
-        unsafe { update_bucket(s, v, (s.tile_links)(v), ptr::null_mut()) };
+        unsafe { update_vehicle_tile_hash(s, v, (s.tile_links)(v), ptr::null_mut()) };
     } else {
         let map = Map::from_log_x((s.map_log_x)());
         unsafe { update_position(s, v, map) };
@@ -74,17 +88,30 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
 #[inline]
 pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Map) {
     let links = (s.tile_links)(v);
-    unsafe { update_bucket(s, v, links, tile_bucket(map, v.tile())) };
+    unsafe {
+        update_vehicle_tile_hash(
+            s,
+            v,
+            links,
+            get_tile_hash_for_tile(map, TileIndex(v.tile())),
+        );
+    };
 }
 #[inline]
-unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, new: *mut Shell) {
-    let old = unsafe { (*links).current };
-    if old == new {
+unsafe fn update_vehicle_tile_hash(
+    s: &VehicleServices,
+    v: VehicleRef,
+    links: *mut Links,
+    new_hash: *mut Shell,
+) {
+    let old_hash = unsafe { (*links).current };
+    if old_hash == new_hash {
         crate::witness::hit(crate::witness::OCCUPANCY_SAME);
         return;
     }
     unsafe {
-        if !old.is_null() {
+        // Remove from the old position in the hash table
+        if !old_hash.is_null() {
             crate::witness::hit(crate::witness::OCCUPANCY_REMOVE);
             let n = (*links).next;
             if !n.is_null() {
@@ -92,18 +119,21 @@ unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, n
             }
             *(*links).prev = (*links).next;
         }
-        if !new.is_null() {
+        // Insert vehicle at beginning of the new position in the hash table
+        if !new_hash.is_null() {
             crate::witness::hit(crate::witness::OCCUPANCY_INSERT);
-            (*links).next = *new;
+            (*links).next = *new_hash;
             if !(*links).next.is_null() {
                 (*((s.tile_links)(handle((*links).next)))).prev = ptr::addr_of_mut!((*links).next);
             }
-            (*links).prev = new;
-            *new = v.0.as_ptr();
+            (*links).prev = new_hash;
+            *new_hash = v.0.as_ptr();
         }
-        (*links).current = new;
+        // Remember current hash position
+        (*links).current = new_hash;
     }
 }
+/// Tile-index portion of `ResetVehicleHash`.
 /// No pool allocation/deletion/yield occurs during reset. Retain stale links.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
@@ -120,7 +150,11 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
         }
     }
     unsafe {
-        ptr::write_bytes(BUCKETS.get().cast::<Shell>(), 0, TOTAL);
+        ptr::write_bytes(
+            VEHICLE_TILE_HASH.get().cast::<Shell>(),
+            0,
+            TOTAL_TILE_HASH_SIZE,
+        );
     }
 }
 #[unsafe(no_mangle)]
@@ -133,7 +167,8 @@ pub unsafe extern "C" fn openttd_rust_occupancy_update(
         update(s, v, remove);
     }
 }
-/// Complete tile cursor; no reference into index storage is retained.
+/// Iterate over all vehicles on a tile; no reference into index storage is retained.
+/// The order is non-deterministic. Processing must not depend on the order.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OnTile {
@@ -141,27 +176,33 @@ pub struct OnTile {
     pub current: Shell,
 }
 impl OnTile {
+    /// Iterator constructor. Find first vehicle on tile.
     pub(crate) unsafe fn new(s: &VehicleServices, tile: u32) -> Self {
         let map = Map::from_log_x((s.map_log_x)());
         let mut it = Self {
             tile,
-            current: unsafe { *tile_bucket(map, tile) },
+            current: unsafe { *get_tile_hash_for_tile(map, TileIndex(tile)) },
         };
         unsafe {
-            it.filter(s);
+            it.skip_false_matches(s);
         }
         it
     }
-    unsafe fn filter(&mut self, s: &VehicleServices) {
-        while !self.current.is_null() && unsafe { handle(self.current) }.tile() != self.tile {
+    /// Advance until it reaches a vehicle on the correct tile or the end.
+    unsafe fn skip_false_matches(&mut self, s: &VehicleServices) {
+        while !self.current.is_null()
+            && TileIndex(unsafe { handle(self.current) }.tile()) != TileIndex(self.tile)
+        {
             crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
             self.current = unsafe { next(s, self.current) };
         }
     }
+    /// Advance to the next potential vehicle (which may be on a different tile),
+    /// then skip false matches, as in `VehiclesOnTile::Iterator::operator++`.
     pub(crate) unsafe fn advance(&mut self, s: &VehicleServices) {
         self.current = unsafe { next(s, self.current) };
         unsafe {
-            self.filter(s);
+            self.skip_false_matches(s);
         }
     }
     pub(crate) fn get(&self) -> Option<VehicleRef> {
@@ -178,7 +219,10 @@ pub unsafe extern "C" fn openttd_rust_occupancy_on_advance(s: &VehicleServices, 
         it.advance(s);
     }
 }
-/// Complete near cursor. Integer fields preserve native unsigned arithmetic and
+/// Iterate over all vehicles near a given world coordinate.
+/// This only works for vehicles with proper `Vehicle::Tile`, so only ground vehicles outside wormholes.
+/// The order is non-deterministic. Processing must not depend on the order.
+/// Integer fields preserve native unsigned arithmetic and
 /// `Rect::Contains` wrap, including extreme coordinates in the default probe.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -196,9 +240,11 @@ pub struct Near {
     pub current: Shell,
 }
 impl Near {
+    /// Iterator constructor. Find first vehicle near (x, y).
     #[inline]
     pub(crate) unsafe fn new(s: &VehicleServices, x: i32, y: i32, distance: u32) -> Self {
         crate::witness::hit(crate::witness::OCCUPANCY_NEAR);
+        // There are no negative tile coordinates. Preserve unsigned arithmetic before clamping.
         let left = (x as u32).wrapping_sub(distance) as i32;
         let right = (x as u32).wrapping_add(distance) as i32;
         let top = (y as u32).wrapping_sub(distance) as i32;
@@ -209,53 +255,58 @@ impl Near {
             right: right.max(0),
             bottom: bottom.max(0),
             hxmin: 0,
-            hxmax: HASH_MASK,
+            // Scan all unless the distance below selects a smaller hash area.
+            hxmax: TILE_HASH_MASK,
             hymin: 0,
-            hymax: HASH_MASK,
+            hymax: TILE_HASH_MASK,
             hx: 0,
             hy: 0,
             current: ptr::null_mut(),
         };
-        if distance.wrapping_mul(2) < HASH_MASK * TILE_SIZE {
-            it.hxmin = hash_1d(it.left as u32 / TILE_SIZE);
-            it.hxmax = hash_1d(it.right as u32 / TILE_SIZE);
-            it.hymin = hash_1d(it.top as u32 / TILE_SIZE);
-            it.hymax = hash_1d(it.bottom as u32 / TILE_SIZE);
+        if distance.wrapping_mul(2) < TILE_HASH_MASK * TILE_SIZE {
+            // Hash area to scan
+            it.hxmin = get_tile_hash_1d(it.left as u32 / TILE_SIZE);
+            it.hxmax = get_tile_hash_1d(it.right as u32 / TILE_SIZE);
+            it.hymin = get_tile_hash_1d(it.top as u32 / TILE_SIZE);
+            it.hymax = get_tile_hash_1d(it.bottom as u32 / TILE_SIZE);
         }
         it.hx = it.hxmin;
         it.hy = it.hymin;
-        it.current = unsafe { *bucket(it.hx, it.hy) };
+        it.current = unsafe { *get_tile_hash(it.hx, it.hy) };
         unsafe {
-            it.skip_empty();
-            it.filter(s);
+            it.skip_empty_buckets();
+            it.skip_false_matches(s);
         }
         it
     }
+    /// Advance until we reach a non-empty bucket, or the end.
     #[inline]
-    unsafe fn skip_empty(&mut self) {
+    unsafe fn skip_empty_buckets(&mut self) {
         while self.current.is_null() {
             if self.hx != self.hxmax {
-                self.hx = increment(self.hx);
+                self.hx = inc_tile_hash_1d(self.hx);
             } else if self.hy != self.hymax {
                 self.hx = self.hxmin;
-                self.hy = increment(self.hy);
+                self.hy = inc_tile_hash_1d(self.hy);
             } else {
                 return;
             }
-            self.current = unsafe { *bucket(self.hx, self.hy) };
+            self.current = unsafe { *get_tile_hash(self.hx, self.hy) };
         }
     }
+    /// Advance the internal state to the next potential vehicle.
     #[inline]
     unsafe fn increment(&mut self, links: *mut Links) {
-        // filter proves a non-null current; public advancement asserts before
+        // skip_false_matches proves a non-null current; public advancement asserts before
         // resolving links, as the original Increment does before dereferencing.
         self.current = unsafe { (*links).next };
         unsafe {
-            self.skip_empty();
+            self.skip_empty_buckets();
         }
     }
+    /// Advance until it reaches a vehicle within the search area.
     #[inline]
-    unsafe fn filter(&mut self, s: &VehicleServices) {
+    unsafe fn skip_false_matches(&mut self, s: &VehicleServices) {
         while let Some(v) = self.get() {
             let links = (s.tile_links)(v);
             if crate::geometry_type::rect_contains(
@@ -273,9 +324,10 @@ impl Near {
             }
         }
     }
+    /// `VehiclesNearTileXY::Iterator::operator++`: increment, then skip false matches.
     #[inline]
     pub(crate) unsafe fn advance(&mut self, s: &VehicleServices) {
-        // Resolve afresh AFTER the visitor; never reuse a filter observation
+        // Resolve afresh AFTER the visitor; never reuse a skip_false_matches observation
         // across callbacks that can change the current shell's next link.
         if s.assertions {
             assert!(!self.current.is_null());
@@ -283,7 +335,7 @@ impl Near {
         let links = (s.tile_links)(unsafe { handle(self.current) });
         unsafe {
             self.increment(links);
-            self.filter(s);
+            self.skip_false_matches(s);
         }
     }
     #[inline]
@@ -325,13 +377,15 @@ pub struct Commands {
 }
 impl Commands {
     fn result(&self, out: *mut crate::services::CommandCost, vehicle: Option<u8>) {
-        if let Some(kind) = vehicle {
-            (self.costs.error)(out, self.vehicle_error.wrapping_add(u32::from(kind)));
+        if let Some(vehicle_type) = vehicle.map(VehicleType) {
+            let error = StringID(self.vehicle_error.wrapping_add(u32::from(vehicle_type.0)));
+            (self.costs.error)(out, error.0);
         } else {
             (self.costs.zero)(out);
         }
     }
 }
+/// `EnsureNoVehicleOnGround`: ensure there is no vehicle at the ground at the given position.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     c: &Commands,
@@ -339,16 +393,19 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     tile: u32,
 ) {
     let s = c.vehicles;
-    let z = (c.max_pixel_z)(tile);
-    let mut it = unsafe { OnTile::new(s, tile) };
+    let tile = TileIndex(tile);
+    let z = (c.max_pixel_z)(tile.0);
+    let mut it = unsafe { OnTile::new(s, tile.0) };
+    // Value v is not safe in MP games, however, it is used to generate a local
+    // error message only (which may be different for different machines).
+    // Such a message does not affect MP synchronisation.
     while let Some(v) = it.get() {
-        let kind = v.vehicle_type();
-        if kind != super::VehicleType::DISASTER.0
-            && !(kind == super::VehicleType::AIRCRAFT.0
-                && v.subtype() == crate::aircraft::AIR_SHADOW)
+        let vehicle_type = VehicleType(v.vehicle_type());
+        if vehicle_type != VehicleType::DISASTER
+            && !(vehicle_type == VehicleType::AIRCRAFT && v.subtype() == AIR_SHADOW)
             && v.z() <= z
         {
-            c.result(out, Some(kind));
+            c.result(out, Some(vehicle_type.0));
             return;
         }
         unsafe {
@@ -357,6 +414,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     }
     c.result(out, None);
 }
+/// `TunnelBridgeIsFree`: find a vehicle in a tunnel / bridge, ignoring the given vehicle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_wormhole(
     c: &Commands,
@@ -375,19 +433,17 @@ pub(crate) unsafe fn wormhole_blocker(
     end: u32,
     ignore: *const OpenTTDVehicle,
 ) -> Option<u8> {
-    for tile in [tile, end] {
-        let mut it = unsafe { OnTile::new(s, tile) };
+    for t in [TileIndex(tile), TileIndex(end)] {
+        let mut it = unsafe { OnTile::new(s, t.0) };
+        // Value v is not safe in MP games, however, it is used to generate a local
+        // error message only (which may be different for different machines).
+        // Such a message does not affect MP synchronisation.
         while let Some(v) = it.get() {
-            let kind = v.vehicle_type();
-            if [
-                super::VehicleType::TRAIN.0,
-                super::VehicleType::ROAD.0,
-                super::VehicleType::SHIP.0,
-            ]
-            .contains(&kind)
+            let vehicle_type = VehicleType(v.vehicle_type());
+            if [VehicleType::TRAIN, VehicleType::ROAD, VehicleType::SHIP].contains(&vehicle_type)
                 && !ptr::eq(v.0.as_ptr(), ignore)
             {
-                return Some(kind);
+                return Some(vehicle_type.0);
             }
             unsafe {
                 it.advance(s);
@@ -396,6 +452,8 @@ pub(crate) unsafe fn wormhole_blocker(
     }
     None
 }
+/// `EnsureNoTrainOnTrackBits`: test if a vehicle interacts with the specified track bits.
+/// All track bits interact except parallel `TRACK_BIT_HORZ` or `TRACK_BIT_VERT`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_train(
     c: &Commands,
@@ -404,12 +462,17 @@ pub unsafe extern "C" fn openttd_rust_occupancy_train(
     bits: u8,
 ) {
     let s = c.vehicles;
-    let mut it = unsafe { OnTile::new(s, tile) };
+    let tile = TileIndex(tile);
+    let track_bits = TrackBits(bits);
+    let mut it = unsafe { OnTile::new(s, tile.0) };
+    // Value v is not safe in MP games, however, it is used to generate a local
+    // error message only (which may be different for different machines).
+    // Such a message does not affect MP synchronisation.
     while let Some(v) = it.get() {
-        if v.vehicle_type() == super::VehicleType::TRAIN.0 {
-            let track = (s.train_handle)(v.0.as_ptr()).track();
-            if track == bits || crate::track_func::tracks_overlap(track | bits) {
-                c.result(out, Some(super::VehicleType::TRAIN.0));
+        if VehicleType(v.vehicle_type()) == VehicleType::TRAIN {
+            let track = TrackBits((s.train_handle)(v.0.as_ptr()).track());
+            if track == track_bits || crate::track_func::tracks_overlap(track.0 | track_bits.0) {
+                c.result(out, Some(VehicleType::TRAIN.0));
                 return;
             }
         }
