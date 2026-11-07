@@ -5,15 +5,35 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `vehiclelist.h` values. `services.cpp` asserts every value.
+//! Shared definitions from `vehiclelist.h`.
+
+/// Vehicle list type flags, retaining every underlying `uint8_t` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehicleListType(pub u8);
+
+impl VehicleListType {
+    /// Index is the company.
+    pub const VL_STANDARD: Self = Self(0);
+    /// Index is the first vehicle of the shared orders.
+    pub const VL_SHARED_ORDERS: Self = Self(1);
+    /// Index is the station.
+    pub const VL_STATION_LIST: Self = Self(2);
+    /// Index is the destination (station for hangar of aircraft, depot for others).
+    pub const VL_DEPOT_LIST: Self = Self(3);
+    /// Index is the group.
+    pub const VL_GROUP_LIST: Self = Self(4);
+    /// Native `VLT_END`.
+    pub const VLT_END: Self = Self(5);
+}
 
 /// `VL_STANDARD`.
-pub const VL_STANDARD: u8 = 0;
+pub const VL_STANDARD: u8 = VehicleListType::VL_STANDARD.0;
 /// `VL_SHARED_ORDERS`.
-pub const VL_SHARED_ORDERS: u8 = 1;
+pub const VL_SHARED_ORDERS: u8 = VehicleListType::VL_SHARED_ORDERS.0;
 /// `VL_STATION_LIST`.
-pub const VL_STATION_LIST: u8 = 2;
+pub const VL_STATION_LIST: u8 = VehicleListType::VL_STATION_LIST.0;
 /// `VL_DEPOT_LIST`.
-pub const VL_DEPOT_LIST: u8 = 3;
+pub const VL_DEPOT_LIST: u8 = VehicleListType::VL_DEPOT_LIST.0;
 /// `VL_GROUP_LIST`.
-pub const VL_GROUP_LIST: u8 = 4;
+pub const VL_GROUP_LIST: u8 = VehicleListType::VL_GROUP_LIST.0;
