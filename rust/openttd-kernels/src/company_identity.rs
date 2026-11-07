@@ -554,8 +554,15 @@ pub(crate) fn get_engine_livery_scheme(
     use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
     use crate::cargotype::{CargoClass, CargoClasses};
     use crate::engine_type::{
-        AIR_CTOL, AIR_FAST, AIR_HELI, EngineClass, EngineMiscFlag, EngineMiscFlags,
+        AIR_CTOL, AIR_FAST, AIR_HELI, EngineClass, EngineMiscFlag, EngineMiscFlags, RAIL_IS_MU,
         RailVehicleTypes,
+    };
+    use crate::livery::{
+        LS_BUS, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_FREIGHT_SHIP, LS_FREIGHT_TRAM,
+        LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL, LS_PASSENGER_SHIP,
+        LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
+        LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
+        LS_SMALL_PLANE, LS_STEAM, LS_TRUCK,
     };
     use crate::vehicle::{EngineRef, VehicleRef};
     use crate::vehicle_type::VehicleType;
@@ -589,53 +596,54 @@ pub(crate) fn get_engine_livery_scheme(
             assert!(is_valid_cargo_type(cargo_type.0));
             if EngineRef::of(e).rail_kind() == RailVehicleTypes::RAILVEH_WAGON {
                 if (s.cargo_freight)(cargo_type.0) {
-                    return LiveryScheme::LS_FREIGHT_WAGON.0;
+                    return LiveryScheme(LS_FREIGHT_WAGON).0;
                 }
                 if parent_engine_type == EngineID::INVALID {
-                    return LiveryScheme::LS_PASSENGER_WAGON_STEAM.0;
+                    return LiveryScheme(LS_PASSENGER_WAGON_STEAM).0;
                 }
                 let p = (s.engine)(parent_engine_type);
-                let is_mu = EngineMiscFlags(EngineRef::of(p).misc()).test(EngineMiscFlag::RailIsMU);
+                // RAIL_IS_MU is the retained raw adapter for EngineMiscFlag::RailIsMU.
+                let is_mu = EngineRef::of(p).misc() & RAIL_IS_MU != 0;
                 match EngineClass(EngineRef::of(p).train_class()) {
-                    EngineClass::EC_STEAM => LiveryScheme::LS_PASSENGER_WAGON_STEAM.0,
+                    EngineClass::EC_STEAM => LiveryScheme(LS_PASSENGER_WAGON_STEAM),
                     EngineClass::EC_DIESEL => {
                         if is_mu {
-                            LiveryScheme::LS_DMU.0
+                            LiveryScheme(LS_DMU)
                         } else {
-                            LiveryScheme::LS_PASSENGER_WAGON_DIESEL.0
+                            LiveryScheme(LS_PASSENGER_WAGON_DIESEL)
                         }
                     }
                     EngineClass::EC_ELECTRIC => {
                         if is_mu {
-                            LiveryScheme::LS_EMU.0
+                            LiveryScheme(LS_EMU)
                         } else {
-                            LiveryScheme::LS_PASSENGER_WAGON_ELECTRIC.0
+                            LiveryScheme(LS_PASSENGER_WAGON_ELECTRIC)
                         }
                     }
-                    EngineClass::EC_MONORAIL => LiveryScheme::LS_PASSENGER_WAGON_MONORAIL.0,
-                    EngineClass::EC_MAGLEV => LiveryScheme::LS_PASSENGER_WAGON_MAGLEV.0,
+                    EngineClass::EC_MONORAIL => LiveryScheme(LS_PASSENGER_WAGON_MONORAIL),
+                    EngineClass::EC_MAGLEV => LiveryScheme(LS_PASSENGER_WAGON_MAGLEV),
                     _ => unreachable!("NOT_REACHED"),
                 }
             } else {
-                let is_mu = EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RailIsMU);
+                let is_mu = EngineRef::of(e).misc() & RAIL_IS_MU != 0;
                 match EngineClass(EngineRef::of(e).train_class()) {
-                    EngineClass::EC_STEAM => LiveryScheme::LS_STEAM.0,
+                    EngineClass::EC_STEAM => LiveryScheme(LS_STEAM),
                     EngineClass::EC_DIESEL => {
                         if is_mu {
-                            LiveryScheme::LS_DMU.0
+                            LiveryScheme(LS_DMU)
                         } else {
-                            LiveryScheme::LS_DIESEL.0
+                            LiveryScheme(LS_DIESEL)
                         }
                     }
                     EngineClass::EC_ELECTRIC => {
                         if is_mu {
-                            LiveryScheme::LS_EMU.0
+                            LiveryScheme(LS_EMU)
                         } else {
-                            LiveryScheme::LS_ELECTRIC.0
+                            LiveryScheme(LS_ELECTRIC)
                         }
                     }
-                    EngineClass::EC_MONORAIL => LiveryScheme::LS_MONORAIL.0,
-                    EngineClass::EC_MAGLEV => LiveryScheme::LS_MAGLEV.0,
+                    EngineClass::EC_MONORAIL => LiveryScheme(LS_MONORAIL),
+                    EngineClass::EC_MAGLEV => LiveryScheme(LS_MAGLEV),
                     _ => unreachable!("NOT_REACHED"),
                 }
             }
@@ -659,15 +667,15 @@ pub(crate) fn get_engine_livery_scheme(
             if EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RoadIsTram) {
                 // Tram
                 if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
-                    LiveryScheme::LS_PASSENGER_TRAM.0
+                    LiveryScheme(LS_PASSENGER_TRAM)
                 } else {
-                    LiveryScheme::LS_FREIGHT_TRAM.0
+                    LiveryScheme(LS_FREIGHT_TRAM)
                 }
             } else if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
                 // Bus or truck
-                LiveryScheme::LS_BUS.0
+                LiveryScheme(LS_BUS)
             } else {
-                LiveryScheme::LS_TRUCK.0
+                LiveryScheme(LS_TRUCK)
             }
         }
         VehicleType::VEH_SHIP => {
@@ -680,19 +688,20 @@ pub(crate) fn get_engine_livery_scheme(
             }
             assert!(is_valid_cargo_type(cargo_type.0));
             if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
-                LiveryScheme::LS_PASSENGER_SHIP.0
+                LiveryScheme(LS_PASSENGER_SHIP)
             } else {
-                LiveryScheme::LS_FREIGHT_SHIP.0
+                LiveryScheme(LS_FREIGHT_SHIP)
             }
         }
         VehicleType::VEH_AIRCRAFT => match EngineRef::of(e).aircraft_subtype() {
-            AIR_HELI => LiveryScheme::LS_HELICOPTER.0,
-            AIR_CTOL => LiveryScheme::LS_SMALL_PLANE.0,
-            x if x == AIR_CTOL | AIR_FAST => LiveryScheme::LS_LARGE_PLANE.0,
+            AIR_HELI => LiveryScheme(LS_HELICOPTER),
+            AIR_CTOL => LiveryScheme(LS_SMALL_PLANE),
+            x if x == AIR_CTOL | AIR_FAST => LiveryScheme(LS_LARGE_PLANE),
             _ => unreachable!("NOT_REACHED"),
         },
         _ => unreachable!("NOT_REACHED"),
     }
+    .0
 }
 // Compatibility name for the existing engine-loading caller; the helper has one body.
 pub(crate) use get_engine_livery_scheme as engine_livery;
