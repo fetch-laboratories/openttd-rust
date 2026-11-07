@@ -14,173 +14,203 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
+use crate::cargo_type::CargoType;
+use crate::station_type::StationID;
 use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::ops::Bound::{Excluded, Unbounded};
 
+/// `station_base.h::FlowStat`: flow statistics describing how much to send
+/// along a link. Each share is the difference between a cumulative map key and
+/// its predecessor; a key alone has no meaning. Random upper-bound lookups
+/// select shares with probability proportional to their flow.
 #[derive(Clone)]
 pub struct Flow {
+    /// Shares sent via the specified station, or consumed locally.
     shares: BTreeMap<u32, u16>,
+    /// Limit for unrestricted shares.
     unrestricted: u32,
 }
 impl Flow {
-    fn new(st: u16, amount: u32, restricted: bool) -> Self {
-        assert!(amount > 0);
+    /// Create a `FlowStat` with an initial station, flow and restriction state.
+    fn new(st: StationID, flow: u32, restricted: bool) -> Self {
+        assert!(flow > 0);
         Self {
-            shares: BTreeMap::from([(amount, st)]),
-            unrestricted: if restricted { 0 } else { amount },
+            shares: BTreeMap::from([(flow, st.0)]),
+            unrestricted: if restricted { 0 } else { flow },
         }
     }
-    fn share(&self, station: u16) -> u32 {
-        let mut previous = 0;
-        for (&key, &st) in &self.shares {
-            if st == station {
-                return key.wrapping_sub(previous);
+    /// `FlowStat::GetShare`: get flow for a station.
+    fn get_share(&self, st: StationID) -> u32 {
+        let mut prev = 0;
+        for (&key, &station) in &self.shares {
+            if station == st.0 {
+                return key.wrapping_sub(prev);
             }
-            previous = key;
+            prev = key;
         }
         0
     }
-    fn append(&mut self, st: u16, amount: u32, restricted: bool) {
-        assert!(amount > 0);
+    /// `FlowStat::AppendShare`: append only when the station is not already in
+    /// the map; otherwise the shares may become inconsistent.
+    fn append_share(&mut self, st: StationID, flow: u32, restricted: bool) {
+        assert!(flow > 0);
         let end = *self.shares.last_key_value().unwrap().0;
-        self.shares.insert(end.wrapping_add(amount), st);
+        self.shares.insert(end.wrapping_add(flow), st.0);
         if !restricted {
-            self.unrestricted = self.unrestricted.wrapping_add(amount);
+            self.unrestricted = self.unrestricted.wrapping_add(flow);
         }
     }
+    /// `FlowStat::Invalidate`: reduce flows to minimum capacity so they do not
+    /// distort link-usage statistics, but keep routing any remaining cargo.
     fn invalidate(&mut self) {
         assert!(!self.shares.is_empty());
-        let mut shares = BTreeMap::new();
-        let mut index = 0u32;
+        let mut new_shares = BTreeMap::new();
+        let mut i = 0u32;
         for (&key, &st) in &self.shares {
-            index = index.wrapping_add(1);
-            shares.insert(index, st);
+            i = i.wrapping_add(1);
+            new_shares.insert(i, st);
             if key == self.unrestricted {
-                self.unrestricted = index;
+                self.unrestricted = i;
             }
         }
-        self.shares = shares;
+        self.shares = new_shares;
         assert!(self.unrestricted <= *self.shares.last_key_value().unwrap().0);
     }
-    fn change(&mut self, st: u16, mut flow: i32) {
+    /// `FlowStat::ChangeShare`: change a station's share. `INT_MIN` erases the
+    /// share; newly added flows are unrestricted.
+    fn change_share(&mut self, st: StationID, mut flow: i32) {
+        // Assert only before changing: shares may become empty afterwards,
+        // in which case the whole FlowStat must then be deleted.
         assert!(!self.shares.is_empty());
-        let (mut removed, mut added, mut last) = (0u32, 0u32, 0u32);
-        let mut shares = BTreeMap::new();
+        let (mut removed_shares, mut added_shares, mut last_share) = (0u32, 0u32, 0u32);
+        let mut new_shares = BTreeMap::new();
         for (&key, &station) in &self.shares {
-            if station == st {
+            if station == st.0 {
                 if flow < 0 {
-                    let share = key.wrapping_sub(last);
+                    let share = key.wrapping_sub(last_share);
                     if flow == i32::MIN || flow.wrapping_neg() as u32 >= share {
-                        removed = removed.wrapping_add(share);
+                        removed_shares = removed_shares.wrapping_add(share);
                         if key <= self.unrestricted {
                             self.unrestricted = self.unrestricted.wrapping_sub(share);
                         }
                         if flow != i32::MIN {
                             flow = flow.wrapping_add(share as i32);
                         }
-                        last = key;
-                        continue;
+                        last_share = key;
+                        continue; // Remove the whole share.
                     }
-                    removed = removed.wrapping_add(flow.wrapping_neg() as u32);
+                    removed_shares = removed_shares.wrapping_add(flow.wrapping_neg() as u32);
                 } else {
-                    added = added.wrapping_add(flow as u32);
+                    added_shares = added_shares.wrapping_add(flow as u32);
                 }
                 if key <= self.unrestricted {
                     self.unrestricted = self.unrestricted.wrapping_add(flow as u32);
                 }
+                // Unless the loop continued above, the whole flow has been
+                // added or removed.
                 flow = 0;
             }
-            shares.insert(key.wrapping_add(added).wrapping_sub(removed), station);
-            last = key;
+            new_shares.insert(
+                key.wrapping_add(added_shares).wrapping_sub(removed_shares),
+                station,
+            );
+            last_share = key;
         }
         if flow > 0 {
-            shares.insert(last.wrapping_add(flow as u32), st);
-            // Preserve the source's ReleaseShare call on the OLD map, before swap.
-            if self.unrestricted < last {
-                self.release(st);
+            new_shares.insert(last_share.wrapping_add(flow as u32), st.0);
+            // ChangeShare calls ReleaseShare on the old map before swapping.
+            if self.unrestricted < last_share {
+                self.release_share(st);
             } else {
                 self.unrestricted = self.unrestricted.wrapping_add(flow as u32);
             }
         }
-        self.shares = shares;
+        self.shares = new_shares;
     }
-    fn restrict(&mut self, st: u16) {
+    /// `FlowStat::RestrictShare`: move a flow to the end of the map and
+    /// decrease the unrestricted amount.
+    fn restrict_share(&mut self, st: StationID) {
         assert!(!self.shares.is_empty());
-        let (mut flow, mut last) = (0u32, 0u32);
-        let mut shares = BTreeMap::new();
+        let (mut flow, mut last_share) = (0u32, 0u32);
+        let mut new_shares = BTreeMap::new();
         for (&key, &station) in &self.shares {
             if flow == 0 {
                 if key > self.unrestricted {
-                    return;
+                    return; // Not present or already restricted.
                 }
-                if station == st {
-                    flow = key.wrapping_sub(last);
+                if station == st.0 {
+                    flow = key.wrapping_sub(last_share);
                     self.unrestricted = self.unrestricted.wrapping_sub(flow);
                 } else {
-                    shares.insert(key, station);
+                    new_shares.insert(key, station);
                 }
             } else {
-                shares.insert(key.wrapping_sub(flow), station);
+                new_shares.insert(key.wrapping_sub(flow), station);
             }
-            last = key;
+            last_share = key;
         }
         if flow == 0 {
             return;
         }
         // The original increases the cumulative tail by flow here.
-        shares.insert(last.wrapping_add(flow), st);
-        self.shares = shares;
+        new_shares.insert(last_share.wrapping_add(flow), st.0);
+        self.shares = new_shares;
     }
+    /// `FlowStat::ReleaseShare`: move a flow to the beginning of the map and
+    /// increase the unrestricted amount.
     #[allow(clippy::if_not_else)] // Keep the source branch order.
-    fn release(&mut self, st: u16) {
+    fn release_share(&mut self, st: StationID) {
         assert!(!self.shares.is_empty());
-        let (mut flow, mut next) = (0u32, 0u32);
+        let (mut flow, mut next_share) = (0u32, 0u32);
         let mut found = false;
         for (&key, &station) in self.shares.iter().rev() {
+            // Not <=: the share may hit the limit.
             if key < self.unrestricted {
                 return;
             }
             if found {
-                flow = next.wrapping_sub(key);
+                flow = next_share.wrapping_sub(key);
                 self.unrestricted = self.unrestricted.wrapping_add(flow);
                 break;
             }
             if key == self.unrestricted {
-                return;
+                return; // Not found, so the limit was not hit.
             }
-            if station == st {
+            if station == st.0 {
                 found = true;
             }
-            next = key;
+            next_share = key;
         }
         if flow == 0 {
             return;
         }
-        let mut shares = BTreeMap::from([(flow, st)]);
+        let mut new_shares = BTreeMap::from([(flow, st.0)]);
         for (&key, &station) in &self.shares {
-            if station != st {
-                shares.insert(flow.wrapping_add(key), station);
+            if station != st.0 {
+                new_shares.insert(flow.wrapping_add(key), station);
             } else {
                 flow = 0;
             }
         }
-        self.shares = shares;
+        self.shares = new_shares;
     }
-    fn scale(&mut self, runtime: u32) {
+    /// `FlowStat::ScaleToMonthly`: scale the uncompressed link-graph runtime
+    /// to monthly values. Runtime must be positive to avoid infinite flow.
+    fn scale_to_monthly(&mut self, runtime: u32) {
         assert!(runtime > 0);
-        let mut shares = BTreeMap::new();
+        let mut new_shares = BTreeMap::new();
         let mut share = 0u32;
         for (&key, &station) in &self.shares {
             share = share.wrapping_add(1).max(key.wrapping_mul(30) / runtime);
-            shares.insert(share, station);
+            new_shares.insert(share, station);
             if self.unrestricted == key {
                 self.unrestricted = share;
             }
         }
-        self.shares = shares;
+        self.shares = new_shares;
     }
-    fn upper(&self, key: u32) -> (u32, u16) {
+    fn upper_bound(&self, key: u32) -> (u32, u16) {
         let (&key, &station) = self
             .shares
             .range((Excluded(key), Unbounded))
@@ -194,51 +224,58 @@ impl Flow {
             .next_back()
             .map_or(0, |(&key, _)| key)
     }
-    fn via(
+    /// Existing dispatch for `FlowStat::GetViaWithRestricted` and both
+    /// `GetVia` overloads: select a route in proportion to its flow, optionally
+    /// excluding stations or including restricted flows.
+    fn get_via(
         &self,
         mode: u8,
-        excluded: u16,
-        excluded2: u16,
+        excluded: StationID,
+        excluded2: StationID,
         restricted: &mut u8,
         mut random: impl FnMut() -> u32,
-    ) -> u16 {
+    ) -> StationID {
         let mut range = |max: u32| crate::random_func::scale_to_limit(random(), max);
         if mode == 1 {
+            // GetViaWithRestricted includes restricted flows and reports
+            // whether the selected share crosses the unrestricted limit.
             assert!(!self.shares.is_empty());
             let draw = range(*self.shares.last_key_value().unwrap().0);
             *restricted = u8::from(draw >= self.unrestricted);
-            return self.upper(draw).1;
+            return StationID(self.upper_bound(draw).1);
         }
         if mode == 0 {
             assert!(!self.shares.is_empty());
         }
         if self.unrestricted == 0 {
-            return u16::MAX;
+            return StationID::INVALID;
         }
         assert!(!self.shares.is_empty());
-        let (mut end, station) = self.upper(range(self.unrestricted));
-        if mode == 0 || (station != excluded && station != excluded2) {
-            return station;
+        let (mut end, station) = self.upper_bound(range(self.unrestricted));
+        if mode == 0 || (station != excluded.0 && station != excluded2.0) {
+            return StationID(station);
         }
+        // Hit an excluded station. Draw another share outside its range.
         let mut begin = self.begin_of(end);
         let mut interval = end.wrapping_sub(begin);
         if interval >= self.unrestricted {
-            return u16::MAX;
+            return StationID::INVALID; // Only one station in the map.
         }
         let mut max = self.unrestricted.wrapping_sub(interval);
         let draw = range(max);
-        let (mut end2, station2) = self.upper(if draw < begin {
+        let (mut end2, station2) = self.upper_bound(if draw < begin {
             draw
         } else {
             draw.wrapping_add(interval)
         });
-        if station2 != excluded && station2 != excluded2 {
-            return station2;
+        if station2 != excluded.0 && station2 != excluded2.0 {
+            return StationID(station2);
         }
+        // Hit the second excluded station. Draw again, excluding both ranges.
         let mut begin2 = self.begin_of(end2);
         let mut interval2 = end2.wrapping_sub(begin2);
         if interval2 >= max {
-            return u16::MAX;
+            return StationID::INVALID; // Only the two excluded stations remain.
         }
         max = max.wrapping_sub(interval2);
         if begin > begin2 {
@@ -247,14 +284,16 @@ impl Flow {
             std::mem::swap(&mut interval, &mut interval2);
         }
         let draw = range(max);
-        self.upper(if draw < begin {
-            draw
-        } else if draw < begin2.wrapping_sub(interval) {
-            draw.wrapping_add(interval)
-        } else {
-            draw.wrapping_add(interval).wrapping_add(interval2)
-        })
-        .1
+        StationID(
+            self.upper_bound(if draw < begin {
+                draw
+            } else if draw < begin2.wrapping_sub(interval) {
+                draw.wrapping_add(interval)
+            } else {
+                draw.wrapping_add(interval).wrapping_add(interval2)
+            })
+            .1,
+        )
     }
 }
 #[repr(C)]
@@ -280,6 +319,7 @@ impl Default for Origin {
         }
     }
 }
+/// `station_base.h::FlowStatMap`: flow descriptions by origin station.
 /// Raw-owned nodes retain address identity across unrelated map mutations.
 #[derive(Default)]
 pub struct FlowMap {
@@ -327,11 +367,13 @@ impl FlowMap {
             }
         }
     }
+    /// `FlowStatMap::DeleteFlows`: delete flows to a remote station and return
+    /// source IDs whose complete FlowStat, rather than just a share, was erased.
     pub(crate) fn deleted(&mut self, via: u16) -> Vec<u16> {
         let mut ret = Vec::new();
         for (&origin, &ptr) in &self.entries {
             let flow = unsafe { &mut *ptr };
-            flow.change(via, i32::MIN);
+            flow.change_share(StationID(via), i32::MIN);
             if flow.shares.is_empty() {
                 ret.push(origin);
             }
@@ -341,18 +383,22 @@ impl FlowMap {
         }
         ret
     }
+    /// Existing combined `FlowStatMap::AddFlow` / `PassOnFlow` dispatch.
+    /// Passed flow is remembered under the invalid station for later
+    /// subtraction from local consumption: flows cannot be negative, and
+    /// sorting them before addition is avoided.
     fn add(&mut self, origin: u16, via: u16, amount: u32, pass: bool) {
         if let Some(&ptr) = self.entries.get(&origin) {
             let flow = unsafe { &mut *ptr };
-            flow.change(via, amount as i32);
+            flow.change_share(StationID(via), amount as i32);
             if pass {
-                flow.change(u16::MAX, amount as i32);
+                flow.change_share(StationID::INVALID, amount as i32);
             }
             assert!(!flow.shares.is_empty());
         } else {
-            let mut flow = Flow::new(via, amount, false);
+            let mut flow = Flow::new(StationID(via), amount, false);
             if pass {
-                flow.append(u16::MAX, amount, false);
+                flow.append_share(StationID::INVALID, amount, false);
             }
             self.entries.insert(origin, Box::into_raw(Box::new(flow)));
         }
@@ -360,7 +406,7 @@ impl FlowMap {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_flow_new(st: u16, amount: u32, restricted: u8) -> *mut Flow {
-    Box::into_raw(Box::new(Flow::new(st, amount, restricted != 0)))
+    Box::into_raw(Box::new(Flow::new(StationID(st), amount, restricted != 0)))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_flow_clone(ptr: *const Flow) -> *mut Flow {
@@ -376,7 +422,7 @@ pub unsafe extern "C" fn openttd_rust_flow_destroy(ptr: *mut Flow) {
 pub unsafe extern "C" fn openttd_rust_flow_read(ptr: *const Flow, op: u8, st: u16) -> u32 {
     let flow = unsafe { &*ptr };
     match op {
-        0 => flow.share(st),
+        0 => flow.get_share(StationID(st)),
         1 => flow.unrestricted,
         2 => flow.shares.len() as u32,
         3 => *flow.shares.last_key_value().unwrap().0,
@@ -387,12 +433,12 @@ pub unsafe extern "C" fn openttd_rust_flow_read(ptr: *const Flow, op: u8, st: u1
 pub unsafe extern "C" fn openttd_rust_flow_change(ptr: *mut Flow, op: u8, st: u16, amount: u32) {
     let flow = unsafe { &mut *ptr };
     match op {
-        0 => flow.change(st, amount as i32),
-        1 => flow.restrict(st),
-        2 => flow.release(st),
-        3 => flow.scale(amount),
+        0 => flow.change_share(StationID(st), amount as i32),
+        1 => flow.restrict_share(StationID(st)),
+        2 => flow.release_share(StationID(st)),
+        3 => flow.scale_to_monthly(amount),
         4 => flow.invalidate(),
-        5 | 6 => flow.append(st, amount, op == 6),
+        5 | 6 => flow.append_share(StationID(st), amount, op == 6),
         // Temporary imported job map is reset before its cumulative records arrive.
         7 => {
             flow.shares.clear();
@@ -451,7 +497,17 @@ pub(crate) unsafe fn flow_via(
     restricted: *mut u8,
     random: impl FnMut() -> u32,
 ) -> u16 {
-    unsafe { (&*ptr).via(mode, ex, ex2, &mut *restricted, random) }
+    unsafe {
+        (&*ptr)
+            .get_via(
+                mode,
+                StationID(ex),
+                StationID(ex2),
+                &mut *restricted,
+                random,
+            )
+            .0
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_flow_via(
@@ -530,20 +586,22 @@ pub unsafe extern "C" fn openttd_rust_flow_map_read(
     let map = unsafe { &*ptr };
     match op {
         0 => map.entries.len() as u32,
+        // GetFlow sums all flows; GetFlowVia sums shares via one station.
         1 | 2 => map.entries.values().fold(0u32, |sum, &ptr| {
             sum.wrapping_add(unsafe {
                 if op == 1 {
                     *(*ptr).shares.last_key_value().unwrap().0
                 } else {
-                    (*ptr).share(via)
+                    (*ptr).get_share(StationID(via))
                 }
             })
         }),
+        // GetFlowFrom and GetFlowFromVia return zero for a missing origin.
         3 | 4 => map.entries.get(&origin).map_or(0, |&ptr| unsafe {
             if op == 3 {
                 *(*ptr).shares.last_key_value().unwrap().0
             } else {
-                (*ptr).share(via)
+                (*ptr).get_share(StationID(via))
             }
         }),
         _ => unreachable!(),
@@ -560,28 +618,33 @@ pub unsafe extern "C" fn openttd_rust_flow_map_change(
     let map = unsafe { &mut *ptr };
     match op {
         0 | 1 => map.add(origin, via, amount, op == 1),
+        // RestrictFlows / ReleaseFlows apply to every origin at this station.
         2 | 3 => {
             for &ptr in map.entries.values() {
                 unsafe {
                     if op == 2 {
-                        (*ptr).restrict(via);
+                        (*ptr).restrict_share(StationID(via));
                     } else {
-                        (*ptr).release(via);
+                        (*ptr).release_share(StationID(via));
                     }
                 }
             }
         }
         4 => {
+            // FinalizeLocalConsumption subtracts invalid flows from the
+            // locally consumed share at this station.
             for &ptr in map.entries.values() {
                 let flow = unsafe { &mut *ptr };
-                let mut local = flow.share(u16::MAX);
+                let mut local = flow.get_share(StationID::INVALID);
                 if local > i32::MAX as u32 {
-                    flow.change(origin, -i32::MAX);
-                    flow.change(u16::MAX, -i32::MAX);
+                    // Make sure the remaining amount fits in an int.
+                    flow.change_share(StationID(origin), -i32::MAX);
+                    flow.change_share(StationID::INVALID, -i32::MAX);
                     local = local.wrapping_sub(i32::MAX as u32);
                 }
-                flow.change(origin, (local as i32).wrapping_neg());
-                flow.change(u16::MAX, (local as i32).wrapping_neg());
+                flow.change_share(StationID(origin), (local as i32).wrapping_neg());
+                flow.change_share(StationID::INVALID, (local as i32).wrapping_neg());
+                // If the local share is used up, a remote share must remain.
                 assert!(!flow.shares.is_empty());
             }
         }
@@ -624,23 +687,26 @@ pub struct Services {
 pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
     let s = unsafe { &*services };
     if s.live_graph.is_null() {
+        // LinkGraphJob::~LinkGraphJob: the graph was merged into another one.
         return;
     }
     let snapshot = unsafe { (*s.job).graph };
     let size = unsafe { &*snapshot }.size();
     let graph = unsafe { (*s.job).graph_index.0 };
-    let cargo = unsafe { (*snapshot).cargo };
+    let cargo = CargoType(unsafe { (*snapshot).cargo });
     let stations = unsafe { &*s.stations };
     let links = unsafe { &*s.links };
     let job_flows = |node: u16| unsafe { (&(*s.job).nodes)[usize::from(node)].flows };
     let mut edge_begin = 0;
+    // Station deletion and link-graph merging can change IDs. Ignore a node
+    // unless its current station, graph and node IDs remain consistent.
     let valid_node = |node| {
         let station = unsafe { (&(*snapshot).nodes)[usize::from(node)].station };
         let shell = (stations.get)(station);
         !shell.is_null()
             && (stations.is_station)(shell)
-            && (links.graphs.graph_id)(shell, cargo) == graph
-            && (links.graphs.node)(shell, cargo) == node
+            && (links.graphs.graph_id)(shell, cargo.0) == graph
+            && (links.graphs.node)(shell, cargo.0) == node
     };
     for node in 0..size {
         let station = unsafe { &*snapshot }.nodes[usize::from(node)].station;
@@ -648,6 +714,7 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
         let first_edge = edge_begin;
         edge_begin += edge_count;
         if !valid_node(node) {
+            // The station may have been deleted. Erase all flows from it.
             for index in 0..size {
                 let map = job_flows(index);
                 unsafe {
@@ -673,6 +740,9 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                 None
             };
             if observed.is_none_or(|(last, _)| last == crate::timer_game_common::INVALID_DATE) {
+                // The edge was removed. Delete its flows, and old flows for
+                // source stations removed from the new flows, to avoid cycles
+                // between old and new flows.
                 let erased = unsafe { (&mut *flows).deleted(to) };
                 for origin in erased {
                     unsafe {
@@ -680,17 +750,21 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                     }
                 }
             } else if observed.unwrap().1 == crate::timer_game_common::INVALID_DATE {
+                // The edge is fully restricted.
                 unsafe {
                     openttd_rust_flow_map_change(flows, 2, 0, to, 0);
                 }
             }
         }
+        // Swap shares and invalidate completely deleted ones. Keep them to
+        // avoid unroutable cargo, unless automatic distribution was turned
+        // off for this cargo; then delete them and reroute the relevant cargo.
         let mut current = unsafe { openttd_rust_flow_map_at(live, 0, 0) };
         while current.found != 0 {
             let next = unsafe { openttd_rust_flow_map_at(live, u32::from(current.origin), 2) };
             let new = unsafe { openttd_rust_flow_map_at(flows, u32::from(current.origin), 1) };
             if new.found == 0 {
-                if (links.automatic_distribution)(cargo) {
+                if (links.automatic_distribution)(cargo.0) {
                     unsafe {
                         (*current.flow).invalidate();
                     }
@@ -763,15 +837,15 @@ mod tests {
 
     #[test]
     fn source_restriction_tail_and_old_map_release_are_preserved() {
-        let mut flow = Flow::new(1, 10, false);
-        flow.append(2, 20, false);
-        flow.restrict(1);
+        let mut flow = Flow::new(StationID(1), 10, false);
+        flow.append_share(StationID(2), 20, false);
+        flow.restrict_share(StationID(1));
         assert_eq!(flow.shares, BTreeMap::from([(20, 2), (40, 1)]));
         assert_eq!(flow.unrestricted, 20);
-        flow.change(3, 5);
+        flow.change_share(StationID(3), 5);
         assert_eq!(flow.shares, BTreeMap::from([(20, 2), (40, 1), (45, 3)]));
         assert_eq!(flow.unrestricted, 20);
-        flow.release(1);
+        flow.release_share(StationID(1));
         assert_eq!(flow.shares, BTreeMap::from([(20, 1), (40, 2), (45, 3)]));
         assert_eq!(flow.unrestricted, 40);
         flow.invalidate();
@@ -780,29 +854,46 @@ mod tests {
     }
     #[test]
     fn excluded_selection_draws_once_for_each_hit() {
-        let mut flow = Flow::new(1, 10, false);
-        flow.append(2, 20, false);
-        flow.append(3, 30, false);
+        let mut flow = Flow::new(StationID(1), 10, false);
+        flow.append_share(StationID(2), 20, false);
+        flow.append_share(StationID(3), 30, false);
         DRAWS.with(|n| n.set(0));
         let mut restricted = 0;
-        assert_eq!(flow.via(2, 1, 2, &mut restricted, || zero_random()), 3);
+        assert_eq!(
+            flow.get_via(2, StationID(1), StationID(2), &mut restricted, || {
+                zero_random()
+            })
+            .0,
+            3
+        );
         assert_eq!(DRAWS.with(Cell::get), 3);
-        flow.change(3, i32::MIN);
+        flow.change_share(StationID(3), i32::MIN);
         DRAWS.with(|n| n.set(0));
         assert_eq!(
-            flow.via(2, 1, 2, &mut restricted, || zero_random()),
+            flow.get_via(2, StationID(1), StationID(2), &mut restricted, || {
+                zero_random()
+            })
+            .0,
             u16::MAX
         );
         assert_eq!(DRAWS.with(Cell::get), 2);
-        let restricted_flow = Flow::new(1, 5, true);
+        let restricted_flow = Flow::new(StationID(1), 5, true);
         DRAWS.with(|n| n.set(0));
         assert_eq!(
-            restricted_flow.via(0, 0, 0, &mut restricted, || zero_random()),
+            restricted_flow
+                .get_via(0, StationID(0), StationID(0), &mut restricted, || {
+                    zero_random()
+                })
+                .0,
             u16::MAX
         );
         assert_eq!(DRAWS.with(Cell::get), 0);
         assert_eq!(
-            restricted_flow.via(1, 0, 0, &mut restricted, || zero_random()),
+            restricted_flow
+                .get_via(1, StationID(0), StationID(0), &mut restricted, || {
+                    zero_random()
+                })
+                .0,
             1
         );
         assert_eq!(restricted, 1);
@@ -810,8 +901,8 @@ mod tests {
     }
     #[test]
     fn scaling_wraps_before_division_and_nodes_keep_identity() {
-        let mut flow = Flow::new(1, u32::MAX, false);
-        flow.scale(30);
+        let mut flow = Flow::new(StationID(1), u32::MAX, false);
+        flow.scale_to_monthly(30);
         assert_eq!(flow.unrestricted, u32::MAX.wrapping_mul(30) / 30);
         let mut map = FlowMap::default();
         map.add(10, 1, 5, false);
@@ -822,7 +913,7 @@ mod tests {
         assert_eq!(map.entries[&10], first);
         let cloned = map.clone();
         assert_ne!(cloned.entries[&10], first);
-        assert_eq!(unsafe { (*cloned.entries[&10]).share(1) }, 5);
+        assert_eq!(unsafe { (*cloned.entries[&10]).get_share(StationID(1)) }, 5);
     }
     struct World {
         job: [*mut FlowMap; 3],
