@@ -1780,6 +1780,9 @@
     "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a > | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
+    "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a > | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      111
+    ],
     "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a >::fn coastal | excessive_nesting | b7778fcd3cad0b92f428": [
       6
     ],
