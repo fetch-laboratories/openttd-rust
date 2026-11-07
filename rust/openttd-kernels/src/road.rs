@@ -33,6 +33,7 @@ use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
 use crate::raw_field::{read_field, write_field};
+use crate::road_data;
 use crate::roadveh::{
     RVSB_IN_DEPOT as DEPOT, RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP,
     RVSB_WORMHOLE,
@@ -855,15 +856,12 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
-        write_field!(
-            v.s.as_ptr(),
-            fields.overtaking_ctr,
-            if ur.cur_speed == 0 || ur.status & VS_STOPPED != 0 {
-                17
-            } else {
-                0
-            }
-        );
+        let overtaking_ctr = if ur.cur_speed == 0 || ur.status & VS_STOPPED != 0 {
+            17
+        } else {
+            0
+        };
+        write_field!(v.s.as_ptr(), fields.overtaking_ctr, overtaking_ctr);
         write_field!(v.s.as_ptr(), fields.overtaking, 16);
     }
     /// `RoadVehGetSlidingDirection`.
@@ -1303,7 +1301,7 @@ impl Game<'_> {
         let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
             crate::movement::native_assert(self.ss, ok);
         });
-        let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
+        let rd = road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
             if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT && d.tile == (v.v).dest_tile() {
@@ -1463,7 +1461,7 @@ impl Game<'_> {
         }
         let state = v.state();
         let movement = if state & 64 != 0 { state & 9 } else { state };
-        let rd = crate::road_data::entry(
+        let rd = road_data::entry(
             s.tram,
             (usize::from(movement) + self.side()) ^ usize::from(v.overtaking()),
             usize::from(v.frame()) + 1,
@@ -1529,10 +1527,10 @@ impl Game<'_> {
                         tile = s.tile;
                     }
                 }
-                let pos = crate::road_data::entry(
+                let pos = road_data::entry(
                     s.tram,
                     (usize::from(dir) + self.side()) ^ usize::from(v.overtaking()),
-                    start_frame,
+                    start_frame.into(),
                 );
                 let (x, y) = self.tile_xy(tile, pos);
                 let new_dir = Self::sliding(s, x, y);
@@ -1582,7 +1580,7 @@ impl Game<'_> {
                     let after = world.road_type(tile, tram);
                     s.tile = tile;
                     write_field!(v.s.as_ptr(), fields.state, dir);
-                    write_field!(v.s.as_ptr(), fields.frame, start_frame as u8);
+                    write_field!(v.s.as_ptr(), fields.frame, start_frame);
                     if before != after {
                         if s.front {
                             self.update_cache(v, false);
@@ -1616,7 +1614,7 @@ impl Game<'_> {
                 Self::set_speed(v, s, 0);
                 return false;
             }
-            let pos = crate::road_data::entry(s.tram, self.side() + usize::from(dir), start_frame);
+            let pos = road_data::entry(s.tram, self.side() + usize::from(dir), start_frame.into());
             let (x, y) = self.tile_xy(s.tile, pos);
             let new_dir = Self::sliding(s, x, y);
             if s.front {
@@ -1633,7 +1631,7 @@ impl Game<'_> {
                 return false;
             }
             write_field!(v.s.as_ptr(), fields.state, dir);
-            write_field!(v.s.as_ptr(), fields.frame, start_frame as u8);
+            write_field!(v.s.as_ptr(), fields.frame, start_frame);
             if new_dir != s.direction {
                 self.set_direction(v, s, new_dir);
             }
@@ -1699,8 +1697,7 @@ impl Game<'_> {
         // The frame test is pure and decides most drive-through passes without a read.
         if s.front
             && ((in_range(state, STOP, STOP + 16)
-                && crate::road_data::_ROAD_STOP_STOP_FRAME
-                    [usize::from(state - STOP) + self.side()]
+                && road_data::_ROAD_STOP_STOP_FRAME[usize::from(state - STOP) + self.side()]
                     == frame)
                 || (in_range(state, DT_STOP, DT_STOP + 16)
                     && frame == 11
@@ -2442,7 +2439,7 @@ pub(crate) unsafe fn slope_pixel(
 /// Shared modern/legacy afterload road-stop frame query, retaining original indexes.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_stop_frame(index: u32) -> u8 {
-    crate::road_data::_ROAD_STOP_STOP_FRAME[index as usize]
+    road_data::_ROAD_STOP_STOP_FRAME[index as usize]
 }
 
 /// Construction removal clears only drive-through stop state bits. The raw
