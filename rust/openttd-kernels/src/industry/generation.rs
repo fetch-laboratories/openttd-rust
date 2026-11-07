@@ -12,6 +12,7 @@ use super::{Builder, Services, TYPES, place};
 use crate::industry_type::IndustryType;
 use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
 use crate::newgrf_industries::IndustryAvailabilityCallType;
+use crate::settings_type::IndustryDensity;
 
 pub use crate::industrytype::IndustrySpec as SpecHandle;
 #[repr(C)]
@@ -55,7 +56,11 @@ fn probability(
     let (enabled, layouts) = unsafe { ((*spec).enabled, !(*spec).layouts.is_empty()) };
     let climate = unsafe { s.shared().settings().climate.read() };
     let appear = unsafe { (*spec).appear_creation[usize::from(climate)] };
-    if !enabled || !layouts || (!(g.environment.editor)() && unsafe { (g.density)() } == 0) {
+    if !enabled
+        || !layouts
+        || (!(g.environment.editor)()
+            && unsafe { (g.density)() } == IndustryDensity::ID_FUND_ONLY.0)
+    {
         *forced = false;
         return 0;
     }
@@ -117,13 +122,14 @@ fn probabilities(water: bool, s: &Services, g: &GenerationServices) -> Probabili
     p
 }
 fn wanted(s: &Services, g: &GenerationServices) -> u32 {
-    const AMOUNTS: [u16; 7] = [0, 0, 10, 25, 55, 80, 0];
+    // Number of industries on a 256x256 map, in IndustryDensity order.
+    const AMOUNTS: [u16; IndustryDensity::ID_END.0 as usize] = [0, 0, 10, 25, 55, 80, 0];
     let density = if (g.environment.editor)() {
-        2
+        IndustryDensity::ID_VERY_LOW.0
     } else {
         unsafe { (g.density)() }
     };
-    if density == 6 {
+    if density == IndustryDensity::ID_CUSTOM.0 {
         unsafe { (g.custom_number)() }.min(u32::from(crate::industry_type::IndustryID::END.0))
     } else {
         unsafe { (s.scale_by_map_size)(u32::from(AMOUNTS[density as usize])) }
@@ -167,26 +173,32 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
 ) -> u8 {
     let s = unsafe { &*s };
     let g = unsafe { &*g };
-    if !(g.environment.editor)() && unsafe { (g.density)() } == 0 {
+    if !(g.environment.editor)() && unsafe { (g.density)() } == IndustryDensity::ID_FUND_ONLY.0 {
         return u8::from(true);
     }
+    // Compute both land and water probabilities first: scaling needs their total.
     let land = probabilities(false, s, g);
     let water = probabilities(true, s, g);
+    // Generate land and water industries in turn.
     for (on_water, p) in [(false, &land), (true, &water)] {
+        // Total industry count scaled by land/water proportion.
         let mut amount = 0;
         let total = land.total.wrapping_add(water.total);
         if total > 0 {
             amount = (p.total.wrapping_mul(u64::from(wanted(s, g))) / total) as u32;
         }
-        if !on_water && unsafe { (g.density)() } != 6 {
+        // Scale land industries by land proportion unless a custom count was set.
+        if !on_water && unsafe { (g.density)() } != IndustryDensity::ID_CUSTOM.0 {
             amount = unsafe { (g.scale_by_land_proportion)(amount) };
         }
+        // Always place the forced industries, even if the scaled count is too low.
         if p.total == 0 || amount < p.num_forced {
             amount = p.num_forced;
         }
         if !unsafe { (g.set_progress)(context, on_water, amount) } {
             return u8::from(false);
         }
+        // Try one industry per forced type, independent of its probability.
         for kind in 0..TYPES {
             if p.force_one[kind] {
                 amount = amount.wrapping_sub(1);
@@ -195,6 +207,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
                 }
             }
         }
+        // Add remaining industries according to their probabilities.
         for _ in 0..amount {
             let mut r = s.shared().random_range(p.total as u32);
             let mut kind = 0;

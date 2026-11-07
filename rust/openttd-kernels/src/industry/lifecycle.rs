@@ -8,11 +8,13 @@
 //! Industry destruction and tile and parent trigger traversal. Station deletion, cargo
 //! invalidation and resolver calls can revisit Rust; map and pool storage stay native.
 use super::{Builder, Industry, Map, Services, TileArea};
+use crate::company_type::Owner;
 use crate::industry_type::{
     IndustryAnimationTrigger, IndustryAnimationTriggers, IndustryRandomTrigger,
     IndustryRandomTriggers,
 };
 use crate::industrytype::{IndustryBehaviour, IndustryBehaviours};
+use crate::tile_type::{MP_INDUSTRY, MP_STATION};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -104,6 +106,8 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         return;
     }
     let width = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.width)) };
+    // Destruction can happen before initialization finishes: then no tiles
+    // need clearing and the industry count must not be decremented.
     if width == 0 {
         return;
     }
@@ -117,22 +121,24 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     };
     tiles(area, map.size_x, |tile| unsafe {
         let observation = (w.cleanup_tile)(tile);
-        if observation.kind == 8 {
+        if observation.kind == MP_INDUSTRY {
             if observation.industry == id {
                 (w.delete_tile_inspect)(tile);
                 let shared = s.shared();
+                // MakeWaterKeepingClass also handles land.
                 crate::water::restore(
                     tile,
-                    16,
+                    Owner::NONE.0,
                     shared,
                     &*(shared.water_services)(),
                     &*w.restoration,
                 );
             }
-        } else if observation.kind == 5 && observation.oilrig {
+        } else if observation.kind == MP_STATION && observation.oilrig {
             (w.delete_oilrig)(tile);
         }
     });
+    // Remove possible docking tiles.
     if has_neutral_station {
         tiles(unsafe { location(owner) }, map.size_x, |tile| unsafe {
             (w.clear_docking)(tile);
@@ -149,6 +155,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         let sy = y.saturating_sub(21);
         let ex = x.wrapping_add(21).min(map.size_x);
         let ey = y.wrapping_add(21).min(map.size_y);
+        // Remove farmland; it converts back to regular tiles over time.
         let fields = TileArea {
             tile: sy.wrapping_mul(map.size_x).wrapping_add(sx),
             w: (ex - sx) as u16,
