@@ -6,9 +6,9 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 ## Where the fork stands (2026-11-07, integration 129; paused)
 
-Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
+Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host
 
-Development is paused at the user's request in the cleanup stage. Code main is integration 129, `7b6887f43d` (#803); pre-pause main is `5df157bfb1`. The source/evidence review, corrected Industry case inventory and exact-head Full/tested-tree verification pass. The delivery update below uses retained reports for 127–129, not a new measurement or regular profile. No confirmed source regression or rollback is known. Post-merge Quick/CI - Build on `7b6887f43d` and Quick on `5df157bfb1` are pending at the recorded 16:28 UTC pause state; later results do not resume work. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) remains accepted on clean `46864a207c`, with seven nonempty canonical exit comparisons and all six policy records below band. Profiles 113/119 remain retained. The user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). Next regular stocktake/profile is 131; platform cadence 130 follows that integration's eventual delivery.
+Development is paused at the user's request in the cleanup stage. Code main is integration 129, `7b6887f43d` (#803). Integrations 104 to 129 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. Quick validation passes on the pause commit `a9ca01d657`. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) is accepted on clean `46864a207c`, with profiles 113/119 retained; the user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). The next regular stocktake/profile is 131 and the next platform cadence 130.
 
 | Measured quantity | Integration 129 |
 | --- | ---: |
@@ -27,17 +27,7 @@ Development is paused at the user's request in the cleanup stage. Code main is i
 | Ruff keys / diagnostics | 296 / 296 |
 | Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,272 |
 
-Fork-added C++ under `src/tests` is 5,684 lines, already within source glue. The measured ABI-generated C++ is 6,137 lines: 615 record declarations within source glue and 5,522 non-record evidence lines included above. Version 2 does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings. Their volume is unknown; the 278,959-line series covers only the listed native inventory. This scope-completeness follow-up belongs to #736; unmeasured support earns no deletion credit. Historical regex and expanded boundary series have different scopes. The one shared final report was collected at the Full-tested 129 candidate, whose merged tree is identical. Raw GLOBAL Rust/tooling inventories also include oracle text and native support; implementation source and frozen data are separate below. Shared-accessor baselines retain 117 rows, rebound callees 314 and orphan exports 40. Clippy retains five approved families. Integration 128 retires eight actual parameter-count rows with three individually reviewed line-count carries, leaving 664 keys / 757 diagnostics. Ruff remains at 296 keys / 296 diagnostics. Unrelated rows, provenance and thresholds remain intact.
-
-| Delivered checkpoint | Rust executable code +/− | Python code +/− | Tracked C++ code +/− | Frozen oracle bytes |
-| --- | ---: | ---: | ---: | ---: |
-| 127: Company finance #802 (`0c8a0f8a05`) | 268 / 0 | 4 / 53 | 0 / 127 | 976,283 |
-| 128: eight Station helper contexts #801 (`5d43172624`) | 310 / 200 | 0 / 0 | 0 / 0 | 0 |
-| 129: Town/Industry policy #803 (`7b6887f43d`) | 895 / 0 | 16 / 44 | 3 / 343 | 1,095,202 |
-
-These three deliveries retire **467 counted fork C++ code lines**, within the two evidence families' earlier 437 to 517 estimate, while compiled production C++, original/simulation retirement and boundary counters hold. Their combined Rust executable cost is 1,473 added / 200 removed (net +1,273), Python net −77, and frozen oracle data 2,071,485 bytes. Finance preserves all 40,320 original cases; policy preserves all 21,128 cases and 55,056,680 ordered Industry resolver pairs. Actual native calling-boundary, tunnel, history and lifetime evidence stays. The exact integrating diff corrects the prior policy Python table from 18/46 to 16/44 without changing net −28 or source/raw reports. Its raw Rust additions of 22,029 split into 895 executable lines and 21,134 classified oracle-text lines. No new census was run for this pause.
-
-The preceding 119–125 vocabulary window had zero net C++ removal; 126 also held C++ while restoring Train/Cargo vocabulary. The cleanup pivot to complete evidence families and real parameter-count retirement now supplies the reductions above. The earlier reference content-protocol failure and inconclusive static diagnosis remain retained after 126's one unchanged-code Full retry; no source repair or causal claim is made. #805's reviewed housekeeping safety fix is paused before delivery. Its ranked successors are unstarted static estimates, not commissioned work. No phase, anchor or lint threshold is reset. Locked #565 WIP remains retained.
+Fork-added C++ under `src/tests` (5,684 lines) is within source glue. The 6,137 ABI-generated lines are 615 record declarations within source glue plus the 5,522 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support. Clippy retains five approved families.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
@@ -51,9 +41,30 @@ The preceding 119–125 vocabulary window had zero net C++ removal; 126 also hel
 | Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,684 |
 | Boundary layer | 0 | 0 | 0 | 16,905 |
 
-These are source-area subtotals, not new ownership or phase-exit claims; pool save chunks remain with their storage owner. Phase 1's exit does not assert zero original source in its area. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference, rather than merely a coverage gap. #503 deep checks remain user-requested. The source-operation reviews and Full gates do not close those broader limits.
+These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference (#726). #503 deep checks remain user-requested.
 
-The instruction counts below measure profile 125 on clean `46864a207c`, the documentation successor of code integration 125. Candidate compatibility identities match retained 119 and the Ubuntu 24.04 anchors within each role; reference identities/counts match retained evidence. The selected Callgrind/LibVEX is 3.26.0 (dispatcher 3.22.0), with GCC 13.3.0 and Rust 1.99.0. Historical manifests retain opaque compatibility digests rather than complete per-component diagnostics; the report records that provenance limit.
+### Cleanup stream inventories
+
+Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)); steering re-measures the others.
+
+| Stream | Inventory | Overhaul | Integration 129 |
+| --- | --- | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 |
+| #735 | Functions over seven parameters | 150 | 141 |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 |
+| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged |
+
+Since integration 103, raw fork C++ fell by 923 lines: `tools/` −649, `src/tests` −192, other `src/` −82. Original C++ retired held at 22.05%. #734 added about 4,900 Rust lines in 33 PRs. Rust comments rose by 3,524 lines, but only 438 of those sit inside bodies. Counting commands: #734 from its issue's per-workset counts; #735 from `migration/clippy-debt.json` and `grep -rn 'allow(clippy::too_many_arguments' rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user.
+
+### Speed
+
+The instruction counts below measure profile 125 on clean `46864a207c`, the documentation successor of code integration 125, with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
 
 | Scenario | Original Ir | Candidate Ir (125) | Projection (125) |
 | --- | ---: | ---: | ---: |
@@ -65,19 +76,7 @@ The instruction counts below measure profile 125 on clean `46864a207c`, the docu
 | P2016 | 11,343,424,651 | 13,926,293,082 | 1.382593x |
 | Drawing | 2,149,015,961 | 2,154,353,683 | 1.004635x |
 
-All seven nonempty canonical exit-save comparisons pass, including drawing; all full logs match, with every stdout/stderr pair empty. The latter supplies no nonempty branch evidence. An independent cross-check passes 180 assertions. Unchanged-anchor projections use the same-host available quiet-pass mean and speed formula. TGP rises 0.132989% since 119, below the 3% attribution trigger; all six policy records remain below band and ceiling. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. Drawing has no policy ceiling. No wall pass or attribution repair is required, and no anchor/history was reset. Simulation took 875.0 seconds and verification 878.889 seconds; neither is a quiet wall median. Frozen manifests/build-list records remain after completed loose logs were reclaimed. Historical diagnostic gaps, matched tool advisories, canonical masks and cleaned drawing bitmap bytes remain disclosed in the report. Next regular stocktake/profile is 131.
-
-**Why the pause.** Net C++ removal fell from about 7,200 raw lines on 11-05, mostly reader ports, to about 1,300 on 11-06, when five of six slots held storage owners. Storage owners remove little while C++ readers of their records remain: in the five open storage drafts, 57% of changed C++ lines were in save/load, GUI/viewport, NewGRF and script consumers. Measured against the original with the same rules, the Rust port also degraded readability, and agents copy the code they find:
-
-| Measure | Original C++ | Rust port |
-| --- | ---: | ---: |
-| Comment lines per 100 code lines | 35 | 7 |
-| Functions with more than 7 parameters | 0.6% | 2.5% |
-| Functions over 100 lines | 1.6% | 2.5% |
-| Mean cyclomatic complexity | 4.08 | 3.83 |
-| Code in copy-paste clones | 4.5% | 2.3% |
-
-Complexity and nesting match the original, because ports keep its control flow. The overhaul's initial gaps were literals for named values (`signal.rs:334` writes `0x0c || 0x30` beside the existing `TRACK_BIT_HORZ`/`TRACK_BIT_VERT`), about 3,100 dropped explanatory comment lines, 150 functions with more than 7 parameters, and 27,719 raw lines of fork C++ test evidence that storage changes had to patch. Those historical inventories remain on the stream issues. Quick CI now runs all four Cargo checks and the lint, policy, growth and claimed-proof gates. The ratchet retains the five approved complexity/safety-documentation families; its 757 current diagnostics are not comparable to the initial broader lint inventory.
+All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. TGP rose 0.13% since 119, below the 3% attribution trigger. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
@@ -100,22 +99,37 @@ Phase numbers name content; the execution order above sets the sequence. Phase 1
 
 ## Cleanup work order
 
-Each stream issue holds its batches, rules, proof and inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting a batch. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](workflow.md#integration)).
+Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](root-workflow.md#integration)).
 
-1. **#733 checks** start first: Rust checks in quick CI, Clippy and Ruff ratchets, growth ratchets, the refactor proof. #737's batch C (cargo records), #736's R0 registration and #734's foundation F may start beside it.
-2. **#734 types, names and comments**, after F and the #733 refactor proof: worksets 01 to 23 with disjoint files, then closure (private wrapper fields).
-3. **#736 test evidence** and **#737 boundary debt** run beside #734 where files are disjoint. #737's C precedes V. #736's T follows W and F; A follows T.
-4. **#735 argument structs** follow #734 for the same files.
-5. **#738 rules** is docs-only; root applies it between integrations.
-6. **#726** integrates as a cleanup maintenance PR beside #737; its TCP tail stays with #730.
+Slots: while ready worksets remain, #734/#735 file passes hold two of the four implementer slots. The other two run items 2 to 4 in order; when #806 integrates, its slot passes to item 4. #738 runs as one docs agent outside the implementer count.
 
-Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), without changing the course:
+1. **#734/#735 file passes.** One PR per workset in the #734 manifest finishes every file it touches, in one pass:
+   - the original's wrapper types in internal signatures, return types and accessors. FFI exports, service tables and generated declarations keep base integers (#355);
+   - named constants wherever a literal stands for a named value;
+   - the original's explanatory comments at the matching branches;
+   - #735's argument and context structs for the functions defined in those files, including FFI exports with their C++ facades.
 
-- #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order plus exact-head Full when compiled code differs. Archive equivalence remains the first attempt; per-PR Callgrind profiles and disassembly accounting are not required. F's existing evidence is accepted.
-- #747 is integrated through #751/#752: the Clippy ratchet retains complexity, parameter count, nesting and safety documentation, preserving retained debt. Remove unnecessary existing cast suppressions on later base updates, after F's integration.
+   A typed accessor replaces its raw form. Callers outside the pass use a temporary raw adapter that delegates to the typed accessor, and each adopts the typed form in its own file's pass. The adapter retires with its last caller, or at #734 closure. Split a workset only at a file boundary, and only when its diff would exceed about 2,000 changed lines. That size is provisional: the 33 vocabulary PRs averaged about 150 lines. Above about 1,000 changed lines, assign one reviewer per function group ([review](workflow.md#review)). Later PRs touch a finished file only for a mechanical shared-file edit or for a caller adopting a changed signature.
+
+   Order: closing passes for worksets 01 to 09, then the untouched worksets, largest integer-site count first. Worksets 02 and 03 are checked off, but their files keep raw internal signatures and literals; for example `station_cmd.rs:815` still has `0xffff` for `INVALID_STRING_ID` and `:4135` still has `9` for `AT_OILRIG`. A pass's reviewer applies the checklist's code standards to every line left in its files, not only to changed lines. A remaining literal for a named value, a raw internal signature or a hand-written copy of a shared helper is a finding. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
+2. **#806**: carries for renamed lint keys and fidelity suppressions, as one tools PR. File passes in flight adopt it when they update from base.
+3. **#726**: the steering-31 maintenance batch, including the inherited CargoPacket assertion fix. Its #741 dependency integrated in 104.
+4. **#736 test evidence and #737 boundary debt**, ranked by C++ removed per PR, one PR per batch where the batch fits the review bound above. Fold any item under about 150 counted C++ lines into another item of its batch; the after-128 queue's items were 40 to 90 lines each. Order:
+   - #736 U: the seven comparison probes, about 1,430 raw lines. Each already prints a deterministic stream, so freezing the original's stream retires it.
+   - #737 V: about 400 glue lines, including the eight Orders field callbacks.
+   - #736 P `packet-comparison.cpp`.
+   - #737 W.
+   - #736's remaining W/F families folded by file, including cargo income and Engine runtime.
+
+   Every #736 item follows the oracle rule on #736. Root re-checks source boundaries and live reservations before commissioning each item.
+5. **#738 rules**: one docs agent works #738's items; root reviews and commits each docs-only change between integrations.
+6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases.
+
+Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), still in force:
+
+- #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order, plus exact-head Full when compiled code differs. Per-PR Callgrind profiles and disassembly accounting are not required.
+- #747 is integrated through #751/#752: the Clippy ratchet retains complexity, parameter count, nesting and safety documentation. Remove unnecessary existing cast suppressions on later base updates.
 - #734 permits the original's integer uses through wrapper accessors and measures wrapper adoption rather than Rust enum counts. The implementer brief places helpers by their original file, including `.cpp`-only helpers (#738).
-- #734/#737 may merge mechanical shared-file edits on base updates; H's protocol closure does not wait for F's unrelated `lib.rs` declarations.
-- Before selecting #669 afterload, re-check its all-pool writes against the boundary yardstick and current storage ownership, as noted below.
 
 ## After cleanup
 
@@ -190,6 +204,42 @@ a shared service once under [integration](workflow.md#integration); a service
 need does not park the whole owner behind an unrelated draft. Real state and
 lifetime dependencies retain their selection events.
 
+## Thirty-second steering review (2026-11-07)
+
+Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host
+
+Root was paused for this review. Its focus was the overhaul thread's evaluation of cleanup integrations 104 to 129. This review verified that evaluation against the code and ran three independent Opus audits: Station contexts #801 with Train/Cargo vocabulary #800, the largest vocabulary batch #758, and the evidence transfers #802/#803.
+
+Findings:
+
+- **The process is sound, but delivery is thin.** Every integration had review and exact-head Full, with no rollback, and the audits found no reachable divergence. Yet the [stream inventories](#cleanup-stream-inventories) moved 0 to 10% in 26 integrations.
+- **Ranking by fork C++ starved #734/#735 (running dry).** Under [selection](planning.md#selection), #734 and #735 always ranked last, because they remove no C++ by design. After 125, root left vocabulary for evidence families. Its after-128 queue held three items of 40 to 90 lines.
+- **#734 was cut into helper-sized slices (template drift).**
+  - It ran as 33 PRs of about 150 lines each. `town/founding.rs` and `company_identity.rs` each took 5 PRs, and `town_type.rs` and `cargo_registry.rs` 4 each.
+  - Root's briefs set a "bounded family" per PR, kept raw signatures and accessors, and left argument structs to "#735 later". The work order then sent #735 back over the same files.
+  - Steering 31's rule that converging owners integrate checkpoints, written for storage owners, carried into the cleanup.
+- **The "finished" worksets are not finished.** Worksets 02 and 03, checked off in 110, keep raw internal signatures and literals for named values (`subsidy.rs:475`, `station_cmd.rs:2415`). #801 rewrote `station_cmd.rs:815` and kept `0xffff` for `INVALID_STRING_ID`. #797 left a hand-written `DirDifference` (`train.rs:688`). The source reviews checked operations and order, but missed these code-standard findings.
+- **Contracts are a hurdle.**
+  - 143 contract records appear in 29 PR bodies, and 67 of them repeat at integration heads. #800, #801, #797 and #798 carried about 128,000 characters of reports and contracts for about 170 net lines.
+  - The overhaul's proposed "same token hash" carry would be too weak: every function-level Clippy row shares the constant fingerprint of `item`. #806 replaces it with declared carries, reasoned fidelity suppressions and content-bound acceptance.
+- **Oracles carry redundant text.**
+  - The 127–129 oracles hold 2,071,485 raw bytes (158,323 gzip) for 467 lines. Git stores them compressed, so the cost is the checkout in each worktree and the test binaries.
+  - Storing each distinct output once and dropping echoed inputs would cut them to about 243 KB with no new dependency. The Town authority matrix has 5 distinct outputs across 14,976 rows.
+  - The tests call production exports or their inner helpers, and recomputing 436 rows from the original source found no mismatch.
+  - Two native checks lapsed: the Industry production-callback export forwarder and the Company ABI field offsets (#156).
+- **Two items slipped.** #726, selected by steering 31, never started, although its #741 dependency integrated in 104. #738 never ran, and the corpus grew from 3,312 to 3,362 lines.
+- **Accepted:** the overhaul's decisions 1, 3 and 4, plus decision 2 with a stronger carry rule. Nesting, length and complexity rows did not move; refactoring waits for the user.
+
+Actions:
+
+1. [Selection](planning.md#selection) ranks and reports cleanup work by stream inventory. Stocktakes update the [inventory table](#cleanup-stream-inventories) (`/start-development` step 4).
+2. #734/#735 run as one pass per workset that finishes every file it touches, with two implementer slots ([work order](#cleanup-work-order), [integration](root-workflow.md#integration)). Root rewrites #734's body as a per-workset count of finished files and moves checkpoint history to the PRs. #735's batches fold into the passes.
+3. #806 removes rename, fidelity and renewal contracts. Real growth keeps the reviewed contract.
+4. #736 items store each distinct output once and report oracle bytes, under a provisional budget on #736. Batch U leads #736's ranking.
+5. #726 runs after #806. #738 gets one docs agent.
+6. Review reports and integration notes follow [review](workflow.md#review): findings, fixing commits and disposition. A base update records only its applicable condition, and no report re-certifies base adoption or metric provenance.
+7. No user direction is reversed. The 11-06 yardstick still governs owners and forbids fork C++ or boundary growth in cleanup PRs. It never ranked work inside the cleanup stage the user set.
+
 ## Earlier steering, still in force
 
 Ownership, original behavior, process scope, named callees, typed shared services
@@ -229,59 +279,20 @@ or uncovered fixture; exact-head Full is the final simulation tier. A completion
 claim names only the delivered scope (#636). Release a quiet-host hold when the
 timed games end; a rejected peripheral host action does not end the assignment.
 
-Steering 31 (2026-11-06), still in force: an owner's checkpoint integrates once it meets the [integration](workflow.md#integration) rule and the owner continues in a fresh PR; a field moves in the same change that deletes its Rust-called services, before pool adoption, and no service routes through `Record()`; the whole-fork metric runs twice per PR; status comments change at milestones; long jobs start as `exec python3 tools/signal-witness.py -- <command>`, and a host-killed job (exit 143, no logged failure) reruns once incrementally (#724).
+Steering 31 (2026-11-06), still in force: an ownership port's checkpoint integrates once it meets the [integration](root-workflow.md#integration) rule and the owner continues in a fresh PR, while cleanup passes finish their files instead; a field moves in the same change that deletes its Rust-called services, before pool adoption, and no service routes through `Record()`; the whole-fork metric runs twice per PR; status comments change at milestones; long jobs start as `exec python3 tools/signal-witness.py -- <command>`, and a host-killed job (exit 143, no logged failure) reruns once incrementally (#724).
 
 ## Recent completed work
 
-Individual evidence and review reports stay in the linked PRs. Metrics below
-are actual compiled-C++ reductions where stated, not sums of rewritten lines.
+Evidence and review reports stay in the linked PRs. Metrics are actual reductions where stated, not sums of rewritten lines. Per-integration rows for 69 to 129 are in the roadmap at `a9ca01d657`.
 
-| Integration | Work | Integration commit | Result |
-| --- | --- | --- | --- |
-| 69–88 | Settings, corpus, typing, shared records, GRF text #655, logging #679, vehicle records #636, script APIs #691/#697, CI repairs, industry specs #692 and game protocol #628 | `e76c94b306` through `5168023c13` | Compiled C++ −4,289 on the consistent series (navigation at `bc6c727c48`); #636 alone −1,952. Rows are in the thirtieth steering commit `7c4a448327`. |
-| 89 | Native fatal reporting #709, repair #711 | `6426473252` | Production-path fatal probe and unrepaired-binary negative control; original/glue C++ unchanged. |
-| 90 | Typing, TSan startup and network diagnostics #705 | `8fc7620ce5` | All-tools typing and precise one-use network allowances; platform workflow passed; C++ unchanged. |
-| 91 | Accounting, housekeeping, identity and fact tools #712 | `561ec04c42` | Versioned census, ordinary cleanup and compatible profile guard; no ownership-retirement credit. |
-| 92 | Map leaves #698 and harness consolidation #713, combined #715 | `f5f16377ce` | Historical C++ -178; total fork C++ -247; callback slots -57; original retirement unchanged. |
-| 93 | Shared Rust pool core #716/#718 | `d5cb6a424e` | Coupled support; Rust +682, generated C++ +20; no production pool or retirement claim. |
-| 94 | Content metadata/dependency/download state #706/#667 | `36a3681ee0` | Exact-head Full/tree match; combined 93–94 source C++ -431, total fork -214, original retirement +676. Seven profile comparisons equal, all projections below bands. |
-| 95 | Shared native pool facade and first vehicle allocation #720 | `5391a8ee49` | Both source reviews and exact-head Full/tree match; eleven local games/64 snapshots and seven affected native tests pass. Measured +181 C++ coupled support, no full-vehicle or generic deletion credit. Platform cadence passed. |
-| 96 | Map-reader maintenance #275/#721 | `01dcc7419f` | Both source reviews and exact-head Full/tree match. PR Grok Ir -3.966178% versus retained 92; Rust +77 added/net +27, C++/tooling zero. Combined 95–96 source C++ +181, fork +184; profile 96 passes seven comparisons and all six projections below bands. |
-| 97 | Host signal witness #724/#727 | `4cc6ee4b20` | Independent source review and exact-head Full/tree match. Four signal/process tests; future long jobs use the integrated wrapper. C++ and Rust unchanged; no live sender identified yet. |
-| 98 | Graph/job indexed pool checkpoint #719 | `9867694d02` | Both steering fixes/source review/focused/native and exact Full/tree pass. Source C++-153, fork-151; actual station publication remains717. |
-| 99 | Shared nearby StationList #728 | `8faa77f296` | Source review/exact Full/tree pass. Source C+++6, evidence+1; necessary shared support, no completion/retirement credit. |
-| 100 | Const nearby StationList views #729 | `dbbb502073` | Two qualifiers, same descriptor/lifetime. Source review/exact Full/tree pass; counters unchanged. Profile100 accepted; cadence initializer repair integrates in101. |
-| 101 | Engine records/GRF/direct consumers #722 | `31478f303a` | Scoped reviews and exact Full42302553842/tree pass. Compiled C++−852, fork−973, original retired+380/net glue−472; callback slots−229. Actual pools/native consumers remain637/497. Main platform recovery42304912050 runs. |
-| 102 | Shared owned-bytes assignment and GRF price metadata #732 | `a0337694c4` | Review and exact-head Full passed; compiled C++ +2, fork +4. Necessary shared support, no retirement credit. |
-| 103 | Cleanup CI, lint/growth ratchets and refactor proof #733/#742 | `b7b6603f4c` | Three reviews and exact-head Full/tree match. Tooling +1,956 code lines; production Rust and C++ unchanged. |
-| 104 | Evidence registration and direct cargo records #740/#741, combined #743 | `49f7ac951e` | Reviews and exact-head Full/tree pass. Compiled C++ -9, fork C++ -6, exports -3 and callbacks -1. The initial original-client reconnect stall is recorded on #693; no source regression was established. |
-| 105 | Canonical native type foundation #734/#739 | `7c3fb4455a` | Source and exact lint reviews, accepted #746 proof disposition and exact-head Full/tree pass. C++ and boundary counts hold. Platform cadence passes. |
-| 106 | Three live typed history queries and protocol closure #737/#745 | `1e109c47a9` | Source/closure reviews and exact-head Full/tree pass. Compiled C++ -47, fork C++ -71 and exports -3; generic native evidence restored, so original retirement decreases by 40. |
-| 107 | Narrow lint debt and cargo/engine evidence #747/#751/#749/#750, combined #752 | `c540d0788f` | Source/evidence reviews and exact-head Full/tree pass after bounded CI repairs. Compiled C++ -77, outside evidence -35, fork C++ -112; boundary holds. Original retirement is unchanged. |
-| 108 | Direct road records and MovementGap evidence #744/#748, combined #755 | `b2e1f4ba` | Reviews and exact-head Full/tree pass. Compiled C++ -95, total fork -140 and exports -4; 19,608 movement observations preserved. |
-| 109 | Czech town-name vocabulary #754 | `3cc1d1593f` | Source/exact contract reviews and unchanged-head Full retry pass. Rust +404 added code lines; C++ and boundary hold. Initial inherited reconnect timeout remains disclosed. |
-| 110 | Industry, station and cargo-monitor vocabulary #753/#756/#757, combined #758 | `726c8c18f8` | Source/union reviews and exact-head Full/tree pass. Rust +2,077 added code lines; C++ and boundary hold. Platform cadence passes. |
-| 111 | House flags and property vocabulary #759 | `82e1166868` | Source/exact contract reviews and exact-head Full/tree pass. Rust +178 added code lines; C++ and boundary hold. |
-| 112 | Vehicle-list and manager-face vocabulary #760/#762, combined #763 | `dd457ef961` | Source/union reviews and exact-head Full/tree pass. Rust +131 added code lines; C++ and boundary hold. |
-| 113 | Cargo packet and Town policy vocabulary #761/#764, combined #765 | `1b5be29b7d` | Source/union reviews and exact-head Full/tree pass. Rust +167 added code lines; C++ and boundary hold. Stocktake/profile accepted; seven comparisons equal and six projections below bands. |
-| 114 | Original order helpers and Livery vocabulary #766/#767, combined #769 | `2a341845d6` | Source reviews, clean union and exact-head Full/tree pass. Rust +138 added code lines; C++, tooling and all guarded counters hold. |
-| 115 | Cargo flow and Vehicle headers #770/#771, combined #773 | `bf1bd30b12` | Source/union reviews, eight exact contracts and Full/tree pass. Rust +301 added/net +110; C++, tooling and guarded counters hold. Platform 115 passed. |
-| 116 | Town naming/import and Signal vocabulary #768/#772, combined #776 | `980c6f0da8` | Source/union reviews, seven contracts and Full/tree pass. Rust +251 added/net +76; C++ and boundaries hold. Earlier cancelled Town Full and inconclusive diagnostics remain retained. |
-| 117 | Vehicle renewal/servicing and Cargo payment #774/#775, combined #777 | `43b913f4a5` | Source/union reviews, exact Cargo identity carry and Full/tree pass. Rust +172 added/net +48; tooling/C++ and guarded counters hold. |
-| 118 | Company and Town generation #778/#779, combined #780 | `2d05ea2ca6` | Five owner blobs preserved, source reviews and Full/tree pass. Rust +187 added/net +60; tooling/C++ and boundaries hold. |
-| 119 | Vehicle breakdown and Cargo registry setup/labels #781/#782, combined #785 | `03392da0d4` | Source/union reviews, three exact contracts and Full/tree pass. Rust +133 added/net +24; C++ and boundaries hold. Stocktake/profile accepted: seven comparisons equal, six records below band. |
-| 120 | Town creation and engine livery #783/#784, combined #786 | `1f8c1139d0` | Four owner blobs and exact ledger union preserved; two contracts and Full/tree pass. Rust +151 added/net +11; C++, tooling and guarded counters hold. Platform cadence passed. |
-| 121 | Cargo sorting and Vehicle aging/value #787/#788, combined #789 | `34ce361ff2` | Both reviewed blobs and complete ledgers preserved; clean union and exact-head Full/tree pass. Rust +68 added/net +16; tooling/C++ and all guarded counters hold. |
-| 122 | Town placement and coastal vocabulary #790 | `ac1616b56c` | Source review, unchanged depth-6 identity carry and exact-head Full/tree pass. Rust +50 added/net +14; tooling/C++ and all guarded counters hold. Earlier Quick predates exact acceptance; Full's fresh Quick passes. |
-| 123 | Company rename and Cargo finalisation/translation #791/#792, combined #794 | `b8fe5094d9` | Both reviewed blobs and complete ledgers preserved; clean union and exact-head Full/tree pass. Rust +57 added/net +9; tooling/C++ and all guarded counters hold. |
-| 124 | Vehicle tile-hash, cursors and occupancy vocabulary #793 | `dc02d1340c` | Reviewed owner blob and complete ledgers preserved; conflict-free base adoption and exact-head Full/tree pass. Rust +97 added/net +22; tooling/C++ and all guarded counters hold. |
-| 125 | Town found/rename and engine-replacement rules #795/#796, combined #799 | `78d4234849` | Six reviewed blobs, exact ledger union and four renewed contracts preserved; scoped review and exact-head Full/tree pass. Rust +113 added/net +47; tooling/C++ and all guarded counters hold. Source stocktake and profile 125 accepted; platform 125 passed. |
-| 126 | Train limits and Cargo resolver/specification vocabulary #797/#798, combined #800 | `7d35010d71` | Nine reviewed blobs and exact ledger union preserved; three renewed contracts and exact-head Full/tree pass. Rust +214 added/−122 removed/net +92; tooling/C++ and guarded counters hold. The earlier reference preparation failure remains retained after one unchanged-code validation retry. |
-| 127 | Complete Company financial-command evidence #802 | `0c8a0f8a05` | Independent source/evidence review, all 40,320 original cases and exact-head Full/tree pass. Tracked C++ −127; Rust implementation +268, Python net −49, oracle data 976,283 bytes. Raw collector data classification is reported separately; production C++ and boundary hold. |
-
-| 128 | Eight Station helper contexts #801 | `5d43172624` | Complete source/order review, three renewed exact contracts and exact-head Full/tree pass. Eight parameter-count rows retire; Clippy is 664 keys / 757 diagnostics. Rust +310/−200 code lines, net +110; C++, tooling and all guarded counters hold. |
-
-| 129 | Complete Town/Industry policy evidence #803 | `7b6887f43d` | Independent evidence review and root summary fix verified; all six production replacements, default comparison inventory and exact-head Full/tree pass. Tracked C++ −340; Rust tests +895, Python net −28, oracle data 1,095,202 bytes. Retained tunnel/native ABI/lifetime evidence and boundary counters hold. |
+| Integrations | Work | Result |
+| --- | --- | --- |
+| 69–102 | Porting through steering 31: settings, corpus, typing, shared records, GRF text, logging, vehicle records #636, script APIs, industry specs, game protocol, fatal reporting, accounting tools, map leaves, shared pool core/facade, content state #706, graph/job pool #719, engine records #722 | Compiled C++ −4,289 through 88; #722 −852 at 101. Original retirement reached 22.07%. |
+| 103, 107 | #733 checks #742; lint narrowing #747/#751 | Quick CI runs Cargo checks and the lint, policy, growth and proof gates. Tooling +1,956 code lines. |
+| 105, 109–126 | #734 foundation F #739 and 33 vocabulary PRs (#753–#798) | Rust +4,900 added lines; C++ and boundary hold. Worksets 02 and 03 checked off; 132 of 319 workset files touched. |
+| 128 | #735 P1 Station helper contexts #801 (`5d43172624`) | Eight parameter-count rows retire; Rust +310/−200. |
+| 104, 107, 108, 127, 129 | #736 R0 #740, cargo/engine #749/#750, MovementGap #748, Company finance #802 (`0c8a0f8a05`), Town/Industry policy #803 (`7b6887f43d`) | 127 and 129 retire 467 counted C++ lines for 1,273 net Rust test lines and 2,071,485 raw oracle bytes. All 40,320 finance and 21,128 policy cases preserved. |
+| 104, 106, 108 | #737 C #741, H #745, R #744 | Compiled C++ −151, exports −10. |
 
 ## Recurring
 
@@ -298,32 +309,24 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 ## Resume checkpoint
 
-Paused at the user's request. Normal work stopped at the recorded 2026-11-07 16:28 UTC state. Code main is integration 129, `7b6887f43d`; pre-pause main is `5df157bfb1`. This docs-only pause moves main without advancing code. There is no merge or rollback to perform during wind-down, no running child, and no newly commissioned implementation, branch or brief. Later CI or background completion does not restart normal work; explicit user resume is required.
+Paused at the user's request. Normal work stopped at the recorded 2026-11-07 16:28 UTC state. Code main is integration 129, `7b6887f43d`; pre-pause main is `5df157bfb1`. This docs-only pause moves main without advancing code. There is no merge or rollback to perform during wind-down, no running child, and no newly commissioned implementation, branch or brief. Later CI or background completion does not restart normal work; explicit user resume is required. On resume, apply the thirty-second steering review first.
 
 | Work / state at pause | Next action on explicit resume |
 | --- | --- |
 | #804 / #805, `root/804-detached-housekeeping`, head `7fac379c436cb7d879c409c38d420776afd92daf` over `5df157bfb1` | Keep `.local/worktrees/root-804-detached-housekeeping`. Both Python blobs equal reviewed `df984cab30`; all 23 housekeeping tests and prior Python/gate receipts pass. Review carries. The pause commit moves base under strict protection: adopt the new main tip preserving those blobs, then obtain exact-head Full and the final report before protected merge. Platform cadence 130 follows delivery. |
-| #805 Full `42391323158` and Quick | In progress at the recorded pause state; do not wait or infer merge readiness from later success. Keep the request at `.local/ci-requests/130-full.json`. Read results only after resume and update base before final integration validation. |
+| #805 Full `42391323158` | Passed at the pre-pause head; the pause and steering commits have since moved base. Update #805 from base preserving the reviewed blobs; its review carries. Request exact-head Full only if the carried status is pending, then merge. |
 | Metrics job `24514`, `.local/130-final-measure.sh` | Running for pre-pause head `7fac379c43`; do not wait. Keep all outputs. This is not #805's final integrating report; the actual resume head needs that report. Completion does not restart wind-down. |
-| Main CI | Post-merge Quick validation and CI - Build on `7b6887f43d`, and Quick on `5df157bfb1`, are pending at the recorded pause state. No red run is known. CI on this new pause commit is unobserved; no wait or new request is authorized. |
+| Main CI | Quick, CI - Build and baseline validation passed on `7b6887f43d`; Quick passed on `5df157bfb1` and `a9ca01d657`. |
 | Integrations 127–129 | Delivered with independent source/evidence review, exact-head Full and matching tested/merged trees. #736 F/W and #735 P1 remain open for their other families. No rollback occurred. |
 | Next cadence | Platform 130 after its delivery; next regular stocktake/profile 131. Profile/platform 125 remain accepted, with profiles 113/119 retained. |
 
-Unstarted ranked queue from the private after-128 static plan, retained at `.local/cleanup-after128-plan.json` and in `t3-20fec9ce`. No implementation, branch or brief was started for any item:
-
-| Rank | Queued family | Static estimate / condition |
-| ---: | --- | --- |
-| 1 | #736 F: complete cargo-income probe transfer | 80 to 90 counted C++ lines retired; preserve all 185,285 cases and actual native payment/lifetime checks. Estimated oracle data 1 to 6 MB; actual cost requires its first concrete checkpoint. |
-| 2 | #737 V: eight Orders field callbacks | 58 to 70 counted C++ lines retired and eight callback fields removed, using existing canonical records. Native shell conversion and protected fixtures stay. |
-| 3 | #736 F: Engine runtime evidence | 40 to 75 net counted C++ lines retired after preserving native ABI, alias, width and lifetime observations. Least certain estimate; fold into a larger same-file checkpoint if the native remainder erases the benefit. |
-
-The child slots were idle because the preceding owners and reviews had finished, while root serialized integration/report bookkeeping and the routing correction instead of refilling independent work. There was no quiet-host hold or resource/dependency block. That scheduling gap is recorded; the user's wind-down now expressly prohibits refilling. Mid-task messages use the child's verified `parentThreadId`, not a root found by title (`docs/team.md`).
+The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue (`.local/cleanup-after128-plan.json`); its three items lead item 4. No implementation, branch or brief has started for any of them.
 
 Remaining placement and limits:
 
 - Metric scope completeness stays with #736: account for unlisted extracted/embedded C++ and separate executable source, oracle text and native support. Preserve raw reports/provenance and distinguish coverage corrections from deletions.
 - Keep #693 / #736 P's failed and passing network traces and bounded original/original nonreproduction. The initial #800 content failure differs from prior reconnect/multiplayer stalls. No stacks/connector state proved a cause; the two-run authorization remains exhausted. No repair, retry or new diagnostic is selected.
-- The remaining #734–#738 cleanup stream checklists, wrapper closure, evidence/boundary remainder and authorized rule-corpus work remain open. No later phase is selected. Future root must verify source boundaries and live reservations before commissioning the static queue.
+- No later phase is selected.
 
 Retained state for housekeeping:
 

@@ -7,7 +7,7 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 
 - Each ownership port has one open PR at a time, targeting `rust-migration` directly.
 - Integrate an owner's checkpoint once it meets all of the following:
-  - It removes at least 100 fork C++ lines net, counting C++ under `tools/` and `src/tests`. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge. Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and integrate on review and exact-head Full.
+  - It removes at least 100 fork C++ lines net, counting C++ under `tools/` and `src/tests`. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge. Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and integrate on review and exact-head Full. A #734/#735 PR finishes every file it touches ([work order](roadmap.md#cleanup-work-order)); it is not a checkpoint of a larger owner.
   - No moved field remains behind a service.
   - It has no boundary design fault.
   - It passes review and exact-head Full.
