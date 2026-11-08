@@ -21,7 +21,7 @@ For agents writing or reviewing port code, tests and Python tools.
 
 ## Storage ports
 
-- The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects (vehicles first, #563; then stations, orders, towns, industries, companies and the rest), then map arrays.
+- The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects, then map arrays, in the roadmap's order.
 - A pool's storage is moved when Rust owns its slot array, occupancy and allocation bookkeeping, allocation/free/iteration/reset policy and lifetime ordering, and no Rust code reaches a record field through a C++ service. Move every field Rust reads or writes, across one or more owners. A field stays in its C++ shell only while no Rust code touches it, and moves with the owner of its last C++ consumer; the shell and native registration facade retire with their callers. The map owner likewise takes array allocation/reset and the remaining map bodies. A shared-record checkpoint alone completes neither pool nor map ownership.
 - Define each moved record once in Rust with a C-compatible layout. Generate its C++ declaration and check the layout at build. `tools/port-metrics.py` counts the declaration as compiled C++ glue. Both languages access fields in place.
 - Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers, together with their rows in the rebound-callee and shared-accessor baselines, and report the rows removed in the PR. Move a field and delete its Rust-called services in the same change. Do not route a service through the shared record (`Record()`) as an intermediate step.
@@ -45,7 +45,7 @@ For agents writing or reviewing port code, tests and Python tools.
   - Allocation on a hot path or per call where the original has none.
   - Opcode dispatch or whole-record copies.
   - A Rust-to-C++-to-Rust bounce into code Rust owns.
-- Pass C++ class types such as `PoolID` and `StrongType` as their base types: MSVC returns class types through a hidden pointer (#355). Use the existing shared transparent ID newtypes and opaque pool-pointer marker types from their header modules. The cleanup stage converts existing modules in batches with disjoint files ([code standards](#code-standards)).
+- Pass C++ class types such as `PoolID` and `StrongType` as their base types: MSVC returns class types through a hidden pointer (#355). Use the existing shared transparent ID newtypes and opaque pool-pointer marker types from their header modules.
 
 ## Callees and shared accessors
 

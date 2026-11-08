@@ -19,7 +19,7 @@ Direct CMake builds need the pinned commit object for native-test oracle headers
 `git fetch --no-tags --depth=1 origin 14ec60f248547d4d062a1160f0fc26d742319888`.
 CI fetches that commit before configuring.
 
-The driver creates the detached reference worktree and rejects a dirty source or wrong revision. Keep that worktree unchanged; updating the baseline is a separate task. See [workflow](workflow.md#branches-and-worktrees) for branches and PRs. A port does not by itself complete its subsystem.
+The driver creates the detached reference worktree and rejects a dirty source or wrong revision. Updating the baseline is a separate task. See [workflow](workflow.md#branches-and-worktrees) for branches and PRs.
 
 ## Build and verification
 
@@ -150,7 +150,7 @@ See [speed](speed.md) for benchmarks and profiles and [deep checks](deep-checks.
 
 ## Continuous integration
 
-Full validation requires native comparisons and simulation, Windows x64, Linux GCC SDL2, Emscripten, quick checks and annotation checks. It publishes a status only for the captured PR head after all succeed; skipped or cancelled jobs do not qualify. Protection also requires cheap checks, resolved conversations and a branch current with base. See [integration](workflow.md#integration) for the exact-head gate; never bypass it with `--admin`.
+Full validation requires native comparisons and simulation, Windows x64, Linux GCC SDL2, Emscripten, quick checks and annotation checks. It publishes a status only for the captured PR head after all succeed; skipped or cancelled jobs do not qualify. Protection also requires cheap checks, resolved conversations and a branch current with base. See [integration](root-workflow.md#integration) for the exact-head gate.
 
 | Command | Purpose |
 | --- | --- |
@@ -164,7 +164,7 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 - The CLI refuses unmergeable or pending-mergeability PRs and changed heads. A changed head or advanced base needs a new Full, except when the head's status was carried (next bullet). A Full request for a head that already passed dispatches nothing. `CI_ON_DEMAND=true` enables requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
 - For a workflow-changing PR, root reviews its workflow, temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap` through `ci:full`. After merge, restore the variable to `true` and record both changes in the PR.
 - Keep warm-cache Full within about 15 minutes (#233). Add parallel jobs or shards, not steps on one job's critical path. Keep caches under the repository limit.
-- All profiles run quick checks including Ruff 0.16.8 and ty 0.0.92. Python conversion remains on #501. `rust-migration` protection disables ordinary force pushes and branch deletion; attributed independent review supplies the process gate with shared credentials.
+- All profiles run quick checks. `rust-migration` protection disables ordinary force pushes and branch deletion.
 - Carried validation (#659): when a PR push keeps the non-Markdown tree that its previous head passed Full on, the invalidation workflow copies that `Full validation` and `Validated tree` to the new head within seconds, instead of setting it pending. Examples are an update from base over docs-only commits and a Markdown-only push to the PR. The new head must contain the current base, so the merged tree is the one that was tested. The tree comparison is the same complete-inventory rule as the post-merge cache refresh. Any other push, a previous head without a same-run passing result, or a failed lookup leaves the status pending.
 - Protected pushes queue without cancelling a running validation; newer pending pushes replace older ones. Markdown-only pushes ordinarily start no workflows. Matching previously Full-tested non-Markdown trees refresh eligible compiler caches without repeating tests; incomplete inventories retain heavy validation. Post-merge checks do not authorize an untested combination.
 - Full uses native comparisons and three simulation shards, with frozen runtimes and run-scoped artifacts. Reports and failing saves are artifacts; build inputs expire after one day. Native cache roles are trimmed to 750 MB, Linux flavours to 600 MB, macOS flavours to 650 MB and Emscripten to 500 MB; retention bounds GitHub cache use to 8 GiB under the 10 GiB limit.
@@ -185,13 +185,13 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | `python3 tools/port-metrics.py --whole-fork` | Report source-area and simulation retirement, C++ evidence/dependency inventory, Rust exports and boundary function pointers. |
 | `python3 tools/port-metrics.py --functions [AREA ...]` | Add the whole-fork report's remaining original code lines per baseline file and top-level function, plus file scope. Rows sum to each area's remaining count. `facade` marks rows whose remaining lines are only a signature and braces. Function detection is a brace heuristic; macro-headed blocks show as `?`. |
 
-The `tools/test-ffi-bool-returns.py`, `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
+The `tools/test-ffi-bool-returns.py`, `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).
 
 Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. `compiled_cpp` and the area totals retain the comparable `src/` plus generated-record inventory and the 284,355-line original denominator. `evidence_cpp` adds tracked C++ outside `src/` and non-record fragments from the ABI generator, each source identity once. `fork_cpp` is their combined source census, not a preprocessed executable size. Records remain only in the area series. Version 2 does not inventory extracted-original comparison fragments or C++ embedded in Python strings; their volume is unknown and belongs to #736's scope-completeness follow-up. The current `fork_cpp` series and `candidate_cpp_upper_bound` are limited to the listed inventory, not bounds over that unlisted support. These are coverage gaps, not exemptions from final C++ retirement; report any later coverage correction separately from deletion. Historical `--head` runs archive each revision's generator and Rust/header/probe inputs; mutable build output is never read. Raw `rust` and `tooling` totals classify by directory prefix, so frozen oracle text under `rust/` and native support under `tools/` also contribute. Report executable `.rs`/`.py` changes and data footprint separately: #802's 7,007 raw Rust additions contain 6,739 oracle-data lines and 268 implementation lines. Preserve the collected values; a future classification correction is not new code or C++ retirement.
 
-Evidence rows identify direct Rust/dual-build dependencies as candidate/shared. The pinned-original Monocypher vector generator's documented reference-only compile recipe places it separately; fixtures with reference-like names can still exercise candidate Rust. Other sources stay unresolved and count toward `candidate_cpp_upper_bound`. This conservative bound includes all source-area C++ and unresolved evidence; it is not an exact build graph. Reference-only fork adapters still must retire. Only the separate pinned original is outside the fork inventory.
+Evidence rows identify direct Rust/dual-build dependencies as candidate/shared. The pinned-original Monocypher vector generator's documented reference-only compile recipe places it separately; fixtures with reference-like names can still exercise candidate Rust. Other sources stay unresolved and count toward `candidate_cpp_upper_bound`. This conservative bound includes all source-area C++ and unresolved evidence; it is not an exact build graph.
 
-JSON records the metric version, implementation hash, head, baseline and scope. Recount historical endpoints with the same implementation and report inventory corrections separately from deletion. No line metric claims behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
+JSON records the metric version, implementation hash, head, baseline and scope. Recount historical endpoints with the same implementation and report inventory corrections separately from deletion. No line metric claims behavioral completion.
 
 ### Read-only retrospective facts
 
@@ -207,4 +207,3 @@ These commands read through the existing CI/`gh` helpers and metric. A matching 
 
 `tools/rust-only.py` rejects `WITH_RUST` conditionals in `src/` in quick CI.
 `WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
-The pinned original remains the oracle; do not sweep its worktree or `tools/`.
