@@ -128,8 +128,12 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
     if m.read(tile) != MP_INDUSTRY {
         return false;
     }
-    let shell =
-        crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
+    let shell = crate::industry_map::get_industry_by_tile(
+        m,
+        crate::tile_type::TileIndex(tile),
+        s.catchment.industry_by_id,
+        s.check(),
+    );
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
     if unsafe { (*Services::spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
@@ -207,11 +211,12 @@ pub(crate) fn generate_name(
         }
         let kind = crate::industry_map::get_industry_type(
             &m,
-            at,
+            crate::tile_type::TileIndex(at),
             s.catchment.industry_by_id,
             s.catchment.industry_owner,
             s.check(),
-        );
+        )
+        .0;
         let spec = Services::spec(kind);
         // Undefined means this industry does not name stations.
         if unsafe { (*spec).station_name } == n.undefined {

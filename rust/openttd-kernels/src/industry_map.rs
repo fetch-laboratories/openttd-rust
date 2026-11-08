@@ -1,40 +1,46 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Shared industry-map graphics identities.
+//! Accessors for industry tiles and the industry graphics identities (`industry_map.h`).
 #![allow(unsafe_code)]
+use crate::industry::tile::ShellHandle;
+use crate::industry_type::{IndustryID, IndustryType};
+use crate::tile_type::{TileIndex, TileType};
 
 /// Raw compatibility value for the water check marker.
 pub const GFX_WATERTILE_SPECIALCHECK: u16 = IndustryGraphics::GFX_WATERTILE_SPECIALCHECK.0 as u16;
 
-/// `GetIndustryIndex`, including its tile-type assertion policy.
+/// `GetIndustryIndex`: get the industry ID of the given tile, including its tile-type
+/// assertion policy.
 pub(crate) fn get_industry_index(
     m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-) -> Option<crate::industry_type::IndustryID> {
-    m.require_type(tile, crate::tile_type::MP_INDUSTRY)?;
-    Some(crate::industry_type::IndustryID(m.m2(tile)?))
+    t: TileIndex,
+) -> Option<IndustryID> {
+    m.require_type(t.0, TileType::MP_INDUSTRY.0)?;
+    Some(IndustryID(m.m2(t.0)?))
 }
-/// `Industry::GetByTile` (`industry.h`).
+/// `Industry::GetByTile` (`industry.h`): get the industry of the given tile.
 pub(crate) fn get_industry_by_tile(
     m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-    get: extern "C" fn(crate::industry_type::IndustryID) -> *mut crate::industry::tile::ShellHandle,
+    tile: TileIndex,
+    get: extern "C" fn(IndustryID) -> *mut ShellHandle,
     check: extern "C" fn(bool),
-) -> *mut crate::industry::tile::ShellHandle {
-    check(m.read(tile) == crate::tile_type::MP_INDUSTRY);
+) -> *mut ShellHandle {
+    check(TileType(m.read(tile.0)) == TileType::MP_INDUSTRY);
     get(get_industry_index(m, tile).unwrap())
 }
-/// `GetIndustryType`, with the source assertion before and after its lookup.
+/// `GetIndustryType`: retrieve the type for this industry. Although it is called
+/// IndustryType, it is in fact an index in the `_industry_specs` array. The source asserts
+/// the tile type before and after its lookup.
 pub(crate) fn get_industry_type(
     m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-    get: extern "C" fn(crate::industry_type::IndustryID) -> *mut crate::industry::tile::ShellHandle,
-    owner: extern "C" fn(*mut crate::industry::tile::ShellHandle) -> *mut crate::industry::Industry,
+    tile: TileIndex,
+    get: extern "C" fn(IndustryID) -> *mut ShellHandle,
+    owner: extern "C" fn(*mut ShellHandle) -> *mut crate::industry::Industry,
     check: extern "C" fn(bool),
-) -> u8 {
-    check(m.read(tile) == crate::tile_type::MP_INDUSTRY);
-    let shell = get_industry_by_tile(m, tile, get, check);
-    check(!shell.is_null());
-    unsafe { (*crate::industry::openttd_rust_industry_metadata(owner(shell))).kind }
+) -> IndustryType {
+    check(TileType(m.read(tile.0)) == TileType::MP_INDUSTRY);
+    let ind = get_industry_by_tile(m, tile, get, check);
+    check(!ind.is_null());
+    IndustryType(unsafe { (*crate::industry::openttd_rust_industry_metadata(owner(ind))).kind })
 }
 
 /// Indices into `table/industry_land.h::_industry_draw_tile_data`: gfx << 2 | stage (0 to 3).

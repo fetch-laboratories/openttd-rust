@@ -155,7 +155,7 @@ pub(crate) fn forest(tile: u32, s: &Services) -> bool {
     let catchment = unsafe { &*(shared.station_catchment)() };
     let shell = crate::industry_map::get_industry_by_tile(
         &world.types,
-        tile,
+        crate::tile_type::TileIndex(tile),
         catchment.industry_by_id,
         crate::movement::table(shared).native_assert,
     );
