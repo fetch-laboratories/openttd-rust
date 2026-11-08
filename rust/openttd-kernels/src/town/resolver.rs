@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, Leaves, State, house};
-use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, is_valid_cargo_type};
+use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, CargoType, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
@@ -13,8 +13,9 @@ use std::{cell::OnceCell, ffi::c_void};
 use crate::bitmath_func::gb;
 use crate::cargotype::TownAcceptanceEffect;
 use crate::house::HouseZone;
-use crate::house_type::{HouseClassID, HouseID};
+use crate::house_type::{HouseClassID, HouseID, HouseRandomTriggers};
 use crate::newgrf_callbacks::CallbackID;
+use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
 use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
@@ -188,11 +189,11 @@ unsafe fn get_num_houses(owner: *const State, house_id: HouseID, class_id: House
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
 unsafe fn town_history_helper(
     owner: *const State,
-    cargo: u8,
+    cargo: CargoType,
     period: u8,
     transported: bool,
 ) -> u32 {
-    unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
+    unsafe { super::supplied_history(owner, cargo.0, period) }.map_or(0, |h| {
         (if transported {
             h.transported
         } else {
@@ -247,7 +248,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         let value = unsafe {
             town_history_helper(
                 scope.owner,
-                cargo,
+                CargoType(cargo),
                 if index < 8 { THIS_MONTH } else { LAST_MONTH },
                 index & 4 != 0,
             )
@@ -795,9 +796,9 @@ pub(super) unsafe fn reseed_house_tile(
     house: HouseID,
     tile: TileIndex,
     town: *mut TownHandle,
-    waiting: u8,
+    waiting: HouseRandomTriggers,
 ) -> house::HouseReseed {
-    (services().reseed)(house, tile.0, town, waiting)
+    (services().reseed)(house, tile.0, town, waiting.0)
 }
 /// Raw adapter for `reseed_house_tile`, retained for `town/house.rs` until its pass.
 pub(super) unsafe fn reseed(
@@ -806,7 +807,7 @@ pub(super) unsafe fn reseed(
     town: *mut TownHandle,
     waiting: u8,
 ) -> house::HouseReseed {
-    unsafe { reseed_house_tile(house, TileIndex(tile), town, waiting) }
+    unsafe { reseed_house_tile(house, TileIndex(tile), town, HouseRandomTriggers(waiting)) }
 }
 /// `GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, ...)` with `Convert8bitBooleanCallback`
 /// (`TryBuildTownHouse`): whether the house may be built here.
@@ -860,8 +861,8 @@ pub extern "C" fn openttd_rust_house_scope(
     relative: u8,
 ) -> *mut c_void {
     match scope {
-        0 => house,
-        1 => town,
+        VSG_SCOPE_SELF => house,
+        VSG_SCOPE_PARENT => town,
         _ => (services().base_scope)(ro, scope, relative),
     }
 }
@@ -872,7 +873,7 @@ pub extern "C" fn openttd_rust_town_scope(
     scope: u8,
     relative: u8,
 ) -> *mut c_void {
-    if scope == 0 {
+    if scope == VSG_SCOPE_SELF {
         town
     } else {
         (services().base_scope)(ro, scope, relative)

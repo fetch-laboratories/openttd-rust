@@ -383,7 +383,7 @@ fn property(
                 }
                 for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
                     // Get the cargo number from the list.
-                    let cargo = translate((cargos >> (8 * index)) as u8, file, false);
+                    let cargo = translate(gb(cargos, 8 * index, 8) as u8, file, false);
                     if is_valid_cargo_type(cargo) {
                         (s.set_cargo)(spec, index, cargo);
                     } else {
