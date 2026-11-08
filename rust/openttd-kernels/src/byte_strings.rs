@@ -273,3 +273,366 @@ crate::abi::layouts! {
         length,
     };
 }
+
+#[cfg(all(test, target_os = "linux", target_env = "gnu"))]
+mod comparison_tests {
+    //! Original-only `byte-strings-comparison.cpp` observations (#736 U) through the
+    //! production exports, under each captured glibc locale; see the oracle header.
+    #![allow(unsafe_code)] // libc locale switching and the production exports.
+
+    use super::{
+        openttd_rust_bytes_case, openttd_rust_bytes_hex_decode, openttd_rust_bytes_hex_encode,
+        openttd_rust_bytes_lower, openttd_rust_bytes_trim,
+    };
+    use crate::oracle;
+    use std::collections::HashSet;
+    use std::ffi::{CStr, c_char, c_int};
+    use std::fmt::Write as _;
+
+    const ORACLE: &str = include_str!("byte_strings/comparison-oracle.txt");
+    const LC_ALL: c_int = 6;
+
+    unsafe extern "C" {
+        fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
+    }
+
+    fn token(value: &[u8]) -> String {
+        if value.is_empty() {
+            return "-".to_owned();
+        }
+        value.iter().fold(String::new(), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
+    }
+
+    /// `byte-strings-comparison.py::corpus` at 305ac20c28, then `dict.fromkeys`.
+    fn corpus() -> Vec<String> {
+        let mut out = vec!["null -".to_owned()];
+        case_records(&mut out);
+        hex_records(&mut out);
+        trim_records(&mut out);
+        let mut seen = HashSet::new();
+        out.retain(|record| seen.insert(record.clone()));
+        out
+    }
+
+    fn case_records(out: &mut Vec<String>) {
+        let values: [&[u8]; 18] = [
+            b"",
+            b"a",
+            b"A",
+            b"aa",
+            b"aA",
+            b"b",
+            b"ababa",
+            b"aba",
+            b"abab",
+            b"BAB",
+            b"absent",
+            b"abc",
+            b"c",
+            b"\x00",
+            b"a\x00B",
+            b"A\x00b",
+            b"\x00b",
+            b"x\x00a\x00Bz",
+        ];
+        for left in values {
+            for right in values {
+                out.push(format!("pair {} {}", token(left), token(right)));
+            }
+        }
+        for byte in 0..=u8::MAX {
+            let value = [byte];
+            for right in [b"\x00", b"A", b"\x7f", b"\xff", &value] {
+                out.push(format!("pair {} {}", token(&value), token(right)));
+            }
+            for offset in 0..4 {
+                out.push(format!("lower {} {offset}", token(&[b'A', byte, b'Z'])));
+            }
+            out.push(format!("encode {}", token(&value)));
+            for pair in [[b'1', byte], [byte, b'1']] {
+                out.push(format!("decode {} 1", token(&pair)));
+            }
+        }
+        let all: Vec<u8> = (0..=u8::MAX).collect();
+        for value in [&b""[..], b"lower", b"UPPER", b"Aa\x00Z", &all] {
+            out.push(format!("encode {}", token(value)));
+            let mut offsets = vec![0, value.len() / 2, value.len()];
+            offsets.dedup();
+            for offset in offsets {
+                out.push(format!("lower {} {offset}", token(value)));
+            }
+        }
+    }
+
+    fn hex_records(out: &mut Vec<String>) {
+        let decodes: [&[u8]; 14] = [
+            b"",
+            b"1",
+            b"12",
+            b"123",
+            b"1234",
+            b"12g4",
+            b"123g",
+            b"g234",
+            b"1g34",
+            b"123456789abcdef0",
+            b"123456789ABCDEF0",
+            b"123456g8",
+            b"12\x0034",
+            b"12\xff4",
+        ];
+        for value in decodes {
+            for length in 0..6 {
+                out.push(format!("decode {} {length}", token(value)));
+            }
+        }
+        let all: Vec<u8> = (0..=u8::MAX).collect();
+        out.push(format!("decode {} 256", token(to_hex(&all).as_bytes())));
+        for value in [
+            &b"12345678"[..],
+            b"1234g678",
+            b"1234567g",
+            b"g2345678",
+            b"1234567",
+        ] {
+            let backing = [&b"\xa5\xa5"[..], value, &[0xa5; 12]].concat();
+            for offset in 0..11 {
+                for length in [value.len() / 2, value.len() / 2 + 1] {
+                    let record = format!(
+                        "overlap {} 2 {} {offset} {length}",
+                        token(&backing),
+                        value.len()
+                    );
+                    out.push(record);
+                }
+            }
+        }
+    }
+
+    fn trim_records(out: &mut Vec<String>) {
+        let all: Vec<u8> = (0..=u8::MAX).collect();
+        let trims: [&[u8]; 12] = [
+            b"",
+            b" ",
+            b" \t\x0b\x0c\r ",
+            b"\n",
+            b" \n ",
+            b"  a  b  ",
+            b"\x00",
+            b"\x00a\x00",
+            b"\xff\x00a\xff",
+            b"\xff\xff",
+            b"aaaa",
+            b"xabxx",
+        ];
+        let sets: [&[u8]; 8] = [
+            b"",
+            b" \t\x0b\x0c\r",
+            b"\x00",
+            b"\xff",
+            b"\xff\x00",
+            b"a",
+            b"x",
+            &all,
+        ];
+        for value in trims {
+            out.push(format!("inplace {}", token(value)));
+            for set in sets {
+                out.push(format!("trim {} {}", token(value), token(set)));
+            }
+        }
+    }
+
+    fn from_hex(token: &str) -> Vec<u8> {
+        if token == "-" {
+            return Vec::new();
+        }
+        (0..token.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&token[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// The probe's uppercase `ToHex`.
+    fn to_hex(value: &[u8]) -> String {
+        if value.is_empty() {
+            return "-".to_owned();
+        }
+        value.iter().fold(String::new(), |mut s, b| {
+            let _ = write!(s, "{b:02X}");
+            s
+        })
+    }
+
+    /// Candidate `RustByteCase`: C++ computes the libstdc++ `string_view::compare` length
+    /// order (difference clamped to int) for mode 0; Rust maps and compares the bytes.
+    fn case(left: &[u8], right: &[u8], mode: u8, signed: bool) -> i32 {
+        let length_order = if mode != 0 {
+            0
+        } else if left.len() >= right.len() {
+            i32::try_from(left.len() - right.len()).unwrap_or(i32::MAX)
+        } else {
+            i32::try_from(right.len() - left.len()).map_or(i32::MIN, |d| -d)
+        };
+        // SAFETY: Live immutable spans for the call.
+        unsafe {
+            openttd_rust_bytes_case(
+                left.as_ptr(),
+                left.len(),
+                right.as_ptr(),
+                right.len(),
+                mode,
+                u8::from(signed),
+                length_order,
+            )
+        }
+    }
+
+    fn execute(record: &str, signed: bool) -> String {
+        let fields: Vec<&str> = record.split(' ').collect();
+        let mut left = from_hex(fields[1]);
+        match fields[0] {
+            "pair" => {
+                let right = from_hex(fields[2]);
+                let r: Vec<i32> = (0..5)
+                    .map(|mode| case(&left, &right, mode, signed))
+                    .collect();
+                // No ICU in the probe build: StrNaturalContainsIgnoreCase is StrContainsIgnoreCase.
+                format!("{} {} {} {} {} {}", r[0], r[1], r[2], r[3], r[4], r[4])
+            }
+            "lower" => {
+                let offset = fields[2].parse().unwrap();
+                // SAFETY: Exclusive initialized span; offset <= length.
+                let changed =
+                    unsafe { openttd_rust_bytes_lower(left.as_mut_ptr(), left.len(), offset) };
+                format!("{changed} {}", to_hex(&left))
+            }
+            "encode" => {
+                let mut text = vec![0; left.len() * 2];
+                // SAFETY: Disjoint input and twice-sized output.
+                unsafe {
+                    openttd_rust_bytes_hex_encode(left.as_ptr(), left.len(), text.as_mut_ptr());
+                }
+                to_hex(&text)
+            }
+            "decode" => {
+                let size: usize = fields[2].parse().unwrap();
+                let mut backing = vec![0xa5_u8; size + 2];
+                // SAFETY: Readable hex; the writable span lies strictly inside the backing.
+                let result = unsafe {
+                    openttd_rust_bytes_hex_decode(
+                        left.as_ptr(),
+                        left.len(),
+                        backing.as_mut_ptr().add(1),
+                        size,
+                    )
+                };
+                format!("{result} {}", to_hex(&backing))
+            }
+            "overlap" => {
+                let n: Vec<usize> = fields[2..6].iter().map(|f| f.parse().unwrap()).collect();
+                let base = left.as_mut_ptr();
+                // SAFETY: Overlapping caller-valid views over one live initialized allocation.
+                let result = unsafe {
+                    openttd_rust_bytes_hex_decode(base.add(n[0]), n[1], base.add(n[2]), n[3])
+                };
+                format!("{result} {}", to_hex(&left))
+            }
+            "trim" => {
+                let set = from_hex(fields[2]);
+                // A "-" token is the default null view.
+                let data = if fields[1] == "-" {
+                    std::ptr::null()
+                } else {
+                    left.as_ptr()
+                };
+                // SAFETY: Two immutable spans (null only when empty).
+                let r =
+                    unsafe { openttd_rust_bytes_trim(data, left.len(), set.as_ptr(), set.len()) };
+                if r.length == 0 {
+                    "1 - 0 -".to_owned()
+                } else {
+                    format!(
+                        "0 {} {} {}",
+                        r.offset,
+                        r.length,
+                        to_hex(&left[r.offset..r.offset + r.length])
+                    )
+                }
+            }
+            "inplace" => {
+                // StringConsumer::WHITESPACE_NO_NEWLINE.
+                let set = b"\t\x0b\x0c\r ";
+                // SAFETY: Two immutable spans.
+                let r = unsafe {
+                    openttd_rust_bytes_trim(left.as_ptr(), left.len(), set.as_ptr(), set.len())
+                };
+                let kept = if r.length == 0 {
+                    &[][..]
+                } else {
+                    &left[r.offset..r.offset + r.length]
+                };
+                to_hex(kept)
+            }
+            "null" => {
+                let null = std::ptr::null();
+                // SAFETY: Null empty spans are permitted by every export.
+                let (cmp, flags, decoded, trim) = unsafe {
+                    (
+                        openttd_rust_bytes_case(null, 0, null, 0, 0, u8::from(signed), 0),
+                        [1, 2, 3, 4].map(|mode| {
+                            openttd_rust_bytes_case(null, 0, null, 0, mode, u8::from(signed), 0)
+                        }),
+                        openttd_rust_bytes_hex_decode(null, 0, std::ptr::null_mut(), 0),
+                        openttd_rust_bytes_trim(null, 0, null, 0),
+                    )
+                };
+                format!(
+                    "{cmp} {} {} {} {} {decoded} {}",
+                    flags[0],
+                    flags[1],
+                    flags[2],
+                    flags[3],
+                    u8::from(trim.length == 0)
+                )
+            }
+            other => panic!("unknown record {other}"),
+        }
+    }
+
+    fn set_locale(name: &CStr) -> bool {
+        // SAFETY: NUL-terminated name; this module's only test switches the C locale.
+        !unsafe { setlocale(LC_ALL, name.as_ptr()) }.is_null()
+    }
+
+    #[test]
+    fn byte_strings_match_original_in_each_locale_and_char_signedness() {
+        let o = oracle::parse(ORACLE);
+        let records = corpus();
+        assert_eq!(records.len(), 3699);
+        for locale in [c"C", c"POSIX", c"C.utf8", c"en_US.utf8"] {
+            if !set_locale(locale) {
+                assert!(
+                    locale != c"C" && locale != c"POSIX",
+                    "required locale {locale:?} missing"
+                );
+                eprintln!("byte-strings oracle: locale {locale:?} unavailable; skipped");
+                continue;
+            }
+            let actual = records.iter().map(|record| {
+                let (signed, unsigned) = (execute(record, true), execute(record, false));
+                let output = if signed == unsigned {
+                    signed
+                } else {
+                    format!("{signed} ~ {unsigned}")
+                };
+                (format!("{locale:?} {record}"), output)
+            });
+            oracle::check(&o, "records", actual.collect::<Vec<_>>());
+        }
+        assert!(set_locale(c"C"));
+    }
+}
