@@ -74,6 +74,7 @@
     }
   },
   {
+    "platform": "linux",
     "retires": [
       "source:tools/migration/byte-strings-comparison.cpp",
       "comparison:byte-strings-comparison.py"
