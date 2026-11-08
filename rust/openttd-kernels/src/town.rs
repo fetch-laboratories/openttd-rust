@@ -2367,9 +2367,8 @@ impl Engine<'_> {
             tile = self.xy();
             for (x, y) in TOWN_COORD_MOD {
                 /* Only work with plain land that not already has a house */
-                // `IsTileFlat`; equal to a flat slope for the inner tiles around a town.
                 if !self.is_tile_type(tile, TileType::MP_HOUSE)
-                    && self.get_tile_slope(tile) == Slope::SLOPE_FLAT
+                    && crate::map_func::World::new(self.services).tile_flat(tile.0)
                     && self.cmd_landscape_clear(DC_AUTO_NO_WATER, tile).success
                 {
                     let rt = self.get_town_road_type();
