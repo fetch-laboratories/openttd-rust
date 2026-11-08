@@ -27,6 +27,8 @@ use crate::{
 };
 use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
+/// Maximum number of parts per station.
+pub(crate) const NUM_STATIONSSPECS_PER_STATION: usize = 255;
 pub(crate) const TA_WHOLE: u8 = 2;
 /// `GetRailTileArea`: forward scan precedes backward scan, and both compare
 /// each neighbour to the original trigger tile.

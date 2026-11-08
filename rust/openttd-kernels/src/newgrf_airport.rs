@@ -124,7 +124,7 @@ pub unsafe extern "C" fn openttd_rust_airport_get_spec(
     kind: u8,
     s: *const Services,
 ) -> *const AirportSpec {
-    crate::station_base::airport_get_spec(tile, kind, unsafe { &*s })
+    crate::station_base::airport_get_spec_raw(tile, kind, unsafe { &*s })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_fta(kind: u8, s: *const Services) -> *const c_void {
@@ -139,7 +139,7 @@ pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const Airport
     if tile == INVALID_TILE {
         s.dummy_spec
     } else {
-        crate::station_base::airport_get_spec(tile, (s.commands().airport_type)(st), s)
+        crate::station_base::airport_get_spec_raw(tile, (s.commands().airport_type)(st), s)
     }
 }
 pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
