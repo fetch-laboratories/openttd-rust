@@ -17,16 +17,10 @@ pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID::CBID_VEHICLE_LENGTH;
 /// Native `CBID_VEHICLE_32DAY_CALLBACK`.
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID::CBID_VEHICLE_32DAY_CALLBACK;
 
-/// Native `CBID_INDUSTRY_PROBABILITY`.
-pub const CBID_INDUSTRY_PROBABILITY: u16 = CallbackID::CBID_INDUSTRY_PROBABILITY.0;
 /// Native `CBID_INDUSTRY_SPECIAL_EFFECT`.
 pub const CBID_INDUSTRY_SPECIAL_EFFECT: u16 = CallbackID::CBID_INDUSTRY_SPECIAL_EFFECT.0;
 /// Native `CBID_INDTILE_DRAW_FOUNDATIONS`.
 pub const CBID_INDTILE_DRAW_FOUNDATIONS: CallbackID = CallbackID::CBID_INDTILE_DRAW_FOUNDATIONS;
-/// Native `CBID_INDUSTRY_LOCATION`.
-pub const CBID_INDUSTRY_LOCATION: u16 = CallbackID::CBID_INDUSTRY_LOCATION.0;
-/// Native `CBID_INDUSTRY_REFUSE_CARGO`.
-pub const CBID_INDUSTRY_REFUSE_CARGO: u16 = CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0;
 /// Native `CBID_INDTILE_ANIMATION_TRIGGER`.
 pub const CBID_INDTILE_ANIMATION_TRIGGER: CallbackID = CallbackID::CBID_INDTILE_ANIMATION_TRIGGER;
 /// Native `CBID_STATION_ANIMATION_TRIGGER`.
@@ -101,18 +95,12 @@ pub const CBID_VEHICLE_REFIT_COST: CallbackID = CallbackID::CBID_VEHICLE_REFIT_C
 /// Native `CBID_VEHICLE_LOAD_AMOUNT`.
 pub const CBID_VEHICLE_LOAD_AMOUNT: CallbackID = CallbackID::CBID_VEHICLE_LOAD_AMOUNT;
 
-/// Masks from `newgrf_callbacks.h::IndustryCallbackMask`.
-pub const INDUSTRY_PROBABILITY: u16 =
-    IndustryCallbackMasks::from_element(IndustryCallbackMask::Probability).0;
 /// Native `INDUSTRY_PRODUCTION_CARGO_ARRIVAL`.
 pub const INDUSTRY_PRODUCTION_CARGO_ARRIVAL: u16 =
     IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionCargoArrival).0;
 /// Native `INDUSTRY_PRODUCTION_256_TICKS`.
 pub const INDUSTRY_PRODUCTION_256_TICKS: u16 =
     IndustryCallbackMasks::from_element(IndustryCallbackMask::Production256Ticks).0;
-/// Native `INDUSTRY_REFUSE_CARGO`.
-pub const INDUSTRY_REFUSE_CARGO: u16 =
-    IndustryCallbackMasks::from_element(IndustryCallbackMask::RefuseCargo).0;
 
 /// `CBID_STATION_LAND_SLOPE_CHECK`.
 pub const CBID_STATION_LAND_SLOPE_CHECK: CallbackID = CallbackID::CBID_STATION_LAND_SLOPE_CHECK;

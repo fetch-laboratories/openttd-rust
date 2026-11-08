@@ -2,8 +2,6 @@
 //! Shared `newgrf_internal.h` property parser results.
 /// `CIR_SUCCESS`.
 pub const CIR_SUCCESS: i32 = ChangeInfoResult::CIR_SUCCESS.0 as i32;
-/// `CIR_DISABLED`.
-pub const CIR_DISABLED: i32 = ChangeInfoResult::CIR_DISABLED.0 as i32;
 /// `CIR_UNKNOWN`.
 pub const CIR_UNKNOWN: i32 = ChangeInfoResult::CIR_UNKNOWN.0 as i32;
 /// `CIR_INVALID_ID`.
