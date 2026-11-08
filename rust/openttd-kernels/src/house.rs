@@ -1,68 +1,61 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Shared values from `house.h`. Native specification storage and raw adapters remain shared.
-/// The house has reached the final stage of construction.
+//! Definitions of classes and constants related to houses from `house.h`.
+//! Native specification storage remains shared.
+use crate::house_type::{HouseClassID, HouseID};
+use crate::landscape_type::LandscapeType;
+
+/// Simple value that indicates the house has reached the final stage of construction.
 pub const TOWN_HOUSE_COMPLETED: u8 = 3;
 /// No house class is assigned.
-pub const HOUSE_NO_CLASS: u16 = 0;
+pub const HOUSE_NO_CLASS: HouseClassID = 0;
 /// Offset for new houses.
-pub const NEW_HOUSE_OFFSET: u16 = 110;
+pub const NEW_HOUSE_OFFSET: HouseID = 110;
+/// Total number of houses.
+pub const NUM_HOUSES: HouseID = 4096;
 /// Invalid house ID sentinel.
-pub const INVALID_HOUSE_ID: u16 = u16::MAX;
-/// `HouseZone::TownEdge`.
-pub const HOUSE_ZONE_TOWN_EDGE: u8 = HouseZone::TownEdge.0;
-
-/// House capacity and size/availability bits from `house.h`.
-pub const NUM_HOUSES: u16 = 4096;
+pub const INVALID_HOUSE_ID: HouseID = u16::MAX;
 /// Number of supported houses per `NewGRF`.
-pub const NUM_HOUSES_PER_GRF: u32 = NUM_HOUSES as u32;
-/// Maximum number of cargoes accepted by a tile.
+pub const NUM_HOUSES_PER_GRF: HouseID = NUM_HOUSES;
+/// Max number of cargoes accepted by a tile.
 pub const HOUSE_NUM_ACCEPTS: u8 = 16;
 /// Original number of accepted cargo types.
 pub const HOUSE_ORIGINAL_NUM_ACCEPTS: u8 = 3;
-/// Raw compatibility view of the north-tile size mask.
+/// Raw adapter for `HouseZone::TownEdge`, retained for the `NewGRF` road-stop resolver's later pass.
+pub const HOUSE_ZONE_TOWN_EDGE: u8 = HouseZone::TownEdge.0;
+/// Raw adapter for `BUILDING_HAS_1_TILE`, retained for `town.rs` and `town/house.rs` until their passes.
 pub const BUILDING_HAS_1_TILE: u8 = BuildingFlags::BUILDING_HAS_1_TILE.0;
-/// Raw compatibility view of the multitile north-tile size mask.
+/// Raw adapter for `BUILDING_HAS_2_TILES`, retained for `town/house.rs` until its pass.
 pub const BUILDING_HAS_2_TILES: u8 = BuildingFlags::BUILDING_HAS_2_TILES.0;
-/// Raw compatibility view of the four-tile north-tile size mask.
-pub const BUILDING_HAS_4_TILES: u8 = BuildingFlags::BUILDING_HAS_4_TILES.0;
-/// Raw compatibility bit for `BuildingFlag::IsChurch`.
+/// Raw adapter for `BuildingFlag::IsChurch`, retained for `town/house.rs` until its pass.
 pub const BUILDING_IS_CHURCH: u8 = BuildingFlags::from_element(BuildingFlag::IsChurch).0;
-/// Raw compatibility bit for `BuildingFlag::IsStadium`.
+/// Raw adapter for `BuildingFlag::IsStadium`, retained for `town/house.rs` until its pass.
 pub const BUILDING_IS_STADIUM: u8 = BuildingFlags::from_element(BuildingFlag::IsStadium).0;
-/// Raw compatibility view of all town-zone bits.
-pub const HZ_ZONE_ALL: u16 = HouseZones::HZ_ZONE_ALL.0;
-/// Raw compatibility view of all climate bits.
-pub const HZ_CLIMATE_ALL: u16 = HouseZones::HZ_CLIMATE_ALL.0;
-
-/// Individual `BuildingFlag` values and footprint masks from `house.h`.
+/// Raw adapter for `BuildingFlag::NotSloped`, retained for `town/house.rs` until its pass.
 pub const BUILDING_NOT_SLOPED: u8 = BuildingFlags::from_element(BuildingFlag::NotSloped).0;
-/// Raw compatibility bit for `BuildingFlag::Size2x1`.
+/// Raw adapter for `BuildingFlag::Size2x1`, retained for `town/house.rs` until its pass.
 pub const BUILDING_SIZE_2X1: u8 = BuildingFlags::from_element(BuildingFlag::Size2x1).0;
-/// Raw compatibility bit for `BuildingFlag::Size1x2`.
+/// Raw adapter for `BuildingFlag::Size1x2`, retained for `town/house.rs` until its pass.
 pub const BUILDING_SIZE_1X2: u8 = BuildingFlags::from_element(BuildingFlag::Size1x2).0;
-/// Raw compatibility bit for `BuildingFlag::Size2x2`.
+/// Raw adapter for `BuildingFlag::Size2x2`, retained for `town/house.rs` until its pass.
 pub const BUILDING_SIZE_2X2: u8 = BuildingFlags::from_element(BuildingFlag::Size2x2).0;
-/// Raw compatibility bit for `BuildingFlag::IsAnimated`.
+/// Raw adapter for `BuildingFlag::IsAnimated`, retained for `town/house.rs` until its pass.
 pub const BUILDING_IS_ANIMATED: u8 = BuildingFlags::from_element(BuildingFlag::IsAnimated).0;
-/// Raw compatibility view of footprints extending along X.
+/// Raw adapter for `BUILDING_2_TILES_X`, retained for `town.rs` and `town/house.rs` until their passes.
 pub const BUILDING_2_TILES_X: u8 = BuildingFlags::BUILDING_2_TILES_X.0;
-/// Raw compatibility view of footprints extending along Y.
+/// Raw adapter for `BUILDING_2_TILES_Y`, retained for `town.rs` and `town/house.rs` until their passes.
 pub const BUILDING_2_TILES_Y: u8 = BuildingFlags::BUILDING_2_TILES_Y.0;
 
-/// `GetClimateMaskForLandscape`, with the native unreachable landscape domain.
-pub(crate) fn climate_mask(landscape: u8) -> u16 {
-    use crate::landscape_type::LandscapeType;
-    match LandscapeType(landscape) {
-        LandscapeType::Temperate => HouseZones::from_element(HouseZone::ClimateTemperate).0,
-        LandscapeType::Arctic => {
-            HouseZones::from_element(HouseZone::ClimateSubarcticAboveSnow)
-                .with(HouseZones::from_element(
-                    HouseZone::ClimateSubarcticBelowSnow,
-                ))
-                .0
-        }
-        LandscapeType::Tropic => HouseZones::from_element(HouseZone::ClimateSubtropic).0,
-        LandscapeType::Toyland => HouseZones::from_element(HouseZone::ClimateToyland).0,
+/// Get the `HouseZones` climate mask for the current landscape type; declared in `house.h`
+/// (`GetClimateMaskForLandscape`), with the native unreachable landscape domain.
+pub(crate) fn get_climate_mask_for_landscape(landscape: LandscapeType) -> HouseZones {
+    match landscape {
+        LandscapeType::Temperate => HouseZones::from_element(HouseZone::ClimateTemperate),
+        LandscapeType::Arctic => HouseZones::from_element(HouseZone::ClimateSubarcticAboveSnow)
+            .with(HouseZones::from_element(
+                HouseZone::ClimateSubarcticBelowSnow,
+            )),
+        LandscapeType::Tropic => HouseZones::from_element(HouseZone::ClimateSubtropic),
+        LandscapeType::Toyland => HouseZones::from_element(HouseZone::ClimateToyland),
         _ => unreachable!("landscape"),
     }
 }
@@ -143,6 +136,8 @@ impl BuildingFlags {
     }
 }
 
+crate::base_bitset_type::impl_bitset_ops!(BuildingFlags);
+
 /// Native `HouseZone` bit positions, retaining the full byte domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -214,7 +209,19 @@ impl HouseZones {
     pub const fn all(self, other: Self) -> bool {
         self.0 & other.0 == other.0
     }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: HouseZone) -> bool {
+        self.any(Self::from_element(element))
+    }
+    /// Native set iteration, visiting set elements in ascending bit order.
+    pub fn iter(self) -> impl Iterator<Item = HouseZone> {
+        (0..u16::BITS as u8)
+            .map(HouseZone)
+            .filter(move |&zone| self.test(zone))
+    }
 }
+crate::base_bitset_type::impl_bitset_ops!(HouseZones);
 
 /// Number of town zones in `house.h`.
 pub const NUM_HOUSE_ZONES: u32 = HouseZone::TownEnd.0 as u32;

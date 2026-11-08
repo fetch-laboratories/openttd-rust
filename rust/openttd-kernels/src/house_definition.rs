@@ -11,6 +11,7 @@
     clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
+use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_registry::{
     openttd_rust_cargo_by_label as by_label, openttd_rust_cargo_translate as translate,
 };
@@ -23,6 +24,7 @@ use crate::house::{
     BuildingFlag, BuildingFlags, HOUSE_NUM_ACCEPTS, HOUSE_ORIGINAL_NUM_ACCEPTS, HouseExtraFlags,
     HouseZones, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, NUM_HOUSES, NUM_HOUSES_PER_GRF,
 };
+use crate::house_type::HouseID;
 use crate::landscape_type::LandscapeType;
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
@@ -165,7 +167,7 @@ fn property(
     prop: i32,
     reader: &mut Reader<'_>,
 ) -> Result<ChangeInfoResult, ReadError> {
-    if last > NUM_HOUSES_PER_GRF {
+    if last > u32::from(NUM_HOUSES_PER_GRF) {
         grf_msg!(
             1,
             "TownHouseChangeInfo: Too many houses loaded ({}), max ({}). Ignoring.",
@@ -197,7 +199,7 @@ fn property(
                     // A substitute ID of 0xFF disables the old house with the current ID
                     // instead of defining a new house.
                     if id < u32::from(NEW_HOUSE_OFFSET) {
-                        (s.set_enabled)((s.get)(id as u16), false);
+                        (s.set_enabled)((s.get)(id as HouseID), false);
                     }
                     continue;
                 } else if u16::from(substitute) >= NEW_HOUSE_OFFSET {
@@ -215,9 +217,9 @@ fn property(
                     // Only the first property 08 setting copies properties; later changes
                     // leave the properties in place.
                     let source = (s.get)(u16::from(substitute));
-                    let spec = (s.copy_substitute)(file, id as u16, source);
+                    let spec = (s.copy_substitute)(file, id as HouseID, source);
                     (s.set_enabled)(spec, true);
-                    (s.set_identity)(spec, file, id as u16, u16::from(substitute));
+                    (s.set_identity)(spec, file, id as HouseID, HouseID::from(substitute));
                     // Default randomization colours, used if not overridden.
                     for (index, colour) in [COLOUR_RED, COLOUR_BLUE, COLOUR_ORANGE, COLOUR_GREEN]
                         .into_iter()
@@ -254,15 +256,15 @@ fn property(
             // Availability years.
             0x0a => {
                 let years = reader.word()?;
-                let year = |v: u8| {
+                let year = |v: u32| {
                     if v > 150 {
                         MAX_YEAR
                     } else {
-                        ORIGINAL_BASE_YEAR + i32::from(v)
+                        ORIGINAL_BASE_YEAR + v as i32
                     }
                 };
-                (s.set_min_year)(spec, year(years as u8));
-                (s.set_max_year)(spec, year((years >> 8) as u8));
+                (s.set_min_year)(spec, year(gb(u32::from(years), 0, 8)));
+                (s.set_max_year)(spec, year(gb(u32::from(years), 8, 8)));
             }
             // Population.
             0x0b => (s.set_population)(spec, reader.byte()?),
@@ -305,8 +307,9 @@ fn property(
             0x13 => (s.set_availability)(spec, HouseZones(reader.word()?).0),
             // House callback mask.
             0x14 => {
-                let mask = HouseCallbackMasks((s.callbacks)(spec));
-                (s.set_callbacks)(spec, (mask.0 & 0xff00) | u16::from(reader.byte()?));
+                let mut mask = u32::from(HouseCallbackMasks((s.callbacks)(spec)).0);
+                crate::bitmath_func::sb(&mut mask, 0, 8, u32::from(reader.byte()?));
+                (s.set_callbacks)(spec, HouseCallbackMasks(mask as u16).0);
             }
             // House override byte.
             0x15 => {
@@ -324,7 +327,7 @@ fn property(
                 unsafe {
                     override_manager::openttd_rust_override_add(
                         override_manager::house(),
-                        id as u16,
+                        id as HouseID,
                         ((*s.resolver).shared().grf_file_id)(file),
                         u32::from(target),
                     );
@@ -335,7 +338,7 @@ fn property(
             // Four random colours to use.
             0x17 => {
                 for index in 0..4 {
-                    (s.set_colour)(spec, index, reader.byte()? & 0x0f);
+                    (s.set_colour)(spec, index, gb(u32::from(reader.byte()?), 0, 4) as u8);
                 }
             }
             // Relative probability of appearing.
@@ -347,8 +350,8 @@ fn property(
                 let info = reader.byte()?;
                 (s.set_animation)(
                     spec,
-                    info & 0x7f,
-                    if info & 0x80 != 0 {
+                    gb(u32::from(info), 0, 7) as u8,
+                    if has_bit(info, 7) {
                         AnimationStatus::Looping.0
                     } else {
                         AnimationStatus::NonLooping.0
@@ -367,8 +370,9 @@ fn property(
             }
             // Callback mask part 2.
             0x1d => {
-                let mask = HouseCallbackMasks((s.callbacks)(spec));
-                (s.set_callbacks)(spec, (mask.0 & 0x00ff) | (u16::from(reader.byte()?) << 8));
+                let mut mask = u32::from(HouseCallbackMasks((s.callbacks)(spec)).0);
+                crate::bitmath_func::sb(&mut mask, 8, 8, u32::from(reader.byte()?));
+                (s.set_callbacks)(spec, HouseCallbackMasks(mask as u16).0);
             }
             // Accepted cargo types.
             0x1e => {
@@ -397,7 +401,9 @@ fn property(
                 for _ in 0..count {
                     let cargo = translate(reader.byte()?, file, false);
                     if is_valid_cargo_type(cargo) {
-                        (s.set_watched)(spec, (s.watched)(spec) | (1_u64 << cargo));
+                        let mut watched = (s.watched)(spec);
+                        set_bit64(&mut watched, cargo);
+                        (s.set_watched)(spec, watched);
                     }
                 }
             }
@@ -536,8 +542,9 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     // The substitute type is also used for overrides; a different size causes crashes.
     // Check only NewGRF houses, because original houses have no substitute ID set.
     if report
-        && (info.flags & BuildingFlags::BUILDING_HAS_1_TILE.0)
-            != ((s.flags)((s.get)(info.substitute)) & BuildingFlags::BUILDING_HAS_1_TILE.0)
+        && (flags & BuildingFlags::BUILDING_HAS_1_TILE)
+            != (BuildingFlags((s.flags)((s.get)(info.substitute)))
+                & BuildingFlags::BUILDING_HAS_1_TILE)
     {
         (s.set_enabled)(spec, false);
         debug!(
@@ -572,7 +579,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
 fn early_house(s: &Services, mask: HouseZones) {
     let mut min_year = MAX_YEAR;
     for id in 0..(s.count)() {
-        let info = (s.early)((s.get)(id as u16));
+        let info = (s.early)((s.get)(id as HouseID));
         if !info.enabled || !HouseZones(info.availability).all(mask) {
             continue;
         }
@@ -582,7 +589,7 @@ fn early_house(s: &Services, mask: HouseZones) {
         return;
     }
     for id in 0..(s.count)() {
-        let spec = (s.get)(id as u16);
+        let spec = (s.get)(id as HouseID);
         let info = (s.early)(spec);
         if !info.enabled || !HouseZones(info.availability).all(mask) {
             continue;
@@ -677,10 +684,10 @@ pub fn finalise(s: &Services) {
     }
     let mut id = 0;
     while id < (s.count)() {
-        let spec = (s.get)(id as u16);
+        let spec = (s.get)(id as HouseID);
         let next = [1, 2, 3].map(|offset| {
             if id + offset < usize::from(NUM_HOUSES) {
-                (s.get)((id + offset) as u16)
+                (s.get)((id + offset) as HouseID)
             } else {
                 std::ptr::null()
             }
@@ -710,15 +717,15 @@ pub fn finalise(s: &Services) {
         }
         id += 1;
     }
-    let climates =
-        crate::house::climate_mask(unsafe { (*s.resolver).shared().settings().climate.read() });
-    for climate in 0..16 {
-        if climates & (1 << climate) != 0 {
-            for zone in 0..16 {
-                if HouseZones::HZ_ZONE_ALL.0 & (1 << zone) != 0 {
-                    early_house(s, HouseZones((1 << climate) | (1 << zone)));
-                }
-            }
+    let climate_mask = crate::house::get_climate_mask_for_landscape(LandscapeType(unsafe {
+        (*s.resolver).shared().settings().climate.read()
+    }));
+    for climate in climate_mask.iter() {
+        for zone in HouseZones::HZ_ZONE_ALL.iter() {
+            early_house(
+                s,
+                HouseZones::from_element(climate).with(HouseZones::from_element(zone)),
+            );
         }
     }
 }

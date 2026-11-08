@@ -87,5 +87,5 @@ pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> u8 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_climate_mask(landscape: u8) -> u16 {
-    crate::house::climate_mask(landscape)
+    crate::house::get_climate_mask_for_landscape(crate::landscape_type::LandscapeType(landscape)).0
 }
