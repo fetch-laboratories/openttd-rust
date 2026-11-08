@@ -305,10 +305,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     let callbacks = unsafe { (*spec).callback_mask };
-    if !super::uses_original_economy(
-        IndustryCallbackMasks(callbacks),
-        crate::economy_type::EconomyType(unsafe { (s.economy_type)() }),
-    ) {
+    if !super::original_economy(callbacks, unsafe { (s.economy_type)() }) {
         for n in 0..produced_count(owner) {
             let random = s.shared().random_range(256);
             let p = produced(owner, n);

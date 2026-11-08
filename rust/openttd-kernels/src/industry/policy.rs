@@ -208,6 +208,10 @@ pub(crate) fn is_tile_forest_industry(tile: TileIndex, s: &Services) -> bool {
             && CargoLabel(crate::cargo_registry::cargo_label(cargo.0)) == CargoLabel::CT_WOOD
     })
 }
+/// Temporary raw adapter for [`is_tile_forest_industry`].
+pub(crate) fn forest(tile: u32, s: &Services) -> bool {
+    is_tile_forest_industry(TileIndex(tile), s)
+}
 /// # Safety
 /// Live world map, pool and static native table under the game-state mutex.
 #[unsafe(no_mangle)]
@@ -261,6 +265,13 @@ pub(crate) const fn uses_original_economy(
                     IndustryCallbackMask::ProdChangeBuild,
                 )),
         )
+}
+/// Temporary raw adapter for [`uses_original_economy`].
+pub(crate) const fn original_economy(callback_mask: u16, economy_type: u8) -> bool {
+    uses_original_economy(
+        IndustryCallbackMasks(callback_mask),
+        EconomyType(economy_type),
+    )
 }
 /// `IndustrySpec::GetConstructionCost`: get the cost for constructing this industry, under
 /// the `raw_industry_construction` setting.
