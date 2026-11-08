@@ -38,8 +38,7 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
     }
     let check = |ok| world.check(ok);
     for dir in crate::direction_type::DIAGDIR_BEGIN..crate::direction_type::DIAGDIR_END {
-        // `TileAdd` also preserves its native `_DEBUG` coordinate assertions.
-        let neighbour = (crate::movement::table(shared).add_by_diag_dir)(tile, dir);
+        let neighbour = world.dimensions.add_diag(tile, dir);
         let target = crate::road_func::diag_dir_to_road_bits(dir, check);
         if bits.0 & target != 0 {
             let mirrored = crate::road_func::mirror_road_bits(target, check);

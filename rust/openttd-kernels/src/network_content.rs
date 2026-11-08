@@ -11,7 +11,11 @@
 
 use crate::debug::{Bytes, debug};
 use crate::game_state::GameState;
-use crate::network_config::TCP_MTU;
+use crate::network_config::{
+    NETWORK_CONTENT_DESC_LENGTH, NETWORK_CONTENT_FILENAME_LENGTH, NETWORK_CONTENT_NAME_LENGTH,
+    NETWORK_CONTENT_TAG_LENGTH, NETWORK_CONTENT_URL_LENGTH, NETWORK_CONTENT_VERSION_LENGTH,
+    TCP_MTU,
+};
 use crate::network_tcp::{self as tcp, NetworkTCPSocketHandler, Packet};
 use crate::packet::{self, State as PacketState};
 use crate::services::ByteSpan;
@@ -115,12 +119,6 @@ const CONTENT_QUEUE_TIMEOUT: i64 = 100_000_000;
 const MAX_PACKETS_TO_RECEIVE: i32 = 42;
 /// IDs per `CLIENT_INFO_ID` or `CLIENT_CONTENT` packet after size, type and count.
 const MAX_CONTENT_IDS_PER_PACKET: usize = (TCP_MTU - 2 - 1 - 2) / 4;
-const NETWORK_CONTENT_FILENAME_LENGTH: usize = 48;
-const NETWORK_CONTENT_NAME_LENGTH: usize = 32;
-const NETWORK_CONTENT_VERSION_LENGTH: usize = 16;
-const NETWORK_CONTENT_URL_LENGTH: usize = 96;
-const NETWORK_CONTENT_DESC_LENGTH: usize = 512;
-const NETWORK_CONTENT_TAG_LENGTH: usize = 32;
 
 struct Client {
     callbacks: Vec<*mut ContentCallback>,

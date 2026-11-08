@@ -1059,7 +1059,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.stuck_news = TrainStuckNews,
 		.suppress_implicit = TrainSuppressImplicit,
 
-		.tile_add_diag = OpenTTDLegacyMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset_axis = TrainTileOffsetAxis,
 		.tile_offset_diag = TrainTileOffsetDiag,
 		.tile_owner = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tile_owner>,
@@ -1151,7 +1150,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.station_train = TrainReservationStationTrain,
 		.station_xy = TrainReservationStationXy,
 		.stuck = TrainReservationStuck,
-		.tile_add = OpenTTDLegacyContextMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,

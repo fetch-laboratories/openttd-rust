@@ -806,7 +806,6 @@ const OpenTTDMovementServices _rust_movement_services{
 	.resolve = RustMovementResolve,
 	.depot_invalidate = RustMovementDepotInvalidate,
 	.native_assert = RustAssertCondition,
-	.add_by_diag_dir = RustTileAddByDiagDir,
 	.owned_land = GetRustRailGroundServices().owned_land,
 	.object_foundation = RustObjectFoundation,
 	.house_foundation = RustHouseFoundation,

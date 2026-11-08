@@ -169,7 +169,6 @@ pub struct MovementServices {
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
-    pub add_by_diag_dir: extern "C" fn(u32, u8) -> u32,
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
@@ -819,8 +818,7 @@ impl Context<'_> {
                                                 TRACKDIR_BIT_X_NE | TRACKDIR_BIT_Y_NW,
                                             ),
                                         ] {
-                                            // `TileAdd` keeps its native `_DEBUG` coordinate assertions.
-                                            let t = (self.add_by_diag_dir)(tile, dir);
+                                            let t = self.world.dimensions.add_diag(tile, dir);
                                             if self.world.level_crossing_tile(t)
                                                 && self.world.crossing_barred(t)
                                             {
@@ -1543,7 +1541,6 @@ crate::abi::layouts! {
         resolve,
         depot_invalidate,
         native_assert,
-        add_by_diag_dir,
         owned_land,
         object_foundation,
         house_foundation,
