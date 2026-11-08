@@ -4,6 +4,7 @@ use super::{Leaves, State};
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::cargotype::TownProductionEffect;
 use crate::road_type::{RoadTramType, RoadTypes};
+use crate::tile_type::TileIndex;
 use crate::timer_game_calendar::CalendarDate;
 use crate::{cargo_registry, services::Services};
 
@@ -90,7 +91,7 @@ pub unsafe extern "C" fn openttd_rust_town_radius_group(
     s: *const Services,
     tile: u32,
 ) -> u8 {
-    unsafe { super::get_radius_group(owner, tile, (&*s).map()) }
+    unsafe { super::get_town_radius_group(owner, TileIndex(tile), (&*s).map()) }.0
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> u8 {

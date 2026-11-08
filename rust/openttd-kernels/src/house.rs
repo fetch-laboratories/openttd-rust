@@ -22,10 +22,6 @@ pub const HOUSE_NUM_ACCEPTS: u8 = 16;
 pub const HOUSE_ORIGINAL_NUM_ACCEPTS: u8 = 3;
 /// Raw adapter for `HouseZone::TownEdge`, retained for the `NewGRF` road-stop resolver's later pass.
 pub const HOUSE_ZONE_TOWN_EDGE: u8 = HouseZone::TownEdge.0;
-/// Raw adapter for `BUILDING_2_TILES_X`, retained for `town.rs` until its pass.
-pub const BUILDING_2_TILES_X: u8 = BuildingFlags::BUILDING_2_TILES_X.0;
-/// Raw adapter for `BUILDING_2_TILES_Y`, retained for `town.rs` until its pass.
-pub const BUILDING_2_TILES_Y: u8 = BuildingFlags::BUILDING_2_TILES_Y.0;
 
 /// Get the `HouseZones` climate mask for the current landscape type; declared in `house.h`
 /// (`GetClimateMaskForLandscape`), with the native unreachable landscape domain.

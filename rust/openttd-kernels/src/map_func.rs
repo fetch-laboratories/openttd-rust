@@ -144,6 +144,24 @@ impl Map {
     pub fn tile_add_xy(self, tile: u32, x: i32, y: i32) -> u32 {
         tile.wrapping_add(self.diff(x, y))
     }
+    /// `TileIndexToTileIndexDiffC`: the unsigned coordinate differences
+    /// `TileX(a) - TileX(b)` and `TileY(a) - TileY(b)`, narrowed to `int16_t`.
+    #[must_use]
+    #[inline]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "original TileIndexDiffC int16_t member assignment"
+    )]
+    pub fn tile_index_to_tile_index_diff_c(
+        self,
+        tile_a: crate::tile_type::TileIndex,
+        tile_b: crate::tile_type::TileIndex,
+    ) -> crate::map_type::TileIndexDiffC {
+        crate::map_type::TileIndexDiffC {
+            x: self.tile_x(tile_a.0).wrapping_sub(self.tile_x(tile_b.0)) as i16,
+            y: self.tile_y(tile_a.0).wrapping_sub(self.tile_y(tile_b.0)) as i16,
+        }
+    }
     /// Original `DistanceSquare` over captured map dimensions.
     #[must_use]
     #[inline]

@@ -263,7 +263,7 @@ impl<'a> Commands<'a> {
             (self.cost.error)(out, self.s.too_many_objects);
             return false;
         }
-        let center = TileIndex(unsafe { super::position(t.state) });
+        let center = unsafe { super::position(t.state) };
         let mut spiral = crate::spiral::square(
             self.map().tile_x(center.0),
             self.map().tile_y(center.0),
@@ -610,7 +610,7 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
         unsafe {
             (*t.state).simulation.goal[usize::from(effect.0)] = goal;
         }
-        c.growth(t).update_growth(u32::from(id));
+        c.growth(t).update_town_growth(TownId(id));
         (s.invalidate_view)(id);
         w::hit(w::TOWN_COMMAND_GOAL);
     }
@@ -668,7 +668,7 @@ pub unsafe extern "C" fn openttd_rust_town_growth_command(
         return;
     };
     if flags.test(DoCommandFlag::Execute) {
-        c.growth(t).custom_rate(u32::from(id), u32::from(rate));
+        c.growth(t).town_growth_rate(TownId(id), rate);
         (s.invalidate_view)(id);
         w::hit(w::TOWN_COMMAND_RATE);
     }
@@ -731,7 +731,7 @@ pub unsafe extern "C" fn openttd_rust_town_expand_command(
     if flags.test(DoCommandFlag::Execute) {
         let mut e = c.growth(t);
         e.road = road;
-        e.expand(u32::from(id), amount, u32::from(modes.0));
+        e.expand_town(TownId(id), amount, modes);
         w::hit(w::TOWN_COMMAND_EXPAND);
     }
     (c.cost.zero)(out);
@@ -809,7 +809,7 @@ impl Commands<'_> {
                 if execute {
                     crate::station::spatial::modify_rating_around(
                         self.shared,
-                        unsafe { super::position(t.state) },
+                        unsafe { super::position(t.state) }.0,
                         (self.shared.current_company)(),
                         [0x40, 0x70, 0xA0][usize::from(action.0)],
                         [10, 15, 20][usize::from(action.0)],
@@ -844,7 +844,7 @@ impl Commands<'_> {
                     return false;
                 }
                 if execute {
-                    self.growth(t).fund(u32::from(t.id.0));
+                    self.growth(t).town_action_fund_buildings(t.id);
                     (unsafe { &*self.f.growth }.dirty_town)(u32::from(t.id.0));
                 }
             }
@@ -864,7 +864,7 @@ impl Commands<'_> {
                     }
                     crate::station::spatial::modify_rating_around(
                         self.shared,
-                        unsafe { super::position(t.state) },
+                        unsafe { super::position(t.state) }.0,
                         (self.shared.current_company)(),
                         130,
                         17,

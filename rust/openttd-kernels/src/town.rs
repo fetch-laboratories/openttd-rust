@@ -31,15 +31,50 @@ pub(crate) mod policy;
 pub mod resolver;
 pub(crate) mod spatial;
 
-use crate::history_type::LAST_MONTH;
-use crate::random_func::chance16_i;
-use crate::services::{Map, Services};
-use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
-use crate::tile_type::{
-    MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_VOID,
-    TileIndex,
+use crate::bitmath_func::gb;
+use crate::bridge::MAX_BRIDGES;
+use crate::cargo_type::{CargoType, is_valid_cargo_type};
+use crate::cargotype::TownAcceptanceEffect;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::{CompanyID, MAX_COMPANIES, OWNER_NONE, OWNER_TOWN};
+use crate::direction_func::{
+    change_diag_dir, diag_dir_to_axis, is_valid_diag_direction, reverse_diag_dir,
 };
+use crate::direction_type::{Axis, DiagDirDiff, DiagDirection, Direction};
+use crate::history_type::{HISTORY_RECORDS, LAST_MONTH};
+use crate::house::{
+    BuildingFlag, BuildingFlags, HOUSE_NO_CLASS, HouseExtraFlag, HouseExtraFlags, HouseZone,
+    HouseZones, INVALID_HOUSE_ID, NUM_HOUSE_ZONES, NUM_HOUSES, TOWN_HOUSE_COMPLETED,
+};
+use crate::house_type::{HouseClassID, HouseID};
+use crate::landscape_type::LandscapeType;
+use crate::map_type::TileIndexDiffC;
+use crate::math::round_div_su;
+use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
+use crate::random_func::chance16_i;
+use crate::road::{RoadTypeFlag, RoadTypeFlags};
+use crate::road_func::diag_dir_to_road_bits;
+use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadTramType, RoadType};
+use crate::services::{Map, Services};
+use crate::slope_func::{
+    complement_slope, inclined_slope, is_slope_with_one_corner_raised, is_steep_slope,
+};
+use crate::slope_type::Slope;
+use crate::tile_type::{TROPICZONE_DESERT, TileIndex, TileType};
+use crate::timer_game_common::MAX_DATE;
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
+use crate::town_type::{
+    RATING_GROWTH_MAXIMUM, RATING_GROWTH_UP_STEP, RATING_MAXIMUM, RATING_MINIMUM,
+    RATING_ROAD_NEEDED_HOSTILE, RATING_ROAD_NEEDED_LENIENT, RATING_ROAD_NEEDED_NEUTRAL,
+    RATING_ROAD_NEEDED_PERMISSIVE, RATING_STATION_DOWN_STEP, RATING_STATION_UP_STEP,
+    RATING_TUNNEL_BRIDGE_NEEDED_HOSTILE, RATING_TUNNEL_BRIDGE_NEEDED_LENIENT,
+    RATING_TUNNEL_BRIDGE_NEEDED_NEUTRAL, RATING_TUNNEL_BRIDGE_NEEDED_PERMISSIVE, RATING_VERYPOOR,
+    TownExpandMode, TownExpandModes, TownID, TownLayout,
+};
+use crate::transport_type::TransportType;
+
+/// `NUM_TAE`, as the length of the per-effect town arrays.
+const NUM_TAE: usize = TownAcceptanceEffect::NUM_TAE.0 as usize;
 
 /// Value for custom town number in difficulty settings (`town.h`).
 pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
@@ -48,9 +83,13 @@ pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
 pub const TOWN_GROWTH_WINTER: u32 = 0xFFFF_FFFE;
 /// The town needs the cargo for growth when on desert (any amount).
 pub const TOWN_GROWTH_DESERT: u32 = 0xFFFF_FFFF;
+/// Special value for `Town::growth_rate` to disable town growth.
+pub const TOWN_GROWTH_RATE_NONE: u16 = 0xFFFF;
+/// Max amount of original town ticks that still fit into `uint16_t`, about equal to
+/// `UINT16_MAX / TOWN_GROWTH_TICKS` but slightly less to simplify calculations.
+pub const MAX_TOWN_GROWTH_TICKS: u16 = 930;
 
 /// Town flags (`town.h`), as bit positions, retaining every underlying byte.
-/// `CustomGrowth` joins with its first Rust user, `town.rs`'s growth pass.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TownFlag(pub u8);
@@ -65,12 +104,16 @@ impl TownFlag {
     pub const HasChurch: Self = Self(1);
     /// There can be only one stadium by town.
     pub const HasStadium: Self = Self(2);
+    /// Growth rate is controlled by GS.
+    pub const CustomGrowth: Self = Self(3);
 }
 /// Set of `TownFlag`s (`town.h`), retaining every underlying byte.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TownFlags(pub u8);
 impl TownFlags {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
     /// Native element-to-set conversion.
     #[must_use]
     pub const fn from_element(element: TownFlag) -> Self {
@@ -85,17 +128,41 @@ impl TownFlags {
     pub fn reset(&mut self, element: TownFlag) {
         self.0 &= !Self::from_element(element).0;
     }
+    /// Native `Set` of one element.
+    pub fn set(&mut self, element: TownFlag) {
+        self.0 |= Self::from_element(element).0;
+    }
+    /// Native `Any` of a set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
 }
+crate::base_bitset_type::impl_bitset_ops!(TownFlags);
 
 /// Settings for town council attitudes (`town.h`), retaining every underlying byte.
-/// The lenient, tolerant and hostile values join with their first Rust user,
-/// `town.rs`'s rating pass.
+/// Rating tables index by the attitude's value; the lenient, tolerant and hostile
+/// values join with their first named Rust user.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TownCouncilAttitudes(pub u8);
 impl TownCouncilAttitudes {
     /// Permissive (local authority disabled).
     pub const TOWN_COUNCIL_PERMISSIVE: Self = Self(3);
+}
+
+/// Action types that a company must ask permission for to a town authority (`town.h`).
+/// Native callers pass the element; Rust indexes the needed-rating table by it.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownRatingCheckType(pub u8);
+#[allow(
+    non_upper_case_globals,
+    reason = "original town.h TownRatingCheckType enumerators"
+)]
+impl TownRatingCheckType {
+    /// End marker.
+    pub const End: Self = Self(2);
 }
 
 /// Town actions of a company (`town.h`), retaining every underlying byte.
@@ -172,15 +239,15 @@ pub struct SimulationFields {
     pub xy: u32,
     pub num_houses: u32,
     pub population: u32,
-    pub radius: [u32; 5],
-    pub goal: [u32; 6],
-    pub ratings: [i16; 15],
-    pub received: [Received; 6],
+    pub radius: [u32; NUM_HOUSE_ZONES as usize],
+    pub goal: [u32; NUM_TAE],
+    pub ratings: [i16; MAX_COMPANIES as usize],
+    pub received: [Received; NUM_TAE],
     pub noise_reached: u16,
     pub time_until_rebuild: u16,
     pub statues: u16,
     pub have_ratings: u16,
-    pub unwanted: [u8; 15],
+    pub unwanted: [u8; MAX_COMPANIES as usize],
     pub exclusivity: u8,
     pub exclusive_counter: u8,
     pub larger_town: bool,
@@ -193,19 +260,19 @@ impl Default for SimulationFields {
     fn default() -> Self {
         Self {
             valid_history: 0,
-            xy: u32::MAX,
+            xy: TileIndex::INVALID.0,
             num_houses: 0,
             population: 0,
-            radius: [0; 5],
-            goal: [0; 6],
-            ratings: [0; 15],
-            received: [Received::default(); 6],
+            radius: [0; NUM_HOUSE_ZONES as usize],
+            goal: [0; NUM_TAE],
+            ratings: [0; MAX_COMPANIES as usize],
+            received: [Received::default(); NUM_TAE],
             noise_reached: 0,
             time_until_rebuild: 0,
             statues: 0,
             have_ratings: 0,
-            unwanted: [0; 15],
-            exclusivity: u8::MAX,
+            unwanted: [0; MAX_COMPANIES as usize],
+            exclusivity: CompanyID::INVALID.0,
             exclusive_counter: 0,
             larger_town: false,
             layout: 0,
@@ -225,13 +292,13 @@ pub struct SuppliedHistory {
 #[derive(Clone, Copy)]
 pub struct Supplied {
     pub cargo: u8,
-    pub history: [SuppliedHistory; 61],
+    pub history: [SuppliedHistory; HISTORY_RECORDS],
 }
 impl Default for Supplied {
     fn default() -> Self {
         Self {
-            cargo: u8::MAX,
-            history: [SuppliedHistory::default(); 61],
+            cargo: CargoType::INVALID_CARGO.0,
+            history: [SuppliedHistory::default(); HISTORY_RECORDS],
         }
     }
 }
@@ -260,12 +327,18 @@ pub struct State {
     growth: GrowthFields,
     stations_near: crate::station::StationList,
 }
+/// `t->received[effect].new_act += amount` (`economy.cpp`'s `DeliverGoods`).
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
-pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
+pub(crate) unsafe fn add_received(owner: *mut State, effect: TownAcceptanceEffect, amount: u32) {
     unsafe {
-        let count = &mut (*owner).simulation.received[usize::from(effect)].new_act;
+        let count = &mut (*owner).simulation.received[usize::from(effect.0)].new_act;
         *count = count.wrapping_add(amount as u16);
     }
+}
+/// Raw adapter for `cargo_payment.rs`, outside workset 01; delegates to `add_received`.
+/// SAFETY: As `add_received`.
+pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
+    unsafe { add_received(owner, TownAcceptanceEffect(effect), amount) }
 }
 /// The town's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
@@ -283,21 +356,31 @@ pub unsafe extern "C" fn openttd_rust_town_stations_near(
 }
 /// `Town::GetCargoSupplied` followed by the original history-period lookup.
 /// SAFETY: Live serialized canonical owner; the returned value is a copy.
-unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option<SuppliedHistory> {
-    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+unsafe fn supplied_history(
+    state: *const State,
+    cargo: CargoType,
+    period: u8,
+) -> Option<SuppliedHistory> {
+    if !is_valid_cargo_type(cargo.0) {
         return None;
     }
-    let index = unsafe { openttd_rust_town_supplied_find(state, cargo) };
+    let index = unsafe { openttd_rust_town_supplied_find(state, cargo.0) };
     unsafe {
         let rows = &(*state).supplied;
         rows.get(index).map(|s| s.history[usize::from(period)])
     }
 }
-/// Read only the canonical position at the original observation point.
+/// Read only the canonical `Town::xy` at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
-pub(crate) unsafe fn position(state: *const State) -> u32 {
+pub(crate) unsafe fn position(state: *const State) -> TileIndex {
     // SAFETY: Caller establishes owner lifetime and serialized access.
-    unsafe { (*state).simulation.xy }
+    TileIndex(unsafe { (*state).simulation.xy })
+}
+/// Raw adapter for callers outside workset 01 (`subsidy.rs`, `station_cmd.rs`,
+/// `station_lifecycle.rs`); delegates to `position`.
+/// SAFETY: As `position`.
+pub(crate) unsafe fn position_raw(state: *const State) -> u32 {
+    unsafe { position(state) }.0
 }
 /// Read only the canonical population at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
@@ -311,103 +394,113 @@ pub(crate) unsafe fn num_houses(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     unsafe { (*state).simulation.num_houses }
 }
-fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
-    if funded && distance <= 25 {
-        return 4;
-    }
-    let mut zone = 0;
-    for (index, radius) in radii.iter().enumerate() {
-        if distance < *radius {
-            zone = index as u8;
-        }
-    }
-    zone
-}
 /// `GetTownRadiusGroup` over live canonical town fields. No owner borrow crosses
 /// a callback. The caller supplies the original live town and valid tile.
+pub(crate) unsafe fn get_town_radius_group(
+    state: *const State,
+    tile: TileIndex,
+    map: crate::map_func::Map,
+) -> HouseZone {
+    let state = unsafe { &*state };
+    let dist = map.distance_square(tile.0, state.simulation.xy);
+    if state.growth.funding != 0 && dist <= 25 {
+        return HouseZone::TownCentre;
+    }
+    let mut smallest = HouseZone::TownEdge;
+    for i in HouseZones::HZ_ZONE_ALL.iter() {
+        if dist < state.simulation.radius[usize::from(i.0)] {
+            smallest = i;
+        }
+    }
+    smallest
+}
+/// Raw adapter for callers outside workset 01 (`newgrf_airport.rs`,
+/// `station_lifecycle.rs`); delegates to `get_town_radius_group`.
 pub(crate) unsafe fn get_radius_group(
     state: *const State,
     tile: u32,
     map: crate::map_func::Map,
 ) -> u8 {
-    let state = unsafe { &*state };
-    radius_group(
-        state.growth.funding != 0,
-        &state.simulation.radius,
-        map.distance_square(tile, state.simulation.xy),
-    )
+    unsafe { get_town_radius_group(state, TileIndex(tile), map) }.0
 }
 /// `GetTownRadiusGroup` for a live native shell, resolving its canonical owner once.
+/// Raw for its callers outside workset 01 (`objects.rs`, `industry/resolver.rs`,
+/// `newgrf_roadstop.rs`).
 pub(crate) unsafe fn radius_from_shell(
     s: &Services,
     town: *const crate::services::TownHandle,
     tile: u32,
 ) -> u8 {
-    unsafe { get_radius_group((s.town_owner)(town), tile, s.map()) }
+    unsafe { get_town_radius_group((s.town_owner)(town), TileIndex(tile), s.map()) }.0
 }
 /// Copied canonical road-work policy inputs; no owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
 pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -> (u8, u8, u32) {
     // SAFETY: Immediate reads only, caller establishes owner lifetime.
     let state = unsafe { &*state };
-    let xy = state.simulation.xy;
     // Native TileX/TileY operate on the power-of-two map dimensions.
-    let mask = size_x - 1;
-    let shift = size_x.trailing_zeros();
-    let dx = (tile & mask).abs_diff(xy & mask);
-    let dy = (tile >> shift).abs_diff(xy >> shift);
-    let zone = unsafe { get_radius_group(state, tile, crate::map_func::Map::from_log_x(shift)) };
-    (state.growth.road, zone, dx + dy)
+    let map = crate::map_func::Map::from_log_x(size_x.trailing_zeros());
+    let distance = map.distance_manhattan(tile, state.simulation.xy);
+    let zone = unsafe { get_town_radius_group(state, TileIndex(tile), map) };
+    (state.growth.road, zone.0, distance)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange_abi(generating: bool) -> u8 {
     // SAFETY: Serialized native entry; the flag is process-wide.
     u8::from(unsafe { std::ptr::replace(GENERATING_TOWN.get(), generating) })
 }
-/// Convert original town tick counters, including tick zero, to game ticks.
+/// `TownTicksToGameTicks`: convert original town tick counters, including tick
+/// zero, to game ticks.
 fn town_ticks_to_game_ticks(ticks: u16) -> u16 {
-    ((u32::from(ticks.min(930)) + 1) * u32::from(TOWN_GROWTH_TICKS) - 1) as u16
+    ((u32::from(ticks.min(MAX_TOWN_GROWTH_TICKS)) + 1) * u32::from(TOWN_GROWTH_TICKS) - 1) as u16
 }
 
-unsafe fn update_radius(state: *mut State) {
-    const RADII: [[u32; 5]; 23] = [
-        [4, 0, 0, 0, 0],
+/// `UpdateTownRadius`: update the cached town zone radii of a town, based on the
+/// number of houses.
+unsafe fn update_town_radius(state: *mut State) {
+    const TOWN_SQUARED_TOWN_ZONE_RADIUS_DATA: [[u32; NUM_HOUSE_ZONES as usize]; 23] = [
+        [4, 0, 0, 0, 0], // 0
         [16, 0, 0, 0, 0],
         [25, 0, 0, 0, 0],
         [36, 0, 0, 0, 0],
         [49, 0, 4, 0, 0],
-        [64, 0, 4, 0, 0],
+        [64, 0, 4, 0, 0], // 20
         [64, 0, 9, 0, 1],
         [64, 0, 9, 0, 4],
         [64, 0, 16, 0, 4],
         [81, 0, 16, 0, 4],
-        [81, 0, 16, 0, 4],
+        [81, 0, 16, 0, 4], // 40
         [81, 0, 25, 0, 9],
         [81, 36, 25, 0, 9],
         [81, 36, 25, 16, 9],
         [81, 49, 0, 25, 9],
-        [81, 64, 0, 25, 9],
+        [81, 64, 0, 25, 9], // 60
         [81, 64, 0, 36, 9],
         [81, 64, 0, 36, 16],
         [100, 81, 0, 49, 16],
         [100, 81, 0, 49, 25],
+        [121, 81, 0, 49, 25], // 80
         [121, 81, 0, 49, 25],
-        [121, 81, 0, 49, 25],
-        [121, 81, 0, 49, 36],
+        [121, 81, 0, 49, 36], // 88
     ];
     // SAFETY: Immediate field accesses on live owner; this helper invokes no services.
-    let houses = unsafe { (*state).simulation.num_houses };
-    let radius = if houses < 92 {
-        RADII[(houses / 4) as usize]
+    let num_houses = unsafe { (*state).simulation.num_houses };
+    let radius = if (num_houses as usize) < TOWN_SQUARED_TOWN_ZONE_RADIUS_DATA.len() * 4 {
+        TOWN_SQUARED_TOWN_ZONE_RADIUS_DATA[(num_houses / 4) as usize]
     } else {
-        let mass = (houses / 8) as i32;
-        [
-            mass.wrapping_mul(15).wrapping_sub(40) as u32,
-            mass.wrapping_mul(9).wrapping_sub(15) as u32,
-            0,
-            mass.wrapping_mul(5).wrapping_sub(5) as u32,
-            mass.wrapping_mul(3).wrapping_add(5) as u32,
-        ]
+        let mass = (num_houses / 8) as i32;
+        /* Actually we are proportional to sqrt() but that's right because we are covering an area.
+         * The offsets are to make sure the radii do not decrease in size when going from the table
+         * to the calculated value.*/
+        let mut radius = [0; NUM_HOUSE_ZONES as usize];
+        radius[usize::from(HouseZone::TownEdge.0)] = mass.wrapping_mul(15).wrapping_sub(40) as u32;
+        radius[usize::from(HouseZone::TownOutskirt.0)] =
+            mass.wrapping_mul(9).wrapping_sub(15) as u32;
+        radius[usize::from(HouseZone::TownOuterSuburb.0)] = 0;
+        radius[usize::from(HouseZone::TownInnerSuburb.0)] =
+            mass.wrapping_mul(5).wrapping_sub(5) as u32;
+        radius[usize::from(HouseZone::TownCentre.0)] = mass.wrapping_mul(3).wrapping_add(5) as u32;
+        radius
     };
     // SAFETY: No callback or competing native access during this owner mutation.
     unsafe {
@@ -418,10 +511,11 @@ unsafe fn update_radius(state: *mut State) {
 pub unsafe extern "C" fn openttd_rust_town_update_radius(state: *mut State) {
     // SAFETY: Native shell supplies its live single owner.
     unsafe {
-        update_radius(state);
+        update_town_radius(state);
     }
 }
-unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amount: i32) {
+/// `ChangePopulation`.
+unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amount: i32) {
     // SAFETY: Field mutation ends before the presentation service can reenter.
     unsafe {
         (*state).simulation.population = population(state).wrapping_add(amount as u32);
@@ -430,7 +524,8 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amoun
     if unsafe { *GENERATING_TOWN.get() } {
         return;
     }
-    (leaves.population_changed)(town);
+    // Cargo requirements may appear/vanish for small populations.
+    (leaves.population_changed)(u32::from(t.0));
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
@@ -509,16 +604,17 @@ pub struct SuppliedEntry {
     pub entry: *mut Supplied,
     pub created: bool,
 }
-unsafe fn supplied_entry(state: *mut State, cargo: u8) -> SuppliedEntry {
+/// `Town::GetOrCreateCargoSupplied`.
+unsafe fn supplied_entry(state: *mut State, cargo: CargoType) -> SuppliedEntry {
     // SAFETY: Live sole owner, no native vector views survive its mutation.
     let rows = unsafe { &mut (*state).supplied };
-    let at = rows.partition_point(|row| row.cargo < cargo);
-    let created = at == rows.len() || rows[at].cargo != cargo;
+    let at = rows.partition_point(|row| row.cargo < cargo.0);
+    let created = at == rows.len() || rows[at].cargo != cargo.0;
     if created {
         rows.insert(
             at,
             Supplied {
-                cargo,
+                cargo: cargo.0,
                 ..Supplied::default()
             },
         );
@@ -534,7 +630,7 @@ pub unsafe extern "C" fn openttd_rust_town_supplied_entry(
     cargo: u8,
 ) -> SuppliedEntry {
     // SAFETY: Native facade has ended every vector view before this call.
-    unsafe { supplied_entry(state, cargo) }
+    unsafe { supplied_entry(state, CargoType(cargo)) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_supplied_find(state: *const State, cargo: u8) -> usize {
@@ -632,40 +728,43 @@ pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
         (*BUILDING_COUNTS.get()).classes.resize(count, 0);
     }
 }
-/// Count one built house part in its town and the process-wide totals.
-unsafe fn increase_building(state: *mut State, house: u16, class: u16) {
+/// `IncreaseBuildingCount`: count one built house part in its town and the
+/// process-wide totals.
+unsafe fn increase_building(state: *mut State, house: HouseID, class: HouseClassID) {
     // SAFETY: Original valid spec/count indices; no callback while borrowed.
     let state = unsafe { &mut *state };
     // SAFETY: All counters are serialized by the game-state mutex.
     let global = unsafe { &mut *BUILDING_COUNTS.get() };
     state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
     global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
-    if class != 0 {
+    if class != HOUSE_NO_CLASS {
         state.class_counts[usize::from(class)] =
             state.class_counts[usize::from(class)].wrapping_add(1);
         global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
     }
 }
-/// Saturating removal of one house part from town and process-wide totals.
-unsafe fn decrease_building(state: *mut State, house: u16, class: u16) {
+/// `DecreaseBuildingCount`: saturating removal of one house part from town and
+/// process-wide totals.
+unsafe fn decrease_building(state: *mut State, house: HouseID, class: HouseClassID) {
     // SAFETY: Source valid indices and serialized original lifetime preconditions.
     let state = unsafe { &mut *state };
     // SAFETY: No callback spans the process-wide global count access.
     let global = unsafe { &mut *BUILDING_COUNTS.get() };
     state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
     global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
-    if class != 0 {
+    if class != HOUSE_NO_CLASS {
         state.class_counts[usize::from(class)] =
             state.class_counts[usize::from(class)].saturating_sub(1);
         global.classes[usize::from(class)] = global.classes[usize::from(class)].saturating_sub(1);
     }
 }
+/// `TryBuildTownHouse`'s static probability vector of `(HouseID, probability)`.
 struct HouseCandidates {
-    slots: [std::mem::MaybeUninit<(u32, u32)>; 4096],
+    slots: [std::mem::MaybeUninit<(HouseID, u32)>; NUM_HOUSES as usize],
     len: usize,
 }
 static HOUSE_CANDIDATES: GameState<HouseCandidates> = GameState::new(HouseCandidates {
-    slots: [std::mem::MaybeUninit::uninit(); 4096],
+    slots: [std::mem::MaybeUninit::uninit(); NUM_HOUSES as usize],
     len: 0,
 });
 fn clear_house_candidates() {
@@ -673,13 +772,13 @@ fn clear_house_candidates() {
         (*HOUSE_CANDIDATES.get()).len = 0;
     }
 }
-fn add_house_candidate(house: u32, weight: u32) {
+fn add_house_candidate(house: HouseID, weight: u32) {
     // SAFETY: HouseSpec's original maximum is NUM_HOUSES=4096. No callback occurs.
     let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
     candidates.slots[candidates.len].write((house, weight));
     candidates.len += 1;
 }
-fn take_house_candidate(mut random: u32) -> (u32, u32) {
+fn take_house_candidate(mut random: u32) -> (HouseID, u32) {
     // SAFETY: Source's positive total guarantees an initialized weighted slot.
     // The source's static probability vector is also replaced by reentrant builds.
     let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
@@ -747,7 +846,10 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
 ) {
     // SAFETY: Native immutable tables live for this synchronous invocation.
     let (a, s, c) = unsafe { (&*authority, &*services, &*costs) };
-    if (a.council_tolerance)() == 3 {
+    /* The required rating is hardcoded to RATING_VERYPOOR (see below), not the authority attitude setting, so we can bail out like this. */
+    if TownCouncilAttitudes((a.council_tolerance)())
+        == TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
+    {
         (c.zero)(result);
         return;
     }
@@ -756,7 +858,7 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.zero)(result);
         return;
     }
-    let town = crate::town::spatial::closest(s, tile, u32::from((a.authority_distance)()));
+    let town = spatial::closest(s, tile, u32::from((a.authority_distance)()));
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -764,7 +866,7 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
     let owner = (s.town_owner)(town);
     // SAFETY: Live single owner and valid company; immediate copy ends here.
     let rating = unsafe { (*owner).simulation.ratings[usize::from(company)] };
-    if rating > -200 {
+    if i32::from(rating) > RATING_VERYPOOR {
         (c.zero)(result);
     } else {
         (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
@@ -782,8 +884,30 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
     no_test: bool,
     kind: u8,
 ) {
+    /* minimum rating needed to be allowed to remove stuff */
+    const NEEDED_RATING: [[i32; TownRatingCheckType::End.0 as usize]; 4] = [
+        /* RoadRemove, TunnelBridgeRemove */
+        [
+            RATING_ROAD_NEEDED_LENIENT,
+            RATING_TUNNEL_BRIDGE_NEEDED_LENIENT,
+        ], // Lenient
+        [
+            RATING_ROAD_NEEDED_NEUTRAL,
+            RATING_TUNNEL_BRIDGE_NEEDED_NEUTRAL,
+        ], // Neutral
+        [
+            RATING_ROAD_NEEDED_HOSTILE,
+            RATING_TUNNEL_BRIDGE_NEEDED_HOSTILE,
+        ], // Hostile
+        [
+            RATING_ROAD_NEEDED_PERMISSIVE,
+            RATING_TUNNEL_BRIDGE_NEEDED_PERMISSIVE,
+        ], // Permissive
+    ];
     // SAFETY: Native immutable tables and stack-owned result outlive this call.
     let (a, s, c) = unsafe { (&*authority, &*services, &*costs) };
+    let kind = TownRatingCheckType(kind);
+    /* if magic_bulldozer cheat is active, town doesn't restrict your destructive actions */
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -793,8 +917,11 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
         (c.zero)(result);
         return;
     }
-    let needed = [[16, 144], [64, 208], [112, 400], [-1000, -1000]]
-        [usize::from((a.council_tolerance)())][usize::from(kind)];
+    /* check if you're allowed to remove the road/bridge/tunnel
+     * owned by a town no removal if rating is lower than ... depends now on
+     * difficulty setting. Minimum town rating selected by difficulty level
+     */
+    let needed = NEEDED_RATING[usize::from((a.council_tolerance)())][usize::from(kind.0)];
     let owner = (s.town_owner)(town);
     // SAFETY: Live owner, valid company; scratch/native rating access ends here.
     let rating = unsafe { openttd_rust_town_rating(owner, town as usize, company) };
@@ -846,6 +973,31 @@ pub struct CommandResult {
     pub cost: i64,
     pub success: bool,
 }
+/// The possible states of town growth (`town_cmd.cpp`), over its `int` underlying type.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TownGrowthResult(i32);
+#[allow(
+    non_upper_case_globals,
+    reason = "original town_cmd.cpp TownGrowthResult enumerators"
+)]
+impl TownGrowthResult {
+    const Succeed: Self = Self(0);
+    const SearchStopped: Self = Self(1);
+    const Continue: Self = Self(2);
+}
+/// The construction state `MakeTownHouse` writes into every part of a house.
+#[derive(Clone, Copy)]
+struct HouseConstruction {
+    /// The counter of the construction stage.
+    counter: u8,
+    /// The current construction stage.
+    stage: u8,
+    /// Random bits for newgrf houses to use.
+    random_bits: u8,
+    /// Whether the house is protected from the town upgrading it.
+    is_protected: bool,
+}
 /// `owner` is the town's live state for the entry; field accesses end before services.
 #[derive(Clone)]
 struct Engine<'a> {
@@ -856,156 +1008,232 @@ struct Engine<'a> {
     owner: *mut State,
     house_shell: OnceCell<*mut crate::services::TownHandle>,
 }
+/// Map geometry and tile accessors in the original vocabulary. Each delegates to
+/// the shared map arithmetic or one native tile service.
 impl Engine<'_> {
     fn map(&self) -> Map {
         *self
             .map
             .get_or_init(|| Map::from_log_x((self.leaves.map_log_x)()))
     }
-    fn size_x(&self) -> u32 {
-        self.map().size_x()
+    /// `Map::SizeY()`, read at each original observation point.
+    fn size_y(&self) -> u32 {
+        (self.services.map_max_y)().wrapping_add(1)
     }
-    fn distance_from_edge(&self, tile: u32) -> u32 {
-        self.map()
-            .distance_from_edge(tile, (self.services.map_max_y)() + 1)
+    /// The native assertion handler for the shared header preconditions.
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        |ok| crate::movement::native_assert(self.services, ok)
     }
-    fn position(&self) -> u32 {
+    fn distance_from_edge(&self, tile: TileIndex) -> u32 {
+        self.map().distance_from_edge(tile.0, self.size_y())
+    }
+    fn distance_square(&self, a: TileIndex, b: TileIndex) -> u32 {
+        self.map().distance_square(a.0, b.0)
+    }
+    fn tile_index_to_tile_index_diff_c(&self, a: TileIndex, b: TileIndex) -> TileIndexDiffC {
+        self.map().tile_index_to_tile_index_diff_c(a, b)
+    }
+    /// `tile + TileDiffXY(x, y)`.
+    fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
+        TileIndex(self.map().tile_add_xy(tile.0, x, y))
+    }
+    /// `TileOffsByDiagDir`, as the unsigned pattern of its `TileIndexDiff`.
+    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> u32 {
+        self.map().offs_by_diag_dir(dir.0)
+    }
+    fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
+        TileIndex(self.map().add_diag(tile.0, dir.0))
+    }
+    fn tile_add_by_dir(&self, tile: TileIndex, dir: Direction) -> TileIndex {
+        TileIndex(self.map().add_dir(tile.0, dir.0))
+    }
+    fn reverse_diag_dir(&self, dir: DiagDirection) -> DiagDirection {
+        DiagDirection(reverse_diag_dir(dir.0, self.check()))
+    }
+    fn diag_dir_to_axis(&self, dir: DiagDirection) -> Axis {
+        Axis(diag_dir_to_axis(dir.0, self.check()))
+    }
+    fn diag_dir_to_road_bits(&self, dir: DiagDirection) -> RoadBits {
+        RoadBits(diag_dir_to_road_bits(dir.0, self.check()))
+    }
+    fn inclined_slope(dir: DiagDirection) -> Slope {
+        inclined_slope(dir, || unreachable!("native inclined slope direction"))
+    }
+    fn is_valid_tile(&self, tile: TileIndex) -> bool {
+        (self.services.tile_valid)(tile.0)
+    }
+    fn get_tile_type(&self, tile: TileIndex) -> TileType {
+        TileType((self.services.tile_type)(tile.0))
+    }
+    fn is_tile_type(&self, tile: TileIndex, kind: TileType) -> bool {
+        self.get_tile_type(tile) == kind
+    }
+    fn get_tile_slope(&self, tile: TileIndex) -> Slope {
+        Slope((self.services.tile_slope)(tile.0))
+    }
+    fn get_tile_z(&self, tile: TileIndex) -> i32 {
+        (self.services.tile_z)(tile.0)
+    }
+    fn get_tile_max_z(&self, tile: TileIndex) -> i32 {
+        (self.services.tile_max_z)(tile.0)
+    }
+    fn has_tile_water_ground(&self, tile: TileIndex) -> bool {
+        (self.services.has_water_ground)(tile.0)
+    }
+    fn is_bridge_above(&self, tile: TileIndex) -> bool {
+        crate::map_func::World::new(self.services).bridge_above(tile.0)
+    }
+    fn get_tunnel_bridge_transport_type(&self, tile: TileIndex) -> TransportType {
+        TransportType((self.services.tunnel_transport)(tile.0))
+    }
+    fn get_tunnel_bridge_direction(&self, tile: TileIndex) -> DiagDirection {
+        DiagDirection((self.services.tunnel_bridge_direction)(tile.0))
+    }
+    fn get_road_type_road(&self, tile: TileIndex) -> RoadType {
+        RoadType((self.services.road_type)(tile.0))
+    }
+    /// `GetRoadTypeInfo(rt)->flags`.
+    fn road_type_flags(&self, rt: RoadType) -> RoadTypeFlags {
+        RoadTypeFlags((self.leaves.road_flags)(rt.0))
+    }
+    /// Return the `RoadBits` of a tile, ignoring depot and bay road stops (`GetTownRoadBits`).
+    fn get_town_road_bits(&self, tile: TileIndex) -> RoadBits {
+        if (self.services.is_road_depot)(tile.0) || (self.services.is_bay_stop)(tile.0) {
+            return RoadBits::ROAD_NONE;
+        }
+        RoadBits((self.services.road_bits)(
+            tile.0,
+            u8::from(RoadTramType::RTT_ROAD.0),
+            true,
+        ))
+    }
+    /// `Chance16(a, b)` over the shared random stream.
+    fn chance16(&self, a: u32, b: u32) -> bool {
+        chance16_i(a, b, self.services.random())
+    }
+    /// `RandomDiagDir`.
+    fn random_diag_dir(&self) -> DiagDirection {
+        DiagDirection(
+            self.services
+                .random_range(u32::from(DiagDirection::DIAGDIR_END.0)) as u8,
+        )
+    }
+}
+/// The bound town's fields, each read or written at its original observation point.
+impl Engine<'_> {
+    fn bind(mut self, town: TownID) -> Self {
+        self.owner = (self.leaves.resolve_owner)(u32::from(town.0));
+        self
+    }
+    /// `Town::xy`.
+    fn xy(&self) -> TileIndex {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { position(self.owner) }
     }
+    /// `Town::cache.num_houses`.
     fn num_houses(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { num_houses(self.owner) }
     }
-    fn change_house_count(&self, amount: u32) {
-        write_field!(
-            self.owner,
-            simulation.num_houses,
-            self.num_houses().wrapping_add(amount)
-        );
+    fn set_num_houses(&self, value: u32) {
+        write_field!(self.owner, simulation.num_houses, value);
     }
+    /// `Town::cache.population`.
     fn population(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { population(self.owner) }
     }
-    fn layout(&self) -> u8 {
-        read_field!(self.owner, simulation.layout)
+    fn layout(&self) -> TownLayout {
+        TownLayout(read_field!(self.owner, simulation.layout))
     }
-    fn is_city(&self) -> bool {
+    fn larger_town(&self) -> bool {
         read_field!(self.owner, simulation.larger_town)
     }
-    fn radius(&self) -> [u32; 5] {
+    /// `Town::cache.squared_town_zone_radius`.
+    fn squared_town_zone_radius(&self) -> [u32; NUM_HOUSE_ZONES as usize] {
         read_field!(self.owner, simulation.radius)
     }
-    fn goals(&self) -> [u32; 6] {
+    fn goal(&self) -> [u32; NUM_TAE] {
         read_field!(self.owner, simulation.goal)
     }
-    fn old_received(&self, at: usize) -> u32 {
+    /// `Town::received[i].old_act`.
+    fn received_old_act(&self, i: usize) -> u32 {
         // SAFETY: Source bounds and immediate owner access before any callback.
-        unsafe { u32::from((*self.owner).simulation.received[at].old_act) }
+        unsafe { u32::from((*self.owner).simulation.received[i].old_act) }
     }
-    fn bind(mut self, town: u32) -> Self {
-        self.owner = (self.leaves.resolve_owner)(town);
-        self
-    }
-    fn modify_flags(&self, clear: u16, set: u16) {
-        self.set_flags((self.flags() & !clear) | set);
-    }
-    fn counter(&self) -> u16 {
+    fn grow_counter(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
         unsafe { (*self.owner).growth.counter }
     }
-    fn set_counter(&self, value: u16) {
+    fn set_grow_counter(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
             (*self.owner).growth.counter = value;
         }
     }
-    fn rate(&self) -> u16 {
+    fn growth_rate(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
         unsafe { (*self.owner).growth.rate }
     }
-    fn set_rate(&self, value: u16) {
+    fn set_growth_rate(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
             (*self.owner).growth.rate = value;
         }
     }
-    fn funding(&self) -> u16 {
+    fn fund_buildings_months(&self) -> u8 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { u16::from((*self.owner).growth.funding) }
+        unsafe { (*self.owner).growth.funding }
     }
-    fn set_funding(&self, value: u16) {
+    fn set_fund_buildings_months(&self, value: u8) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.funding = value as u8;
+            (*self.owner).growth.funding = value;
         }
     }
-    fn flags(&self) -> u16 {
+    fn flags(&self) -> TownFlags {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { u16::from((*self.owner).growth.flags) }
+        TownFlags(unsafe { (*self.owner).growth.flags })
     }
-    fn set_flags(&self, value: u16) {
+    fn set_flags(&self, value: TownFlags) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.flags = value as u8;
+            (*self.owner).growth.flags = value.0;
         }
     }
-    fn chance(&self, a: u32, b: u32) -> bool {
-        chance16_i(a, b, self.services.random())
+    /// `t->flags.Set(flag)`.
+    fn flags_set(&self, flag: TownFlag) {
+        let mut flags = self.flags();
+        flags.set(flag);
+        self.set_flags(flags);
     }
-    fn dir(&self) -> u32 {
-        self.services.random_range(4)
+    /// `t->flags.Reset(flag)`.
+    fn flags_reset(&self, flag: TownFlag) {
+        let mut flags = self.flags();
+        flags.reset(flag);
+        self.set_flags(flags);
     }
-    fn offset(&self, tile: u32, x: i32, y: i32) -> u32 {
-        tile.wrapping_add(self.map().diff(x, y))
-    }
-    fn step(&self, tile: u32, dir: u32) -> u32 {
-        self.map().add_diag(tile, dir as u8)
-    }
-    fn valid(&self, tile: u32) -> bool {
-        (self.services.tile_valid)(tile)
-    }
-    fn rb(&self, tile: u32) -> u32 {
-        if (self.services.is_road_depot)(tile) || (self.services.is_bay_stop)(tile) {
-            0
-        } else {
-            u32::from((self.services.road_bits)(tile, 0, true))
-        }
-    }
-    fn gridpos(&self, _town: u32, tile: u32) -> (i32, i32) {
-        let center = self.position();
-        let sx = self.size_x();
-        (
-            (center % sx) as i32 - (tile % sx) as i32,
-            (center / sx) as i32 - (tile / sx) as i32,
-        )
-    }
-    fn distance(&self, a: u32, b: u32) -> u32 {
-        self.map().distance_square(a, b)
-    }
-    fn build_road(&self, town: u32, tile: u32, bits: u32, rt: u32, mode: u32) -> bool {
-        let mut flags = 2;
-        if mode != 2 {
-            flags |= 8;
-        }
-        if mode != 0 {
-            flags |= 1;
-        }
-        // SAFETY: growth entries supply a live outer native stack context.
-        unsafe { (&*self.road).build(flags, tile, bits as u8, rt as u8, town as u16) }
-    }
-    fn road(&self, town: u32, tile: u32, bits: u32, flags: u32) -> bool {
-        let rt = self.road_type();
-        self.build_road(town, tile, bits, rt, flags)
-    }
-    fn landscape(
+}
+/// Commands the growth engine issues; each completes before the next owner access.
+impl Engine<'_> {
+    /// `Command<CMD_BUILD_ROAD>::Do(flags, tile, rcmd, rt, DRD_NONE, town).Succeeded()`.
+    fn cmd_build_road(
         &self,
-        tile: u32,
-        slope: u8,
-        up: bool,
-        execute: bool,
-        clear: bool,
+        flags: DoCommandFlags,
+        tile: TileIndex,
+        rcmd: RoadBits,
+        rt: RoadType,
+        town: TownID,
+    ) -> bool {
+        // SAFETY: growth entries supply a live outer native stack context.
+        unsafe { (&*self.road).build(flags.0, tile.0, rcmd.0, rt.0, town.0) }
+    }
+    /// `CMD_LANDSCAPE_CLEAR` or, with its slope and direction, `CMD_TERRAFORM_LAND`.
+    fn landscape_command(
+        &self,
+        flags: DoCommandFlags,
+        tile: TileIndex,
+        terraform: Option<(Slope, bool)>,
     ) -> CommandResult {
         let commands = unsafe { &*(*self.leaves.houses).commands };
         let table = unsafe { &*(commands.landscape_commands)() };
@@ -1013,15 +1241,12 @@ impl Engine<'_> {
         unsafe {
             /* SAFETY: synchronous costs never escape or outlive this call. */
             crate::command::with_cost(costs, |out| {
-                let flags = crate::command_type::DoCommandFlag::AUTO
-                    | crate::command_type::DoCommandFlag::NO_WATER
-                    | u16::from(execute);
-                if clear {
-                    crate::landscape_cmd::clear_command(commands, out.0, tile, flags);
-                } else {
+                if let Some((edges, dir)) = terraform {
                     crate::landscape_cmd::terraform_command(
-                        commands, out.0, tile, slope, up, flags,
+                        commands, out.0, tile.0, edges.0, dir, flags.0,
                     );
+                } else {
+                    crate::landscape_cmd::clear_command(commands, out.0, tile.0, flags.0);
                 }
                 CommandResult {
                     cost: out.money(),
@@ -1030,118 +1255,173 @@ impl Engine<'_> {
             })
         }
     }
-    fn clear(&self, tile: u32, execute: bool) -> bool {
-        self.landscape(tile, 0, false, execute, true).success
+    /// `Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile)`.
+    fn cmd_landscape_clear(&self, flags: DoCommandFlags, tile: TileIndex) -> CommandResult {
+        self.landscape_command(flags, tile, None)
     }
-    fn count_stations(&self, _town: u32) -> u32 {
-        let center = self.position();
-        let radius = self.radius()[0];
+    /// `Command<CMD_TERRAFORM_LAND>::Do(flags, tile, edges, dir)`.
+    fn cmd_terraform_land(
+        &self,
+        flags: DoCommandFlags,
+        tile: TileIndex,
+        edges: Slope,
+        dir: bool,
+    ) -> CommandResult {
+        self.landscape_command(flags, tile, Some((edges, dir)))
+    }
+}
+/// `{DoCommandFlag::Auto, DoCommandFlag::NoWater}`.
+const DC_AUTO_NO_WATER: DoCommandFlags =
+    DoCommandFlags(DoCommandFlag::AUTO | DoCommandFlag::NO_WATER);
+/// `{DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}`.
+const DC_EXECUTE_AUTO_NO_WATER: DoCommandFlags =
+    DoCommandFlags(DoCommandFlag::EXECUTE | DoCommandFlag::AUTO | DoCommandFlag::NO_WATER);
+/// `{DoCommandFlag::Execute, DoCommandFlag::Auto}`.
+const DC_EXECUTE_AUTO: DoCommandFlags =
+    DoCommandFlags(DoCommandFlag::EXECUTE | DoCommandFlag::AUTO);
+/// Growth rates, station ratings and growth state (`town_cmd.cpp`).
+impl Engine<'_> {
+    /// `ForAllStationsNearTown`: `func` receives the station catchment table with
+    /// each station within the town edge zone.
+    fn for_all_stations_near_town(
+        &self,
+        mut func: impl FnMut(&crate::station::CatchmentServices, *mut crate::station::BaseStation),
+    ) {
+        let xy = self.xy();
+        let radius = self.squared_town_zone_radius()[usize::from(HouseZone::TownEdge.0)];
+        /* Ideally the search radius should be close to the actual town zone 0 radius.
+         * The true radius is not stored or calculated anywhere, only the squared radius. */
+        /* The efficiency of this search might be improved for large towns and many stations on the map,
+         * by using an integer square root approximation giving a value not less than the true square root. */
+        let search_radius = radius / 2;
         let c = unsafe { &*(self.services.station_catchment)() };
-        let mut count = 0_u32;
-        crate::station::spatial::radius(self.services, center, radius / 2, |st| {
-            if self.distance((c.location)(st), center) <= radius {
-                let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
-                if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
-                    count = count.wrapping_add(1);
-                }
+        crate::station::spatial::for_all_stations_radius(self.services, xy, search_radius, |st| {
+            if self.distance_square(TileIndex((c.location)(st)), xy) <= radius {
+                func(c, st);
             }
         });
-        count
     }
-    fn update_rate(&self, town: u32) {
-        if self.flags() & 8 != 0 {
+    /// `CountActiveStations`: the amount of active stations in the range of the
+    /// town (`HZB_TOWN_EDGE`).
+    fn count_active_stations(&self) -> u32 {
+        let mut n = 0_u32;
+        self.for_all_stations_near_town(|c, st| {
+            let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
+            if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
+                n = n.wrapping_add(1);
+            }
+        });
+        n
+    }
+    /// `UpdateTownGrowCounter`: update the grow counter after a growth rate change.
+    /// Preserves relative house building progress whenever it can.
+    fn update_town_grow_counter(&self, prev_growth_rate: u16) {
+        if self.growth_rate() == TOWN_GROWTH_RATE_NONE {
             return;
         }
-        let old = self.rate();
-        let rates = [
-            [120_u32, 120, 120, 100, 80, 60],
-            [320, 420, 300, 220, 160, 100],
+        if prev_growth_rate == TOWN_GROWTH_RATE_NONE {
+            self.set_grow_counter(self.growth_rate().min(self.grow_counter()));
+            return;
+        }
+        let numerator = u32::from(self.grow_counter()) * (u32::from(self.growth_rate()) + 1);
+        self.set_grow_counter(
+            round_div_su(numerator as i32, u32::from(prev_growth_rate) + 1) as u16,
+        );
+    }
+    /// `GetNormalGrowthRate`: the growth rate in normal conditions (custom growth
+    /// rate not set). If town growth speed is set to None(0) returns the same rate
+    /// as if it was Normal(2).
+    fn get_normal_growth_rate(&self) -> u16 {
+        /*
+         * Note:
+         * Unserviced+unfunded towns get an additional malus in UpdateTownGrowth(),
+         * so the "320" is actually not better than the "420".
+         */
+        const GROW_COUNT_VALUES: [[u32; 6]; 2] = [
+            [120, 120, 120, 100, 80, 60],   // Fund new buildings has been activated
+            [320, 420, 300, 220, 160, 100], // Normal values
         ];
-        let funding = self.funding() != 0;
-        let mut m = rates[usize::from(!funding)][self.count_stations(town).min(5) as usize];
-        m >>= if u32::from((self.leaves.growth_rate)()) == 0 {
+        let n = self.count_active_stations();
+        let mut m =
+            GROW_COUNT_VALUES[usize::from(self.fund_buildings_months() == 0)][n.min(5) as usize];
+        let growth_multiplier = if u32::from((self.leaves.growth_rate)()) == 0 {
             1
         } else {
             u32::from((self.leaves.growth_rate)()) - 1
         };
-        if self.is_city() {
+        m >>= growth_multiplier;
+        if self.larger_town() {
             m /= 2;
         }
-        let rate = town_ticks_to_game_ticks((m / (self.num_houses() / 50 + 1)) as u16);
-        self.set_rate(rate);
-        if rate != u16::MAX {
-            let counter = self.counter();
-            self.set_counter(if old == u16::MAX {
-                rate.min(counter)
-            } else {
-                let numerator = u32::from(counter) * (u32::from(rate) + 1);
-                round_div(numerator as i32, u32::from(old) + 1) as u16
-            });
-        }
-        (self.leaves.dirty_town)(town);
+        town_ticks_to_game_ticks((m / (self.num_houses() / 50 + 1)) as u16)
     }
-    fn update_growth(&self, town: u32) {
-        self.update_rate(town);
-        self.modify_flags(1, 0);
-        (self.leaves.dirty_town)(town);
-        let funding = self.funding() != 0;
-        if u32::from((self.leaves.growth_rate)()) == 0 && !funding {
+    /// `UpdateTownGrowthRate`.
+    fn update_town_growth_rate(&self, t: TownID) {
+        if self.flags().test(TownFlag::CustomGrowth) {
             return;
         }
-        if !funding {
-            for i in 0..6 {
-                match self.goals()[i] {
-                    0xffff_fffe => {
+        let old_rate = self.growth_rate();
+        self.set_growth_rate(self.get_normal_growth_rate());
+        self.update_town_grow_counter(old_rate);
+        (self.leaves.dirty_town)(u32::from(t.0));
+    }
+    /// `UpdateTownGrowth`: update the growth state (whether the town is growing or not).
+    fn update_town_growth(&self, t: TownID) {
+        self.update_town_growth_rate(t);
+        self.flags_reset(TownFlag::IsGrowing);
+        (self.leaves.dirty_town)(u32::from(t.0));
+        if u32::from((self.leaves.growth_rate)()) == 0 && self.fund_buildings_months() == 0 {
+            return;
+        }
+        if self.fund_buildings_months() == 0 {
+            /* Check if all goals are reached for this town to grow (given we are not funding it) */
+            for tae in TownAcceptanceEffect::TAE_BEGIN.0..TownAcceptanceEffect::TAE_END.0 {
+                let i = usize::from(tae);
+                match self.goal()[i] {
+                    TOWN_GROWTH_WINTER => {
                         if crate::tile_map::tile_height_in(
                             &crate::map_func::World::new(self.services),
-                            self.position(),
+                            self.xy().0,
                         ) >= u32::from(crate::snow_line::get(self.services))
-                            && self.old_received(i) == 0
+                            && self.received_old_act(i) == 0
                             && self.population() > 90
                         {
                             return;
                         }
                     }
-                    u32::MAX => {
-                        if (self.services.tropic_zone)(self.position()) == 1
-                            && self.old_received(i) == 0
+                    TOWN_GROWTH_DESERT => {
+                        if (self.services.tropic_zone)(self.xy().0) == TROPICZONE_DESERT
+                            && self.received_old_act(i) == 0
                             && self.population() > 60
                         {
                             return;
                         }
                     }
                     goal => {
-                        if goal > self.old_received(i) {
+                        if goal > self.received_old_act(i) {
                             return;
                         }
                     }
                 }
             }
         }
-        if self.flags() & 8 != 0 {
-            if self.rate() != u16::MAX {
-                self.modify_flags(0, 1);
+        if self.flags().test(TownFlag::CustomGrowth) {
+            if self.growth_rate() != TOWN_GROWTH_RATE_NONE {
+                self.flags_set(TownFlag::IsGrowing);
             }
-            (self.leaves.dirty_town)(town);
+            (self.leaves.dirty_town)(u32::from(t.0));
             return;
         }
-        if !funding && self.count_stations(town) == 0 && !self.chance(1, 12) {
+        if self.fund_buildings_months() == 0
+            && self.count_active_stations() == 0
+            && !self.chance16(1, 12)
+        {
             return;
         }
-        self.modify_flags(0, 1);
-        (self.leaves.dirty_town)(town);
+        self.flags_set(TownFlag::IsGrowing);
+        (self.leaves.dirty_town)(u32::from(t.0));
     }
 }
-fn reverse(dir: u32) -> u32 {
-    (dir + 2) & 3
-}
-fn bit(dir: u32) -> u32 {
-    1 << (3 - dir)
-}
-fn incline(dir: u32) -> u32 {
-    [12, 6, 3, 9][dir as usize]
-}
-
 fn engine<'a>(leaves: *const Leaves, services: *const Services) -> Engine<'a> {
     // SAFETY: Immutable native service tables remain live for each synchronous entry.
     let leaves = unsafe { &*leaves };
@@ -1155,107 +1435,151 @@ fn engine<'a>(leaves: *const Leaves, services: *const Services) -> Engine<'a> {
         house_shell: OnceCell::new(),
     }
 }
-fn round_div(a: i32, b: u32) -> i32 {
-    if a > 0 {
-        (a + (b as i32) / 2) / (b as i32)
-    } else {
-        (a - ((b as i32) - 1) / 2) / (b as i32)
-    }
-}
-
+/// Town road building (`town_cmd.cpp`).
 impl Engine<'_> {
-    fn road_type(&self) -> u32 {
-        let mut mask = crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD);
-        let mut best = 0;
+    /// `GetTownRoadType`: the road type that towns should build at this current
+    /// moment. They may have built a different type in the past.
+    fn get_town_road_type(&self) -> RoadType {
+        const ASSUME_MAX_SPEED: u16 = 50;
+        let mut best_rt = RoadType::ROADTYPE_ROAD;
         let mut best_speed = None;
+        let mut mask = crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD);
         while mask != 0 {
-            let rt = mask.trailing_zeros();
+            let rt = RoadType(mask.trailing_zeros() as u8);
             mask &= mask - 1;
-            let rti = (self.leaves.road_info)(rt as u8);
+            let rti = (self.leaves.road_info)(rt.0);
+            /* Can town build this road. */
             if !rti.town_build {
                 continue;
             }
+            /* Not yet introduced at this date. */
             let date = rti.introduction_date;
-            if (0..1_826_212_865).contains(&date)
-                && date > crate::timer_game_common::calendar_date().0
-            {
+            if (0..MAX_DATE).contains(&date) && date > crate::timer_game_common::calendar_date().0 {
                 continue;
             }
             let speed = if rti.max_speed == 0 {
-                50
+                ASSUME_MAX_SPEED
             } else {
                 rti.max_speed
             };
-            if best_speed.is_some_and(|previous| speed < previous) {
+            if best_speed.is_some_and(|best| speed < best) {
                 continue;
             }
-            best = rt;
+            best_rt = rt;
             best_speed = Some(speed);
         }
-        best
+        best_rt
     }
-    fn neighbour_road(&self, tile: u32, dir: u32, distance: u32) -> bool {
-        if !self.valid(tile) {
+    /// `IsNeighbourRoadTile`: check for parallel road inside a given distance.
+    /// Assuming a road from (tile - `TileOffsByDiagDir(dir)`) to tile, is there a
+    /// parallel road left or right of it within distance `dist_multi`?
+    fn is_neighbour_road_tile(&self, tile: TileIndex, dir: DiagDirection, dist_multi: u32) -> bool {
+        if !self.is_valid_tile(tile) {
             return false;
         }
-        let left = self.step(tile, (dir + 1) & 3).wrapping_sub(tile);
-        let right = self.step(tile, (dir + 3) & 3).wrapping_sub(tile);
-        let back = self.step(tile, reverse(dir)).wrapping_sub(tile);
-        for pos in 4..(distance + 1) * 4 {
-            let mut diff = if pos & 1 != 0 { left } else { right }.wrapping_mul(pos / 4);
+        /* Lookup table for the used diff values */
+        let tid_lt = [
+            self.tile_offs_by_diag_dir(change_diag_dir_typed(
+                dir,
+                DiagDirDiff::DIAGDIRDIFF_90RIGHT,
+            )),
+            self.tile_offs_by_diag_dir(change_diag_dir_typed(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT)),
+            self.tile_offs_by_diag_dir(self.reverse_diag_dir(dir)),
+        ];
+        let dist_multi = (dist_multi + 1) * 4;
+        for pos in 4..dist_multi {
+            /* Go (pos / 4) tiles to the left or the right */
+            let mut cur = tid_lt[usize::from(pos & 1 == 0)].wrapping_mul(pos / 4);
+            /* Use the current tile as origin, or go one tile backwards */
             if pos & 2 != 0 {
-                diff = diff.wrapping_add(back);
+                cur = cur.wrapping_add(tid_lt[2]);
             }
-            let test = tile.wrapping_add(diff);
-            if self.valid(test)
-                && self.rb(test) & bit(if pos & 2 != 0 { dir } else { reverse(dir) }) != 0
+            /* Test for roadbit parallel to dir and facing towards the middle axis */
+            let test = TileIndex(tile.0.wrapping_add(cur));
+            if self.is_valid_tile(test)
+                && self.get_town_road_bits(test)
+                    & self.diag_dir_to_road_bits(if pos & 2 != 0 {
+                        dir
+                    } else {
+                        self.reverse_diag_dir(dir)
+                    })
+                    != RoadBits::ROAD_NONE
             {
                 return true;
             }
         }
         false
     }
-    fn road_allowed(&self, town: u32, tile: u32, dir: u32) -> bool {
-        if self.distance_from_edge(tile) == 0
-            || (crate::map_func::World::new(self.services).bridge_above(tile)
-                && u32::from((self.services.bridge_axis)(tile)) == (dir & 1))
+    /// `IsRoadAllowedHere`: check if a road is allowed on a given tile, extending
+    /// the town in `dir`.
+    fn is_road_allowed_here(&self, t: TownID, tile: TileIndex, dir: DiagDirection) -> bool {
+        if self.distance_from_edge(tile) == 0 {
+            return false;
+        }
+        /* Prevent towns from building roads under bridges along the bridge. Looks silly. */
+        if self.is_bridge_above(tile)
+            && Axis((self.services.bridge_axis)(tile.0)) == self.diag_dir_to_axis(dir)
         {
             return false;
         }
-        if self.rb(tile) == 0
-            && !self.road(town, tile, if dir & 1 != 0 { 5 } else { 10 }, 0)
-            && !self.clear(tile, false)
-        {
-            return false;
+        /* Check if there already is a road at this point? */
+        if self.get_town_road_bits(tile) == RoadBits::ROAD_NONE {
+            /* No, try if we are able to build a road piece there.
+             * If that fails clear the land, and if that fails exit.
+             * This is to make sure that we can build a road here later. */
+            let rt = self.get_town_road_type();
+            let rcmd = if dir == DiagDirection::DIAGDIR_NW || dir == DiagDirection::DIAGDIR_SE {
+                RoadBits::ROAD_Y
+            } else {
+                RoadBits::ROAD_X
+            };
+            if !self.cmd_build_road(DC_AUTO_NO_WATER, tile, rcmd, rt, t)
+                && !self.cmd_landscape_clear(DC_AUTO_NO_WATER, tile).success
+            {
+                return false;
+            }
         }
-        let slope = if (self.services.build_on_slopes)() {
-            u32::from(
-                crate::movement::foundation_slope(self.services, tile)
-                    .slope
-                    .0,
-            )
+        let cur_slope = if (self.services.build_on_slopes)() {
+            crate::movement::foundation_slope(self.services, tile.0).slope
         } else {
-            u32::from((self.services.tile_slope)(tile))
+            self.get_tile_slope(tile)
         };
-        let ret = !self.neighbour_road(tile, dir, if self.layout() == 0 { 1 } else { 2 });
-        if slope == 0 {
+        let ret = !self.is_neighbour_road_tile(
+            tile,
+            dir,
+            if self.layout() == TownLayout::TL_ORIGINAL {
+                1
+            } else {
+                2
+            },
+        );
+        if cur_slope == Slope::SLOPE_FLAT {
             return ret;
         }
-        let desired = if dir & 1 != 0 { 9 } else { 12 };
-        if desired != slope && (desired ^ 15) != slope {
-            if self.chance(1, 8) {
-                let mut success = false;
-                if !(self.leaves.generating_world)() && self.chance(1, 10) {
-                    let edges = if self.chance(1, 16) {
-                        slope
+        /* If the tile is not a slope in the right direction, then
+         * maybe terraform some. */
+        let desired_slope = if dir == DiagDirection::DIAGDIR_NW || dir == DiagDirection::DIAGDIR_SE
+        {
+            Slope::SLOPE_NW
+        } else {
+            Slope::SLOPE_NE
+        };
+        if desired_slope != cur_slope && Slope(complement_slope(desired_slope.0)) != cur_slope {
+            if self.chance16(1, 8) {
+                let mut res = false;
+                if !(self.leaves.generating_world)() && self.chance16(1, 10) {
+                    /* Note: Do not replace "^ SLOPE_ELEVATED" with ComplementSlope(). The slope might be steep. */
+                    let edges = if self.chance16(1, 16) {
+                        cur_slope
                     } else {
-                        slope ^ 15
+                        cur_slope ^ Slope::SLOPE_ELEVATED
                     };
-                    success = self
-                        .landscape(tile, edges as u8, false, true, false)
+                    res = self
+                        .cmd_terraform_land(DC_EXECUTE_AUTO_NO_WATER, tile, edges, false)
                         .success;
                 }
-                if !success && self.chance(1, 3) {
+                if !res && self.chance16(1, 3) {
+                    /* We can consider building on the slope, though. */
                     return ret;
                 }
             }
@@ -1263,217 +1587,364 @@ impl Engine<'_> {
         }
         ret
     }
-    fn terraform(&self, tile: u32, edges: u32, up: bool) -> bool {
-        let CommandResult { success, cost } = self.landscape(tile, edges as u8, up, false, false);
-        if !success || cost >= ((self.leaves.terraform_price)() + 2) * 8 {
+    /// `TerraformTownTile`.
+    fn terraform_town_tile(&self, tile: TileIndex, edges: Slope, dir: bool) -> bool {
+        let r = self.cmd_terraform_land(DC_AUTO_NO_WATER, tile, edges, dir);
+        if !r.success || r.cost >= ((self.leaves.terraform_price)() + 2) * 8 {
             return false;
         }
-        self.landscape(tile, edges as u8, up, true, false);
+        self.cmd_terraform_land(DC_EXECUTE_AUTO_NO_WATER, tile, edges, dir);
         true
     }
-    fn level(&self, tile: u32) {
-        if (self.services.tile_type)(tile) == MP_HOUSE {
+    /// `LevelTownLand`.
+    fn level_town_land(&self, tile: TileIndex) {
+        /* Don't terraform if land is plain or if there's a house there. */
+        if self.is_tile_type(tile, TileType::MP_HOUSE) {
             return;
         }
-        let slope = u32::from((self.services.tile_slope)(tile));
-        if slope == 0 {
+        let tileh = self.get_tile_slope(tile);
+        if tileh == Slope::SLOPE_FLAT {
             return;
         }
-        if !self.terraform(tile, (!slope) & 15, true) {
-            self.terraform(tile, slope & 15, false);
+        /* First try up, then down */
+        if !self.terraform_town_tile(tile, !tileh & Slope::SLOPE_ELEVATED, true) {
+            self.terraform_town_tile(tile, tileh & Slope::SLOPE_ELEVATED, false);
         }
     }
-    fn grid(&self, town: u32, tile: u32, dir: u32) -> u32 {
-        let (x, y) = self.gridpos(town, tile);
-        let spacing = if self.layout() == 2 { 3 } else { 4 };
-        let bits = if x % spacing == 0 { 5 } else { 0 } | if y % spacing == 0 { 10 } else { 0 };
-        if bits != 15 {
-            return bits;
-        }
-        let template = match u32::from((self.services.tile_slope)(tile)) {
-            1 => 3,
-            3 => 7,
-            2 => 6,
-            6 => 14,
-            4 => 12,
-            12 => 13,
-            8 => 9,
-            9 => 11,
-            23 | 27 | 29 | 30 => 0,
-            _ => 15,
-        };
-        if bit(reverse(dir)) & template != 0 {
-            template
+    /// `GetTownRoadGridElement`: the `RoadBits` of a grid tile, growing towards
+    /// `dir`, regarding the town's grid layout.
+    fn get_town_road_grid_element(&self, tile: TileIndex, dir: DiagDirection) -> RoadBits {
+        /* align the grid to the downtown */
+        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile); // Vector from downtown to the tile
+        let mut rcmd = RoadBits::ROAD_NONE;
+        // `TL_2X2_GRID` uses every third tile; `TL_3X3_GRID` every fourth.
+        let spacing = if self.layout() == TownLayout::TL_2X2_GRID {
+            3
         } else {
-            bit(dir) | bit(reverse(dir))
+            4
+        };
+        if grid_pos.x % spacing == 0 {
+            rcmd |= RoadBits::ROAD_Y;
         }
+        if grid_pos.y % spacing == 0 {
+            rcmd |= RoadBits::ROAD_X;
+        }
+        /* Optimise only X-junctions */
+        if rcmd != RoadBits::ROAD_ALL {
+            return rcmd;
+        }
+        let rb_template = match self.get_tile_slope(tile) {
+            Slope::SLOPE_W => RoadBits::ROAD_NW | RoadBits::ROAD_SW,
+            Slope::SLOPE_SW => RoadBits::ROAD_Y | RoadBits::ROAD_SW,
+            Slope::SLOPE_S => RoadBits::ROAD_SW | RoadBits::ROAD_SE,
+            Slope::SLOPE_SE => RoadBits::ROAD_X | RoadBits::ROAD_SE,
+            Slope::SLOPE_E => RoadBits::ROAD_SE | RoadBits::ROAD_NE,
+            Slope::SLOPE_NE => RoadBits::ROAD_Y | RoadBits::ROAD_NE,
+            Slope::SLOPE_N => RoadBits::ROAD_NE | RoadBits::ROAD_NW,
+            Slope::SLOPE_NW => RoadBits::ROAD_X | RoadBits::ROAD_NW,
+            Slope::SLOPE_STEEP_W
+            | Slope::SLOPE_STEEP_S
+            | Slope::SLOPE_STEEP_E
+            | Slope::SLOPE_STEEP_N => RoadBits::ROAD_NONE,
+            _ => RoadBits::ROAD_ALL,
+        };
+        /* Stop if the template is compatible to the growth dir */
+        if self.diag_dir_to_road_bits(self.reverse_diag_dir(dir)) & rb_template
+            != RoadBits::ROAD_NONE
+        {
+            return rb_template;
+        }
+        /* If not generate a straight road in the direction of the growth */
+        self.diag_dir_to_road_bits(dir) | self.diag_dir_to_road_bits(self.reverse_diag_dir(dir))
     }
-    fn extra_house(&self, town: u32, tile: u32, modes: u32) -> bool {
+    /// `GrowTownWithExtraHouse`: check if there are enough neighbour house tiles
+    /// next to the current tile. If there are enough add another house.
+    fn grow_town_with_extra_house(
+        &self,
+        t: TownID,
+        tile: TileIndex,
+        modes: TownExpandModes,
+    ) -> bool {
+        /* We can't look further than that. */
         if self.distance_from_edge(tile) == 0 {
             return false;
         }
-        let mut count = 0;
-        for dir in 0..4 {
+        let mut counter = 0; // counts the house neighbour tiles
+
+        /* Check the tiles E,N,W and S of the current tile for houses */
+        for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+            /* Count both void and house tiles for checking whether there
+             * are enough houses in the area. This to make it likely that
+             * houses get build up to the edge of the map. */
             if matches!(
-                (self.services.tile_type)(self.step(tile, dir)),
-                MP_HOUSE | MP_VOID
+                self.get_tile_type(self.tile_add_by_diag_dir(tile, DiagDirection(dir))),
+                TileType::MP_HOUSE | TileType::MP_VOID
             ) {
-                count += 1;
+                counter += 1;
             }
-            if count >= 3 {
-                return self.try_house(town, tile, modes);
+            /* If there are enough neighbours stop here */
+            if counter >= 3 {
+                return self.try_build_town_house(t, tile, modes);
             }
         }
         false
     }
-    fn road_continue(&self, town: u32, tile: u32, dir: u32) -> bool {
-        let next = self.step(tile, dir);
-        let rt = self.road_type();
-        if !self.valid(next) {
+    /// `GrowTownWithRoad`: grow the town with a road piece.
+    fn grow_town_with_road(&self, t: TownID, tile: TileIndex, rcmd: RoadBits) -> bool {
+        let rt = self.get_town_road_type();
+        self.cmd_build_road(DC_EXECUTE_AUTO_NO_WATER, tile, rcmd, rt, t)
+    }
+    /// `CanRoadContinueIntoNextTile`: check if a town road can be continued into
+    /// the next tile. Road vehicle stations, bridges, and tunnels are fine, as
+    /// long as they are facing the right direction.
+    fn can_road_continue_into_next_tile(
+        &self,
+        t: TownID,
+        tile: TileIndex,
+        road_dir: DiagDirection,
+    ) -> bool {
+        let next_tile = self.tile_add_by_diag_dir(tile, road_dir); // The tile beyond which must be connectable to the target tile
+        let rt = self.get_town_road_type();
+        /* Before we try anything, make sure the tile is on the map and not the void. */
+        if !self.is_valid_tile(next_tile) {
             return false;
         }
-        match (self.services.tile_type)(next) {
-            MP_TUNNELBRIDGE => {
-                return (self.services.tunnel_transport)(next) == 1
-                    && u32::from((self.services.tunnel_bridge_direction)(next)) == dir;
+        match self.get_tile_type(next_tile) {
+            /* If the next tile is a bridge or tunnel, allow if it's continuing in the same direction. */
+            TileType::MP_TUNNELBRIDGE => {
+                return self.get_tunnel_bridge_transport_type(next_tile)
+                    == TransportType::TRANSPORT_ROAD
+                    && self.get_tunnel_bridge_direction(next_tile) == road_dir;
             }
-            MP_STATION => {
-                if (self.services.is_drive_through_stop)(next) {
-                    return u32::from((self.services.drive_through_axis)(next)) == dir & 1;
+            /* If the next tile is a station, allow if it's a road station facing the proper direction. Otherwise return false. */
+            TileType::MP_STATION => {
+                /* If the next tile is a road station, allow if it can be entered by the new tunnel/bridge, otherwise disallow. */
+                if (self.services.is_drive_through_stop)(next_tile.0) {
+                    return Axis((self.services.drive_through_axis)(next_tile.0))
+                        == self.diag_dir_to_axis(road_dir);
                 }
-                if (self.services.is_bay_stop)(next) {
-                    return u32::from((self.services.bay_stop_direction)(next)) == reverse(dir);
+                if (self.services.is_bay_stop)(next_tile.0) {
+                    return DiagDirection((self.services.bay_stop_direction)(next_tile.0))
+                        == self.reverse_diag_dir(road_dir);
                 }
                 return false;
             }
-            MP_ROAD => {
-                return (self.services.is_road_depot)(next)
-                    && u32::from((self.services.road_depot_direction)(next)) == reverse(dir);
+            /* If the next tile is a road depot, allow if it's facing the right way. */
+            TileType::MP_ROAD => {
+                return (self.services.is_road_depot)(next_tile.0)
+                    && DiagDirection((self.services.road_depot_direction)(next_tile.0))
+                        == self.reverse_diag_dir(road_dir);
             }
-            MP_RAILWAY => {
+            /* If the next tile is a railroad track, check if towns are allowed to build level crossings.
+             * If level crossing are not allowed, reject the construction. Else allow DoCommand to determine if the rail track is buildable. */
+            TileType::MP_RAILWAY => {
                 if !(self.leaves.allow_crossings)() {
                     return false;
                 }
             }
             _ => {}
         }
-        self.build_road(town, next, bit(reverse(dir)), rt, 0)
+        /* If a road tile can be built, the construction is allowed. */
+        let rcmd = self.diag_dir_to_road_bits(self.reverse_diag_dir(road_dir));
+        self.cmd_build_road(DC_AUTO_NO_WATER, next_tile, rcmd, rt, t)
     }
-    fn bridge(&self, town: u32, tile: u32, dir: u32) -> bool {
-        let slope = u32::from((self.services.tile_slope)(tile));
-        if slope != 0 && slope & incline(dir) != 0 {
+    /// `GrowTownWithBridge`: at first we check if a bridge is reasonable. If so we
+    /// check if we are able to build it.
+    fn grow_town_with_bridge(&self, t: TownID, tile: TileIndex, bridge_dir: DiagDirection) -> bool {
+        const TOWN_BRIDGE_LENGTH_CAP: u32 = 11;
+        let slope = self.get_tile_slope(tile);
+        /* Make sure the direction is compatible with the slope.
+         * Well we check if the slope has an up bit set in the
+         * reverse direction. */
+        if slope != Slope::SLOPE_FLAT
+            && slope & Self::inclined_slope(bridge_dir) != Slope::SLOPE_FLAT
+        {
             return false;
         }
-        if self.rb(self.step(tile, reverse(dir))) & bit(dir) == 0 {
+        /* Assure that the bridge is connectable to the start side */
+        if self
+            .get_town_road_bits(self.tile_add_by_diag_dir(tile, self.reverse_diag_dir(bridge_dir)))
+            & self.diag_dir_to_road_bits(bridge_dir)
+            == RoadBits::ROAD_NONE
+        {
             return false;
         }
-        let max = (self.population() / 1000 + 5).min(11);
-        let mut length = 0;
-        let mut end = tile;
+        /* We are in the right direction */
+        let mut bridge_length = 0_u32; // This value stores the length of the possible bridge
+        let mut bridge_tile = tile; // Used to store the other waterside
+
+        /* To prevent really small towns from building disproportionately
+         * long bridges, make the max a function of its population. */
+        let base_bridge_length = 5;
+        let max_bridge_length =
+            (self.population() / 1000 + base_bridge_length).min(TOWN_BRIDGE_LENGTH_CAP);
+        let world = || crate::map_func::World::new(self.services);
+        let one_way_road = |tile: TileIndex| {
+            world().is_normal_road_tile(tile.0)
+                && DisallowedRoadDirections(world().disallowed_road_directions(tile.0))
+                    != DisallowedRoadDirections::DRD_NONE
+        };
+        if slope == Slope::SLOPE_FLAT {
+            /* Bridges starting on flat tiles are only allowed when crossing rivers, rails or one-way roads. */
+            loop {
+                let length = bridge_length;
+                bridge_length += 1;
+                if length >= base_bridge_length {
+                    /* Allow to cross rivers, not big lakes, nor large amounts of rails or one-way roads. */
+                    return false;
+                }
+                bridge_tile = self.tile_add_by_diag_dir(bridge_tile, bridge_dir);
+                if !(self.is_valid_tile(bridge_tile)
+                    && (((self.services.is_water_tile)(bridge_tile.0)
+                        && !world().is_sea(bridge_tile.0))
+                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || one_way_road(bridge_tile)))
+                {
+                    break;
+                }
+            }
+        } else {
+            loop {
+                let length = bridge_length;
+                bridge_length += 1;
+                if length >= max_bridge_length {
+                    /* Ensure the bridge is not longer than the max allowed length. */
+                    return false;
+                }
+                bridge_tile = self.tile_add_by_diag_dir(bridge_tile, bridge_dir);
+                if !(self.is_valid_tile(bridge_tile)
+                    && ((self.services.is_water_tile)(bridge_tile.0)
+                        || (self.services.is_plain_rail)(bridge_tile.0)
+                        || one_way_road(bridge_tile)))
+                {
+                    break;
+                }
+            }
+        }
+        /* Don't allow a bridge where the start and end tiles are adjacent with no span between. */
+        if bridge_length == 1 {
+            return false;
+        }
+        /* Make sure the road can be continued past the bridge. At this point, bridge_tile holds the end tile of the bridge. */
+        if !self.can_road_continue_into_next_tile(t, bridge_tile, bridge_dir) {
+            return false;
+        }
+        /* If another parallel bridge exists nearby, this one would be redundant and shouldn't be built. We don't care about flat bridges. */
+        if slope != Slope::SLOPE_FLAT {
+            let map = self.map();
+            let mut search = crate::spiral::hole(
+                map.tile_x(tile.0),
+                map.tile_y(tile.0),
+                bridge_length,
+                0,
+                0,
+                map.size_x(),
+                self.size_y(),
+            );
+            while !search.is_end() {
+                let at = TileIndex(map.tile_xy(search.x, search.y));
+                /* Only consider bridge head tiles. */
+                /* Only consider road bridges. */
+                /* If the bridge is facing the same direction as the proposed bridge, we've found a redundant bridge. */
+                if (self.services.is_bridge)(at.0)
+                    && self.get_tunnel_bridge_transport_type(at) == TransportType::TRANSPORT_ROAD
+                    && self.get_tile_slope(at)
+                        & Self::inclined_slope(self.reverse_diag_dir(bridge_dir))
+                        != Slope::SLOPE_FLAT
+                {
+                    return false;
+                }
+                search = search.advance(map.size_x(), self.size_y());
+            }
+        }
+        for _times in 0..=22_u8 {
+            let bridge_type = self.services.random_range(MAX_BRIDGES - 1);
+            /* Can we actually build the bridge? */
+            let rt = self.get_town_road_type();
+            if (self.leaves.build_bridge)(tile.0, bridge_tile.0, bridge_type, u32::from(rt.0), 0) {
+                (self.leaves.build_bridge)(tile.0, bridge_tile.0, bridge_type, u32::from(rt.0), 1);
+                return true;
+            }
+        }
+        /* Quit if it selecting an appropriate bridge type fails a large number of times. */
+        false
+    }
+    /// `GrowTownWithTunnel`: first we check if a tunnel is reasonable. If so we
+    /// check if we are able to build it.
+    fn grow_town_with_tunnel(&self, t: TownID, tile: TileIndex, tunnel_dir: DiagDirection) -> bool {
+        /* Only consider building a tunnel if the starting tile is sloped properly. */
+        if self.get_tile_slope(tile) != Self::inclined_slope(tunnel_dir) {
+            return false;
+        }
+        /* Assure that the tunnel is connectable to the start side */
+        if self
+            .get_town_road_bits(self.tile_add_by_diag_dir(tile, self.reverse_diag_dir(tunnel_dir)))
+            & self.diag_dir_to_road_bits(tunnel_dir)
+            == RoadBits::ROAD_NONE
+        {
+            return false;
+        }
+        /* There are two conditions for building tunnels: Under a mountain and under an obstruction. */
+        let max_tunnel_length = if self.can_road_continue_into_next_tile(t, tile, tunnel_dir) {
+            /* Only tunnel under a mountain if the slope is continuous for at least 4 tiles. We want tunneling to be a last resort for large hills. */
+            let mut slope_tile = tile;
+            for _tiles in 0..4_u8 {
+                if !self.is_valid_tile(slope_tile) {
+                    return false;
+                }
+                let slope = self.get_tile_slope(slope_tile);
+                if slope != Self::inclined_slope(tunnel_dir)
+                    && !is_steep_slope(slope.0)
+                    && !is_slope_with_one_corner_raised(slope.0)
+                {
+                    return false;
+                }
+                slope_tile = self.tile_add_by_diag_dir(slope_tile, tunnel_dir);
+            }
+            /* More population means longer tunnels, but make sure we can at least cover the smallest mountain which necessitates tunneling. */
+            self.population() / 1000 + 7
+        } else {
+            /* When tunneling under an obstruction, the length limit is 5, enough to tunnel under a four-track railway. */
+            5
+        };
+        let mut tunnel_length = 0_u8;
+        let mut tunnel_tile = tile; // Iterator to store the other end tile of the tunnel.
+
+        /* Find the end tile of the tunnel for length and continuation checks. */
         loop {
-            let old = length;
-            length += 1;
-            if old >= if slope == 0 { 5 } else { max } {
+            let length = tunnel_length;
+            tunnel_length = tunnel_length.wrapping_add(1);
+            if u32::from(length) >= max_tunnel_length {
                 return false;
             }
-            end = self.step(end, dir);
-            if !self.valid(end)
-                || !(((self.services.is_water_tile)(end)
-                    && (slope != 0 || !crate::map_func::World::new(self.services).is_sea(end)))
-                    || (self.services.is_plain_rail)(end)
-                    || (crate::map_func::World::new(self.services).is_normal_road_tile(end)
-                        && crate::map_func::World::new(self.services)
-                            .disallowed_road_directions(end)
-                            != 0))
+            tunnel_tile = self.tile_add_by_diag_dir(tunnel_tile, tunnel_dir);
+            /* The tunnel ends when start and end tiles are the same height. */
+            if !self.is_valid_tile(tunnel_tile)
+                || self.get_tile_z(tile) == self.get_tile_z(tunnel_tile)
             {
                 break;
             }
         }
-        if length == 1 || !self.road_continue(town, end, dir) {
+        /* Don't allow a tunnel where the start and end tiles are adjacent. */
+        if tunnel_length == 1 {
             return false;
         }
-        if slope != 0 {
-            let mut spiral = crate::spiral::hole(
-                tile % self.size_x(),
-                tile / self.size_x(),
-                length,
-                0,
-                0,
-                self.size_x(),
-                (self.services.map_max_y)().wrapping_add(1),
-            );
-            while !spiral.is_end() {
-                let at = spiral.x + spiral.y * self.size_x();
-                if (self.services.is_bridge)(at)
-                    && (self.services.tunnel_transport)(at) == 1
-                    && u32::from((self.services.tile_slope)(at)) & incline(reverse(dir)) != 0
-                {
-                    return false;
-                }
-                spiral = spiral.advance(self.size_x(), (self.services.map_max_y)().wrapping_add(1));
-            }
-        }
-        for _ in 0..=22 {
-            let bridge = self.services.random_range(13 - 1);
-            let rt = self.road_type();
-            if (self.leaves.build_bridge)(tile, end, bridge, rt, 0) {
-                (self.leaves.build_bridge)(tile, end, bridge, rt, 1);
-                return true;
-            }
-        }
-        false
-    }
-    fn tunnel(&self, town: u32, tile: u32, dir: u32) -> bool {
-        if u32::from((self.services.tile_slope)(tile)) != incline(dir)
-            || self.rb(self.step(tile, reverse(dir))) & bit(dir) == 0
-        {
+        /* Make sure the road can be continued past the tunnel. At this point, tunnel_tile holds the end tile of the tunnel. */
+        if !self.can_road_continue_into_next_tile(t, tunnel_tile, tunnel_dir) {
             return false;
         }
-        let max = if self.road_continue(town, tile, dir) {
-            let mut test = tile;
-            for _ in 0..4 {
-                if !self.valid(test) {
-                    return false;
-                }
-                let slope = (self.services.tile_slope)(test);
-                if u32::from(slope) != incline(dir)
-                    && !is_steep_slope(slope)
-                    && !is_slope_with_one_corner_raised(slope)
-                {
-                    return false;
-                }
-                test = self.step(test, dir);
-            }
-            self.population() / 1000 + 7
-        } else {
-            5
-        };
-        let mut length = 0_u8;
-        let mut end = tile;
-        loop {
-            let old = length;
-            length = length.wrapping_add(1);
-            if u32::from(old) >= max {
-                return false;
-            }
-            end = self.step(end, dir);
-            if !self.valid(end) || (self.services.tile_z)(tile) == (self.services.tile_z)(end) {
-                break;
-            }
-        }
-        if length == 1 || !self.road_continue(town, end, dir) {
-            return false;
-        }
-        let rt = self.road_type();
-        if (self.leaves.build_tunnel)(tile, rt, 0) {
-            (self.leaves.build_tunnel)(tile, rt, 1);
+        /* Attempt to build the tunnel. Return false if it fails to let the town build a road instead. */
+        let rt = self.get_town_road_type();
+        if (self.leaves.build_tunnel)(tile.0, u32::from(rt.0), 0) {
+            (self.leaves.build_tunnel)(tile.0, u32::from(rt.0), 1);
             return true;
         }
         false
     }
-    fn roads_allow_house(&self, tile: u32) -> bool {
-        let mut found = false;
-        for (x, y) in [
+    /// `RoadTypesAllowHouseHere`: whether at least one surrounding road type
+    /// allows building a house here.
+    fn road_types_allow_house_here(&self, t: TileIndex) -> bool {
+        const TILES: [(i32, i32); 8] = [
             (-1, -1),
             (-1, 0),
             (-1, 1),
@@ -1482,244 +1953,363 @@ impl Engine<'_> {
             (1, -1),
             (1, 0),
             (1, 1),
-        ] {
-            let at = self.offset(tile, x, y);
-            if !self.valid(at)
-                || !((self.services.tile_type)(at) == MP_ROAD
-                    || crate::map_func::World::new(self.services).any_road_stop_tile(at))
+        ];
+        let mut allow = false;
+        for (x, y) in TILES {
+            let cur_tile = self.tile_add_xy(t, x, y);
+            if !self.is_valid_tile(cur_tile) {
+                continue;
+            }
+            if !(self.is_tile_type(cur_tile, TileType::MP_ROAD)
+                || crate::map_func::World::new(self.services).any_road_stop_tile(cur_tile.0))
             {
                 continue;
             }
-            found = true;
-            let road_type = (self.services.road_type)(at);
-            if road_type != 63 && (self.leaves.road_flags)(road_type) & 4 == 0 {
+            allow = true;
+            let road_rt = self.get_road_type_road(cur_tile);
+            if road_rt != RoadType::INVALID_ROADTYPE
+                && !self.road_type_flags(road_rt).test(RoadTypeFlag::NoHouses)
+            {
                 return true;
             }
         }
-        !found
+        /* If no road was found surrounding the tile we can allow building the house since there is
+         * nothing which forbids it, if a road was found but the execution reached this point, then
+         * all the found roads don't allow houses to be built */
+        !allow
     }
-    fn grow_road(&self, tile: u32) -> bool {
-        if (self.services.tile_type)(tile) != MP_ROAD {
+    /// `TownCanGrowRoad`: whether the tile's road type doesn't prevent extending the road.
+    fn town_can_grow_road(&self, tile: TileIndex) -> bool {
+        if !self.is_tile_type(tile, TileType::MP_ROAD) {
             return true;
         }
-        let road_type = (self.services.road_type)(tile);
-        (self.leaves.road_flags)(road_type) & 16 != 0 || u32::from(road_type) == self.road_type()
+        /* Allow extending on roadtypes which can be built by town, or if the road type matches the type the town will build. */
+        let rt = self.get_road_type_road(tile);
+        self.road_type_flags(rt).test(RoadTypeFlag::TownBuild) || self.get_town_road_type() == rt
     }
-    fn can_follow(&self, tile: u32, dir: u32, modes: u32) -> bool {
-        let next = self.step(tile, dir);
-        if !self.valid(next) || (self.services.has_water_ground)(next) {
+    /// `CanFollowRoad`: whether a road can be followed or is a dead end that can
+    /// not be extended to the next tile. This only checks trivial but often cases.
+    fn can_follow_road(&self, tile: TileIndex, dir: DiagDirection, modes: TownExpandModes) -> bool {
+        let target_tile = self.tile_add_by_diag_dir(tile, dir);
+        if !self.is_valid_tile(target_tile) || self.has_tile_water_ground(target_tile) {
             return false;
         }
-        let bits = self.rb(next);
-        if modes & 2 != 0 {
-            match (self.services.tile_type)(next) {
-                MP_ROAD => bits != 0,
-                MP_STATION => (self.services.is_drive_through_stop)(next),
-                MP_TUNNELBRIDGE => (self.services.tunnel_transport)(next) == 1,
-                MP_HOUSE | MP_INDUSTRY | MP_OBJECT => false,
+        let target_rb = self.get_town_road_bits(target_tile);
+        if town_allowed_to_build_roads(modes) {
+            /* Check whether a road connection exists or can be build. */
+            match self.get_tile_type(target_tile) {
+                TileType::MP_ROAD => target_rb != RoadBits::ROAD_NONE,
+                TileType::MP_STATION => (self.services.is_drive_through_stop)(target_tile.0),
+                TileType::MP_TUNNELBRIDGE => {
+                    self.get_tunnel_bridge_transport_type(target_tile)
+                        == TransportType::TRANSPORT_ROAD
+                }
+                TileType::MP_HOUSE | TileType::MP_INDUSTRY | TileType::MP_OBJECT => false,
+                /* Checked for void and water earlier */
                 _ => true,
             }
         } else {
-            let back = bit(reverse(dir));
-            bits & back != 0 && bits & !back != 0
+            /* Check whether a road connection already exists,
+             * and it leads somewhere else. */
+            let back_rb = self.diag_dir_to_road_bits(self.reverse_diag_dir(dir));
+            target_rb & back_rb != RoadBits::ROAD_NONE
+                && target_rb & !back_rb != RoadBits::ROAD_NONE
         }
     }
 }
-
+/// `ChangeDiagDir`, over the shared modulo-four helper.
+fn change_diag_dir_typed(dir: DiagDirection, delta: DiagDirDiff) -> DiagDirection {
+    DiagDirection(change_diag_dir(dir.0, delta.0))
+}
+/// `TownAllowedToBuildRoads`.
+fn town_allowed_to_build_roads(modes: TownExpandModes) -> bool {
+    modes.test(TownExpandMode::Roads)
+}
+/// Town growth (`town_cmd.cpp`).
 impl Engine<'_> {
-    fn in_tile(&self, town: u32, tile: &mut u32, cur: u32, mut dir: u32, modes: u32) -> u32 {
-        let at = *tile;
+    /// `GrowTownInTile`: grow the given town. There are at the moment 3 possible
+    /// ways for the town expansion:
+    /// - Generate a random tile and check if there is a road allowed
+    ///   (`TL_ORIGINAL`, `TL_BETTER_ROADS`)
+    /// - Check if the town geometry allows a road and which one
+    ///   (`TL_2X2_GRID`, `TL_3X3_GRID`)
+    /// - Forbid roads, only build houses
+    fn grow_town_in_tile(
+        &self,
+        t1: TownID,
+        tile_ptr: &mut TileIndex,
+        cur_rb: RoadBits,
+        mut target_dir: DiagDirection,
+        modes: TownExpandModes,
+    ) -> TownGrowthResult {
+        let mut rcmd; // RoadBits for the road construction command
+        let tile = *tile_ptr; // The main tile on which we base our growth
         let layout = self.layout();
-        let mut bits;
-        if cur == 0 {
-            if modes & 2 == 0
-                || (!(self.leaves.allow_crossings)() && (self.services.tile_type)(at) == MP_RAILWAY)
-            {
-                return 1;
+        if cur_rb == RoadBits::ROAD_NONE {
+            /* Tile has no road.
+             * We will return TownGrowthResult::SearchStopped to say that this is the last iteration. */
+            if !town_allowed_to_build_roads(modes) {
+                return TownGrowthResult::SearchStopped;
             }
-            if !(self.services.build_on_slopes)() || self.chance(1, 6) {
-                self.level(at);
+            if !(self.leaves.allow_crossings)() && self.is_tile_type(tile, TileType::MP_RAILWAY) {
+                return TownGrowthResult::SearchStopped;
             }
-            if layout >= 2 {
-                bits = self.grid(town, at, dir);
-                if bits == 0 {
-                    return 1;
+            /* Remove hills etc */
+            if !(self.services.build_on_slopes)() || self.chance16(1, 6) {
+                self.level_town_land(tile);
+            }
+            /* Is a road allowed here? */
+            if layout.0 >= TownLayout::TL_2X2_GRID.0 {
+                // TL_3X3_GRID, TL_2X2_GRID
+                rcmd = self.get_town_road_grid_element(tile, target_dir);
+                if rcmd == RoadBits::ROAD_NONE {
+                    return TownGrowthResult::SearchStopped;
                 }
             } else {
-                if !self.road_allowed(town, at, dir) {
-                    return 1;
+                // TL_BETTER_ROADS, TL_ORIGINAL
+                if !self.is_road_allowed_here(t1, tile, target_dir) {
+                    return TownGrowthResult::SearchStopped;
                 }
-                let source = reverse(dir);
-                if self.chance(1, 4) {
-                    loop {
-                        dir = self.dir();
-                        if dir != source {
-                            break;
-                        }
+                let source_dir = self.reverse_diag_dir(target_dir);
+                if self.chance16(1, 4) {
+                    /* Randomize a new target dir */
+                    target_dir = self.random_diag_dir();
+                    while target_dir == source_dir {
+                        target_dir = self.random_diag_dir();
                     }
                 }
-                if !self.road_allowed(town, self.step(at, dir), dir) {
-                    if dir != reverse(source) {
-                        return 1;
+                let next_tile = self.tile_add_by_diag_dir(tile, target_dir);
+                if !self.is_road_allowed_here(t1, next_tile, target_dir) {
+                    /* A road is not allowed to continue the randomized road,
+                     *  return if the road we're trying to build is curved. */
+                    if target_dir != self.reverse_diag_dir(source_dir) {
+                        return TownGrowthResult::SearchStopped;
                     }
-                    if (self.services.tile_type)(self.step(at, (dir + 1) & 3)) != MP_HOUSE
-                        && (self.services.tile_type)(self.step(at, (dir + 3) & 3)) != MP_HOUSE
+                    /* Return if neither side of the new road is a house */
+                    let right = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
+                    let left = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
+                    if !self
+                        .is_tile_type(self.tile_add_by_diag_dir(tile, right), TileType::MP_HOUSE)
+                        && !self
+                            .is_tile_type(self.tile_add_by_diag_dir(tile, left), TileType::MP_HOUSE)
                     {
-                        return 1;
+                        return TownGrowthResult::SearchStopped;
                     }
+                    /* That means that the road is only allowed if there is a house
+                     *  at any side of the new road. */
                 }
-                bits = bit(dir) | bit(source);
+                rcmd =
+                    self.diag_dir_to_road_bits(target_dir) | self.diag_dir_to_road_bits(source_dir);
             }
-        } else if dir < 4 && cur & bit(reverse(dir)) == 0 {
-            if !self.grow_road(at) {
-                return 2;
+        } else if target_dir.0 < DiagDirection::DIAGDIR_END.0
+            && cur_rb & self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir))
+                == RoadBits::ROAD_NONE
+        {
+            if !self.town_can_grow_road(tile) {
+                return TownGrowthResult::Continue;
             }
-            if modes & 2 == 0 {
-                return 1;
+            if !town_allowed_to_build_roads(modes) {
+                return TownGrowthResult::SearchStopped;
             }
-            bits = if layout >= 2 {
-                self.grid(town, at, dir)
+            /* Continue building on a partial road.
+             * Should be always OK, so we only generate
+             * the fitting RoadBits */
+            rcmd = if layout.0 >= TownLayout::TL_2X2_GRID.0 {
+                // TL_3X3_GRID, TL_2X2_GRID
+                self.get_town_road_grid_element(tile, target_dir)
             } else {
-                bit(reverse(dir))
+                // TL_BETTER_ROADS, TL_ORIGINAL
+                self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir))
             };
         } else {
-            let mut allow = true;
-            if (self.services.tile_type)(at) == MP_TUNNELBRIDGE {
-                if (self.services.tunnel_transport)(at) == 1 && (dir != 4 || self.chance(1, 2)) {
-                    *tile = (self.services.other_tunnel_end)(at);
+            let mut allow_house = true; // Value which decides if we want to construct a house
+
+            /* Reached a tunnel/bridge? Then continue at the other side of it, unless
+             * it is the starting tile. Half the time, we stay on this side then.*/
+            if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
+                if self.get_tunnel_bridge_transport_type(tile) == TransportType::TRANSPORT_ROAD
+                    && (target_dir != DiagDirection::DIAGDIR_END || self.chance16(1, 2))
+                {
+                    *tile_ptr = TileIndex((self.services.other_tunnel_end)(tile.0));
                 }
-                return 2;
+                return TownGrowthResult::Continue;
             }
-            dir = self.dir();
-            let target = bit(dir);
-            let house_tile = if cur & target != 0 {
-                if cur & 10 != target {
-                    return 2;
-                }
-                let house = match cur {
-                    9 => self.offset(at, 1, 1),
-                    6 => self.offset(at, -1, -1),
-                    12 => self.offset(at, 1, -1),
-                    3 => self.offset(at, -1, 1),
-                    _ => return 2,
-                };
-                dir = 4;
-                house
+            /* Possibly extend the road in a direction.
+             * Randomize a direction and if it has a road, bail out. */
+            target_dir = self.random_diag_dir();
+            let target_rb = self.diag_dir_to_road_bits(target_dir);
+            let house_tile = if cur_rb & target_rb == RoadBits::ROAD_NONE {
+                self.tile_add_by_diag_dir(tile, target_dir)
             } else {
-                self.step(at, dir)
+                /* If it's a road turn possibly build a house in a corner.
+                 * Use intersection with straight road as an indicator
+                 * that we randomised corner house position.
+                 * A turn (and we check for that later) always has only
+                 * one common bit with a straight road so it has the same
+                 * chance to be chosen as the house on the side of a road.
+                 */
+                if cur_rb & RoadBits::ROAD_X != target_rb {
+                    return TownGrowthResult::Continue;
+                }
+                /* Check whether it is a turn and if so determine
+                 * position of the corner tile */
+                let Some(house_tile) = self.road_turn_corner_tile(tile, cur_rb) else {
+                    return TownGrowthResult::Continue; // not a turn
+                };
+                target_dir = DiagDirection::DIAGDIR_END;
+                house_tile
             };
-            if (self.services.has_water_ground)(house_tile) {
-                return 2;
+            /* Don't walk into water. */
+            if self.has_tile_water_ground(house_tile) || !self.is_valid_tile(house_tile) {
+                return TownGrowthResult::Continue;
             }
-            if !self.valid(house_tile) {
-                return 2;
-            }
-            let mut result = 2;
-            bits = 0;
-            if dir != 4 && modes & 2 != 0 {
-                if layout == 3 || layout == 1 {
-                    if self.extra_house(town, self.step(house_tile, dir), modes) {
-                        result = 0;
-                    }
+            let mut result = TownGrowthResult::Continue;
+            rcmd = RoadBits::ROAD_NONE;
+            if target_dir != DiagDirection::DIAGDIR_END && town_allowed_to_build_roads(modes) {
+                // TL_3X3_GRID: use 2x2 grid afterwards! TL_BETTER_ROADS: use original afterwards!
+                let extra_tile = self.tile_add_by_diag_dir(house_tile, target_dir);
+                if (layout == TownLayout::TL_3X3_GRID || layout == TownLayout::TL_BETTER_ROADS)
+                    && self.grow_town_with_extra_house(t1, extra_tile, modes)
+                {
+                    result = TownGrowthResult::Succeed;
                 }
-                if layout >= 2 {
-                    bits = self.grid(town, at, dir);
-                    allow = bits & target == 0;
+                if layout.0 >= TownLayout::TL_2X2_GRID.0 {
+                    // TL_3X3_GRID, TL_2X2_GRID
+                    rcmd = self.get_town_road_grid_element(tile, target_dir);
+                    allow_house = rcmd & target_rb == RoadBits::ROAD_NONE;
                 } else {
-                    bits = target;
-                    allow = !self.road_allowed(town, house_tile, dir) || self.chance(6, 10);
+                    // TL_BETTER_ROADS, TL_ORIGINAL
+                    /* Allow a house at the edge. 60% chance or
+                     * always ok if no road allowed. */
+                    rcmd = target_rb;
+                    allow_house = !self.is_road_allowed_here(t1, house_tile, target_dir)
+                        || self.chance16(6, 10);
                 }
             }
-            allow &= self.roads_allow_house(house_tile);
-            if allow {
-                if (self.services.tile_type)(house_tile) != MP_HOUSE {
-                    if self.chance(1, 6) {
-                        self.level(house_tile);
+            allow_house &= self.road_types_allow_house_here(house_tile);
+            if allow_house {
+                /* Build a house, but not if there already is a house there. */
+                if !self.is_tile_type(house_tile, TileType::MP_HOUSE) {
+                    /* Level the land if possible */
+                    if self.chance16(1, 6) {
+                        self.level_town_land(house_tile);
                     }
-                    if self.try_house(town, house_tile, modes) {
-                        result = 0;
+                    /* And build a house.
+                     * Set result to -1 if we managed to build it. */
+                    if self.try_build_town_house(t1, house_tile, modes) {
+                        result = TownGrowthResult::Succeed;
                     }
                 }
                 return result;
             }
-            if !self.grow_road(at) {
+            if !self.town_can_grow_road(tile) {
                 return result;
             }
         }
-        if (self.services.has_water_ground)(at) {
-            return 1;
+        /* Return if a water tile */
+        if self.has_tile_water_ground(tile) {
+            return TownGrowthResult::SearchStopped;
         }
-        bits = u32::from(
-            crate::road_cleanup::clean_up_road_bits(
-                self.services,
-                at,
-                crate::services::RoadBits(bits as u8),
-            )
-            .0,
-        );
-        if bits == 0 {
-            return 1;
+        /* Make the roads look nicer */
+        rcmd = crate::road_cleanup::clean_up_road_bits(self.services, tile.0, rcmd);
+        if rcmd == RoadBits::ROAD_NONE {
+            return TownGrowthResult::SearchStopped;
         }
-        if self.bridge(town, at, dir) || self.tunnel(town, at, dir) || self.road(town, at, bits, 1)
+        /* Only use the target direction for bridges and tunnels to ensure they're connected.
+         * The target_dir is as computed previously according to town layout, so
+         * it will match it perfectly. */
+        if self.grow_town_with_bridge(t1, tile, target_dir)
+            || self.grow_town_with_tunnel(t1, tile, target_dir)
+            || self.grow_town_with_road(t1, tile, rcmd)
         {
-            return 0;
+            return TownGrowthResult::Succeed;
         }
-        1
+        TownGrowthResult::SearchStopped
     }
-    fn at_road(&self, town: u32, mut tile: u32, modes: u32) -> bool {
-        let factor = match self.layout() {
-            1 => 2,
-            2 | 3 => 1,
-            _ => 4,
+    /// `GrowTownInTile`'s corner tile of a road turn, or `None` if `cur_rb` is not a turn.
+    fn road_turn_corner_tile(&self, tile: TileIndex, cur_rb: RoadBits) -> Option<TileIndex> {
+        match cur_rb {
+            RoadBits::ROAD_N => Some(self.tile_add_by_dir(tile, Direction::DIR_S)),
+            RoadBits::ROAD_S => Some(self.tile_add_by_dir(tile, Direction::DIR_N)),
+            RoadBits::ROAD_E => Some(self.tile_add_by_dir(tile, Direction::DIR_W)),
+            RoadBits::ROAD_W => Some(self.tile_add_by_dir(tile, Direction::DIR_E)),
+            _ => None,
+        }
+    }
+    /// `GrowTownAtRoad`: try to grow a town at a given road tile.
+    fn grow_town_at_road(&self, t: TownID, mut tile: TileIndex, modes: TownExpandModes) -> bool {
+        /* Special case.
+         * @see GrowTownInTile Check the else if
+         */
+        let mut target_dir = DiagDirection::DIAGDIR_END; // The direction in which we want to extend the town
+
+        /* Number of times to search.
+         * Better roads, 2X2 and 3X3 grid grow quite fast so we give
+         * them a little handicap. */
+        let mut iterations = match self.layout() {
+            TownLayout::TL_BETTER_ROADS => (10 + self.num_houses().wrapping_mul(2) / 9) as i32,
+            TownLayout::TL_3X3_GRID | TownLayout::TL_2X2_GRID => {
+                (10 + self.num_houses().wrapping_mul(1) / 9) as i32
+            }
+            _ => (10 + self.num_houses().wrapping_mul(4) / 9) as i32,
         };
-        let mut iterations = (10 + self.num_houses().wrapping_mul(factor) / 9) as i32;
-        let mut dir = 4;
         loop {
-            let mut cur = self.rb(tile);
-            match self.in_tile(town, &mut tile, cur, dir, modes) {
-                0 => return true,
-                1 => iterations = 0,
+            let mut cur_rb = self.get_town_road_bits(tile); // The RoadBits of the current tile
+
+            /* Try to grow the town from this point */
+            match self.grow_town_in_tile(t, &mut tile, cur_rb, target_dir, modes) {
+                TownGrowthResult::Succeed => return true,
+                TownGrowthResult::SearchStopped => iterations = 0,
                 _ => {}
             }
-            if dir < 4 {
-                cur &= !bit(reverse(dir));
+            /* Exclude the source position from the bitmask
+             * and return if no more road blocks available */
+            if is_valid_diag_direction(target_dir) {
+                cur_rb &= !self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir));
             }
-            if cur == 0 {
+            if cur_rb == RoadBits::ROAD_NONE {
                 return false;
             }
-            if (self.services.tile_type)(tile) == MP_TUNNELBRIDGE {
-                dir = reverse(u32::from((self.services.tunnel_bridge_direction)(tile)));
+            if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
+                /* Only build in the direction away from the tunnel or bridge. */
+                target_dir = self.reverse_diag_dir(self.get_tunnel_bridge_direction(tile));
             } else {
+                /* Select a random bit from the blockmask, walk a step
+                 * and continue the search from there. */
                 loop {
-                    if cur == 0 {
+                    if cur_rb == RoadBits::ROAD_NONE {
                         return false;
                     }
-                    let target = loop {
-                        dir = self.dir();
-                        let bits = bit(dir);
-                        if cur & bits != 0 {
-                            break bits;
+                    let target_bits = loop {
+                        target_dir = self.random_diag_dir();
+                        let target_bits = self.diag_dir_to_road_bits(target_dir);
+                        if cur_rb & target_bits != RoadBits::ROAD_NONE {
+                            break target_bits;
                         }
                     };
-                    cur &= !target;
-                    if self.can_follow(tile, dir, modes) {
+                    cur_rb &= !target_bits;
+                    if self.can_follow_road(tile, target_dir, modes) {
                         break;
                     }
                 }
             }
-            tile = self.step(tile, dir);
-            if (self.services.tile_type)(tile) == MP_ROAD
-                && !(self.services.is_road_depot)(tile)
-                && (self.services.has_road_type)(tile)
+            tile = self.tile_add_by_diag_dir(tile, target_dir);
+            if self.is_tile_type(tile, TileType::MP_ROAD)
+                && !(self.services.is_road_depot)(tile.0)
+                && (self.services.has_road_type)(tile.0)
             {
-                let owner = crate::map_func::World::new(self.services).road_owner(tile, false);
-                if owner == 15 && u32::from((self.services.town_index)(tile)) != town {
+                let owner = crate::map_func::World::new(self.services).road_owner(tile.0, false);
+                /* Don't allow building over roads of other cities */
+                if owner == OWNER_TOWN && TownID((self.services.town_index)(tile.0)) != t {
                     return false;
                 }
-                if owner == 16 && (self.leaves.environment.editor)() {
-                    (self.leaves.set_road_town)(tile, town);
+                if owner == OWNER_NONE && (self.leaves.environment.editor)() {
+                    /* If we are in the SE, and this road-piece has no town owner yet, it just found an
+                     * owner :) (happy happy happy road now) */
+                    (self.leaves.set_road_town)(tile.0, u32::from(t.0));
                 }
             }
+            /* Max number of times is checked. */
             iterations -= 1;
             if iterations < 0 {
                 break;
@@ -1727,262 +2317,267 @@ impl Engine<'_> {
         }
         false
     }
-    fn grow(&self, town: u32, modes: u32) -> bool {
-        const OFFSETS: [(i32, i32); 13] = [
-            (-1, 0),
-            (1, 1),
-            (1, -1),
-            (-1, -1),
-            (-1, 0),
-            (0, 2),
-            (2, 0),
-            (0, -2),
-            (-1, -1),
-            (-2, 2),
-            (2, 2),
-            (2, -2),
-            (0, 0),
-        ];
-        // Ordinary shared commands are noexcept; restore the original company on each return.
-        let company = (self.leaves.exchange_company)(15);
-        let mut tile = self.position();
-        for (x, y) in OFFSETS {
-            if self.rb(tile) != 0 {
-                let result = self.at_road(town, tile, modes);
-                (self.leaves.exchange_company)(company);
-                return result;
-            }
-            tile = self.offset(tile, x, y);
+    /// `GenRandomRoadBits`: a random road block. The probability of a straight
+    /// road is somewhat higher than a curved.
+    fn gen_random_road_bits(&self) -> RoadBits {
+        let r = self.services.random();
+        let a = gb(r, 0, 2);
+        let mut b = gb(r, 8, 2);
+        if a == b {
+            b ^= 2;
         }
-        if modes & 2 != 0 {
-            tile = self.position();
-            for (x, y) in OFFSETS {
-                if (self.services.tile_type)(tile) != MP_HOUSE
-                    && (self.services.tile_slope)(tile) == 0
-                    && self.clear(tile, false)
+        RoadBits(
+            ((u32::from(RoadBits::ROAD_NW.0) << a) + (u32::from(RoadBits::ROAD_NW.0) << b)) as u8,
+        )
+    }
+    /// `GrowTown`: whether we successfully grew the town with a road or house.
+    fn grow_town(&self, t: TownID, modes: TownExpandModes) -> bool {
+        const TOWN_COORD_MOD: [TileIndexDiffC; 13] = [
+            TileIndexDiffC { x: -1, y: 0 },
+            TileIndexDiffC { x: 1, y: 1 },
+            TileIndexDiffC { x: 1, y: -1 },
+            TileIndexDiffC { x: -1, y: -1 },
+            TileIndexDiffC { x: -1, y: 0 },
+            TileIndexDiffC { x: 0, y: 2 },
+            TileIndexDiffC { x: 2, y: 0 },
+            TileIndexDiffC { x: 0, y: -2 },
+            TileIndexDiffC { x: -1, y: -1 },
+            TileIndexDiffC { x: -2, y: 2 },
+            TileIndexDiffC { x: 2, y: 2 },
+            TileIndexDiffC { x: 2, y: -2 },
+            TileIndexDiffC { x: 0, y: 0 },
+        ];
+        /* Current "company" is a town */
+        // Ordinary shared commands are noexcept; restore the original company on each return.
+        // The exchange service carries the saved `CompanyID` in its base integer.
+        let cur_company = CompanyID((self.leaves.exchange_company)(u32::from(OWNER_TOWN)) as u8);
+        let mut tile = self.xy(); // The tile we are working with ATM
+
+        /* Find a road that we can base the construction on. */
+        for ptr in TOWN_COORD_MOD {
+            if self.get_town_road_bits(tile) != RoadBits::ROAD_NONE {
+                let success = self.grow_town_at_road(t, tile, modes);
+                (self.leaves.exchange_company)(u32::from(cur_company.0));
+                return success;
+            }
+            tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
+        }
+        /* No road available, try to build a random road block by
+         * clearing some land and then building a road there. */
+        if town_allowed_to_build_roads(modes) {
+            tile = self.xy();
+            for ptr in TOWN_COORD_MOD {
+                /* Only work with plain land that not already has a house */
+                if !self.is_tile_type(tile, TileType::MP_HOUSE)
+                    && crate::map_func::World::new(self.services).tile_flat(tile.0)
+                    && self.cmd_landscape_clear(DC_AUTO_NO_WATER, tile).success
                 {
-                    let rt = self.road_type();
-                    let r = self.services.random();
-                    let a = r & 3;
-                    let mut b = (r >> 8) & 3;
-                    if a == b {
-                        b ^= 2;
-                    }
-                    self.build_road(town, tile, (1 << a) + (1 << b), rt, 2);
-                    (self.leaves.exchange_company)(company);
+                    let rt = self.get_town_road_type();
+                    self.cmd_build_road(DC_EXECUTE_AUTO, tile, self.gen_random_road_bits(), rt, t);
+                    (self.leaves.exchange_company)(u32::from(cur_company.0));
                     return true;
                 }
-                tile = self.offset(tile, x, y);
+                tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
             }
         }
-        (self.leaves.exchange_company)(company);
+        (self.leaves.exchange_company)(u32::from(cur_company.0));
         false
     }
-    fn layout_house(&self, town: u32, tile: u32, modes: u32, square: bool) -> bool {
-        if modes & 1 == 0 {
+}
+/// House construction (`town_cmd.cpp`).
+impl Engine<'_> {
+    /// `TownLayoutAllowsHouseHere`: whether the current town layout allows building here.
+    fn town_layout_allows_house_here(&self, tile: TileIndex, modes: TownExpandModes) -> bool {
+        if !modes.test(TownExpandMode::Buildings) {
             return false;
         }
-        if modes & 2 == 0 {
+        /* Allow towns everywhere when we don't build roads */
+        if !town_allowed_to_build_roads(modes) {
             return true;
         }
-        let (x, y) = self.gridpos(town, tile);
+        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile);
         match self.layout() {
-            2 => {
-                if square {
-                    matches!(x % 3, 2 | -1) && matches!(y % 3, 2 | -1)
-                } else {
-                    x % 3 != 0 && y % 3 != 0
-                }
-            }
-            3 => {
-                if square {
-                    x & 3 >= 2 && y & 3 >= 2
-                } else {
-                    x % 4 != 0 && y % 4 != 0
-                }
-            }
+            TownLayout::TL_2X2_GRID => grid_pos.x % 3 != 0 && grid_pos.y % 3 != 0,
+            TownLayout::TL_3X3_GRID => grid_pos.x % 4 != 0 && grid_pos.y % 4 != 0,
             _ => true,
         }
     }
-    fn can_house(&self, tile: u32, noslope: bool) -> bool {
-        let slope = (self.services.tile_slope)(tile);
-        if (noslope && slope != 0) || is_steep_slope(slope) {
+    /// `TownLayoutAllows2x2HouseHere`: whether the current town layout allows a
+    /// 2x2 building here.
+    fn town_layout_allows_2x2_house_here(&self, tile: TileIndex, modes: TownExpandModes) -> bool {
+        if !modes.test(TownExpandMode::Buildings) {
             return false;
         }
-        if !self.roads_allow_house(tile)
-            || crate::map_func::World::new(self.services).bridge_above(tile)
-        {
-            return false;
+        /* Allow towns everywhere when we don't build roads */
+        if !town_allowed_to_build_roads(modes) {
+            return true;
         }
-        self.clear(tile, false)
+        /* Compute relative position of tile. (Positive offsets are towards north) */
+        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile);
+        match self.layout() {
+            TownLayout::TL_2X2_GRID => {
+                matches!(grid_pos.x % 3, 2 | -1) && matches!(grid_pos.y % 3, 2 | -1)
+            }
+            TownLayout::TL_3X3_GRID => grid_pos.x & 3 >= 2 && grid_pos.y & 3 >= 2,
+            _ => true,
+        }
     }
-    fn same_z(&self, tile: u32, z: i32, noslope: bool) -> bool {
-        self.can_house(tile, noslope) && (self.services.tile_max_z)(tile) == z
-    }
-    fn free_square(&self, mut tile: u32, z: i32, noslope: bool) -> bool {
-        if !self.same_z(tile, z, noslope) {
+    /// `CanBuildHouseHere`: whether a house can be built here, based on slope,
+    /// whether there's a bridge above, and if we can clear the land.
+    fn can_build_house_here(&self, tile: TileIndex, noslope: bool) -> bool {
+        /* cannot build on these slopes... */
+        let slope = self.get_tile_slope(tile);
+        if (noslope && slope != Slope::SLOPE_FLAT) || is_steep_slope(slope.0) {
             return false;
         }
-        for dir in 1..4 {
-            tile = self.step(tile, dir);
-            if !self.same_z(tile, z, noslope) {
+        /* at least one RoadTypes allow building the house here? */
+        if !self.road_types_allow_house_here(tile) {
+            return false;
+        }
+        /* building under a bridge? */
+        if self.is_bridge_above(tile) {
+            return false;
+        }
+        /* can we clear the land? */
+        self.cmd_landscape_clear(DC_AUTO_NO_WATER, tile).success
+    }
+    /// `CheckBuildHouseSameZ`: whether a tile where we want to build a multi-tile
+    /// house has an appropriate max Z.
+    fn check_build_house_same_z(&self, tile: TileIndex, z: i32, noslope: bool) -> bool {
+        if !self.can_build_house_here(tile, noslope) {
+            return false;
+        }
+        /* if building on slopes is allowed, there will be flattening foundation (to tile max z) */
+        self.get_tile_max_z(tile) == z
+    }
+    /// `CheckFree2x2Area`: whether a house of size 2x2 can be built at this tile.
+    fn check_free_2x2_area(&self, mut tile: TileIndex, z: i32, noslope: bool) -> bool {
+        /* we need to check this tile too because we can be at different tile now */
+        if !self.check_build_house_same_z(tile, z, noslope) {
+            return false;
+        }
+        for d in DiagDirection::DIAGDIR_SE.0..DiagDirection::DIAGDIR_END.0 {
+            tile = self.tile_add_by_diag_dir(tile, DiagDirection(d));
+            if !self.check_build_house_same_z(tile, z, noslope) {
                 return false;
             }
         }
         true
     }
-    fn check_house(
+    /// `CheckTownBuild2House`: whether a 1x2 or 2x1 building is allowed here,
+    /// accounting for road layout and tile heights. Also, tests both building
+    /// positions that occupy this tile.
+    fn check_town_build_2_house(
         &self,
-        town: u32,
-        tile: &mut u32,
-        z: i32,
+        tile: &mut TileIndex,
+        maxz: i32,
         noslope: bool,
-        size: u32,
-        modes: u32,
+        second: DiagDirection,
+        modes: TownExpandModes,
     ) -> bool {
-        if size & 16 != 0 {
-            let mut test = *tile;
-            for dir in 1..=4 {
-                if self.layout_house(town, test, modes, true) && self.free_square(test, z, noslope)
-                {
-                    *tile = test;
-                    return true;
-                }
-                if dir == 4 {
-                    break;
-                }
-                test = self.step(test, reverse(dir));
-            }
-            false
-        } else if size & 12 != 0 {
-            let dir = if size & 4 != 0 { 2 } else { 1 };
-            let mut test = self.step(*tile, dir);
-            if self.layout_house(town, test, modes, false) && self.same_z(test, z, noslope) {
-                return true;
-            }
-            test = self.step(*tile, reverse(dir));
-            if self.layout_house(town, test, modes, false) && self.same_z(test, z, noslope) {
-                *tile = test;
-                return true;
-            }
-            false
-        } else {
-            true
+        /* 'tile' is already checked in BuildTownHouse() - CanBuildHouseHere() and slope test */
+        let mut tile2 = self.tile_add_by_diag_dir(*tile, second);
+        if self.town_layout_allows_house_here(tile2, modes)
+            && self.check_build_house_same_z(tile2, maxz, noslope)
+        {
+            return true;
         }
+        tile2 = self.tile_add_by_diag_dir(*tile, self.reverse_diag_dir(second));
+        if self.town_layout_allows_house_here(tile2, modes)
+            && self.check_build_house_same_z(tile2, maxz, noslope)
+        {
+            *tile = tile2;
+            return true;
+        }
+        false
     }
-    fn make_house_tile(
+    /// `CheckTownBuild2x2House`: whether a 2x2 building is allowed here,
+    /// accounting for road layout and tile heights. Also, tests all four building
+    /// positions that occupy this tile.
+    fn check_town_build_2x2_house(
         &self,
-        town: u32,
-        tile: u32,
-        counter: u32,
-        stage: u32,
-        house: u32,
-        random: u32,
-        protected: bool,
+        tile: &mut TileIndex,
+        maxz: i32,
+        noslope: bool,
+        modes: TownExpandModes,
+    ) -> bool {
+        let mut tile2 = *tile;
+        // 'd' goes through DIAGDIR_SE, DIAGDIR_SW, DIAGDIR_NW, DIAGDIR_END
+        for d in DiagDirection::DIAGDIR_SE.0..=DiagDirection::DIAGDIR_END.0 {
+            if self.town_layout_allows_2x2_house_here(tile2, modes)
+                && self.check_free_2x2_area(tile2, maxz, noslope)
+            {
+                *tile = tile2;
+                return true;
+            }
+            if d == DiagDirection::DIAGDIR_END.0 {
+                break;
+            }
+            tile2 = self.tile_add_by_diag_dir(tile2, self.reverse_diag_dir(DiagDirection(d))); // go clockwise
+        }
+        false
+    }
+    /// `ClearMakeHouseTile`: clear the tile and build a house or house part.
+    fn clear_make_house_tile(
+        &self,
+        tile: TileIndex,
+        t: TownID,
+        house: HouseID,
+        c: HouseConstruction,
     ) {
-        (self.leaves.assert_clear_house)(self.landscape(tile, 0, false, true, true).success);
-        let class = (self.leaves.house_class)(house as u16);
+        (self.leaves.assert_clear_house)(
+            self.cmd_landscape_clear(DC_EXECUTE_AUTO_NO_WATER, tile)
+                .success,
+        );
+        let class = (self.leaves.house_class)(house);
         // SAFETY: Entry resolved the live town once. Count borrows end here,
         // before map writes or callbacks can reenter and mutate the owner.
-        unsafe { increase_building(self.owner, house as u16, class) };
+        unsafe { increase_building(self.owner, house, class) };
         (self.leaves.make_house)(
-            tile,
-            town,
-            house,
-            counter | (stage << 8) | (random << 16) | (u32::from(protected) << 24),
+            tile.0,
+            u32::from(t.0),
+            u32::from(house),
+            u32::from(c.counter)
+                | (u32::from(c.stage) << 8)
+                | (u32::from(c.random_bits) << 16)
+                | (u32::from(c.is_protected) << 24),
         );
-        if u32::from((self.leaves.house_flags)(house as u16)) & 32 != 0 {
-            crate::animated_tile::openttd_rust_animation_add(tile, false);
+        if house::building_flags(self.leaves, house).test(BuildingFlag::IsAnimated) {
+            crate::animated_tile::openttd_rust_animation_add(tile.0, false);
         }
-        (self.services.mark_dirty)(tile);
+        (self.services.mark_dirty)(tile.0);
     }
-    fn build_house(
+    /// `MakeTownHouse`: write house information into the map. For multi-tile
+    /// houses, all tiles are marked; `tile` is the northern-most tile.
+    fn make_town_house(
         &self,
-        town: u32,
-        tile: u32,
-        house: u32,
-        random: u32,
-        complete: bool,
-        protected: bool,
+        tile: TileIndex,
+        t: TownID,
+        mut house: HouseID,
+        c: HouseConstruction,
     ) {
-        // SAFETY: Entry bound its owner once; this mutation ends before spec queries.
-        unsafe {
-            (*self.owner).simulation.num_houses = self.num_houses().wrapping_add(1);
+        let size = house::building_flags(self.leaves, house);
+        self.clear_make_house_tile(tile, t, house, c);
+        if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
+            house += 1;
+            self.clear_make_house_tile(self.tile_add_xy(tile, 0, 1), t, house, c);
         }
-
-        let mut counter = 0;
-        let mut stage = 0;
-        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || complete {
-            let construction = self.services.random();
-            stage = 3;
-            if (self.leaves.generating_world)()
-                && (self.leaves.house_extra_flags)(house as u16) & 1 == 0
-                && self.chance(1, 7)
-            {
-                stage = construction & 3;
-            }
-            if stage == 3 {
-                // SAFETY: Owner mutation ends before possible presentation reentry.
-                unsafe {
-                    change_population(
-                        self.leaves,
-                        self.owner,
-                        town,
-                        i32::from((self.leaves.house_population)(house as u16)),
-                    );
-                }
-            } else {
-                counter = (construction >> 2) & 3;
-            }
+        if size.any(BuildingFlags::BUILDING_2_TILES_X) {
+            house += 1;
+            self.clear_make_house_tile(self.tile_add_xy(tile, 1, 0), t, house, c);
         }
-        let size = u32::from((self.leaves.house_flags)(house as u16));
-        let mut part = house;
-        self.make_house_tile(town, tile, counter, stage, part, random, protected);
-        if size & 24 != 0 {
-            part += 1;
-            self.make_house_tile(
-                town,
-                self.offset(tile, 0, 1),
-                counter,
-                stage,
-                part,
-                random,
-                protected,
-            );
+        if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
+            house += 1;
+            self.clear_make_house_tile(self.tile_add_xy(tile, 1, 1), t, house, c);
         }
-        if size & 20 != 0 {
-            part += 1;
-            self.make_house_tile(
-                town,
-                self.offset(tile, 1, 0),
-                counter,
-                stage,
-                part,
-                random,
-                protected,
-            );
-        }
-        if size & 16 != 0 {
-            part += 1;
-            self.make_house_tile(
-                town,
-                self.offset(tile, 1, 1),
-                counter,
-                stage,
-                part,
-                random,
-                protected,
-            );
-        }
-        let flags = size as u8;
         let area = crate::tilearea::TileArea {
-            tile,
-            w: if flags & crate::house::BUILDING_2_TILES_X != 0 {
+            tile: tile.0,
+            w: if size.any(BuildingFlags::BUILDING_2_TILES_X) {
                 2
             } else {
                 1
             },
-            h: if flags & crate::house::BUILDING_2_TILES_Y != 0 {
+            h: if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
                 2
             } else {
                 1
@@ -1998,184 +2593,307 @@ impl Engine<'_> {
                 true
             },
         );
+    }
+    /// `BuildTownHouse`: build a house at this tile.
+    fn build_town_house(
+        &self,
+        t: TownID,
+        tile: TileIndex,
+        house: HouseID,
+        random_bits: u8,
+        house_completed: bool,
+        is_protected: bool,
+    ) {
+        /* build the house */
+        self.set_num_houses(self.num_houses().wrapping_add(1));
+        let mut construction_counter = 0;
+        let mut construction_stage = 0;
+        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || house_completed
+        {
+            let construction_random = self.services.random();
+            construction_stage = TOWN_HOUSE_COMPLETED;
+            if (self.leaves.generating_world)()
+                && !HouseExtraFlags((self.leaves.house_extra_flags)(house))
+                    .test(HouseExtraFlag::BuildingIsHistorical)
+                && self.chance16(1, 7)
+            {
+                construction_stage = gb(construction_random, 0, 2) as u8;
+            }
+            if construction_stage == TOWN_HOUSE_COMPLETED {
+                // SAFETY: Owner mutation ends before possible presentation reentry.
+                unsafe {
+                    change_population(
+                        self.leaves,
+                        self.owner,
+                        t,
+                        i32::from((self.leaves.house_population)(house)),
+                    );
+                }
+            } else {
+                construction_counter = gb(construction_random, 2, 2) as u8;
+            }
+        }
+        self.make_town_house(
+            tile,
+            t,
+            house,
+            HouseConstruction {
+                counter: construction_counter,
+                stage: construction_stage,
+                random_bits,
+                is_protected,
+            },
+        );
         // SAFETY: Pure immediate owner mutation, without native callbacks.
         unsafe {
-            update_radius(self.owner);
+            update_town_radius(self.owner);
         }
-        self.update_rate(town);
-        let size = u32::from((self.leaves.house_flags)(house as u16));
+        self.update_town_growth_rate(t);
+        let size = house::building_flags(self.leaves, house);
         // Resolve only the native shell at the first construction trigger; the
         // entry already resolved its owner. House lifecycle callers also supplied
         // their shell. No owner reference spans any construction callback.
         let shell = *self.house_shell.get_or_init(|| {
             // SAFETY: Static house table referenced by the town leaves.
-            (self.services.town_by_id)(town)
+            (self.services.town_by_id)(u32::from(t.0))
         });
         let town_ref = TownRef {
             shell,
             state: self.owner,
-            id: TownId(town as u16),
+            id: t,
         };
-        let stage_changed = |part: u32| {
+        let stage_changed = |part: TileIndex| {
             house::trigger_house_animation_construction_stage_changed(
                 self.leaves,
                 self.services,
                 town_ref,
-                TileIndex(part),
+                part,
             );
         };
         stage_changed(tile);
-        if size & 24 != 0 {
-            stage_changed(self.offset(tile, 0, 1));
+        if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
+            stage_changed(self.tile_add_xy(tile, 0, 1));
         }
-        if size & 20 != 0 {
-            stage_changed(self.offset(tile, 1, 0));
+        if size.any(BuildingFlags::BUILDING_2_TILES_X) {
+            stage_changed(self.tile_add_xy(tile, 1, 0));
         }
-        if size & 16 != 0 {
-            stage_changed(self.offset(tile, 1, 1));
+        if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
+            stage_changed(self.tile_add_xy(tile, 1, 1));
         }
     }
-    fn try_house(&self, town: u32, base: u32, modes: u32) -> bool {
-        if !self.layout_house(town, base, modes, false) || !self.can_house(base, false) {
-            return false;
-        }
-        let slope = u32::from((self.services.tile_slope)(base));
-        let maxz = (self.services.tile_max_z)(base);
-        let distance = self.distance(self.position(), base);
-        let zone = u32::from(radius_group(self.funding() != 0, &self.radius(), distance));
-        let climate = match (self.leaves.climate)() {
-            0 => 12,
-            1 => {
-                if maxz > i32::from(crate::snow_line::highest(self.services)) {
-                    11
-                } else {
-                    13
+}
+/// House selection, ticks and the town command bodies (`town_cmd.cpp`).
+impl Engine<'_> {
+    /// `TryBuildTownHouse`'s zone set: the town zone of the tile and its climate.
+    fn town_house_zones(&self, tile: TileIndex, maxz: i32) -> HouseZones {
+        // SAFETY: Live bound owner; immediate copied reads.
+        let mut zones = HouseZones::from_element(unsafe {
+            get_town_radius_group(self.owner, tile, self.map())
+        });
+        zones = zones.with(HouseZones::from_element(
+            match LandscapeType((self.leaves.climate)()) {
+                LandscapeType::Temperate => HouseZone::ClimateTemperate,
+                LandscapeType::Arctic => {
+                    if maxz > i32::from(crate::snow_line::highest(self.services)) {
+                        HouseZone::ClimateSubarcticAboveSnow
+                    } else {
+                        HouseZone::ClimateSubarcticBelowSnow
+                    }
                 }
-            }
-            2 => 14,
-            _ => 15,
-        };
-        let zones = (1 << zone) | (1 << climate);
+                LandscapeType::Tropic => HouseZone::ClimateSubtropic,
+                // LandscapeType::Toyland
+                _ => HouseZone::ClimateToyland,
+            },
+        ));
+        zones
+    }
+    /// `TryBuildTownHouse`'s list of all possible houses that can be built, with
+    /// their total probability.
+    fn collect_town_house_candidates(&self, zones: HouseZones) -> u32 {
         clear_house_candidates();
-        let mut max = 0_u32;
-        for house in 0..(self.leaves.house_count)() {
-            let h = (self.leaves.house_availability)(house as u16);
-            if u32::from(h.zones) & zones != zones || !h.enabled || h.override_id != u16::MAX {
+        let mut probability_max = 0_u32;
+        /* Generate a list of all possible houses that can be built. */
+        for index in 0..(self.leaves.house_count)() {
+            let house = index as HouseID;
+            let hs = (self.leaves.house_availability)(house);
+            /* Verify that the candidate house spec matches the current tile status */
+            if !HouseZones(hs.zones).all(zones) || !hs.enabled || hs.override_id != INVALID_HOUSE_ID
+            {
                 continue;
             }
+            /* Don't let these counters overflow. Global counters are 32bit, there will never be that many houses. */
             // SAFETY: Original valid spec/count indices; immediate read ends
             // before the next spec query or any construction callback.
             let count = unsafe {
-                if h.class_id != 0 {
-                    (&(*self.owner).class_counts)[usize::from(h.class_id)]
+                if hs.class_id == HOUSE_NO_CLASS {
+                    /* If the house has no class, check id_count instead */
+                    (&(*self.owner).id_counts)[usize::from(house)]
                 } else {
-                    (&(*self.owner).id_counts)[house as usize]
+                    /* id_count is always <= class_count, so it doesn't need to be checked */
+                    (&(*self.owner).class_counts)[usize::from(hs.class_id)]
                 }
             };
             if count == u16::MAX {
                 continue;
             }
-            max = max.wrapping_add(u32::from(h.probability));
-            add_house_candidate(house, u32::from(h.probability));
+            let cur_prob = u32::from(hs.probability);
+            probability_max = probability_max.wrapping_add(cur_prob);
+            add_house_candidate(house, cur_prob);
         }
-        while max > 0 {
-            let mut tile = base;
-            let (house, weight) = take_house_candidate(self.services.random_range(max));
-            max -= weight;
-            let h = (self.leaves.house_placement)(house as u16);
+        probability_max
+    }
+    /// `TryBuildTownHouse`: false iff no house can be built on this tile.
+    fn try_build_town_house(&self, t: TownID, mut tile: TileIndex, modes: TownExpandModes) -> bool {
+        /* forbidden building here by town layout */
+        if !self.town_layout_allows_house_here(tile, modes) {
+            return false;
+        }
+        /* no house allowed at all, bail out */
+        if !self.can_build_house_here(tile, false) {
+            return false;
+        }
+        let slope = self.get_tile_slope(tile);
+        let maxz = self.get_tile_max_z(tile);
+        /* Get the town zone type of the current tile, as well as the climate.
+         * This will allow to easily compare with the specs of the new house to build */
+        let zones = self.town_house_zones(tile, maxz);
+        /* bits 0-4 are used
+         * bits 11-15 are used
+         * bits 5-10 are not used. */
+        let mut probability_max = self.collect_town_house_candidates(zones);
+        let base_tile = tile;
+        while probability_max > 0 {
+            /* Building a multitile building can change the location of tile.
+             * The building would still be built partially on that tile, but
+             * its northern tile would be elsewhere. However, if the callback
+             * fails we would be basing further work from the changed tile.
+             * So a next 1x1 tile building could be built on the wrong tile. */
+            tile = base_tile;
+            /* remove tested house from the set */
+            let (house, probability) =
+                take_house_candidate(self.services.random_range(probability_max));
+            probability_max -= probability;
+            let hs = (self.leaves.house_placement)(house);
+            let extra_flags = || HouseExtraFlags((self.leaves.house_extra_flags)(house));
             if !(self.leaves.generating_world)()
                 && !(self.leaves.environment.editor)()
-                && (self.leaves.house_extra_flags)(house as u16) & 1 != 0
+                && extra_flags().test(HouseExtraFlag::BuildingIsHistorical)
             {
                 continue;
             }
             let year = crate::timer_game_common::calendar_year().0;
-            if year < h.min_year || year > h.max_year {
+            if year < hs.min_year || year > hs.max_year {
                 continue;
             }
-            let flags = (self.leaves.house_flags)(house as u16);
-            let oneof = if u32::from(flags) & 64 != 0 {
-                2
-            } else if u32::from(flags) & 128 != 0 {
-                4
+            /* Special houses that there can be only one of. */
+            let building_flags = house::building_flags(self.leaves, house);
+            let mut oneof = TownFlags::EMPTY;
+            if building_flags.test(BuildingFlag::IsChurch) {
+                oneof.set(TownFlag::HasChurch);
+            } else if building_flags.test(BuildingFlag::IsStadium) {
+                oneof.set(TownFlag::HasStadium);
+            }
+            if self.flags().any(oneof) {
+                continue;
+            }
+            /* Make sure there is no slope? */
+            let noslope = building_flags.test(BuildingFlag::NotSloped);
+            if noslope && slope != Slope::SLOPE_FLAT {
+                continue;
+            }
+            if building_flags.test(BuildingFlag::Size2x2) {
+                if !self.check_town_build_2x2_house(&mut tile, maxz, noslope, modes) {
+                    continue;
+                }
+            } else if building_flags.test(BuildingFlag::Size2x1) {
+                if !self.check_town_build_2_house(
+                    &mut tile,
+                    maxz,
+                    noslope,
+                    DiagDirection::DIAGDIR_SW,
+                    modes,
+                ) {
+                    continue;
+                }
+            } else if building_flags.test(BuildingFlag::Size1x2) {
+                if !self.check_town_build_2_house(
+                    &mut tile,
+                    maxz,
+                    noslope,
+                    DiagDirection::DIAGDIR_SE,
+                    modes,
+                ) {
+                    continue;
+                }
             } else {
-                0
-            };
-            if self.flags() & oneof != 0 {
-                continue;
+                /* 1x1 house checks are already done */
             }
-            let noslope = u32::from(flags) & 2 != 0;
-            if noslope && slope != 0 {
-                continue;
-            }
-            if !self.check_house(town, &mut tile, maxz, noslope, u32::from(flags), modes) {
-                continue;
-            }
-            let random = u32::from(self.services.random() as u8);
-            if (self.leaves.house_callbacks)(house as u16) & 1 != 0
+            let random_bits = self.services.random() as u8;
+            if HouseCallbackMasks((self.leaves.house_callbacks)(house))
+                .test(HouseCallbackMask::AllowConstruction)
                 && !unsafe {
-                    resolver::allow_construction(
-                        self.leaves,
-                        TownId(town as u16),
-                        crate::tile_type::TileIndex(tile),
-                        house as u16,
-                        random as u8,
-                    )
+                    resolver::allow_construction(self.leaves, t, tile, house, random_bits)
                 }
             {
                 continue;
             }
-            self.modify_flags(0, oneof);
-            self.build_house(
-                town,
+            /* Special houses that there can be only one of. */
+            self.set_flags(self.flags() | oneof);
+            self.build_town_house(
+                t,
                 tile,
                 house,
-                random,
+                random_bits,
                 false,
-                (self.leaves.house_extra_flags)(house as u16) & 2 != 0,
+                extra_flags().test(HouseExtraFlag::BuildingIsProtected),
             );
             return true;
         }
         false
     }
-    fn tick(&self, town: u32) {
-        if self.flags() & 1 == 0 {
+    /// `TownTickHandler`: handle the town tick for a single town, by growing the
+    /// town if desired.
+    fn town_tick_handler(&self, t: TownID) {
+        if !self.flags().test(TownFlag::IsGrowing) {
             return;
         }
-        let modes = 1 | if unsafe { self.services.settings().allow_town_roads.read() } {
-            2
-        } else {
-            0
-        };
-        let mut counter = i32::from(self.counter()) - 1;
-        if counter < 0 {
-            counter = i32::from(if self.grow(town, modes) {
-                self.rate()
+        let mut modes = TownExpandModes::from_element(TownExpandMode::Buildings);
+        if unsafe { self.services.settings().allow_town_roads.read() } {
+            modes = modes.with(TownExpandModes::from_element(TownExpandMode::Roads));
+        }
+        let mut i = i32::from(self.grow_counter()) - 1;
+        if i < 0 {
+            i = i32::from(if self.grow_town(t, modes) {
+                self.growth_rate()
             } else {
-                self.rate().min((70 - 1) as u16)
+                /* If growth failed wait a bit before retrying */
+                self.growth_rate().min(TOWN_GROWTH_TICKS - 1)
             });
         }
-        self.set_counter(counter as u16);
+        self.set_grow_counter(i as u16);
     }
-    fn expand(&self, town: u32, amount: u32, modes: u32) {
-        if amount == 0 {
+    /// `CmdExpandTown`'s execution.
+    fn expand_town(&self, t: TownID, grow_amount: u32, modes: TownExpandModes) {
+        /* The more houses, the faster we grow */
+        if grow_amount == 0 {
             let amount = self
                 .services
                 .random_range((self.num_houses() / 10).min(u32::from(u16::MAX)))
                 + 3;
-            self.change_house_count(amount);
+            self.set_num_houses(self.num_houses().wrapping_add(amount));
             // SAFETY: Pure immediate owner mutation, without native callbacks.
             unsafe {
-                update_radius(self.owner);
+                update_town_radius(self.owner);
             }
             for _ in 0..amount * 10 {
-                self.grow(town, modes);
+                self.grow_town(t, modes);
             }
-            self.change_house_count(amount.wrapping_neg());
+            self.set_num_houses(self.num_houses().wrapping_sub(amount));
         } else {
-            for _ in 0..amount {
+            for _ in 0..grow_amount {
+                /* Try several times to grow, as we are really suppose to grow */
                 for _ in 0..25 {
-                    if self.grow(town, modes) {
+                    if self.grow_town(t, modes) {
                         break;
                     }
                 }
@@ -2183,47 +2901,66 @@ impl Engine<'_> {
         }
         // SAFETY: Pure immediate owner mutation, without native callbacks.
         unsafe {
-            update_radius(self.owner);
+            update_town_radius(self.owner);
         }
         policy::update_town_max_pass(self.leaves, self.owner);
     }
-    fn tick_all(mut self) {
-        if !(self.leaves.environment.editor)() {
-            let mut id = (self.leaves.next_town)(0);
-            while id != u32::MAX {
-                // Each town starts with an empty map/shell cache, as the previous
-                // per-town engine did, without copying that engine each tick.
-                self.map.take();
-                self.house_shell.take();
-                self.owner = (self.leaves.resolve_owner)(id);
-                self.tick(id);
-                id = (self.leaves.next_town)(id + 1);
-            }
+    /// `OnTick_Town`: iterate through all towns and call their tick handler.
+    fn on_tick_town(mut self) {
+        if (self.leaves.environment.editor)() {
+            return;
+        }
+        let mut id = (self.leaves.next_town)(0);
+        while id != u32::MAX {
+            // Each town starts with an empty map/shell cache, as the previous
+            // per-town engine did, without copying that engine each tick.
+            self.map.take();
+            self.house_shell.take();
+            self.owner = (self.leaves.resolve_owner)(id);
+            self.town_tick_handler(TownID(id as u16));
+            id = (self.leaves.next_town)(id + 1);
         }
     }
-    fn custom_rate(&self, town: u32, a: u32) {
-        if a == 0 {
-            self.modify_flags(8, 0);
+    /// `CmdTownGrowthRate`'s execution.
+    fn town_growth_rate(&self, t: TownID, growth_rate: u16) {
+        if growth_rate == 0 {
+            /* Just clear the flag, UpdateTownGrowth will determine a proper growth rate */
+            self.flags_reset(TownFlag::CustomGrowth);
         } else {
-            let old = u32::from(self.rate());
-            let counter = u32::from(self.counter());
-            self.set_counter(if counter >= old {
-                a as u16
+            let old_rate = u32::from(self.growth_rate());
+            let grow_counter = u32::from(self.grow_counter());
+            self.set_grow_counter(if grow_counter >= old_rate {
+                /* This also catches old_rate == 0 */
+                growth_rate
             } else {
-                (counter * a / old) as u16
+                /* Scale grow_counter, so half finished houses stay half finished */
+                (grow_counter * u32::from(growth_rate) / old_rate) as u16
             });
-            self.set_rate(a as u16);
-            self.modify_flags(0, 8);
+            self.set_growth_rate(growth_rate);
+            self.flags_set(TownFlag::CustomGrowth);
         }
-        self.update_growth(town);
+        self.update_town_growth(t);
     }
-    fn fund(&self, town: u32) {
-        self.set_funding(3);
-        self.update_growth(town);
-        let counter = i32::from(self.counter());
-        let rate = i32::from(self.rate());
+    /// `TownActionFundBuildings`'s execution.
+    fn town_action_fund_buildings(&self, t: TownID) {
+        /* And grow for 3 months */
+        self.set_fund_buildings_months(3);
+        /* Enable growth (also checking GameScript's opinion) */
+        self.update_town_growth(t);
+        /* Build a new house, but add a small delay to make sure
+         * that spamming funding doesn't let town grow any faster
+         * than 1 house per 2 * TOWN_GROWTH_TICKS ticks.
+         * Also emulate original behaviour when town was only growing in
+         * TOWN_GROWTH_TICKS intervals, to make sure that it's not too
+         * tick-perfect and gives player some time window where they can
+         * spam funding with the exact same efficiency.
+         */
+        let grow_counter = i32::from(self.grow_counter());
+        let growth_rate = i32::from(self.growth_rate());
         let ticks = i32::from(TOWN_GROWTH_TICKS);
-        self.set_counter((counter.min(2 * ticks - (rate - counter) % ticks)) as u16);
+        self.set_grow_counter(
+            (grow_counter.min(2 * ticks - (growth_rate - grow_counter) % ticks)) as u16,
+        );
     }
 }
 pub(crate) unsafe fn tick_all(
@@ -2233,7 +2970,7 @@ pub(crate) unsafe fn tick_all(
 ) {
     let mut engine = engine(leaves, services);
     engine.road = road;
-    engine.tick_all();
+    engine.on_tick_town();
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_expand(
@@ -2246,14 +2983,17 @@ pub unsafe extern "C" fn openttd_rust_town_expand(
 ) {
     let mut engine = engine(leaves, services);
     engine.road = road;
-    engine.bind(town).expand(town, amount, modes);
+    let t = TownID(town as u16);
+    engine
+        .bind(t)
+        .expand_town(t, amount, TownExpandModes(modes as u8));
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_road_type(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    engine(leaves, services).road_type()
+    u32::from(engine(leaves, services).get_town_road_type().0)
 }
 #[cfg(feature = "native-test-support")]
 pub(crate) unsafe fn tunnel(
@@ -2266,9 +3006,11 @@ pub(crate) unsafe fn tunnel(
 ) -> bool {
     let mut engine = engine(leaves, services);
     engine.road = road;
-    engine.bind(town).tunnel(town, tile, dir)
+    let t = TownID(town as u16);
+    engine
+        .bind(t)
+        .grow_town_with_tunnel(t, TileIndex(tile), DiagDirection(dir as u8))
 }
-
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda
 // result narrows to int, then the final int sign-extends to the uint64 destination.
 pub(crate) fn sum_history(history: &[SuppliedHistory]) -> SuppliedHistory {
@@ -2291,28 +3033,13 @@ pub unsafe extern "C" fn openttd_rust_town_sum_history(
     // SAFETY: Native supplied-history layout is checked; original nonempty range.
     sum_history(unsafe { std::slice::from_raw_parts(history, len) })
 }
-fn history_ranges() -> [crate::history::Descriptor; 3] {
-    let descriptor = |first, last, division, total_division| crate::history::Descriptor {
-        child: 0,
-        periods: 24,
-        records: last - first,
-        first,
-        last,
-        division,
-        total_division,
-        child_periods: 0,
-        child_division: 0,
-    };
-    [
-        descriptor(1, 25, 1, 1),
-        descriptor(25, 42, 3, 3),
-        descriptor(42, 61, 4, 12),
-    ]
-}
+/// The monthly town loop (`town_cmd.cpp`'s economy monthly timer).
 impl Engine<'_> {
+    /// The monthly timer's counters and statistics for one town.
     fn monthly_statistics(&self, month: u8) {
         // SAFETY: No callback or service spans this borrow of canonical histories.
         let state = unsafe { &mut *self.owner };
+        /* Check for active town actions and decrement their counters. */
         if state.growth.road != 0 {
             state.growth.road -= 1;
         }
@@ -2322,12 +3049,13 @@ impl Engine<'_> {
         if state.simulation.exclusive_counter != 0 {
             state.simulation.exclusive_counter -= 1;
             if state.simulation.exclusive_counter == 0 {
-                state.simulation.exclusivity = u8::MAX;
+                state.simulation.exclusivity = CompanyID::INVALID.0;
             }
         }
+        /* Check for active failed bribe cooloff periods and decrement them. */
         // Company traversal is external, so this borrow ends before it.
         let mut company = (self.services.next_company)(0);
-        while company != u8::MAX {
+        while company != CompanyID::INVALID.0 {
             // SAFETY: Live canonical owner; no reference spans the next pool callback.
             unsafe {
                 let unwanted = &mut (*self.owner).simulation.unwanted[usize::from(company)];
@@ -2339,28 +3067,17 @@ impl Engine<'_> {
         }
         // SAFETY: Reacquire only after traversal; no callback spans history writes.
         let state = unsafe { &mut *self.owner };
-        for range in history_ranges() {
-            state.simulation.valid_history =
-                crate::history::update(state.simulation.valid_history, range, u32::from(month));
-        }
+        state.simulation.valid_history = crate::history::update_valid_history_year(
+            state.simulation.valid_history,
+            u32::from(month),
+        );
+        /* Update cargo statistics. */
         for supplied in &mut state.supplied {
-            for range in history_ranges() {
-                if !month.is_multiple_of(range.total_division) {
-                    continue;
-                }
-                let first = usize::from(range.first);
-                let last = usize::from(range.last);
-                supplied.history.copy_within(first..last - 1, first + 1);
-                if range.total_division == 1 {
-                    supplied.history[first] = supplied.history[first - 1];
-                    supplied.history[0] = SuppliedHistory::default();
-                } else if state.simulation.valid_history & (1 << (range.first - range.division))
-                    != 0
-                {
-                    supplied.history[first] =
-                        sum_history(&supplied.history[first - usize::from(range.division)..first]);
-                }
-            }
+            crate::history::rotate_history_year(
+                &mut supplied.history,
+                state.simulation.valid_history,
+                u32::from(month),
+            );
         }
         for received in &mut state.simulation.received {
             received.old_max = received.new_max;
@@ -2369,25 +3086,22 @@ impl Engine<'_> {
             received.new_act = 0;
         }
     }
-    fn update_rating(&self, town: u32) {
+    /// `UpdateTownRating`: monthly update of town and station ratings.
+    fn update_town_rating(&self, t: TownID) {
+        /* Increase company ratings if they're low */
         let mut company = (self.services.next_company)(0);
-        while company != u8::MAX {
+        while company != CompanyID::INVALID.0 {
             // SAFETY: Immediate field update; borrow ends before pool traversal.
             unsafe {
                 let rating = &mut (*self.owner).simulation.ratings[usize::from(company)];
-                if *rating < 200 {
-                    *rating = (i32::from(*rating) + 5).min(200) as i16;
+                if i32::from(*rating) < RATING_GROWTH_MAXIMUM {
+                    *rating = RATING_GROWTH_MAXIMUM.min(i32::from(*rating) + RATING_GROWTH_UP_STEP)
+                        as i16;
                 }
             }
             company = (self.services.next_company)(company + 1);
         }
-        let center = self.position();
-        let radius = self.radius()[0];
-        let c = unsafe { &*(self.services.station_catchment)() };
-        crate::station::spatial::radius(self.services, center, radius / 2, |st| {
-            if self.distance((c.location)(st), center) > radius {
-                return;
-            }
+        self.for_all_stations_near_town(|c, st| {
             let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
             let active = activity.time_since_load <= 20 || activity.time_since_unload <= 20;
             let commands = unsafe { &*(self.services.station_commands)() };
@@ -2399,19 +3113,22 @@ impl Engine<'_> {
             unsafe {
                 let rating = &mut (*self.owner).simulation.ratings[usize::from(owner)];
                 *rating = if active {
-                    (i32::from(*rating) + 12).min(i32::from(i16::MAX)) as i16
+                    let new_rating = i32::from(*rating) + RATING_STATION_UP_STEP;
+                    new_rating.min(i32::from(i16::MAX)) as i16 // do not let it overflow
                 } else {
-                    (i32::from(*rating) - 15).max(i32::from(i16::MIN)) as i16
+                    let new_rating = i32::from(*rating) + RATING_STATION_DOWN_STEP;
+                    new_rating.max(i32::from(i16::MIN)) as i16
                 };
             }
         });
+        /* clamp all ratings to valid values */
         // SAFETY: All station visitors returned; no callback spans clamping.
         unsafe {
             for rating in &mut (*self.owner).simulation.ratings {
-                *rating = (*rating).clamp(-1000, 1000);
+                *rating = i32::from(*rating).clamp(RATING_MINIMUM, RATING_MAXIMUM) as i16;
             }
         }
-        (self.leaves.dirty_authority)(town);
+        (self.leaves.dirty_authority)(u32::from(t.0));
     }
 }
 pub(crate) unsafe fn openttd_rust_town_monthly_all(
@@ -2422,10 +3139,11 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
     let engine = engine(leaves, services);
     let mut town = (engine.leaves.next_town)(0);
     while town != u32::MAX {
-        let owner = engine.clone().bind(town);
+        let t = TownID(town as u16);
+        let owner = engine.clone().bind(t);
         owner.monthly_statistics(month);
-        owner.update_growth(town);
-        owner.update_rating(town);
+        owner.update_town_growth(t);
+        owner.update_town_rating(t);
         (owner.leaves.dirty_town)(town);
         town = (engine.leaves.next_town)(town + 1);
     }
@@ -2438,9 +3156,10 @@ pub unsafe extern "C" fn openttd_test_town_stations(
     services: *const Services,
     town: u32,
 ) -> u32 {
-    let e = engine(leaves, services).bind(town);
-    let count = e.count_stations(town);
-    e.update_rating(town);
+    let t = TownID(town as u16);
+    let e = engine(leaves, services).bind(t);
+    let count = e.count_active_stations();
+    e.update_town_rating(t);
     count
 }
 #[derive(Default)]
@@ -2452,6 +3171,9 @@ static RATING_TEST: GameState<RatingTest> = GameState::new(RatingTest {
     depth: 0,
     ratings: std::collections::BTreeMap::new(),
 });
+/// `SetTownRatingTestMode`: switch the town rating to test-mode, to allow commands
+/// to be tested without affecting current ratings. The function is safe to use
+/// in nested calls.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
     // SAFETY: Game-state-mutex serialized scratch; no callback.
@@ -2466,6 +3188,7 @@ pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
         test.depth = test.depth.wrapping_sub(1);
     }
 }
+/// `GetRating`: the rating of a town for the current company.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rating(
     state: *const State,
@@ -2495,6 +3218,7 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     no_modify: bool,
     bulldozer: bool,
 ) {
+    /* if magic_bulldozer cheat is active, town doesn't penalize for removing stuff */
     if state.is_null() || no_modify {
         return;
     }
@@ -2533,20 +3257,25 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     }
 }
 
-/// Read the original last-month transported percentage from the sole town owner.
+/// `Town::GetPercentTransported`: the last-month transported percentage of a cargo.
 /// SAFETY: Serialized live owner; no callback or owner borrow survives this call.
-pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
-    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+pub(crate) unsafe fn get_percent_transported(state: *const State, cargo_type: CargoType) -> u8 {
+    if !is_valid_cargo_type(cargo_type.0) {
         return 0;
     }
     let rows = unsafe { &(*state).supplied };
-    let at = unsafe { openttd_rust_town_supplied_find(state, cargo) };
+    let at = unsafe { openttd_rust_town_supplied_find(state, cargo_type.0) };
     if at == rows.len() {
         return 0;
     }
     unsafe {
         openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
     }
+}
+/// Raw adapter for `subsidy.rs`, outside workset 01; delegates to `get_percent_transported`.
+/// SAFETY: As `get_percent_transported`.
+pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
+    unsafe { get_percent_transported(state, CargoType(cargo)) }
 }
 
 crate::abi::layouts! {
@@ -3009,7 +3738,7 @@ mod policy_tests {
             town.simulation.num_houses = houses;
             // SAFETY: Live local canonical owner, no callbacks.
             unsafe {
-                update_radius(&raw mut town);
+                update_town_radius(&raw mut town);
             }
             let mut row = format!("Z {houses}");
             for value in town.simulation.radius {
