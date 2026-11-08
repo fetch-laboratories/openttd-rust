@@ -254,7 +254,7 @@ impl Services {
             TownProductionEffect::TPE_PASSENGERS.0,
             r as usize,
         ));
-        let src = town::spatial::random(unsafe { &*self.shared });
+        let src = town::spatial::get_random_town(unsafe { &*self.shared });
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
                 || town::subsidy_percent_transported(src.state, cargo_type.0)
@@ -262,7 +262,7 @@ impl Services {
         } {
             return false;
         }
-        let dst = town::spatial::random(unsafe { &*self.shared });
+        let dst = town::spatial::get_random_town(unsafe { &*self.shared });
         if unsafe { town::population(dst.state) < SUBSIDY_PAX_MIN_POPULATION }
             || src.shell == dst.shell
         {
@@ -336,7 +336,7 @@ impl Services {
             return false;
         }
         // Select a random town.
-        let src = town::spatial::random(unsafe { &*self.shared });
+        let src = town::spatial::get_random_town(unsafe { &*self.shared });
         if unsafe { town::population(src.state) < SUBSIDY_CARGO_MIN_POPULATION } {
             return false;
         }
@@ -426,7 +426,7 @@ impl Services {
         // Choose a random destination.
         let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
             // Select a random town.
-            let dst_town = town::spatial::random(unsafe { &*self.shared });
+            let dst_town = town::spatial::get_random_town(unsafe { &*self.shared });
             // Calculate cargo acceptance of houses around town center.
             self.scan(scratch, dst_town.state, true);
             // Check if the town can accept this cargo.
