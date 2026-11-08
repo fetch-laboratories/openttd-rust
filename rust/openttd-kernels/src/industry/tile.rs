@@ -94,6 +94,18 @@ impl TileServices {
     fn set_animation_frame(&self, tile: TileIndex, frame: u8) {
         unsafe { (self.set_frame)(tile.0, frame) };
     }
+    /// `SetIndustryCompleted`.
+    fn set_industry_completed(&self, tile: TileIndex) {
+        unsafe { (self.set_completed)(tile.0) };
+    }
+    /// `ResetIndustryConstructionStage`.
+    fn reset_industry_construction_stage(&self, tile: TileIndex) {
+        unsafe { (self.reset_construction)(tile.0) };
+    }
+    /// `SetIndustryAnimationLoop`.
+    fn set_industry_animation_loop(&self, tile: TileIndex, count: u8) {
+        unsafe { (self.set_animation_loop)(tile.0, count) };
+    }
     /// `GetIndustryTileCallback` for `tile` with no parameters.
     fn tile_callback(&self, tile: TileIndex, gfx: IndustryGfx, callback: CallbackID) -> u16 {
         unsafe { (self.callback)(tile.0, gfx.0, callback.0, 0, 0) }
@@ -193,7 +205,7 @@ fn animate_toy_factory(tile: TileIndex, s: &Services, t: &TileServices) {
                     n = 0;
                     delete_animated_tile(tile);
                 }
-                unsafe { (t.set_animation_loop)(tile.0, n as u8) };
+                t.set_industry_animation_loop(tile, n as u8);
             }
         }
     }
@@ -408,7 +420,7 @@ fn make_industry_tile_bigger(
         | IndustryGfx::GFX_BUBBLE_CATCHER
         | IndustryGfx::GFX_TOFFEE_QUARRY => {
             t.set_animation_frame(tile, 0);
-            unsafe { (t.set_animation_loop)(tile.0, 0) };
+            t.set_industry_animation_loop(tile, 0);
         }
         _ if (IndustryGfx::GFX_PLASTIC_FOUNTAIN_ANIMATED_1
             ..=IndustryGfx::GFX_PLASTIC_FOUNTAIN_ANIMATED_8)
@@ -451,15 +463,9 @@ pub(crate) unsafe fn tile_loop(
     call: *mut crate::ground::Call,
     services: &crate::tile_loop::IndustryServices,
 ) {
-    let (s, c, l, t, g) = unsafe {
-        (
-            &*services.production,
-            &*services.construction,
-            &*services.lifecycle,
-            &*services.tiles,
-            &*services.generation,
-        )
-    };
+    let (s, c) = unsafe { (&*services.production, &*services.construction) };
+    let (l, t) = unsafe { (&*services.lifecycle, &*services.tiles) };
+    let g = unsafe { &*services.generation };
     if unsafe { (t.on_water)(tile.0) } {
         unsafe { crate::water::tree_industry_water_loop(tile.0, call, s.shared()) };
     }
@@ -504,10 +510,8 @@ pub(crate) unsafe fn tile_loop(
                 (*get_industry_tile_spec(gfx)).anim_production
             }));
             if newgfx != IndustryGfx::INDUSTRYTILE_NOANIM {
-                unsafe {
-                    (t.reset_construction)(tile.0);
-                    (t.set_completed)(tile.0);
-                }
+                t.reset_industry_construction_stage(tile);
+                t.set_industry_completed(tile);
                 t.set_industry_gfx(tile, newgfx);
                 mark_tile_dirty_by_tile(tile, s);
                 return;
@@ -530,7 +534,7 @@ pub(crate) unsafe fn tile_loop(
         (*get_industry_tile_spec(gfx)).anim_next
     }));
     if newgfx != IndustryGfx::INDUSTRYTILE_NOANIM {
-        unsafe { (t.reset_construction)(tile.0) };
+        t.reset_industry_construction_stage(tile);
         t.set_industry_gfx(tile, newgfx);
         mark_tile_dirty_by_tile(tile, s);
         return;
@@ -576,10 +580,8 @@ pub(crate) unsafe fn tile_loop(
                     _ => IndustryGfx::GFX_GOLD_MINE_TOWER_NOT_ANIMATED,
                 };
                 t.set_industry_gfx(tile, gfx);
-                unsafe {
-                    (t.set_completed)(tile.0);
-                    (c.set_construction_stage)(tile.0, 3);
-                }
+                t.set_industry_completed(tile);
+                unsafe { (c.set_construction_stage)(tile.0, 3) };
                 delete_animated_tile(tile);
                 mark_tile_dirty_by_tile(tile, s);
             }
@@ -603,10 +605,8 @@ pub(crate) unsafe fn tile_loop(
             let delivered =
                 unsafe { ptr::read(ptr::addr_of!((*i.owner).fields.was_cargo_delivered)) };
             if delivered != 0 {
-                unsafe {
-                    (*i.owner).fields.was_cargo_delivered = 0;
-                    (t.set_animation_loop)(tile.0, 0);
-                }
+                unsafe { (*i.owner).fields.was_cargo_delivered = 0 };
+                t.set_industry_animation_loop(tile, 0);
                 add_animated_tile(tile);
             }
         }

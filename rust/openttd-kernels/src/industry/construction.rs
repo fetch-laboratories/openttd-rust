@@ -254,9 +254,7 @@ pub(crate) unsafe fn do_create_new_industry(
     let g: &GenerationServices = unsafe { &*context.generation };
     let l = unsafe { &*context.lifecycle };
     let c = unsafe { &*context.construction };
-    let tile = TileIndex(r.tile);
-    let kind = IndustryType(r.kind);
-    let id = IndustryID(r.id);
+    let (tile, kind, id) = (TileIndex(r.tile), IndustryType(r.kind), IndustryID(r.id));
     let map = crate::map_func::Map::from_log_x(r.size_x.ilog2());
     let indspec = get_industry_spec(kind);
     unsafe {
@@ -285,10 +283,7 @@ pub(crate) unsafe fn do_create_new_industry(
                 ..Produced::default()
             });
         }
-        let rate = unsafe { (*indspec).production_rate[index] };
-        unsafe {
-            (*produced(owner, index)).rate = rate;
-        }
+        unsafe { (*produced(owner, index)).rate = (*indspec).production_rate[index] };
     }
     let mut accepted_count = 0;
     for (index, cargo) in lists.accepted.iter().enumerate() {
@@ -337,9 +332,7 @@ pub(crate) unsafe fn do_create_new_industry(
         (*f).ctlflags = 0;
     }
     let date = crate::timer_game_common::calendar_date().0;
-    unsafe {
-        (*owner).metadata.construction_date = date;
-    }
+    unsafe { (*owner).metadata.construction_date = date };
     let construction_type = if (g.environment.editor)() {
         IndustryConstructionType::ICT_SCENARIO_EDITOR
     } else if unsafe { (c.generating)() } {
@@ -430,9 +423,7 @@ pub(crate) unsafe fn do_create_new_industry(
                     (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, res);
                 }
             }
-            unsafe {
-                (*owner).metadata.random_colour = gb(u32::from(res), 0, 4) as u8;
-            }
+            unsafe { (*owner).metadata.random_colour = gb(u32::from(res), 0, 4) as u8 };
         }
     }
     if callbacks.test(IndustryCallbackMask::InputCargoTypes) {
