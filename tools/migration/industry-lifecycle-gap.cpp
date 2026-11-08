@@ -47,8 +47,8 @@ struct IndustryTileSpec {
 	std::array<int8_t, 16> acceptance{};
 	Bits special_flags, callback_mask;
 };
-/* A 3x2 industry on a 4-wide map, the smallest power-of-two width the original
- * Map::Allocate accepts as a row stride; tile 3 lies outside the industry. */
+/* A synthetic 3x2 industry with a 4-wide power-of-two row stride;
+ * tile 3 lies outside the industry. */
 static std::array<Tile, 7> tiles;
 static std::array<IndustryTileSpec, 7> specs;
 static IndustryTileSpec builtin_spec;
