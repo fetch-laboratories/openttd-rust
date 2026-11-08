@@ -601,6 +601,7 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
         return;
     }
     let t = c.resolve(town_id);
+    // Validate if there is a cargo which is the requested TownEffect.
     if t.shell.is_null() || crate::cargo_registry::first_town_acceptance(effect.0).is_none() {
         c.error(out);
         return;
@@ -950,12 +951,14 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
+    // Invalidating the nearest town cache has to be done after removing the item from the pool.
     let c = unsafe { Commands::new(s) };
     (c.f.directory_rebuild)();
     // SAFETY: Road owner tables live for this call, and no town borrow exists after pool removal.
     unsafe {
         crate::road_cmd::openttd_rust_road_nearest_towns((c.shared.road_commands)(), false);
     }
+    // Give objects a new home!
     let mut from = 0;
     loop {
         // SAFETY: Pool iteration returns a live object or null; no Rust borrow spans it.
@@ -965,9 +968,9 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
         }
         from = o.id.wrapping_add(1);
         if unsafe { (c.object_query().town)(o.object) }.is_null() {
-            let town = crate::town::spatial::calc_closest(
+            let town = crate::town::spatial::calc_closest_town_from_tile(
                 c.shared,
-                unsafe { (c.object_query().north)(o.object) },
+                TileIndex(unsafe { (c.object_query().north)(o.object) }),
                 u32::MAX,
             );
             (s.set_object_town)(o.object, town.cast_mut());

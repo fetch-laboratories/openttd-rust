@@ -558,7 +558,8 @@ pub unsafe extern "C" fn openttd_rust_town_found(
 ) {
     // Multidimensional arrays have to have defined length of non-first dimension.
     #[allow(non_upper_case_globals)]
-    const price_mult: [[i32; 4]; 2] = [[15, 25, 40, 25], [20, 35, 55, 35]];
+    const price_mult: [[i32; TownSize::TSZ_RANDOM.0 as usize + 1]; 2] =
+        [[15, 25, 40, 25], [20, 35, 55, 35]];
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
