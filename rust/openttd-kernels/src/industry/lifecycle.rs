@@ -9,12 +9,13 @@
 //! invalidation and resolver calls can revisit Rust; map and pool storage stay native.
 use super::{Builder, Industry, Map, Services, TileArea};
 use crate::company_type::Owner;
+use crate::industry_type::IndustryID;
 use crate::industry_type::{
     IndustryAnimationTrigger, IndustryAnimationTriggers, IndustryRandomTrigger,
     IndustryRandomTriggers,
 };
 use crate::industrytype::{IndustryBehaviour, IndustryBehaviours};
-use crate::tile_type::{MP_INDUSTRY, MP_STATION};
+use crate::tile_type::{TileIndex, TileType};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -67,6 +68,7 @@ pub struct LifecycleServices {
     pub animation_spec: unsafe extern "C" fn(u32) -> AnimationSpec,
 }
 
+/// `Industry::location`, read from the canonical metadata.
 pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
     unsafe {
         TileArea {
@@ -76,15 +78,16 @@ pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
         }
     }
 }
+/// `for (TileIndex tile : area)`, through the shared orthogonal tile iterator. The map
+/// width is a power of two.
 pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(u32)) {
-    for y in 0..u32::from(area.h) {
-        let row = area.tile.wrapping_add(y.wrapping_mul(size_x));
-        for x in 0..u32::from(area.w) {
-            operation(row.wrapping_add(x));
-        }
+    for tile in area.tiles(crate::map_func::Map::from_log_x(size_x.ilog2())) {
+        operation(tile);
     }
 }
 
+/// Original `Industry::~Industry`.
+///
 /// # Safety
 /// Live shell/owner in its native destructor, including partial initialization or
 /// pool cleanup. Tables/map are valid for the call. No callback destroys this owner.
@@ -105,9 +108,11 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     if cleaning {
         return;
     }
+    let id = IndustryID(id);
     let width = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.width)) };
-    // Destruction can happen before initialization finishes: then no tiles
-    // need clearing and the industry count must not be decremented.
+    // Industry can also be destroyed when not fully initialized.
+    // This means that we do not have to clear tiles either.
+    // Also we must not decrement industry counts in that case.
     if width == 0 {
         return;
     }
@@ -119,65 +124,65 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
             h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
         }
     };
-    tiles(area, map.size_x, |tile| unsafe {
-        let observation = (w.cleanup_tile)(tile);
-        if observation.kind == MP_INDUSTRY {
-            if observation.industry == id {
-                (w.delete_tile_inspect)(tile);
+    tiles(area, map.size_x, |tile_cur| unsafe {
+        let observation = (w.cleanup_tile)(tile_cur);
+        if TileType(observation.kind) == TileType::MP_INDUSTRY {
+            if IndustryID(observation.industry) == id {
+                (w.delete_tile_inspect)(tile_cur);
                 let shared = s.shared();
-                // MakeWaterKeepingClass also handles land.
+                // MakeWaterKeepingClass() can also handle 'land'
                 crate::water::restore(
-                    tile,
+                    tile_cur,
                     Owner::NONE.0,
                     shared,
                     &*(shared.water_services)(),
                     &*w.restoration,
                 );
             }
-        } else if observation.kind == MP_STATION && observation.oilrig {
-            (w.delete_oilrig)(tile);
+        } else if TileType(observation.kind) == TileType::MP_STATION && observation.oilrig {
+            (w.delete_oilrig)(tile_cur);
         }
     });
-    // Remove possible docking tiles.
     if has_neutral_station {
-        tiles(unsafe { location(owner) }, map.size_x, |tile| unsafe {
-            (w.clear_docking)(tile);
+        // Remove possible docking tiles
+        tiles(unsafe { location(owner) }, map.size_x, |tile_cur| unsafe {
+            (w.clear_docking)(tile_cur);
         });
     }
-    let kind = unsafe { (*owner).metadata.kind };
-    if IndustryBehaviours(unsafe { (*crate::industrytype::industry(u16::from(kind))).behaviour })
+    let r#type = crate::industry_type::IndustryType(unsafe { (*owner).metadata.kind });
+    if IndustryBehaviours(unsafe { (*crate::industrytype::get_industry_spec(r#type)).behaviour })
         .test(IndustryBehaviour::PlantFields)
     {
-        let tile = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) };
-        let x = tile % map.size_x;
-        let y = tile / map.size_x;
-        let sx = x.saturating_sub(21);
-        let sy = y.saturating_sub(21);
-        let ex = x.wrapping_add(21).min(map.size_x);
-        let ey = y.wrapping_add(21).min(map.size_y);
-        // Remove farmland; it converts back to regular tiles over time.
-        let fields = TileArea {
-            tile: sy.wrapping_mul(map.size_x).wrapping_add(sx),
-            w: (ex - sx) as u16,
-            h: (ey - sy) as u16,
+        let mut ta = TileArea {
+            tile: unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) },
+            w: 0,
+            h: 0,
         };
-        tiles(fields, map.size_x, |tile| unsafe {
-            if (w.industry_field)(tile, id) {
-                (w.disassociate_field)(tile);
+        ta.expand(
+            21,
+            crate::map_func::Map::from_log_x(map.size_x.ilog2()),
+            map.size_y,
+        );
+        // Remove the farmland and convert it to regular tiles over time.
+        tiles(ta, map.size_x, |tile_cur| unsafe {
+            if (w.industry_field)(tile_cur, id.0) {
+                (w.disassociate_field)(tile_cur);
             }
         });
     }
     unsafe {
-        (w.release_disasters)(id);
+        // don't let any disaster vehicle target invalid industry
+        (w.release_disasters)(id.0);
+        // Clear the persistent storage.
         (w.delete_storage)(industry);
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
-        super::openttd_rust_industry_registry_erase(builder, kind, id);
-        (w.delete_news)(id);
-        (w.close_view)(id);
-        (w.close_production)(id);
-        (w.delete_inspect)(id);
-        (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id));
-        (w.invalidate_cargo)(id);
+        super::openttd_rust_industry_registry_erase(builder, kind, id.0);
+        (w.delete_news)(id.0);
+        (w.close_view)(id.0);
+        (w.close_production)(id.0);
+        (w.delete_inspect)(id.0);
+        (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id.0));
+        (w.invalidate_cargo)(id.0);
     }
     let c = crate::station::Ctx::from_shared(s.shared());
     // SAFETY: Live industry owner; the visits mutate only station delivery lists.
@@ -188,44 +193,53 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     }
 }
 
-unsafe fn randomise_tile(
-    tile: u32,
+/// Original `DoTriggerIndustryTileRandomisation`: trigger random triggers for an industry
+/// tile and reseed its random bits. Returns the bits to reseed for the industry, which the
+/// caller collects.
+unsafe fn do_trigger_industry_tile_randomisation(
+    tile: TileIndex,
     trigger: IndustryRandomTrigger,
-    industry: *mut c_void,
+    ind: *mut c_void,
     s: &Services,
     w: &LifecycleServices,
 ) -> u32 {
-    let spec = unsafe { (w.randomisation_spec)(tile) };
+    let spec = unsafe { (w.randomisation_spec)(tile.0) };
     if !spec.enabled {
         return 0;
     }
-    let waiting =
-        IndustryRandomTriggers(unsafe { (w.random_triggers)(tile) } | (1_u8 << trigger.0));
-    // Store before resolving so variable 5F observes the waiting triggers.
-    unsafe { (w.set_random_triggers)(tile, waiting.0) };
-    let masks = unsafe { (w.resolve_reseed)(tile, spec.gfx, industry, waiting.0) };
-    unsafe { (w.set_random_triggers)(tile, waiting.0 & !masks.used) };
+    let waiting_random_triggers = IndustryRandomTriggers(unsafe { (w.random_triggers)(tile.0) })
+        .with(IndustryRandomTriggers::from_element(trigger));
+    unsafe { (w.set_random_triggers)(tile.0, waiting_random_triggers.0) }; // store now for var 5F
+    let object = unsafe { (w.resolve_reseed)(tile.0, spec.gfx, ind, waiting_random_triggers.0) };
+    // Store remaining triggers.
+    let waiting_random_triggers = waiting_random_triggers & !IndustryRandomTriggers(object.used);
+    unsafe { (w.set_random_triggers)(tile.0, waiting_random_triggers.0) };
+    // Rerandomise tile bits
     let new_random_bits = s.shared().random() as u8;
-    let random_bits = unsafe { (w.random_bits)(tile) };
-    let random_bits = (random_bits & !(masks.own as u8)) | (new_random_bits & masks.own as u8);
+    let random_bits = unsafe { (w.random_bits)(tile.0) };
+    let random_bits = (random_bits & !(object.own as u8)) | (new_random_bits & object.own as u8);
     unsafe {
-        (w.set_random_bits)(tile, random_bits);
-        (s.shared().mark_dirty)(tile);
+        (w.set_random_bits)(tile.0, random_bits);
+        (s.shared().mark_dirty)(tile.0);
     }
-    masks.parent
+    object.parent
 }
-unsafe fn reseed_industry(owner: *mut Industry, reseed: u32, s: &Services) {
-    if reseed == 0 || owner.is_null() {
+/// Original `DoReseedIndustry`: reseeds the random bits of an industry.
+unsafe fn do_reseed_industry(ind: *mut Industry, reseed: u32, s: &Services) {
+    if reseed == 0 || ind.is_null() {
         return;
     }
     let random_bits = s.shared().random() as u16;
     unsafe {
-        let field = ptr::addr_of_mut!((*owner).metadata.random);
+        let field = ptr::addr_of_mut!((*ind).metadata.random);
         let old = ptr::read(field);
         // Historical &= reseed (not &= ~reseed) is the specification.
         ptr::write(field, (old & reseed as u16) | (random_bits & reseed as u16));
     }
 }
+/// Original `TriggerIndustryTileRandomisation`: trigger a random trigger for a single
+/// industry tile.
+///
 /// # Safety
 /// Live industry owner for this industry tile and immutable tables; serial call.
 #[unsafe(no_mangle)]
@@ -239,9 +253,19 @@ pub unsafe extern "C" fn openttd_rust_industry_randomise_tile(
 ) {
     let s = unsafe { &*services };
     let w = unsafe { &*lifecycle };
-    let reseed = unsafe { randomise_tile(tile, IndustryRandomTrigger(trigger), industry, s, w) };
-    unsafe { reseed_industry(owner, reseed, s) };
+    let reseed_industry = unsafe {
+        do_trigger_industry_tile_randomisation(
+            TileIndex(tile),
+            IndustryRandomTrigger(trigger),
+            industry,
+            s,
+            w,
+        )
+    };
+    unsafe { do_reseed_industry(owner, reseed_industry, s) };
 }
+/// Original `TriggerIndustryRandomisation`: trigger a random trigger for all industry tiles.
+///
 /// # Safety
 /// Live industry and map with valid original trigger; tables outlive this call.
 #[unsafe(no_mangle)]
@@ -256,35 +280,45 @@ pub unsafe extern "C" fn openttd_rust_industry_randomise(
 ) {
     let s = unsafe { &*services };
     let w = unsafe { &*lifecycle };
-    let mut reseed = 0;
+    let mut reseed_industry = 0;
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
         if (w.belongs)(tile, id) {
-            reseed |= randomise_tile(tile, IndustryRandomTrigger(trigger), industry, s, w);
+            reseed_industry |= do_trigger_industry_tile_randomisation(
+                TileIndex(tile),
+                IndustryRandomTrigger(trigger),
+                industry,
+                s,
+                w,
+            );
         }
     });
-    unsafe { reseed_industry(owner, reseed, s) };
+    unsafe { do_reseed_industry(owner, reseed_industry, s) };
 }
-unsafe fn trigger_animation(
-    tile: u32,
-    trigger: IndustryAnimationTrigger,
+/// Original `DoTriggerIndustryTileAnimation`.
+unsafe fn do_trigger_industry_tile_animation(
+    tile: TileIndex,
+    iat: IndustryAnimationTrigger,
     random: u32,
-    extra: u32,
+    var18_extra: u32,
     w: &LifecycleServices,
 ) -> bool {
-    let spec = unsafe { (w.animation_spec)(tile) };
-    if !IndustryAnimationTriggers(spec.triggers).test(trigger) {
+    let itspec = unsafe { (w.animation_spec)(tile.0) };
+    if !IndustryAnimationTriggers(itspec.triggers).test(iat) {
         return false;
     }
     unsafe {
         crate::animated_tile::industry_change(
-            spec.spec,
-            tile,
+            itspec.spec,
+            tile.0,
             random,
-            u32::from(trigger.0) | extra,
+            u32::from(iat.0) | var18_extra,
         );
     };
     true
 }
+/// Original `TriggerIndustryTileAnimation` and
+/// `TriggerIndustryTileAnimation_ConstructionStageChanged`, whose caller passes `extra`.
+///
 /// # Safety
 /// Industry tile and valid original trigger; native frame service may reenter.
 #[unsafe(no_mangle)]
@@ -299,9 +333,17 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_tile_abi(
     let w = unsafe { &*lifecycle };
     let random = s.shared().random();
     u8::from(unsafe {
-        trigger_animation(tile, IndustryAnimationTrigger(trigger), random, extra, w)
+        do_trigger_industry_tile_animation(
+            TileIndex(tile),
+            IndustryAnimationTrigger(trigger),
+            random,
+            extra,
+            w,
+        )
     })
 }
+/// Original `TriggerIndustryAnimation`.
+///
 /// # Safety
 /// Live industry and map; immutable tables and valid original trigger.
 #[unsafe(no_mangle)]
@@ -315,17 +357,23 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_abi(
 ) -> u8 {
     let s = unsafe { &*services };
     let w = unsafe { &*lifecycle };
-    let mut result = true;
+    let mut ret = true;
     let mut random = s.shared().random();
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
         if (w.belongs)(tile, id) {
-            if trigger_animation(tile, IndustryAnimationTrigger(trigger), random, 0, w) {
+            if do_trigger_industry_tile_animation(
+                TileIndex(tile),
+                IndustryAnimationTrigger(trigger),
+                random,
+                0,
+                w,
+            ) {
                 // SB does not mask its input, so the draw can set high bits too.
-                random = (random & 0xffff_0000) | s.shared().random();
+                crate::bitmath_func::sb(&mut random, 0, 16, s.shared().random());
             } else {
-                result = false;
+                ret = false;
             }
         }
     });
-    u8::from(result)
+    u8::from(ret)
 }
