@@ -1,6 +1,6 @@
 # Root change workflow
 
-Readers: Root integrating changes, reclaiming output or winding down.
+Readers: Root integrating changes, administering CI, taking stock, reclaiming output or winding down.
 For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 
 ## Integration
@@ -19,6 +19,11 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 - Integrate drafts in readiness order, except a sweep across most of `src/`, such as #581 PR-B. It integrates before any other `src/` change; other drafts continue implementation and review and hold integration until it lands, because each integration would force a new sweep. No draft waits for another draft's services. A reviewed PR gains no new scope before integration.
 - Batch two or three ready, reviewed component heads only when their diffs touch disjoint files. Integrate a lone ready PR without waiting. Integrate overlapping components one at a time at their reviewed heads.
 - Assemble an integration PR from current base. Preserve component commits and link their reviews. Review only substantive conflict resolutions under [review](workflow.md#review); unchanged components need no new review. Full on the combination needs no separate component Full first. A stack organizes dependent PRs but does not combine validation runs. No extra local integration build or full local simulation is required. Keep batches small: the integration merge is the rollback unit.
+- Spot-check reviewers' fix commits before integration ([review](workflow.md#review)).
+- A reviewed PR's base update needs no new review if CI passes and one of these conditions holds:
+  - The update has no conflicts in `src/`, `rust/`, `tools/` or `.github/`.
+  - It resolves every conflict by keeping both sides' lines unchanged. `git show --remerge-diff` removes only conflict markers.
+- Root records the applicable condition on the PR. Such an update needs only CI: no recount, local build, proof or new evidence. Record metrics once, at the head that integrates. Otherwise a fresh reviewer checks and fixes only the conflict resolution.
 
 For final validation and merge, root follows these steps:
 
@@ -27,6 +32,23 @@ For final validation and merge, root follows these steps:
 3. Request `python3 tools/ci.py request PR --profile full` for the exact head and wait. Only a successful Full at that head publishes `Full validation`. Any head, membership or base change requires a fresh Full, including removal of a failing component. Strict protection also requires it after a push or base move. The one exception is a push that keeps the tested non-Markdown tree: the invalidation workflow carries the passing status to the new head within seconds ([carried validation](rust-migration.md#continuous-integration)). After updating from base, read the head's `Full validation` status before requesting; request Full only if it is pending. A clean textual merge, local build, older success or post-merge CI is no substitute.
 4. Serialize integration. Merge only the passing current head with `gh pr merge --match-head-commit` and the reviewed SHA. Never bypass the gate. A failure leaves the shared branch unchanged.
 5. Record completion and close included component PRs. Clean up as described below.
+
+## CI administration
+
+- `CI_ON_DEMAND=true` enables `tools/ci.py` requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
+- For a workflow-changing PR, root reviews its workflow, temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap` through `ci:full`. After merge, restore the variable to `true` and record both changes in the PR.
+- Run macOS, Windows x86, Linux Clang and Linux GCC Dedicated on `rust-migration` after every fifth integration (user, 2026-10-22 and 2026-10-26; #357, #514): `gh workflow run ci-build.yml --ref rust-migration`. Fix a red result before further integrations. An uncovered protected push also runs them. The dispatch includes the [platform comparison](rust-migration.md#continuous-integration).
+- After two hosted-capacity cancellations of a macOS run, run `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, rerun, then `gh variable delete CI_MACOS_HEAVY` when it finishes.
+
+## Stocktake facts
+
+| Command | Output |
+| --- | --- |
+| `python3 tools/retrospective.py readiness 705 704 --json` | Observed head, PR base (its last sync point), current base-branch tip, mergeability, report SHAs/links, Full status including carry description, and changed-file intersections between the supplied PRs. |
+| `python3 tools/retrospective.py latency 705 704 --json` | Available PR/review/Full-run milestones and completed created-to-merge intervals, with both summed per-PR seconds and their elapsed union. |
+| `python3 tools/retrospective.py stocktake START END` | Same-version whole-fork endpoint delta table; `--json` retains both full metric endpoints and scope metadata. |
+
+These commands read through the existing CI/`gh` helpers and metric. A matching report SHA is a text fact, not an inferred independent approval under shared credentials. Readiness is an observation, not merge authorization; `stable_snapshot` flags a head, PR-base or base-tip change during collection. Absent milestones remain absent and causes remain unknown. Full workflow `updated_at` is labeled as its last update, not a precise completion timestamp; a dispatch run's Git head belongs to the workflow branch, so it is never substituted for the PR head. Edited report text uses the latest edit time. Issue placement remains `python3 docs/skills/steer/issues.py`.
 
 ## Cleanup
 
