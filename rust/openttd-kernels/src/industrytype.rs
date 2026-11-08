@@ -12,6 +12,7 @@ use crate::industry_type::{
 use crate::newgrf::CargoLabel;
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
+use crate::newgrf_commons::StandardSpriteGroup;
 use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -197,17 +198,17 @@ impl SubstituteProps {
     }
     /// `StandardGRFFileProps::HasSpriteGroups`.
     pub fn has_sprite_groups(&self) -> bool {
-        !self.spritegroups[0].is_null()
+        !self.spritegroups[StandardSpriteGroup::Default.0 as usize].is_null()
     }
     /// `StandardGRFFileProps::GetSpriteGroup(entity_exists)`.
     pub fn sprite_group(&self, entity_exists: bool) -> *const c_void {
         let purchase = if entity_exists {
             std::ptr::null()
         } else {
-            self.spritegroups[1]
+            self.spritegroups[StandardSpriteGroup::Purchase.0 as usize]
         };
         if purchase.is_null() {
-            self.spritegroups[0]
+            self.spritegroups[StandardSpriteGroup::Default.0 as usize]
         } else {
             purchase
         }
