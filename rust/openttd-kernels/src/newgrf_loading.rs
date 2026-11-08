@@ -1490,7 +1490,10 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         (s.reset_prices)();
         (s.reset_currencies)();
         crate::house_definition::reset(&*s.houses);
-        crate::industry::definitions::reset(s.shared().settings().climate.read(), &*s.industry);
+        crate::industry::definitions::reset(
+            crate::landscape_type::LandscapeType(s.shared().settings().climate.read()),
+            &*s.industry,
+        );
         crate::newgrf_class::object::reset(s.object_classes);
         (s.reset_objects)();
         crate::newgrf_class::station::reset(s.station_classes);

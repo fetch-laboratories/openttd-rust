@@ -752,6 +752,11 @@ impl IndustryCallbackMasks {
     pub const fn from_element(element: IndustryCallbackMask) -> Self {
         Self((1_u64 << element.0) as u16)
     }
+    /// Native `BaseBitSet::Any`: whether any of the given values are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
 }
 
 /// Native `IndustryTileCallbackMasks`, retaining every underlying `u8` value.
