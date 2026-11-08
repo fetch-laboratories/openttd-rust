@@ -281,7 +281,7 @@ fn deliver_goods(
         IndustryID::INVALID,
     );
     // Modify profit if a subsidy is in effect.
-    if subsidies.check(cargo_type.0, company.0, src, dest.0) {
+    if subsidies.check_subsidised(cargo_type, company, src, dest) {
         profit = match (s.subsidy_multiplier)() {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),

@@ -1218,7 +1218,10 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if new == INVALID_OWNER {
         write_field!((f.company_finances)(old), money, (u64::MAX >> 2) as i64);
     }
-    unsafe { &*(s.subsidies)() }.transfer(old, new);
+    unsafe { &*(s.subsidies)() }.transfer(
+        crate::company_type::CompanyID(old),
+        crate::company_type::CompanyID(new),
+    );
     let mut t = TownRights {
         rating: 0,
         have_ratings: 0,
