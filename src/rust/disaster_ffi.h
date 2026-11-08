@@ -102,7 +102,6 @@ void OPENTTD_RUST_CALL openttd_rust_disaster_state_destroy(OpenTTDDisasterState 
 uint16_t *OPENTTD_RUST_CALL openttd_rust_disaster_delay();
 uint8_t OPENTTD_RUST_CALL openttd_rust_disaster_tick_abi(const OpenTTDDisasterServices *, OpenTTDDisasterVehicle);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_disaster_tick(const OpenTTDDisasterServices *a0, OpenTTDDisasterVehicle a1) { return openttd_rust_disaster_tick_abi(a0, a1) != 0; }
-void OPENTTD_RUST_CALL openttd_rust_disaster_startup(const OpenTTDDisasterServices *);
 void OPENTTD_RUST_CALL openttd_rust_disaster_construct(const OpenTTDDisasterServices *, OpenTTDDisasterVehicle, int32_t, int32_t, uint8_t, uint8_t);
 void OPENTTD_RUST_CALL openttd_rust_disaster_release_industry(const OpenTTDDisasterServices *, uint16_t);
 void OPENTTD_RUST_CALL openttd_rust_disaster_release_vehicle(const OpenTTDDisasterServices *, OpenTTDDisasterVehicle);
