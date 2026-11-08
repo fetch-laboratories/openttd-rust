@@ -426,7 +426,10 @@ pub(crate) unsafe fn enter(
 }
 
 /// The `uint8_t RoadVehicle::state` store after `SetBit`/`SB`.
-#[allow(clippy::cast_possible_truncation)] // The source stores back into uint8_t.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SetBit and SB store back into the original uint8_t RoadVehicle::state"
+)]
 fn state_byte(value: u32) -> u8 {
     value as u8
 }

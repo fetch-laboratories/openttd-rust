@@ -19,9 +19,9 @@ impl CargoPacketID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(0xFFF000);
+    pub const END: Self = Self(0x00FF_F000);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(0xFF_FFFF);
+    pub const INVALID: Self = Self(0x00FF_FFFF);
 }
 
 /// Native `CargoList::MoveToAction`, shared with `VehicleCargoList`.

@@ -83,8 +83,7 @@ pub(crate) fn is_airport(tile: TileIndex, s: &Services) -> bool {
     (s.station_type)(tile.0) == StationType::Airport
 }
 /// Temporary raw adapter for `animated_tile.rs` and `newgrf_airport.rs`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_airport_raw(tile: u32, s: &Services) -> bool {
     is_airport(TileIndex(tile), s)
 }
@@ -126,8 +125,7 @@ pub(crate) fn get_airport_gfx(
     ))
 }
 /// Temporary raw adapter for `newgrf_airport.rs`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_airport_gfx_raw(
     tile: u32,
     s: &Services,
@@ -147,8 +145,7 @@ pub(crate) fn station_get_by_tile(
     (s.by_tile)(tile.0).cast()
 }
 /// Temporary raw adapter for `water.rs` and `airport.rs`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
@@ -176,8 +173,7 @@ pub(crate) fn is_hangar(tile: TileIndex, s: &crate::newgrf_airport::Services) ->
     false
 }
 /// Temporary raw adapter for `newgrf_airport.rs`.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_hangar_raw(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
     is_hangar(TileIndex(tile), s)
 }
@@ -213,7 +209,10 @@ pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32)
 }
 /// `ToggleRoadWaypointOnSnowOrDesert`: toggle the snow/desert state of a road
 /// waypoint tile.
-#[allow(clippy::cast_possible_truncation)] // The source stores back into uint16_t.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ToggleBit stores back into the original uint16_t m8"
+)]
 pub(crate) fn toggle_road_waypoint_on_snow_or_desert(
     m: &crate::map_func::TileTypeAccess,
     tile: TileIndex,
@@ -231,7 +230,10 @@ pub(crate) fn toggle_road_waypoint_snow(
     toggle_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
 }
 /// `GetRoadWaypointRoadside`: get the decorations of a road waypoint.
-#[allow(clippy::cast_possible_truncation)] // GB returns the original two-bit value.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GB returns the original two-bit Roadside value"
+)]
 pub(crate) fn get_road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
     tile: TileIndex,
@@ -431,8 +433,7 @@ impl crate::map_func::World<'_> {
 /// Temporary raw adapters for callers outside workset 03; each delegates to
 /// the typed accessor named after the original.
 impl crate::map_func::World<'_> {
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn rail_station(&self, t: u32) -> bool {
         self.is_rail_station_tile(TileIndex(t))
     }
@@ -463,48 +464,39 @@ impl crate::map_func::World<'_> {
     pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
         self.is_rail_waypoint_tile(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn has_station_rail_raw(&self, t: u32) -> bool {
         self.has_station_tile_rail(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn station_road_stop(&self, t: u32) -> bool {
         self.is_station_road_stop_tile(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn bay_stop(&self, t: u32) -> bool {
         self.is_bay_road_stop_tile(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn bay_dir(&self, t: u32) -> u8 {
         self.get_bay_road_stop_dir(TileIndex(t)).0
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn station_index(&self, t: u32) -> StationID {
         self.get_station_index(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn station_blocked(&self, t: u32) -> bool {
         self.is_station_tile_blocked(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn station_axis(&self, t: u32) -> u8 {
         self.get_rail_station_axis(TileIndex(t)).0
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn station_reserved(&self, t: u32) -> bool {
         self.has_station_reservation(TileIndex(t))
     }
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
         self.is_compatible_train_station_tile(TileIndex(t), TileIndex(start))
     }
