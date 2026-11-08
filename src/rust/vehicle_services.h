@@ -88,8 +88,6 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 /* Typed signature adapter for synchronous pathfinder vehicle contexts. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
-/** Signature adapter for existing opaque fleet and orders callbacks. */
-inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
 inline void OPENTTD_RUST_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
