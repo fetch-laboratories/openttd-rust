@@ -20,7 +20,7 @@ use crate::roadveh::{
 };
 use crate::services::{Map, Services};
 use crate::station::BaseStation;
-use crate::station_type::RoadStopType;
+use crate::station_type::{RoadStopID, RoadStopType};
 use crate::tile_type::{MP_STATION, TILE_SIZE, TileIndex};
 use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::VS_CRASHED;
@@ -813,7 +813,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
     let s = unsafe { &*s };
     let t = table(s);
     // Construct the drive-through entries before rebuilding their data.
-    let mut index = 0;
+    let mut index = u32::from(RoadStopID::BEGIN.0);
     loop {
         let rs = (t.pool_next)(index);
         if rs.state.is_null() {
@@ -824,7 +824,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
         }
         index = rs.index + 1;
     }
-    index = 0;
+    index = u32::from(RoadStopID::BEGIN.0);
     loop {
         let rs = (t.pool_next)(index);
         if rs.state.is_null() {

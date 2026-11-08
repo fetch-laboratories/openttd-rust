@@ -959,14 +959,16 @@ pub(crate) fn production_around_tiles(
         h: h as u16,
     };
     ta.expand(rad, c.map, c.size_y);
+    // Loop over all tiles to get the produced cargo of
+    // everything except industries.
     for tile in ta.tiles(c.map).map(TileIndex) {
         if (c.s.tile_type)(tile.0) == MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
         crate::tile_cmd::add_produced_cargo(tile.0, &mut produced, c);
     }
-    // Loop over the seen industries. They produce cargo for this station
-    // if it is not a neutral station.
+    // Loop over the seen industries. They produce cargo for
+    // anything that is within 'rad' of any one of their tiles.
     for industry in industries {
         let i = (c.c.industry_by_id)(industry);
         // Skip industry with neutral station.
