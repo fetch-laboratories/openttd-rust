@@ -13,17 +13,20 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
+use crate::bitmath_func::has_bit;
 use crate::cargo_type::{CargoType, CargoTypes};
 use crate::debug::grf_msg;
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
-use crate::newgrf_internal::{CIR_DISABLED, CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
+use crate::newgrf_internal::ChangeInfoResult;
 use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
 use crate::newgrf_roadstop::{RoadStopAvailabilityType, RoadStopClassID, RoadStopDrawModes};
 use crate::newgrf_station::{StationClassID, StationSpecFlags};
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
+/// `NUM_STATIONS_PER_GRF`: the maximum number of stations a single GRF is
+/// allowed to add.
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
 const GSF_STATIONS: u8 = crate::newgrf::GSF_STATIONS;
 const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
@@ -99,49 +102,61 @@ crate::abi::layouts! {
     "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars };
 }
 
-unsafe fn station_change(
-    s: &Services,
-    action2: &Action2Services,
-    loading: &LoadingServices,
+/// The `_cur_gps` loading state that `StationChangeInfo` reads, with the
+/// native tables it writes through.
+struct StationChangeCtx<'a> {
+    s: &'a Services,
+    action2: &'a Action2Services,
+    loading: &'a LoadingServices,
+    /// `_cur_gps.grffile`.
     file: *mut c_void,
+    /// Scratch `std::vector<DrawTileSeqStruct> tmp_layout` of property 0x09.
+    sequence: *mut Sequence,
+}
+
+/// `StationChangeInfo`: define properties for stations.
+unsafe fn station_change_info(
+    c: &StationChangeCtx<'_>,
     first: u32,
     last: u32,
     prop: u32,
-    sequence: *mut Sequence,
     reader: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+) -> Result<ChangeInfoResult, ReadError> {
+    let (s, action2, loading, file, sequence) = (c.s, c.action2, c.loading, c.file, c.sequence);
     unsafe {
         if last > NUM_STATIONS_PER_GRF {
             grf_msg!(
                 1,
                 "StationChangeInfo: Station {} is invalid, max {}, ignoring",
                 last,
-                u16::MAX - 1
+                NUM_STATIONS_PER_GRF
             );
-            return Ok(CIR_INVALID_ID);
+            return Ok(ChangeInfoResult::CIR_INVALID_ID);
         }
-        // Allocate station specs if necessary.
+        // Allocate station specs if necessary
         if (s.station_count)(file) < last as usize {
             (s.station_resize)(file, last);
         }
-        let mut result = CIR_SUCCESS;
+        let mut result = ChangeInfoResult::CIR_SUCCESS;
         for id in first..last {
             let mut spec = (s.station_get)(file, id);
-            // Only property 0x08 can allocate an undefined spec.
+            // Check that the station we are modifying is defined.
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
                     2,
                     "StationChangeInfo: Attempt to modify undefined station {}, ignoring",
                     id
                 );
-                return Ok(CIR_INVALID_ID);
+                return Ok(ChangeInfoResult::CIR_INVALID_ID);
             }
             match prop {
+                // Class ID
                 0x08 => {
+                    // Property 0x08 is special; it is where the station is allocated
                     if spec.is_null() {
                         spec = (s.station_new)(file, id);
                     }
-                    // Class labels are read with big-endian meaning: WAYP or DFLT.
+                    // Swap classid because we read it in BE meaning WAYP or DFLT
                     let label = reader.dword()?.swap_bytes();
                     let class = StationClassID(crate::newgrf_class::station::allocate(
                         label,
@@ -150,14 +165,16 @@ unsafe fn station_change(
                     ));
                     (s.station_class)(spec, class.0);
                 }
+                // Define sprite layout
                 0x09 => {
                     let tiles = reader.extended()?;
+                    // delete earlier loaded stuff
                     (s.station_render_clear)(spec);
                     (s.station_render_reserve)(spec, tiles);
                     for tile in 0..tiles {
                         let layout = (s.station_render_append)(spec);
                         let fields = (action2.layout_storage)(layout);
-                        // Sprite sets are unknown, so there is no offset limit.
+                        // Spritesets are unknown, so no limit.
                         fields.consistent_max_offset.write(u32::from(u16::MAX));
                         if reader.has_data(4) && reader.peek_dword()? == 0 {
                             reader.skip(4)?;
@@ -176,9 +193,9 @@ unsafe fn station_change(
                             std::ptr::null_mut(),
                             std::ptr::null_mut(),
                         )?;
-                        // On error, bail out immediately: temporary GRF data is freed.
+                        // On error, bail out immediately. Temporary GRF data was already freed
                         if crate::newgrf_loading::is_disabled() {
-                            return Ok(CIR_DISABLED);
+                            return Ok(ChangeInfoResult::CIR_DISABLED);
                         }
                         (s.sequence_reset)(sequence);
                         loop {
@@ -188,7 +205,7 @@ unsafe fn station_change(
                             }
                             let item = (s.sequence_append)(sequence);
                             let fields = (action2.sequence_storage)(item);
-                            // No relative bounding-box support.
+                            // no relative bounding box support
                             fields.x.write(delta_x as i8);
                             fields.y.write(reader.byte()? as i8);
                             fields.z.write(reader.byte()? as i8);
@@ -207,15 +224,15 @@ unsafe fn station_change(
                                 std::ptr::null_mut(),
                                 std::ptr::null_mut(),
                             )?;
-                            // On error, bail out immediately: temporary GRF data is freed.
+                            // On error, bail out immediately. Temporary GRF data was already freed
                             if crate::newgrf_loading::is_disabled() {
-                                return Ok(CIR_DISABLED);
+                                return Ok(ChangeInfoResult::CIR_DISABLED);
                             }
                         }
                         (s.layout_sequence_move)(layout, sequence);
                         (s.sequence_reset)(sequence);
                     }
-                    // Layouts must come in alternating X/Y pairs.
+                    // Number of layouts must be even, alternating X and Y
                     if (s.station_render_size)(spec) & 1 != 0 {
                         grf_msg!(
                             1,
@@ -225,6 +242,7 @@ unsafe fn station_change(
                         (s.station_render_pop)(spec);
                     }
                 }
+                // Copy sprite layout
                 0x0a => {
                     let source_id = reader.extended()?;
                     let source = (s.station_get)(file, u32::from(source_id));
@@ -237,7 +255,8 @@ unsafe fn station_change(
                         );
                         continue;
                     }
-                    // StationChangeInfo clears before observing the source, including self-copy.
+                    // delete earlier loaded stuff; this clears before observing
+                    // the source, including self-copy.
                     (s.station_render_clear)(spec);
                     let count = (s.station_render_size)(source);
                     (s.station_render_reserve)(spec, count as u16);
@@ -245,9 +264,13 @@ unsafe fn station_change(
                         (s.station_render_copy_append)(spec, source, index);
                     }
                 }
+                // Callback mask
                 0x0b => (s.station_callback_mask)(spec, reader.byte()?),
+                // Disallowed number of platforms
                 0x0c => (s.station_disallowed_platforms)(spec, reader.byte()?),
+                // Disallowed platform lengths
                 0x0d => (s.station_disallowed_lengths)(spec, reader.byte()?),
+                // Define custom layout
                 0x0e => {
                     while reader.has_data(1) {
                         let length = reader.byte()?;
@@ -257,10 +280,11 @@ unsafe fn station_change(
                         }
                         let count = usize::from(length) * usize::from(number);
                         let data = reader.bytes(count)?;
+                        // Create entry in layouts and assign the layout to it.
                         let key = crate::newgrf_station::get_station_layout_key(number, length);
                         (s.station_custom_assign)(spec, key, data, count);
-                        // Clear the axis bit; the rest is validated during rendering
-                        // because the tile range is not yet known.
+                        // Ensure the first bit, axis, is zero. The rest of the value is
+                        // validated during rendering, as we don't know the range yet.
                         for index in 0..count {
                             let tile = data.add(index).read();
                             if tile & !1 != tile {
@@ -276,6 +300,7 @@ unsafe fn station_change(
                         }
                     }
                 }
+                // Copy custom layout
                 0x0f => {
                     let source_id = reader.extended()?;
                     let source = (s.station_get)(file, u32::from(source_id));
@@ -290,7 +315,9 @@ unsafe fn station_change(
                     }
                     (s.station_custom_copy)(spec, source);
                 }
+                // Little/lots cargo threshold
                 0x10 => (s.station_cargo_threshold)(spec, reader.word()?),
+                // Pylon placement, overhead wire placement and blocked tiles
                 0x11 | 0x14 | 0x15 => {
                     let value = reader.byte()?;
                     if (s.station_tileflags_size)(spec) < 8 {
@@ -302,9 +329,10 @@ unsafe fn station_change(
                         _ => s.station_blocked,
                     };
                     for index in 0..8 {
-                        set(spec, index, value & (1 << index) != 0);
+                        set(spec, index, has_bit(value, index));
                     }
                 }
+                // Cargo types for random triggers
                 0x12 => {
                     let value = reader.dword()?;
                     let cargo = if ((*s.shared).grf_file_version)(file) >= 7 {
@@ -314,20 +342,29 @@ unsafe fn station_change(
                     };
                     (s.station_cargo_triggers)(spec, CargoTypes(cargo).0);
                 }
+                // General flags
                 0x13 => (s.station_flags)(spec, StationSpecFlags(reader.byte()?).0),
+                // Animation info
                 0x16 => {
                     (s.shared().specs().station().animation().frames)(spec, reader.byte()?);
                     (s.shared().specs().station().animation().status)(spec, reader.byte()?);
                 }
+                // Animation speed
                 0x17 => (s.shared().specs().station().animation().speed)(spec, reader.byte()?),
+                // Animation triggers
                 0x18 => (s.shared().specs().station().animation().triggers)(spec, reader.word()?),
+                // 0x19 road routing (not implemented)
+
+                // Advanced sprite layout
                 0x1a => {
                     let tiles = reader.extended()?;
+                    // delete earlier loaded stuff
                     (s.station_render_clear)(spec);
                     (s.station_render_reserve)(spec, tiles);
                     for _ in 0..tiles {
                         let layout = (s.station_render_append)(spec);
                         let count = reader.byte()?;
+                        // On error, bail out immediately. Temporary GRF data was already freed
                         if newgrf_act2::read_layout(
                             action2,
                             loading,
@@ -339,10 +376,10 @@ unsafe fn station_change(
                             false,
                             layout,
                         )? {
-                            return Ok(CIR_DISABLED);
+                            return Ok(ChangeInfoResult::CIR_DISABLED);
                         }
                     }
-                    // Layouts must come in alternating X/Y pairs.
+                    // Number of layouts must be even, alternating X and Y
                     if (s.station_render_size)(spec) & 1 != 0 {
                         grf_msg!(
                             1,
@@ -352,22 +389,28 @@ unsafe fn station_change(
                         (s.station_render_pop)(spec);
                     }
                 }
+                // Minimum bridge height (not implemented)
                 0x1b => {
                     for _ in 0..4 {
                         reader.word()?;
                     }
                 }
+                // Station Name
                 0x1c => (s.station_name)(spec, reader.word()?),
+                // Station Class name
                 0x1d => (s.station_class_name)(spec, reader.word()?),
+                // Extended tile flags (replaces prop 11, 14 and 15)
                 0x1e => {
                     let tiles = usize::from(reader.extended()?);
                     let data = reader.bytes(tiles)?;
                     (s.station_tileflags_assign)(spec, data, tiles);
                 }
+                // Badge list
                 0x1f => reader.badges(
                     GSF_STATIONS,
                     (s.shared().specs().station().badge_list)(spec),
                 )?,
+                // Minimum bridge height (extended) and disallowed bridge pillars
                 0x20 | 0x21 => {
                     let tiles = usize::from(reader.extended()?);
                     if (s.station_bridge_size)(spec) < tiles {
@@ -382,13 +425,17 @@ unsafe fn station_change(
                         write(spec, index, reader.byte()?);
                     }
                 }
-                _ => result = CIR_UNKNOWN,
+                _ => result = ChangeInfoResult::CIR_UNKNOWN,
             }
         }
         Ok(result)
     }
 }
-fn ignore_road_property(prop: u32, reader: &mut Reader<'_>) -> Result<i32, ReadError> {
+/// `IgnoreRoadStopProperty`: ignore properties for roadstops.
+fn ignore_road_stop_property(
+    prop: u32,
+    reader: &mut Reader<'_>,
+) -> Result<ChangeInfoResult, ReadError> {
     match prop {
         0x09 | 0x0c | 0x0f | 0x11 => {
             reader.byte()?;
@@ -403,19 +450,21 @@ fn ignore_road_property(prop: u32, reader: &mut Reader<'_>) -> Result<i32, ReadE
             let count = usize::from(reader.extended()?);
             reader.skip(count)?;
         }
+        // Badge list
         0x16 => reader.skip_badges()?,
-        _ => return Ok(CIR_UNKNOWN),
+        _ => return Ok(ChangeInfoResult::CIR_UNKNOWN),
     }
-    Ok(CIR_SUCCESS)
+    Ok(ChangeInfoResult::CIR_SUCCESS)
 }
-unsafe fn road_change(
+/// `RoadStopChangeInfo`: define properties for road stops.
+unsafe fn road_stop_change_info(
     s: &Services,
     file: *mut c_void,
     first: u32,
     last: u32,
     prop: u32,
     reader: &mut Reader<'_>,
-) -> Result<i32, ReadError> {
+) -> Result<ChangeInfoResult, ReadError> {
     unsafe {
         if last > crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF {
             grf_msg!(
@@ -424,30 +473,30 @@ unsafe fn road_change(
                 last,
                 crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF
             );
-            return Ok(CIR_INVALID_ID);
+            return Ok(ChangeInfoResult::CIR_INVALID_ID);
         }
         if (s.road_count)(file) < last as usize {
             (s.road_resize)(file, last);
         }
-        let mut result = CIR_SUCCESS;
+        let mut result = ChangeInfoResult::CIR_SUCCESS;
         for id in first..last {
             let mut spec = (s.road_get)(file, id);
-            // Only property 0x08 can allocate an undefined spec.
             if spec.is_null() && prop != 0x08 {
                 grf_msg!(
                     1,
                     "RoadStopChangeInfo: Attempt to modify undefined road stop {}, ignoring",
                     id
                 );
-                result = result.max(ignore_road_property(prop, reader)?);
+                result = result.max(ignore_road_stop_property(prop, reader)?);
                 continue;
             }
             match prop {
+                // Road Stop Class ID
                 0x08 => {
                     if spec.is_null() {
                         spec = (s.road_new)(file, id);
                     }
-                    // Class labels are read with big-endian meaning: WAYP or DFLT.
+                    // The class label is read with big-endian meaning: WAYP or DFLT.
                     let label = reader.dword()?.swap_bytes();
                     let class = RoadStopClassID(crate::newgrf_class::roadstop::allocate(
                         label,
@@ -456,10 +505,15 @@ unsafe fn road_change(
                     ));
                     (s.road_class)(spec, class.0);
                 }
+                // Road stop type
                 0x09 => (s.road_stop_type)(spec, RoadStopAvailabilityType(reader.byte()?).0),
+                // Road Stop Name
                 0x0a => (s.road_name)(spec, reader.word()?),
+                // Road Stop Class name
                 0x0b => (s.road_class_name)(spec, reader.word()?),
+                // The draw modes
                 0x0c => (s.road_draw_mode)(spec, RoadStopDrawModes(reader.byte()?).0),
+                // Cargo types for random triggers
                 0x0d => {
                     let cargo = crate::engine_loading::openttd_rust_engine_translate_refit(
                         reader.dword()?,
@@ -467,16 +521,23 @@ unsafe fn road_change(
                     );
                     (s.road_cargo_triggers)(spec, CargoTypes(cargo).0);
                 }
+                // Animation info
                 0x0e => {
                     (s.shared().specs().road_stop().animation().frames)(spec, reader.byte()?);
                     (s.shared().specs().road_stop().animation().status)(spec, reader.byte()?);
                 }
+                // Animation speed
                 0x0f => (s.shared().specs().road_stop().animation().speed)(spec, reader.byte()?),
+                // Animation triggers
                 0x10 => (s.shared().specs().road_stop().animation().triggers)(spec, reader.word()?),
+                // Callback mask
                 0x11 => (s.road_callback_mask)(spec, reader.byte()?),
-                // Future-proofed as four bytes, though the original uses only
-                // two bytes worth of flags. Preserve the native narrowing point.
+                // General flags. Future-proofing, size this as 4 bytes, but we only
+                // need two byte's worth of flags at present. Preserve the native
+                // narrowing point.
                 0x12 => (s.road_flags)(spec, reader.dword()?),
+                // Minimum bridge height and disallowed pillars for each of the
+                // roadstop's tile layouts.
                 0x13 | 0x14 => {
                     let tiles = usize::from(reader.extended()?);
                     let write = if prop == 0x13 {
@@ -492,15 +553,17 @@ unsafe fn road_change(
                         }
                     }
                 }
+                // Cost multipliers
                 0x15 => {
                     (s.road_build_cost)(spec, reader.byte()?);
                     (s.road_clear_cost)(spec, reader.byte()?);
                 }
+                // Badge list
                 0x16 => reader.badges(
                     GSF_ROADSTOPS,
                     (s.shared().specs().road_stop().badge_list)(spec),
                 )?,
-                _ => result = CIR_UNKNOWN,
+                _ => result = ChangeInfoResult::CIR_UNKNOWN,
             }
         }
         Ok(result)
@@ -523,21 +586,23 @@ pub unsafe extern "C" fn openttd_rust_station_change_info_abi(
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
     u8::from(
         match unsafe {
-            station_change(
-                s,
-                &*action2,
-                &*loading,
-                file,
+            station_change_info(
+                &StationChangeCtx {
+                    s,
+                    action2: &*action2,
+                    loading: &*loading,
+                    file,
+                    sequence,
+                },
                 first,
                 last,
                 prop,
-                sequence,
                 &mut reader,
             )
         } {
             Ok(value) => {
                 unsafe {
-                    output.write(value as u8);
+                    output.write(value.0);
                 }
                 true
             }
@@ -558,10 +623,10 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info_abi(
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
     u8::from(
-        match unsafe { road_change(s, file, first, last, prop, &mut reader) } {
+        match unsafe { road_stop_change_info(s, file, first, last, prop, &mut reader) } {
             Ok(value) => {
                 unsafe {
-                    output.write(value as u8);
+                    output.write(value.0);
                 }
                 true
             }
@@ -570,6 +635,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info_abi(
     )
 }
 
+/// `CargoTypeMapSpriteGroupHandler<GSF_STATIONS>::MapSpecific`.
 pub(crate) unsafe fn station_map_specific(
     s: *const Services,
     file: *mut c_void,
@@ -592,6 +658,7 @@ pub(crate) unsafe fn station_map_specific(
         }
     }
 }
+/// `CargoTypeMapSpriteGroupHandler<GSF_STATIONS>::MapDefault`.
 pub(crate) unsafe fn station_map_default(
     s: *const Services,
     file: *mut c_void,
@@ -614,6 +681,7 @@ pub(crate) unsafe fn station_map_default(
     }
 }
 
+/// `CargoTypeMapSpriteGroupHandler<GSF_ROADSTOPS>::MapSpecific`.
 pub(crate) unsafe fn roadstop_map_specific(
     s: *const Services,
     file: *mut c_void,
@@ -636,6 +704,7 @@ pub(crate) unsafe fn roadstop_map_specific(
         }
     }
 }
+/// `CargoTypeMapSpriteGroupHandler<GSF_ROADSTOPS>::MapDefault`.
 pub(crate) unsafe fn roadstop_map_default(
     s: *const Services,
     file: *mut c_void,
