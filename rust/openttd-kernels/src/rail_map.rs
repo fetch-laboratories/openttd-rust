@@ -87,6 +87,16 @@ impl crate::map_func::World<'_> {
         self.check(self.has_signal_on_track(t, crate::track_func::trackdir_to_track(trackdir)));
         u8::from(self.signal_states(t) & crate::signal_func::signal_along_trackdir(trackdir) != 0)
     }
+    /// `IsPresignalEntry`.
+    pub(crate) fn is_presignal_entry(&self, t: u32, track: u8) -> bool {
+        self.signal_type(t, track) == crate::signal_type::SignalType::SIGTYPE_ENTRY.0
+            || self.signal_type(t, track) == crate::signal_type::SignalType::SIGTYPE_COMBO.0
+    }
+    /// `IsPresignalExit`.
+    pub(crate) fn is_presignal_exit(&self, t: u32, track: u8) -> bool {
+        self.signal_type(t, track) == crate::signal_type::SignalType::SIGTYPE_EXIT.0
+            || self.signal_type(t, track) == crate::signal_type::SignalType::SIGTYPE_COMBO.0
+    }
     /// `IsOnewaySignal`.
     pub(crate) fn oneway_signal(&self, t: u32, track: u8) -> bool {
         self.signal_type(t, track) != crate::signal_type::SIGTYPE_PBS
