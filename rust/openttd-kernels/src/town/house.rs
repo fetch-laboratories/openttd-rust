@@ -250,6 +250,22 @@ unsafe fn add_one(cargoes: *mut u32, cargo: CargoType) {
     }
 }
 
+/// Gameplay arguments of `town_cmd.cpp::CmdPlaceHouse`, in command order.
+#[derive(Clone, Copy)]
+struct CmdPlaceHouse {
+    tile: TileIndex,
+    house: HouseID,
+    is_protected: bool,
+    replace: bool,
+}
+
+/// Execution flags and result storage for the house command.
+#[derive(Clone, Copy)]
+struct HouseCommandCall {
+    result: *mut CommandCost,
+    flags: DoCommandFlags,
+}
+
 /// Immutable native tables for one synchronous entry.
 struct House<'a> {
     l: &'a Leaves,
@@ -1114,15 +1130,14 @@ impl<'a> House<'a> {
         crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile.0, flags.0);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
-    fn cmd_place_house(
-        &self,
-        result: *mut CommandCost,
-        flags: DoCommandFlags,
-        tile: TileIndex,
-        house: HouseID,
-        is_protected: bool,
-        replace: bool,
-    ) {
+    fn cmd_place_house(&self, call: HouseCommandCall, args: CmdPlaceHouse) {
+        let HouseCommandCall { result, flags } = call;
+        let CmdPlaceHouse {
+            tile,
+            house,
+            is_protected,
+            replace,
+        } = args;
         let c = self.costs();
         if !(self.l.environment.editor)()
             && PlaceHouses((self.h.place_houses)()) == PlaceHouses::PH_FORBIDDEN
@@ -1644,12 +1659,16 @@ pub unsafe extern "C" fn openttd_rust_house_place(
     replace: bool,
 ) {
     house(leaves, services).cmd_place_house(
-        result,
-        DoCommandFlags(flags),
-        TileIndex(tile),
-        id,
-        protected,
-        replace,
+        HouseCommandCall {
+            result,
+            flags: DoCommandFlags(flags),
+        },
+        CmdPlaceHouse {
+            tile: TileIndex(tile),
+            house: id,
+            is_protected: protected,
+            replace,
+        },
     );
 }
 /// `AddAcceptedCargoOfHouse`, raw adapter retained for `subsidy.rs` until its pass.
