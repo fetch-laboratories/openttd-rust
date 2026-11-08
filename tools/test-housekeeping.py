@@ -244,6 +244,42 @@ class HousekeepingTests(unittest.TestCase):
                 self.assertTrue(tree.exists())
             child_write(child)
 
+    def test_detached_task_keeps_unpublished_commits(self) -> None:
+        tree = self.t3_tree("t3-detached-unpublished", detached=True)
+
+        def planned() -> housekeeping.Item:
+            # Test retained history after the activity window has expired.
+            future = time.time() + 2 * housekeeping.RUNNING_SECONDS
+            with patch.object(housekeeping.time, "time", return_value=future):
+                return next(
+                    item
+                    for item in housekeeping.plan_worktrees(
+                        self.main,
+                        housekeeping.list_worktrees(self.main)[1:],
+                        pr_state,
+                    )
+                    if item.path == tree
+                )
+
+        self.assertTrue(planned().remove)
+        write(tree / "work/unpublished.txt", "work not held by any branch\n")
+        git(tree, "add", "work/unpublished.txt")
+        git(tree, "commit", "--quiet", "-m", "Add: unpublished detached work")
+        head = git(tree, "rev-parse", "HEAD").strip()
+        self.age(tree, 2 * housekeeping.RUNNING_SECONDS)
+        self.assertFalse(planned().remove)
+        self.assertEqual(git(tree, "rev-parse", "HEAD").strip(), head)
+        self.assertEqual(
+            (tree / "work/unpublished.txt").read_text(), "work not held by any branch\n"
+        )
+
+        git(tree, "push", "--quiet", "origin", "HEAD:refs/heads/retained-detached")
+        item = planned()
+        self.assertTrue(item.remove, item.reason)
+        self.assertEqual(
+            git(self.main, "rev-parse", "origin/retained-detached").strip(), head
+        )
+
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")
         detached = self.t3_tree("t3-detached", detached=True)

@@ -200,9 +200,9 @@ def plan_worktrees(
             reason, branch = "PR closed; origin lacks this head, branch kept", None
         else:
             fresh = tree.head in first_parent
-            if task and (tree.branch is None or fresh):
-                reason = "finished T3 task; detached or no commits beyond base"
-                # A fresh branch holds no work to delete; a detached head has none.
+            if task and fresh:
+                reason = "finished T3 task; no commits beyond base"
+                # A base-chain head holds no unpublished commits to delete.
             elif not fresh and on_origin(main, tree.head):
                 # Review and update checkouts push to another branch's PR.
                 reason = "no PR; head pushed to origin"
