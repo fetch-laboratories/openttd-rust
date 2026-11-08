@@ -69,11 +69,11 @@ fn get_scaled_industry_generation_probability(
         return 0;
     }
     let chance = unsafe {
-        super::resolver::openttd_rust_industry_probability(
-            it.0,
-            IndustryAvailabilityCallType::IACT_MAPGENERATION.0,
+        super::resolver::get_industry_probability_callback(
+            it,
+            IndustryAvailabilityCallType::IACT_MAPGENERATION,
             u32::from(chance),
-            s.resolver,
+            &*s.resolver,
         )
     };
     if chance == 0 {

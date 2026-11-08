@@ -229,7 +229,9 @@ pub unsafe fn finalise(s: &Services) {
         if enabled && has_file {
             for i in 0..unsafe { (*spec).conflicting.len() } {
                 let kind = unsafe { (*spec).conflicting[i] };
-                let mapped = crate::industry::resolver::map_type(kind, grfid);
+                let mapped =
+                    crate::industry::resolver::map_new_grf_industry_type(IndustryType(kind), grfid)
+                        .0;
                 unsafe { (*spec).conflicting[i] = mapped };
             }
         }

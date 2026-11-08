@@ -40,7 +40,9 @@ fn can_cargo_service_industry(
     }
     // Check for acceptance of cargo
     if unsafe { super::get_cargo_accepted(ind, cargo.0).is_some() }
-        && !unsafe { super::resolver::refuses(shell, ind, cargo.0, &*s.resolver) }
+        && !unsafe {
+            super::resolver::industry_temporarily_refuses_cargo(shell, ind, cargo, &*s.resolver)
+        }
     {
         *c_accepts = true;
     }
