@@ -41,6 +41,8 @@ rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
 rebound | OpenTTDCargoSpecValid | src/subsidy.cpp | cargo_valid
 rebound | OpenTTDCompanyIsValid | src/rust/services.cpp | company_valid
 rebound | OpenTTDCompanyIsValid | src/rust/vehicle_services_newgrf.h | valid_company
+rebound | OpenTTDDistanceManhattan | src/newgrf_object.cpp | manhattan
+rebound | OpenTTDDistanceManhattan | src/rust/ship_control_services.h | dist_manhattan
 rebound | OpenTTDDistanceSquare | src/newgrf_object.cpp | square
 rebound | OpenTTDDistanceSquare | src/rust/ship_control_services.h | dist_square
 rebound | OpenTTDEditor | src/landscape.cpp | editor

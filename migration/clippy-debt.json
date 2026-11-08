@@ -1799,7 +1799,7 @@
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn crossing_removed | excessive_nesting | 965968d2b96a84342147": [
       5
     ],
-    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn crossing_removed | excessive_nesting | dc2d4b9305b866aaada5": [
+    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn crossing_removed | excessive_nesting | bbc01e8ce5b1cef7f8b9": [
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn get_current_max_speed::mod el | excessive_nesting | 0d06fc01371dbcd17075": [
@@ -1826,7 +1826,7 @@
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       42
     ],
-    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 02ed8c57227667ad5a23": [
+    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | aeff2c146b91182cb6da": [
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 40f56c67ef8fefcbca08": [
@@ -1881,7 +1881,7 @@
     "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | a7148d6828eb165aac33": [
       6
     ],
-    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | ed7e4c104b6398fde534": [
+    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | 57e151827030b79ecd44": [
       6
     ],
     "rust/openttd-kernels/src/train_reservation.rs | fn extend_from | too_many_lines | 4a33eacd5fa65f2b2e28": [
@@ -2002,7 +2002,7 @@
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       32
     ],
-    "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | 6eb5853d60d3644ef9d2": [
+    "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ba367b9edf519908fef2": [
       7
     ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ae6a3ac5b6cb1c142c5e": [
@@ -2044,7 +2044,7 @@
     ],
     "rust/openttd-kernels/src/vehicle_transactions/refit.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       151,
-      239
+      225
     ],
     "rust/openttd-kernels/src/water.rs | impl < ' a > World < ' a >::fn flood_vehicles | excessive_nesting | 5b512942255e24675ecb": [
       5

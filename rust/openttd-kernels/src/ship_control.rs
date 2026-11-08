@@ -173,6 +173,7 @@ pub struct Leaves {
     pub offset: extern "C" fn(u32) -> u32,
     pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
+    pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
     pub dock: extern "C" fn(u32) -> bool,
     pub dock_water: extern "C" fn(u32) -> bool,
     pub station: extern "C" fn(u32) -> u32,
@@ -720,11 +721,7 @@ impl Game<'_> {
                             }
                         } else if observed_dest != 0 {
                             if observed_order_type == u32::from(OT_GOTO_WAYPOINT)
-                                && self
-                                    .services
-                                    .map()
-                                    .distance_manhattan(observed_dest, new_tile)
-                                    <= 3
+                                && (self.leaves.dist_manhattan)(observed_dest, new_tile) <= 3
                             {
                                 crate::witness::hit(crate::witness::SHIP_BUOY);
                                 (self.leaves.timetable)(id);
@@ -1168,6 +1165,7 @@ crate::abi::layouts! {
         offset,
         diag_between,
         dist_square,
+        dist_manhattan,
         dock,
         dock_water,
         station,

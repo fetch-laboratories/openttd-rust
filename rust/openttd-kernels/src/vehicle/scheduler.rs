@@ -552,7 +552,7 @@ mod tests {
         unsafe { (*part.0.as_ptr()).first = front.0.as_ptr() };
         let post = PostTick::after_tick(part);
         let (f, p) = (front.0.as_ptr(), part.0.as_ptr());
-        assert!(post.vehicle_type == ROAD);
+        assert_eq!(post.vehicle_type.0, ROAD.0);
         // SAFETY: Only addresses of the live private records are formed, then one store.
         unsafe {
             assert_eq!(post.period, &raw const (*p).cached_cargo_age_period);

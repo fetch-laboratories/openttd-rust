@@ -1828,11 +1828,7 @@ impl Game<'_> {
             {
                 if (id).front() != 0 {
                     crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
-                    self.reserve_track(
-                        id,
-                        new,
-                        u64::from((self.services.tunnel_bridge_direction)(new)) & 1,
-                    );
+                    self.reserve_track(id, new, (self.services.tunnel_bridge_direction)(new) & 1);
                     (self.leaves.check_next)(id);
                 }
                 if old == new {
@@ -1865,7 +1861,7 @@ impl Game<'_> {
         if signals {
             if (id).front() != 0 && self.moved_signals(id, new, entered) {
                 if (!crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(new, id.track())
-                    && self.reserve_track(id, new, u64::from(id.track().trailing_zeros())) == 0)
+                    && self.reserve_track(id, new, id.track().trailing_zeros() as u8) == 0)
                     || !self.try_path_reserve(id, false, false)
                 {
                     self.mark_stuck(id);
@@ -1919,8 +1915,8 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// `TryReserveRailTrack(tile, track)` with its default station triggers.
-    fn reserve_track(&self, _id: Handle, tile: u32, track: u64) -> u64 {
-        u64::from(crate::pbs::Pbs::acquire(self.services).try_reserve(tile, track as u8, true))
+    fn reserve_track(&self, _id: Handle, tile: u32, track: u8) -> u64 {
+        u64::from(crate::pbs::Pbs::acquire(self.services).try_reserve(tile, track, true))
     }
     fn crash(&self, id: Handle, flooded: bool) -> u32 {
         let mut victims = 0_u32;

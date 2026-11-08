@@ -262,6 +262,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
+		.dist_manhattan = OpenTTDDistanceManhattan,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig,
