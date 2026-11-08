@@ -22,7 +22,9 @@
  * 1. PutIntegerBase overload resolution for char/char16/char32, unsigned short, long long,
  *    unscoped enums, implicit conversions and an overloaded unary plus (fork-modified
  *    StringBuilderIntegerAdapter, src/core/string_builder.hpp). Retires with the last C++
- *    PutIntegerBase caller.
+ *    PutIntegerBase caller. Ordered sinks also observe synchronous PutBuffer calls,
+ *    including empty UTF-8 writes and suppressed integer formatting; these retire with
+ *    the C++ BaseStringBuilder facade.
  * 2. STRGEN fatal timing: the logger never returns, so the fork's ReadClamped/SkipClamped and
  *    ReadIntegerBase must log before committing the cursor (6 parser and 10 consumer cases).
  * 3. Peek/Read borrowed views start at the cursor. 2 and 3 retire with the C++ StringConsumer
@@ -92,6 +94,69 @@ static int Check(std::string_view name, const std::string &got, std::string_view
 	return 1;
 }
 
+class OrderedBuilder final : public BaseStringBuilder {
+public:
+	struct Event {
+		bool inside_call;
+		size_t phase;
+		std::string bytes;
+	};
+	bool active = false;
+	size_t phase = 0;
+	std::vector<Event> events;
+
+	void PutBuffer(std::span<const char> bytes) override
+	{
+		this->events.push_back({this->active, this->phase, {bytes.data(), bytes.size()}});
+	}
+};
+
+static std::string DumpBuilder(const OrderedBuilder &builder)
+{
+	std::ostringstream output;
+	output << builder.events.size();
+	for (const auto &event : builder.events) {
+		auto hex = Hex(event.bytes);
+		output << ' ' << event.inside_call << ' ' << event.phase << ' ' << event.bytes.size() << ' ' << (hex.empty() ? "-" : hex);
+	}
+	return output.str();
+}
+
+
+static int OrderedSinks()
+{
+	OrderedBuilder sequence;
+	auto call = [&](auto operation) {
+		++sequence.phase;
+		sequence.active = true;
+		operation();
+		sequence.active = false;
+	};
+	call([&] { sequence.PutUint8(0); });
+	call([&] { sequence.PutSint8(INT8_MIN); });
+	call([&] { sequence.PutUint8(UINT8_MAX); });
+	call([&] { sequence.PutUint16LE(0); });
+	call([&] { sequence.PutSint16LE(INT16_MIN); });
+	call([&] { sequence.PutUint16LE(UINT16_MAX); });
+	call([&] { sequence.PutUint32LE(0); });
+	call([&] { sequence.PutSint32LE(INT32_MIN); });
+	call([&] { sequence.PutUint32LE(UINT32_MAX); });
+	call([&] { sequence.PutUint64LE(0); });
+	call([&] { sequence.PutSint64LE(INT64_MIN); });
+	call([&] { sequence.PutUint64LE(UINT64_MAX); });
+	call([&] { sequence.PutChar(static_cast<char>(0xFF)); });
+	call([&] { sequence.PutUtf8(0); });
+	call([&] { sequence.PutUtf8(0xD800); });
+	call([&] { sequence.PutUtf8(0x10FFFF); });
+	call([&] { sequence.PutUtf8(0x110000); }); // One zero-length call, distinct from formatting failure.
+	call([&] { sequence.PutUtf8(UINT32_MAX); });
+	call([&] { sequence.PutIntegerBase<uint64_t>(uint64_t{1} << 32, 2); }); // 33 bytes: no call.
+	call([&] { sequence.PutIntegerBase<uint32_t>(UINT32_MAX, 2); }); // Exactly 32 bytes: one call.
+	call([&] { sequence.PutIntegerBase<int32_t>(INT32_MIN, 2); }); // Minus sign makes 33: no call.
+	call([&] { sequence.PutIntegerBase<int32_t>(INT32_MIN + 1, 2); }); // Minus sign makes 32: one call.
+	return Check("ordered-sinks", DumpBuilder(sequence), "20 1 1 1 00 1 2 1 80 1 3 1 ff 1 4 2 0000 1 5 2 0080 1 6 2 ffff 1 7 4 00000000 1 8 4 00000080 1 9 4 ffffffff 1 10 8 0000000000000000 1 11 8 0000000000000080 1 12 8 ffffffffffffffff 1 13 1 ff 1 14 1 00 1 15 3 eda080 1 16 4 f48fbfbf 1 17 0 - 1 18 0 - 1 20 32 3131313131313131313131313131313131313131313131313131313131313131 1 22 32 2d31313131313131313131313131313131313131313131313131313131313131");
+}
+
 } // namespace integer_boundary
 
 #if defined(STRGEN) || defined(SETTINGSGEN)
@@ -105,7 +170,7 @@ static int Check(std::string_view name, const std::string &got, std::string_view
 int IntegerBoundary()
 {
 	using namespace integer_boundary;
-	int failures = 0;
+	int failures = OrderedSinks();
 	enum SignedEnum : int64_t { NegativeEnum = INT64_MIN };
 	enum UnsignedEnum : uint64_t { MaximumEnum = UINT64_MAX };
 	enum BoolEnum : bool { TrueEnum = true };
