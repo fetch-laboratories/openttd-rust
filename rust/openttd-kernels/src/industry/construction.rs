@@ -17,7 +17,6 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::Owner;
 use crate::economy_type::EconomyType;
 use crate::history_type::LAST_MONTH;
-use crate::industry_map::IndustryGraphics;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryAnimationTrigger, IndustryGfx, IndustryID, IndustryType,
@@ -450,7 +449,7 @@ pub(crate) unsafe fn do_create_new_industry(
             tile.0
                 .wrapping_add(map.diff(i32::from(it.x), i32::from(it.y))),
         );
-        if it.gfx != u16::from(IndustryGraphics::GFX_WATERTILE_SPECIALCHECK.0) {
+        if IndustryGfx(it.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
             let mut location = super::location(owner);
             location.add(cur_tile.0, map);
             set_location(owner, location);
