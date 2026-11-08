@@ -27,12 +27,12 @@ This file holds what every agent needs. The routing table points to the rest (us
 | Selecting, ranking or planning work, or placing issues | [Roadmap](docs/roadmap.md), [planning](docs/planning.md) |
 | Building, testing, running the harness or CI | [Migration tools](docs/rust-migration.md) |
 | Implementing a work order | [Implementer brief](docs/implementer-brief.md) |
-| Reviewing a PR | [Review checklist](docs/review-checklist.md), [review](docs/workflow.md#review) |
+| Reviewing a PR | [Review checklist](docs/review-checklist.md), [review](docs/workflow.md#review), [review brief](docs/review-brief.md) |
 | Writing port standards, or when a check or work order cites them | [Porting](docs/porting.md) |
 | Touching an already-ported component | [Components](docs/components/README.md) |
 | Designing a storage port or map access | [World state](docs/design/world-state.md), [storage ports](docs/porting.md#storage-ports) |
 | Opening issues or PRs, committing or reviewing | [Workflow](docs/workflow.md) |
-| Integrating PRs, administering CI, taking stock or reclaiming output as root | [Root workflow](docs/root-workflow.md) |
+| Integrating PRs, administering CI, taking stock or reclaiming output as root or integrator | [Root workflow](docs/root-workflow.md) |
 | Spawning or briefing agents, or running as root | [Team](docs/team.md) |
 | Checking speed projections or running speed passes | [Speed](docs/speed.md) |
 | Running a deep check | [Deep checks](docs/deep-checks.md) |

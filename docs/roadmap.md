@@ -320,21 +320,40 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
+## Ready queue
+
+Work orders ready to dispatch, which root selects when a slot frees ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two entries are ready. File sets are checked against open PRs and reservations.
+
+| # | Work order | Files | Waits on |
+| ---: | --- | --- | --- |
+| 1 | #824: housekeeping reclaims `build-rust` from finished kept worktrees | `tools/housekeeping.py` and its test | Ready |
+| 2 | #734 02 `industry.rs` single-file pass (2,874 lines) | `industry.rs`, plus callers adopting typed forms | #823 (`industry/resolver.rs`) |
+| 3 | #734 03 `station_cmd.rs` single-file pass (4,868 lines) | `station_cmd.rs`, plus callers | #823 (`station_cmd.rs` caller edits); #737 W waits behind it |
+| 4 | #734 03 station group: `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs`, `station_lifecycle.rs`, with #815's inherited items | those files | #823 (`station_lifecycle.rs`) |
+| 5 | #734 03 `station_service.rs` single-file pass (2,285 lines) | `station_service.rs` | Check against the #737 V remainder reservation |
+| 6 | #734 13 Map/terrain core with 23's type-bearing files | `map_func.rs`, `tile_map.rs`, `slope_func.rs`, `direction_func.rs`, `tilearea.rs` and the rest of 13's non-tree files; `bitmath_func.rs`, `random_func.rs`, `pool.rs`, `math.rs`, `kdtree.rs` | #823 (`map_func.rs`, `slope_func.rs`, `direction_func.rs`, `math.rs`) |
+
 ## Resume checkpoint
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. Under this Claude Code root, `gpt-6.1-sol` reviewers report findings and Opus implementers fix them ([team](team.md#claude-code-root)). Code main is integration 138, `8e967f83c5`, which is #822 combining #816 and #814. Four branches are unintegrated.
+Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. [Delegation](team.md#delegation-user-2026-11-08) applies (user, 2026-11-08):
+- an Opus xhigh integrator owns integration;
+- each finding's reviewer verifies its fixes;
+- reviewers start from the [review brief](review-brief.md);
+- a planner keeps the [ready queue](#ready-queue) filled;
+- implementers pipeline onto the next ready entry while their PR waits.
+
+Code main is integration 138, `8e967f83c5`. Two branches are unintegrated: #823 and the batch V remainder.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #734 workset 01 `town.rs` pass, PR #819 | `/root/cleanup_734_pass_01c_town_rs`; reviewed by `/root/review_819_{a_state,b_roads,c_growth,d_houses,e_shared}` | Eleven cleanup findings, none behavioural. E1, E3, E4 and E5 are pushed; A1, A2, B1, C1, C2, D1 and E2 are in progress, then a merge of integration 138. Root spot-checks the fixes. D1 (retiring the test-only `openttd_rust_town_expand`) gets a fresh scoped review. Then Full. |
-| #734 workset 02c industry resolver/property reader, PR #821 | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_821_{resolver,properties}` | Findings R1 and P1, then a merge of integration 138 and the post-#816 adapter clean-ups. Root spot-checks the fixes, then requests Full. |
-| #736 P packet comparison, PR #820 | `/root/cleanup_736_p_packet`; reviewed by `/root/review_820_{rust_oracle,boundary}` | The boundary review accepts. The Rust-oracle finding (restore the native `Send_bytes` suffix-span observations at the boundary) and the merge of integration 138 are being rebuilt. Then a fresh scoped evidence review and Full. |
-| #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | New PR from `8e967f83c5` covering the 11 families in #814's remaining-items table. Families needing files held by #819 or #821 are deferred. |
-| Next file passes | Unassigned | In the [new order](#cleanup-work-order): `industry.rs`; then the 03 remainder as three passes (`station_cmd.rs`; `station_service.rs`; `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs` and `station_lifecycle.rs`, which take #815's inherited items after reachability checks); then 13 with 23's type-bearing files. Start each when its files are free and fewer than six branches are open. |
-| #737 W | Unassigned | Waits: its files overlap #819 (`town.rs`, `town/house.rs`, `town/resolver.rs`, `subsidy.rs`, `station_cmd.rs`) and the industry passes. |
-| Next stocktake/profile and cadence | Root | Stocktake/profile after 143; platform cadence after 140. |
+| #823, integrating #819 (`town.rs` pass), #821 (industry resolver pass) and #820 (#736 P packet probe) | Integrator | Exact-head Full is requested at `d6cf15acd7`. Merge as integration 139, post the note, close the components and clean up. All reviews carried; fixes spot-checked or verified. |
+| #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | Family 5 is committed (`4b449ceb27`). Next it pushes a draft PR, then the station visit-type and position families. |
+| Ready queue | Implementers of #819, #820, #821 (pipelining) | Entry 1 (#824) can start now; entries 2 to 6 wait for #823. |
+| D1 from #819 | #736 W | Retire the test-only `openttd_rust_town_expand` after moving its fixture observations to Rust tests. |
+| #737 W | Unassigned | Waits behind the `station_cmd.rs` pass and the industry passes, whose files it overlaps. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 143; platform cadence after 140. |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 

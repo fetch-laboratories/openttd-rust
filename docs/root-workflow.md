@@ -5,6 +5,8 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 
 ## Integration
 
+Under a Claude Code root, the [integrator](team.md#integrator) carries out this section, and root keeps the escalations listed there.
+
 - Each ownership port has one open PR at a time, targeting `rust-migration` directly.
 - Integrate an owner's checkpoint once it meets all of the following:
   - It removes at least 100 fork C++ lines net, counting C++ under `tools/` and `src/tests`. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge. Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and integrate on review and exact-head Full. A #734/#735 PR finishes every file it touches ([work order](roadmap.md#cleanup-work-order)); it is not a checkpoint of a larger owner.
@@ -19,7 +21,7 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 - Integrate drafts in readiness order, except a sweep across most of `src/`, such as #581 PR-B. It integrates before any other `src/` change; other drafts continue implementation and review and hold integration until it lands, because each integration would force a new sweep. No draft waits for another draft's services. A reviewed PR gains no new scope before integration.
 - Batch two or three ready, reviewed component heads only when their diffs touch disjoint files. Integrate a lone ready PR without waiting. Integrate overlapping components one at a time at their reviewed heads.
 - Assemble an integration PR from current base. Preserve component commits and link their reviews. Review only substantive conflict resolutions under [review](workflow.md#review); unchanged components need no new review. Full on the combination needs no separate component Full first. A stack organizes dependent PRs but does not combine validation runs. No extra local integration build or full local simulation is required. Keep batches small: the integration merge is the rollback unit.
-- Spot-check reviewers' fix commits before integration ([review](workflow.md#review)).
+- Spot-check reviewers' fix commits before integration ([review](workflow.md#review)). Under a Claude Code root, each finding's reviewer verifies them instead ([review loop](team.md#review-loop)).
 - A reviewed PR's base update needs no new review if CI passes and one of these conditions holds:
   - The update has no conflicts in `src/`, `rust/`, `tools/` or `.github/`.
   - It resolves every conflict by keeping both sides' lines unchanged. `git show --remerge-diff` removes only conflict markers.
