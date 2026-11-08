@@ -113,25 +113,12 @@ struct OpenTTDVehiclePoolCursor {
 	size_t slots_len;
 	const size_t *first_unused;
 };
-/** Named actual scalar members. No reference into the shell crosses a callback. */
-struct OpenTTDVehiclePostTick {
-	VehicleType type;
-	const uint16_t *period;
-	uint16_t *counter;
-	uint32_t *motion;
-	const uint16_t *speed;
-	const uint8_t *front_type;
-	const uint8_t *subtype;
-	const uint8_t *tick;
-	const uint8_t *front_status;
-	const uint8_t *status;
-};
 struct OpenTTDVehicleSchedulerTables;
 struct OpenTTDVehicleSchedulerServices {
 	OpenTTDVehiclePoolCursor (OPENTTD_RUST_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
 	bool assertions;
-	/** Runs the virtual Tick; fills the bundle only when the vehicle survives. */
-	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *, OpenTTDVehiclePostTick *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
+	/** Runs the virtual Tick; true when the vehicle survives. */
+	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
 	void (OPENTTD_RUST_CALL *calendar_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(calendar_day);
 	void (OPENTTD_RUST_CALL *economy_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_day);
 	OpenTTDCargoList *(OPENTTD_RUST_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);

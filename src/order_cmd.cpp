@@ -69,12 +69,6 @@ extern "C" void openttd_orders_destroy(void *data, size_t length) noexcept
 	for (size_t i = 0; i < length; ++i) std::destroy_at(orders + i);
 }
 
-extern "C" uint64_t openttd_orders_last_station(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetLastStationVisited().base();
-}
-
 extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t if_valid) noexcept
 {
 	{
@@ -87,12 +81,6 @@ extern "C" uint64_t openttd_orders_vehicle_type(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return v->GetType();
-}
-
-extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetVehStatus().base();
 }
 
 
@@ -116,21 +104,9 @@ extern "C" uint64_t openttd_orders_timetable_year_limit() noexcept
 	return TimerGameEconomy::DateAtStartOfYear(MAX_TIMETABLE_START_YEARS).base();
 }
 
-extern "C" uint64_t openttd_orders_stopped_or_crashed(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed});
-}
-
 extern "C" void *openttd_orders_allocate_list() noexcept
 {
 	return new OrderList();
-}
-
-extern "C" uint64_t openttd_orders_suppress_implicit(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS);
 }
 
 extern "C" uint64_t openttd_orders_shared_window(void *ctx, void *first) noexcept
@@ -324,12 +300,6 @@ extern "C" uint64_t openttd_orders_default_group() noexcept
 	return DEFAULT_GROUP.base();
 }
 
-extern "C" uint64_t openttd_orders_vehicle_tile(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetTile().base();
-}
-
 extern "C" uint64_t openttd_orders_vehicle_group(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -394,11 +364,6 @@ extern "C" void openttd_orders_delete_order_news(void *ctx) noexcept
 	DeleteVehicleNews(static_cast<Vehicle *>(ctx)->index, AdviceType::Order);
 }
 
-extern "C" void openttd_orders_suppress_implicit_write(void *ctx, uint8_t suppress) noexcept
-{
-	{ uint16_t &flags = static_cast<Vehicle *>(ctx)->GetGroundVehicleFlags(); AssignBit(flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress != 0);  }
-}
-
 extern "C" void openttd_orders_invalidate_vehicle_list(void *ctx) noexcept
 {
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), 0);
@@ -412,11 +377,6 @@ extern "C" void openttd_orders_close_shared_window(void *ctx, uint32_t window) n
 extern "C" void openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept
 {
 	InvalidateWindowData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), window, static_cast<int>(data));
-}
-
-extern "C" void openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept
-{
-	static_cast<Vehicle *>(ctx)->SetLastStationVisited(StationID(station));
 }
 
 extern "C" void openttd_orders_dirty_vehicle_windows(void *ctx) noexcept
@@ -527,11 +487,8 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.backup = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustState(); },
 	.backup_vector = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustOrders(); },
 	.backup_consist = [](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->rust_orders.get(); },
-	.first_vehicle = RustVehicleFirstOpaque,
-	.last_station = openttd_orders_last_station,
 	.ownerless_station = openttd_orders_ownerless_station,
 	.vehicle_type = openttd_orders_vehicle_type,
-	.vehicle_status = openttd_orders_vehicle_status,
 	.tick_counter = openttd_orders_tick_counter,
 	.primary_vehicle = openttd_orders_primary_vehicle,
 	.ticks_per_second = openttd_orders_ticks_per_second,
@@ -539,9 +496,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.economy_fraction = openttd_orders_economy_fraction,
 	.maximum_date = openttd_orders_maximum_date,
 	.timetable_year_limit = openttd_orders_timetable_year_limit,
-	.stopped_or_crashed = openttd_orders_stopped_or_crashed,
 	.allocate_list = openttd_orders_allocate_list,
-	.suppress_implicit = openttd_orders_suppress_implicit,
 	.shared_window = openttd_orders_shared_window,
 	.vehicle_id = openttd_orders_vehicle_id,
 	.reliability = RustOpaqueVehicleRead<uint64_t, RustVehicleReliability>,
@@ -585,7 +540,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.network_client = openttd_orders_network_client,
 	.server_client = openttd_orders_server_client,
 	.default_group = openttd_orders_default_group,
-	.vehicle_tile = openttd_orders_vehicle_tile,
 	.vehicle_group = openttd_orders_vehicle_group,
 	.unique_backup_name = openttd_orders_unique_backup_name,
 	.review_setting = openttd_orders_review_setting,
@@ -597,11 +551,9 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,
 	.delete_order_news = openttd_orders_delete_order_news,
-	.suppress_implicit_write = openttd_orders_suppress_implicit_write,
 	.invalidate_vehicle_list = openttd_orders_invalidate_vehicle_list,
 	.close_shared_window = openttd_orders_close_shared_window,
 	.invalidate_shared_window = openttd_orders_invalidate_shared_window,
-	.last_station_write = openttd_orders_last_station_write,
 	.dirty_vehicle_windows = openttd_orders_dirty_vehicle_windows,
 	.capture_backup_metadata = openttd_orders_capture_backup_metadata,
 	.clear_backup_name = openttd_orders_clear_backup_name,

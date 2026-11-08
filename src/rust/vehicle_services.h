@@ -88,8 +88,6 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 /* Typed signature adapter for synchronous pathfinder vehicle contexts. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
-/** Signature adapter for existing opaque fleet and orders callbacks. */
-inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
 inline void OPENTTD_RUST_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
@@ -138,10 +136,8 @@ Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->GetDirection(); }
-inline const uint8_t *RustVehicleTickAddress(const Vehicle *v) noexcept { return &v->Record().tick_counter; }
-inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return *RustVehicleTickAddress(v); }
-inline const uint8_t *RustVehicleStatusAddress(const Vehicle *v) noexcept { return &v->Record().vehstatus; }
-inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return *RustVehicleStatusAddress(v); }
+inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return v->Record().tick_counter; }
+inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return v->Record().vehstatus; }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
 inline uint8_t RustVehicleBreakdownDelay(const Vehicle *v) noexcept { return v->breakdown_delay; }
@@ -179,9 +175,6 @@ inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEn
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return e == nullptr ? nullptr : &e->Record(); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return e == nullptr ? nullptr : e->shell; }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
 void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
 void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept;
 void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
@@ -193,29 +186,20 @@ inline uint16_t RustGroundCachedTotalLength(const GroundVehicleCache *cache) noe
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
-inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->Record().subtype; }
-inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehicleSubtypeAddress(v); }
+inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return v->Record().subtype; }
 inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
-inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->Record().x_pos; }
-inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
-inline const int32_t *RustVehicleYAddress(const Vehicle *v) noexcept { return &v->Record().y_pos; }
-inline int32_t RustVehicleY(const Vehicle *v) noexcept { return *RustVehicleYAddress(v); }
-inline const int32_t *RustVehicleZAddress(const Vehicle *v) noexcept { return &v->Record().z_pos; }
-inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return *RustVehicleZAddress(v); }
+inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->Record().x_pos; }
+inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->Record().y_pos; }
+inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return v->Record().z_pos; }
 inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_pos = x; }
 inline void RustWriteVehicleY(Vehicle *v, int32_t y) noexcept { v->Record().y_pos = y; }
 inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->Record().z_pos = z; }
-inline const uint16_t *RustVehicleSpeedAddress(const Vehicle *v) noexcept { return &v->Record().cur_speed; }
-inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return *RustVehicleSpeedAddress(v); }
+inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return v->Record().cur_speed; }
 inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->Record().subspeed; }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
-inline const uint8_t *RustVehicleVehicleTypeAddress(const Vehicle *v) noexcept { return &v->Record().type; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return v->GetType(); }
 
-inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept { return &v->Record().cached_cargo_age_period; }
 inline uint16_t *RustVehicleCargoCapacityAddress(Vehicle *v) noexcept { return &v->Record().cargo_cap; }
-inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->Record().cargo_age_counter; }
-inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->Record().motion_counter; }
 
 /** Typed shell adapter; canonical reads keep their actual return types.
  * Result also preserves existing wider legacy table signatures. */

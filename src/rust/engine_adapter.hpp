@@ -9,6 +9,7 @@
 #include "engine_ffi.h"
 #include "vehicle_services.h"
 #include "company_services.h"
+#include "company_adapter.h"
 #include "settings_services.h"
 #include "engine_services.h"
 #include "presentation_services.h"
@@ -66,10 +67,6 @@ static void Engine_refresh_lists(bool dirty) noexcept
 	InvalidateWindowClassesData(WC_BUILD_VEHICLE);
 	if (dirty) { SetWindowClassesDirty(WC_BUILD_VEHICLE); SetWindowClassesDirty(WC_REPLACE_VEHICLE); }
 }
-static OpenTTDEngineCompanyPreview Engine_company_preview(const Company *c) noexcept
-{
-	return {.blocked = c->Finances().block_preview, .performance = c->Finances().old_economy[0].performance_history};
-}
 static OpenTTDEngineVehicleCargo Engine_vehicle_cargo(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -77,7 +74,6 @@ static OpenTTDEngineVehicleCargo Engine_vehicle_cargo(OpenTTDVehicle *handle) no
 }
 
 static uint Engine_company_engine_count(uint8_t company, uint16_t engine) noexcept { return GetGroupNumEngines(CompanyID{company}, ALL_GROUP, EngineID{engine}); }
-static void Engine_block_preview(uint8_t company) noexcept { Company::Get(CompanyID{company})->Finances().block_preview = 20; }
 
 
 
@@ -110,6 +106,7 @@ const OpenTTDEngineServices &EngineServices() noexcept
 {
 	static const OpenTTDEngineServices services{
 		.shared = &GetRustSharedServices(),
+		.finance = &GetRustCompanyFinanceServices(),
 		.rng = &GetRustRandomServices(),
 		.types = &GetRustTypeAvailabilityServices(),
 		.next = Engine_next,
@@ -129,7 +126,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.refresh_type = Engine_refresh_type,
 		.refresh_lists = Engine_refresh_lists,
 		.company_next = Engine_company_next,
-		.company_preview = Engine_company_preview,
 		.vehicle_next = Engine_vehicle_next,
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
@@ -137,7 +133,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.company_railtypes = RustCompanyRailTypes,
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,
-		.block_preview = Engine_block_preview,
 		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,
 		.toolbar_release = Engine_toolbar_release,

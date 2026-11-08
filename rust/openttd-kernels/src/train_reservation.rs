@@ -98,7 +98,6 @@ pub struct Leaves {
     pub is_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub line_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -118,13 +117,11 @@ pub struct Leaves {
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub shared: *const crate::services::Services,
     pub start_stop: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub station_train: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub station_xy: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub stuck: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
 
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
@@ -288,7 +285,7 @@ fn pbs(step: Search) -> Pbs {
 fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
     let dir = g.dir(id, td);
     if is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE) {
-        if (g.leaves.tunnel_dir)(g.context, id, tile) as u8 == dir ^ 2 {
+        if (g.shared().tunnel_bridge_direction)(tile) == dir ^ 2 {
             let end = (g.leaves.other_end)(g.context, id, tile) as u32;
             if g.tunnel_free(id, tile, end) {
                 (g.leaves.set_tunnel)(g.context, id, tile, 0);
@@ -297,8 +294,8 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
                     if (g.leaves.is_bridge)(g.context, id, tile) != 0 {
                         (g.shared().mark_bridge_dirty)(tile);
                     } else {
-                        (g.leaves.mark_tile)(g.context, id, tile);
-                        (g.leaves.mark_tile)(g.context, id, end);
+                        (g.shared().mark_dirty)(tile);
+                        (g.shared().mark_dirty)(end);
                     }
                 }
             }
@@ -324,7 +321,7 @@ fn free(g: &Game, id: Handle) {
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
         || (is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE)));
     let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        (g.leaves.station)(g.context, id, tile) as u16
+        (g.shared().station_index)(tile)
     } else {
         u16::MAX
     };
@@ -370,7 +367,7 @@ fn free(g: &Game, id: Handle) {
                     break;
                 }
                 g.signal(id, tile, td, false);
-                (g.leaves.mark_tile)(g.context, id, tile);
+                (g.shared().mark_dirty)(tile);
             } else if (g.leaves.has_pbs)(g.context, id, tile, td ^ 8) != 0 {
                 g.signal_buffer(tile, g.dir(id, td ^ 8));
             } else if ((g.leaves.has_signal)(g.context, id, tile, td ^ 8) != 0)
@@ -380,8 +377,7 @@ fn free(g: &Game, id: Handle) {
             }
         }
         if free_tile
-            || (!(ft.is_station
-                && (g.leaves.station)(g.context, id, ft.new_tile.0) as u16 == station)
+            || (!(ft.is_station && (g.shared().station_index)(ft.new_tile.0) == station)
                 && !ft.is_tunnel
                 && !ft.is_bridge)
         {
@@ -454,7 +450,7 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
                 crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
                 red.push((tile, rev));
                 g.signal(id, tile, rev, false);
-                (g.leaves.mark_tile)(g.context, id, tile);
+                (g.shared().mark_dirty)(tile);
             }
             return Pbs {
                 tile,
@@ -472,7 +468,7 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
             crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
             red.push((tile, rev));
             g.signal(id, tile, rev, false);
-            (g.leaves.mark_tile)(g.context, id, tile);
+            (g.shared().mark_dirty)(tile);
         }
     }
     if ft.err == 1 || ft.err == 4 {
@@ -678,7 +674,7 @@ fn choose(
         }
         if dest.okay != 0 {
             if changed {
-                (g.leaves.mark_tile)(g.context, id, tile);
+                (g.shared().mark_dirty)(tile);
             }
             g.reserve(id.vehicle().tile(), g.td(id));
             return (best, true);
@@ -702,7 +698,7 @@ fn choose(
         || (v_order != OT_GOTO_DEPOT
             && if v_order == OT_GOTO_STATION {
                 ((g.leaves.is_station)(g.context, id, v_tile) != 0)
-                    && u64::from(v_destination) == (g.leaves.station)(g.context, id, v_tile)
+                    && v_destination == (g.shared().station_index)(v_tile)
             } else {
                 v_tile == v_dest
             })
@@ -737,7 +733,7 @@ fn choose(
             g.reserve(id.vehicle().tile(), g.td(id));
             got = true;
             if changed {
-                (g.leaves.mark_tile)(g.context, id, tile);
+                (g.shared().mark_dirty)(tile);
             }
         } else {
             free(g, id);
@@ -785,7 +781,7 @@ fn choose(
     }
     g.reserve(id.vehicle().tile(), g.td(id));
     if changed {
-        (g.leaves.mark_tile)(g.context, id, tile);
+        (g.shared().mark_dirty)(tile);
     }
     orders.restore();
     let v_order: u8 = id.vehicle().current_order().kind();
@@ -838,7 +834,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     if id.get_track() == u64::from(DEPOT) {
         (g.leaves.set_depot)(g.context, id, v_tile, 1);
         if (g.leaves.show_res)(g.context, id) != 0 {
-            (g.leaves.mark_tile)(g.context, id, v_tile);
+            (g.shared().mark_dirty)(v_tile);
         }
     }
     let exit = g.dir(id, origin.td);
@@ -879,7 +875,7 @@ fn check_next(g: &Game, id: Handle) {
         }
         OT_GOTO_WAYPOINT => {
             if ((g.leaves.is_waypoint)(g.context, id, v_tile) != 0)
-                && (g.leaves.station)(g.context, id, v_tile) == u64::from(v_destination)
+                && (g.shared().station_index)(v_tile) == v_destination
             {
                 (g.leaves.process_orders)(id);
             }
@@ -889,7 +885,7 @@ fn check_next(g: &Game, id: Handle) {
     }
     let tile = id.vehicle().tile();
     if ((g.leaves.is_station)(g.context, id, tile) != 0)
-        && g.order_stop(id, (g.leaves.station)(g.context, id, tile) as u16)
+        && g.order_stop(id, (g.shared().station_index)(tile))
     {
         return;
     }
@@ -1067,7 +1063,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
                     (g.leaves.diag_track)(
                         g.context,
                         part,
-                        ((g.leaves.tunnel_dir)(g.context, part, v_tile)) as u8,
+                        (g.shared().tunnel_bridge_direction)(v_tile),
                     ) as u8,
                 );
             }
@@ -1124,7 +1120,6 @@ crate::abi::layouts! {
         is_station,
         is_waypoint,
         line_reverse,
-        mark_tile,
         oneway,
         order_service,
         order_type,
@@ -1144,13 +1139,11 @@ crate::abi::layouts! {
         vehicle,
         shared,
         start_stop,
-        station,
         station_train,
         station_xy,
         stuck,
         tile_offset,
         trackdir,
-        tunnel_dir,
         pathfind,
         safe_track,
         process_orders,
@@ -1237,7 +1230,6 @@ pub(crate) mod tests {
             is_station: unused(),
             is_waypoint: unused(),
             line_reverse: unused(),
-            mark_tile: unused(),
             oneway: unused(),
             order_service: unused(),
             order_type: unused(),
@@ -1257,13 +1249,11 @@ pub(crate) mod tests {
             vehicle: std::ptr::null(),
             shared: std::ptr::null(),
             start_stop: unused(),
-            station: unused(),
             station_train: unused(),
             station_xy: unused(),
             stuck: unused(),
             tile_offset: unused(),
             trackdir: unused(),
-            tunnel_dir: unused(),
             pathfind: unused(),
             safe_track: unused(),
             process_orders: unused(),
@@ -1513,6 +1503,7 @@ pub(crate) mod tests {
                     all_compatible_railtypes: every_type,
                     tile_type: railway,
                     is_plain_rail: yes,
+                    mark_dirty: mark,
                     ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
                 },
                 rail: rail_map(),
@@ -1649,11 +1640,8 @@ pub(crate) mod tests {
             mock(h).log.push(("signal", ordinal(tile), green));
         }
     }
-    extern "C" fn mark(_: *mut c_void, h: Handle, tile: u32) {
-        // SAFETY: Live exclusive test mock.
-        unsafe {
-            mock(h).log.push(("mark", ordinal(tile), 0));
-        }
+    extern "C" fn mark(tile: u32) {
+        current().log.push(("mark", ordinal(tile), 0));
     }
     fn extension_leaves(shared: &crate::services::Services) -> Leaves {
         Leaves {
@@ -1664,7 +1652,6 @@ pub(crate) mod tests {
             has_pbs: one_track,
             green: one_track,
             set_signal: signal,
-            mark_tile: mark,
             ..leaves()
         }
     }

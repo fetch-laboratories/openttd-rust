@@ -174,11 +174,6 @@ pub struct Company {
     pub id: u8,
 }
 #[repr(C)]
-pub struct CompanyPreview {
-    pub blocked: u8,
-    pub performance: i32,
-}
-#[repr(C)]
 pub struct Vehicle {
     pub shell: *mut OpenTTDVehicle,
     pub id: u32,
@@ -193,6 +188,8 @@ pub struct VehicleCargo {
 #[repr(C)]
 pub struct Services {
     pub shared: *const SharedServices,
+    /// Canonical company finance records (`Company::Finances()`).
+    pub finance: *const crate::company::FinanceServices,
     pub rng: *const RandomServices,
     pub types: *const crate::type_availability::Services,
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
@@ -212,7 +209,6 @@ pub struct Services {
     pub refresh_type: unsafe extern "C" fn(VehicleType),
     pub refresh_lists: unsafe extern "C" fn(bool),
     pub company_next: unsafe extern "C" fn(u32) -> Company,
-    pub company_preview: unsafe extern "C" fn(*const OpenTTDCompany) -> CompanyPreview,
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
@@ -220,7 +216,6 @@ pub struct Services {
     pub company_railtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
-    pub block_preview: unsafe extern "C" fn(u8),
     pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
     pub toolbar_release: unsafe extern "C" fn(VehicleType),
@@ -244,6 +239,12 @@ macro_rules! call {
     ($s:expr, $field:ident $(, $arg:expr)* $(,)?) => {
         crate::witness::counted!(ENGINE_SERVICES, ENGINE_BYTES, ($s.$field)($($arg),*))
     };
+}
+/// `Company::Get(company)->Finances()`, the canonical record of a live company.
+/// # Safety
+/// `company` names a live company; the immutable finance table outlives the call.
+unsafe fn finances(s: &Services, company: u8) -> *mut crate::company::Finances {
+    unsafe { ((*s.finance).company_finances)(company) }
 }
 unsafe fn parent(s: &Services, mut e: EngineRef) -> EngineRef {
     loop {
@@ -656,10 +657,10 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
             break;
         }
         from = u32::from(c.id) + 1;
-        let preview = unsafe { call!(s, company_preview, c.shell) };
-        if preview.blocked != 0
+        let finances = unsafe { finances(s, c.id) };
+        if read_field!(finances, preview) != 0
             || read_field!(e.state, preview_asked) & (1 << c.id) != 0
-            || preview.performance <= performance
+            || read_field!(finances, old[0].performance) <= performance
         {
             continue;
         }
@@ -683,7 +684,7 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
             {
                 continue;
             }
-            performance = preview.performance;
+            performance = read_field!(finances, old[0].performance);
             best = c.id;
             break;
         }
@@ -778,10 +779,9 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 continue;
             }
             if unsafe { call!(s, company_engine_count, c.id, e.id) } == 0 {
-                unsafe {
-                    crate::witness::hit(crate::witness::ENGINE_PENALTY);
-                    call!(s, block_preview, c.id);
-                }
+                crate::witness::hit(crate::witness::ENGINE_PENALTY);
+                let finances = unsafe { finances(s, c.id) };
+                write_field!(finances, preview, 20);
             }
         }
     }
@@ -1173,10 +1173,6 @@ crate::abi::layouts! {
         shell,
         id,
     };
-    "OpenTTDEngineCompanyPreview" ["engine"] => CompanyPreview {
-        blocked,
-        performance,
-    };
     "OpenTTDEngineVehicle" ["engine"] => Vehicle {
         shell,
         id,
@@ -1189,6 +1185,7 @@ crate::abi::layouts! {
     };
     "OpenTTDEngineServices" ["engine"] => Services {
         shared,
+        finance,
         rng,
         types,
         next,
@@ -1208,7 +1205,6 @@ crate::abi::layouts! {
         refresh_type,
         refresh_lists,
         company_next,
-        company_preview,
         vehicle_next,
         vehicle_cargo,
         capabilities,
@@ -1216,7 +1212,6 @@ crate::abi::layouts! {
         company_railtypes,
         company_roadtypes,
         company_engine_count,
-        block_preview,
         local_company,
         toolbar_enable,
         toolbar_release,

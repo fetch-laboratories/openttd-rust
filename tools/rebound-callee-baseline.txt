@@ -18,11 +18,7 @@ forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices(
 forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
 forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicleServices().newgrf
-forwarded | src/rust/fleet_group_services.hpp | next_vehicle = GetRustSharedServices().vehicle_next
-forwarded | src/rust/fleet_group_services.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
-forwarded | src/rust/ship_control_services.h | docking = GetRustSharedServices().docking_tile
-forwarded | src/rust/ship_control_services.h | lock_middle = GetRustSharedServices().water_middle_lock
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
@@ -116,7 +112,6 @@ rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
-rebound | RustCurrentCompanyID | src/rust/fleet_group_services.hpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
 rebound | RustCustomRoadStopIndex | src/rust/station_command_services.hpp | custom_road_index
@@ -288,14 +283,11 @@ rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
 rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
-rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle
-rebound | RustVehicleTrain | src/rust/vehicle_services.cpp | train_handle
 rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta
 rebound | RustVehicleUpdateDelta | src/rust/aircraft_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/rust/disaster_adapter.hpp | update_delta
