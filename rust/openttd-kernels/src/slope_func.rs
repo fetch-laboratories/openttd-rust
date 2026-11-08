@@ -119,6 +119,21 @@ pub fn get_highest_slope_corner(s: u8, not_reached: impl FnOnce()) -> u8 {
         }
     }
 }
+/// `InclinedSlope`: the slope inclined in the given direction (up when moving
+/// in it); the caller supplies its non-returning failure operation.
+pub fn inclined_slope(dir: u8, not_reached: impl FnOnce()) -> u8 {
+    use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
+    match dir {
+        DIAGDIR_NE => SLOPE_NE,
+        DIAGDIR_SE => SLOPE_SE,
+        DIAGDIR_SW => SLOPE_SW,
+        DIAGDIR_NW => SLOPE_NW,
+        _ => {
+            not_reached();
+            std::process::abort()
+        }
+    }
+}
 /// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
 pub const fn is_valid_corner(c: u8) -> bool {
     c < 4
