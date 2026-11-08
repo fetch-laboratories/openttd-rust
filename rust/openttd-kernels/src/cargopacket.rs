@@ -7,7 +7,7 @@
 
 //! `cargopacket.h` constants shared by simulation owners.
 
-/// `VehicleCargoList::MTA_LOAD`.
+/// `VehicleCargoList::MTA_LOAD`: temporary raw adapter for `vehicle/visits.rs`.
 pub const MTA_LOAD: u8 = MoveToAction::MTA_LOAD.0;
 
 /// Native `CargoPacketID`, retaining every underlying `u32` value.
@@ -19,9 +19,9 @@ impl CargoPacketID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);
     /// Native `PoolID::End()`.
-    pub const END: Self = Self(16_773_120);
+    pub const END: Self = Self(0x00FF_F000);
     /// Native `PoolID::Invalid()`.
-    pub const INVALID: Self = Self(16_777_215);
+    pub const INVALID: Self = Self(0x00FF_FFFF);
 }
 
 /// Native `CargoList::MoveToAction`, shared with `VehicleCargoList`.
@@ -51,6 +51,3 @@ impl CargoPacket {
     /// Maximum number of items in one cargo packet.
     pub const MAX_COUNT: u16 = u16::MAX;
 }
-
-/// Raw adapter for consumers that have not adopted the qualified packet name.
-pub const MAX_COUNT: u16 = CargoPacket::MAX_COUNT;

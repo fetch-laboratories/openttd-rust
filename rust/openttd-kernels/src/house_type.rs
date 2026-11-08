@@ -27,3 +27,19 @@ impl HouseRandomTrigger {
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HouseRandomTriggers(pub u8);
+
+impl HouseRandomTriggers {
+    /// Native element-to-set conversion.
+    #[must_use]
+    pub const fn from_element(element: HouseRandomTrigger) -> Self {
+        Self(1 << element.0)
+    }
+    /// Native `Set` of one element.
+    pub fn set(&mut self, element: HouseRandomTrigger) {
+        self.0 |= Self::from_element(element).0;
+    }
+    /// Native `Reset` of the given set.
+    pub fn reset(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+}

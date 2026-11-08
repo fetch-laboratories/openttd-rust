@@ -587,7 +587,12 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
     unsafe {
         crate::station::for_each_catchment_tile(state, &c, |tile| {
             if (shared.tile_type)(tile) == crate::tile_type::MP_HOUSE {
-                crate::town::house::watched_cargo_accepted(c.c.town, shared, tile, cargoes);
+                crate::town::house::trigger_house_animation_watched_cargo_accepted(
+                    c.c.town,
+                    shared,
+                    crate::tile_type::TileIndex(tile),
+                    crate::cargo_type::CargoTypes(cargoes),
+                );
             }
         });
     }

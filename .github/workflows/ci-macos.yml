@@ -178,7 +178,7 @@ jobs:
         ctest -j $(sysctl -n hw.logicalcpu) --timeout 120 --output-junit ctest.xml
 
     - name: Compare accepted wide math templates with pinned C++
-      run: python3 tools/math-comparison.py --build build --output .local/macos-evidence/math-extensions
+      run: python3 tools/math-extension-comparison.py --build build --output .local/macos-evidence/math-extensions
 
     - name: Reject unsupported Rust configurations
       run: |

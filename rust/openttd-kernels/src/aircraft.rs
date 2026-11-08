@@ -659,7 +659,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if tile == INVALID_TILE {
             crate::newgrf_airport::runtime().dummy_spec
         } else {
-            crate::station_base::airport_get_spec(
+            crate::station_base::airport_get_spec_raw(
                 tile,
                 unsafe { (self.leaves.airport_type)(st) },
                 crate::newgrf_airport::runtime(),

@@ -1,0 +1,101 @@
+[
+  {
+    "retires": [
+      "source:tools/migration/crypto-vectors.cpp"
+    ],
+    "oracle": "Original-only generator: tools/migration/crypto-vectors.cpp at 305ac20c28 linked only with pinned 14ec60f248547d4d062a1160f0fc26d742319888 Monocypher 4.0.2 (GCC 13.3.0, GNU/Linux x86_64; recipe in rust/openttd-kernels/src/crypto/vectors.txt header). A re-run before deletion reproduced vectors.txt byte for byte. The generator never linked candidate code.",
+    "observations": {
+      "Hostile X25519 points, public keys, BLAKE2b sizes and block splits, key derivation, XChaCha20-Poly1305 streams and one-shot locks with tamper rejection, SHA-512 and Ed25519 signature checks including noncanonical and small-order encodings": [
+        "rust:lib:crypto::tests::monocypher_known_answers"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/integer_probe.cpp",
+      "comparison:compare-integers.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/integer/probe-oracle.txt. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), each naming its retiring boundary. Integer section: PutIntegerBase overload resolution for char/enum/implicit-conversion types, STRGEN fatal log-before-commit timing and borrowed-view identity. The strgen/settingsgen output and malformed-pragma comparison never used the probe and continues as tools/generator-comparison.py.",
+    "observations": {
+      "PeekIntegerBase, TryReadIntegerBase, ReadIntegerBase with logged diagnostics and positions, SkipIntegerBase and ParseInteger for 8/16/32/64-bit signed and unsigned values, bases 0/8/10/16 and clamp over the bounded corpus (5312 cases)": [
+        "rust:lib:integer::tests::integer_probe_api_matches_original"
+      ],
+      "PutIntegerBase formats for bases 2..36 at representable bounds and the 32/33-byte to_chars boundary (1624 cases)": [
+        "rust:lib:builder::tests::integer_probe_builder_formats_match_original"
+      ],
+      "Ordered sink calls: little-endian 8/16/32/64-bit writers, PutChar, PutUtf8 including the zero-length call, and the one-call versus no-call integer boundary": [
+        "rust:lib:builder::tests::integer_probe_ordered_sinks_match_original"
+      ],
+      "Consumer short-buffer, borrowed-offset and UTF-8 cursor gaps with logged diagnostics (103 cases)": [
+        "rust:lib:consumer::tests::integer_probe_consumer_gaps_match_original"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/migration/utf8-comparison.cpp",
+      "comparison:utf8-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/utf8/comparison-oracle.txt. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), each naming its retiring boundary. UTF-8 section: StrMakeValid builder progress/bad_alloc/reentry through the fork loop, the inline DecodeUtf8 ASCII shortcut and the InPlaceBuilder overtake NOT_REACHED. InPlaceReplacement copy/assignment and the unchanged wrapper bodies compare unchanged original text with itself and were deleted (#736 U PR lists the checks).",
+    "observations": {
+      "StrMakeValid and both StrMakeValidInPlace forms for all 16 settings with and without unknown bits, StrValid, and InPlaceReplacement read/write/unused/overlap/wrap/overtake values": [
+        "rust:lib:string_validation::tests::validation_and_in_place_replacement_match_original"
+      ],
+      "EncodeUtf8, DecodeUtf8 truncations and invalid continuations, IsUtf8Part, malformed sequences, Utf8View forward/backward/normalize/next/previous/beyond and consumer UTF-8 failure advance": [
+        "rust:lib:utf8::tests::codec_view_and_consumer_match_original"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/migration/encoded-comparison.cpp",
+      "comparison:encoded-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/encoded/comparison-oracle.txt. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), each naming its retiring boundary. Encoded section: native logger replay and throwing-logger uncommitted input, assertion dispatch per compile mode compared with the original, and the candidate-only copy-throw owner release under LeakSanitizer.",
+    "observations": {
+      "FixSCCEncoded, FixSCCEncodedNegative, EncodedString::ReplaceParam, GetEncodedStringWithArgs serialization, clear and default replacement, with diagnostics, exit status and assertion outcome in each of the four assertion modes (882 records x 4 modes)": [
+        "rust:lib:encoded::tests::encoded_operations_match_original"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/migration/math-comparison.cpp",
+      "comparison:math-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracles rust/openttd-kernels/src/math/comparison-oracle.txt and rust/openttd-kernels/src/landscape/partial-pixel-z-oracle.txt. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), each naming its retiring boundary. Math section: the four SoftClamp constant-evaluation static_asserts and the -O2 Rust routing count. ClampTo runtime cases, its eight static_asserts and the three rejected templates exercised the unchanged ClampTo template and were deleted. The wide-template comparison of the separate math-extension-comparison.cpp continues as tools/math-extension-comparison.py.",
+    "observations": {
+      "IntSqrt over every k*k neighbourhood to 65535 and UINT32_MAX, and runtime SoftClamp for all 8 integer widths plus the int8 narrow-promotion corner": [
+        "rust:lib:math::comparison_tests::int_sqrt_and_soft_clamp_match_original"
+      ],
+      "GetPartialPixelZ for every slope byte over the -32..32 grid and the full-width edge coordinates, including NOT_REACHED slopes, excluding executed signed overflow": [
+        "rust:lib:landscape::partial_pixel_z_tests::partial_pixel_z_matches_original_extended_grid_and_edges"
+      ]
+    }
+  },
+  {
+    "platform": "linux",
+    "retires": [
+      "source:tools/migration/byte-strings-comparison.cpp",
+      "comparison:byte-strings-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/byte_strings/comparison-oracle.txt. The test sets each captured C locale (C and POSIX required; C.utf8 and en_US.utf8 when installed) and both char signedness values on GNU/Linux. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), each naming its retiring boundary. Bytes section: StrCompareIgnoreCase length order beyond int over a real mapping.",
+    "observations": {
+      "Case-insensitive compare/equals/starts/ends/contains/natural-contains, strtolower offsets, FormatArrayAsHex, ConvertHexToBytes including overlapping views, StrTrimView and StrTrimInPlace for each locale and char signedness (3699 records)": [
+        "rust:lib:byte_strings::comparison_tests::byte_strings_match_original_in_each_locale_and_char_signedness"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/migration/history-comparison.cpp",
+      "comparison:history-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 305ac20c28 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/history/comparison-oracle.txt. The uint16 rotate and the typed copy/move/drop/throw traces exercised RotateHistory/GetHistory template bodies the candidate compiles unchanged for non-production element types and were deleted. No history observation needs the C++ boundary file.",
+    "observations": {
+      "Valid-history mask updates, first-child validity, GetHistory results and NOT_REACHED for every range, month, mask and age, the wrapped quarter query, industry produced/accepted and town supplied queries and rotation through the production reducers, nested grouping rounding and graph filler sequences": [
+        "rust:lib:history::comparison_tests::history_queries_match_original"
+      ]
+    }
+  }
+]

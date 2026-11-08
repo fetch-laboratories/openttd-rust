@@ -1163,7 +1163,7 @@ unsafe fn action(
         5 => {
             if p.next_hop == avoid || p.next_hop == avoid2 {
                 let via = unsafe {
-                    crate::station_base::goods_get_via(
+                    crate::station_base::goods_get_via_raw(
                         (s.flow_map)(ge),
                         p.first_station,
                         avoid,
@@ -1211,7 +1211,7 @@ unsafe fn action(
         }
         8 => {
             let via = unsafe {
-                crate::station_base::goods_get_via(
+                crate::station_base::goods_get_via_raw(
                     (s.flow_map)(ge),
                     p.first_station,
                     avoid,

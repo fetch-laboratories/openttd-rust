@@ -8,9 +8,11 @@
 //! Stack-owned cargo collector. Typed world iteration stays outside Rust.
 
 use crate::script_list::List;
+use crate::script_stationlist::{CargoMode, CargoSelector};
 use crate::station_type::StationID;
 
-/// Scalar state pinned by `station_cargo_ffi.h` on 32/64-bit targets.
+/// `CargoCollector` scalar state pinned by `station_cargo_ffi.h` on 32/64-bit
+/// targets; the record keeps base integers.
 #[repr(C)]
 pub struct Collector {
     pub amount: u32,
@@ -23,58 +25,66 @@ pub struct Collector {
 }
 
 impl Collector {
-    pub(crate) fn new(selector: u8, other: u16) -> Self {
-        assert!(selector < 4);
+    /// `CargoCollector::CargoCollector`, with the template selector as state.
+    pub(crate) fn new(selector: CargoSelector, other: StationID) -> Self {
+        assert!(selector.0 <= CargoSelector::CS_FROM_BY_VIA.0);
         Self {
             amount: 0,
             previous: 0,
             last_key: StationID::INVALID.0,
-            other,
+            other: other.0,
             origin: StationID::INVALID.0,
-            selector,
+            selector: selector.0,
             finalized: 0,
         }
     }
 
+    /// `CargoCollector::SetValue`.
     fn flush(&self, list: &mut List) {
         if self.amount != 0 {
             list.cargo_merge(i64::from(self.last_key), i64::from(self.amount));
         }
     }
 
-    pub(crate) fn packet(&mut self, list: &mut List, from: u16, via: u16, amount: u32) {
+    /// `CargoCollector::Update<Tselector>`.
+    pub(crate) fn packet(&mut self, list: &mut List, from: StationID, via: StationID, amount: u32) {
         assert_eq!(self.finalized, 0);
+        let other = StationID(self.other);
         // Filtering precedes even observing/changing the pending run key.
-        let key = match self.selector {
-            0 => from,
-            1 if via == self.other => from,
-            2 => via,
-            3 if from == self.other => via,
-            1 | 3 => return,
+        let key = match CargoSelector(self.selector) {
+            CargoSelector::CS_VIA_BY_FROM if via != other => return,
+            CargoSelector::CS_BY_FROM | CargoSelector::CS_VIA_BY_FROM => from,
+            CargoSelector::CS_FROM_BY_VIA if from != other => return,
+            CargoSelector::CS_BY_VIA | CargoSelector::CS_FROM_BY_VIA => via,
             _ => unreachable!("valid selector"),
         };
-        if key == self.last_key {
+        if key.0 == self.last_key {
             self.amount = self.amount.wrapping_add(amount);
         } else {
             self.flush(list);
             self.amount = amount;
-            self.last_key = key;
+            self.last_key = key.0;
         }
     }
 
-    pub(crate) fn origin(&mut self, origin: u16) {
+    /// Begin one `FlowStatMap` entry of `ScriptStationList_CargoPlanned::Add`:
+    /// `uint prev = 0`.
+    pub(crate) fn origin(&mut self, origin: StationID) {
         assert_eq!(self.finalized, 0);
-        self.origin = origin;
+        self.origin = origin.0;
         self.previous = 0;
     }
 
-    pub(crate) fn share(&mut self, list: &mut List, via: u16, cumulative: u32) {
+    /// One share of `ScriptStationList_CargoPlanned::Add`:
+    /// `Update(iter->first, flow_iter->second, flow_iter->first - prev)`.
+    pub(crate) fn share(&mut self, list: &mut List, via: StationID, cumulative: u32) {
         let amount = cumulative.wrapping_sub(self.previous);
-        self.packet(list, self.origin, via, amount);
+        self.packet(list, StationID(self.origin), via, amount);
         // Every visited share advances this, including filtered/restricted shares.
         self.previous = cumulative;
     }
 
+    /// `CargoCollector::~CargoCollector`, once.
     pub(crate) fn finish(&mut self, list: &mut List) {
         if self.finalized == 0 {
             self.flush(list);
@@ -83,13 +93,24 @@ impl Collector {
     }
 }
 
-/// Select actual typed traversal: packets all/range, flows all/find.
-pub fn plan(mode: u8, selector: u8) -> u8 {
+/// Select the typed traversal that the native `ScriptStationList_Cargo`
+/// constructor performs. The result is the fork's traversal code: 0 all packets
+/// (`CargoWaiting::Add`), 1 the `equal_range(via)` packets of
+/// `CargoWaitingViaByFrom`, 2 all flows (`CargoPlanned::Add`), 3 the
+/// `flows.find(from)` entry of `CargoPlannedFromByVia`; `u8::MAX` for an
+/// invalid mode or selector.
+pub fn plan(mode: CargoMode, selector: CargoSelector) -> u8 {
     match (mode, selector) {
-        (0, 1) => 1,
-        (0, 0 | 2 | 3) => 0,
-        (1, 3) => 3,
-        (1, 0..=2) => 2,
+        (CargoMode::CM_WAITING, CargoSelector::CS_VIA_BY_FROM) => 1,
+        (
+            CargoMode::CM_WAITING,
+            CargoSelector::CS_BY_FROM | CargoSelector::CS_BY_VIA | CargoSelector::CS_FROM_BY_VIA,
+        ) => 0,
+        (CargoMode::CM_PLANNED, CargoSelector::CS_FROM_BY_VIA) => 3,
+        (
+            CargoMode::CM_PLANNED,
+            CargoSelector::CS_BY_FROM | CargoSelector::CS_VIA_BY_FROM | CargoSelector::CS_BY_VIA,
+        ) => 2,
         _ => u8::MAX,
     }
 }
