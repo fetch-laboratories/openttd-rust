@@ -2804,7 +2804,11 @@ impl Ctx<'_> {
                 (self.s.make_drive_stop)(
                     tile, owner, road_owner, tram_owner, id, kind, road, tram, axis,
                 );
-                crate::road_stop::make_drive_through(self.shared, tile, (self.stops().state)(stop));
+                crate::road_stop::make_drive_through(
+                    self.shared,
+                    crate::tile_type::TileIndex(tile),
+                    (self.stops().state)(stop),
+                );
             } else {
                 if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
@@ -2900,7 +2904,11 @@ impl Ctx<'_> {
         let (stop, stop_state) = if waypoint {
             (std::ptr::null_mut(), std::ptr::null_mut())
         } else {
-            crate::road_stop::get_by_tile(self.shared, tile, RoadStopType(u8::from(truck)))
+            crate::road_stop::get_by_tile(
+                self.shared,
+                crate::tile_type::TileIndex(tile),
+                RoadStopType(u8::from(truck)),
+            )
         };
         if waypoint {
             if flags & DoCommandFlag::BANKRUPT == 0 {
@@ -2973,7 +2981,11 @@ impl Ctx<'_> {
             (self.s.close_stop_inspect)(tile);
             if !waypoint && crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                 // ClearDriveThrough clears the tile for us.
-                crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
+                crate::road_stop::clear_drive_through(
+                    self.shared,
+                    crate::tile_type::TileIndex(tile),
+                    stop_state,
+                );
                 crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
                 crate::ground::clear_square(tile, self.shared);

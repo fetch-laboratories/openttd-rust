@@ -1144,7 +1144,7 @@ impl MovementServices {
                     v.subtype(),
                 )
             {
-                if unsafe { crate::road_stop::enter_by_tile(self.shared(), tile, v, h.road) } {
+                if unsafe { crate::road_stop::enter_by_tile_raw(self.shared(), tile, v, h.road) } {
                     w::hit(w::MOVE_ROAD_STOP_ADMIT);
                     return 0;
                 }
