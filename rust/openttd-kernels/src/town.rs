@@ -2332,40 +2332,41 @@ impl Engine<'_> {
     }
     /// `GrowTown`: whether we successfully grew the town with a road or house.
     fn grow_town(&self, t: TownID, modes: TownExpandModes) -> bool {
-        const TOWN_COORD_MOD: [(i32, i32); 13] = [
-            (-1, 0),
-            (1, 1),
-            (1, -1),
-            (-1, -1),
-            (-1, 0),
-            (0, 2),
-            (2, 0),
-            (0, -2),
-            (-1, -1),
-            (-2, 2),
-            (2, 2),
-            (2, -2),
-            (0, 0),
+        const TOWN_COORD_MOD: [TileIndexDiffC; 13] = [
+            TileIndexDiffC { x: -1, y: 0 },
+            TileIndexDiffC { x: 1, y: 1 },
+            TileIndexDiffC { x: 1, y: -1 },
+            TileIndexDiffC { x: -1, y: -1 },
+            TileIndexDiffC { x: -1, y: 0 },
+            TileIndexDiffC { x: 0, y: 2 },
+            TileIndexDiffC { x: 2, y: 0 },
+            TileIndexDiffC { x: 0, y: -2 },
+            TileIndexDiffC { x: -1, y: -1 },
+            TileIndexDiffC { x: -2, y: 2 },
+            TileIndexDiffC { x: 2, y: 2 },
+            TileIndexDiffC { x: 2, y: -2 },
+            TileIndexDiffC { x: 0, y: 0 },
         ];
         /* Current "company" is a town */
         // Ordinary shared commands are noexcept; restore the original company on each return.
-        let cur_company = (self.leaves.exchange_company)(u32::from(OWNER_TOWN));
+        // The exchange service carries the saved `CompanyID` in its base integer.
+        let cur_company = CompanyID((self.leaves.exchange_company)(u32::from(OWNER_TOWN)) as u8);
         let mut tile = self.xy(); // The tile we are working with ATM
 
         /* Find a road that we can base the construction on. */
-        for (x, y) in TOWN_COORD_MOD {
+        for ptr in TOWN_COORD_MOD {
             if self.get_town_road_bits(tile) != RoadBits::ROAD_NONE {
                 let success = self.grow_town_at_road(t, tile, modes);
-                (self.leaves.exchange_company)(cur_company);
+                (self.leaves.exchange_company)(u32::from(cur_company.0));
                 return success;
             }
-            tile = self.tile_add_xy(tile, x, y);
+            tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
         }
         /* No road available, try to build a random road block by
          * clearing some land and then building a road there. */
         if town_allowed_to_build_roads(modes) {
             tile = self.xy();
-            for (x, y) in TOWN_COORD_MOD {
+            for ptr in TOWN_COORD_MOD {
                 /* Only work with plain land that not already has a house */
                 if !self.is_tile_type(tile, TileType::MP_HOUSE)
                     && crate::map_func::World::new(self.services).tile_flat(tile.0)
@@ -2373,13 +2374,13 @@ impl Engine<'_> {
                 {
                     let rt = self.get_town_road_type();
                     self.cmd_build_road(DC_EXECUTE_AUTO, tile, self.gen_random_road_bits(), rt, t);
-                    (self.leaves.exchange_company)(cur_company);
+                    (self.leaves.exchange_company)(u32::from(cur_company.0));
                     return true;
                 }
-                tile = self.tile_add_xy(tile, x, y);
+                tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
             }
         }
-        (self.leaves.exchange_company)(cur_company);
+        (self.leaves.exchange_company)(u32::from(cur_company.0));
         false
     }
 }
