@@ -1,21 +1,11 @@
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
 src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 0adea4dfb4e628dd | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2476726e8336e3a3 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2f3fe8935519b746 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 42b3050e03485e2d | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 45992d52fc0daa85 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | b47b72a3c9ac9c98 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cb5a659cbe6a8f4 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cf059c2aa94086f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | b837556a01baf950 | 1
-src/economy.cpp | [](OpenTTDVehicle *vehicle, uint32_t amount) noexcept -> void | a871c6abb61211ab | 1
-src/economy.cpp | [](OpenTTDVehicle *vehicle, uint32_t amount) noexcept -> void | b4dade1479de2ec9 | 1
 src/industry_cmd.cpp | IndustryCommandDeity() noexcept | a3c89e002d00e907 | 1
 src/industry_cmd.cpp | []() noexcept -> bool | 04692d80b1b4e782 | 1
 src/industry_cmd.cpp | []() noexcept -> bool | 076c7d2608a7c129 | 1

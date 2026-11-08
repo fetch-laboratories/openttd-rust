@@ -248,7 +248,7 @@ fn increase_vehicle_stats(
         if remaining > 0 {
             // The stored count can exceed refit_cap after autoreplace/autorefit.
             witness::hit(witness::VISITS_ARRIVAL_STATS);
-            let usage = u32::from(remaining).min((s.loading.stored_count)(v));
+            let usage = u32::from(remaining).min(s.loading.stored_count(v));
             increase_stats(
                 st,
                 (s.refit.cargo_kind)(v.0.as_ptr()).cargo,
@@ -750,7 +750,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
 
     let mut part = Some(front);
     while let Some(v) = part {
-        count = count.wrapping_add((s.loading.stored_count)(v).cast_signed());
+        count = count.wrapping_add(s.loading.stored_count(v).cast_signed());
         let capacity = v.cargo_cap();
         max = max.wrapping_add(i32::from(capacity));
         if capacity != 0 && wants_colour {

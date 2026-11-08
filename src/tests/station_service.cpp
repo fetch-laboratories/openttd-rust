@@ -215,6 +215,7 @@ struct StationLoadingProbe {
 	bool frame_live = false, staged = false;
 };
 static StationLoadingProbe *_station_loading_probe;
+static OpenTTDCargoList *_station_loading_cargo;
 
 TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
@@ -235,10 +236,12 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	OpenTTDVehicleServices vehicle{};
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
-	loading.unload_count = [](OpenTTDVehicle *) noexcept -> uint32_t { return 1; };
+	/* The Rust-owned list holds one packet to unload; the vehicle has no order list. */
+	OpenTTDCargoListFields counts{.count = 1, .action_counts = {0, 1, 0, 0}};
+	_station_loading_cargo = openttd_rust_cargo_list_new(true);
+	openttd_rust_cargo_list_import(_station_loading_cargo, &counts);
+	loading.cargo_capacity = [](OpenTTDVehicle *) noexcept { return OpenTTDCargoCapacity{_station_loading_cargo, 0}; };
 	loading.unload_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-	loading.has_orders = [](OpenTTDVehicle *) noexcept { return false; };
-	loading.total_count = [](OpenTTDVehicle *) noexcept -> uint32_t { return 1; };
 	loading.set_cargo_unloading = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_loading_finished = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_load_ticks = [](OpenTTDVehicle *, uint16_t) noexcept {};
@@ -260,9 +263,12 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	};
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
 	OpenTTDVehicle record{};
+	OpenTTDVehicleOrderState orders{};
 	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
+	record.orders = &orders;
 	record.cargo_cap = 1;
 	openttd_test_station_prepare(&record, &services, &loading);
+	openttd_rust_cargo_list_destroy(_station_loading_cargo, CargoStorageServices());
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);
