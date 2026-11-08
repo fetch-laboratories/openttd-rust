@@ -17,7 +17,7 @@ pub const SUBSIDY_PAX_MIN_POPULATION: u32 = 400;
 pub const SUBSIDY_CARGO_MIN_POPULATION: u32 = 900;
 /// Subsidy will be created only for towns/industries with less % transported
 pub const SUBSIDY_MAX_PCT_TRANSPORTED: u8 = 42;
-/// Max. length of subsidised route (DistanceManhattan)
+/// Max. length of subsidised route (`DistanceManhattan`)
 pub const SUBSIDY_MAX_DISTANCE: u32 = 70;
 /// Extent of a tile area around town center when scanning for town cargo acceptance and
 /// production (6 ~= min catchment + min station / 2)

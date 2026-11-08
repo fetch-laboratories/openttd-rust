@@ -28,7 +28,7 @@ pub(crate) fn get_industry_by_tile(
     get(get_industry_index(m, tile).unwrap())
 }
 /// `GetIndustryType`: retrieve the type for this industry. Although it is called
-/// IndustryType, it is in fact an index in the `_industry_specs` array. The source asserts
+/// `IndustryType`, it is in fact an index in the `_industry_specs` array. The source asserts
 /// the tile type before and after its lookup.
 pub(crate) fn get_industry_type(
     m: &crate::map_func::TileTypeAccess,

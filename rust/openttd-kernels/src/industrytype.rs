@@ -432,6 +432,10 @@ pub(crate) fn get_industry_tile_spec(gfx: IndustryGfx) -> *mut IndustryTileSpec 
     )
 }
 /// Temporary raw adapter for [`get_industry_spec`]; every caller widens an `IndustryType`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetIndustrySpec takes IndustryType (uint8_t); every raw caller widens one"
+)]
 pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
     get_industry_spec(IndustryType(id as u8))
 }

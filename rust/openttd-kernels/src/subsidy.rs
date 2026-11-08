@@ -41,11 +41,11 @@ use std::{ffi::c_void, ptr};
 /// `Subsidy`'s fields, shared in place with the native pool shell.
 #[repr(C)]
 pub struct State {
-    /// Cargo type involved in this subsidy, INVALID_CARGO for invalid subsidy
+    /// Cargo type involved in this subsidy, `INVALID_CARGO` for invalid subsidy
     pub cargo_type: CargoType,
     /// Remaining months when this subsidy is valid
     pub remaining: u16,
-    /// Subsidy is awarded to this company; CompanyID::Invalid() if it's not awarded to anyone
+    /// Subsidy is awarded to this company; `CompanyID::Invalid()` if it's not awarded to anyone
     pub awarded: CompanyID,
     /// Source of subsidised path
     pub src: Source,
