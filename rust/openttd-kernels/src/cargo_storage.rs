@@ -177,11 +177,6 @@ unsafe fn reduce(p: *mut Packet, amount: u32) {
 unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
     // Delay setting the origin until first pickup: creation at a station does
     // not yet tell us the tile at which the cargo will be picked up.
-    // SAFETY: the synchronous service table keeps the shared map view live;
-    // these coordinate reads neither call back nor yield.
-    let world = crate::map_func::World::new(unsafe { &*s.shared });
-    let x = world.dimensions.tile_x(at) as i16;
-    let y = world.dimensions.tile_y(at) as i16;
     unsafe {
         if loading {
             if (*p).source_xy == u32::MAX {
@@ -191,15 +186,23 @@ unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
                 check(false);
             }
             (*p).in_vehicle = 1;
-            // Add the known loading tile now; subtract the unloading tile later
-            // to obtain the vector of travel inside a vehicle.
-            (*p).travelled_x = (*p).travelled_x.wrapping_add(x);
-            (*p).travelled_y = (*p).travelled_y.wrapping_add(y);
         } else {
             if (*p).in_vehicle == 0 {
                 check(false);
             }
             (*p).in_vehicle = 0;
+        }
+        // SAFETY: the synchronous service table keeps the shared map view live;
+        // these coordinate reads neither call back nor yield.
+        let world = crate::map_func::World::new(&*s.shared);
+        let x = world.dimensions.tile_x(at) as i16;
+        let y = world.dimensions.tile_y(at) as i16;
+        if loading {
+            // Add the known loading tile now; subtract the unloading tile later
+            // to obtain the vector of travel inside a vehicle.
+            (*p).travelled_x = (*p).travelled_x.wrapping_add(x);
+            (*p).travelled_y = (*p).travelled_y.wrapping_add(y);
+        } else {
             (*p).travelled_x = (*p).travelled_x.wrapping_sub(x);
             (*p).travelled_y = (*p).travelled_y.wrapping_sub(y);
         }
