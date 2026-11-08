@@ -122,7 +122,6 @@ pub struct Leaves {
     pub station_train: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub station_xy: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub stuck: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub tile_add: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
@@ -256,9 +255,6 @@ impl Game<'_> {
     fn dir(&self, id: Handle, td: u8) -> u8 {
         (self.leaves.exit_dir)(self.context, id, td) as u8
     }
-    fn add(&self, id: Handle, tile: u32, dir: u8) -> u32 {
-        (self.leaves.tile_add)(self.context, id, tile, dir) as u32
-    }
     fn signal(&self, id: Handle, tile: u32, td: u8, green: bool) {
         (self.leaves.set_signal)(self.context, id, tile, td, u8::from(green));
     }
@@ -308,7 +304,7 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
             }
         }
     } else if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        let next = g.add(id, tile, dir);
+        let next = g.shared().map().add_diag(tile, dir);
         if (g.leaves.compat_station)(g.context, id, next, tile) == 0 {
             g.set_platform(tile, dir ^ 2, false);
         }
@@ -755,7 +751,7 @@ fn choose(
     // SAFETY: The entry keeps the native train live through reservation traversal.
     while !g.safe(id, dest.tile, dest.td) {
         let exit = g.dir(id, dest.td);
-        let next = g.add(id, dest.tile, exit);
+        let next = g.shared().map().add_diag(dest.tile, exit);
         let mut reachable =
             tracks(g.track_status(next)) & (g.leaves.reach_tracks)(g.context, id, exit) as u8;
         if (g.leaves.rail90)(g.context, id, dest.tile, next) != 0 {
@@ -820,7 +816,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
             return false;
         }
         let dir = (g.leaves.depot_dir)(g.context, id, v_tile) as u8;
-        let next = g.add(id, v_tile, dir);
+        let next = g.shared().map().add_diag(v_tile, dir);
         if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
             return false;
         }
@@ -846,7 +842,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         }
     }
     let exit = g.dir(id, origin.td);
-    let new_tile = g.add(id, origin.tile, exit);
+    let new_tile = g.shared().map().add_diag(origin.tile, exit);
     let mut reachable =
         tracks(g.track_status(new_tile) & (g.leaves.diag_reach_dirs)(g.context, id, exit) as u16);
     if (g.leaves.rail90)(g.context, id, origin.tile, new_tile) != 0 {
@@ -1152,7 +1148,6 @@ crate::abi::layouts! {
         station_train,
         station_xy,
         stuck,
-        tile_add,
         tile_offset,
         trackdir,
         tunnel_dir,
@@ -1266,7 +1261,6 @@ pub(crate) mod tests {
             station_train: unused(),
             station_xy: unused(),
             stuck: unused(),
-            tile_add: unused(),
             tile_offset: unused(),
             trackdir: unused(),
             tunnel_dir: unused(),
@@ -1312,7 +1306,6 @@ pub(crate) mod tests {
             resolve: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
-            add_by_diag_dir: unused(),
             owned_land: unused(),
             object_foundation: unused(),
             house_foundation: unused(),

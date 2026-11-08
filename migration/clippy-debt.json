@@ -267,7 +267,7 @@
       31
     ],
     "rust/openttd-kernels/src/house_definition.rs | fn property | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      232
+      234
     ],
     "rust/openttd-kernels/src/industry.rs | fn build_try | excessive_nesting | f01c9a3cf1909eb80ad8": [
       7
@@ -1414,14 +1414,14 @@
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 8c6e648e48006686af61": [
       7
     ],
-    "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 9eab464f71e55d96df76": [
+    "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 6717e4044750ffe89cc5": [
       8
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | f9d1d6175282e0d63c2b": [
       10
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      181
+      179
     ],
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_airport | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       9
@@ -1738,23 +1738,20 @@
       6,
       6
     ],
-    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete | excessive_nesting | 08914a24a2356c4b8c61": [
+    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete_town | excessive_nesting | 08914a24a2356c4b8c61": [
       6
     ],
-    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete | excessive_nesting | 99eb2be66abc740060ea": [
+    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn delete_town | excessive_nesting | dfa565b037c4a0c2d083": [
       8
     ],
-    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn mask | excessive_nesting | 8c6e648e48006686af61": [
+    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn get_mask_of_town_actions | excessive_nesting | 8c6e648e48006686af61": [
       5
     ],
-    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn mask | excessive_nesting | a827e0c4db4c3e26e572": [
+    "rust/openttd-kernels/src/town/commands.rs | impl < ' a > Commands < ' a >::fn get_mask_of_town_actions | excessive_nesting | a827e0c4db4c3e26e572": [
       6
     ],
     "rust/openttd-kernels/src/town/founding.rs | fn openttd_rust_town_found | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       41
-    ],
-    "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a > | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
     ],
     "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a > | too_many_lines | 4a33eacd5fa65f2b2e28": [
       111
@@ -1763,7 +1760,7 @@
       6
     ],
     "rust/openttd-kernels/src/town/founding.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      116
+      127
     ],
     "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn place | excessive_nesting | ff81917911f6f7974e17": [
       5
@@ -1787,8 +1784,8 @@
       111
     ],
     "rust/openttd-kernels/src/town/resolver.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      105,
-      155
+      108,
+      167
     ],
     "rust/openttd-kernels/src/townname.rs | fn czech | too_many_lines | 4a33eacd5fa65f2b2e28": [
       107
@@ -1978,10 +1975,10 @@
     "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       35
     ],
-    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 2d9c7113631916a5215d": [
+    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 265eff158a12ca11124e": [
       7
     ],
-    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 265eff158a12ca11124e": [
+    "rust/openttd-kernels/src/vehicle/maintenance.rs | fn handle_breakdown_impl | excessive_nesting | 2d9c7113631916a5215d": [
       7
     ],
     "rust/openttd-kernels/src/vehicle/visits.rs | impl Refresher::fn refresh_links | excessive_nesting | 1eca456e7a209fcf6492": [

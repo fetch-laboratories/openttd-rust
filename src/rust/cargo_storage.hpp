@@ -56,15 +56,13 @@ CargoPacket::CargoPacket(StationID first, uint16_t count, Source source) : Cargo
 {
 	auto &f = *this->state;
 	f.first_station = first.base(); f.count = count; f.source_id = source.id; f.source_type = to_underlying(source.type);
+	assert(count != 0);
 }
 CargoPacket::CargoPacket(uint16_t count, uint16_t periods, StationID first, TileIndex tile, Money feeder) : CargoPacket()
 {
 	auto &f = *this->state;
 	f.count = count; f.periods_in_transit = periods; f.first_station = first.base(); f.source_xy = tile.base(); f.feeder_share = feeder.base();
-}
-CargoPacket::CargoPacket(uint16_t count, Money feeder, CargoPacket &original) : CargoPacket(*original.state)
-{
-	auto &f = *this->state; f.count = count; f.feeder_share = feeder.base();
+	assert(count != 0);
 }
 CargoPacket::~CargoPacket() { openttd_rust_cargo_packet_destroy(this->state); }
 CargoPacket *CargoPacket::Split(uint amount) { return static_cast<CargoPacket *>(openttd_rust_cargo_packet_split(this->state, &_cargo_storage_services, amount)); }

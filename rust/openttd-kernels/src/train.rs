@@ -337,7 +337,6 @@ pub struct Leaves {
     pub stop_location: extern "C" fn(Handle) -> u64,
     pub stuck_news: extern "C" fn(Handle),
     pub suppress_implicit: extern "C" fn(Handle),
-    pub tile_add_diag: extern "C" fn(Handle, u32, u8) -> u64,
     pub tile_offset_axis: extern "C" fn(Handle, u8) -> u64,
     pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
     pub tile_owner: extern "C" fn(Handle, u32) -> u64,
@@ -960,9 +959,6 @@ impl Game<'_> {
             .write_status((u64::from(if value { old | mask } else { old & !mask })) as u8);
     }
 
-    fn tile_diag(&self, tile: u32, dir: u8) -> u32 {
-        (self.leaves.tile_add_diag)(Handle::NONE, tile, dir) as u32
-    }
     fn exitdir(&self, id: Handle) -> u8 {
         (self.leaves.veh_exit_dir)(id, (id).vehicle().direction(), id.track()) as u8
     }
@@ -1068,25 +1064,25 @@ impl Game<'_> {
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
                 state |= self.check_crossing(t);
-                t = self.tile_diag(t, d);
+                t = self.services.map().add_diag(t, d);
             }
         }
         self.update_crossing_tile(tile, sound, state);
         for d in [dir, dir ^ 2] {
-            let mut t = self.tile_diag(tile, d);
+            let mut t = self.services.map().add_diag(tile, d);
             while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
                 self.update_crossing_tile(t, sound, state);
-                t = self.tile_diag(t, d);
+                t = self.services.map().add_diag(t, d);
             }
         }
     }
     fn adjacent_crossing_dirty(&self, tile: u32, axis: u64) {
         let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
         for d in [dir, dir ^ 2] {
-            let t = self.tile_diag(tile, d);
+            let t = self.services.map().add_diag(tile, d);
             if u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
@@ -1708,7 +1704,7 @@ impl Game<'_> {
                                         * 2
                             {
                                 let dir = (self.leaves.trackdir_exit)(id, td) as u8;
-                                let tile = self.tile_diag(new, dir);
+                                let tile = self.services.map().add_diag(new, dir);
                                 let mut waiting = false;
                                 self.visit_tile(tile, |u| {
                                     let other_speed: u16 = u.vehicle().speed();
@@ -2572,7 +2568,7 @@ impl Game<'_> {
             };
         }
         let dir = (self.leaves.trackdir_exit)(id, self.trackdir(id)) as u8;
-        let tile = self.tile_diag(v_tile, dir);
+        let tile = self.services.map().add_diag(v_tile, dir);
         if tile == INVALID_TILE
             || !is_tile_type(self.services, tile, MP_RAILWAY)
             || (self.leaves.has_signals)(Handle::NONE, tile) == 0
@@ -3059,7 +3055,6 @@ crate::abi::layouts! {
         stop_location,
         stuck_news,
         suppress_implicit,
-        tile_add_diag,
         tile_offset_axis,
         tile_offset_diag,
         tile_owner,

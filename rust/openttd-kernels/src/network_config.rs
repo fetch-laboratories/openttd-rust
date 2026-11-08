@@ -10,6 +10,18 @@ pub const NETWORK_CLIENT_NAME_LENGTH: usize = 25;
 
 /// Chat string capacity, including its NUL.
 pub const NETWORK_CHAT_LENGTH: usize = 900;
+/// The maximum length of a content's filename, in bytes including '\0'.
+pub const NETWORK_CONTENT_FILENAME_LENGTH: usize = 48;
+/// The maximum length of a content's name, in bytes including '\0'.
+pub const NETWORK_CONTENT_NAME_LENGTH: usize = 32;
+/// The maximum length of a content's version, in bytes including '\0'.
+pub const NETWORK_CONTENT_VERSION_LENGTH: usize = 16;
+/// The maximum length of a content's url, in bytes including '\0'.
+pub const NETWORK_CONTENT_URL_LENGTH: usize = 96;
+/// The maximum length of a content's description, in bytes including '\0'.
+pub const NETWORK_CONTENT_DESC_LENGTH: usize = 512;
+/// The maximum length of a content's tag, in bytes including '\0'.
+pub const NETWORK_CONTENT_TAG_LENGTH: usize = 32;
 
 /// `COMPAT_MTU`.
 pub const COMPAT_MTU: usize = 1460;

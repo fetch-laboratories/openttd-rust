@@ -65,6 +65,7 @@ mod heightmap;
 mod history;
 mod history_type;
 pub mod house;
+pub mod house_type;
 pub mod industry_type;
 mod industrytype;
 mod integer;

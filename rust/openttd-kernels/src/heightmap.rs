@@ -8,10 +8,21 @@ use crate::gfx_type::Colour;
 use crate::map_type::MAX_MAP_SIZE;
 use std::ffi::c_void;
 
-/// `HM_COUNTER_CLOCKWISE`.
-pub(crate) const HM_COUNTER_CLOCKWISE: u8 = 0;
-/// `HM_CLOCKWISE`.
-pub(crate) const HM_CLOCKWISE: u8 = 1;
+/// Order of these enums has to be the same as in `lang/english.txt`.
+/// Otherwise you will get inconsistent behaviour. Retains every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct HeightmapRotation(pub u8);
+impl HeightmapRotation {
+    /// Rotate the map counter clockwise 45 degrees.
+    pub(crate) const HM_COUNTER_CLOCKWISE: Self = Self(0);
+    /// Rotate the map clockwise 45 degrees.
+    pub(crate) const HM_CLOCKWISE: Self = Self(1);
+}
+/// Raw adapter for `HeightmapRotation::HM_COUNTER_CLOCKWISE`.
+pub(crate) const HM_COUNTER_CLOCKWISE: u8 = HeightmapRotation::HM_COUNTER_CLOCKWISE.0;
+/// Raw adapter for `HeightmapRotation::HM_CLOCKWISE`.
+pub(crate) const HM_CLOCKWISE: u8 = HeightmapRotation::HM_CLOCKWISE.0;
 
 /// `MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS`.
 pub(crate) const MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS: u32 = 2 * MAX_MAP_SIZE;

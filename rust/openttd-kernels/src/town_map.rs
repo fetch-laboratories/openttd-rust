@@ -6,13 +6,19 @@
  */
 
 //! Inline helpers of `town_map.h` over the typed house map services.
+use crate::tile_type::TileIndex;
 use crate::town::house::HouseServices;
 
-/// `IncrementHouseAge`; the caller has checked `IsTileType(t, MP_HOUSE)`. One
-/// observation reads `IsHouseCompleted(t)` and, for a completed house, `t.m5()`.
-pub fn increment_house_age(h: &HouseServices, t: u32) {
-    let house = (h.age)(t);
+/// Increments the age of the house (`IncrementHouseAge`).
+/// `t` is the tile of this house; the caller has checked `IsTileType(t, MP_HOUSE)`.
+/// One observation reads `IsHouseCompleted(t)` and, for a completed house, `t.m5()`.
+pub fn increment_house_age(h: &HouseServices, t: TileIndex) {
+    let house = (h.age)(t.0);
     if house.completed && house.age < 0xFF {
-        (h.set_age)(t, house.age + 1);
+        (h.set_age)(t.0, house.age + 1);
     }
+}
+/// Raw adapter for `increment_house_age`, retained for `town/house.rs` until its pass.
+pub fn increment_house_age_raw(h: &HouseServices, t: u32) {
+    increment_house_age(h, TileIndex(t));
 }
