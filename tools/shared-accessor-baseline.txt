@@ -74,10 +74,8 @@ src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, Ope
 src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 30f910a9db971102 | 1
 src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
 src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
-src/rust/train_services.h | TrainMapSize(OpenTTDTrainHandle) noexcept | b49ebe1aff917479 | 1
 src/rust/train_services.h | TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept | b7492fcfee760201 | 1
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
-src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1
 src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac10cb2f2f467c | 1
 src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e790d4250a | 1

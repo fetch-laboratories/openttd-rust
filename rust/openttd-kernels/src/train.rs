@@ -248,7 +248,6 @@ pub struct Leaves {
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
     pub backoff: extern "C" fn() -> u8,
     pub base_viewport: extern "C" fn(Handle, u8),
-    pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub capacity_error: extern "C" fn(Handle),
     pub check_next: extern "C" fn(Handle),
@@ -271,14 +270,12 @@ pub struct Leaves {
     pub delete_vehicle: extern "C" fn(Handle),
     pub depot_dir: extern "C" fn(Handle, u32) -> u64,
     pub depot_dirty: extern "C" fn(Handle),
-    pub depot_index: extern "C" fn(Handle, u32) -> u64,
     pub depot_track: extern "C" fn(Handle, u32) -> u64,
     pub depot_window: extern "C" fn(Handle, u32),
     pub diag_axis: extern "C" fn(Handle, u8) -> u64,
     pub diag_between: extern "C" fn(Handle, u32, u32) -> u64,
     pub diag_reaches_tracks: extern "C" fn(Handle, u8) -> u64,
     pub diag_trackdir: extern "C" fn(Handle, u8) -> u64,
-    pub dirty_tile: extern "C" fn(Handle, u32),
     pub dir_diag: extern "C" fn(Handle, u8) -> u64,
     pub disconnect: extern "C" fn(Handle),
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
@@ -299,7 +296,6 @@ pub struct Leaves {
     pub leave_unbunch: extern "C" fn(Handle),
     pub local_company: extern "C" fn(Handle) -> u64,
     pub lost_warn: extern "C" fn(Handle) -> u64,
-    pub map_size: extern "C" fn(Handle) -> u64,
     pub max_depot_penalty: extern "C" fn(Handle) -> u64,
     pub no_90: extern "C" fn(Handle, u8, u8) -> u64,
     pub oneway_blocking: extern "C" fn(Handle, u32, u8) -> u64,
@@ -329,7 +325,6 @@ pub struct Leaves {
     pub sigseg_full: extern "C" fn(Handle) -> u64,
     pub sigseg_pbs: extern "C" fn(Handle) -> u64,
     pub start_stop_dirty: extern "C" fn(Handle),
-    pub station: extern "C" fn(Handle, u32) -> u64,
     pub station_axis: extern "C" fn(Handle, u32) -> u64,
     pub station_compatible: extern "C" fn(Handle, u32, u32) -> u64,
     pub station_dest: extern "C" fn(Handle) -> u64,
@@ -339,7 +334,6 @@ pub struct Leaves {
     pub suppress_implicit: extern "C" fn(Handle),
     pub tile_offset_axis: extern "C" fn(Handle, u8) -> u64,
     pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
-    pub tile_owner: extern "C" fn(Handle, u32) -> u64,
     pub tile_rail_type: extern "C" fn(Handle, u32) -> u64,
     pub tile_virt: extern "C" fn(i32, i32) -> u32,
     pub trackdir_exit: extern "C" fn(Handle, u8) -> u64,
@@ -350,7 +344,6 @@ pub struct Leaves {
     pub train_list: extern "C" fn(Handle),
     pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub tunnel_dir: extern "C" fn(Handle, u32) -> u64,
     pub update_delta: extern "C" fn(Handle),
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
@@ -806,7 +799,7 @@ impl Game<'_> {
         if model == u64::from(AccelerationModel::AM_REALISTIC.0)
             && (self.leaves.is_station)(id, v_tile.0) != 0
         {
-            let sid = StationID((self.leaves.station)(id, v_tile.0) as u16);
+            let sid = StationID((self.services.station_index)(v_tile.0));
             if crate::movement::should_stop(self.services, id.vehicle(), sid.0) {
                 let (stop_at, station_ahead, station_length) =
                     self.get_train_stop_location(id, sid, v_tile);
@@ -839,7 +832,7 @@ impl Game<'_> {
                     == 0
             {
                 let tile = (u).vehicle().tile();
-                max_speed = max_speed.min((self.leaves.bridge_speed)(u, tile) as i32);
+                max_speed = max_speed.min(i32::from((self.services.bridge_speed)(tile)));
             }
             u = (u).next();
         }
@@ -977,7 +970,7 @@ impl Game<'_> {
             return false;
         }
         if is_tile_type(self.services, v_tile, MP_TUNNELBRIDGE)
-            && (self.leaves.tunnel_dir)(Handle::NONE, v_tile) as u8 * 2 + 1 == v_direction
+            && (self.services.tunnel_bridge_direction)(v_tile) * 2 + 1 == v_direction
         {
             return false;
         }
@@ -1046,7 +1039,7 @@ impl Game<'_> {
                 (self.leaves.crossing_sound)(Handle::NONE, tile);
             }
             (self.leaves.write_crossing_bar)(Handle::NONE, tile, u8::from(barred));
-            (self.leaves.dirty_tile)(Handle::NONE, tile);
+            (self.services.mark_dirty)(tile);
         }
     }
     fn update_crossing(&self, tile: u32, sound: bool, force: bool) {
@@ -1059,7 +1052,7 @@ impl Game<'_> {
         for d in [dir, dir ^ 2] {
             let mut t = tile;
             while !state
-                && u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+                && t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
@@ -1070,7 +1063,7 @@ impl Game<'_> {
         self.update_crossing_tile(tile, sound, state);
         for d in [dir, dir ^ 2] {
             let mut t = self.services.map().add_diag(tile, d);
-            while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+            while t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
@@ -1083,11 +1076,11 @@ impl Game<'_> {
         let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
         for d in [dir, dir ^ 2] {
             let t = self.services.map().add_diag(tile, d);
-            if u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+            if t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
-                (self.leaves.dirty_tile)(Handle::NONE, t);
+                (self.services.mark_dirty)(t);
             }
         }
     }
@@ -1097,7 +1090,7 @@ impl Game<'_> {
             let diff = (self.leaves.tile_offset_diag)(Handle::NONE, d) as u32;
             let mut occupied = false;
             let mut t = tile.wrapping_add(diff);
-            while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+            while t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
@@ -1106,23 +1099,23 @@ impl Game<'_> {
             }
             if occupied {
                 t = tile.wrapping_add(diff);
-                if u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+                if t < self.services.map_size()
                     && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                     && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
                 {
-                    (self.leaves.dirty_tile)(Handle::NONE, t);
+                    (self.services.mark_dirty)(t);
                 }
             } else {
                 t = tile.wrapping_add(diff);
-                while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
+                while t < self.services.map_size()
                     && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                     && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
                 {
                     if (self.leaves.crossing_barred)(Handle::NONE, t) != 0 {
                         (self.leaves.write_crossing_bar)(Handle::NONE, t, 0);
-                        (self.leaves.dirty_tile)(Handle::NONE, t);
+                        (self.services.mark_dirty)(t);
                     } else {
-                        (self.leaves.dirty_tile)(Handle::NONE, t);
+                        (self.services.mark_dirty)(t);
                         break;
                     }
                     t = t.wrapping_add(diff);
@@ -1575,7 +1568,7 @@ impl Game<'_> {
             if u64::from(self.signal_context().segment(
                 tile,
                 exit as u8,
-                (self.leaves.tile_owner)(Handle::NONE, tile) as u8,
+                (self.services.tile_owner)(tile),
             )) == (self.leaves.sigseg_pbs)(id)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
             {
@@ -1631,7 +1624,7 @@ impl Game<'_> {
                         return (2, false);
                     }
                     if vets & 1 != 0 {
-                        self.enter_station(id, (self.leaves.station)(Handle::NONE, new) as u16);
+                        self.enter_station(id, (self.services.station_index)(new));
                     }
                 }
             } else {
@@ -1774,7 +1767,7 @@ impl Game<'_> {
                         (self.leaves.track_direction)(id, chosen.trailing_zeros() as u8, dir) as u8;
                     if (id).front() != 0 && (self.leaves.signal_has_pbs)(id, new, td) != 0 {
                         (self.leaves.set_signal_state)(id, new, td, 0);
-                        (self.leaves.dirty_tile)(Handle::NONE, new);
+                        (self.services.mark_dirty)(new);
                     }
                     if (id).next() == Handle::NONE {
                         (self.leaves.clear_reservation)(
@@ -1826,7 +1819,7 @@ impl Game<'_> {
                     (self.leaves.check_next)(id);
                 }
                 if vets & 1 != 0 {
-                    self.enter_station(id, (self.leaves.station)(Handle::NONE, new) as u16);
+                    self.enter_station(id, (self.services.station_index)(new));
                 }
             }
         } else {
@@ -1835,7 +1828,11 @@ impl Game<'_> {
             {
                 if (id).front() != 0 {
                     crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
-                    self.reserve_track(id, new, (self.leaves.tunnel_dir)(Handle::NONE, new) & 1);
+                    self.reserve_track(
+                        id,
+                        new,
+                        u64::from((self.services.tunnel_bridge_direction)(new)) & 1,
+                    );
                     (self.leaves.check_next)(id);
                 }
                 if old == new {
@@ -2092,7 +2089,7 @@ impl Game<'_> {
         let owner = v_owner;
         (self.leaves.delete_vehicle)(id);
         if tracks == WORMHOLE {
-            tracks = 1 << ((self.leaves.tunnel_dir)(Handle::NONE, tile) & 1);
+            tracks = 1 << (u64::from((self.services.tunnel_bridge_direction)(tile)) & 1);
         }
         let track = tracks.trailing_zeros() as u8;
         if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(tile, tracks) {
@@ -2104,8 +2101,10 @@ impl Game<'_> {
                 }
                 let t = u.track();
                 if t == WORMHOLE {
-                    remaining |=
-                        1 << ((self.leaves.tunnel_dir)(Handle::NONE, (u).vehicle().tile()) & 1);
+                    remaining |= 1
+                        << (u64::from((self.services.tunnel_bridge_direction)(
+                            (u).vehicle().tile(),
+                        )) & 1);
                 } else if t != DEPOT {
                     remaining |= t;
                 }
@@ -2264,7 +2263,7 @@ impl Game<'_> {
         }
         (self.leaves.set_depot_res)(id, (id).vehicle().tile(), 1);
         if (self.leaves.show_reservation)(id) != 0 {
-            (self.leaves.dirty_tile)(Handle::NONE, (id).vehicle().tile());
+            (self.services.mark_dirty)((id).vehicle().tile());
         }
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
         self.service_in_depot(id);
@@ -2423,7 +2422,7 @@ impl Game<'_> {
                 if (v_order == OT_GOTO_WAYPOINT || v_order == OT_GOTO_STATION)
                     && v_nonstop & 2 != 0
                     && (self.leaves.is_station_any)(Handle::NONE, v_tile) != 0
-                    && u64::from(v_order_destination) == (self.leaves.station)(Handle::NONE, v_tile)
+                    && v_order_destination == (self.services.station_index)(v_tile)
                 {
                     // SAFETY: The orders owner is resolved at this source call; no owner borrow remains.
                     unsafe {
@@ -2503,7 +2502,7 @@ impl Game<'_> {
             return;
         }
         let tile = depot.tile;
-        let depot_id = (self.leaves.depot_index)(Handle::NONE, tile) as u16;
+        let depot_id = (self.services.depot_index)(tile);
         let v_order_destination: u16 = id.vehicle().current_order().destination;
         let v_order: u8 = id.vehicle().current_order().kind();
         if v_order == OT_GOTO_DEPOT
@@ -2610,8 +2609,8 @@ impl Game<'_> {
                 if (id).vehicle().current_order().kind() == OT_LOADING {
                     let last = ((id).last()).vehicle().tile();
                     if (self.leaves.is_station_any)(Handle::NONE, last) == 0
-                        || (self.leaves.station)(Handle::NONE, last)
-                            != (self.leaves.station)(Handle::NONE, (id).vehicle().tile())
+                        || (self.services.station_index)(last)
+                            != (self.services.station_index)((id).vehicle().tile())
                     {
                         crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
                     }
@@ -2656,7 +2655,7 @@ pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
     let tile = id.vehicle().tile();
     (leaves.set_depot_res)(id, tile, 0);
     if (leaves.show_reservation)(id) != 0 {
-        (leaves.dirty_tile)(Handle::NONE, tile);
+        (services.mark_dirty)(tile);
     }
     g.signal_segment(id, tile, crate::direction_type::INVALID_DIAGDIR);
     id.set_wait_counter(0);
@@ -2966,7 +2965,6 @@ crate::abi::layouts! {
         axis_diag,
         backoff,
         base_viewport,
-        bridge_speed,
         capabilities,
         capacity_error,
         check_next,
@@ -2989,14 +2987,12 @@ crate::abi::layouts! {
         delete_vehicle,
         depot_dir,
         depot_dirty,
-        depot_index,
         depot_track,
         depot_window,
         diag_axis,
         diag_between,
         diag_reaches_tracks,
         diag_trackdir,
-        dirty_tile,
         dir_diag,
         disconnect,
         find_depot,
@@ -3017,7 +3013,6 @@ crate::abi::layouts! {
         leave_unbunch,
         local_company,
         lost_warn,
-        map_size,
         max_depot_penalty,
         no_90,
         oneway_blocking,
@@ -3047,7 +3042,6 @@ crate::abi::layouts! {
         sigseg_full,
         sigseg_pbs,
         start_stop_dirty,
-        station,
         station_axis,
         station_compatible,
         station_dest,
@@ -3057,7 +3051,6 @@ crate::abi::layouts! {
         suppress_implicit,
         tile_offset_axis,
         tile_offset_diag,
-        tile_owner,
         tile_rail_type,
         tile_virt,
         trackdir_exit,
@@ -3068,7 +3061,6 @@ crate::abi::layouts! {
         train_list,
         train_visit,
         truncate_cargo,
-        tunnel_dir,
         update_delta,
         veh_exit_dir,
         viewport,
