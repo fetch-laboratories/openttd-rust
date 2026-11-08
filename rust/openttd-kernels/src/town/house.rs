@@ -21,7 +21,8 @@ use crate::direction_type::DiagDirection;
 use crate::economy_type::{EXPENSES_CONSTRUCTION, PR_BUILD_FOUNDATION};
 use crate::history_type::THIS_MONTH;
 use crate::house::{
-    BuildingFlag, BuildingFlags, HouseExtraFlag, HouseExtraFlags, NEW_HOUSE_OFFSET,
+    BuildingFlag, BuildingFlags, HOUSE_NUM_ACCEPTS, HouseExtraFlag, HouseExtraFlags,
+    NEW_HOUSE_OFFSET,
 };
 use crate::house_type::{HouseID, HouseRandomTrigger, HouseRandomTriggers};
 use crate::landscape_type::LandscapeType;
@@ -151,8 +152,8 @@ pub struct HouseRemoval {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct HouseAcceptance {
-    pub accepts: [u8; 16],
-    pub amounts: [u8; 16],
+    pub accepts: [u8; HOUSE_NUM_ACCEPTS as usize],
+    pub amounts: [u8; HOUSE_NUM_ACCEPTS as usize],
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -540,6 +541,7 @@ impl<'a> House<'a> {
         base_random: u8,
         first: bool,
     ) {
+        // We can't trigger a non-existent building...
         let hid = self.get_house_type(tile);
         if !(self.h.sprite_groups)(hid) {
             return;
