@@ -22,27 +22,9 @@ pub const HOUSE_NUM_ACCEPTS: u8 = 16;
 pub const HOUSE_ORIGINAL_NUM_ACCEPTS: u8 = 3;
 /// Raw adapter for `HouseZone::TownEdge`, retained for the `NewGRF` road-stop resolver's later pass.
 pub const HOUSE_ZONE_TOWN_EDGE: u8 = HouseZone::TownEdge.0;
-/// Raw adapter for `BUILDING_HAS_1_TILE`, retained for `town.rs` and `town/house.rs` until their passes.
-pub const BUILDING_HAS_1_TILE: u8 = BuildingFlags::BUILDING_HAS_1_TILE.0;
-/// Raw adapter for `BUILDING_HAS_2_TILES`, retained for `town/house.rs` until its pass.
-pub const BUILDING_HAS_2_TILES: u8 = BuildingFlags::BUILDING_HAS_2_TILES.0;
-/// Raw adapter for `BuildingFlag::IsChurch`, retained for `town/house.rs` until its pass.
-pub const BUILDING_IS_CHURCH: u8 = BuildingFlags::from_element(BuildingFlag::IsChurch).0;
-/// Raw adapter for `BuildingFlag::IsStadium`, retained for `town/house.rs` until its pass.
-pub const BUILDING_IS_STADIUM: u8 = BuildingFlags::from_element(BuildingFlag::IsStadium).0;
-/// Raw adapter for `BuildingFlag::NotSloped`, retained for `town/house.rs` until its pass.
-pub const BUILDING_NOT_SLOPED: u8 = BuildingFlags::from_element(BuildingFlag::NotSloped).0;
-/// Raw adapter for `BuildingFlag::Size2x1`, retained for `town/house.rs` until its pass.
-pub const BUILDING_SIZE_2X1: u8 = BuildingFlags::from_element(BuildingFlag::Size2x1).0;
-/// Raw adapter for `BuildingFlag::Size1x2`, retained for `town/house.rs` until its pass.
-pub const BUILDING_SIZE_1X2: u8 = BuildingFlags::from_element(BuildingFlag::Size1x2).0;
-/// Raw adapter for `BuildingFlag::Size2x2`, retained for `town/house.rs` until its pass.
-pub const BUILDING_SIZE_2X2: u8 = BuildingFlags::from_element(BuildingFlag::Size2x2).0;
-/// Raw adapter for `BuildingFlag::IsAnimated`, retained for `town/house.rs` until its pass.
-pub const BUILDING_IS_ANIMATED: u8 = BuildingFlags::from_element(BuildingFlag::IsAnimated).0;
-/// Raw adapter for `BUILDING_2_TILES_X`, retained for `town.rs` and `town/house.rs` until their passes.
+/// Raw adapter for `BUILDING_2_TILES_X`, retained for `town.rs` until its pass.
 pub const BUILDING_2_TILES_X: u8 = BuildingFlags::BUILDING_2_TILES_X.0;
-/// Raw adapter for `BUILDING_2_TILES_Y`, retained for `town.rs` and `town/house.rs` until their passes.
+/// Raw adapter for `BUILDING_2_TILES_Y`, retained for `town.rs` until its pass.
 pub const BUILDING_2_TILES_Y: u8 = BuildingFlags::BUILDING_2_TILES_Y.0;
 
 /// Get the `HouseZones` climate mask for the current landscape type; declared in `house.h`
@@ -133,6 +115,11 @@ impl BuildingFlags {
     #[must_use]
     pub const fn any(self, other: Self) -> bool {
         self.0 & other.0 != 0
+    }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: BuildingFlag) -> bool {
+        self.any(Self::from_element(element))
     }
 }
 
@@ -248,3 +235,16 @@ impl HouseExtraFlag {
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HouseExtraFlags(pub u8);
+
+impl HouseExtraFlags {
+    /// Native element-to-set conversion.
+    #[must_use]
+    pub const fn from_element(element: HouseExtraFlag) -> Self {
+        Self(1 << element.0)
+    }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: HouseExtraFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+}

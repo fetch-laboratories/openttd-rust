@@ -15,12 +15,6 @@
     "tools/baseline_ratchet.py | main | PLR0913": [
       8
     ],
-    "tools/byte-strings-comparison.py | corpus | C901": [
-      16
-    ],
-    "tools/byte-strings-comparison.py | corpus | PLR0912": [
-      15
-    ],
     "tools/check-rust-platform.py | check_build | C901": [
       12
     ],
@@ -38,15 +32,6 @@
     ],
     "tools/deep.py | run_deep | PLR0913": [
       7
-    ],
-    "tools/encoded-comparison.py | corpus | C901": [
-      17
-    ],
-    "tools/encoded-comparison.py | corpus | PLR0912": [
-      16
-    ],
-    "tools/encoded-comparison.py | main | C901": [
-      11
     ],
     "tools/generate-abi.py | generate | C901": [
       13

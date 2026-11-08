@@ -227,3 +227,103 @@ mod water_edges_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod partial_pixel_z_tests {
+    //! Original-only `math-comparison.cpp` `GetPartialPixelZ` observations (#736 U).
+    use crate::oracle;
+
+    const ORACLE: &str = include_str!("landscape/partial-pixel-z-oracle.txt");
+    const EDGE: [i32; 16] = [
+        i32::MIN,
+        i32::MIN + 1,
+        i32::MIN + 16,
+        -65536,
+        -17,
+        -2,
+        -1,
+        0,
+        1,
+        15,
+        16,
+        17,
+        65536,
+        i32::MAX - 16,
+        i32::MAX - 1,
+        i32::MAX,
+    ];
+
+    /// The probe's `DefinedHeightInput`: skip inputs whose executed signed C++ arithmetic
+    /// overflows (equivalence is defined only for defined C++ operations).
+    fn defined(x: i32, y: i32, corners: u8) -> bool {
+        let fits = |v: i64| i32::try_from(v).is_ok();
+        let (x, y) = (i64::from(x), i64::from(y));
+        let sum = x + y;
+        if corners & 0x20 != 0 {
+            let corner = (corners >> 6) & 3;
+            if corner & 1 != 0 && !fits(sum) {
+                return false;
+            }
+            let leveled = match corner {
+                0 => x > y,
+                1 => sum >= 16,
+                2 => x <= y,
+                _ => sum < 16,
+            };
+            if leveled {
+                return true;
+            }
+        }
+        let east = || fits(1 + y) && fits(1 + y - x);
+        let west = || fits(x - y);
+        let south = || fits(1 + x) && fits(1 + sum);
+        match corners & !0xe0 {
+            0x08 | 0x07 => fits(sum),
+            0x02 | 0x0d | 0x0a => fits(sum) && (sum < 16 || south()),
+            0x04 => y < x || east(),
+            0x0b => x >= y || east(),
+            0x01 => x < y || west(),
+            0x0e => y >= x || west(),
+            0x05 => {
+                if x >= y {
+                    west()
+                } else {
+                    east()
+                }
+            }
+            0x06 => fits(1 + y),
+            0x03 => fits(1 + x),
+            0x17 => south(),
+            _ => true,
+        }
+    }
+
+    fn rows(xs: &[i32], ys: &[i32], stride: usize) -> Vec<(String, Vec<u64>, usize)> {
+        let mut rows = Vec::new();
+        for corners in 0..=u8::MAX {
+            for &x in xs {
+                let row: Vec<u64> = ys
+                    .iter()
+                    .filter(|&&y| defined(x, y, corners))
+                    // The production export; u64::MAX reaches the adapter's NOT_REACHED.
+                    .map(|&y| crate::openttd_rust_get_partial_pixel_z(x, y, corners))
+                    .collect();
+                if !row.is_empty() {
+                    rows.push((format!("corners {corners:#04x} x {x}"), row, stride));
+                }
+            }
+        }
+        rows
+    }
+
+    #[test]
+    fn partial_pixel_z_matches_original_extended_grid_and_edges() {
+        let o = oracle::parse(ORACLE);
+        let grid: Vec<i32> = (-32..=32).collect();
+        assert_eq!(
+            oracle::check_rows(&o, "height-grid", rows(&grid, &grid, 2)),
+            16640
+        );
+        oracle::check_rows(&o, "height-edge", rows(&EDGE, &EDGE, 1));
+    }
+}

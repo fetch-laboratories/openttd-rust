@@ -30,8 +30,8 @@
 
 - Rust owns: `GetPartialPixelZ`, the landscape height kernel.
 - C++ keeps: The public interface.
-- Checks: `python3 tools/math-comparison.py`.
-- Limits: Original signed-overflow inputs have no equivalence guarantee. The comparison excludes executed signed-overflow expressions and its bounded corpus does not cover every coordinate pair.
+- Checks: Rust `landscape::partial_pixel_z_tests`.
+- Limits: Original signed-overflow inputs have no equivalence guarantee. The test excludes executed signed-overflow expressions and its bounded corpus does not cover every coordinate pair.
 - PRs: #6 and #91.
 
 ## Spiral tile traversal

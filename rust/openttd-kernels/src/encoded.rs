@@ -381,3 +381,490 @@ crate::abi::layouts! {
         kind,
     };
 }
+
+/// #736: original `encoded-comparison.cpp` observations, frozen from the unchanged original
+/// (`encoded/comparison-oracle.txt`) and replayed on the Rust operations. The C++ adapter
+/// steps (`src/rust/encoded_adapter.hpp` and the candidate `strings.cpp`/`saveload.cpp`
+/// facades) are reconstructed where they turn Rust results into logs, assertions and strings.
+#[cfg(test)]
+mod tests {
+    use super::{Output, Parameter, legacy, negatives, replace, serialize};
+    use crate::oracle;
+    use std::collections::HashSet;
+    use std::fmt::Write as _;
+
+    const ORACLE: &str = include_str!("encoded/comparison-oracle.txt");
+    const NUMERIC_ASSERTION: &str = "!record.AnyBytesLeft()";
+    const STRING_ASSERTION: &str =
+        "len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && c != SCC_RECORD_SEPARATOR)";
+
+    fn utf8(codepoint: u32) -> Vec<u8> {
+        char::from_u32(codepoint).unwrap().to_string().into_bytes()
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        if bytes.is_empty() {
+            return "-".into();
+        }
+        bytes.iter().fold(String::new(), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+    }
+
+    fn unhex(text: &str) -> Vec<u8> {
+        if text == "-" {
+            return Vec::new();
+        }
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// The driver's `token`: E, N<hex>, or S<hex> ("S-" when empty).
+    #[derive(Clone)]
+    enum Token {
+        E,
+        N(u64),
+        S(Vec<u8>),
+    }
+
+    fn token(value: &Token) -> String {
+        match value {
+            Token::E => "E".into(),
+            Token::N(value) => format!("N{value:x}"),
+            Token::S(bytes) => format!("S{}", hex(bytes)),
+        }
+    }
+
+    fn s(bytes: &[u8]) -> Token {
+        Token::S(bytes.to_vec())
+    }
+
+    fn cat(parts: &[&[u8]]) -> Vec<u8> {
+        parts.concat()
+    }
+
+    /// `tools/encoded-comparison.py` `corpus()`, deduplicated in first-appearance order.
+    fn corpus() -> Vec<String> {
+        let mut records = Vec::new();
+        legacy_records(&mut records);
+        negative_records(&mut records);
+        replace_records(&mut records);
+        public_records(&mut records);
+        let mut seen = HashSet::new();
+        records.retain(|record| seen.insert(record.clone()));
+        records
+    }
+
+    /// Legacy quote/colon conversions, without and with code fixing.
+    fn legacy_records(records: &mut Vec<String>) {
+        let encoded = utf8(0xe000);
+        let e = &encoded[..];
+        let mut legacy_values: Vec<Vec<u8>> = vec![
+            b"".to_vec(),
+            b"text".to_vec(),
+            b"\xff".to_vec(),
+            cat(&[b"\xff", e]),
+            cat(&[b"\xf0\x9f\x98\x80", e]),
+            e.to_vec(),
+            cat(&[e, b"0"]),
+            cat(&[e, b"0\xffignored"]),
+            cat(&[e, b"0:\xffignored"]),
+            cat(&[e, b"0:\"x:y\""]),
+            cat(&[e, b"0:\"unmatched"]),
+            cat(&[e, b"0:\"", e, b"12:q\""]),
+            cat(&[e, b"0:\"x\":"]),
+            cat(&[e, b"0::1"]),
+            cat(&[e, b"0:\x00:1"]),
+            cat(&[e, b"0:\"x\"2"]),
+            cat(&[e, b"0:\"x\"\"y\""]),
+            cat(&[e, b"0:abc::\"\":-xyz"]),
+        ];
+        for marker in [utf8(0xe028), utf8(0xe02a)] {
+            let m = &marker[..];
+            legacy_values.push(cat(&[m, b"1"]));
+            legacy_values.push(cat(&[m, b"1:\"x:y\":", m, b"2"]));
+            legacy_values.push(cat(&[e, b"0:\"", m, b":x\""]));
+        }
+        for fix in 0..2 {
+            for value in &legacy_values {
+                records.push(format!("legacy {fix} {}", hex(value)));
+            }
+        }
+    }
+
+    /// Negative numeric repair records.
+    fn negative_records(records: &mut Vec<String>) {
+        let (encoded, internal, numeric, string) =
+            (utf8(0xe000), utf8(0xe001), utf8(0xe002), utf8(0xe003));
+        let (e, i, n, st) = (&encoded[..], &internal[..], &numeric[..], &string[..]);
+        let rs: &[u8] = b"\x1e";
+        for value in [
+            b"".to_vec(),
+            b"text".to_vec(),
+            b"\xff".to_vec(),
+            cat(&[i, b"0"]),
+            e.to_vec(),
+            cat(&[e, b"000A"]),
+        ] {
+            records.push(format!("negative {}", hex(&value)));
+        }
+        let values: [&[u8]; 21] = [
+            b"0",
+            b"0000",
+            b"AaFF",
+            b"00ABC",
+            b"-0",
+            b"-1",
+            b"-7fffffffffffffff",
+            b"-8000000000000000",
+            b"-8000000000000001",
+            b"ffffffffffffffff",
+            b"10000000000000000",
+            b"FFFFFFFFFFFFFFFF",
+            b"",
+            b"-",
+            b"+1",
+            b"xyz",
+            b"-xyz",
+            b"0x2",
+            b"deadTAIL",
+            b"-deadTAIL",
+            b"\xff\x00bad",
+        ];
+        let suffixes: [Vec<u8>; 3] = [b"".to_vec(), cat(&[rs, st, b"tail"]), b"!suffix".to_vec()];
+        for value in values {
+            for suffix in &suffixes {
+                let record = cat(&[e, b"0", rs, n, value, suffix]);
+                records.push(format!("negative {}", hex(&record)));
+            }
+        }
+        let last = cat(&[e, b"0", rs, n, b"-xyz", rs, n, b"10000000000000000"]);
+        records.push(format!("negative {}", hex(&last)));
+    }
+
+    /// Internal-record parameter replacement.
+    fn replace_records(records: &mut Vec<String>) {
+        let (encoded, internal, numeric, string) =
+            (utf8(0xe000), utf8(0xe001), utf8(0xe002), utf8(0xe003));
+        let (e, i, n, st) = (&encoded[..], &internal[..], &numeric[..], &string[..]);
+        let rs: &[u8] = b"\x1e";
+        let replacements = [
+            Token::E,
+            Token::N(42),
+            Token::N(u64::MAX),
+            s(b""),
+            s(b"new"),
+            s(b"a\x00b"),
+            s(&cat(&[b"a", rs, b"x"])),
+        ];
+        let items: Vec<Vec<Vec<u8>>> = vec![
+            vec![],
+            vec![b"".to_vec()],
+            vec![b"".to_vec(), b"".to_vec()],
+            vec![b"".to_vec(), b"".to_vec(), b"".to_vec()],
+            vec![b"unknown".to_vec(), st.to_vec()],
+            vec![cat(&[st, b"old"]), b"".to_vec(), cat(&[n, b"2a"])],
+            vec![cat(&[n, b"-1"]), cat(&[st, b"tail"])],
+            vec![cat(&[n, b"10000000000000000"]), b"unknown".to_vec()],
+            vec![b"\xffunknown".to_vec(), cat(&[st, b"last"])],
+            vec![cat(&[n, b"2fTAIL"]), cat(&[st, b"last"])],
+            vec![cat(&[n, b"-"]), cat(&[n, b"1x"]), cat(&[n, b"xyz"])],
+        ];
+        for record in &items {
+            let mut src = cat(&[i, b"000A"]);
+            if !record.is_empty() {
+                src.extend_from_slice(rs);
+                src.extend_from_slice(&record.join(rs));
+            }
+            for index in [0, 1, 2, 99] {
+                for replacement in &replacements {
+                    records.push(format!(
+                        "replace {index} {} {}",
+                        token(replacement),
+                        hex(&src)
+                    ));
+                }
+            }
+        }
+        for src in [
+            b"".to_vec(),
+            cat(&[e, b"0"]),
+            b"plain".to_vec(),
+            b"\xff".to_vec(),
+            i.to_vec(),
+            cat(&[i, b"-1"]),
+            cat(&[i, b"100000000"]),
+            cat(&[i, b"0x2"]),
+            cat(&[i, b"0x"]),
+            cat(&[i, b"f", rs, n, b"1"]),
+        ] {
+            records.push(format!("replace 0 N2a {}", hex(&src)));
+        }
+    }
+
+    /// Public serialization, clearing, replacement and default records.
+    fn public_records(records: &mut Vec<String>) {
+        let (encoded, internal) = (utf8(0xe000), utf8(0xe001));
+        let (e, i) = (&encoded[..], &internal[..]);
+        let rs: &[u8] = b"\x1e";
+        let parameter_sets: Vec<Vec<Token>> = vec![
+            vec![],
+            vec![Token::E],
+            vec![Token::E, Token::E],
+            vec![Token::E, s(b""), Token::E],
+            vec![Token::N(0), Token::N(u64::MAX)],
+            vec![s(b"a\x00b"), Token::E, s(&cat(&[b"a", rs, b"x"]))],
+            vec![s(b"\xffbad"), s(b"")],
+            vec![s(b"old"), Token::N(42), s(b"tail")],
+        ];
+        for id in [0_u64, 42, u64::from(u32::MAX)] {
+            for parameters in &parameter_sets {
+                id_records(records, id, parameters);
+            }
+        }
+        for prefix in [e, i, rs] {
+            records.push(format!("serialize 0 S{}", hex(prefix)));
+            records.push(format!("public-replace 0 0 S{} N1", hex(prefix)));
+            records.push(format!("public-replace 0 99 S{} N1", hex(prefix)));
+        }
+        records.push("serialize 0 D-1 D-2".into());
+        records.push("public-replace 0 0 D-2 D-1".into());
+        for index in [0, 99, u64::MAX] {
+            records.push(format!("default {index} N1"));
+        }
+    }
+
+    /// Serialize, clear and each public replacement for one id and parameter set.
+    fn id_records(records: &mut Vec<String>, id: u64, parameters: &[Token]) {
+        let arguments = parameters.iter().map(token).collect::<Vec<_>>().join(" ");
+        records.push(format!("serialize {id} {arguments}"));
+        records.push(format!("clear {id} {arguments}"));
+        let replacements = [Token::E, s(b""), s(b"n\x00w"), Token::N(15)];
+        let pairs = [0, 1, 2, 99].into_iter().flat_map(|index| {
+            replacements
+                .iter()
+                .map(move |replacement| (index, replacement))
+        });
+        for (index, replacement) in pairs {
+            let replacement = token(replacement);
+            records.push(format!(
+                "public-replace {id} {index} {replacement} {arguments}"
+            ));
+        }
+    }
+
+    /// One compile mode of the retired probe: `NDEBUG` and `WITH_ASSERT`.
+    #[derive(Clone, Copy)]
+    struct Mode {
+        ndebug: bool,
+        with_assert: bool,
+    }
+
+    /// A failed assertion: libc abort (stderr expression) or the `WITH_ASSERT` handler.
+    struct Failed(&'static str);
+
+    /// `StringParameter` from the probe's `Parameter(token)`; D<dec> converts int64 to uint64.
+    fn parameter(text: &str) -> Parameter<'_> {
+        match text.as_bytes()[0] {
+            b'E' => Parameter::Empty,
+            b'N' => Parameter::Integer(u64::from_str_radix(&text[1..], 16).unwrap()),
+            b'D' => Parameter::Integer(text[1..].parse::<i64>().unwrap().cast_unsigned()),
+            _ => unreachable!("string parameters are decoded by the caller"),
+        }
+    }
+
+    /// `LogRustEncodedDiagnostic`: the integer message, replayed against the original input.
+    fn log_message(diagnostic: &super::Diagnostic, input: &[u8]) -> Vec<u8> {
+        let part = &input[diagnostic.offset..diagnostic.offset + diagnostic.length];
+        if diagnostic.kind == 3 {
+            return [&b"Integer out of range: '"[..], part, b"'"].concat();
+        }
+        let label: &[u8] = if diagnostic.kind == 2 {
+            b"Integer out of range"
+        } else {
+            b"Cannot parse integer"
+        };
+        let tail = diagnostic.offset + diagnostic.length;
+        let tail = &input[tail..tail + diagnostic.tail_length];
+        [label, b": '", part, b"'+'", tail, b"'"].concat()
+    }
+
+    struct Run {
+        mode: Mode,
+        stdout: Vec<String>,
+    }
+
+    impl Run {
+        /// `CopyRustEncoded`: replay diagnostics against the input, assert, then copy.
+        fn copy(&mut self, output: &Output, input: &[u8]) -> Result<Vec<u8>, Failed> {
+            for diagnostic in output.diagnostics() {
+                // The probe's DebugPrint prints each message as hex.
+                self.stdout
+                    .push(format!("log {}", hex(&log_message(diagnostic, input))));
+            }
+            let view = output.view();
+            // Numeric assertions: !NDEBUG || WITH_ASSERT; string assertions: WITH_ASSERT.
+            // The numeric check asserts that the trailing record text is empty.
+            let start = view.assertion_offset.min(input.len());
+            let record = &input[start..input.len().min(start + view.assertion_length)];
+            if self.numeric() && view.assertion_kind == 1 && !record.is_empty() {
+                return Err(Failed(NUMERIC_ASSERTION));
+            }
+            // assert(len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && ...)).
+            if self.mode.with_assert
+                && view.assertion_kind == 2
+                && view.assertion_length != 0
+                && matches!(view.assertion_codepoint, 0xe000 | 0xe001 | 0x1e)
+            {
+                return Err(Failed(STRING_ASSERTION));
+            }
+            Ok(output.bytes.clone())
+        }
+
+        fn numeric(&self) -> bool {
+            !self.mode.ndebug || self.mode.with_assert
+        }
+
+        fn string(&self) -> bool {
+            self.mode.with_assert
+        }
+
+        /// The probe's `Execute` for one record.
+        fn execute(&mut self, command: &str) -> Result<(), Failed> {
+            let words: Vec<&str> = command.split_whitespace().collect();
+            let strings: Vec<Vec<u8>> = words
+                .iter()
+                .map(|word| {
+                    word.strip_prefix('S')
+                        .filter(|_| word.len() > 1)
+                        .map(unhex)
+                        .unwrap_or_default()
+                })
+                .collect();
+            let param = |index: usize| -> Parameter<'_> {
+                if words[index].starts_with('S') {
+                    Parameter::String(&strings[index])
+                } else {
+                    parameter(words[index])
+                }
+            };
+            let output = match words[0] {
+                "legacy" | "negative" => {
+                    let input = unhex(words[words.len() - 1]);
+                    let result = if words[0] == "legacy" {
+                        legacy(&input, words[1] == "1")
+                    } else {
+                        negatives(&input)
+                    };
+                    // The facade leaves the string unchanged unless the result applies.
+                    if result.apply {
+                        self.copy(&result, &input)?
+                    } else {
+                        input
+                    }
+                }
+                "replace" => {
+                    // EndianBufferReader::ToValue reads the string up to its terminator.
+                    let mut input = unhex(words[3]);
+                    input.truncate(input.iter().position(|&b| b == 0).unwrap_or(input.len()));
+                    let index = words[1].parse().unwrap();
+                    let result = replace(&input, index, param(2), self.numeric(), self.string());
+                    self.copy(&result, &input)?
+                }
+                "default" => {
+                    let index = words[1].parse().unwrap();
+                    let result = replace(&[], index, param(2), self.numeric(), self.string());
+                    self.copy(&result, &[])?
+                }
+                mode => {
+                    let id: u32 = words[1].parse().unwrap();
+                    let first = if mode == "public-replace" { 4 } else { 2 };
+                    let parameters: Vec<_> = (first..words.len()).map(param).collect();
+                    let encoded = self.copy(&serialize(id, &parameters, self.string()), &[])?;
+                    let (input, index, replacement) = match mode {
+                        "serialize" => {
+                            self.stdout.push(format!("out {}", hex(&encoded)));
+                            return Ok(());
+                        }
+                        // EncodedString::clear(), then ReplaceParam(0, 42).
+                        "clear" => (Vec::new(), 0, Parameter::Integer(42)),
+                        "public-replace" => (encoded, words[2].parse().unwrap(), param(3)),
+                        _ => unreachable!("unknown probe command {command}"),
+                    };
+                    let result = replace(&input, index, replacement, self.numeric(), self.string());
+                    self.copy(&result, &input)?
+                }
+            };
+            self.stdout.push(format!("out {}", hex(&output)));
+            Ok(())
+        }
+    }
+
+    /// Exit status, stdout lines, and a normalized libc assertion, as the oracle stores them.
+    fn outcome(command: &str, mode: Mode) -> String {
+        let mut run = Run {
+            mode,
+            stdout: Vec::new(),
+        };
+        let result = run.execute(command);
+        let mut text = match &result {
+            Ok(()) => "0".to_string(),
+            Err(_) if !mode.ndebug => "-6".to_string(),
+            Err(Failed(expression)) => {
+                // NDEBUG + WITH_ASSERT: the probe's AssertFailedError prints and exits 3.
+                run.stdout
+                    .push(format!("assert {}", hex(expression.as_bytes())));
+                "3".to_string()
+            }
+        };
+        for line in &run.stdout {
+            text += " ";
+            text += line;
+        }
+        if let (Err(Failed(expression)), false) = (&result, mode.ndebug) {
+            text += " abort ";
+            text += expression;
+        }
+        text
+    }
+
+    #[test]
+    fn encoded_operations_match_original() {
+        let modes = [
+            Mode {
+                ndebug: false,
+                with_assert: false,
+            },
+            Mode {
+                ndebug: false,
+                with_assert: true,
+            },
+            Mode {
+                ndebug: true,
+                with_assert: false,
+            },
+            Mode {
+                ndebug: true,
+                with_assert: true,
+            },
+        ];
+        let records = corpus();
+        assert_eq!(records.len(), 882);
+        let cases = records.iter().flat_map(|command| {
+            modes.iter().map(move |&mode| {
+                (
+                    format!(
+                        "{command} (NDEBUG {}, WITH_ASSERT {})",
+                        mode.ndebug, mode.with_assert
+                    ),
+                    outcome(command, mode),
+                )
+            })
+        });
+        let oracle = oracle::parse(ORACLE);
+        assert_eq!(oracle::check(&oracle, "encoded", cases), 3528);
+    }
+}

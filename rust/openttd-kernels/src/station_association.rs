@@ -10,12 +10,11 @@
 )]
 use crate::cargo_type::CargoTypes;
 use crate::newgrf_class::Identity;
+use crate::newgrf_station::NUM_STATIONSSPECS_PER_STATION;
 use crate::station_cmd::{RailSpec, SpecIndex};
 use crate::station_type::BaseStation;
 use crate::station_type::StationAnimationTriggers;
-use crate::tile_type::TileIndex;
 use std::ptr;
-const NUM_STATIONSSPECS_PER_STATION: usize = 255;
 #[repr(C)]
 pub struct Vacancy {
     spec: *const RailSpec,
@@ -41,6 +40,8 @@ pub struct Services {
     rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RailSpec),
     set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64),
 }
+/// `AllocateSpecToStation`: allocate a `StationSpec` to a station. `valid ==
+/// false` is `std::nullopt`, no free slot; the index is in `value` otherwise.
 pub(crate) fn allocate(
     s: *const Services,
     spec: *const RailSpec,
@@ -61,6 +62,7 @@ pub(crate) fn allocate(
     }
     let s = unsafe { &*s };
     let count = unsafe { (s.count)(st) };
+    // `i` is the original `uint i` reused by both loops.
     let mut i = 1;
     while i < count && i < NUM_STATIONSSPECS_PER_STATION {
         let slot = unsafe { (s.vacancy)(st, i) };
@@ -70,8 +72,10 @@ pub(crate) fn allocate(
         i += 1;
     }
     if i == NUM_STATIONSSPECS_PER_STATION {
-        // As a final effort with a full list, reuse the same spec. This can make
-        // slightly wrong-looking stations, but reaching the limit is unlikely.
+        // As final effort when the spec list is already full...
+        // try to find the same spec and return that one. This might
+        // result in slightly "wrong" (as per specs) looking stations,
+        // but it's fairly unlikely that one reaches the limit anyways.
         for i in 1..count.min(NUM_STATIONSSPECS_PER_STATION) {
             if unsafe { (s.spec)(st, i) } == spec {
                 return SpecIndex {
@@ -90,11 +94,15 @@ pub(crate) fn allocate(
         valid: true,
     }
 }
+/// `StationUpdateCachedTriggers`: update the cached animation trigger bitmask
+/// for a station.
 pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     let s = unsafe { &*native };
+    // `cached_anim_triggers = {}` and `cached_cargo_triggers = 0`.
     let mut anim = StationAnimationTriggers::EMPTY;
     let mut cargo = CargoTypes(0);
-    // Combine animation and cargo triggers for all station specs.
+    // Combine animation trigger bitmask for all station specs
+    // of this station.
     for i in 0..unsafe { (s.count)(st) } {
         let spec = unsafe { (s.spec)(st, i) };
         if spec.is_null() {
@@ -108,6 +116,8 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
         (s.set_cached)(st, anim.0, cargo.0);
     }
 }
+/// `AssignSpecToStation`: assign a previously allocated `StationSpec` spec
+/// index to a station.
 pub(crate) fn assign(
     native: *const Services,
     spec: *const RailSpec,
@@ -129,8 +139,10 @@ pub(crate) fn assign(
     }
     cache(native, st);
 }
+/// `DeallocateSpecFromStation`: deallocate a `StationSpec` from a station.
+/// Called when removing a single station tile.
 pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u8) {
-    // Spec index zero is the default and can never be freed.
+    // specindex of 0 (default) is never freeable
     if index == 0 {
         return;
     }
@@ -145,23 +157,20 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     let shared = unsafe { &*s.shared };
     let command = unsafe { &*(shared.station_commands)() };
     let map = shared.map();
-    // Check all station tiles for another use of this spec index.
-    for y in 0..area.h {
-        for x in 0..area.w {
-            let tile = TileIndex(area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y))));
-            if (animation.rail_belongs)(st, tile.0)
-                && (command.custom_rail_index)(tile.0) == u32::from(index)
-            {
-                return;
-            }
+    // Check all tiles over the station to check if the specindex is still in use
+    for tile in area.tiles(map) {
+        if (animation.rail_belongs)(st, tile)
+            && (command.custom_rail_index)(tile) == u32::from(index)
+        {
+            return;
         }
     }
-    // This spec index is no longer in use; clear its slot.
+    // This specindex is no longer in use, so deallocate it
     unsafe {
         (s.set_slot)(st, index, ptr::null(), 0, 0);
     }
     let count = unsafe { (s.count)(st) };
-    // If this was the highest index, shrink to the last remaining spec.
+    // If this was the highest spec index, reallocate
     if usize::from(index) == count - 1 {
         let mut num = count - 1;
         while num > 0 {
@@ -177,7 +186,7 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
         } else {
             unsafe {
                 (s.clear)(st);
-                (s.set_cached)(st, 0, 0);
+                (s.set_cached)(st, StationAnimationTriggers::EMPTY.0, CargoTypes(0).0);
             }
             return;
         }
@@ -205,12 +214,14 @@ pub unsafe extern "C" fn openttd_rust_station_spec_assign(
 pub unsafe extern "C" fn openttd_rust_station_spec_cache(s: *const Services, st: *mut BaseStation) {
     cache(s, st);
 }
+/// The speclist part of `AfterLoadStations`, for one station.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
     s: *const Services,
     st: *mut BaseStation,
 ) {
     let s = unsafe { &*s };
+    // Update the speclists of all stations to point to the currently loaded custom stations.
     for i in 0..unsafe { (s.count)(st) } {
         let key = unsafe { (s.key)(st, i) };
         if key.grfid == 0 {

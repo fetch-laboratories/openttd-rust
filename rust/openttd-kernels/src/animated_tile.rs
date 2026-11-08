@@ -197,7 +197,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
         MP_STATION => {
             if crate::map_func::World::new(s).station_has_rail(tile) {
                 openttd_rust_animate_station(tile);
-            } else if crate::station_map::is_airport(tile, s) {
+            } else if crate::station_map::is_airport_raw(tile, s) {
                 openttd_rust_animate_airport(tile);
             } else if crate::map_func::World::new(s).any_road_stop_tile(tile) {
                 openttd_rust_animate_roadstop(tile);

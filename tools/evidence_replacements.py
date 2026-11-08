@@ -6,6 +6,10 @@ Each migration/evidence-replacements/*.json is a list of per-file records:
  "observations": {"named behavior": ["rust:lib:module::tests::case",
                                        "scenario:default-scenario-name"]}}
 
+An optional "platform": "linux" registers the record's Rust checks only on
+Linux, for observations the original probe could make only there (for example
+glibc locale behaviour).
+
 Use rust:<lib or auto-discovered integration target>:<exact test name>.
 Every observation needs a destination. Review establishes that these names carry
 all original observations; registration establishes that they actually execute.
@@ -27,10 +31,19 @@ MANIFESTS = "migration/evidence-replacements/*.json"
 NATIVE_SUFFIXES = {".cpp", ".cc", ".cxx", ".h", ".hpp", ".inc"}
 
 
-class Replacement(TypedDict):
+class _RequiredReplacement(TypedDict):
     retires: list[str]
     oracle: str
     observations: dict[str, list[str]]
+
+
+# total=False keeps the configure-time import working on Python 3.10, which
+# lacks typing.NotRequired (Emscripten's container).
+class Replacement(_RequiredReplacement, total=False):
+    platform: str
+
+
+PLATFORMS = {"linux": 'CMAKE_SYSTEM_NAME STREQUAL "Linux"'}
 
 
 def load(root: Path = ROOT) -> list[Replacement]:
@@ -42,7 +55,8 @@ def load(root: Path = ROOT) -> list[Replacement]:
         for record in value:
             if (
                 not isinstance(record, dict)
-                or set(record) != {"retires", "oracle", "observations"}
+                or set(record) - {"platform"} != {"retires", "oracle", "observations"}
+                or record.get("platform", "linux") not in PLATFORMS
                 or not isinstance(record["retires"], list)
                 or not record["retires"]
                 or not all(isinstance(item, str) for item in record["retires"])
@@ -228,16 +242,28 @@ def cmake(records: Sequence[Replacement]) -> str:
     )
     lines.append("set(EVIDENCE_RETIRED_SOURCES " + " ".join(map(quote, sources)) + ")")
     for check in sorted(destinations(records)):
-        if check.startswith("rust:"):
-            lines.append(
-                f"add_test(NAME {quote(ctest_name(check))} COMMAND "
-                '"${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/evidence_replacements.py" '
-                '--cargo "${CARGO_EXECUTABLE}" --target-dir "${CMAKE_BINARY_DIR}/cargo" '
-                f"--run-rust {quote(check)})"
-            )
-            lines.append(
-                f"set_tests_properties({quote(ctest_name(check))} PROPERTIES RUN_SERIAL TRUE)"
-            )
+        if not check.startswith("rust:"):
+            continue
+        # A check is platform-limited only when every record naming it is.
+        platforms = {
+            record.get("platform")
+            for record in records
+            if check in destinations([record])
+        }
+        condition = PLATFORMS["linux"] if platforms == {"linux"} else None
+        if condition:
+            lines.append(f"if({condition})")
+        lines.append(
+            f"add_test(NAME {quote(ctest_name(check))} COMMAND "
+            '"${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/evidence_replacements.py" '
+            '--cargo "${CARGO_EXECUTABLE}" --target-dir "${CMAKE_BINARY_DIR}/cargo" '
+            f"--run-rust {quote(check)})"
+        )
+        lines.append(
+            f"set_tests_properties({quote(ctest_name(check))} PROPERTIES RUN_SERIAL TRUE)"
+        )
+        if condition:
+            lines.append("endif()")
     return "\n".join(lines) + "\n"
 
 

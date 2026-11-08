@@ -47,12 +47,12 @@ class InventoryTests(unittest.TestCase):
             self.recorded[key].pop()
             self.assertEqual(self.errors(), [])
             self.assertEqual(len(hi.removals(self.recorded, RECORDED)), 1)
-        del self.tree["comparisons"]["math-comparison.py"]
+        del self.tree["comparisons"]["widget-parser-comparison.py"]
         self.assertIn("comparison drivers differ", " ".join(self.errors()))
-        del self.recorded["comparisons"]["math-comparison.py"]
+        del self.recorded["comparisons"]["widget-parser-comparison.py"]
         self.assertEqual(self.errors(), [])
         removed = hi.removals(self.recorded, RECORDED)
-        self.assertIn("comparison math-comparison.py", removed)
+        self.assertIn("comparison widget-parser-comparison.py", removed)
 
     def test_zero_missing_or_fewer_cases_fail(self) -> None:
         recorded = {"a.py": ["A passed: 27 O0 records, 3 cases"]}
@@ -66,7 +66,9 @@ class InventoryTests(unittest.TestCase):
             self.assertRegex(" ".join(errors), message)
         more = {"a.py": ["A passed: 28 O0 records, 3 cases"]}
         self.assertEqual(hi.case_errors(recorded, more), [])
-        self.recorded["comparisons"]["math-comparison.py"] = ["M passed: 0 lines"]
+        self.recorded["comparisons"]["widget-parser-comparison.py"] = [
+            "M passed: 0 lines"
+        ]
         self.tree["comparisons"] = self.recorded["comparisons"]
         self.assertRegex(" ".join(self.errors()), "zero count")
 
@@ -249,6 +251,25 @@ class ReplacementTests(unittest.TestCase):
                     er.load(root)
             path.write_text(json.dumps([record]))
             self.assertEqual(er.load(root), [record])
+
+    def test_linux_only_records_register_rust_checks_only_on_linux(self) -> None:
+        record = self.record()
+        linux: er.Replacement = {**record, "platform": "linux"}
+        text = er.cmake([linux])
+        guarded = text.split('if(CMAKE_SYSTEM_NAME STREQUAL "Linux")\n', 1)
+        self.assertEqual(len(guarded), 2)
+        self.assertIn(er.ctest_name(self.RUST), guarded[1].split("endif()", 1)[0])
+        # A check another record runs everywhere stays unconditional.
+        self.assertNotIn("if(", er.cmake([linux, record]))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "migration/evidence-replacements/crypto.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps([{**record, "platform": "windows"}]))
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                er.load(root)
+            path.write_text(json.dumps([linux]))
+            self.assertEqual(er.load(root), [linux])
 
     def test_destinations_must_be_default_scenarios_or_real_rust_targets(self) -> None:
         for check in (

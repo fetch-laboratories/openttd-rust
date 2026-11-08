@@ -24,6 +24,11 @@ pub struct TileArea {
     pub h: u16,
 }
 impl TileArea {
+    /// `OrthogonalTileArea(tile, w, h)`: a rectangle with `tile` as its north corner.
+    #[must_use]
+    pub const fn new(tile: u32, w: u16, h: u16) -> Self {
+        Self { tile, w, h }
+    }
     /// `OrthogonalTileArea(start, end)`, spanning both corners in either order.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]

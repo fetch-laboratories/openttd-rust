@@ -136,7 +136,7 @@ impl crate::map_func::World<'_> {
             {
                 return self.rail_type(t);
             }
-            MP_STATION if self.has_station_rail(t) => return self.rail_type(t),
+            MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
             MP_TUNNELBRIDGE
                 if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
                     &self.types,

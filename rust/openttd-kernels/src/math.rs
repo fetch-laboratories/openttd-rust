@@ -79,3 +79,93 @@ pub fn soft_clamp(value: u64, min: u64, max: u64, width: u8, is_signed: bool) ->
         value & narrow_mask
     }
 }
+
+#[cfg(test)]
+mod comparison_tests {
+    //! Original-only `math-comparison.cpp` observations (#736 U); see the oracle header.
+    use super::{int_sqrt, soft_clamp};
+    use crate::oracle;
+
+    const ORACLE: &str = include_str!("math/comparison-oracle.txt");
+
+    /// The candidate `SoftClamp<T>` facade: `static_cast<uint64_t>` arguments, then the
+    /// narrow result converted to `T` and emitted as `static_cast<uint64_t>`.
+    fn soft(value: i128, min: i128, max: i128, width: u8, is_signed: bool) -> u64 {
+        let bits = |v: i128| {
+            v.to_le_bytes()[..8]
+                .iter()
+                .rev()
+                .fold(0_u64, |a, &b| a << 8 | u64::from(b))
+        };
+        let result = soft_clamp(bits(value), bits(min), bits(max), width, is_signed);
+        if is_signed && width < 64 && result >> (width - 1) & 1 != 0 {
+            result | u64::MAX << width
+        } else {
+            result
+        }
+    }
+
+    #[test]
+    fn int_sqrt_and_soft_clamp_match_original() {
+        let o = oracle::parse(ORACLE);
+        let route = [
+            ("IntSqrt(25)", u64::from(int_sqrt(25))),
+            (
+                "SoftClamp<int>(0, 1500, 1000)",
+                soft(0, 1500, 1000, 32, true),
+            ),
+        ];
+        oracle::check(
+            &o,
+            "route",
+            route.map(|(i, v)| (i.to_owned(), v.to_string())),
+        );
+
+        let roots = (0..=65535_u64).flat_map(|k| {
+            let square = k * k;
+            [square, square + k, square + k + 1, square.saturating_sub(1)]
+        });
+        let roots: Vec<u64> = roots
+            .map(|v| u64::from(int_sqrt(u32::try_from(v).expect("every probe value fits"))))
+            .collect();
+        oracle::check_rows(&o, "roots", [("k in 0..=65535".to_owned(), roots, 4)]);
+        let max = u64::from(int_sqrt(u32::MAX));
+        oracle::check(&o, "root-max", [("UINT32_MAX".to_owned(), max.to_string())]);
+
+        let mut rows = Vec::new();
+        for (width, is_signed) in [8, 16, 32, 64]
+            .into_iter()
+            .flat_map(|w| [(w, true), (w, false)])
+        {
+            let (low, high) = if is_signed {
+                (-(1_i128 << (width - 1)), (1_i128 << (width - 1)) - 1)
+            } else {
+                (0, (1_i128 << width) - 1)
+            };
+            // T(-3), T(-1) wrap for unsigned types, exactly as the probe's casts.
+            let wrap = |v: i128| {
+                if is_signed {
+                    v
+                } else {
+                    v.rem_euclid(1 << width)
+                }
+            };
+            let bounds = [low, low + 1, -3, -1, 0, 1, 3, high - 1, high].map(wrap);
+            for min in bounds {
+                for max in bounds {
+                    let row = bounds.map(|value| soft(value, min, max, width, is_signed));
+                    let inputs = format!("width {width} signed {is_signed} min {min} max {max}");
+                    rows.push((inputs, row.to_vec(), 1));
+                }
+            }
+        }
+        oracle::check_rows(&o, "soft", rows);
+
+        // The bounded narrow signed promotion corner: every int8 max below min.
+        let narrow = (-127..=127_i128).map(|min| {
+            let row = (-128..min).map(|max| soft(0, min, max, 8, true)).collect();
+            (format!("SoftClamp<int8_t>(0, {min}, max < min)"), row, 2)
+        });
+        oracle::check_rows(&o, "narrow", narrow);
+    }
+}
