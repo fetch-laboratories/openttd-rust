@@ -60,13 +60,9 @@ SANITIZE = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-n
 
 
 def build(
-    out: Path,
-    name: str,
-    label: str,
-    source: Path,
-    section: str,
-    flags: Sequence[probe.Argument],
+    out: Path, name: str, label: str, section: str, flags: Sequence[probe.Argument]
 ) -> Path:
+    source = dict(probe.LABELS)[label]
     binary = out / f"{label}-{name}"
     command = [
         probe.compiler(),
@@ -128,7 +124,6 @@ def encoded(out: Path) -> int:
                 out,
                 f"encoded-{mode}",
                 label,
-                source,
                 "ENCODED",
                 ["-O0", *sources, *flags],
             )
@@ -146,7 +141,6 @@ def encoded(out: Path) -> int:
         out,
         "encoded-sanitized",
         "candidate",
-        probe.ROOT,
         "ENCODED",
         ["-O0", *sources, "-DNDEBUG", *SANITIZE],
     )
@@ -169,7 +163,7 @@ def main() -> None:
                 *defines,
                 *(source / "src" / name for name in sources),
             ]
-            binary = build(out, section.lower(), label, source, section, flags)
+            binary = build(out, section.lower(), label, section, flags)
             probe.execute([binary], binary, stderr="merged")
             builds += 1
     builds += encoded(out)

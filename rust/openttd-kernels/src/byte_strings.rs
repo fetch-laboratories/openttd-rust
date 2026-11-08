@@ -278,8 +278,6 @@ crate::abi::layouts! {
 mod comparison_tests {
     //! Original-only `byte-strings-comparison.cpp` observations (#736 U) through the
     //! production exports, under each captured glibc locale; see the oracle header.
-    #![allow(unsafe_code)] // libc locale switching and the production exports.
-
     use super::{
         openttd_rust_bytes_case, openttd_rust_bytes_hex_decode, openttd_rust_bytes_hex_encode,
         openttd_rust_bytes_lower, openttd_rust_bytes_trim,
@@ -291,10 +289,6 @@ mod comparison_tests {
 
     const ORACLE: &str = include_str!("byte_strings/comparison-oracle.txt");
     const LC_ALL: c_int = 6;
-
-    unsafe extern "C" {
-        fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
-    }
 
     fn token(value: &[u8]) -> String {
         if value.is_empty() {
@@ -467,145 +461,156 @@ mod comparison_tests {
         })
     }
 
-    /// Candidate `RustByteCase`: C++ computes the libstdc++ `string_view::compare` length
-    /// order (difference clamped to int) for mode 0; Rust maps and compares the bytes.
-    fn case(left: &[u8], right: &[u8], mode: u8, signed: bool) -> i32 {
-        let length_order = if mode != 0 {
-            0
-        } else if left.len() >= right.len() {
-            i32::try_from(left.len() - right.len()).unwrap_or(i32::MAX)
-        } else {
-            i32::try_from(right.len() - left.len()).map_or(i32::MIN, |d| -d)
-        };
-        // SAFETY: Live immutable spans for the call.
-        unsafe {
-            openttd_rust_bytes_case(
-                left.as_ptr(),
-                left.len(),
-                right.as_ptr(),
-                right.len(),
-                mode,
-                u8::from(signed),
-                length_order,
-            )
-        }
-    }
+    /// The test's only unsafe calls: libc locale switching and the production exports over
+    /// this test's live buffers.
+    struct Native;
 
-    fn execute(record: &str, signed: bool) -> String {
-        let fields: Vec<&str> = record.split(' ').collect();
-        let mut left = from_hex(fields[1]);
-        match fields[0] {
-            "pair" => {
-                let right = from_hex(fields[2]);
-                let r: Vec<i32> = (0..5)
-                    .map(|mode| case(&left, &right, mode, signed))
-                    .collect();
-                // No ICU in the probe build: StrNaturalContainsIgnoreCase is StrContainsIgnoreCase.
-                format!("{} {} {} {} {} {}", r[0], r[1], r[2], r[3], r[4], r[4])
-            }
-            "lower" => {
-                let offset = fields[2].parse().unwrap();
-                // SAFETY: Exclusive initialized span; offset <= length.
-                let changed =
-                    unsafe { openttd_rust_bytes_lower(left.as_mut_ptr(), left.len(), offset) };
-                format!("{changed} {}", to_hex(&left))
-            }
-            "encode" => {
-                let mut text = vec![0; left.len() * 2];
-                // SAFETY: Disjoint input and twice-sized output.
-                unsafe {
-                    openttd_rust_bytes_hex_encode(left.as_ptr(), left.len(), text.as_mut_ptr());
-                }
-                to_hex(&text)
-            }
-            "decode" => {
-                let size: usize = fields[2].parse().unwrap();
-                let mut backing = vec![0xa5_u8; size + 2];
-                // SAFETY: Readable hex; the writable span lies strictly inside the backing.
-                let result = unsafe {
-                    openttd_rust_bytes_hex_decode(
-                        left.as_ptr(),
-                        left.len(),
-                        backing.as_mut_ptr().add(1),
-                        size,
-                    )
-                };
-                format!("{result} {}", to_hex(&backing))
-            }
-            "overlap" => {
-                let n: Vec<usize> = fields[2..6].iter().map(|f| f.parse().unwrap()).collect();
-                let base = left.as_mut_ptr();
-                // SAFETY: Overlapping caller-valid views over one live initialized allocation.
-                let result = unsafe {
-                    openttd_rust_bytes_hex_decode(base.add(n[0]), n[1], base.add(n[2]), n[3])
-                };
-                format!("{result} {}", to_hex(&left))
-            }
-            "trim" => {
-                let set = from_hex(fields[2]);
-                // A "-" token is the default null view.
-                let data = if fields[1] == "-" {
-                    std::ptr::null()
-                } else {
-                    left.as_ptr()
-                };
-                // SAFETY: Two immutable spans (null only when empty).
-                let r =
-                    unsafe { openttd_rust_bytes_trim(data, left.len(), set.as_ptr(), set.len()) };
-                if r.length == 0 {
-                    "1 - 0 -".to_owned()
-                } else {
-                    format!(
-                        "0 {} {} {}",
-                        r.offset,
-                        r.length,
-                        to_hex(&left[r.offset..r.offset + r.length])
-                    )
-                }
-            }
-            "inplace" => {
-                // StringConsumer::WHITESPACE_NO_NEWLINE.
-                let set = b"\t\x0b\x0c\r ";
-                // SAFETY: Two immutable spans.
-                let r = unsafe {
-                    openttd_rust_bytes_trim(left.as_ptr(), left.len(), set.as_ptr(), set.len())
-                };
-                let kept = if r.length == 0 {
-                    &[][..]
-                } else {
-                    &left[r.offset..r.offset + r.length]
-                };
-                to_hex(kept)
-            }
-            "null" => {
-                let null = std::ptr::null();
-                // SAFETY: Null empty spans are permitted by every export.
-                let (cmp, flags, decoded, trim) = unsafe {
-                    (
-                        openttd_rust_bytes_case(null, 0, null, 0, 0, u8::from(signed), 0),
-                        [1, 2, 3, 4].map(|mode| {
-                            openttd_rust_bytes_case(null, 0, null, 0, mode, u8::from(signed), 0)
-                        }),
-                        openttd_rust_bytes_hex_decode(null, 0, std::ptr::null_mut(), 0),
-                        openttd_rust_bytes_trim(null, 0, null, 0),
-                    )
-                };
-                format!(
-                    "{cmp} {} {} {} {} {decoded} {}",
-                    flags[0],
-                    flags[1],
-                    flags[2],
-                    flags[3],
-                    u8::from(trim.length == 0)
+    #[allow(unsafe_code)]
+    impl Native {
+        /// Candidate `RustByteCase`: C++ computes the libstdc++ `string_view::compare` length
+        /// order (difference clamped to int) for mode 0; Rust maps and compares the bytes.
+        fn case(left: &[u8], right: &[u8], mode: u8, signed: bool) -> i32 {
+            let length_order = if mode != 0 {
+                0
+            } else if left.len() >= right.len() {
+                i32::try_from(left.len() - right.len()).unwrap_or(i32::MAX)
+            } else {
+                i32::try_from(right.len() - left.len()).map_or(i32::MIN, |d| -d)
+            };
+            // SAFETY: Live immutable spans for the call.
+            unsafe {
+                openttd_rust_bytes_case(
+                    left.as_ptr(),
+                    left.len(),
+                    right.as_ptr(),
+                    right.len(),
+                    mode,
+                    u8::from(signed),
+                    length_order,
                 )
             }
-            other => panic!("unknown record {other}"),
         }
-    }
 
-    fn set_locale(name: &CStr) -> bool {
-        // SAFETY: NUL-terminated name; this module's only test switches the C locale.
-        !unsafe { setlocale(LC_ALL, name.as_ptr()) }.is_null()
+        fn execute(record: &str, signed: bool) -> String {
+            let fields: Vec<&str> = record.split(' ').collect();
+            let mut left = from_hex(fields[1]);
+            match fields[0] {
+                "pair" => {
+                    let right = from_hex(fields[2]);
+                    let r: Vec<i32> = (0..5)
+                        .map(|mode| Self::case(&left, &right, mode, signed))
+                        .collect();
+                    // No ICU in the probe build: StrNaturalContainsIgnoreCase is StrContainsIgnoreCase.
+                    format!("{} {} {} {} {} {}", r[0], r[1], r[2], r[3], r[4], r[4])
+                }
+                "lower" => {
+                    let offset = fields[2].parse().unwrap();
+                    // SAFETY: Exclusive initialized span; offset <= length.
+                    let changed =
+                        unsafe { openttd_rust_bytes_lower(left.as_mut_ptr(), left.len(), offset) };
+                    format!("{changed} {}", to_hex(&left))
+                }
+                "encode" => {
+                    let mut text = vec![0; left.len() * 2];
+                    // SAFETY: Disjoint input and twice-sized output.
+                    unsafe {
+                        openttd_rust_bytes_hex_encode(left.as_ptr(), left.len(), text.as_mut_ptr());
+                    }
+                    to_hex(&text)
+                }
+                "decode" => {
+                    let size: usize = fields[2].parse().unwrap();
+                    let mut backing = vec![0xa5_u8; size + 2];
+                    // SAFETY: Readable hex; the writable span lies strictly inside the backing.
+                    let result = unsafe {
+                        openttd_rust_bytes_hex_decode(
+                            left.as_ptr(),
+                            left.len(),
+                            backing.as_mut_ptr().add(1),
+                            size,
+                        )
+                    };
+                    format!("{result} {}", to_hex(&backing))
+                }
+                "overlap" => {
+                    let n: Vec<usize> = fields[2..6].iter().map(|f| f.parse().unwrap()).collect();
+                    let base = left.as_mut_ptr();
+                    // SAFETY: Overlapping caller-valid views over one live initialized allocation.
+                    let result = unsafe {
+                        openttd_rust_bytes_hex_decode(base.add(n[0]), n[1], base.add(n[2]), n[3])
+                    };
+                    format!("{result} {}", to_hex(&left))
+                }
+                "trim" => {
+                    let set = from_hex(fields[2]);
+                    // A "-" token is the default null view.
+                    let data = if fields[1] == "-" {
+                        std::ptr::null()
+                    } else {
+                        left.as_ptr()
+                    };
+                    // SAFETY: Two immutable spans (null only when empty).
+                    let r = unsafe {
+                        openttd_rust_bytes_trim(data, left.len(), set.as_ptr(), set.len())
+                    };
+                    if r.length == 0 {
+                        "1 - 0 -".to_owned()
+                    } else {
+                        format!(
+                            "0 {} {} {}",
+                            r.offset,
+                            r.length,
+                            to_hex(&left[r.offset..r.offset + r.length])
+                        )
+                    }
+                }
+                "inplace" => {
+                    // StringConsumer::WHITESPACE_NO_NEWLINE.
+                    let set = b"\t\x0b\x0c\r ";
+                    // SAFETY: Two immutable spans.
+                    let r = unsafe {
+                        openttd_rust_bytes_trim(left.as_ptr(), left.len(), set.as_ptr(), set.len())
+                    };
+                    let kept = if r.length == 0 {
+                        &[][..]
+                    } else {
+                        &left[r.offset..r.offset + r.length]
+                    };
+                    to_hex(kept)
+                }
+                "null" => {
+                    let null = std::ptr::null();
+                    // SAFETY: Null empty spans are permitted by every export.
+                    let (cmp, flags, decoded, trim) = unsafe {
+                        (
+                            openttd_rust_bytes_case(null, 0, null, 0, 0, u8::from(signed), 0),
+                            [1, 2, 3, 4].map(|mode| {
+                                openttd_rust_bytes_case(null, 0, null, 0, mode, u8::from(signed), 0)
+                            }),
+                            openttd_rust_bytes_hex_decode(null, 0, std::ptr::null_mut(), 0),
+                            openttd_rust_bytes_trim(null, 0, null, 0),
+                        )
+                    };
+                    format!(
+                        "{cmp} {} {} {} {} {decoded} {}",
+                        flags[0],
+                        flags[1],
+                        flags[2],
+                        flags[3],
+                        u8::from(trim.length == 0)
+                    )
+                }
+                other => panic!("unknown record {other}"),
+            }
+        }
+
+        fn set_locale(name: &CStr) -> bool {
+            unsafe extern "C" {
+                fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
+            }
+            // SAFETY: NUL-terminated name; this module's only test switches the C locale.
+            !unsafe { setlocale(LC_ALL, name.as_ptr()) }.is_null()
+        }
     }
 
     #[test]
@@ -614,7 +619,7 @@ mod comparison_tests {
         let records = corpus();
         assert_eq!(records.len(), 3699);
         for locale in [c"C", c"POSIX", c"C.utf8", c"en_US.utf8"] {
-            if !set_locale(locale) {
+            if !Native::set_locale(locale) {
                 assert!(
                     locale != c"C" && locale != c"POSIX",
                     "required locale {locale:?} missing"
@@ -623,7 +628,10 @@ mod comparison_tests {
                 continue;
             }
             let actual = records.iter().map(|record| {
-                let (signed, unsigned) = (execute(record, true), execute(record, false));
+                let (signed, unsigned) = (
+                    Native::execute(record, true),
+                    Native::execute(record, false),
+                );
                 let output = if signed == unsigned {
                     signed
                 } else {
@@ -633,6 +641,6 @@ mod comparison_tests {
             });
             oracle::check(&o, "records", actual.collect::<Vec<_>>());
         }
-        assert!(set_locale(c"C"));
+        assert!(Native::set_locale(c"C"));
     }
 }

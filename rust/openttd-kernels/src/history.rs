@@ -284,7 +284,7 @@ mod comparison_tests {
     //! Original-only `history-comparison.cpp` observations (#736 U); see the oracle header.
     //! `IsValidHistory` and the industry/town `GetHistory` queries call the production Rust
     //! bodies; the uint16 queries reuse the same generic Rust `get` with the probe's reducer.
-    use super::{HistoryElement, HistoryRange, update};
+    use super::{Descriptor, HistoryElement, HistoryRange, update};
     use crate::industry::Pair;
     use crate::oracle;
     use crate::town::SuppliedHistory;
@@ -327,42 +327,53 @@ mod comparison_tests {
         }
     }
 
-    #[allow(unsafe_code)]
-    fn is_valid(hr: &HistoryRange, mask: u64, age: u32) -> bool {
-        // SAFETY: Every chain built here stays live for the test.
-        unsafe { hr.is_valid(mask, age) }
-    }
+    /// The test's only unsafe calls: the production chain queries, over range chains that
+    /// each test keeps live for its whole run.
+    struct Live;
 
     #[allow(unsafe_code)]
-    fn get<T: HistoryElement>(
-        history: &[T; RECORDS],
-        mask: u64,
-        hr: &HistoryRange,
-        age: u32,
-        result: &mut T,
-    ) -> Option<bool> {
-        // SAFETY: Live chain, initialized array and a distinct writable result.
-        unsafe { hr.get(history.as_ptr(), mask, age, result) }
+    impl Live {
+        fn child(hr: &HistoryRange) -> Option<&HistoryRange> {
+            // SAFETY: Every chain built here stays live for the test.
+            unsafe { hr.hr.as_ref() }
+        }
+
+        fn descriptor(hr: &HistoryRange) -> Descriptor {
+            // SAFETY: Live chain for the descriptor read.
+            unsafe { hr.descriptor() }
+        }
+
+        fn is_valid(hr: &HistoryRange, mask: u64, age: u32) -> bool {
+            // SAFETY: Every chain built here stays live for the test.
+            unsafe { hr.is_valid(mask, age) }
+        }
+
+        fn get<T: HistoryElement>(
+            history: &[T; RECORDS],
+            mask: u64,
+            hr: &HistoryRange,
+            age: u32,
+            result: &mut T,
+        ) -> Option<bool> {
+            // SAFETY: Live chain, initialized array and a distinct writable result.
+            unsafe { hr.get(history.as_ptr(), mask, age, result) }
+        }
     }
 
-    #[allow(unsafe_code)]
+    /// Subdivisions update first, as the original `UpdateValidHistory` recursion.
     fn update_chain(mask: u64, hr: &HistoryRange, month: u32) -> u64 {
-        // SAFETY: The live chain; subdivisions update first, as the original recursion.
-        let mask = unsafe { hr.hr.as_ref() }.map_or(mask, |child| update_chain(mask, child, month));
-        // SAFETY: Live chain for the descriptor read.
-        update(mask, unsafe { hr.descriptor() }, month)
+        let mask = Live::child(hr).map_or(mask, |child| update_chain(mask, child, month));
+        update(mask, Live::descriptor(hr), month)
     }
 
     /// The original `RotateHistory` template (unchanged C++), with the production reducers.
-    #[allow(unsafe_code)]
     fn rotate<T: HistoryElement>(
         history: &mut [T; RECORDS],
         mask: u64,
         hr: &HistoryRange,
         month: u32,
     ) {
-        // SAFETY: The live chain.
-        if let Some(child) = unsafe { hr.hr.as_ref() } {
+        if let Some(child) = Live::child(hr) {
             rotate(history, mask, child, month);
         }
         if !month.is_multiple_of(u32::from(hr.total_division)) {
@@ -457,9 +468,9 @@ mod comparison_tests {
                         u32::MAX,
                         0x4000_0000,
                     ] {
-                        let first = u8::from(is_valid(hr, mask, age));
+                        let first = u8::from(Live::is_valid(hr, mask, age));
                         let mut result = 999_u16;
-                        let output = match get(&history, mask, hr, age, &mut result) {
+                        let output = match Live::get(&history, mask, hr, age, &mut result) {
                             Some(valid) => format!("{first} {} {result}", u8::from(valid)),
                             None => format!("{first} fatal {result}"),
                         };
@@ -479,7 +490,7 @@ mod comparison_tests {
         let wrapped = (0..12).map(|month| {
             set_month(month);
             let mut result = 999_u16;
-            let valid = get(&plain, u64::MAX, &quarter, 0x5555_5556, &mut result);
+            let valid = Live::get(&plain, u64::MAX, &quarter, 0x5555_5556, &mut result);
             let output = valid.map_or_else(
                 || "fatal".to_owned(),
                 |v| format!("{} {result}", u8::from(v)),
@@ -514,9 +525,9 @@ mod comparison_tests {
             for age in [0, 1, 4, 5, 23] {
                 let (mut p, mut a, mut t) =
                     (Pair::default(), Pair::default(), SuppliedHistory::default());
-                let vp = u8::from(get(&produced, 4, year, age, &mut p).expect("in range"));
-                let va = u8::from(get(&accepted, 4, year, age, &mut a).expect("in range"));
-                let vt = u8::from(get(&supplied, 4, year, age, &mut t).expect("in range"));
+                let vp = u8::from(Live::get(&produced, 4, year, age, &mut p).expect("in range"));
+                let va = u8::from(Live::get(&accepted, 4, year, age, &mut a).expect("in range"));
+                let vt = u8::from(Live::get(&supplied, 4, year, age, &mut t).expect("in range"));
                 production.push((
                     format!("month {month} age {age}"),
                     format!(
@@ -551,7 +562,7 @@ mod comparison_tests {
         }
         set_month(0);
         let mut nested = Pair::default();
-        get(&grouped, u64::MAX, year, 0, &mut nested).expect("in range");
+        Live::get(&grouped, u64::MAX, year, 0, &mut nested).expect("in range");
         let flattened = crate::industry::policy::sum_history(&grouped[1..13]);
         let grouping = format!("{} {}", nested.first, flattened.first);
         oracle::check(o, "grouping", [("nested year 0".to_owned(), grouping)]);
@@ -573,13 +584,14 @@ mod comparison_tests {
                         .flat_map(|i| {
                             let age = 5 - i;
                             let event = if present {
-                                if get(&filled, mask, quarter, age, &mut result).expect("in range")
+                                if Live::get(&filled, mask, quarter, age, &mut result)
+                                    .expect("in range")
                                 {
                                     format!("F:{result}")
                                 } else {
                                     "I".to_owned()
                                 }
-                            } else if is_valid(quarter, mask, age) {
+                            } else if Live::is_valid(quarter, mask, age) {
                                 "Z".to_owned()
                             } else {
                                 "I".to_owned()
