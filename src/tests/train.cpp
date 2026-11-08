@@ -73,12 +73,12 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	auto table = OpenTTDTrainServices{};
 	table.acc_model = [](OpenTTDTrainHandle) noexcept { return _train_speed_model; };
 	table.is_station = [](OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
-	table.bridge_speed = [](OpenTTDTrainHandle, uint32_t tile) noexcept -> uint64_t {
+	table.order_max_speed = [](OpenTTDTrainHandle) noexcept -> uint64_t { return 160; };
+	OpenTTDSharedServices shared{};
+	shared.bridge_speed = [](uint32_t tile) noexcept -> uint16_t {
 		CHECK(tile == 23);
 		return 90;
 	};
-	table.order_max_speed = [](OpenTTDTrainHandle) noexcept -> uint64_t { return 160; };
-	const OpenTTDSharedServices shared{};
 	struct Case { TrackBits track; uint8_t status; int speed; };
 	for (uint64_t model : {0, 1}) {
 		_train_speed_model = model;

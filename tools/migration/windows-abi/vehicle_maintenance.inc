@@ -133,7 +133,6 @@ static void VehicleSchedulerBoundary()
 {
 	using Status = decltype(std::declval<Vehicle>().GetVehStatus());
 	static_assert(std::is_same_v<Status::BaseType, uint8_t>);
-	static_assert(std::is_same_v<decltype(RustVehicleStatusAddress(nullptr)), const uint8_t *>);
 	Status status;
 	const uint8_t *address = status.base_address();
 	static_assert(std::is_same_v<decltype(status.base_address()), const uint8_t *>);

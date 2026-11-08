@@ -2,7 +2,7 @@
 //! Accessors for industry tiles and the industry graphics identities (`industry_map.h`).
 #![allow(unsafe_code)]
 use crate::industry::tile::ShellHandle;
-use crate::industry_type::{IndustryID, IndustryType};
+use crate::industry_type::{IndustryGfx, IndustryID, IndustryType};
 use crate::tile_type::{TileIndex, TileType};
 
 /// Raw compatibility value for the water check marker.
@@ -114,70 +114,92 @@ impl IndustryGraphics {
     pub const GFX_WATERTILE_SPECIALCHECK: Self = Self(255);
 }
 
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_COAL_MINE_TOWER_NOT_ANIMATED: u16 =
-    IndustryGraphics::GFX_COAL_MINE_TOWER_NOT_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_COAL_MINE_TOWER_ANIMATED: u16 =
-    IndustryGraphics::GFX_COAL_MINE_TOWER_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_POWERPLANT_CHIMNEY: u16 = IndustryGraphics::GFX_POWERPLANT_CHIMNEY.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_POWERPLANT_SPARKS: u16 = IndustryGraphics::GFX_POWERPLANT_SPARKS.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_OILRIG_1: u16 = IndustryGraphics::GFX_OILRIG_1.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_OILWELL_NOT_ANIMATED: u16 = IndustryGraphics::GFX_OILWELL_NOT_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_OILWELL_ANIMATED_1: u16 = IndustryGraphics::GFX_OILWELL_ANIMATED_1.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_OILWELL_ANIMATED_3: u16 = IndustryGraphics::GFX_OILWELL_ANIMATED_3.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_COPPER_MINE_TOWER_NOT_ANIMATED: u16 =
-    IndustryGraphics::GFX_COPPER_MINE_TOWER_NOT_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_COPPER_MINE_TOWER_ANIMATED: u16 =
-    IndustryGraphics::GFX_COPPER_MINE_TOWER_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_COPPER_MINE_CHIMNEY: u16 = IndustryGraphics::GFX_COPPER_MINE_CHIMNEY.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_GOLD_MINE_TOWER_NOT_ANIMATED: u16 =
-    IndustryGraphics::GFX_GOLD_MINE_TOWER_NOT_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_GOLD_MINE_TOWER_ANIMATED: u16 =
-    IndustryGraphics::GFX_GOLD_MINE_TOWER_ANIMATED.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_TOY_FACTORY: u16 = IndustryGraphics::GFX_TOY_FACTORY.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_1: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_1.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_8: u16 =
-    IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_8.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_BUBBLE_GENERATOR: u16 = IndustryGraphics::GFX_BUBBLE_GENERATOR.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_BUBBLE_CATCHER: u16 = IndustryGraphics::GFX_BUBBLE_CATCHER.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_TOFFEE_QUARRY: u16 = IndustryGraphics::GFX_TOFFEE_QUARRY.0 as u16;
-
-/// Native graphics value promoted to `IndustryGfx` for integer matching.
-pub const GFX_SUGAR_MINE_SIEVE: u16 = IndustryGraphics::GFX_SUGAR_MINE_SIEVE.0 as u16;
+/// `IndustryGraphics` values promoted to `IndustryGfx`, as the original compares and
+/// switches on them; the promotion widens every value unchanged.
+impl IndustryGfx {
+    /// `GFX_COAL_MINE_TOWER_NOT_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_COAL_MINE_TOWER_NOT_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_COAL_MINE_TOWER_NOT_ANIMATED.0 as u16);
+    /// `GFX_COAL_MINE_TOWER_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_COAL_MINE_TOWER_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_COAL_MINE_TOWER_ANIMATED.0 as u16);
+    /// `GFX_POWERPLANT_CHIMNEY` promoted to `IndustryGfx`.
+    pub const GFX_POWERPLANT_CHIMNEY: Self =
+        Self(IndustryGraphics::GFX_POWERPLANT_CHIMNEY.0 as u16);
+    /// `GFX_POWERPLANT_SPARKS` promoted to `IndustryGfx`.
+    pub const GFX_POWERPLANT_SPARKS: Self = Self(IndustryGraphics::GFX_POWERPLANT_SPARKS.0 as u16);
+    /// `GFX_OILRIG_1` promoted to `IndustryGfx`.
+    pub const GFX_OILRIG_1: Self = Self(IndustryGraphics::GFX_OILRIG_1.0 as u16);
+    /// `GFX_OILRIG_2` promoted to `IndustryGfx`.
+    pub const GFX_OILRIG_2: Self = Self(IndustryGraphics::GFX_OILRIG_2.0 as u16);
+    /// `GFX_OILRIG_3` promoted to `IndustryGfx`.
+    pub const GFX_OILRIG_3: Self = Self(IndustryGraphics::GFX_OILRIG_3.0 as u16);
+    /// `GFX_OILRIG_4` promoted to `IndustryGfx`.
+    pub const GFX_OILRIG_4: Self = Self(IndustryGraphics::GFX_OILRIG_4.0 as u16);
+    /// `GFX_OILRIG_5` promoted to `IndustryGfx`.
+    pub const GFX_OILRIG_5: Self = Self(IndustryGraphics::GFX_OILRIG_5.0 as u16);
+    /// `GFX_OILWELL_NOT_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_OILWELL_NOT_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_OILWELL_NOT_ANIMATED.0 as u16);
+    /// `GFX_OILWELL_ANIMATED_1` promoted to `IndustryGfx`.
+    pub const GFX_OILWELL_ANIMATED_1: Self =
+        Self(IndustryGraphics::GFX_OILWELL_ANIMATED_1.0 as u16);
+    /// `GFX_OILWELL_ANIMATED_2` promoted to `IndustryGfx`.
+    pub const GFX_OILWELL_ANIMATED_2: Self =
+        Self(IndustryGraphics::GFX_OILWELL_ANIMATED_2.0 as u16);
+    /// `GFX_OILWELL_ANIMATED_3` promoted to `IndustryGfx`.
+    pub const GFX_OILWELL_ANIMATED_3: Self =
+        Self(IndustryGraphics::GFX_OILWELL_ANIMATED_3.0 as u16);
+    /// `GFX_COPPER_MINE_TOWER_NOT_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_COPPER_MINE_TOWER_NOT_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_COPPER_MINE_TOWER_NOT_ANIMATED.0 as u16);
+    /// `GFX_COPPER_MINE_TOWER_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_COPPER_MINE_TOWER_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_COPPER_MINE_TOWER_ANIMATED.0 as u16);
+    /// `GFX_COPPER_MINE_CHIMNEY` promoted to `IndustryGfx`.
+    pub const GFX_COPPER_MINE_CHIMNEY: Self =
+        Self(IndustryGraphics::GFX_COPPER_MINE_CHIMNEY.0 as u16);
+    /// `GFX_GOLD_MINE_TOWER_NOT_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_GOLD_MINE_TOWER_NOT_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_GOLD_MINE_TOWER_NOT_ANIMATED.0 as u16);
+    /// `GFX_GOLD_MINE_TOWER_ANIMATED` promoted to `IndustryGfx`.
+    pub const GFX_GOLD_MINE_TOWER_ANIMATED: Self =
+        Self(IndustryGraphics::GFX_GOLD_MINE_TOWER_ANIMATED.0 as u16);
+    /// `GFX_TOY_FACTORY` promoted to `IndustryGfx`.
+    pub const GFX_TOY_FACTORY: Self = Self(IndustryGraphics::GFX_TOY_FACTORY.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_1` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_1: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_1.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_2` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_2: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_2.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_3` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_3: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_3.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_4` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_4: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_4.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_5` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_5: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_5.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_6` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_6: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_6.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_7` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_7: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_7.0 as u16);
+    /// `GFX_PLASTIC_FOUNTAIN_ANIMATED_8` promoted to `IndustryGfx`.
+    pub const GFX_PLASTIC_FOUNTAIN_ANIMATED_8: Self =
+        Self(IndustryGraphics::GFX_PLASTIC_FOUNTAIN_ANIMATED_8.0 as u16);
+    /// `GFX_BUBBLE_GENERATOR` promoted to `IndustryGfx`.
+    pub const GFX_BUBBLE_GENERATOR: Self = Self(IndustryGraphics::GFX_BUBBLE_GENERATOR.0 as u16);
+    /// `GFX_BUBBLE_CATCHER` promoted to `IndustryGfx`.
+    pub const GFX_BUBBLE_CATCHER: Self = Self(IndustryGraphics::GFX_BUBBLE_CATCHER.0 as u16);
+    /// `GFX_TOFFEE_QUARRY` promoted to `IndustryGfx`.
+    pub const GFX_TOFFEE_QUARRY: Self = Self(IndustryGraphics::GFX_TOFFEE_QUARRY.0 as u16);
+    /// `GFX_SUGAR_MINE_SIEVE` promoted to `IndustryGfx`.
+    pub const GFX_SUGAR_MINE_SIEVE: Self = Self(IndustryGraphics::GFX_SUGAR_MINE_SIEVE.0 as u16);
+    /// `GFX_WATERTILE_SPECIALCHECK` promoted to `IndustryGfx`.
+    pub const GFX_WATERTILE_SPECIALCHECK: Self =
+        Self(IndustryGraphics::GFX_WATERTILE_SPECIALCHECK.0 as u16);
+}

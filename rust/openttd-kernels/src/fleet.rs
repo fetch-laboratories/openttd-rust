@@ -270,7 +270,6 @@ pub struct GroupServices {
     pub(crate) group: unsafe extern "C" fn(u16) -> *mut (),
     pub(crate) next_group: unsafe extern "C" fn(u32) -> u32,
     pub(crate) next_company: unsafe extern "C" fn(u32) -> u32,
-    pub(crate) next_vehicle: unsafe extern "C" fn(u32) -> *mut OpenTTDVehicle,
     pub(crate) vehicle: unsafe extern "C" fn(u32) -> *mut (),
     /// Resolves shells to their canonical records.
     pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
@@ -290,7 +289,6 @@ pub struct GroupServices {
     pub(crate) renew_state: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) next_renew: unsafe extern "C" fn(u32) -> *mut (),
     pub(crate) renew_id: unsafe extern "C" fn(*mut ()) -> u32,
-    pub(crate) current_company: unsafe extern "C" fn() -> u8,
     pub(crate) buildable_type: unsafe extern "C" fn(u8) -> bool,
     pub(crate) can_allocate: unsafe extern "C" fn() -> bool,
     pub(crate) allocate: unsafe extern "C" fn(u8, u8) -> u16,
@@ -304,7 +302,6 @@ pub struct GroupServices {
     pub(crate) remove_vehicles: unsafe extern "C" fn(u16, u32),
     pub(crate) delete_child: unsafe extern "C" fn(u16, u32),
     pub(crate) add_to_group: unsafe extern "C" fn(u16, u32, u32),
-    pub(crate) utf8_length: unsafe extern "C" fn(*const u8, usize) -> usize,
     pub(crate) list_dirty: unsafe extern "C" fn(u8, u8),
     pub(crate) list_set_dirty: unsafe extern "C" fn(u8, u8),
     pub(crate) colour_dirty: unsafe extern "C" fn(u8, u8),
@@ -324,7 +321,24 @@ pub struct GroupServices {
     pub(crate) recursion_error: u32,
 }
 
+// The shared table's canonical vehicle iteration, company and UTF-8 services.
 impl GroupServices {
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: The immutable shared table outlives every serialized fleet entry.
+        unsafe { &*self.shared }
+    }
+    /// The first vehicle at or after `from`, as `Vehicle::Iterate(from)`.
+    pub(crate) fn next_vehicle(&self, from: u32) -> *mut OpenTTDVehicle {
+        (self.shared().vehicle_next)(from).map_or(std::ptr::null_mut(), |v| v.0.as_ptr())
+    }
+    /// `_current_company`.
+    pub(crate) fn current_company(&self) -> u8 {
+        (self.shared().current_company)()
+    }
+    /// `Utf8StringLength` of a validated span.
+    pub(crate) fn utf8_length(&self, text: *const u8, len: usize) -> usize {
+        (self.shared().utf8_length)(text, len)
+    }
     pub(crate) fn engine(&self, id: u16) -> crate::vehicle::EngineRef {
         // SAFETY: this serialized entry retains the immutable resolver table and live engine.
         let capabilities = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
@@ -621,7 +635,7 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let g = unsafe { group(w, id) };
     if reset {
         let mut from = 0;
-        while let Some(record) = std::ptr::NonNull::new(unsafe { (w.next_vehicle)(from) }) {
+        while let Some(record) = std::ptr::NonNull::new(w.next_vehicle(from)) {
             let record = VehicleRef(record);
             let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
@@ -655,7 +669,7 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
         return ERROR;
     }
     let pg = unsafe { group(w, parent) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if !pg.is_null() && (read_field!(pg, owner) != owner || read_field!(pg, vehicle_type) != kind) {
         return ERROR;
     }
@@ -688,7 +702,7 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
 }
 unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     let g = unsafe { group(w, id) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
@@ -742,12 +756,12 @@ unsafe fn alter_group(
     len: usize,
 ) -> u32 {
     let g = unsafe { group(w, id) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
     if mode == 0 {
-        if len != 0 && unsafe { (w.utf8_length)(text, len) } >= 32 {
+        if len != 0 && w.utf8_length(text, len) >= 32 {
             return ERROR;
         }
         if flags & 1 != 0 {
@@ -883,7 +897,7 @@ unsafe fn update_afterload(w: &GroupServices) {
     }
     from = 0;
     loop {
-        let v = crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
+        let v = crate::vehicle::VehicleRef::shell_from_record(w.next_vehicle(from));
         if v.is_null() {
             break;
         }
@@ -936,7 +950,7 @@ unsafe fn update_profits(w: &GroupServices) {
     }
     from = 0;
     loop {
-        let v = crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
+        let v = crate::vehicle::VehicleRef::shell_from_record(w.next_vehicle(from));
         if v.is_null() {
             break;
         }
@@ -1023,7 +1037,7 @@ unsafe fn add_vehicle_group(
     };
     let first = unsafe { list.at(w, 0) };
     let kind = VehicleType(record(w, first).vehicle_type());
-    let owner = CompanyID(unsafe { (w.current_company)() });
+    let owner = CompanyID(w.current_company());
     let size = unsafe { list.size(w) };
     for i in 0..size {
         let v = unsafe { list.at(w, i) };
@@ -1081,7 +1095,7 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
     }
     if flags & 1 != 0 {
         let mut from = 0;
-        while let Some(record) = std::ptr::NonNull::new(unsafe { (w.next_vehicle)(from) }) {
+        while let Some(record) = std::ptr::NonNull::new(w.next_vehicle(from)) {
             let record = VehicleRef(record);
             let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
@@ -1100,22 +1114,21 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
                 v2 = unsafe { (w.next_shared)(v2) };
             }
         }
-        let owner = unsafe { (w.current_company)() };
+        let owner = w.current_company();
         unsafe { (w.list_dirty)(owner, kind) };
     }
     OK
 }
 unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     let g = unsafe { group(w, id) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
     if flags & 1 != 0 {
         let mut from = 0;
         loop {
-            let v =
-                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
+            let v = crate::vehicle::VehicleRef::shell_from_record(w.next_vehicle(from));
             if v.is_null() {
                 break;
             }
@@ -1133,7 +1146,7 @@ unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
 }
 unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut colour: u8) -> u32 {
     let g = unsafe { group(w, id) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if g.is_null() || read_field!(g, owner) != owner || (colour >= 16 && colour != 255) {
         return ERROR;
     }
@@ -1171,7 +1184,7 @@ unsafe fn flag_command(
     recursive: bool,
 ) -> u32 {
     let g = unsafe { group(w, id) };
-    let owner = unsafe { (w.current_company)() };
+    let owner = w.current_company();
     if g.is_null() || read_field!(g, owner) != owner || flag > 1 {
         return ERROR;
     }
@@ -1754,7 +1767,6 @@ crate::abi::layouts! {
         group,
         next_group,
         next_company,
-        next_vehicle,
         vehicle,
         vehicles,
         vehicle_id,
@@ -1773,7 +1785,6 @@ crate::abi::layouts! {
         renew_state,
         next_renew,
         renew_id,
-        current_company,
         buildable_type,
         can_allocate,
         allocate,
@@ -1787,7 +1798,6 @@ crate::abi::layouts! {
         remove_vehicles,
         delete_child,
         add_to_group,
-        utf8_length,
         list_dirty,
         list_set_dirty,
         colour_dirty,

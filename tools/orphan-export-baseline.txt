@@ -6,7 +6,6 @@ no production user | openttd_rust_action2_reset
 no production user | openttd_rust_cargo_build_inverse
 no production user | openttd_rust_cargo_finalise
 no production user | openttd_rust_convert_ground_water
-no production user | openttd_rust_disaster_startup
 no production user | openttd_rust_economy_startup
 no production user | openttd_rust_generic_reset
 no production user | openttd_rust_house_animate

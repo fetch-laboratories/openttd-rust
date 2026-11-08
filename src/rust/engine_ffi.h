@@ -1,4 +1,5 @@
 struct OpenTTDEngineCapabilitiesServices;
+struct OpenTTDCompanyFinanceServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -21,7 +22,6 @@ struct OpenTTDEngineRef { const OpenTTDEngine *shell; OpenTTDEngineLifecycle *st
 using OpenTTDEngineYMD = OpenTTDCalendarYMD;
 struct OpenTTDEngineStartSettings { int32_t starting_year, date; };
 struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
-struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };
 struct OpenTTDEngineVehicle { OpenTTDVehicle *shell; uint32_t id; uint8_t owner; VehicleType type; };
 struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; };
 /** Every callback is noexcept; script events only enqueue, no VM executes.
@@ -31,6 +31,7 @@ struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; }
 struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDEngineServices {
 	const OpenTTDSharedServices *shared;
+	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDRandomServices *rng;
 	const OpenTTDTypeAvailabilityServices *types;
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
@@ -50,7 +51,6 @@ struct OpenTTDEngineServices {
 	void (*refresh_type)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(refresh_type);
 	void (*refresh_lists)(bool) noexcept OPENTTD_SERVICE_DEFAULT(refresh_lists);
 	OpenTTDEngineCompany (*company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
-	OpenTTDEngineCompanyPreview (*company_preview)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(company_preview);
 	OpenTTDEngineVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
@@ -58,7 +58,6 @@ struct OpenTTDEngineServices {
 	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	uint (*company_engine_count)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(company_engine_count);
-	void (*block_preview)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(block_preview);
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*toolbar_enable)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_enable);
 	void (*toolbar_release)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_release);

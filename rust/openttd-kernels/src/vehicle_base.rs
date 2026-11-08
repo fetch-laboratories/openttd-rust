@@ -480,6 +480,16 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
         crate::raw_field::read_field!(self.0.as_ptr(), ground)
     }
+    /// `Vehicle::GetGroundVehicleFlags`: the flags of this train or road vehicle.
+    pub(crate) fn ground_vehicle_flags(self) -> u16 {
+        crate::services_assert::check(is_ground_vehicle(self.vehicle_type()));
+        crate::raw_field::read_field!(self.ground(), flags)
+    }
+    /// Store through `Vehicle::GetGroundVehicleFlags` of this train or road vehicle.
+    pub(crate) fn write_ground_vehicle_flags(self, value: u16) {
+        crate::services_assert::check(is_ground_vehicle(self.vehicle_type()));
+        crate::raw_field::write_field!(self.ground(), flags, value);
+    }
     pub(crate) fn ground_cache(self) -> *mut crate::ground_vehicle::GroundCache {
         let ground = self.ground();
         // SAFETY: Ground shells bind a live owner before controller entries.

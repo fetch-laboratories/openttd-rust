@@ -198,7 +198,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineShipCapacity(RustEngine(e)));
-	RustVehicleSetRefitCap(RustVehicle(v), 0);
+	v->Record().refit_cap = 0;
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
@@ -258,11 +258,11 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.servint = Ship_servint,
 		.max_distance = Ship_max_distance, .tile_valid = Ship_tile_valid,
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
-		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
+		.lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
-		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
+		.dist_manhattan = OpenTTDDistanceManhattan,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig,

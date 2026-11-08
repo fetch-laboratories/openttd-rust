@@ -40,12 +40,6 @@ static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) no
 	Operation(static_cast<Train *>(VehicleFromRecord(id.record)), static_cast<Train *>(VehicleFromRecord(other.record)));
 }
 
-template <typename Result, auto Member>
-static Result TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept
-{
-	return (GetRustSharedServices().*Member)(tile);
-}
-
 static void TrainWriteColourmap(OpenTTDTrainHandle id, uint64_t value) noexcept
 {Train *v=static_cast<Train *>(VehicleFromRecord(id.record)); v->colourmap = static_cast<PaletteID>(value);}
 static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
@@ -234,10 +228,6 @@ static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 static uint64_t TrainLostWarn(OpenTTDTrainHandle) noexcept
 {
 	return _settings_client.gui.lost_vehicle_warn;
-}
-static uint64_t TrainMapSize(OpenTTDTrainHandle) noexcept
-{
-	return Map::Size();
 }
 static uint64_t TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept
 {

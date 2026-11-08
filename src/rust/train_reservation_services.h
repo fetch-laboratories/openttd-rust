@@ -13,13 +13,6 @@
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
 
-/* The reservation table's slots take a leading context; the train table's services serve both. */
-template <typename Result, auto Member>
-static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle id, uint32_t tile) noexcept
-{
-	return TrainSharedMap<Result, Member>(id, tile);
-}
-
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackBitsToTrack(static_cast<TrackBits>(a));

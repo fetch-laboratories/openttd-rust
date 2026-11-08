@@ -107,7 +107,7 @@ pub(crate) unsafe fn road(
         let capacity = unsafe {
             crate::engine_capabilities::openttd_rust_engine_capacity(
                 r.capabilities,
-                (r.vehicle_engine)(super::vehicle_ref(u, r.common.vehicles).0.as_ptr()),
+                r.vehicle_engine(super::vehicle_ref(u, r.common.vehicles).0.as_ptr()),
                 super::vehicle_ref(u, r.common.vehicles).0.as_ptr(),
                 ptr::null_mut(),
             )

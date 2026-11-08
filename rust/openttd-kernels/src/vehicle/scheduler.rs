@@ -32,7 +32,7 @@ pub struct PoolCursor {
     pub slots_len: usize,
     pub first_unused: *const usize,
 }
-#[repr(C)]
+/// Field addresses in the surviving vehicle's and its front's canonical records.
 pub struct PostTick {
     pub vehicle_type: VehicleType,
     pub period: *const u16,
@@ -49,9 +49,8 @@ pub struct PostTick {
 pub struct SchedulerServices {
     pub pool: extern "C" fn() -> PoolCursor,
     pub assertions: bool,
-    /// Runs the virtual Tick; fills `out` only when the vehicle survives.
-    /// Caller supplies writable, aligned stack storage for one `PostTick`.
-    pub tick: unsafe extern "C" fn(VehicleRef, *mut PostTick) -> bool,
+    /// Runs the virtual Tick; true when the vehicle survives.
+    pub tick: extern "C" fn(VehicleRef) -> bool,
     pub calendar_day: extern "C" fn(VehicleRef),
     pub economy_day: extern "C" fn(VehicleRef),
     pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
@@ -190,6 +189,45 @@ unsafe fn day<const COUNTED: bool>(
     }
     let _ = tables;
 }
+impl PostTick {
+    /// `v->type` and `v->First()` after the survival assertion; motion types
+    /// address the record fields `CallVehicleTicks` reads and writes next.
+    fn after_tick(v: VehicleRef) -> Self {
+        let vehicle_type = v.vehicle_type();
+        let record = v.0.as_ptr();
+        if VehicleType(vehicle_type).0 > AIRCRAFT.0 {
+            return Self {
+                vehicle_type: VehicleType(vehicle_type),
+                period: std::ptr::null(),
+                counter: std::ptr::null_mut(),
+                motion: std::ptr::null_mut(),
+                speed: std::ptr::null(),
+                front_type: std::ptr::null(),
+                subtype: std::ptr::null(),
+                tick: std::ptr::null(),
+                front_status: std::ptr::null(),
+                status: std::ptr::null(),
+            };
+        }
+        let front = v.first().0.as_ptr();
+        // SAFETY: Both canonical records live while their surviving shells do; only
+        // addresses are formed here, and post_tick loads each field at its use.
+        unsafe {
+            Self {
+                vehicle_type: VehicleType(vehicle_type),
+                period: &raw const (*record).cached_cargo_age_period,
+                counter: &raw mut (*record).cargo_age_counter,
+                motion: &raw mut (*record).motion_counter,
+                speed: &raw const (*front).cur_speed,
+                front_type: &raw const (*front).r#type,
+                subtype: &raw const (*record).subtype,
+                tick: &raw const (*record).tick_counter,
+                front_status: &raw const (*front).vehstatus,
+                status: &raw const (*record).vehstatus,
+            }
+        }
+    }
+}
 struct PostTickServices {
     cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
     sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
@@ -226,7 +264,7 @@ macro_rules! post_svc {
 /// Tick survived. Shells are separately allocated, so pool growth cannot move their members;
 /// cargo packet lookup and `NewGRF` sound resolution may reenter but cannot destroy these
 /// shells, reset the pool or yield the mutex. Never retain a descriptor across Tick,
-/// traversal, loading, day or fleet work. `cargo` is the bundle the surviving Tick filled; only
+/// traversal, loading, day or fleet work. `cargo` addresses the surviving records; only
 /// addresses span callbacks, and field loads and stores end first so subsequent values are fresh.
 unsafe fn post_tick<const COUNTED: bool>(
     schedule: &PostTickServices,
@@ -422,10 +460,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
                 crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
             }
             // Native controller timing completes before the source survival assertion.
-            // The bundle is written only on survival and read only after the assertion.
-            let mut bundle = std::mem::MaybeUninit::<PostTick>::uninit();
-            // SAFETY: bundle is aligned writable storage, unused until success.
-            let survives = unsafe { svc!(COUNTED, s.tick, vehicle, bundle.as_mut_ptr()) };
+            let survives = svc!(COUNTED, s.tick, vehicle);
             if s.assertions {
                 let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
                 let actual = unsafe {
@@ -454,8 +489,9 @@ unsafe fn run_ticks<const COUNTED: bool>(
                     std::mem::size_of::<PostTick>() as u64,
                 );
             }
-            // SAFETY: a surviving Tick initialized every bundle field.
-            unsafe { post_tick::<COUNTED>(&post, vehicle, bundle.assume_init_ref()) };
+            // The survivor's type and front are read after the source assertion.
+            let bundle = PostTick::after_tick(vehicle);
+            unsafe { post_tick::<COUNTED>(&post, vehicle, &bundle) };
         }
     } // Every pool/scalar descriptor is discarded before commands in fleet drain.
     unsafe {
@@ -469,18 +505,6 @@ crate::abi::layouts! {
         slots,
         slots_len,
         first_unused,
-    };
-    "OpenTTDVehiclePostTick" ["scheduler"] => PostTick {
-        vehicle_type => type,
-        period,
-        counter,
-        motion,
-        speed,
-        front_type,
-        subtype,
-        tick,
-        front_status,
-        status,
     };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
         pool,
@@ -512,6 +536,47 @@ crate::abi::layouts! {
 mod tests {
     use super::*;
     use std::ffi::c_void;
+
+    /// The survivor's own fields and its front's speed, type and status are the
+    /// canonical record members; types above aircraft address none of them.
+    #[test]
+    fn post_tick_addresses_survivor_and_front_records() {
+        let record = |kind| {
+            VehicleRef::of(crate::vehicle_base::openttd_rust_vehicle_record_new(
+                null_mut(),
+                kind,
+            ))
+        };
+        let (front, part) = (record(ROAD), record(ROAD));
+        // SAFETY: Both private records are live; `first` links the part to its front.
+        unsafe { (*part.0.as_ptr()).first = front.0.as_ptr() };
+        let post = PostTick::after_tick(part);
+        let (f, p) = (front.0.as_ptr(), part.0.as_ptr());
+        assert_eq!(post.vehicle_type.0, ROAD.0);
+        // SAFETY: Only addresses of the live private records are formed, then one store.
+        unsafe {
+            assert_eq!(post.period, &raw const (*p).cached_cargo_age_period);
+            assert_eq!(post.counter, &raw mut (*p).cargo_age_counter);
+            assert_eq!(post.motion, &raw mut (*p).motion_counter);
+            assert_eq!(post.speed, &raw const (*f).cur_speed);
+            assert_eq!(post.front_type, &raw const (*f).r#type);
+            assert_eq!(post.subtype, &raw const (*p).subtype);
+            assert_eq!(post.tick, &raw const (*p).tick_counter);
+            assert_eq!(post.front_status, &raw const (*f).vehstatus);
+            assert_eq!(post.status, &raw const (*p).vehstatus);
+            (*p).r#type = VehicleType::EFFECT;
+        }
+        let post = PostTick::after_tick(part);
+        assert!(
+            post.vehicle_type == VehicleType::EFFECT
+                && post.period.is_null()
+                && post.status.is_null()
+        );
+        for v in [front, part] {
+            // SAFETY: No traversal follows these private records after cleanup.
+            unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(v.0.as_ptr()) };
+        }
+    }
     const SHIP: VehicleType = VehicleType::SHIP;
     use std::ptr::{NonNull, null, null_mut};
 
