@@ -21,6 +21,9 @@ pub const fn is_valid_cargo_type(cargo: u8) -> bool {
     cargo != INVALID_CARGO
 }
 
+/// Native `CargoArray`: one amount per cargo type.
+pub type CargoArray = [u32; NUM_CARGO as usize];
+
 /// Original `CargoArray::GetCount` over the native stack array's actual `data()`.
 /// SAFETY: The caller supplies `NUM_CARGO` live scalar elements; no callback runs.
 pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {

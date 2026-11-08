@@ -149,6 +149,7 @@ mod script_list;
 mod script_marine;
 mod script_rail;
 mod script_road;
+mod script_stationlist;
 mod script_tile;
 mod script_tunnelbridge;
 mod script_vehicle;
@@ -922,7 +923,10 @@ mod crypto;
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_plan(mode: u8, selector: u8) -> u8 {
-    station_cargo::plan(mode, selector)
+    station_cargo::plan(
+        script_stationlist::CargoMode(mode),
+        script_stationlist::CargoSelector(selector),
+    )
 }
 
 /// Initialize caller-owned scalar collector; no allocation or retained pointer.
@@ -938,7 +942,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_init(
 ) {
     // SAFETY: Caller supplies writable aligned state with no active access.
     unsafe {
-        state.write(station_cargo::Collector::new(selector, other));
+        state.write(station_cargo::Collector::new(
+            script_stationlist::CargoSelector(selector),
+            station_type::StationID(other),
+        ));
     }
 }
 
@@ -958,7 +965,12 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet(
 ) {
     // SAFETY: Exclusive disjoint state/list borrows expire at return.
     unsafe {
-        (&mut *state).packet(&mut *list.cast::<script_list::List>(), from, via, amount);
+        (&mut *state).packet(
+            &mut *list.cast::<script_list::List>(),
+            station_type::StationID(from),
+            station_type::StationID(via),
+            amount,
+        );
     }
 }
 
@@ -974,7 +986,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_origin(
 ) {
     // SAFETY: The caller exclusively borrows the scalar state for this call.
     unsafe {
-        (&mut *state).origin(origin);
+        (&mut *state).origin(station_type::StationID(origin));
     }
 }
 
@@ -992,7 +1004,11 @@ pub unsafe extern "C" fn openttd_rust_cargo_share(
 ) {
     // SAFETY: The disjoint borrows end before another typed iterator operation.
     unsafe {
-        (&mut *state).share(&mut *list.cast::<script_list::List>(), via, cumulative);
+        (&mut *state).share(
+            &mut *list.cast::<script_list::List>(),
+            station_type::StationID(via),
+            cumulative,
+        );
     }
 }
 

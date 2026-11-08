@@ -846,7 +846,7 @@ impl Context<'_> {
                 w::hit(w::MOVE_TRACK_STATION);
                 match mode {
                     TRANSPORT_RAIL => {
-                        if self.world.has_station_rail(tile) && !self.world.station_blocked(tile) {
+                        if self.world.station_rail_raw(tile) && !self.world.station_blocked(tile) {
                             bits = crate::track_func::track_to_track_bits(
                                 self.world.station_track(tile),
                                 |ok| (self.native_assert)(ok),
@@ -1090,7 +1090,7 @@ impl MovementServices {
             if !should_stop(self.shared(), v, station) {
                 return 0;
             }
-            if !World::new(self.shared()).is_rail_station(tile)
+            if !World::new(self.shared()).is_rail_station_raw(tile)
                 || !crate::vehicle_base::is_front_engine(
                     crate::vehicle_base::is_ground_vehicle(h.kind.0),
                     v.subtype(),
@@ -1142,7 +1142,7 @@ impl MovementServices {
                     v.subtype(),
                 )
             {
-                if unsafe { crate::road_stop::enter_by_tile(self.shared(), tile, v, h.road) } {
+                if unsafe { crate::road_stop::enter_by_tile_raw(self.shared(), tile, v, h.road) } {
                     w::hit(w::MOVE_ROAD_STOP_ADMIT);
                     return 0;
                 }

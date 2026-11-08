@@ -24,6 +24,7 @@ pub(crate) mod spatial;
 
 use crate::base_station_base::StationRectMode;
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
+use crate::cargo_type::{CargoArray, CargoTypes, NUM_CARGO};
 use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
 use crate::industry_type::IndustryID;
@@ -33,12 +34,11 @@ use crate::services::Services;
 use crate::station_service::Service;
 use crate::station_type::StationID;
 use crate::station_type::{
-    BUOY, CA_BUS, CA_DOCK, CA_NONE, CA_TRAIN, CA_TRUCK, CA_UNMODIFIED, MAX_CATCHMENT,
-    RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_DOCK, STATION_OILRIG,
-    STATION_RAIL, STATION_TRUCK,
+    CA_BUS, CA_DOCK, CA_NONE, CA_TRAIN, CA_TRUCK, CA_UNMODIFIED, MAX_CATCHMENT, StationType,
 };
-use crate::tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_STATION};
+use crate::tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_STATION, TileIndex};
 use crate::tilearea::TileArea;
+use crate::town_type::TownID;
 use StationRectMode as RectMode;
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
@@ -76,11 +76,11 @@ impl StationRect {
     }
     /// `BeforeAddTile`; `false` is `STR_ERROR_STATION_TOO_SPREAD_OUT`.
     #[allow(clippy::cast_possible_wrap, clippy::many_single_char_names)]
-    pub fn before_add_tile(&mut self, tile: u32, mode: StationRectMode, c: &Ctx<'_>) -> bool {
-        let x = c.map.tile_x(tile) as i32;
-        let y = c.map.tile_y(tile) as i32;
+    pub fn before_add_tile(&mut self, tile: TileIndex, mode: StationRectMode, c: &Ctx<'_>) -> bool {
+        let x = c.map.tile_x(tile.0) as i32;
+        let y = c.map.tile_y(tile.0) as i32;
         if self.is_empty() {
-            // We are adding the first station tile.
+            // we are adding the first station tile
             if mode != RectMode::ADD_TEST {
                 self.left = x;
                 self.right = x;
@@ -88,14 +88,15 @@ impl StationRect {
                 self.bottom = y;
             }
         } else if !self.pt_in_extended_rect(x, y, 0) {
-            // The point is outside the existing rectangle; form the new spread.
+            // current rect is not empty and new point is outside this rect
+            // make new spread-out rectangle
             let new_rect = Self {
                 left: x.min(self.left),
                 top: y.min(self.top),
                 right: x.max(self.right),
                 bottom: y.max(self.bottom),
             };
-            // Check its dimensions against the configured maximum.
+            // check new rect dimensions against preset max
             let w = rect_width(new_rect.left, new_rect.right);
             let h = rect_height(new_rect.top, new_rect.bottom);
             if mode != RectMode::ADD_FORCE
@@ -104,17 +105,20 @@ impl StationRect {
                 c.check(mode != RectMode::ADD_TRY);
                 return false;
             }
+            // spread-out ok, return true
             if mode != RectMode::ADD_TEST {
+                // we should update the station rect
                 *self = new_rect;
             }
         }
+        // Otherwise the new point is inside the rect, we don't need to do anything.
         true
     }
     /// `BeforeAddRect`: an overlarge unforced rectangle succeeds without mutation;
     /// a failing second corner keeps the first corner's effect.
     pub fn before_add_rect(
         &mut self,
-        tile: u32,
+        tile: TileIndex,
         w: i32,
         h: i32,
         mode: StationRectMode,
@@ -123,9 +127,14 @@ impl StationRect {
         if mode == RectMode::ADD_FORCE
             || (w <= i32::from((c.c.spread)()) && h <= i32::from((c.c.spread)()))
         {
+            // Important when the old rect is completely inside the new rect, resp. the old one was empty.
             let ok = self.before_add_tile(tile, mode, c);
             if ok {
-                return self.before_add_tile(c.map.tile_add_xy(tile, w - 1, h - 1), mode, c);
+                return self.before_add_tile(
+                    TileIndex(c.map.tile_add_xy(tile.0, w - 1, h - 1)),
+                    mode,
+                    c,
+                );
             }
             return ok;
         }
@@ -133,47 +142,57 @@ impl StationRect {
     }
     /// `AfterRemoveTile`: shrink edges while no station tile remains on them.
     #[allow(clippy::cast_possible_wrap)]
-    pub fn after_remove_tile(&mut self, id: StationID, tile: u32, c: &Ctx<'_>) -> bool {
-        let mut x = c.map.tile_x(tile) as i32;
-        let mut y = c.map.tile_y(tile) as i32;
-        // If the removed tile was on an edge, reduce that edge until the
-        // rectangle is empty or no further reduction is possible.
+    pub fn after_remove_tile(&mut self, id: StationID, tile: TileIndex, c: &Ctx<'_>) -> bool {
+        let mut x = c.map.tile_x(tile.0) as i32;
+        let mut y = c.map.tile_y(tile.0) as i32;
+        // look if removed tile was on the bounding rect edge
+        // and try to reduce the rect by this edge
+        // do it until we have empty rect or nothing to do
         loop {
+            // check if removed tile is on rect edge
             let left_edge = x == self.left;
             let right_edge = x == self.right;
             let top_edge = y == self.top;
             let bottom_edge = y == self.bottom;
+            // can we reduce the rect in either direction?
             let reduce_x = (left_edge || right_edge)
                 && !scan_for_station_tiles(id, x, self.top, x, self.bottom, c);
             let reduce_y = (top_edge || bottom_edge)
                 && !scan_for_station_tiles(id, self.left, y, self.right, y, c);
             if !(reduce_x || reduce_y) {
-                break;
+                break; // nothing to do (can't reduce)
             }
             if reduce_x {
+                // reduce horizontally
                 if left_edge {
+                    // move left edge right
                     x += 1;
                     self.left = x;
                 } else {
+                    // move right edge left
                     x -= 1;
                     self.right = x;
                 }
             }
             if reduce_y {
+                // reduce vertically
                 if top_edge {
+                    // move top edge down
                     y += 1;
                     self.top = y;
                 } else {
+                    // move bottom edge up
                     y -= 1;
                     self.bottom = y;
                 }
             }
             if self.left > self.right || self.top > self.bottom {
+                // can't continue, if the remaining rectangle is empty
                 self.make_empty();
-                return true;
+                return true; // empty remaining rect
             }
         }
-        false
+        false // non-empty remaining rect
     }
     /// `AfterRemoveRect`: the second corner is skipped once the first empties.
     #[allow(clippy::cast_possible_wrap)]
@@ -186,13 +205,15 @@ impl StationRect {
             (y + u32::from(ta.h)).wrapping_sub(1) as i32,
             0,
         ));
-        let mut empty = self.after_remove_tile(id, ta.tile, c);
+        let mut empty = self.after_remove_tile(id, TileIndex(ta.tile), c);
         if ta.w != 1 || ta.h != 1 {
             empty = empty
                 || self.after_remove_tile(
                     id,
-                    c.map
-                        .tile_add_xy(ta.tile, i32::from(ta.w) - 1, i32::from(ta.h) - 1),
+                    TileIndex(
+                        c.map
+                            .tile_add_xy(ta.tile, i32::from(ta.w) - 1, i32::from(ta.h) - 1),
+                    ),
                     c,
                 );
         }
@@ -200,7 +221,8 @@ impl StationRect {
     }
 }
 
-/// `StationRect::ScanForStationTiles`.
+/// `StationRect::ScanForStationTiles`: check whether station tiles of the given
+/// station id exist in the given rectangle (edges inclusive).
 #[allow(clippy::cast_sign_loss)]
 fn scan_for_station_tiles(
     id: StationID,
@@ -216,7 +238,8 @@ fn scan_for_station_tiles(
         c.map.tile_xy(right as u32, bottom as u32),
     );
     ta.tiles(c.map)
-        .any(|tile| (c.s.tile_type)(tile) == MP_STATION && c.station_index(tile) == id)
+        .map(TileIndex)
+        .any(|tile| (c.s.tile_type)(tile.0) == MP_STATION && c.station_index(tile) == id)
 }
 
 crate::abi::shared_records! {
@@ -463,39 +486,47 @@ impl<'a> Ctx<'a> {
     pub fn check(&self, ok: bool) {
         crate::movement::native_assert(self.s, ok);
     }
-    fn town_by_tile(&self, tile: u32) -> *mut crate::town::State {
-        (self.s.town_owner_by_id)(u32::from((self.s.town_index)(tile)))
+    /// `Town::GetByTile` (`ClosestTownFromTile`'s town index form).
+    fn town_by_tile(&self, tile: TileIndex) -> *mut crate::town::State {
+        (self.s.town_owner_by_id)(u32::from(self.town_index(tile).0))
     }
-    fn industry_index(&self, tile: u32) -> IndustryID {
+    /// `GetTownIndex`.
+    fn town_index(&self, tile: TileIndex) -> TownID {
+        TownID((self.s.town_index)(tile.0))
+    }
+    /// `GetIndustryIndex`.
+    fn industry_index(&self, tile: TileIndex) -> IndustryID {
         // SAFETY: Live immutable table.
-        IndustryID(unsafe { ((*self.c.industry_tile).industry_index)(tile) })
+        IndustryID(unsafe { ((*self.c.industry_tile).industry_index)(tile.0) })
     }
-    fn station_index(&self, tile: u32) -> StationID {
-        StationID((self.s.station_index)(tile))
+    /// `GetStationIndex`.
+    fn station_index(&self, tile: TileIndex) -> StationID {
+        StationID((self.s.station_index)(tile.0))
     }
     fn industry_stations(&self, industry: *mut ShellHandle) -> *mut StationList {
         crate::industry::stations_near((self.c.industry_owner)(industry))
     }
 }
 
-/// `GetTileCatchmentRadius`.
-fn tile_catchment_radius(tile: u32, st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
-    c.check((c.s.tile_type)(tile) == MP_STATION);
-    let kind = (c.s.station_type)(tile).0;
+/// `GetTileCatchmentRadius`: get the catchment size of an individual station
+/// tile.
+fn tile_catchment_radius(tile: TileIndex, st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
+    c.check((c.s.tile_type)(tile.0) == MP_STATION);
+    let kind = (c.s.station_type)(tile.0);
     if (c.c.modified_catchment)() {
         match kind {
-            STATION_RAIL => CA_TRAIN,
-            STATION_OILRIG => CA_UNMODIFIED,
-            STATION_AIRPORT => airport_catchment(st, c),
-            STATION_TRUCK => CA_TRUCK,
-            STATION_BUS => CA_BUS,
-            STATION_DOCK => CA_DOCK,
-            BUOY | RAIL_WAYPOINT | ROAD_WAYPOINT => CA_NONE,
+            StationType::Rail => CA_TRAIN,
+            StationType::Oilrig => CA_UNMODIFIED,
+            StationType::Airport => airport_catchment(st, c),
+            StationType::Truck => CA_TRUCK,
+            StationType::Bus => CA_BUS,
+            StationType::Dock => CA_DOCK,
+            StationType::Buoy | StationType::RailWaypoint | StationType::RoadWaypoint => CA_NONE,
             _ => unreachable!("NOT_REACHED"),
         }
     } else {
         match kind {
-            BUOY | RAIL_WAYPOINT | ROAD_WAYPOINT => CA_NONE,
+            StationType::Buoy | StationType::RailWaypoint | StationType::RoadWaypoint => CA_NONE,
             _ => CA_UNMODIFIED,
         }
     }
@@ -508,7 +539,8 @@ fn airport_catchment(st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
         st, airport,
     )))
 }
-/// `Station::GetCatchmentRadius`.
+/// `Station::GetCatchmentRadius`: determines the catchment radius of the
+/// station.
 pub(crate) fn catchment_radius(st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
     let f = (c.c.radius_facilities)(st);
     let mut ret = CA_NONE;
@@ -538,7 +570,8 @@ pub(crate) fn catchment_radius(st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
     }
     ret
 }
-/// `Station::GetCatchmentRect`, clamped to the map.
+/// `Station::GetCatchmentRect`: determines the catchment rectangle of the
+/// station, clamped to the map.
 #[allow(clippy::cast_possible_wrap)]
 fn catchment_rect(st: *mut BaseStation, state: *mut Service, c: &Ctx<'_>) -> StationRect {
     // SAFETY: Live owner; immediate copy.
@@ -631,17 +664,17 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
     let mut industries = Vec::new();
     // SAFETY: Live owner; immediate geometry copy.
     let area = unsafe { (*catchment(state)).tiles.area };
-    for tile in area.tiles(c.map) {
-        let kind = (c.s.tile_type)(tile);
+    for tile in area.tiles(c.map).map(TileIndex) {
+        let kind = (c.s.tile_type)(tile.0);
         if kind == MP_HOUSE {
-            flat_insert(&mut towns, (c.s.town_index)(tile));
+            flat_insert(&mut towns, c.town_index(tile));
         } else if kind == MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
     }
     let id = (c.c.id)(st);
     for town in towns {
-        let owner = (c.s.town_owner_by_id)(u32::from(town));
+        let owner = (c.s.town_owner_by_id)(u32::from(town.0));
         // SAFETY: Live town owner; immediate mutation.
         unsafe { (*crate::town::stations_near(owner)).erase(id) };
     }
@@ -687,13 +720,13 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         // SAFETY: Live owner; immediate mutation.
         unsafe { (*catchment(state)).tiles.initialize(location) };
         let industry_id = (c.c.industry_id)(industry);
-        for tile in location.tiles(c.map) {
-            if (c.s.tile_type)(tile) == MP_INDUSTRY && c.industry_index(tile) == industry_id {
+        for tile in location.tiles(c.map).map(TileIndex) {
+            if (c.s.tile_type)(tile.0) == MP_INDUSTRY && c.industry_index(tile) == industry_id {
                 // SAFETY: Live owner; immediate mutation.
                 unsafe {
                     (*catchment(state))
                         .tiles
-                        .set_tile(tile, c.map, |ok| c.check(ok));
+                        .set_tile(tile.0, c.map, |ok| c.check(ok));
                 };
             }
         }
@@ -733,8 +766,8 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         c.map.tile_xy(bounds.right as u32, bounds.bottom as u32),
     );
     let id = (c.c.id)(st);
-    for tile in ta.tiles(c.map) {
-        if (c.s.tile_type)(tile) != MP_STATION || c.station_index(tile) != id {
+    for tile in ta.tiles(c.map).map(TileIndex) {
+        if (c.s.tile_type)(tile.0) != MP_STATION || c.station_index(tile) != id {
             continue;
         }
         let radius = tile_catchment_radius(tile, st, c);
@@ -743,7 +776,11 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         }
         // No tile tests are needed in this sub-loop: every tile is simply
         // added to the catchment set.
-        let mut ta2 = TileArea { tile, w: 1, h: 1 };
+        let mut ta2 = TileArea {
+            tile: tile.0,
+            w: 1,
+            h: 1,
+        };
         #[allow(clippy::cast_possible_wrap)]
         ta2.expand(radius as i32, c.map, c.size_y);
         for tile2 in ta2.tiles(c.map) {
@@ -761,8 +798,8 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
-        let tile = it.tile();
-        let kind = (c.s.tile_type)(tile);
+        let tile = TileIndex(it.tile());
+        let kind = (c.s.tile_type)(tile.0);
         if kind == MP_HOUSE {
             // SAFETY: Live town owner; immediate mutation.
             unsafe { (*crate::town::stations_near(c.town_by_tile(tile))).insert(st, id) };
@@ -773,7 +810,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             if (c.s.station_serve_neutral)() || (c.c.industry_neutral)(i).is_null() {
                 // SAFETY: Live industry owner; immediate mutation.
                 unsafe { (*c.industry_stations(i)).insert(st, id) };
-                add_industry_to_deliver(st, state, i, tile, c);
+                add_industry_to_deliver(st, state, i, tile.0, c);
             }
         }
         unsafe { it.advance(bitmap, c.map, check) };
@@ -781,19 +818,21 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
 }
 /// `Station::RecomputeCatchmentForAll`: towns, then industries, then stations in pool order.
 pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
-    let mut town = (c.s.town_next_id)(0);
+    // The fork's town iteration: the next live index at or after the
+    // argument, or `u32::MAX` past the last town.
+    let mut town = (c.s.town_next_id)(u32::from(TownID::BEGIN.0));
     while town != u32::MAX {
         // SAFETY: Live town owner; immediate mutation.
         unsafe { (*crate::town::stations_near((c.s.town_owner_by_id)(town))).clear() };
         town = (c.s.town_next_id)(town + 1);
     }
-    let mut industry = (c.c.next_industry)(0);
+    let mut industry = (c.c.next_industry)(u32::from(IndustryID::BEGIN.0));
     while !industry.is_null() {
         // SAFETY: Live industry owner; immediate mutation.
         unsafe { (*c.industry_stations(industry)).clear() };
         industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry).0) + 1);
     }
-    let mut st = (c.c.next_station)(0);
+    let mut st = (c.c.next_station)(u32::from(StationID::BEGIN.0));
     while !st.is_null() {
         recompute_catchment(st, true, c);
         st = (c.c.next_station)(u32::from((c.c.id)(st).0) + 1);
@@ -822,8 +861,8 @@ pub(crate) fn for_all_stations_around_tiles(
     let mut ext = ta;
     #[allow(clippy::cast_possible_wrap)]
     ext.expand(max_c as i32, c.map, c.size_y);
-    for tile in ext.tiles(c.map) {
-        if (c.s.tile_type)(tile) != MP_STATION {
+    for tile in ext.tiles(c.map).map(TileIndex) {
+        if (c.s.tile_type)(tile.0) != MP_STATION {
             continue;
         }
         flat_insert(&mut seen, c.station_index(tile));
@@ -865,11 +904,13 @@ impl StationFinder {
     /// `GetStations`: computed on first use, then the area tile is invalidated.
     pub fn get_stations(&mut self, c: &Ctx<'_>) -> &StationList {
         if self.area.tile != INVALID_TILE {
-            if (c.s.tile_type)(self.area.tile) == MP_HOUSE {
-                // Town nearby stations are filtered per tile.
+            let tile = TileIndex(self.area.tile);
+            if (c.s.tile_type)(tile.0) == MP_HOUSE {
+                // Only one tile is supported: town nearby stations are
+                // filtered per tile.
                 c.check(self.area.w == 1 && self.area.h == 1);
-                let nearby = crate::town::stations_near(c.town_by_tile(self.area.tile));
-                add_nearby_stations_by_catchment(self.area.tile, &mut self.stations, nearby, c);
+                let nearby = crate::town::stations_near(c.town_by_tile(tile));
+                add_nearby_stations_by_catchment(tile, &mut self.stations, nearby, c);
             } else {
                 let stations = &mut self.stations;
                 for_all_stations_around_tiles(self.area, c, |st, _| {
@@ -882,9 +923,10 @@ impl StationFinder {
         &self.stations
     }
 }
-/// `AddNearbyStationsByCatchment`.
+/// `AddNearbyStationsByCatchment`: add the stations in `nearby` whose
+/// catchment covers `tile`.
 fn add_nearby_stations_by_catchment(
-    tile: u32,
+    tile: TileIndex,
     stations: &mut StationList,
     nearby: *const StationList,
     c: &Ctx<'_>,
@@ -892,39 +934,44 @@ fn add_nearby_stations_by_catchment(
     // SAFETY: Live town owner; the membership reads do not mutate the set.
     unsafe {
         for_each_station(nearby, |st| {
-            if tile_is_in_catchment((c.c.owner)(st.station), tile, c) {
+            if tile_is_in_catchment((c.c.owner)(st.station), tile.0, c) {
                 stations.insert(st.station, st.id);
             }
         });
     }
 }
 
-/// `GetProductionAroundTiles`.
+/// `GetProductionAroundTiles`: get the cargo types being produced around the
+/// tile (in a rectangle).
 pub(crate) fn production_around_tiles(
-    north_tile: u32,
+    north_tile: TileIndex,
     w: i32,
     h: i32,
     rad: i32,
     c: &Ctx<'_>,
-) -> [u32; 64] {
-    let mut produced = [0_u32; 64];
+) -> CargoArray {
+    let mut produced = [0_u32; NUM_CARGO as usize];
     let mut industries = Vec::new();
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mut ta = TileArea {
-        tile: north_tile,
+        tile: north_tile.0,
         w: w as u16,
         h: h as u16,
     };
     ta.expand(rad, c.map, c.size_y);
-    for tile in ta.tiles(c.map) {
-        if (c.s.tile_type)(tile) == MP_INDUSTRY {
+    // Loop over all tiles to get the produced cargo of
+    // everything except industries.
+    for tile in ta.tiles(c.map).map(TileIndex) {
+        if (c.s.tile_type)(tile.0) == MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
-        crate::tile_cmd::add_produced_cargo(tile, &mut produced, c);
+        crate::tile_cmd::add_produced_cargo(tile.0, &mut produced, c);
     }
+    // Loop over the seen industries. They produce cargo for
+    // anything that is within 'rad' of any one of their tiles.
     for industry in industries {
         let i = (c.c.industry_by_id)(industry);
-        // Skip an industry with a neutral station.
+        // Skip industry with neutral station.
         if !(c.c.industry_neutral)(i).is_null() && !(c.s.station_serve_neutral)() {
             continue;
         }
@@ -937,36 +984,37 @@ pub(crate) fn production_around_tiles(
     }
     produced
 }
-/// `GetAcceptanceAroundTiles`, in eighths.
+/// `GetAcceptanceAroundTiles`: get the acceptance of cargoes around the tile
+/// in 1/8.
 pub(crate) fn acceptance_around_tiles(
-    center_tile: u32,
+    center_tile: TileIndex,
     w: i32,
     h: i32,
     rad: i32,
-    always_accepted: *mut u64,
+    always_accepted: *mut CargoTypes,
     c: &Ctx<'_>,
-) -> [u32; 64] {
-    let mut acceptance = [0_u32; 64];
+) -> CargoArray {
+    let mut acceptance = [0_u32; NUM_CARGO as usize];
     // SAFETY: Null or the caller's writable mask.
     if let Some(always) = unsafe { always_accepted.as_mut() } {
-        *always = 0;
+        *always = CargoTypes(0);
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mut ta = TileArea {
-        tile: center_tile,
+        tile: center_tile.0,
         w: w as u16,
         h: h as u16,
     };
     ta.expand(rad, c.map, c.size_y);
-    for tile in ta.tiles(c.map) {
-        // Ignore an industry with a neutral station.
+    for tile in ta.tiles(c.map).map(TileIndex) {
+        // Ignore industry if it has a neutral station.
         if !(c.s.station_serve_neutral)()
-            && (c.s.tile_type)(tile) == MP_INDUSTRY
+            && (c.s.tile_type)(tile.0) == MP_INDUSTRY
             && !(c.c.industry_neutral)((c.c.industry_by_id)(c.industry_index(tile))).is_null()
         {
             continue;
         }
-        crate::tile_cmd::add_accepted_cargo(tile, &mut acceptance, always_accepted, c);
+        crate::tile_cmd::add_accepted_cargo(tile.0, &mut acceptance, always_accepted.cast(), c);
     }
     acceptance
 }
@@ -1100,7 +1148,7 @@ pub unsafe extern "C" fn openttd_rust_station_rect_before_add_tile_abi(
 ) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
-    let ok = copy.before_add_tile(tile, StationRectMode(mode), &c);
+    let ok = copy.before_add_tile(TileIndex(tile), StationRectMode(mode), &c);
     unsafe { *r = copy };
     u8::from(ok)
 }
@@ -1118,7 +1166,7 @@ pub unsafe extern "C" fn openttd_rust_station_rect_before_add_rect_abi(
 ) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
-    let ok = copy.before_add_rect(tile, w, h, StationRectMode(mode), &c);
+    let ok = copy.before_add_rect(TileIndex(tile), w, h, StationRectMode(mode), &c);
     unsafe { *r = copy };
     u8::from(ok)
 }
@@ -1164,7 +1212,7 @@ pub unsafe extern "C" fn openttd_rust_station_production_around(
     out: *mut [u32; 64],
     c: *const CatchmentServices,
 ) {
-    let produced = production_around_tiles(tile, w, h, rad, &unsafe { Ctx::new(c) });
+    let produced = production_around_tiles(TileIndex(tile), w, h, rad, &unsafe { Ctx::new(c) });
     unsafe { *out = produced };
 }
 /// Native `GetAcceptanceAroundTiles`, writing the caller's `CargoArray`.
@@ -1180,7 +1228,9 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_around(
     always: *mut u64,
     c: *const CatchmentServices,
 ) {
-    let acceptance = acceptance_around_tiles(tile, w, h, rad, always, &unsafe { Ctx::new(c) });
+    let acceptance = acceptance_around_tiles(TileIndex(tile), w, h, rad, always.cast(), &unsafe {
+        Ctx::new(c)
+    });
     unsafe { *out = acceptance };
 }
 
