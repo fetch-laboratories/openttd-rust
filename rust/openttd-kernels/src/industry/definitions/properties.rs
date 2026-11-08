@@ -55,11 +55,6 @@ fn file_tile(file: *const c_void, id: u32) -> *mut IndustryTileSpec {
         .as_deref_mut()
         .map_or(ptr::null_mut(), ptr::from_mut)
 }
-/// `GetCargoTranslation` of a cargo byte of the current file, as stored in the spec arrays.
-fn cargo_translation(cargo: u8, c: &Context) -> u8 {
-    let cargo: CargoType = get_cargo_translation(cargo, c.file, false);
-    cargo.0
-}
 /// Ignore an industry tile property.
 fn ignore_industry_tile_property(
     prop: i32,
@@ -380,9 +375,9 @@ unsafe fn industrytiles_change_info(
             0x0A..=0x0C => {
                 let acctp = u32::from(buf.word()?);
                 let slot = (prop - 0x0A) as usize;
-                let cargo = cargo_translation(gb(acctp, 0, 8) as u8, c);
+                let cargo = get_cargo_translation(gb(acctp, 0, 8) as u8, c.file, false);
                 unsafe {
-                    (*tsp).accepts_cargo[slot] = cargo;
+                    (*tsp).accepts_cargo[slot] = cargo.0;
                     (*tsp).acceptance[slot] = gb(acctp, 8, 8).clamp(0, 16) as i8;
                     (*tsp).accepts_cargo_label[slot] = INVALID_LABEL;
                 }
@@ -423,8 +418,8 @@ unsafe fn industrytiles_change_info(
                 }
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     if i < num_cargoes {
-                        let cargo = cargo_translation(buf.byte()?, c);
-                        unsafe { (*tsp).accepts_cargo[i] = cargo };
+                        let cargo = get_cargo_translation(buf.byte()?, c.file, false);
+                        unsafe { (*tsp).accepts_cargo[i] = cargo.0 };
                         // Tile acceptance can be negative to counteract the
                         // IndustryTileSpecialFlag::AcceptsAllCargo flag
                         let acceptance = buf.byte()? as i8;
@@ -578,15 +573,15 @@ unsafe fn industries_change_info(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for j in 0..count {
-                    let cargo = cargo_translation(buf.byte()?, c);
+                    let cargo = get_cargo_translation(buf.byte()?, c.file, false);
                     if produced {
                         unsafe {
-                            (*indsp).produced_cargo[j] = cargo;
+                            (*indsp).produced_cargo[j] = cargo.0;
                             (*indsp).produced_cargo_label[j] = INVALID_LABEL;
                         }
                     } else {
                         unsafe {
-                            (*indsp).accepts_cargo[j] = cargo;
+                            (*indsp).accepts_cargo[j] = cargo.0;
                             (*indsp).accepts_cargo_label[j] = INVALID_LABEL;
                         }
                     }
@@ -702,14 +697,14 @@ unsafe fn industries_change_info(
                 };
                 for i in 0..size {
                     let cargo = if i < num_cargoes {
-                        cargo_translation(buf.byte()?, c)
+                        get_cargo_translation(buf.byte()?, c.file, false)
                     } else {
-                        CargoType::INVALID_CARGO.0
+                        CargoType::INVALID_CARGO
                     };
                     if produced {
-                        unsafe { (*indsp).produced_cargo[i] = cargo };
+                        unsafe { (*indsp).produced_cargo[i] = cargo.0 };
                     } else {
-                        unsafe { (*indsp).accepts_cargo[i] = cargo };
+                        unsafe { (*indsp).accepts_cargo[i] = cargo.0 };
                     }
                     if i < labels {
                         if produced {
