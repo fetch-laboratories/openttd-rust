@@ -634,7 +634,8 @@ int main()
  * original's in both modes. Rust tests (packet::comparison_tests) carry every Rust-routed value;
  * this section keeps the fork's C++ Packet glue:
  * 1. Move construction and assignment (inline in src/network/core/packet.h) leave the source
- *    empty with its cursor. Retires with the C++ Packet facade.
+ *    empty with its cursor, and Send_bytes returns the unwritten suffix as a subspan of its
+ *    input. Retire with the C++ Packet facade.
  * 2. The TransferIn/TransferOutWithLimit templates (packet.h) call the C++ callback once with
  *    the planned span, propagate its exception uncommitted and commit a normal return to the
  *    live cursor after reentry. Retires with the last C++ transfer caller.
@@ -714,6 +715,16 @@ static void Move()
 	std::printf("move-result %u %zu %d %zu\n", assigned.Recv_uint32(), moved.Size(), moved.HasPacketSizeData(), moved.RemainingBytesToTransfer());
 }
 
+/* Send_bytes's facade returns a subspan aliasing its input. */
+static void SendBytes()
+{
+	for (size_t limit : {size_t{3}, size_t{4}, size_t{8}}) {
+		Socket socket; Packet packet(&socket, PacketType{0}, limit); std::array<uint8_t, 8> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+		auto suffix = packet.Send_bytes(bytes);
+		std::printf("send-bytes %zu %zu %td\n", limit, suffix.size(), suffix.data() - bytes.data()); State("send-bytes-state", packet, socket);
+	}
+}
+
 /* Callback return, exception and reentrant live-cursor commit. */
 static void Transfer()
 {
@@ -769,6 +780,7 @@ static void Close()
 int main()
 {
 	Move();
+	SendBytes();
 	Transfer();
 	Crypto();
 	Close();
