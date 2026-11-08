@@ -15,7 +15,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import carry_hints, checked_carries, context, reviewed
+from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
 from rust_syntax import Node, nodes, syntax_trees
 from vcs import git
@@ -361,7 +361,8 @@ def suppression_errors(
             }
             for rows in (before, after)
         )
-        valid = checked_carries(contract[1], tool, old, new, carry_rule, operator.le)
+        ledger = Ledger(tool, old, new, carry_rule, operator.le)
+        valid = checked_carries(contract[1], ledger)
         unexplained = [
             site
             for site in sorted(added)
@@ -373,13 +374,9 @@ def suppression_errors(
             f"new suppression: {site} ({added[site]})" for site in unexplained
         )
         carry_hints(
-            tool,
+            ledger,
             old.keys() - new.keys() - set(valid.values()),
             [site for site in unexplained if site not in old],
-            old,
-            new,
-            carry_rule,
-            operator.le,
         )
     return errors
 

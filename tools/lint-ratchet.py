@@ -12,7 +12,7 @@ from functools import lru_cache, partial
 from pathlib import Path
 
 from baseline_ratchet import debt_errors, exceeds
-from cleanup_contract import carry_hints, checked_carries, context, reviewed
+from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
 from vcs import git
 
@@ -260,7 +260,8 @@ def reviewed_debt(
     if not growth and measured.keys() <= previous.keys():
         return previous
     author, proposals, comments, head = context()
-    carried = checked_carries(proposals, kind, previous, baseline, lint_of, fits)
+    ledger = Ledger(kind, previous, baseline, lint_of, fits)
+    carried = checked_carries(proposals, ledger)
     allowed = dict(previous)
     allowed.update({new: previous[old] for new, old in carried.items()})
     for site, values in growth.items():
@@ -297,13 +298,9 @@ def reviewed_debt(
                     )
                 )
     carry_hints(
-        kind,
+        ledger._replace(after=measured),
         previous.keys() - measured.keys() - set(carried.values()),
         [key for key in measured if key not in allowed],
-        previous,
-        measured,
-        lint_of,
-        fits,
     )
     return allowed
 

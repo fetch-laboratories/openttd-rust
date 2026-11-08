@@ -8,7 +8,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any
+from typing import Any, NamedTuple
 
 from vcs import gh, git
 
@@ -52,59 +52,57 @@ def reviewed(
     return False
 
 
-def checked_carries(
-    proposals: list[dict[str, Any]],
-    tool: str,
-    before: Mapping[str, Any],
-    after: Mapping[str, Any],
-    rule: Callable[[str], object],
-    fits: Callable[[Any, Any], bool],
-) -> dict[str, str]:
+class Ledger(NamedTuple):
+    """One tool's keyed debt at base and head, and how carries compare it."""
+
+    tool: str
+    before: Mapping[str, Any]
+    after: Mapping[str, Any]
+    rule: Callable[[str], object]
+    fits: Callable[[Any, Any], bool]
+
+
+def carry_problem(carry: dict[str, Any], ledger: Ledger, valid: dict[str, str]) -> str:
+    old, new = carry.get("from"), carry.get("to")
+    before, after = ledger.before, ledger.after
+    if not isinstance(old, str) or not isinstance(new, str):
+        return "from and to must be keys"
+    checks = (
+        ("from does not exist at base", lambda: old not in before),
+        ("from still exists at head", lambda: old in after),
+        ("to existed at base", lambda: new in before),
+        ("to does not exist at head", lambda: new not in after),
+        ("lint or scope differs", lambda: ledger.rule(old) != ledger.rule(new)),
+        ("head exceeds from", lambda: not ledger.fits(after[new], before[old])),
+        ("key carried twice", lambda: new in valid or old in valid.values()),
+    )
+    return next((problem for problem, failed in checks if failed()), "")
+
+
+def checked_carries(proposals: list[dict[str, Any]], ledger: Ledger) -> dict[str, str]:
     """Return valid `to -> from` rekeys; print why each other carry fails."""
     valid: dict[str, str] = {}
     for carry in proposals:
-        if carry.get("kind") != "carry" or carry.get("tool") != tool:
+        if carry.get("kind") != "carry" or carry.get("tool") != ledger.tool:
             continue
-        old, new = carry.get("from"), carry.get("to")
-        if not isinstance(old, str) or not isinstance(new, str):
-            problem = "from and to must be keys"
-        elif old not in before:
-            problem = "from does not exist at base"
-        elif old in after:
-            problem = "from still exists at head"
-        elif new in before:
-            problem = "to existed at base"
-        elif new not in after:
-            problem = "to does not exist at head"
-        elif rule(old) != rule(new):
-            problem = "lint or scope differs"
-        elif not fits(after[new], before[old]):
-            problem = f"head {after[new]} exceeds {before[old]}"
-        elif new in valid or old in valid.values():
-            problem = "key carried twice"
+        if problem := carry_problem(carry, ledger, valid):
+            print(f"invalid carry ({problem}): {json.dumps(carry, sort_keys=True)}")
         else:
-            valid[new] = old
-            continue
-        print(f"invalid carry ({problem}): {json.dumps(carry, sort_keys=True)}")
+            valid[carry["to"]] = carry["from"]
     return valid
 
 
-def carry_hints(
-    tool: str,
-    retired: Iterable[str],
-    added: Iterable[str],
-    before: Mapping[str, Any],
-    after: Mapping[str, Any],
-    rule: Callable[[str], object],
-    fits: Callable[[Any, Any], bool],
-) -> None:
+def carry_hints(ledger: Ledger, retired: Iterable[str], added: Iterable[str]) -> None:
     """Print ready records for one-to-one same-lint pairs, else candidates."""
     retired, added = sorted(retired), sorted(added)
+    rule = ledger.rule
     for new in added:
         olds = [old for old in retired if rule(old) == rule(new)]
         news = [other for other in added if rule(other) == rule(new)]
-        if len(olds) == len(news) == 1 and fits(after[new], before[olds[0]]):
-            carry = {"kind": "carry", "tool": tool, "from": olds[0], "to": new}
+        if len(olds) == len(news) == 1 and ledger.fits(
+            ledger.after[new], ledger.before[olds[0]]
+        ):
+            carry = {"kind": "carry", "tool": ledger.tool, "from": olds[0], "to": new}
             print("ready carry: " + json.dumps(carry))
         elif olds:
             print(f"carry candidates for {new}: " + "; ".join(olds))
@@ -155,9 +153,16 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         raise ValueError("PR head changed since the captured checkout")
     body = current["body"] or ""
     author = ATTRIBUTION.search(body)
-    comments = discussion(prefix, number)
-    # Integration PRs name the component PRs whose content-bound acceptances
-    # they reuse; each component's own author still cannot accept its contract.
+    comments = discussion(prefix, number) + source_reviews(prefix, body, number)
+    return author[1] if author else "", records(body), comments, head
+
+
+def source_reviews(prefix: str, body: str, number: int) -> list[str]:
+    """Comments on the component PRs an integration PR names.
+
+    Each component's own author still cannot accept its contract.
+    """
+    comments: list[str] = []
     for record in records(body):
         if record.get("kind") != "reviews":
             continue
@@ -173,7 +178,7 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
                     for text in discussion(prefix, source)
                     if (match := ATTRIBUTION.search(text)) and match[1] != owner[1]
                 )
-    return author[1] if author else "", records(body), comments, head
+    return comments
 
 
 def discussion(prefix: str, number: int) -> list[str]:
