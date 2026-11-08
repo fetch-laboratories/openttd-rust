@@ -1134,7 +1134,6 @@ impl<'a> House<'a> {
         let tile = args.tile;
         let house = args.house;
         let replace = args.replace;
-        let flags = call.flags;
         let c = self.costs();
         if !(self.l.environment.editor)()
             && PlaceHouses((self.h.place_houses)()) == PlaceHouses::PH_FORBIDDEN
@@ -1209,7 +1208,7 @@ impl<'a> House<'a> {
             }
         }
         (c.zero)(call.result);
-        if flags.test(DoCommandFlag::Execute) {
+        if call.flags.test(DoCommandFlag::Execute) {
             witness::hit(W_PLACE);
             // If replacing, clear any existing houses first.
             if replace {
