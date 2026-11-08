@@ -46,17 +46,34 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 		if (id == 2) {
 			REQUIRE(Vehicle::CanAllocateItem(3));
 			new (VehicleID(0)) SchedulerLifetimeVehicle(); // Behind: waits one tick.
+			/* A reused slot gets a fresh record: poisoned counters must not survive. */
+			Vehicle::Get(VehicleID(4))->Record().cargo_age_counter = UINT16_MAX;
+			Vehicle::Get(VehicleID(4))->Record().motion_counter = UINT32_MAX;
 			delete Vehicle::Get(VehicleID(4));
-			new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
+			auto *reused = new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
+			CHECK(reused->Record().cargo_age_counter == 1);
+			CHECK(reused->Record().motion_counter == 0);
 			new (VehicleID(3)) SchedulerLifetimeVehicle(); // Inside initialized storage.
 			delete Vehicle::Get(VehicleID(5)); // Hole ahead must be skipped.
 			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.capacity);
+			/* Native shell construction and pool growth must retain the Rust record
+			 * and the scalar addresses CallVehicleTicks uses after Tick returns. */
+			auto *record = &this->Record();
+			auto *counter = &record->cargo_age_counter;
+			auto *motion = &record->motion_counter;
+			*counter = UINT16_MAX;
+			*motion = UINT32_MAX;
 			REQUIRE(Vehicle::CanAllocateItem(2));
 			new (VehicleID(_lifetime_growth)) SchedulerLifetimeVehicle();
 			new (VehicleID(_lifetime_growth + 1)) SchedulerLifetimeVehicle();
 			/* Growth may extend an allocation in place. The visit trace below
 			 * independently requires the newly initialized slots to be discovered. */
 			CHECK(_vehicle_pool.descriptor->slots.capacity > _lifetime_growth);
+			CHECK(&this->Record() == record);
+			CHECK(&this->Record().cargo_age_counter == counter);
+			CHECK(&this->Record().motion_counter == motion);
+			CHECK(this->Record().cargo_age_counter == UINT16_MAX);
+			CHECK(this->Record().motion_counter == UINT32_MAX);
 		}
 		if (id == _lifetime_growth) {
 			delete this; // Newly discovered shell dies before the next slot is read.
