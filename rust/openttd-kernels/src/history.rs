@@ -278,3 +278,320 @@ pub unsafe extern "C" fn openttd_rust_history_get_town(
     // SAFETY: Caller grants the initialized array/result and original range preconditions.
     unsafe { hr.get(history, mask, age, result) }.into()
 }
+
+#[cfg(test)]
+mod comparison_tests {
+    //! Original-only `history-comparison.cpp` observations (#736 U); see the oracle header.
+    //! `IsValidHistory` and the industry/town `GetHistory` queries call the production Rust
+    //! bodies; the uint16 queries reuse the same generic Rust `get` with the probe's reducer.
+    use super::{HistoryElement, HistoryRange, update};
+    use crate::industry::Pair;
+    use crate::oracle;
+    use crate::town::SuppliedHistory;
+
+    const ORACLE: &str = include_str!("history/comparison-oracle.txt");
+    const RECORDS: usize = 61;
+    type Sections<'a> = std::collections::HashMap<&'a str, oracle::Section<'a>>;
+
+    /// The probe's `SumHistory<uint16_t>`: `ClampTo<uint16_t>` of the plain total.
+    impl HistoryElement for u16 {
+        fn sum(history: &[Self]) -> Self {
+            let total: u32 = history.iter().map(|&v| u32::from(v)).sum();
+            u16::try_from(total).unwrap_or(u16::MAX)
+        }
+    }
+
+    /// Original `HistoryRange` constructors, including their `uint8_t` narrowing.
+    fn initial(periods: u8) -> HistoryRange {
+        HistoryRange {
+            hr: std::ptr::null(),
+            periods,
+            records: periods,
+            first: 1,
+            last: 1_u8.wrapping_add(periods),
+            division: 1,
+            total_division: 1,
+        }
+    }
+
+    fn sub(hr: &HistoryRange, division: u8, periods: u8) -> HistoryRange {
+        let records = periods.wrapping_sub((hr.periods / division).wrapping_sub(1));
+        HistoryRange {
+            hr: std::ptr::from_ref(hr),
+            periods,
+            records,
+            first: hr.last,
+            last: hr.last.wrapping_add(records),
+            division,
+            total_division: division.wrapping_mul(hr.total_division),
+        }
+    }
+
+    #[allow(unsafe_code)]
+    fn is_valid(hr: &HistoryRange, mask: u64, age: u32) -> bool {
+        // SAFETY: Every chain built here stays live for the test.
+        unsafe { hr.is_valid(mask, age) }
+    }
+
+    #[allow(unsafe_code)]
+    fn get<T: HistoryElement>(
+        history: &[T; RECORDS],
+        mask: u64,
+        hr: &HistoryRange,
+        age: u32,
+        result: &mut T,
+    ) -> Option<bool> {
+        // SAFETY: Live chain, initialized array and a distinct writable result.
+        unsafe { hr.get(history.as_ptr(), mask, age, result) }
+    }
+
+    #[allow(unsafe_code)]
+    fn update_chain(mask: u64, hr: &HistoryRange, month: u32) -> u64 {
+        // SAFETY: The live chain; subdivisions update first, as the original recursion.
+        let mask = unsafe { hr.hr.as_ref() }.map_or(mask, |child| update_chain(mask, child, month));
+        // SAFETY: Live chain for the descriptor read.
+        update(mask, unsafe { hr.descriptor() }, month)
+    }
+
+    /// The original `RotateHistory` template (unchanged C++), with the production reducers.
+    #[allow(unsafe_code)]
+    fn rotate<T: HistoryElement>(
+        history: &mut [T; RECORDS],
+        mask: u64,
+        hr: &HistoryRange,
+        month: u32,
+    ) {
+        // SAFETY: The live chain.
+        if let Some(child) = unsafe { hr.hr.as_ref() } {
+            rotate(history, mask, child, month);
+        }
+        if !month.is_multiple_of(u32::from(hr.total_division)) {
+            return;
+        }
+        let (first, last, division) = (
+            usize::from(hr.first),
+            usize::from(hr.last),
+            usize::from(hr.division),
+        );
+        history.copy_within(first..last - 1, first + 1);
+        if hr.total_division == 1 {
+            history[first] = history[first - 1];
+            history[0] = T::default();
+        } else if super::has_bit(mask, u32::from(hr.first - hr.division)) {
+            history[first] = T::sum(&history[first - division..first]);
+        }
+    }
+
+    fn set_month(month: u32) {
+        crate::timer_game_common::write_economy_month(u8::try_from(month).unwrap());
+    }
+
+    /// One test: every part sets the process-wide economy month its queries read.
+    #[test]
+    fn history_queries_match_original() {
+        let o = oracle::parse(ORACLE);
+        let month_range = initial(24);
+        let quarter = sub(&month_range, 3, 24);
+        let year = sub(&quarter, 4, 24);
+        scalars(&o);
+        production(&o, &year);
+        fillers(&o, &quarter);
+    }
+
+    fn scalars(o: &Sections<'_>) {
+        let month_range = initial(24);
+        let quarter = sub(&month_range, 3, 24);
+        let year = sub(&quarter, 4, 24);
+        let wide = initial(40);
+        let small = initial(2);
+        let middle = sub(&small, 2, 4);
+        let upper = sub(&middle, 2, 5);
+        let fourth = sub(&upper, 1, 5);
+        let one = initial(4);
+        let two = sub(&one, 1, 4);
+        let three = sub(&two, 1, 4);
+        let four = sub(&three, 1, 4);
+        let five = sub(&four, 1, 4);
+        let ranges: [&HistoryRange; 9] = [
+            &month_range,
+            &quarter,
+            &year,
+            &wide,
+            &small,
+            &middle,
+            &fourth,
+            &five,
+            &upper,
+        ];
+        let masks = [
+            0,
+            1,
+            2,
+            4,
+            8,
+            0x00AA_AAAA,
+            1 << 24,
+            1 << 41,
+            (1 << 35) | (1 << 63),
+            u64::MAX,
+        ];
+
+        let mut history = [0_u16; RECORDS];
+        for (i, value) in history.iter_mut().enumerate() {
+            *value = u16::try_from(i * 13 + 7).unwrap();
+        }
+        let (mut updates, mut queries) = (Vec::new(), Vec::new());
+        for (index, hr) in ranges.iter().enumerate() {
+            for month in 0..12 {
+                set_month((month + 5) % 12);
+                for (mask_index, &mask) in masks.iter().enumerate() {
+                    let inputs = format!("range {index} month {month} mask {mask_index}");
+                    updates.push((inputs.clone(), update_chain(mask, hr, month).to_string()));
+                    let periods = u32::from(hr.periods);
+                    for age in [
+                        0,
+                        periods / 2,
+                        periods - 1,
+                        periods,
+                        periods + 1,
+                        u32::MAX,
+                        0x4000_0000,
+                    ] {
+                        let first = u8::from(is_valid(hr, mask, age));
+                        let mut result = 999_u16;
+                        let output = match get(&history, mask, hr, age, &mut result) {
+                            Some(valid) => format!("{first} {} {result}", u8::from(valid)),
+                            None => format!("{first} fatal {result}"),
+                        };
+                        queries.push((format!("{inputs} age {age}"), output));
+                    }
+                }
+            }
+        }
+        oracle::check(o, "update", updates);
+        oracle::check(o, "query", queries);
+
+        // Multiplication wraps before the age guard, yielding a defined in-range query.
+        let mut plain = [0_u16; RECORDS];
+        for (i, value) in plain.iter_mut().enumerate() {
+            *value = u16::try_from(i).unwrap();
+        }
+        let wrapped = (0..12).map(|month| {
+            set_month(month);
+            let mut result = 999_u16;
+            let valid = get(&plain, u64::MAX, &quarter, 0x5555_5556, &mut result);
+            let output = valid.map_or_else(
+                || "fatal".to_owned(),
+                |v| format!("{} {result}", u8::from(v)),
+            );
+            (format!("month {month}"), output)
+        });
+        oracle::check(o, "wrapped-quarter", wrapped.collect::<Vec<_>>());
+    }
+
+    fn production(o: &Sections<'_>, year: &HistoryRange) {
+        let mut produced = [Pair::default(); RECORDS];
+        let mut accepted = [Pair::default(); RECORDS];
+        let mut supplied = [SuppliedHistory::default(); RECORDS];
+        for i in 0..RECORDS {
+            let n = u32::try_from(i).unwrap();
+            produced[i] = Pair {
+                first: u16::try_from(n * 37).unwrap(),
+                second: u16::try_from(n * 13).unwrap(),
+            };
+            accepted[i] = Pair {
+                first: u16::try_from(n * 11).unwrap(),
+                second: u16::try_from(n * 17).unwrap(),
+            };
+            supplied[i] = SuppliedHistory {
+                production: u32::MAX - n * 97,
+                transported: 0x8000_0000 + n * 13,
+            };
+        }
+        let (mut production, mut rotated) = (Vec::new(), Vec::new());
+        for month in 0..12 {
+            set_month(month);
+            for age in [0, 1, 4, 5, 23] {
+                let (mut p, mut a, mut t) =
+                    (Pair::default(), Pair::default(), SuppliedHistory::default());
+                let vp = u8::from(get(&produced, 4, year, age, &mut p).expect("in range"));
+                let va = u8::from(get(&accepted, 4, year, age, &mut a).expect("in range"));
+                let vt = u8::from(get(&supplied, 4, year, age, &mut t).expect("in range"));
+                production.push((
+                    format!("month {month} age {age}"),
+                    format!(
+                        "{vp} {} {} {va} {} {} {vt} {} {}",
+                        p.first, p.second, a.first, a.second, t.production, t.transported
+                    ),
+                ));
+            }
+            let (mut p, mut a, mut t) = (produced, accepted, supplied);
+            rotate(&mut p, u64::MAX, year, month);
+            rotate(&mut a, u64::MAX, year, month);
+            rotate(&mut t, u64::MAX, year, month);
+            let fields: Vec<String> = [0, 1, 24, 25, 41, 42, 60]
+                .iter()
+                .map(|&i| {
+                    let (p, a, t) = (p[i], a[i], t[i]);
+                    format!(
+                        "{} {} {} {} {} {}",
+                        p.first, p.second, a.first, a.second, t.production, t.transported
+                    )
+                })
+                .collect();
+            rotated.push((format!("month {month}"), fields.join(" ")));
+        }
+        oracle::check(o, "production", production);
+        oracle::check(o, "production-rotate", rotated);
+
+        // Nested quarter rounding versus one flattened yearly reduction.
+        let mut grouped = [Pair::default(); RECORDS];
+        for (i, value) in [0, 0, 2, 0, 0, 2, 0, 0, 2, 2, 2, 2].into_iter().enumerate() {
+            grouped[i + 1].first = value;
+        }
+        set_month(0);
+        let mut nested = Pair::default();
+        get(&grouped, u64::MAX, year, 0, &mut nested).expect("in range");
+        let flattened = crate::industry::policy::sum_history(&grouped[1..13]);
+        let grouping = format!("{} {}", nested.first, flattened.first);
+        oracle::check(o, "grouping", [("nested year 0".to_owned(), grouping)]);
+    }
+
+    /// `FillFromHistory<6>` over `HISTORY_QUARTER` with two fillers, present or absent.
+    fn fillers(o: &Sections<'_>, quarter: &HistoryRange) {
+        let mut filled = [0_u16; RECORDS];
+        for (i, value) in filled.iter_mut().enumerate() {
+            *value = u16::try_from(i * 7).unwrap();
+        }
+        let mut fillers = Vec::new();
+        for month in 0..12 {
+            set_month(month);
+            for mask in [0, 4, u64::MAX] {
+                for present in [false, true] {
+                    let mut result = 0_u16;
+                    let events: Vec<String> = (0..6_u32)
+                        .flat_map(|i| {
+                            let age = 5 - i;
+                            let event = if present {
+                                if get(&filled, mask, quarter, age, &mut result).expect("in range")
+                                {
+                                    format!("F:{result}")
+                                } else {
+                                    "I".to_owned()
+                                }
+                            } else if is_valid(quarter, mask, age) {
+                                "Z".to_owned()
+                            } else {
+                                "I".to_owned()
+                            };
+                            [format!("1:{i}:{event}"), format!("2:{i}:{event}")]
+                        })
+                        .collect();
+                    let inputs = format!("month {month} mask {mask} present {present}");
+                    fillers.push((inputs, events.join(" ")));
+                }
+            }
+        }
+        oracle::check(o, "fillers", fillers);
+    }
+}
