@@ -16,6 +16,7 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
 use crate::industry_type::{IT_INVALID, NUM_INDUSTRYTYPES};
+use crate::industrytype::IndustryLifeTypes;
 use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
 use crate::landscape_type::ARCTIC;
 use crate::newgrf_callbacks::{
@@ -875,7 +876,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     if !(e.g.environment.editor)()
         && e.company() != Owner::DEITY
         && unsafe { (e.x.raw_setting)() } == 0
-        && unsafe { super::spec_raw((*spec).life_type) }
+        && unsafe { super::is_raw_industry(IndustryLifeTypes((*spec).life_type)) }
     {
         e.fail(INVALID_STRING_ID);
         return;
@@ -909,7 +910,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         || (!(e.g.environment.editor)()
             && e.company() != Owner::DEITY
             && unsafe { (e.x.raw_setting)() } == 2
-            && unsafe { super::spec_raw((*spec).life_type) })
+            && unsafe { super::is_raw_industry(IndustryLifeTypes((*spec).life_type)) })
     {
         if DoCommandFlags(flags).test(DoCommandFlag::Execute) {
             // A fuller map lowers the effective prospecting chance because a
@@ -1002,9 +1003,9 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         super::advertise(industry.cast(), e.s);
     }
     let construction = unsafe {
-        super::construction_cost(
+        super::get_construction_cost(
             (*spec).cost_multiplier,
-            (*spec).life_type,
+            IndustryLifeTypes((*spec).life_type),
             (e.x.raw_setting)(),
         )
     };

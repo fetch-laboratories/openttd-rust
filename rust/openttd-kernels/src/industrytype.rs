@@ -7,17 +7,17 @@
 use crate::game_state::GameState;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
-    INDUSTRY_ORIGINAL_NUM_OUTPUTS, NUM_INDUSTRYTILES, NUM_INDUSTRYTYPES,
+    INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
 };
 use crate::newgrf::CargoLabel;
+use crate::newgrf_animation_type::AnimationStatus;
+use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
 /// `NUM_LANDSCAPE`.
 pub const NUM_LANDSCAPE: usize = crate::landscape_type::NUM_LANDSCAPE as usize;
-/// `AnimationStatus::NoAnimation`.
-const NO_ANIMATION: u8 = crate::newgrf_animation_type::AnimationStatus::NoAnimation.0;
 
 /// A Rust-owned vector that native readers view in place as `RustVector<T>`. Native
 /// tables also build borrowed views with zero capacity, which Rust only clones.
@@ -228,52 +228,95 @@ crate::abi::shared_records! {
     /// `IndustrySpec`; `layouts` indices are those saved in `Industry::selected_layout`.
     #[derive(Clone)]
     "IndustrySpec" ["industry_spec"] => pub struct IndustrySpec {
+        /// List of possible tile layouts for the industry
         pub layouts: NativeVec<Layout> => "RustVector<RustVector<IndustryTileLayoutTile>>",
+        /// Base construction cost multiplier.
         pub cost_multiplier: u8,
+        /// Base removal cost multiplier.
         pub removal_cost_multiplier: u32,
+        /// Chance prospecting succeeds
         pub prospecting_chance: u32,
+        /// Industries this industry cannot be close to
         pub conflicting: [u8; 3] => "IndustryType[3]",
+        /// Index to a procedure to check for conflicting circumstances
         pub check_proc: u8,
         pub produced_cargo: [u8; INDUSTRY_NUM_OUTPUTS] => "std::array<CargoType, INDUSTRY_NUM_OUTPUTS>",
         pub production_rate: [u8; INDUSTRY_NUM_OUTPUTS],
+        /// minimum amount of cargo transported to the stations.
+        /// If the waiting cargo is less than this number, no cargo is moved to it.
         pub minimal_cargo: u8,
+        /// 16 accepted cargoes.
         pub accepts_cargo: [u8; INDUSTRY_NUM_INPUTS] => "std::array<CargoType, INDUSTRY_NUM_INPUTS>",
+        /// Input cargo multipliers (multiply amount of incoming cargo for the produced cargoes)
         pub input_cargo_multiplier: [[u16; INDUSTRY_NUM_OUTPUTS]; INDUSTRY_NUM_INPUTS],
+        /// This is also known as Industry production flag, in newgrf specs
         pub life_type: u8 => "IndustryLifeTypes",
+        /// Bitmask, giving landscape enums as bit position
         pub climate_availability: u8 => "LandscapeTypes",
+        /// How this industry will behave, and how others entities can use it
         pub behaviour: u32 => "IndustryBehaviours",
+        /// colour used for the small map
         pub map_colour: u8 => "PixelColour",
+        /// Displayed name of the industry
         pub name: u32 => "StringID",
+        /// Message appearing when the industry is built
         pub new_industry_text: u32 => "StringID",
+        /// Message appearing when the industry closes
         pub closure_text: u32 => "StringID",
+        /// Message appearing when the industry's production is increasing
         pub production_up_text: u32 => "StringID",
+        /// Message appearing when the industry's production is decreasing
         pub production_down_text: u32 => "StringID",
+        /// Default name for nearby station
         pub station_name: u32 => "StringID",
+        /// Probability of appearance in game
         pub appear_ingame: [u8; NUM_LANDSCAPE],
+        /// Probability of appearance during map creation
         pub appear_creation: [u8; NUM_LANDSCAPE],
+        /// Bitmask of industry callbacks that have to be called
         pub callback_mask: u16 => "IndustryCallbackMasks",
+        /// entity still available (by default true).newgrf can disable it, though
         pub enabled: bool,
+        /// properties related to the grf file
         pub grf_prop: SubstituteProps => "SubstituteGRFFileProps",
+        /// Random sounds;
         pub random_sounds: NativeVec<u8> => "RustVector<uint8_t>",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
+        /// Cargo labels of produced cargo for default industries.
         pub produced_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_OUTPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_OUTPUTS]",
+        /// Cargo labels of accepted cargo for default industries.
         pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
-    /// `IndustryTileSpec`.
+    /// `IndustryTileSpec`: defines the data structure of each individual tile of an industry.
+    /// A tile can at most accept 3 types of cargo, even if an industry as a whole can accept
+    /// more types.
     #[derive(Clone)]
     "IndustryTileSpec" ["industry_spec"] => pub struct IndustryTileSpec {
+        /// Cargo accepted by this tile
         pub accepts_cargo: [u8; INDUSTRY_NUM_INPUTS] => "std::array<CargoType, INDUSTRY_NUM_INPUTS>",
+        /// Level of acceptance per cargo type (signed, may be negative!)
         pub acceptance: [i8; INDUSTRY_NUM_INPUTS] => "std::array<int8_t, INDUSTRY_NUM_INPUTS>",
+        /// slope pattern on which this tile cannot be built
         pub slopes_refused: u8 => "Slope",
+        /// Animation frame to start when goods are produced
         pub anim_production: u8,
+        /// Next frame in an animation
         pub anim_next: u8,
+        /// When true, the tile has to be drawn using the animation
+        /// state instead of the construction stage
         pub anim_state: bool,
+        /// Bitmask of industry tile callbacks that have to be called
         pub callback_mask: u8 => "IndustryTileCallbackMasks",
+        /// Information about the animation (is it looping, how many loops etc)
         pub animation: AnimationInfo => "AnimationInfo<IndustryAnimationTriggers>",
+        /// Bitmask of extra flags used by the tile
         pub special_flags: u8 => "IndustryTileSpecialFlags",
+        /// entity still available (by default true).newgrf can disable it, though
         pub enabled: bool,
+        /// properties related to the grf file
         pub grf_prop: SubstituteProps => "SubstituteGRFFileProps",
         pub badges: NativeVec<u32> => "RustVector<BadgeID>",
+        /// Cargo labels of accepted cargo for default industry tiles.
         pub accepts_cargo_label: [CargoLabel; INDUSTRY_ORIGINAL_NUM_INPUTS] => "OpenTTDNewGRFCargoLabel[INDUSTRY_ORIGINAL_NUM_INPUTS]",
     }
 }
@@ -327,7 +370,7 @@ pub const EMPTY_TILE: IndustryTileSpec = IndustryTileSpec {
     callback_mask: 0,
     animation: AnimationInfo {
         frames: 0,
-        status: NO_ANIMATION,
+        status: AnimationStatus::NoAnimation.0,
         speed: 2,
         triggers: 0,
     },
@@ -339,11 +382,11 @@ pub const EMPTY_TILE: IndustryTileSpec = IndustryTileSpec {
 };
 
 /// `_industry_specs`.
-static SPECS: GameState<[IndustrySpec; NUM_INDUSTRYTYPES as usize]> =
-    GameState::new([EMPTY_INDUSTRY; NUM_INDUSTRYTYPES as usize]);
+static SPECS: GameState<[IndustrySpec; IndustryType::NUM_INDUSTRYTYPES.0 as usize]> =
+    GameState::new([EMPTY_INDUSTRY; IndustryType::NUM_INDUSTRYTYPES.0 as usize]);
 /// `_industry_tile_specs`.
-static TILES: GameState<[IndustryTileSpec; NUM_INDUSTRYTILES as usize]> =
-    GameState::new([EMPTY_TILE; NUM_INDUSTRYTILES as usize]);
+static TILES: GameState<[IndustryTileSpec; IndustryGfx::NUM_INDUSTRYTILES.0 as usize]> =
+    GameState::new([EMPTY_TILE; IndustryGfx::NUM_INDUSTRYTILES.0 as usize]);
 
 /// `GRFFile::industryspec` and `GRFFile::indtspec`, keyed by file. Boxes keep the
 /// string-mapping addresses stable until publication.
@@ -368,18 +411,33 @@ fn spec_assert(ok: bool) {
     // SAFETY: production resets the specs with the process-lifetime shared table before use.
     crate::movement::native_assert(unsafe { SHARED.table() }, ok);
 }
-/// `GetIndustrySpec`, including its native assertion policy.
-pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
+/// `GetIndustrySpec`: accessor for array `_industry_specs`, including its native assertion
+/// policy.
+pub(crate) fn get_industry_spec(thistype: IndustryType) -> *mut IndustrySpec {
     spec_index(
         SPECS.get().cast(),
-        id,
-        u16::from(NUM_INDUSTRYTYPES),
+        u16::from(thistype.0),
+        u16::from(IndustryType::NUM_INDUSTRYTYPES.0),
         spec_assert,
     )
 }
-/// `GetIndustryTileSpec`, including its native assertion policy.
+/// `GetIndustryTileSpec`: accessor for array `_industry_tile_specs`, including its native
+/// assertion policy.
+pub(crate) fn get_industry_tile_spec(gfx: IndustryGfx) -> *mut IndustryTileSpec {
+    spec_index(
+        TILES.get().cast(),
+        gfx.0,
+        IndustryGfx::NUM_INDUSTRYTILES.0,
+        spec_assert,
+    )
+}
+/// Temporary raw adapter for [`get_industry_spec`]; every caller widens an `IndustryType`.
+pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
+    get_industry_spec(IndustryType(id as u8))
+}
+/// Temporary raw adapter for [`get_industry_tile_spec`].
 pub(crate) fn tile(gfx: u16) -> *mut IndustryTileSpec {
-    spec_index(TILES.get().cast(), gfx, NUM_INDUSTRYTILES, spec_assert)
+    get_industry_tile_spec(IndustryGfx(gfx))
 }
 /// The per-file specs of `file`, created empty on first use.
 ///
@@ -408,38 +466,39 @@ pub(crate) unsafe fn reset(
     origin: *const IndustrySpec,
     origin_tiles: *const IndustryTileSpec,
 ) {
-    use crate::industry_type::{NEW_INDUSTRYOFFSET, NEW_INDUSTRYTILEOFFSET};
     SHARED.exchange(shared);
     let specs = unsafe { &mut *SPECS.get() };
     for (id, spec) in specs.iter_mut().enumerate() {
-        *spec = if id < usize::from(NEW_INDUSTRYOFFSET) {
+        *spec = if id < usize::from(IndustryType::NEW_INDUSTRYOFFSET.0) {
             unsafe { (*origin.add(id)).clone() }
         } else {
             EMPTY_INDUSTRY
         };
     }
-    for spec in &mut specs[..usize::from(NEW_INDUSTRYOFFSET)] {
+    // Enable only the current climate industries
+    for spec in &mut specs[..usize::from(IndustryType::NEW_INDUSTRYOFFSET.0)] {
         spec.enabled = crate::landscape_type::LandscapeTypes(spec.climate_availability)
             .test(crate::landscape_type::LandscapeType(climate));
     }
     let tiles = unsafe { &mut *TILES.get() };
     for (gfx, spec) in tiles.iter_mut().enumerate() {
-        *spec = if gfx < usize::from(NEW_INDUSTRYTILEOFFSET) {
+        *spec = if gfx < usize::from(IndustryGfx::NEW_INDUSTRYTILEOFFSET.0) {
             unsafe { (*origin_tiles.add(gfx)).clone() }
         } else {
             EMPTY_TILE
         };
     }
+    // Every `GRFFile`, and with it its override managers' file specs, is reset here.
     unsafe { (*FILES.get()).clear() };
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_industry_specs() -> *mut IndustrySpec {
-    industry(0)
+    get_industry_spec(IndustryType(0))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_industry_tile_specs() -> *mut IndustryTileSpec {
-    tile(0)
+    get_industry_tile_spec(IndustryGfx(0))
 }
 /// `AddBadgeToSpecs` over the file's industry or industry-tile specs; whether any exists.
 ///
@@ -477,23 +536,24 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animation_info(
     spec: *const IndustryTileSpec,
 ) -> crate::newgrf_animation_base::Info {
     let spec = unsafe { &*spec };
+    let callback_mask = IndustryTileCallbackMasks(spec.callback_mask);
     crate::newgrf_animation_base::Info {
         speed: spec.animation.speed,
         frames: spec.animation.frames,
-        // AnimationStatus::Looping.
-        looping: spec.animation.status == 1,
-        // IndustryTileCallbackMask::AnimationSpeed and AnimationNextFrame.
-        speed_callback: spec.callback_mask & (1 << 1) != 0,
-        next_callback: spec.callback_mask & 1 != 0,
-        // IndustryTileSpecialFlag::NextFrameRandomBits.
-        random: spec.special_flags & 1 != 0,
+        looping: AnimationStatus(spec.animation.status) == AnimationStatus::Looping,
+        speed_callback: callback_mask.test(IndustryTileCallbackMask::AnimationSpeed),
+        next_callback: callback_mask.test(IndustryTileCallbackMask::AnimationNextFrame),
+        random: IndustryTileSpecialFlags(spec.special_flags)
+            .test(IndustryTileSpecialFlag::NextFrameRandomBits),
         enabled: true,
     }
 }
 /// `IndustrySpec::IsRawIndustry`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_spec_raw_abi(spec: *const IndustrySpec) -> u8 {
-    u8::from(crate::industry::spec_raw(unsafe { (*spec).life_type }))
+    u8::from(crate::industry::is_raw_industry(IndustryLifeTypes(
+        unsafe { (*spec).life_type },
+    )))
 }
 /// `IndustrySpec::IsProcessingIndustry`.
 #[unsafe(no_mangle)]
@@ -501,7 +561,10 @@ pub unsafe extern "C" fn openttd_rust_industry_spec_processing_abi(
     spec: *const IndustrySpec,
 ) -> u8 {
     let (life, behaviour) = unsafe { ((*spec).life_type, (*spec).behaviour) };
-    u8::from(crate::industry::spec_processing(life, behaviour))
+    u8::from(crate::industry::is_processing_industry(
+        IndustryLifeTypes(life),
+        IndustryBehaviours(behaviour),
+    ))
 }
 /// `IndustrySpec::UsesOriginalEconomy` under the economy type setting.
 #[unsafe(no_mangle)]
@@ -509,9 +572,9 @@ pub unsafe extern "C" fn openttd_rust_industry_original_economy_abi(
     spec: *const IndustrySpec,
     economy: u8,
 ) -> u8 {
-    u8::from(crate::industry::original_economy(
-        unsafe { (*spec).callback_mask },
-        economy,
+    u8::from(crate::industry::uses_original_economy(
+        crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*spec).callback_mask }),
+        crate::economy_type::EconomyType(economy),
     ))
 }
 /// `IndustrySpec::GetConstructionCost` under the raw-industry construction setting.
@@ -520,8 +583,12 @@ pub unsafe extern "C" fn openttd_rust_industry_construction_cost(
     spec: *const IndustrySpec,
     raw_setting: u8,
 ) -> i64 {
-    let (multiplier, life) = unsafe { ((*spec).cost_multiplier, (*spec).life_type) };
-    crate::industry::construction_cost(multiplier, life, raw_setting)
+    let (cost_multiplier, life_type) = unsafe { ((*spec).cost_multiplier, (*spec).life_type) };
+    crate::industry::get_construction_cost(
+        cost_multiplier,
+        IndustryLifeTypes(life_type),
+        raw_setting,
+    )
 }
 
 crate::abi::layouts! {
@@ -592,6 +659,16 @@ impl IndustryLifeTypes {
     #[must_use]
     pub const fn test(self, element: IndustryLifeType) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
+    }
+    /// Native `BaseBitSet::Any`: whether any of the given values are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 }
 

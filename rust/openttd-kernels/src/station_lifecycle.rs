@@ -273,7 +273,9 @@ pub(crate) fn generate_name(
     if info.available(n.woods, s)
         && (count_around(tile, map, size_y, freeform, |t| m.read(t) == MP_TREES) >= 8
             || count_around(tile, map, size_y, freeform, |t| {
-                crate::industry::forest(t, unsafe { &*crate::animated_tile::services().industries })
+                crate::industry::is_tile_forest_industry(crate::tile_type::TileIndex(t), unsafe {
+                    &*crate::animated_tile::services().industries
+                })
             }) >= 2)
     {
         return if Services::climate() == crate::landscape_type::TROPIC {

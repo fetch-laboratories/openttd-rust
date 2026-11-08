@@ -73,13 +73,6 @@ pub struct ConstructionServices {
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
 }
-pub(super) const ORIGINAL_CALLBACKS: u16 =
-    IndustryCallbackMasks::from_element(IndustryCallbackMask::Production256Ticks).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionCargoArrival).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::MonthlyProdChange).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionChange).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProdChangeBuild).0;
-
 fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
     let area = unsafe { super::lifecycle::location(owner) };
     let x = area.tile % size_x;
@@ -312,7 +305,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     let callbacks = unsafe { (*spec).callback_mask };
-    if !super::original_economy(callbacks, unsafe { (s.economy_type)() }) {
+    if !super::uses_original_economy(
+        IndustryCallbackMasks(callbacks),
+        crate::economy_type::EconomyType(unsafe { (s.economy_type)() }),
+    ) {
         for n in 0..produced_count(owner) {
             let random = s.shared().random_range(256);
             let p = produced(owner, n);

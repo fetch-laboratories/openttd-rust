@@ -905,7 +905,10 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
     let mut suppress = false;
     let mut recalc = false;
     // Industries with production callbacks use the original economy.
-    let original = original_economy(o.callbacks, unsafe { (s.economy_type)() });
+    let original = uses_original_economy(
+        crate::newgrf_callbacks::IndustryCallbackMasks(o.callbacks),
+        crate::economy_type::EconomyType(unsafe { (s.economy_type)() }),
+    );
     let mut div = 0u8;
     let mut mul = 0u8;
     let mut increment = 0i8;
