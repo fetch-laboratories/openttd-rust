@@ -80,9 +80,9 @@ pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
 }
 /// `for (TileIndex tile : area)`, through the shared orthogonal tile iterator. The map
 /// width is a power of two.
-pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(u32)) {
+pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(TileIndex)) {
     for tile in area.tiles(crate::map_func::Map::from_log_x(size_x.ilog2())) {
-        operation(tile);
+        operation(TileIndex(tile));
     }
 }
 
@@ -125,14 +125,14 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         }
     };
     tiles(area, map.size_x, |tile_cur| unsafe {
-        let observation = (w.cleanup_tile)(tile_cur);
+        let observation = (w.cleanup_tile)(tile_cur.0);
         if TileType(observation.kind) == TileType::MP_INDUSTRY {
             if IndustryID(observation.industry) == id {
-                (w.delete_tile_inspect)(tile_cur);
+                (w.delete_tile_inspect)(tile_cur.0);
                 let shared = s.shared();
                 // MakeWaterKeepingClass() can also handle 'land'
                 crate::water::restore(
-                    tile_cur,
+                    tile_cur.0,
                     Owner::NONE.0,
                     shared,
                     &*(shared.water_services)(),
@@ -140,13 +140,13 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
                 );
             }
         } else if TileType(observation.kind) == TileType::MP_STATION && observation.oilrig {
-            (w.delete_oilrig)(tile_cur);
+            (w.delete_oilrig)(tile_cur.0);
         }
     });
     if has_neutral_station {
         // Remove possible docking tiles
         tiles(unsafe { location(owner) }, map.size_x, |tile_cur| unsafe {
-            (w.clear_docking)(tile_cur);
+            (w.clear_docking)(tile_cur.0);
         });
     }
     let r#type = crate::industry_type::IndustryType(unsafe { (*owner).metadata.kind });
@@ -165,8 +165,8 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         );
         // Remove the farmland and convert it to regular tiles over time.
         tiles(ta, map.size_x, |tile_cur| unsafe {
-            if (w.industry_field)(tile_cur, id.0) {
-                (w.disassociate_field)(tile_cur);
+            if (w.industry_field)(tile_cur.0, id.0) {
+                (w.disassociate_field)(tile_cur.0);
             }
         });
     }
@@ -282,9 +282,9 @@ pub unsafe extern "C" fn openttd_rust_industry_randomise(
     let w = unsafe { &*lifecycle };
     let mut reseed_industry = 0;
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile, id) {
+        if (w.belongs)(tile.0, id) {
             reseed_industry |= do_trigger_industry_tile_randomisation(
-                TileIndex(tile),
+                tile,
                 IndustryRandomTrigger(trigger),
                 industry,
                 s,
@@ -360,9 +360,9 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_abi(
     let mut ret = true;
     let mut random = s.shared().random();
     tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile, id) {
+        if (w.belongs)(tile.0, id) {
             if do_trigger_industry_tile_animation(
-                TileIndex(tile),
+                tile,
                 IndustryAnimationTrigger(trigger),
                 random,
                 0,
