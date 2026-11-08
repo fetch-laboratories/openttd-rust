@@ -368,7 +368,9 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
     x: f32,
     y: f32,
 ) -> u32 {
-    unsafe { &*services }.target(rotation, x, y).0
+    unsafe { &*services }
+        .target(crate::heightmap::HeightmapRotation(rotation), x, y)
+        .0
 }
 
 #[unsafe(no_mangle)]
