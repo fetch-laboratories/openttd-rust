@@ -622,17 +622,7 @@ mod tests {
         ];
         for id in [0_u64, 42, u64::from(u32::MAX)] {
             for parameters in &parameter_sets {
-                let arguments = parameters.iter().map(token).collect::<Vec<_>>().join(" ");
-                records.push(format!("serialize {id} {arguments}"));
-                records.push(format!("clear {id} {arguments}"));
-                for index in [0, 1, 2, 99] {
-                    for replacement in [Token::E, s(b""), s(b"n\x00w"), Token::N(15)] {
-                        records.push(format!(
-                            "public-replace {id} {index} {} {arguments}",
-                            token(&replacement)
-                        ));
-                    }
-                }
+                id_records(records, id, parameters);
             }
         }
         for prefix in [e, i, rs] {
@@ -644,6 +634,25 @@ mod tests {
         records.push("public-replace 0 0 D-2 D-1".into());
         for index in [0, 99, u64::MAX] {
             records.push(format!("default {index} N1"));
+        }
+    }
+
+    /// Serialize, clear and each public replacement for one id and parameter set.
+    fn id_records(records: &mut Vec<String>, id: u64, parameters: &[Token]) {
+        let arguments = parameters.iter().map(token).collect::<Vec<_>>().join(" ");
+        records.push(format!("serialize {id} {arguments}"));
+        records.push(format!("clear {id} {arguments}"));
+        let replacements = [Token::E, s(b""), s(b"n\x00w"), Token::N(15)];
+        let pairs = [0, 1, 2, 99].into_iter().flat_map(|index| {
+            replacements
+                .iter()
+                .map(move |replacement| (index, replacement))
+        });
+        for (index, replacement) in pairs {
+            let replacement = token(replacement);
+            records.push(format!(
+                "public-replace {id} {index} {replacement} {arguments}"
+            ));
         }
     }
 
@@ -667,6 +676,22 @@ mod tests {
         }
     }
 
+    /// `LogRustEncodedDiagnostic`: the integer message, replayed against the original input.
+    fn log_message(diagnostic: &super::Diagnostic, input: &[u8]) -> Vec<u8> {
+        let part = &input[diagnostic.offset..diagnostic.offset + diagnostic.length];
+        if diagnostic.kind == 3 {
+            return [&b"Integer out of range: '"[..], part, b"'"].concat();
+        }
+        let label: &[u8] = if diagnostic.kind == 2 {
+            b"Integer out of range"
+        } else {
+            b"Cannot parse integer"
+        };
+        let tail = diagnostic.offset + diagnostic.length;
+        let tail = &input[tail..tail + diagnostic.tail_length];
+        [label, b": '", part, b"'+'", tail, b"'"].concat()
+    }
+
     struct Run {
         mode: Mode,
         stdout: Vec<String>,
@@ -676,33 +701,17 @@ mod tests {
         /// `CopyRustEncoded`: replay diagnostics against the input, assert, then copy.
         fn copy(&mut self, output: &Output, input: &[u8]) -> Result<Vec<u8>, Failed> {
             for diagnostic in output.diagnostics() {
-                let part = &input[diagnostic.offset..diagnostic.offset + diagnostic.length];
-                let mut message = Vec::new();
-                if diagnostic.kind == 3 {
-                    message.extend_from_slice(b"Integer out of range: '");
-                    message.extend_from_slice(part);
-                    message.push(b'\'');
-                } else {
-                    let label: &[u8] = if diagnostic.kind == 2 {
-                        b"Integer out of range"
-                    } else {
-                        b"Cannot parse integer"
-                    };
-                    let tail = diagnostic.offset + diagnostic.length;
-                    let tail = &input[tail..tail + diagnostic.tail_length];
-                    message = [label, b": '", part, b"'+'", tail, b"'"].concat();
-                }
                 // The probe's DebugPrint prints each message as hex.
-                self.stdout.push(format!("log {}", hex(&message)));
+                self.stdout
+                    .push(format!("log {}", hex(&log_message(diagnostic, input))));
             }
             let view = output.view();
             // Numeric assertions: !NDEBUG || WITH_ASSERT; string assertions: WITH_ASSERT.
-            if (!self.mode.ndebug || self.mode.with_assert) && view.assertion_kind == 1 {
-                let start = view.assertion_offset.min(input.len());
-                let record = &input[start..input.len().min(start + view.assertion_length)];
-                if !record.is_empty() {
-                    return Err(Failed(NUMERIC_ASSERTION));
-                }
+            // The numeric check asserts that the trailing record text is empty.
+            let start = view.assertion_offset.min(input.len());
+            let record = &input[start..input.len().min(start + view.assertion_length)];
+            if self.numeric() && view.assertion_kind == 1 && !record.is_empty() {
+                return Err(Failed(NUMERIC_ASSERTION));
             }
             // assert(len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && ...)).
             if self.mode.with_assert

@@ -250,6 +250,28 @@ mod tests {
         corpus
     }
 
+    /// One validation row: the `string_view`, in-place `std::string` and in-place `char *` results.
+    fn validation_case(input: &[u8], settings: u8) -> String {
+        // StrMakeValid(std::string_view): the same loop appending to a string.
+        let output = make_valid(input, settings);
+        // StrMakeValidInPlace(std::string &): empty returns early; erase tail.
+        let mut inplace = input.to_vec();
+        if !inplace.is_empty() {
+            let length = inplace.len();
+            let written = make_valid_in_place(&mut inplace, length, settings).written;
+            inplace.truncate(written);
+        }
+        // StrMakeValidInPlace(char *): strlen span, then a NUL if bytes remain.
+        let mut cstring = input.to_vec();
+        cstring.extend_from_slice(b"\0T!");
+        let span = cstring.iter().position(|&byte| byte == 0).unwrap();
+        let mut pair = make_valid_in_place(&mut cstring, span, settings);
+        if pair.read > pair.written {
+            assert!(pair.put_bytes(&mut cstring, b"\0"));
+        }
+        format!("{}/{}/{}/", hex(&output), hex(&inplace), hex(&cstring))
+    }
+
     #[test]
     fn validation_and_in_place_replacement_match_original() {
         let oracle = oracle::parse(ORACLE);
@@ -259,29 +281,12 @@ mod tests {
             for unknown in [0, 0xf0] {
                 // Unknown settings bits reach Rust unchanged; the original ignores them.
                 let settings = flags | unknown;
-                for (index, input) in corpus.iter().enumerate() {
-                    // StrMakeValid(std::string_view): the same loop appending to a string.
-                    let output = make_valid(input, settings);
-                    // StrMakeValidInPlace(std::string &): empty returns early; erase tail.
-                    let mut inplace = input.clone();
-                    if !inplace.is_empty() {
-                        let length = inplace.len();
-                        let written = make_valid_in_place(&mut inplace, length, settings).written;
-                        inplace.truncate(written);
-                    }
-                    // StrMakeValidInPlace(char *): strlen span, then a NUL if bytes remain.
-                    let mut cstring = input.clone();
-                    cstring.extend_from_slice(b"\0T!");
-                    let span = cstring.iter().position(|&byte| byte == 0).unwrap();
-                    let mut pair = make_valid_in_place(&mut cstring, span, settings);
-                    if pair.read > pair.written {
-                        assert!(pair.put_bytes(&mut cstring, b"\0"));
-                    }
-                    cases.push((
+                cases.extend(corpus.iter().enumerate().map(|(index, input)| {
+                    (
                         format!("settings {settings} corpus {index}"),
-                        format!("{}/{}/{}/", hex(&output), hex(&inplace), hex(&cstring)),
-                    ));
-                }
+                        validation_case(input, settings),
+                    )
+                }));
             }
         }
         assert_eq!(oracle::check(&oracle, "validation", cases), 1216);
