@@ -429,15 +429,9 @@ impl<'a> Founding<'a> {
         }
         loop {
             // Generate a tile index not too close to the edge.
+            let random = self.random();
             let mut tile = self.align_tile_to_grid(
-                TileIndex(
-                    self.random()
-                        & self
-                            .map()
-                            .size_x()
-                            .wrapping_mul(self.size_y())
-                            .wrapping_sub(1),
-                ),
+                TileIndex(self.map().random_tile_seed(self.size_y(), random)),
                 layout,
             );
             // If the random tile is water, find suitable land nearby; otherwise evaluate it.
