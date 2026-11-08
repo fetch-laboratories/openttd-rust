@@ -35,20 +35,17 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 - A boundary change does not require a separate native/full simulation run before review. Use focused local checks; request a diagnostic CI subset only for a named failure or uncovered fixture. Final exact-head Full supplies the complete simulation tier.
 - Ordinary PR pushes run cheap checks; do not use `[skip ci]` on code pushes. Use `python3 tools/ci.py request PR --profile rust|native|platform` for diagnostic subsets; request `platform` only for a suspected platform failure or once before Full for a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/` (#642's new crate dependency turned the cadence red after integration). Docs pushes to base cost no Full: the PR's update from base carries its status ([carried validation](rust-migration.md#continuous-integration)).
 - Before requesting Full for a PR removing a name, grep `tools/simulation/` and `src/tests/` for it: fixtures for scenarios not run locally compile only in Full.
-- See [continuous integration](rust-migration.md#continuous-integration) for Full jobs, platform cadence and `CI_MACOS_HEAVY`.
+- See [continuous integration](rust-migration.md#continuous-integration) for Full jobs and profiles.
 
 ## Review
 
 - Infrastructure reviews apply [cost decisions](planning.md#cost-decisions).
 - A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md). For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
 - For each new scenario, fixture or checker, the reviewer names the behavior it distinguishes that existing checks cannot ([cost decisions](planning.md#cost-decisions)). One that names none, or compares an operation with itself, is a finding; the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
-- The reviewer commits each fix to the PR branch. Rerun only checks affected by those fixes; a review without fixes reruns nothing. List each finding, its fixing commit and the check that found it. Root spot-checks the fix commits before integration. Send findings that need a scope or policy decision to root unfixed.
+- The reviewer commits each fix to the PR branch. Rerun only checks affected by those fixes; a review without fixes reruns nothing. List each finding, its fixing commit and the check that found it. Send findings that need a scope or policy decision to root unfixed.
 - Use the review report skeleton in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md), starting with `Reviewed commit: <sha>`. Name the functions or files compared with original bodies and duplicate callbacks; cite the quick-CI orphan-export check for exports and declarations. Name touched `WITH_RUST` bodies and their production callers. Each orphan is a finding. Add no narration when there are no findings. Put branches the harness does not reach in #156, not only in the disposition.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review. CI checks those commits. A simulation behavior fix found by CI needs a fresh scoped review, including arithmetic or assertion fixes.
-- A reviewed PR's base update needs no new review if CI passes and one of these conditions holds:
-  - The update has no conflicts in `src/`, `rust/`, `tools/` or `.github/`.
-  - It resolves every conflict by keeping both sides' lines unchanged. `git show --remerge-diff` removes only conflict markers.
-- Root records the applicable condition on the PR. Such an update needs only CI: no recount, local build, proof or new evidence. Record metrics once, at the head that integrates. Otherwise a fresh reviewer checks and fixes only the conflict resolution.
+- A reviewed PR's base update that meets a condition under [integration](root-workflow.md#integration) needs only CI.
 
 ## Integration
 
