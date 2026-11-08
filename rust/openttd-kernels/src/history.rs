@@ -409,6 +409,36 @@ mod comparison_tests {
         fillers(&o, &quarter);
     }
 
+    /// The probe's seven ages: `IsValidHistory`, then `GetHistory` or its fatal.
+    fn query_ages(
+        history: &[u16; RECORDS],
+        mask: u64,
+        hr: &HistoryRange,
+        inputs: &str,
+    ) -> Vec<(String, String)> {
+        let periods = u32::from(hr.periods);
+        let ages = [
+            0,
+            periods / 2,
+            periods - 1,
+            periods,
+            periods + 1,
+            u32::MAX,
+            0x4000_0000,
+        ];
+        ages.into_iter()
+            .map(|age| {
+                let first = u8::from(Live::is_valid(hr, mask, age));
+                let mut result = 999_u16;
+                let output = match Live::get(history, mask, hr, age, &mut result) {
+                    Some(valid) => format!("{first} {} {result}", u8::from(valid)),
+                    None => format!("{first} fatal {result}"),
+                };
+                (format!("{inputs} age {age}"), output)
+            })
+            .collect()
+    }
+
     fn scalars(o: &Sections<'_>) {
         let month_range = initial(24);
         let quarter = sub(&month_range, 3, 24);
@@ -452,32 +482,15 @@ mod comparison_tests {
             *value = u16::try_from(i * 13 + 7).unwrap();
         }
         let (mut updates, mut queries) = (Vec::new(), Vec::new());
-        for (index, hr) in ranges.iter().enumerate() {
-            for month in 0..12 {
-                set_month((month + 5) % 12);
-                for (mask_index, &mask) in masks.iter().enumerate() {
-                    let inputs = format!("range {index} month {month} mask {mask_index}");
-                    updates.push((inputs.clone(), update_chain(mask, hr, month).to_string()));
-                    let periods = u32::from(hr.periods);
-                    for age in [
-                        0,
-                        periods / 2,
-                        periods - 1,
-                        periods,
-                        periods + 1,
-                        u32::MAX,
-                        0x4000_0000,
-                    ] {
-                        let first = u8::from(Live::is_valid(hr, mask, age));
-                        let mut result = 999_u16;
-                        let output = match Live::get(&history, mask, hr, age, &mut result) {
-                            Some(valid) => format!("{first} {} {result}", u8::from(valid)),
-                            None => format!("{first} fatal {result}"),
-                        };
-                        queries.push((format!("{inputs} age {age}"), output));
-                    }
-                }
-            }
+        // Probe order: range, then month, then mask.
+        for case in 0..ranges.len() * 12 * masks.len() {
+            let (index, mask_index) = (case / (12 * masks.len()), case % masks.len());
+            let month = u32::try_from(case / masks.len() % 12).unwrap();
+            let (hr, mask) = (ranges[index], masks[mask_index]);
+            set_month((month + 5) % 12);
+            let inputs = format!("range {index} month {month} mask {mask_index}");
+            updates.push((inputs.clone(), update_chain(mask, hr, month).to_string()));
+            queries.extend(query_ages(&history, mask, hr, &inputs));
         }
         oracle::check(o, "update", updates);
         oracle::check(o, "query", queries);
@@ -568,6 +581,31 @@ mod comparison_tests {
         oracle::check(o, "grouping", [("nested year 0".to_owned(), grouping)]);
     }
 
+    /// One `FillFromHistory<6>` call: both fillers see each age's event in turn.
+    fn fill_events(
+        filled: &[u16; RECORDS],
+        mask: u64,
+        quarter: &HistoryRange,
+        present: bool,
+    ) -> String {
+        let mut result = 0_u16;
+        let mut events = Vec::new();
+        for i in 0..6_u32 {
+            let age = 5 - i;
+            let event = match (
+                present,
+                present && Live::get(filled, mask, quarter, age, &mut result).expect("in range"),
+            ) {
+                (true, true) => format!("F:{result}"),
+                (false, _) if Live::is_valid(quarter, mask, age) => "Z".to_owned(),
+                _ => "I".to_owned(),
+            };
+            events.push(format!("1:{i}:{event}"));
+            events.push(format!("2:{i}:{event}"));
+        }
+        events.join(" ")
+    }
+
     /// `FillFromHistory<6>` over `HISTORY_QUARTER` with two fillers, present or absent.
     fn fillers(o: &Sections<'_>, quarter: &HistoryRange) {
         let mut filled = [0_u16; RECORDS];
@@ -575,34 +613,13 @@ mod comparison_tests {
             *value = u16::try_from(i * 7).unwrap();
         }
         let mut fillers = Vec::new();
-        for month in 0..12 {
+        // Probe order: month, then mask, then absent before present.
+        for case in 0..72_u32 {
+            let (month, present) = (case / 6, case % 2 == 1);
+            let mask = [0, 4, u64::MAX][usize::try_from(case / 2 % 3).unwrap()];
             set_month(month);
-            for mask in [0, 4, u64::MAX] {
-                for present in [false, true] {
-                    let mut result = 0_u16;
-                    let events: Vec<String> = (0..6_u32)
-                        .flat_map(|i| {
-                            let age = 5 - i;
-                            let event = if present {
-                                if Live::get(&filled, mask, quarter, age, &mut result)
-                                    .expect("in range")
-                                {
-                                    format!("F:{result}")
-                                } else {
-                                    "I".to_owned()
-                                }
-                            } else if Live::is_valid(quarter, mask, age) {
-                                "Z".to_owned()
-                            } else {
-                                "I".to_owned()
-                            };
-                            [format!("1:{i}:{event}"), format!("2:{i}:{event}")]
-                        })
-                        .collect();
-                    let inputs = format!("month {month} mask {mask} present {present}");
-                    fillers.push((inputs, events.join(" ")));
-                }
-            }
+            let inputs = format!("month {month} mask {mask} present {present}");
+            fillers.push((inputs, fill_events(&filled, mask, quarter, present)));
         }
         oracle::check(o, "fillers", fillers);
     }
