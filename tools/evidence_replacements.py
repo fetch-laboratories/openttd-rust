@@ -24,18 +24,23 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFESTS = "migration/evidence-replacements/*.json"
 NATIVE_SUFFIXES = {".cpp", ".cc", ".cxx", ".h", ".hpp", ".inc"}
 
 
-class Replacement(TypedDict):
+class _RequiredReplacement(TypedDict):
     retires: list[str]
     oracle: str
     observations: dict[str, list[str]]
-    platform: NotRequired[str]
+
+
+# total=False keeps the configure-time import working on Python 3.10, which
+# lacks typing.NotRequired (Emscripten's container).
+class Replacement(_RequiredReplacement, total=False):
+    platform: str
 
 
 PLATFORMS = {"linux": 'CMAKE_SYSTEM_NAME STREQUAL "Linux"'}
