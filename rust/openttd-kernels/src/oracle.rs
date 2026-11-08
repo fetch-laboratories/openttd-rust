@@ -80,6 +80,114 @@ pub(crate) fn check(
     name: &str,
     actual: impl IntoIterator<Item = (String, String)>,
 ) -> usize {
+    check_with(sections, name, actual, |want, got| {
+        let mut out = String::new();
+        let (a, b): (Vec<_>, Vec<_>) = (want.split(' ').collect(), got.split(' ').collect());
+        for field in 0..a.len().max(b.len()) {
+            let (x, y) = (a.get(field).copied(), b.get(field).copied());
+            if x != y {
+                let _ = writeln!(
+                    out,
+                    "  field {field}: original {} candidate {}",
+                    x.unwrap_or("<none>"),
+                    y.unwrap_or("<none>")
+                );
+            }
+        }
+        out
+    })
+}
+
+/// Compare rows of `u64` results stored with [`encode_rows`]; `(inputs, results, stride)`.
+///
+/// A failure decodes the original row and lists each differing element position.
+pub(crate) fn check_rows(
+    sections: &HashMap<&str, Section<'_>>,
+    name: &str,
+    actual: impl IntoIterator<Item = (String, Vec<u64>, usize)>,
+) -> usize {
+    let actual = actual
+        .into_iter()
+        .map(|(inputs, values, stride)| (inputs, encode_rows(&values, stride)));
+    check_with(sections, name, actual, |want, got| {
+        let mut out = String::new();
+        let (a, b) = (decode_rows(want), decode_rows(got));
+        for index in 0..a.len().max(b.len()) {
+            let (x, y) = (a.get(index), b.get(index));
+            if x != y {
+                let _ = writeln!(out, "  element {index}: original {x:?} candidate {y:?}");
+            }
+        }
+        out
+    })
+}
+
+/// Encode a result row losslessly: `stride` interleaved parts joined by ` | `, each part its
+/// first value in decimal, then wrapping `i64` deltas with runs written `d*n` (`-` if empty).
+pub(crate) fn encode_rows(values: &[u64], stride: usize) -> String {
+    let mut parts = Vec::with_capacity(stride);
+    for start in 0..stride {
+        let part: Vec<u64> = values.iter().skip(start).step_by(stride).copied().collect();
+        let Some(&first) = part.first() else {
+            parts.push("-".to_owned());
+            continue;
+        };
+        let mut text = first.to_string();
+        let deltas: Vec<i64> = part
+            .windows(2)
+            .map(|pair| pair[1].wrapping_sub(pair[0]).cast_signed())
+            .collect();
+        for run in deltas.chunk_by(|a, b| a == b) {
+            if run.len() > 1 {
+                let _ = write!(text, " {}*{}", run[0], run.len());
+            } else {
+                let _ = write!(text, " {}", run[0]);
+            }
+        }
+        parts.push(text);
+    }
+    parts.join(" | ")
+}
+
+/// Decode an [`encode_rows`] line.
+pub(crate) fn decode_rows(line: &str) -> Vec<u64> {
+    let parts: Vec<Vec<u64>> = line
+        .split(" | ")
+        .map(|part| {
+            let mut values: Vec<u64> = Vec::new();
+            if part == "-" {
+                return values;
+            }
+            let mut tokens = part.split(' ');
+            values.push(
+                tokens
+                    .next()
+                    .and_then(|t| t.parse().ok())
+                    .unwrap_or_default(),
+            );
+            for token in tokens {
+                let (delta, count) = token.split_once('*').unwrap_or((token, "1"));
+                let delta: i64 = delta.parse().unwrap_or_default();
+                for _ in 0..count.parse::<usize>().unwrap_or(1) {
+                    let last = *values.last().unwrap_or(&0);
+                    values.push(last.wrapping_add_signed(delta));
+                }
+            }
+            values
+        })
+        .collect();
+    let total = parts.iter().map(Vec::len).sum();
+    (0..total)
+        .map(|index| parts[index % parts.len()][index / parts.len()])
+        .collect()
+}
+
+fn check_with(
+    sections: &HashMap<&str, Section<'_>>,
+    name: &str,
+    actual: impl IntoIterator<Item = (String, String)>,
+    differ: impl Fn(&str, &str) -> String,
+) -> usize {
     let section = sections
         .get(name)
         .unwrap_or_else(|| panic!("missing oracle section {name}"));
@@ -97,19 +205,7 @@ pub(crate) fn check(
             failed += 1;
             if failed <= 20 {
                 let _ = writeln!(failures, "case {} [{inputs}]:", count - 1);
-                let (a, b): (Vec<_>, Vec<_>) =
-                    (want.split(' ').collect(), got.split(' ').collect());
-                for field in 0..a.len().max(b.len()) {
-                    let (x, y) = (a.get(field).copied(), b.get(field).copied());
-                    if x != y {
-                        let _ = writeln!(
-                            failures,
-                            "  field {field}: original {} candidate {}",
-                            x.unwrap_or("<none>"),
-                            y.unwrap_or("<none>")
-                        );
-                    }
-                }
+                failures.push_str(&differ(want, &got));
             }
         }
     }
