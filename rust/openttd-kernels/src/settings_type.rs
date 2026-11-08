@@ -84,6 +84,18 @@ impl SettingAddresses {
     };
 }
 
+/// Possible values for the `place_houses` setting (`settings_type.h`), retaining every underlying byte.
+/// `PH_ALLOWED` (1) has no Rust reader; the settings table stays native.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlaceHouses(pub u8);
+impl PlaceHouses {
+    /// Placing houses is forbidden.
+    pub const PH_FORBIDDEN: Self = Self(0);
+    /// Placing houses is allowed; they are placed fully constructed.
+    pub const PH_ALLOWED_CONSTRUCTED: Self = Self(2);
+}
+
 /// Native `settings_type.h::IndustryDensity`, retaining the full underlying integer domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -179,3 +179,6 @@ impl CargoClasses {
 }
 
 crate::base_bitset_type::impl_bitset_ops!(CargoClasses);
+
+/// Divisor of `CargoSpec::town_production_multiplier` (`cargotype.h`).
+pub const TOWN_PRODUCTION_DIVISOR: u32 = 256;
