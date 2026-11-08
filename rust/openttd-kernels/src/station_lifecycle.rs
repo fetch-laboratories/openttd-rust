@@ -4,6 +4,7 @@
 //! field accesses and owner borrows end before a service can reenter an owner.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::too_many_lines)]
 use crate::cargo_type::{NUM_CARGO, is_valid_cargo_type};
+use crate::industry_map::{get_industry_by_tile, get_industry_type};
 use crate::industry_type::{IT_INVALID, NUM_INDUSTRYTYPES};
 use crate::map_func::TileTypeAccess;
 use crate::road_map::{ROADSIDE_BARREN, ROADSIDE_GRASS, ROADSIDE_PAVED};
@@ -128,8 +129,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
     if m.read(tile) != MP_INDUSTRY {
         return false;
     }
-    let shell =
-        crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
+    let shell = get_industry_by_tile(m, TileIndex(tile), s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
     if unsafe { (*Services::spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
@@ -205,14 +205,14 @@ pub(crate) fn generate_name(
         if m.read(at) != MP_INDUSTRY {
             continue;
         }
-        let kind = crate::industry_map::get_industry_type(
+        let kind = get_industry_type(
             &m,
-            at,
+            TileIndex(at),
             s.catchment.industry_by_id,
             s.catchment.industry_owner,
             s.check(),
         );
-        let spec = Services::spec(kind);
+        let spec = Services::spec(kind.0);
         // Undefined means this industry does not name stations.
         if unsafe { (*spec).station_name } == n.undefined {
             continue;
@@ -221,11 +221,11 @@ pub(crate) fn generate_name(
         // suffixes. A null name does only that.
         info.set_used(n.oilfield, s);
         info.set_used(n.mines, s);
-        if info.industries[usize::from(kind)] {
+        if info.industries[usize::from(kind.0)] {
             continue;
         }
         if unsafe { (*spec).station_name } != n.null {
-            (s.set_industry_type)(st, kind);
+            (s.set_industry_type)(st, kind.0);
             return n.fallback;
         }
         break;

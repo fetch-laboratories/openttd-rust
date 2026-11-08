@@ -115,6 +115,24 @@ pub const PR_BUILD_CANAL: usize = Price::PR_BUILD_CANAL.0 as usize;
 /// `PR_BUILD_LOCK`.
 pub const PR_BUILD_LOCK: usize = Price::PR_BUILD_LOCK.0 as usize;
 
+/// Native `EconomyType`: type of the game economy.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EconomyType(pub u8);
+
+impl EconomyType {
+    /// Native `ET_BEGIN`.
+    pub const ET_BEGIN: Self = Self(0);
+    /// Native `ET_ORIGINAL`.
+    pub const ET_ORIGINAL: Self = Self(0);
+    /// Native `ET_SMOOTH`.
+    pub const ET_SMOOTH: Self = Self(1);
+    /// Native `ET_FROZEN`.
+    pub const ET_FROZEN: Self = Self(2);
+    /// Native `ET_END`.
+    pub const ET_END: Self = Self(3);
+}
+
 /// Native `ExpensesType : uint8_t` carrier.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

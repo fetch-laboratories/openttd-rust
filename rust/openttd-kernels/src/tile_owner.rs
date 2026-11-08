@@ -67,7 +67,11 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
             7 => (s.void)(tile, old, new),
             8 => {
                 let owner = ((*s.industry).industry)(tile).owner;
-                industry::openttd_rust_industry_change_owner(owner, old, new);
+                industry::change_tile_owner_industry(
+                    owner,
+                    crate::company_type::CompanyID(old),
+                    crate::company_type::CompanyID(new),
+                );
             }
             9 => {
                 crate::tunnelbridge_cmd::change_owner(

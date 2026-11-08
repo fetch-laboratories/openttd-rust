@@ -20,6 +20,8 @@ pub struct IndustryCommandServices {
     pub valid_company: unsafe extern "C" fn(u8) -> bool,
     pub invalidate_view: unsafe extern "C" fn(u16),
 }
+/// Original `CmdIndustrySetFlags`: set industry control flags.
+///
 /// # Safety
 /// Live synchronous pool services; the owner is resolved only for an executing
 /// command and no reference to its fields survives a callback.
@@ -35,7 +37,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
         return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
-    if shell.is_null() || value & !IndustryControlFlags::MASK != 0 {
+    if shell.is_null() || !IndustryControlFlags(value).is_valid() {
         return u8::from(false);
     }
     if execute {
@@ -46,6 +48,8 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     }
     u8::from(true)
 }
+/// Original `CmdIndustrySetProduction`: set industry production.
+///
 /// # Safety
 /// Live synchronous services. The original post-assignment news comparison is
 /// always false; production multiplier leaves cannot mutate the requested level.
@@ -72,9 +76,15 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
             (*owner).fields.prod_level = level;
         }
         super::recompute(owner);
+        // Show news message if requested: `prod_level != ind->prod_level` is false after the
+        // assignment above, so the original adds no news item.
     }
     u8::from(true)
 }
+/// Original `CmdIndustrySetExclusivity`: change exclusive consumer or supplier for the
+/// industry. `company` is the company to set, or `INVALID_OWNER` (available to everyone),
+/// `OWNER_NONE` (neutral stations only) or `OWNER_DEITY` (no one).
+///
 /// # Safety
 /// Synchronous native pool and company lookup; owner mutation has no reentry.
 #[unsafe(no_mangle)]
@@ -93,10 +103,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
     if shell.is_null() {
         return u8::from(false);
     }
-    if CompanyID(company) != Owner::NONE
-        && CompanyID(company) != CompanyID::INVALID
-        && CompanyID(company) != Owner::DEITY
-        && !unsafe { (s.valid_company)(company) }
+    let company_id = CompanyID(company);
+    if company_id != Owner::NONE
+        && company_id != Owner::INVALID
+        && company_id != Owner::DEITY
+        && !unsafe { (s.valid_company)(company_id.0) }
     {
         return u8::from(false);
     }
@@ -104,14 +115,16 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
         let owner = unsafe { (s.owner)(shell) };
         unsafe {
             if consumer {
-                (*owner).metadata.exclusive_consumer = company;
+                (*owner).metadata.exclusive_consumer = company_id.0;
             } else {
-                (*owner).metadata.exclusive_supplier = company;
+                (*owner).metadata.exclusive_supplier = company_id.0;
             }
         }
     }
     u8::from(true)
 }
+/// Original `CmdIndustrySetText`: change additional industry text.
+///
 /// # Safety
 /// Borrowed full encoded byte span remains live through this synchronous call.
 /// Native UI invalidation runs only after the owner text mutation ends.
@@ -139,22 +152,30 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
     }
     u8::from(true)
 }
+/// Original `ChangeTileOwner_Industry`, after its `Industry::GetByTile` lookup.
+///
 /// # Safety
 /// Live owner, with no callbacks or surviving reference to metadata.
-pub(crate) unsafe fn openttd_rust_industry_change_owner(owner: *mut Industry, old: u8, new: u8) {
+pub(crate) unsafe fn change_tile_owner_industry(
+    owner: *mut Industry,
+    old_owner: Owner,
+    new_owner: Owner,
+) {
     unsafe {
-        if (*owner).metadata.founder == old {
-            (*owner).metadata.founder = if CompanyID(new) == CompanyID::INVALID {
-                Owner::NONE.0
+        // If the founder merges, the industry was created by the merged company
+        if CompanyID((*owner).metadata.founder) == old_owner {
+            (*owner).metadata.founder = if new_owner == Owner::INVALID {
+                Owner::NONE
             } else {
-                new
-            };
+                new_owner
+            }
+            .0;
         }
-        if (*owner).metadata.exclusive_supplier == old {
-            (*owner).metadata.exclusive_supplier = new;
+        if CompanyID((*owner).metadata.exclusive_supplier) == old_owner {
+            (*owner).metadata.exclusive_supplier = new_owner.0;
         }
-        if (*owner).metadata.exclusive_consumer == old {
-            (*owner).metadata.exclusive_consumer = new;
+        if CompanyID((*owner).metadata.exclusive_consumer) == old_owner {
+            (*owner).metadata.exclusive_consumer = new_owner.0;
         }
     }
 }

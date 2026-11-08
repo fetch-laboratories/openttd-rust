@@ -47,8 +47,10 @@ struct IndustryTileSpec {
 	std::array<int8_t, 16> acceptance{};
 	Bits special_flags, callback_mask;
 };
-static std::array<Tile, 6> tiles;
-static std::array<IndustryTileSpec, 6> specs;
+/* A synthetic 3x2 industry with a 4-wide power-of-two row stride;
+ * tile 3 lies outside the industry. */
+static std::array<Tile, 7> tiles;
+static std::array<IndustryTileSpec, 7> specs;
 static IndustryTileSpec builtin_spec;
 static std::vector<std::array<uint32_t, 4>> trace;
 static uint32_t rng, self_mask, parent_mask;
@@ -63,7 +65,7 @@ static uint8_t GetIndustryRandomBits(TileIndex tile) { return tiles[tile].bits; 
 static void SetIndustryRandomBits(TileIndex tile, uint8_t bits) { tiles[tile].bits = bits; trace.push_back({2, tile, bits, 0}); }
 static void MarkTileDirtyByTile(TileIndex tile) { trace.push_back({3, tile, 0, 0}); }
 struct Industry {
-	std::array<TileIndex, 6> location{0, 1, 2, 3, 4, 5};
+	std::array<TileIndex, 6> location{0, 1, 2, 4, 5, 6};
 	uint16_t random;
 	struct Accepted { uint8_t cargo; };
 	std::vector<Accepted> accepted;
@@ -282,7 +284,7 @@ static void Run()
 			auto setup = [&] {
 				rng = seed; self_mask = mask; parent_mask = mask; trace.clear();
 				for (uint tile = 0; tile < tiles.size(); tile++) {
-					tiles[tile] = {static_cast<uint8_t>(tile * 7 + variant), static_cast<uint8_t>(tile * 23 + variant), tile != 1 && (variant != 7 || tile != 3)};
+					tiles[tile] = {static_cast<uint8_t>(tile * 7 + variant), static_cast<uint8_t>(tile * 23 + variant), tile != 1 && (variant != 7 || tile != 4)};
 					specs[tile] = {{((variant >> (tile % 3)) & 1) != 0}, {{static_cast<uint8_t>(tile * 13 + variant)}}};
 				}
 			};
@@ -304,10 +306,10 @@ static void Run()
 				const auto reference_random = industry.random;
 				setup(); metadata->random = static_cast<uint16_t>(seed);
 				bool candidate_result = true;
-				if (operation == 0) openttd_rust_industry_randomise(&industry, owner, 0, trigger, 3, &services, &lifecycle);
+				if (operation == 0) openttd_rust_industry_randomise(&industry, owner, 0, trigger, 4, &services, &lifecycle);
 				if (operation == 1) openttd_rust_industry_randomise_tile(2, trigger, &industry, owner, &services, &lifecycle);
 				if (operation == 3) candidate_result = openttd_rust_industry_animate_tile(2, trigger, trigger == 0 && (variant & 1) ? 0x100 : 0, &services, &lifecycle);
-				if (operation == 2) candidate_result = openttd_rust_industry_animate(owner, 0, trigger, 3, &services, &lifecycle);
+				if (operation == 2) candidate_result = openttd_rust_industry_animate(owner, 0, trigger, 4, &services, &lifecycle);
 				if (trace != reference_trace || rng != reference_rng || metadata->random != reference_random || candidate_result != reference_result) {
 					std::fprintf(stderr, "seed %u mask %u variant %u trigger %u operation %u: RNG %u/%u, random %u/%u, result %d/%d, traces %zu/%zu\n", seed, mask, variant, trigger, operation, rng, reference_rng, metadata->random, reference_random, candidate_result, reference_result, trace.size(), reference_trace.size());
 					std::abort();
