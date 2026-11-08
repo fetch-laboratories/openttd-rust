@@ -21,7 +21,7 @@
     clippy::fn_params_excessive_bools,
     clippy::verbose_bit_mask
 )]
-use crate::company_type::{INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
+use crate::company_type::{CompanyID, INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::raw_field::{read_field, write_field};
 use std::ptr::{addr_of, addr_of_mut};
@@ -1218,7 +1218,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if new == INVALID_OWNER {
         write_field!((f.company_finances)(old), money, (u64::MAX >> 2) as i64);
     }
-    unsafe { &*(s.subsidies)() }.transfer(old, new);
+    unsafe { &*(s.subsidies)() }.transfer(CompanyID(old), CompanyID(new));
     let mut t = TownRights {
         rating: 0,
         have_ratings: 0,
