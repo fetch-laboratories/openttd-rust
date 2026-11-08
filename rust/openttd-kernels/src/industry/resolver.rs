@@ -1,25 +1,30 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Industry and industry-tile resolvers. Contexts are stack values; industry state and the
-//! ordered registries are read directly, and Action2, town and storage calls can reenter.
+//! Industry and industry-tile resolvers (`newgrf_industries.cpp`, `newgrf_industrytiles.cpp`).
+//! Contexts are stack values; industry state and the ordered registries are read directly,
+//! and Action2, town and storage calls can reenter.
 use super::{Builder, Industry, LifecycleServices, SpecHandle, TileServices, TownHandle};
+use crate::bitmath_func::{gb, has_bit, set_bit};
+use crate::cargo_registry::get_cargo_translation;
+use crate::cargo_type::CargoType;
+use crate::company_type::{CompanyID, Owner};
 use crate::debug::debug;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
-use crate::industry_type::{
-    INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, IndustryID, IndustryType,
-    NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTYPES,
+use crate::industry_type::{IndustryGfx, IndustryID, IndustryType};
+use crate::industrytype::{
+    IndustryBehaviour, IndustryBehaviours, IndustrySpec, get_industry_spec, get_industry_tile_spec,
 };
-use crate::industrytype::{self, IndustryBehaviour, IndustryBehaviours};
 use crate::newgrf_callbacks::{
-    CALLBACK_FAILED, CBID_INDUSTRY_LOCATION, CBID_INDUSTRY_PROBABILITY, CBID_INDUSTRY_REFUSE_CARGO,
-    INDUSTRY_PROBABILITY, INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
-    INDUSTRY_REFUSE_CARGO,
+    CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
 };
+use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
-use crate::tile_type::{INVALID_TILE, MP_INDUSTRY};
+use crate::tile_type::{TILE_HEIGHT, TileIndex, TileType};
 use crate::timer_game_common::{DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR};
+use crate::town_type::TownID;
 use crate::witness;
 use std::{ffi::c_void, ptr};
 
+/// The scope state shared by `IndustriesScopeResolver` and `IndustryTileScopeResolver`.
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct ResolverContext {
@@ -30,6 +35,20 @@ pub struct ResolverContext {
     pub random_bits: u32,
     pub id: u16,
     pub kind: u8,
+}
+impl ResolverContext {
+    /// `tile`: the tile related to the object.
+    fn tile(&self) -> TileIndex {
+        TileIndex(self.tile)
+    }
+    /// `industry->index`, or `IndustryID::Invalid()` for a construction check.
+    fn index(&self) -> IndustryID {
+        IndustryID(self.id)
+    }
+    /// `IndustriesScopeResolver::type`: the type of the industry.
+    fn industry_type(&self) -> IndustryType {
+        IndustryType(self.kind)
+    }
 }
 #[repr(C)]
 pub struct ResolverRef {
@@ -76,174 +95,296 @@ impl ResolverServices {
     fn map(&self) -> crate::map_func::Map {
         self.shared().map()
     }
-    fn is_industry(&self, tile: u32) -> bool {
-        (self.shared().tile_type)(tile) == MP_INDUSTRY
+    /// `IsTileType(tile, MP_INDUSTRY)`.
+    fn is_industry_tile(&self, tile: TileIndex) -> bool {
+        crate::tile_map::is_tile_type(self.shared(), tile.0, TileType::MP_INDUSTRY.0)
     }
-    fn belongs(&self, tile: u32, id: u16) -> bool {
-        unsafe { (self.lifecycle().belongs)(tile, id) }
+    /// `Industry::TileBelongsToIndustry`, for the industry with this index.
+    fn tile_belongs_to_industry(&self, tile: TileIndex, index: IndustryID) -> bool {
+        unsafe { (self.lifecycle().belongs)(tile.0, index.0) }
     }
+    /// `GetNearbyTile`.
+    fn get_nearby_tile(&self, parameter: u8, tile: TileIndex, signed_offsets: bool) -> TileIndex {
+        TileIndex(unsafe { (self.nearby)(parameter, tile.0, signed_offsets) })
+    }
+    /// `GetCleanIndustryGfx`.
+    fn get_clean_industry_gfx(&self, tile: TileIndex) -> IndustryGfx {
+        IndustryGfx(unsafe { (self.clean_gfx)(tile.0) })
+    }
+    /// `GetClosestWaterDistance`.
+    fn get_closest_water_distance(&self, tile: TileIndex, water: bool) -> u32 {
+        unsafe { (self.water_distance)(tile.0, water) }
+    }
+    /// `GetAnimationFrame` of an industry tile.
+    fn get_animation_frame(&self, tile: TileIndex) -> u8 {
+        unsafe { (self.tile().frame)(tile.0) }
+    }
+    /// `GetIndustryRandomBits`.
+    fn get_industry_random_bits(&self, tile: TileIndex) -> u8 {
+        unsafe { (self.lifecycle().random_bits)(tile.0) }
+    }
+    /// `ResolverObject::callback` of the native resolver.
+    fn resolver_callback(&self, ro: *const c_void) -> CallbackID {
+        CallbackID(unsafe { (self.callback_id)(ro) })
+    }
+    /// Temporary raw adapter for [`get_industry_spec`], used by `industry.rs`.
     pub(crate) fn spec(kind: u8) -> *const SpecHandle {
-        industrytype::industry(u16::from(kind))
+        get_industry_spec(IndustryType(kind))
     }
+    /// Temporary raw adapter for `IndustrySpec::behaviour`, used by `industry.rs`.
     pub(crate) fn behaviour(spec: *const SpecHandle) -> u32 {
-        unsafe { (*spec).behaviour }
+        behaviour(spec).0
     }
+}
+/// `IndustrySpec::behaviour`.
+fn behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
+    IndustryBehaviours(unsafe { (*spec).behaviour })
+}
+/// `IndustrySpec::callback_mask`.
+fn callback_mask(spec: *const IndustrySpec) -> IndustryCallbackMasks {
+    IndustryCallbackMasks(unsafe { (*spec).callback_mask })
+}
+/// `Industry::location.tile`.
+fn location_tile(i: *const Industry) -> TileIndex {
+    TileIndex(unsafe { (*i).metadata.tile })
+}
+/// `Town::xy`.
+fn town_xy(town: *const TownHandle, s: &ResolverServices) -> TileIndex {
+    TileIndex(unsafe { (s.town_tile)(town.cast()) })
+}
+/// `Town::index`.
+fn town_index(town: *const TownHandle, s: &ResolverServices) -> TownID {
+    TownID(unsafe { (s.town_id)(town.cast()) })
 }
 
-pub(crate) fn map_type(kind: u8, grfid: u32) -> u8 {
-    if kind == IT_INVALID {
-        return IT_INVALID;
+/// `MapNewGRFIndustryType`: map the GRF local type `grf_type` of the GRF `grf_id` to an
+/// industry type in the global scope.
+pub(crate) fn map_new_grf_industry_type(grf_type: IndustryType, grf_id: u32) -> IndustryType {
+    if grf_type == IndustryType::IT_INVALID {
+        return IndustryType::IT_INVALID;
     }
-    if kind & 0x80 == 0 {
-        return kind & 0x7f;
+    if !has_bit(grf_type.0, 7) {
+        return IndustryType(gb(u32::from(grf_type.0), 0, 7) as u8);
     }
-    (unsafe { crate::override_manager::industry_id(u16::from(kind & 0x7f), grfid) }) as u8
+    IndustryType(
+        (unsafe {
+            crate::override_manager::industry_id(gb(u32::from(grf_type.0), 0, 7) as u16, grf_id)
+        }) as u8,
+    )
 }
-fn id_at_offset(tile: u32, id: IndustryID, grfid: u32, s: &ResolverServices) -> u32 {
-    if !s.belongs(tile, id.0) {
-        return 0xffff;
-    }
-    let gfx = unsafe { (s.clean_gfx)(tile) };
-    let props = unsafe { (*industrytype::tile(gfx)).grf_prop };
-    if gfx < NEW_INDUSTRYTILEOFFSET {
-        if props.override_id == INVALID_INDUSTRYTILE {
-            return 0xff00 | u32::from(gfx);
-        }
-        let other = unsafe { (*industrytype::tile(props.override_id)).grf_prop };
-        return if other.grfid == grfid {
-            u32::from(other.local_id)
-        } else {
-            0xfffe
-        };
-    }
-    if props.has_sprite_groups() {
-        if props.grfid == grfid {
-            u32::from(props.local_id)
-        } else {
-            0xfffe
-        }
-    } else {
-        0xff00 | u32::from(props.subst_id)
-    }
-}
-fn nearby_information(
-    parameter: u8,
-    mut tile: u32,
-    id: u16,
-    signed: bool,
-    version8: bool,
+/// `GetIndustryIDAtOffset`: make an analysis of a tile and check for its belonging to the
+/// same industry, and/or the same grf file. `tile` is the tile to query, `i` the industry to
+/// compare the tile to and `cur_grfid` the GRFID of the current callback chain. Returns the
+/// value encoded as per NFO specs.
+fn get_industry_id_at_offset(
+    tile: TileIndex,
+    i: IndustryID,
+    cur_grfid: u32,
     s: &ResolverServices,
 ) -> u32 {
-    if parameter != 0 {
-        tile = unsafe { (s.nearby)(parameter, tile, signed) };
+    if !s.tile_belongs_to_industry(tile, i) {
+        // No industry and/or the tile does not have the same industry as the one we match it with
+        return 0xFFFF;
     }
-    let same = s.belongs(tile, id);
-    (s.shared().nearby_tile_information)(tile, version8) | (u32::from(same) << 8)
+    let gfx = s.get_clean_industry_gfx(tile);
+    let indtsp = unsafe { (*get_industry_tile_spec(gfx)).grf_prop };
+    // Does it belongs to an old type?
+    if gfx < IndustryGfx::NEW_INDUSTRYTILEOFFSET {
+        // It is an old tile.  We have to see if it's been overridden
+        // has it been overridden?
+        if IndustryGfx(indtsp.override_id) == IndustryGfx::INVALID_INDUSTRYTILE {
+            // no. Tag FF + the gfx id of that tile
+            return 0xFF << 8 | u32::from(gfx.0);
+        }
+        // Overridden
+        let tile_ovr =
+            unsafe { (*get_industry_tile_spec(IndustryGfx(indtsp.override_id))).grf_prop };
+        return if tile_ovr.grfid == cur_grfid {
+            // same grf file
+            u32::from(tile_ovr.local_id)
+        } else {
+            // not the same grf file
+            0xFFFE
+        };
+    }
+    // Not an 'old type' tile
+    if indtsp.has_sprite_groups() {
+        // same industry, same grf ?
+        if indtsp.grfid == cur_grfid {
+            u32::from(indtsp.local_id)
+        } else {
+            // Defined in another grf file
+            0xFFFE
+        }
+    } else {
+        // The tile has no spritegroup, so just give it the substitute
+        0xFF << 8 | u32::from(indtsp.subst_id)
+    }
 }
-pub(crate) fn relative_position(tile: u32, north: u32, map: crate::map_func::Map) -> u32 {
-    let x = map.tile_x(tile).wrapping_sub(map.tile_x(north)) as u8;
-    let y = map.tile_y(tile).wrapping_sub(map.tile_y(north)) as u8;
-    (u32::from(y & 15) << 20) | (u32::from(x & 15) << 16) | (u32::from(y) << 8) | u32::from(x)
+/// `GetNearbyIndustryTileInformation`: based on newhouses equivalent, but adapted for
+/// newindustries. `parameter` from the callback is in fact a pair of coordinates; `tile` is the
+/// tile from which the callback was initiated and `index` the industry being queried for.
+/// `signed_offsets` tells whether the x and y offsets encoded in `parameter` are signed, and
+/// `grf_version8` whether we are dealing with a new `NewGRF` which uses GRF version >= 8.
+/// Returns a construction of bits obeying the newgrf format.
+fn get_nearby_industry_tile_information(
+    parameter: u8,
+    mut tile: TileIndex,
+    index: IndustryID,
+    signed_offsets: bool,
+    grf_version8: bool,
+    s: &ResolverServices,
+) -> u32 {
+    // only perform if it is required
+    if parameter != 0 {
+        tile = s.get_nearby_tile(parameter, tile, signed_offsets);
+    }
+    let is_same_industry = s.tile_belongs_to_industry(tile, index);
+    (s.shared().nearby_tile_information)(tile.0, grf_version8) | (u32::from(is_same_industry) << 8)
 }
-unsafe fn registry_count(builder: *const Builder, kind: u8) -> usize {
-    unsafe { (&(*builder).registry)[usize::from(kind)].len() }
+/// `GetRelativePosition`: the position of `tile` relative to `ind_tile`, the northernmost tile
+/// of the industry.
+///
+/// ```text
+/// Format: 00yxYYXX
+/// Variable  Content
+/// x         the x offset from the northernmost tile
+/// XX        same, but stored in a byte instead of a nibble
+/// y         the y offset from the northernmost tile
+/// YY        same, but stored in a byte instead of a nibble
+/// ```
+pub(crate) fn get_relative_position(
+    tile: TileIndex,
+    ind_tile: TileIndex,
+    map: crate::map_func::Map,
+) -> u32 {
+    let x = map.tile_x(tile.0).wrapping_sub(map.tile_x(ind_tile.0)) as u8;
+    let y = map.tile_y(tile.0).wrapping_sub(map.tile_y(ind_tile.0)) as u8;
+    (u32::from(y & 0xF) << 20) | (u32::from(x & 0xF) << 16) | (u32::from(y) << 8) | u32::from(x)
 }
-unsafe fn registry_id(builder: *const Builder, kind: u8, n: usize) -> u16 {
-    unsafe { (&(*builder).registry)[usize::from(kind)][n] }
+/// `Industry::industries[type].size()`.
+unsafe fn industries_of_type_count(builder: *const Builder, kind: IndustryType) -> usize {
+    unsafe { (&(*builder).registry)[usize::from(kind.0)].len() }
 }
-fn closest(
-    tile: u32,
+/// `Industry::industries[type][n]`.
+unsafe fn industries_of_type_at(
+    builder: *const Builder,
+    kind: IndustryType,
+    n: usize,
+) -> IndustryID {
+    IndustryID(unsafe { (&(*builder).registry)[usize::from(kind.0)][n] })
+}
+/// `GetClosestIndustry`.
+fn get_closest_industry(
+    tile: TileIndex,
     kind: IndustryType,
     current: &ResolverContext,
     builder: *const Builder,
     s: &ResolverServices,
     map: crate::map_func::Map,
 ) -> u32 {
-    let mut best = u32::MAX;
-    for n in 0..unsafe { registry_count(builder, kind.0) } {
-        let id = unsafe { registry_id(builder, kind.0, n) };
-        if id == current.id {
+    let mut best_dist = u32::MAX;
+    for n in 0..unsafe { industries_of_type_count(builder, kind) } {
+        let industry = unsafe { industries_of_type_at(builder, kind, n) };
+        if industry == current.index() {
             continue;
         }
-        let other = unsafe { (s.get)(id) };
-        let other_tile = unsafe { (*other.owner).metadata.tile };
-        best = best.min(map.distance_manhattan(tile, other_tile));
+        let other = unsafe { (s.get)(industry.0) };
+        best_dist = best_dist.min(map.distance_manhattan(tile.0, location_tile(other.owner).0));
     }
-    best
+    best_dist
 }
-fn count_and_distance(
-    mut parameter: u8,
-    layout: u8,
-    town: bool,
+/// `GetCountAndDistanceOfClosestInstance`: implementation of both var 67 and 68, since the
+/// mechanism is almost the same, it is easier to regroup them on the same function.
+/// `param_set_id` is the parameter given to the callback, which is the set id, or the local
+/// id, in our terminology. `layout_filter` is the layout to filter on, `town_filter` whether
+/// to filter on the same town as the current industry, and `current` the industry for which
+/// the inquiry is made. Returns the formatted answer to the callback: rr(reserved) cc(count)
+/// dddd(manhattan distance of closest sister).
+fn get_count_and_distance_of_closest_instance(
+    param_set_id: u8,
+    layout_filter: u8,
+    town_filter: bool,
     current: &ResolverContext,
     builder: *const Builder,
     s: &ResolverServices,
 ) -> u32 {
-    let mut grfid = unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
-    let kind = if grfid == 0 {
-        parameter
+    // Get the GRFID of the definition to look for in register 100h
+    let mut grf_id = unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
+    // Determine what will be the industry type to look for
+    let industry_type = if grf_id == 0 {
+        // this is a default industry type
+        IndustryType(param_set_id)
     } else {
-        if grfid == u32::MAX {
-            grfid = unsafe {
-                (*industrytype::industry(u16::from((*current.owner).metadata.kind)))
+        // current grf
+        if grf_id == 0xFFFF_FFFF {
+            grf_id = unsafe {
+                (*get_industry_spec(IndustryType((*current.owner).metadata.kind)))
                     .grf_prop
                     .grfid
             };
         }
-        parameter |= 0x80;
-        map_type(parameter, grfid)
+        // use the grfid specified in register 100h
+        let mut param_set_id = u32::from(param_set_id);
+        // bit 7 means it is not an old type
+        set_bit(&mut param_set_id, 7);
+        map_new_grf_industry_type(IndustryType(param_set_id as u8), grf_id)
     };
-    if kind >= NUM_INDUSTRYTYPES {
-        return 0xffff;
+    // If the industry type is invalid, there is none and the closest is far away.
+    if industry_type >= IndustryType::NUM_INDUSTRYTYPES {
+        return 0xFFFF;
     }
     let map = s.map();
-    let tile = unsafe { (*current.owner).metadata.tile };
+    let tile = location_tile(current.owner);
     let mut count: u8 = 0;
-    let mut distance = u32::MAX;
-    if layout == 0 && !town {
+    let mut closest_dist = u32::MAX;
+    if layout_filter == 0 && !town_filter {
+        // If the filter is 0, it could be because none was specified as well as being really a 0.
+        // In either case, just do the regular var67
         witness::hit(witness::INDUSTRY_RESOLVER_COUNT);
-        distance = closest(tile, IndustryType(kind), current, builder, s, map);
-        count = unsafe { registry_count(builder, kind) }.min(255) as u8;
+        closest_dist = get_closest_industry(tile, industry_type, current, builder, s, map);
+        count = unsafe { industries_of_type_count(builder, industry_type) }
+            .min(usize::from(u8::MAX)) as u8;
     } else {
+        // Count only those who match the same industry type and layout filter
+        // Unfortunately, we have to do it manually
         witness::hit(witness::INDUSTRY_RESOLVER_FILTERED_COUNT);
-        for n in 0..unsafe { registry_count(builder, kind) } {
-            let id = unsafe { registry_id(builder, kind, n) };
-            if id == current.id {
+        for n in 0..unsafe { industries_of_type_count(builder, industry_type) } {
+            let industry = unsafe { industries_of_type_at(builder, industry_type, n) };
+            if industry == current.index() {
                 continue;
             }
-            let other = unsafe { (s.get)(id) };
-            if (layout == 0 || unsafe { (*other.owner).metadata.selected_layout } == layout)
-                && (!town || other.town == current.town)
+            let i = unsafe { (s.get)(industry.0) };
+            if (layout_filter == 0
+                || unsafe { (*i.owner).metadata.selected_layout } == layout_filter)
+                && (!town_filter || i.town == current.town)
             {
-                distance = distance
-                    .min(map.distance_manhattan(tile, unsafe { (*other.owner).metadata.tile }));
+                closest_dist =
+                    closest_dist.min(map.distance_manhattan(tile.0, location_tile(i.owner).0));
                 count = count.wrapping_add(1);
             }
         }
     }
-    (u32::from(count) << 16) | (distance & 0xffff)
+    (u32::from(count) << 16) | gb(closest_dist, 0, 16)
 }
-fn unavailable(
+/// The `Debug(grf, 1, "Unhandled ...")` tail of the scope resolvers: report the
+/// unhandled variable, mark it unavailable and return `UINT_MAX`.
+fn unhandled_variable(
     variable: u8,
     available: *mut bool,
     tile: bool,
     missing: bool,
-    callback: u16,
+    callback: CallbackID,
     s: &ResolverServices,
 ) -> u32 {
     unsafe {
-        (s.unhandled)(variable, tile, missing, callback);
+        (s.unhandled)(variable, tile, missing, callback.0);
         *available = false;
     }
     u32::MAX
 }
-fn town_tile(town: *const TownHandle, s: &ResolverServices) -> u32 {
-    unsafe { (s.town_tile)(town.cast()) }
-}
-fn town_id(town: *const TownHandle, s: &ResolverServices) -> u32 {
-    u32::from(unsafe { (s.town_id)(town.cast()) })
-}
-fn variable(
+/// `IndustriesScopeResolver::GetVariable`.
+fn industries_get_variable(
     c: &ResolverContext,
     ro: *const c_void,
     variable: u8,
@@ -253,92 +394,88 @@ fn variable(
     s: &ResolverServices,
 ) -> u32 {
     witness::hit(witness::INDUSTRY_RESOLVER_VARIABLE);
-    let callback = unsafe { (s.callback_id)(ro) };
+    let callback = s.resolver_callback(ro);
     let i = c.owner;
-    // Variables available during the construction check.
-    if callback == CBID_INDUSTRY_LOCATION {
+    if callback == CallbackID::CBID_INDUSTRY_LOCATION {
+        // Variables available during construction check.
         witness::hit(witness::INDUSTRY_RESOLVER_LOCATION);
         match variable {
-            0x7a => {
-                let badges = unsafe {
-                    (*industrytype::industry(u16::from(c.kind)))
-                        .badges
-                        .badge_view()
-                };
+            0x7A => {
+                let badges = unsafe { (*get_industry_spec(c.industry_type())).badges.badge_view() };
                 return badges.resolve(s.shared(), ro, parameter);
             }
-            // Industry structure access.
-            0x80 => return c.tile,
-            0x81 => return (c.tile >> 8) & 255,
-            // Pointer to the associated town.
-            0x82 => return town_id(c.town, s),
+            0x80 => return c.tile().0,
+            0x81 => return gb(c.tile().0, 8, 8),
+            // Pointer to the town the industry is associated with
+            0x82 => return u32::from(town_index(c.town, s).0),
+            // not supported
             0x83..=0x85 => debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic"),
-            // Selected layout number.
+            // Number of the layout
             0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
-            // Ground type.
-            0x87 => return (s.shared().terrain_type)(c.tile),
-            // Town zone.
+            // Ground type
+            0x87 => return (s.shared().terrain_type)(c.tile().0),
+            // Town zone
             0x88 => {
                 return u32::from(unsafe {
-                    crate::town::radius_from_shell(s.shared(), c.town, c.tile)
+                    crate::town::radius_from_shell(s.shared(), c.town, c.tile().0)
                 });
             }
-            // Manhattan distance from the closest town.
+            // Manhattan distance of the closest town
             0x89 => {
                 return s
                     .map()
-                    .distance_manhattan(town_tile(c.town, s), c.tile)
-                    .min(255);
+                    .distance_manhattan(town_xy(c.town, s).0, c.tile().0)
+                    .min(u32::from(u8::MAX));
             }
-            // Lowest tile height.
-            0x8a => {
-                return (s.shared().tile_z)(c.tile)
+            // Lowest height of the tile
+            0x8A => {
+                return (s.shared().tile_z)(c.tile().0)
                     .wrapping_mul(if (s.shared().resolver_grf_version)(ro) >= 8 {
                         1
                     } else {
-                        crate::tile_type::TILE_HEIGHT as i32
+                        TILE_HEIGHT as i32
                     })
-                    .clamp(0, 255) as u32;
+                    .clamp(0, i32::from(u8::MAX)) as u32;
             }
-            // Distance to the nearest water/land tile.
-            0x8b => {
-                return unsafe {
-                    (s.water_distance)(
-                        c.tile,
-                        !IndustryBehaviours(ResolverServices::behaviour(ResolverServices::spec(
-                            (*i).metadata.kind,
-                        )))
-                        .test(IndustryBehaviour::BuiltOnWater),
-                    )
-                };
+            // Distance to the nearest water/land tile
+            0x8B => {
+                return s.get_closest_water_distance(
+                    c.tile(),
+                    !behaviour(get_industry_spec(IndustryType(unsafe {
+                        (*i).metadata.kind
+                    })))
+                    .test(IndustryBehaviour::BuiltOnWater),
+                );
             }
-            // Squared Euclidean distance from town.
-            0x8d => {
+            // Square of Euclidean distance from town
+            0x8D => {
                 return s
                     .map()
-                    .distance_square(town_tile(c.town, s), c.tile)
-                    .min(65535);
+                    .distance_square(town_xy(c.town, s).0, c.tile().0)
+                    .min(u32::from(u16::MAX));
             }
-            // 32 random bits.
-            0x8f => return c.random_bits,
+            // 32 random bits
+            0x8F => return c.random_bits,
             _ => {}
         }
     }
-    let spec = ResolverServices::spec(c.kind);
+    let indspec = get_industry_spec(c.industry_type());
     if i.is_null() {
-        return unavailable(variable, available, false, true, callback, s);
+        return unhandled_variable(variable, available, false, true, callback, s);
     }
     match variable {
-        // Waiting cargo, only when one of these two production callback flags is set.
+        // waiting cargo, but only if those two callback flags are set
         0x40..=0x42 => {
-            let callbacks = unsafe { (*spec).callback_mask };
-            if callbacks & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) == 0
-            {
+            let callback = callback_mask(indspec);
+            if !callback.any(
+                IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionCargoArrival)
+                    .with(IndustryCallbackMasks::from_element(
+                        IndustryCallbackMask::Production256Ticks,
+                    )),
+            ) {
                 return 0;
             }
-            let multiplier = if IndustryBehaviours(ResolverServices::behaviour(spec))
-                .test(IndustryBehaviour::ProdMultiHandling)
-            {
+            let multiplier = if behaviour(indspec).test(IndustryBehaviour::ProdMultiHandling) {
                 let level = unsafe { (*i).fields.prod_level };
                 if level == 0 {
                     return 0;
@@ -352,190 +489,191 @@ fn variable(
                     / u16::from(multiplier),
             )
         }
-        // Manhattan distance to the closest dry/water tile.
-        0x43 if c.tile != INVALID_TILE => unsafe {
-            (s.water_distance)(
-                c.tile,
-                !IndustryBehaviours(ResolverServices::behaviour(spec))
-                    .test(IndustryBehaviour::BuiltOnWater),
-            )
-        },
-        // Layout number.
+        // Manhattan distance of closes dry/water tile
+        0x43 if c.tile() != TileIndex::INVALID => s.get_closest_water_distance(
+            c.tile(),
+            !behaviour(indspec).test(IndustryBehaviour::BuiltOnWater),
+        ),
+        // Layout number
         0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
-        // Company information.
+        // Company info
         0x45 => {
-            let founder = unsafe { (*i).metadata.founder };
-            {
-                let info = unsafe { (s.founder_info)(founder) };
-                u32::from(founder) | (u32::from(info.is_ai) << 16) | (u32::from(info.colours) << 24)
-            }
+            let founder: Owner = CompanyID(unsafe { (*i).metadata.founder });
+            let c = unsafe { (s.founder_info)(founder.0) };
+            u32::from(founder.0) | (u32::from(c.is_ai) << 16) | (u32::from(c.colours) << 24)
         }
-        // Construction date in days, long format.
+        // Date when built - long format - (in days)
         0x46 => (unsafe { (*i).metadata.construction_date }) as u32,
-        // GameScript override flags.
+        // Override flags from GS
         0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
-        // Industry ID at the parameter offset.
-        0x60 => id_at_offset(
-            unsafe { (s.nearby)(parameter as u8, (*i).metadata.tile, false) },
-            IndustryID(c.id),
+        // Get industry ID at offset param
+        0x60 => get_industry_id_at_offset(
+            s.get_nearby_tile(parameter as u8, location_tile(i), false),
+            c.index(),
             (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
-        // Random tile bits at the parameter offset.
-        0x61 if c.tile != INVALID_TILE => {
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile, false) };
-            if s.belongs(tile, c.id) {
-                u32::from(unsafe { (s.lifecycle().random_bits)(tile) })
+        // Get random tile bits at offset param
+        0x61 if c.tile() != TileIndex::INVALID => {
+            let tile = s.get_nearby_tile(parameter as u8, c.tile(), false);
+            if s.tile_belongs_to_industry(tile, c.index()) {
+                u32::from(s.get_industry_random_bits(tile))
             } else {
                 0
             }
         }
-        // Land information for nearby tiles.
-        0x62 if c.tile != INVALID_TILE => nearby_information(
+        // Land info of nearby tiles
+        0x62 if c.tile() != TileIndex::INVALID => get_nearby_industry_tile_information(
             parameter as u8,
-            c.tile,
-            INVALID_INDUSTRY,
+            c.tile(),
+            IndustryID::INVALID,
             false,
             (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
-        // Animation stage of nearby tiles.
-        0x63 if c.tile != INVALID_TILE => {
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile, false) };
-            if s.belongs(tile, c.id) {
-                u32::from(unsafe { (s.tile().frame)(tile) })
+        // Animation stage of nearby tiles
+        0x63 if c.tile() != TileIndex::INVALID => {
+            let tile = s.get_nearby_tile(parameter as u8, c.tile(), false);
+            if s.tile_belongs_to_industry(tile, c.index()) {
+                u32::from(s.get_animation_frame(tile))
             } else {
-                u32::MAX
+                0xFFFF_FFFF
             }
         }
-        // Distance to the nearest industry of the given type.
-        0x64 if c.tile != INVALID_TILE => {
-            let kind = map_type(parameter as u8, unsafe { (*spec).grf_prop.grfid });
-            if kind >= NUM_INDUSTRYTYPES {
+        // Distance of nearest industry of given type
+        0x64 if c.tile() != TileIndex::INVALID => {
+            let kind = map_new_grf_industry_type(IndustryType(parameter as u8), unsafe {
+                (*indspec).grf_prop.grfid
+            });
+            if kind >= IndustryType::NUM_INDUSTRYTYPES {
                 u32::MAX
             } else {
-                closest(c.tile, IndustryType(kind), c, builder, s, s.map())
+                get_closest_industry(c.tile(), kind, c, builder, s, s.map())
             }
         }
-        // Town zone and Manhattan distance from the closest town.
-        0x65 if c.tile != INVALID_TILE => {
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
-            (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile) }) << 16)
+        // Get town zone and Manhattan distance of closest town
+        0x65 if c.tile() != TileIndex::INVALID => {
+            let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
+            (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile.0) }) << 16)
                 | s.map()
-                    .distance_manhattan(tile, town_tile(c.town, s))
-                    .min(65535)
+                    .distance_manhattan(tile.0, town_xy(c.town, s).0)
+                    .min(u32::from(u16::MAX))
         }
-        // Squared Euclidean distance from the closest town.
-        0x66 if c.tile != INVALID_TILE => {
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
-            s.map().distance_square(tile, town_tile(c.town, s))
+        // Get square of Euclidean distance of closest town
+        0x66 if c.tile() != TileIndex::INVALID => {
+            let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
+            s.map().distance_square(tile.0, town_xy(c.town, s).0)
         }
-        // Industry count and nearest distance; 68 also filters by selected layout.
+        // Count of industry, distance of closest instance
+        // 68 is the same as 67, but with a filtering on selected layout
         0x67 | 0x68 => {
-            let reg = if variable == 0x68 {
-                (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32
-            } else {
-                0
-            };
-            count_and_distance(parameter as u8, reg as u8, reg & 0x100 != 0, c, builder, s)
-        }
-        0x69..=0x6d | 0x70 | 0x71 => {
-            let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+            let mut layout_filter = 0;
+            let mut town_filter = false;
+            if variable == 0x68 {
+                let reg =
+                    (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32;
+                layout_filter = gb(reg, 0, 8) as u8;
+                town_filter = has_bit(reg, 8);
+            }
+            get_count_and_distance_of_closest_instance(
                 parameter as u8,
-                (s.shared().resolver_grf_file)(ro),
-                false,
-            );
-            let Some(slot) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
-                return 0; // Invalid cargo.
+                layout_filter,
+                town_filter,
+                c,
+                builder,
+                s,
+            )
+        }
+        0x69..=0x6D | 0x70 | 0x71 => {
+            let cargo: CargoType =
+                get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
+            let Some(it) = (unsafe { super::get_cargo_produced(i, cargo.0) }) else {
+                return 0; // invalid cargo
             };
-            let p = unsafe { &*super::produced(i, slot) };
+            let it = unsafe { &*super::produced(i, it) };
             match variable {
-                0x69 => u32::from(p.waiting),
-                // Cargo produced so far this month.
-                0x6a => u32::from(p.history[usize::from(THIS_MONTH)].first),
-                // Cargo transported so far this month.
-                0x6b => u32::from(p.history[usize::from(THIS_MONTH)].second),
-                // Cargo produced last month.
-                0x6c => u32::from(p.history[usize::from(LAST_MONTH)].first),
-                // Cargo transported last month.
-                0x6d => u32::from(p.history[usize::from(LAST_MONTH)].second),
-                0x70 => u32::from(p.rate),
-                _ => u32::from(p.history[usize::from(LAST_MONTH)].pct_transported()),
+                0x69 => u32::from(it.waiting),
+                0x6A => u32::from(it.history[usize::from(THIS_MONTH)].first),
+                0x6B => u32::from(it.history[usize::from(THIS_MONTH)].second),
+                0x6C => u32::from(it.history[usize::from(LAST_MONTH)].first),
+                0x6D => u32::from(it.history[usize::from(LAST_MONTH)].second),
+                0x70 => u32::from(it.rate),
+                _ => u32::from(it.history[usize::from(LAST_MONTH)].pct_transported()),
             }
         }
-        0x6e | 0x6f => {
-            let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
-                parameter as u8,
-                (s.shared().resolver_grf_file)(ro),
-                false,
-            );
-            let Some(slot) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
-                return 0; // Invalid cargo.
+        0x6E | 0x6F => {
+            let cargo: CargoType =
+                get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
+            let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo.0) }) else {
+                return 0; // invalid cargo
             };
-            let a = unsafe { &*super::accepted(i, slot) };
-            if variable == 0x6e {
-                a.last_accepted as u32
+            let it = unsafe { &*super::accepted(i, it) };
+            if variable == 0x6E {
+                it.last_accepted as u32
             } else {
-                u32::from(a.waiting)
+                u32::from(it.waiting)
             }
         }
-        0x7a => {
-            let badges = unsafe {
-                (*industrytype::industry(u16::from(c.kind)))
-                    .badges
-                    .badge_view()
-            };
+        0x7A => {
+            let badges = unsafe { (*get_industry_spec(c.industry_type())).badges.badge_view() };
             badges.resolve(s.shared(), ro, parameter)
         }
-        // Persistent storage variable.
-        0x7c => {
+        // Get a variable from the persistent storage
+        0x7C => {
             // Resolve the native shell association once, then read the canonical
             // Rust payload directly. Temporary invalid-ID scopes can read PSA;
             // the invalid-ID gate belongs only to the storage write operation.
-            let owner = unsafe { (s.storage_owner)(c.industry) };
-            if owner.is_null() {
+            let psa = unsafe { (s.storage_owner)(c.industry) };
+            if psa.is_null() {
                 0
             } else {
-                (unsafe { crate::newgrf_storage::openttd_rust_storage256_get(owner, parameter) })
+                (unsafe { crate::newgrf_storage::openttd_rust_storage256_get(psa, parameter) })
                     as u32
             }
         }
-        0x80 => unsafe { (*i).metadata.tile },
-        0x81 => (unsafe { (*i).metadata.tile } >> 8) & 255,
-        // Pointer to the associated town.
-        0x82 => town_id(c.town, s),
+        // Industry structure access
+        0x80 => location_tile(i).0,
+        0x81 => gb(location_tile(i).0, 8, 8),
+        // Pointer to the town the industry is associated with
+        0x82 => u32::from(town_index(c.town, s).0),
+        // not supported
         0x83..=0x85 => {
             debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic");
-            unavailable(variable, available, false, false, callback, s)
+            unhandled_variable(variable, available, false, false, callback, s)
         }
-        // Industry x/y dimensions.
+        // xy dimensions
         0x86 => u32::from(unsafe { (*i).metadata.width }),
         0x87 => u32::from(unsafe { (*i).metadata.height }),
         0x88 | 0x89 => {
             u32::from(unsafe { (*super::get_produced(i, usize::from(variable - 0x88))).cargo })
         }
-        0x8a..=0x8d => {
-            let p = unsafe { super::get_produced(i, usize::from((variable - 0x8a) / 2)) };
-            let value = u32::from(unsafe { (*p).waiting });
-            if variable & 1 != 0 {
-                (value >> 8) & 255
+        // 0x8A and 0x8C read the waiting cargo of slots 0 and 1; 0x8B and 0x8D its high byte.
+        0x8A..=0x8D => {
+            let p = unsafe { super::get_produced(i, usize::from((variable - 0x8A) / 2)) };
+            let waiting = u32::from(unsafe { (*p).waiting });
+            if has_bit(variable, 0) {
+                gb(waiting, 8, 8)
             } else {
-                value
+                waiting
             }
         }
-        0x8e | 0x8f => {
-            u32::from(unsafe { (*super::get_produced(i, usize::from(variable - 0x8e))).rate })
+        0x8E | 0x8F => {
+            u32::from(unsafe { (*super::get_produced(i, usize::from(variable - 0x8E))).rate })
         }
         0x90..=0x92 => {
             u32::from(unsafe { (*super::get_accepted(i, usize::from(variable - 0x90))).cargo })
         }
         0x93 => u32::from(unsafe { (*i).fields.prod_level }),
-        // Production and transported totals for this month and last month.
-        0x94..=0x9b | 0x9e..=0xa5 => {
-            let (base, month) = if variable < 0x9c {
+        // 0x94 to 0x97: amount of cargo produced so far THIS month.
+        // 0x98 to 0x9B: amount of cargo transported so far THIS month.
+        // 0x9E to 0xA1: amount of cargo produced LAST month.
+        // 0xA2 to 0xA5: amount of cargo transported last month.
+        // Within each group of four, slots 0 and 1 alternate a value and its high byte.
+        0x94..=0x9B | 0x9E..=0xA5 => {
+            let (base, month) = if variable < 0x9C {
                 (0x94, THIS_MONTH)
             } else {
-                (0x9e, LAST_MONTH)
+                (0x9E, LAST_MONTH)
             };
             let offset = variable - base;
             let p = unsafe { super::get_produced(i, usize::from((offset % 4) / 2)) };
@@ -545,45 +683,46 @@ fn variable(
             } else {
                 history.second
             });
-            if offset & 1 != 0 {
-                (value >> 8) & 255
+            if has_bit(offset, 0) {
+                gb(value, 8, 8)
             } else {
                 value
             }
         }
-        // Fraction of cargo transported last month.
-        0x9c | 0x9d => u32::from(unsafe {
-            (*super::get_produced(i, usize::from(variable - 0x9c))).history[usize::from(LAST_MONTH)]
+        // fraction of cargo transported LAST month.
+        0x9C | 0x9D => u32::from(unsafe {
+            (*super::get_produced(i, usize::from(variable - 0x9C))).history[usize::from(LAST_MONTH)]
                 .pct_transported()
         }),
-        0xa6 => u32::from(unsafe { (*spec).grf_prop.local_id }),
-        0xa7 => u32::from(unsafe { (*i).metadata.founder }),
-        0xa8 => u32::from(unsafe { (*i).metadata.random_colour }),
-        0xa9 => unsafe { (*i).fields.last_prod_year }
+        0xA6 => u32::from(unsafe { (*indspec).grf_prop.local_id }),
+        0xA7 => u32::from(unsafe { (*i).metadata.founder }),
+        0xA8 => u32::from(unsafe { (*i).metadata.random_colour }),
+        0xA9 => unsafe { (*i).fields.last_prod_year }
             .wrapping_sub(ORIGINAL_BASE_YEAR)
-            .clamp(0, 255) as u32,
-        0xaa => u32::from(unsafe { (*i).fields.counter }),
-        0xab => u32::from(unsafe { (*i).fields.counter } >> 8),
-        0xac => u32::from(unsafe { (*i).fields.was_cargo_delivered }),
-        // Construction date in days since 1920.
-        0xb0 => unsafe { (*i).metadata.construction_date }
+            .clamp(0, i32::from(u8::MAX)) as u32,
+        0xAA => u32::from(unsafe { (*i).fields.counter }),
+        0xAB => gb(u32::from(unsafe { (*i).fields.counter }), 8, 8),
+        0xAC => u32::from(unsafe { (*i).fields.was_cargo_delivered }),
+        // Date when built since 1920 (in days)
+        0xB0 => unsafe { (*i).metadata.construction_date }
             .wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
-            .clamp(0, 65535) as u32,
-        // Construction type.
-        0xb3 => u32::from(unsafe { (*i).metadata.construction_type }),
-        // Date of last accepted cargo in days since 1920.
-        0xb4 => {
+            .clamp(0, i32::from(u16::MAX)) as u32,
+        // Construction type
+        0xB3 => u32::from(unsafe { (*i).metadata.construction_type }),
+        // Date last cargo accepted since 1920 (in days)
+        0xB4 => {
             let accepted = unsafe { &(*i).accepted };
             accepted.iter().map(|a| a.last_accepted).max()
         }
         .map_or(0, |date| {
             date.wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
-                .clamp(0, 65535) as u32
+                .clamp(0, i32::from(u16::MAX)) as u32
         }),
-        _ => unavailable(variable, available, false, false, callback, s),
+        _ => unhandled_variable(variable, available, false, false, callback, s),
     }
 }
-fn tile_variable(
+/// `IndustryTileScopeResolver::GetVariable`.
+fn industry_tile_get_variable(
     c: &ResolverContext,
     ro: *const c_void,
     variable: u8,
@@ -593,69 +732,71 @@ fn tile_variable(
 ) -> u32 {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_VARIABLE);
     match variable {
-        // Construction state, from 0 to 3.
+        // Construction state of the tile: a value between 0 and 3
         0x40 => {
-            if s.is_industry(c.tile) {
-                u32::from(unsafe { (s.tile().construction_stage)(c.tile) })
+            if s.is_industry_tile(c.tile()) {
+                u32::from(unsafe { (s.tile().construction_stage)(c.tile().0) })
             } else {
                 0
             }
         }
-        // Terrain type.
-        0x41 => (s.shared().terrain_type)(c.tile),
-        // Town zone in the nearest town.
+        // Terrain type
+        0x41 => (s.shared().terrain_type)(c.tile().0),
+        // Current town zone of the tile in the nearest town
         0x42 => {
-            let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
-            u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
+            let town = crate::town::spatial::closest_town_from_tile(s.shared(), c.tile(), u32::MAX);
+            u32::from(unsafe {
+                crate::town::radius_from_shell(s.shared(), town.cast(), c.tile().0)
+            })
         }
-        // Relative position.
-        0x43 => relative_position(c.tile, unsafe { (*c.owner).metadata.tile }, s.map()),
-        // Animation frame; unlike a house frame, this can be any byte.
+        // Relative position
+        0x43 => get_relative_position(c.tile(), location_tile(c.owner), s.map()),
+        // Animation frame. Like house variable 46 but can contain anything 0..FF.
         0x44 => {
-            if s.is_industry(c.tile) {
-                u32::from(unsafe { (s.tile().frame)(c.tile) })
+            if s.is_industry_tile(c.tile()) {
+                u32::from(s.get_animation_frame(c.tile()))
             } else {
                 0
             }
         }
-        // Land information for nearby tiles.
-        0x60 => nearby_information(
+        // Land info of nearby tiles
+        0x60 => get_nearby_industry_tile_information(
             parameter as u8,
-            c.tile,
-            c.id,
+            c.tile(),
+            c.index(),
             true,
             (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
-        // Animation stage of nearby tiles.
+        // Animation stage of nearby tiles
         0x61 => {
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
-            if s.is_industry(tile)
-                && unsafe { (s.tile().industry)(tile).shell.cast::<c_void>() } == c.industry
+            let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
+            if s.is_industry_tile(tile)
+                && unsafe { (s.tile().industry)(tile.0).shell.cast::<c_void>() } == c.industry
             {
-                u32::from(unsafe { (s.tile().frame)(tile) })
+                u32::from(s.get_animation_frame(tile))
             } else {
                 u32::MAX
             }
         }
-        // Industry tile ID at the offset.
-        0x62 => id_at_offset(
-            unsafe { (s.nearby)(parameter as u8, c.tile, true) },
-            IndustryID(c.id),
+        // Get industry tile ID at offset
+        0x62 => get_industry_id_at_offset(
+            s.get_nearby_tile(parameter as u8, c.tile(), true),
+            c.index(),
             (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
-        0x7a => {
-            let gfx = unsafe { (s.tile().gfx)(c.tile) };
-            let badges = unsafe { (*industrytype::tile(gfx)).badges.badge_view() };
+        0x7A => {
+            let gfx = IndustryGfx(unsafe { (s.tile().gfx)(c.tile().0) });
+            let badges = unsafe { (*get_industry_tile_spec(gfx)).badges.badge_view() };
             badges.resolve(s.shared(), ro, parameter)
         }
-        _ => unavailable(
+        _ => unhandled_variable(
             variable,
             available,
             true,
             false,
-            crate::newgrf_callbacks::CallbackID::CBID_NO_CALLBACK.0,
+            CallbackID::CBID_NO_CALLBACK,
             s,
         ),
     }
@@ -676,7 +817,7 @@ pub unsafe extern "C" fn openttd_rust_industry_variable(
 ) -> u32 {
     // End the native context borrow before a synchronous service can reenter.
     let c = unsafe { *c };
-    variable(&c, ro, var, parameter, available, builder, unsafe { &*s })
+    industries_get_variable(&c, ro, var, parameter, available, builder, unsafe { &*s })
 }
 /// # Safety
 /// Live scope/resolver/table; original variable-specific map/industry preconditions.
@@ -690,8 +831,10 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_variable(
     s: *const ResolverServices,
 ) -> u32 {
     let c = unsafe { *c };
-    tile_variable(&c, ro, var, parameter, available, unsafe { &*s })
+    industry_tile_get_variable(&c, ro, var, parameter, available, unsafe { &*s })
 }
+/// `IndustriesScopeResolver::GetRandomBits`.
+///
 /// # Safety
 /// Live context; a non-null owner remains live through the immediate read.
 #[unsafe(no_mangle)]
@@ -703,6 +846,8 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_random(c: *const Resolve
         u32::from(unsafe { (*owner).metadata.random })
     }
 }
+/// `IndustryTileScopeResolver::GetRandomBits`.
+///
 /// # Safety
 /// Original non-null industry/valid tile assertions are checked by the facade.
 #[unsafe(no_mangle)]
@@ -711,12 +856,14 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_random(
     s: *const ResolverServices,
 ) -> u32 {
     let c = unsafe { *c };
-    if c.id == INVALID_INDUSTRY {
+    if c.index() == IndustryID::INVALID {
         0
     } else {
-        u32::from(unsafe { ((*(*s).lifecycle).random_bits)(c.tile) })
+        u32::from(unsafe { (*s).get_industry_random_bits(c.tile()) })
     }
 }
+/// `IndustryTileScopeResolver::GetRandomTriggers`.
+///
 /// # Safety
 /// Original non-null industry/valid tile assertions are checked by the facade.
 #[unsafe(no_mangle)]
@@ -725,12 +872,14 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_triggers(
     s: *const ResolverServices,
 ) -> u32 {
     let c = unsafe { *c };
-    if c.id == INVALID_INDUSTRY {
+    if c.index() == IndustryID::INVALID {
         0
     } else {
-        u32::from(unsafe { ((*(*s).lifecycle).random_triggers)(c.tile) })
+        u32::from(unsafe { ((*(*s).lifecycle).random_triggers)(c.tile().0) })
     }
 }
+/// The root sprite group of `IndustriesResolverObject`.
+///
 /// # Safety
 /// Live context and native specs; root group lives for the resolver invocation.
 #[unsafe(no_mangle)]
@@ -739,9 +888,11 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
     let c = unsafe { *c };
-    let props = unsafe { (*industrytype::industry(u16::from(c.kind))).grf_prop };
-    props.sprite_group(!c.owner.is_null() && c.id != INVALID_INDUSTRY)
+    let props = unsafe { (*get_industry_spec(c.industry_type())).grf_prop };
+    props.sprite_group(!c.owner.is_null() && c.index() != IndustryID::INVALID)
 }
+/// The root sprite group of `IndustryTileResolverObject`.
+///
 /// # Safety
 /// Original non-null industry and valid gfx preconditions; stable native group.
 #[unsafe(no_mangle)]
@@ -750,20 +901,22 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_root(
     gfx: u16,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
-    let props = unsafe { (*industrytype::tile(gfx)).grf_prop };
-    props.sprite_group(unsafe { (*c).id } != INVALID_INDUSTRY)
+    let props = unsafe { (*get_industry_tile_spec(IndustryGfx(gfx))).grf_prop };
+    props.sprite_group(unsafe { (*c).index() } != IndustryID::INVALID)
 }
-fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_void {
+/// Get or create the town scope object associated with the industry.
+/// @return The associated town scope, if it exists.
+fn get_town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TOWN);
     let existing = unsafe { (s.existing_town)(ro) };
     if !existing.is_null() {
         return existing;
     }
-    let (town, readonly) = if !c.owner.is_null() {
-        (c.town, c.id == INVALID_INDUSTRY)
-    } else if c.tile != INVALID_TILE {
+    let (t, readonly) = if !c.owner.is_null() {
+        (c.town, c.index() == IndustryID::INVALID)
+    } else if c.tile() != TileIndex::INVALID {
         (
-            crate::town::spatial::closest(s.shared(), c.tile, u32::MAX)
+            crate::town::spatial::closest_town_from_tile(s.shared(), c.tile(), u32::MAX)
                 .cast_mut()
                 .cast(),
             true,
@@ -771,12 +924,14 @@ fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_vo
     } else {
         (ptr::null_mut(), true)
     };
-    if town.is_null() {
+    if t.is_null() {
         ptr::null_mut()
     } else {
-        unsafe { (s.make_town)(ro, town, readonly) }
+        unsafe { (s.make_town)(ro, t, readonly) }
     }
 }
+/// `IndustriesResolverObject::GetTown`.
+///
 /// # Safety
 /// Live native industries resolver; optional town scope belongs to that stack frame.
 #[unsafe(no_mangle)]
@@ -786,8 +941,10 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_town(
     s: *const ResolverServices,
 ) -> *mut c_void {
     let c = unsafe { *c };
-    town(&c, ro, unsafe { &*s })
+    get_town(&c, ro, unsafe { &*s })
 }
+/// `IndustriesResolverObject::GetScope`.
+///
 /// # Safety
 /// All native scopes and resolver live for this synchronous resolution.
 #[unsafe(no_mangle)]
@@ -804,16 +961,18 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_scope(
         VSG_SCOPE_SELF => own,
         VSG_SCOPE_PARENT => {
             let c = unsafe { *c };
-            let town = town(&c, ro, s);
-            if town.is_null() {
+            let tsr = get_town(&c, ro, s);
+            if tsr.is_null() {
                 unsafe { (s.base_scope)(ro, scope, relative) }
             } else {
-                town
+                tsr
             }
         }
         _ => unsafe { (s.base_scope)(ro, scope, relative) },
     }
 }
+/// `IndustryTileResolverObject::GetScope`.
+///
 /// # Safety
 /// Live tile resolver and its two native virtual facades, valid table.
 #[unsafe(no_mangle)]
@@ -831,46 +990,61 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_scope(
         _ => unsafe { ((*s).base_scope)(ro, scope, relative) },
     }
 }
+/// `GetIndustryProbabilityCallback`: check with callback `CBID_INDUSTRY_PROBABILITY` whether
+/// the industry `kind` can be built, for the reason `creation_type`. Returns `default_prob`
+/// unless the callback replaces or disallows it.
+pub(crate) fn get_industry_probability_callback(
+    kind: IndustryType,
+    creation_type: IndustryAvailabilityCallType,
+    mut default_prob: u32,
+    s: &ResolverServices,
+) -> u32 {
+    witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
+    let indspec = get_industry_spec(kind);
+    if callback_mask(indspec).test(IndustryCallbackMask::Probability) {
+        let res = unsafe {
+            (s.callback)(
+                CallbackID::CBID_INDUSTRY_PROBABILITY.0,
+                0,
+                u32::from(creation_type.0),
+                ptr::null_mut(),
+                kind.0,
+                TileIndex::INVALID.0,
+            )
+        };
+        if res != CALLBACK_FAILED {
+            if (s.shared().grf_file_version)(unsafe { (*indspec).grf_prop.grffile }) < 8 {
+                // Disallow if result != 0
+                if res != 0 {
+                    default_prob = 0;
+                }
+            // Use returned probability. 0x100 to use default
+            } else if res < 0x100 {
+                default_prob = u32::from(res);
+            } else if res > 0x100 {
+                unsafe {
+                    (s.callback_error)(indspec, CallbackID::CBID_INDUSTRY_PROBABILITY.0, res);
+                }
+            }
+        }
+    }
+    default_prob
+}
 /// # Safety
 /// Live specs/table, callback may synchronously reenter with its own stack context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_probability(
     kind: u8,
     creation: u8,
-    mut default: u32,
+    default: u32,
     s: *const ResolverServices,
 ) -> u32 {
-    witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
-    let s = unsafe { &*s };
-    let spec = ResolverServices::spec(kind);
-    if unsafe { (*spec).callback_mask } & INDUSTRY_PROBABILITY != 0 {
-        let result = unsafe {
-            (s.callback)(
-                CBID_INDUSTRY_PROBABILITY,
-                0,
-                u32::from(creation),
-                ptr::null_mut(),
-                kind,
-                INVALID_TILE,
-            )
-        };
-        if result != CALLBACK_FAILED {
-            if (s.shared().grf_file_version)(unsafe { (*spec).grf_prop.grffile }) < 8 {
-                // Disallow construction when the old callback returns nonzero.
-                if result != 0 {
-                    default = 0;
-                }
-            // Use the returned probability; 0x100 keeps the default.
-            } else if result < 0x100 {
-                default = u32::from(result);
-            } else if result > 0x100 {
-                unsafe {
-                    (s.callback_error)(spec, CBID_INDUSTRY_PROBABILITY, result);
-                }
-            }
-        }
-    }
-    default
+    get_industry_probability_callback(
+        IndustryType(kind),
+        IndustryAvailabilityCallType(creation),
+        default,
+        unsafe { &*s },
+    )
 }
 /// # Safety
 /// Live owner and original accepted-cargo assertion, checked by the native facade.
@@ -881,35 +1055,42 @@ pub unsafe extern "C" fn openttd_rust_industry_refuses_abi(
     cargo: u8,
     s: *const ResolverServices,
 ) -> u8 {
-    u8::from(unsafe { refuses(industry, owner, cargo, &*s) })
+    u8::from(unsafe { industry_temporarily_refuses_cargo(industry, owner, CargoType(cargo), &*s) })
 }
+/// `IndustryTemporarilyRefusesCargo`: check whether an industry temporarily refuses to accept
+/// a certain cargo. Precondition: `cargo_type` is in the industry's accepted cargo.
+///
 /// SAFETY: live owner/shell, caller has established an accepted cargo slot.
 /// Action2 may reenter; owner observations end before every native call.
-pub(crate) unsafe fn refuses(
+pub(crate) unsafe fn industry_temporarily_refuses_cargo(
     industry: *mut c_void,
     owner: *mut Industry,
-    cargo: u8,
+    cargo_type: CargoType,
     s: &ResolverServices,
 ) -> bool {
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
-    let kind = unsafe { (*owner).metadata.kind };
-    let spec = ResolverServices::spec(kind);
-    if unsafe { (*spec).callback_mask } & INDUSTRY_REFUSE_CARGO != 0 {
-        let file = unsafe { (*spec).grf_prop.grffile };
-        let parameter = (s.shared().grf_cargo_map)(file, cargo);
-        let tile = unsafe { (*owner).metadata.tile };
-        let result = unsafe {
+    let kind = IndustryType(unsafe { (*owner).metadata.kind });
+    let indspec = get_industry_spec(kind);
+    if callback_mask(indspec).test(IndustryCallbackMask::RefuseCargo) {
+        let file = unsafe { (*indspec).grf_prop.grffile };
+        let parameter = (s.shared().grf_cargo_map)(file, cargo_type.0);
+        let tile = location_tile(owner);
+        let res = unsafe {
             (s.callback)(
-                CBID_INDUSTRY_REFUSE_CARGO,
+                CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0,
                 0,
                 u32::from(parameter),
                 industry,
-                kind,
-                tile,
+                kind.0,
+                tile.0,
             )
         };
-        if result != CALLBACK_FAILED {
-            return !(s.shared().grf_boolean_callback)(file, CBID_INDUSTRY_REFUSE_CARGO, result);
+        if res != CALLBACK_FAILED {
+            return !(s.shared().grf_boolean_callback)(
+                file,
+                CallbackID::CBID_INDUSTRY_REFUSE_CARGO.0,
+                res,
+            );
         }
     }
     false

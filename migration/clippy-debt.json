@@ -284,30 +284,30 @@
     "rust/openttd-kernels/src/industry/construction.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       245
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       31
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 3f9ff36d9d9a9d6687a4": [
-      7
-    ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 73a2e0a0f1b09f9235e5": [
-      7
-    ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 8a4be6a52a329e992805": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 4dc53fad5b4141c988a1": [
       8
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 8a8fc2996d47c9d45560": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 57924066d2c8a4338247": [
       8
+    ],
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 73a2e0a0f1b09f9235e5": [
+      7
+    ],
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | a3e5012f0081905a1557": [
+      7
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      139,
-      274
+      133,
+      266
     ],
     "rust/openttd-kernels/src/industry/policy.rs | fn servicing | excessive_nesting | 06c9c88537fe6a8e70d5": [
       6
     ],
-    "rust/openttd-kernels/src/industry/resolver.rs | fn variable | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      290
+    "rust/openttd-kernels/src/industry/resolver.rs | fn industries_get_variable | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      283
     ],
     "rust/openttd-kernels/src/industry/tile.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       149
