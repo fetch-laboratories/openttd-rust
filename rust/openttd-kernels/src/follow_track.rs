@@ -266,7 +266,7 @@ impl State {
             w.check(reverse_diag_dir(dir, |ok| w.check(ok)) == self.exitdir);
         }
         self.new_tile.0 = w.dimensions.add_diag(self.old_tile.0, self.exitdir);
-        self.is_station = (self.mode == RAIL && w.has_station_rail(self.new_tile.0))
+        self.is_station = (self.mode == RAIL && w.has_station_rail_raw(self.new_tile.0))
             || (self.mode == ROAD && w.station_road_stop(self.new_tile.0));
     }
     fn can_enter(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {

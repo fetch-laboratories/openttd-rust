@@ -9,23 +9,24 @@
 use crate::bitmath_func::{gb, has_bit, sb, toggle_bit};
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
-use crate::station_type::{
-    RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK, StationType,
-};
+use crate::direction_type::{Axis, DiagDirection};
+use crate::station_type::{RoadStopType, StationID, StationType};
 use crate::tile_type::{MP_STATION, TileIndex};
+use crate::track_type::Track;
 
-/// Native `StationGfx`, the byte index of station graphics.
+/// Native `StationGfx`: index of station graphics (`_station_display_datas`).
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StationGfx(pub u8);
 
 /// Offset for the dock water parts (`GFX_DOCK_BASE_WATER_PART`).
 pub const GFX_DOCK_BASE_WATER_PART: u8 = 4;
 
-/// `GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET`.
+/// `GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET`: offset for drive through parts.
 pub const GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET: u8 = 4;
 
-/// `GetStationType`, including its native tile-type assertion policy.
+/// `GetStationType`: get the station type of this tile, including its native
+/// tile-type assertion policy.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 #[allow(clippy::cast_possible_truncation)] // GB returns the original four-bit value.
@@ -34,38 +35,39 @@ pub(crate) fn get_station_type(m: &TileTypeAccess, tile: TileIndex) -> Option<St
     Some(StationType(gb(u32::from(fields.m6()), 3, 4) as u8))
 }
 
-/// `IsDock`.
+/// `IsDock`: is tile `t` a dock tile?
 pub(crate) fn is_dock(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    Some(get_station_type(m, tile)?.0 == crate::station_type::STATION_DOCK)
+    Some(get_station_type(m, tile)? == StationType::Dock)
 }
 
-/// `IsBuoy`.
+/// `IsBuoy`: is tile `t` a buoy tile?
 pub(crate) fn is_buoy(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    Some(get_station_type(m, tile)?.0 == crate::station_type::BUOY)
+    Some(get_station_type(m, tile)? == StationType::Buoy)
 }
 
-/// `IsTruckStop`.
+/// `IsTruckStop`: is the station at `t` a truck stop?
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_truck_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    Some(get_station_type(m, tile)?.0 == STATION_TRUCK)
+    Some(get_station_type(m, tile)? == StationType::Truck)
 }
 
-/// `IsBusStop`.
+/// `IsBusStop`: is the station at `t` a bus stop?
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_bus_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    Some(get_station_type(m, tile)?.0 == STATION_BUS)
+    Some(get_station_type(m, tile)? == StationType::Bus)
 }
 
-/// `IsRoadWaypoint`.
+/// `IsRoadWaypoint`: is the station at `t` a road waypoint?
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_road_waypoint(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    Some(get_station_type(m, tile)?.0 == ROAD_WAYPOINT)
+    Some(get_station_type(m, tile)? == StationType::RoadWaypoint)
 }
 
-/// `IsAnyRoadStop`, preserving the source predicate order.
+/// `IsAnyRoadStop`: is the station at `t` a road station? Preserves the
+/// source predicate order.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
@@ -73,266 +75,438 @@ pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bo
     Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)? || is_road_waypoint(m, tile)?)
 }
 
-/// `IsAirport`; the station type leaf keeps its native assertion.
+/// `IsAirport`: is this station tile an airport? The station type leaf keeps
+/// its native assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_airport(tile: u32, s: &Services) -> bool {
-    (s.station_type)(tile).0 == STATION_AIRPORT
+pub(crate) fn is_airport(tile: TileIndex, s: &Services) -> bool {
+    (s.station_type)(tile.0) == StationType::Airport
+}
+/// Temporary raw adapter for `animated_tile.rs` and `newgrf_airport.rs`.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn is_airport_raw(tile: u32, s: &Services) -> bool {
+    is_airport(TileIndex(tile), s)
 }
 
-/// `IsRailWaypoint`; the station type leaf keeps its native assertion.
+/// `IsRailWaypoint`: is this station tile a rail waypoint? The station type
+/// leaf keeps its native assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_rail_waypoint(tile: u32, s: &Services) -> bool {
-    (s.station_type)(tile).0 == RAIL_WAYPOINT
+pub(crate) fn is_rail_waypoint(tile: TileIndex, s: &Services) -> bool {
+    (s.station_type)(tile.0) == StationType::RailWaypoint
 }
-/// `IsRailWaypointTile`.
+/// `IsRailWaypointTile`: is this tile a station tile and a rail waypoint?
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_rail_waypoint_tile(tile: u32, s: &Services) -> bool {
-    crate::map_func::World::new(s).rail_waypoint_tile(tile)
+pub(crate) fn is_rail_waypoint_tile(tile: TileIndex, s: &Services) -> bool {
+    crate::map_func::World::new(s).is_rail_waypoint_tile(tile)
 }
-/// `IsRoadWaypointTile`.
+/// `IsRoadWaypointTile`: is this tile a station tile and a road waypoint?
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_road_waypoint_tile(tile: u32, s: &Services) -> bool {
-    (s.tile_type)(tile) == MP_STATION && (s.station_type)(tile).0 == ROAD_WAYPOINT
+pub(crate) fn is_road_waypoint_tile(tile: TileIndex, s: &Services) -> bool {
+    (s.tile_type)(tile.0) == MP_STATION && (s.station_type)(tile.0) == StationType::RoadWaypoint
 }
 
-/// `GetAirportGfx`: airport membership is established by each caller before
-/// this read, proving its native `IsAirport` assertion. `GetStationGfx` retains its
-/// native station assertion; translation calls the Rust owner directly.
+/// `GetAirportGfx`: get the station graphics of this airport tile. Airport
+/// membership is established by each caller before this read, proving its
+/// native `IsAirport` assertion. `GetStationGfx` retains its native station
+/// assertion; translation calls the Rust owner directly.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_airport_gfx(
+    tile: TileIndex,
+    s: &Services,
+    airport: &crate::newgrf_airport::Services,
+) -> StationGfx {
+    StationGfx(crate::newgrf_airport::translate_tile(
+        (s.station_gfx)(tile.0),
+        airport,
+    ))
+}
+/// Temporary raw adapter for `newgrf_airport.rs`.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn get_airport_gfx_raw(
     tile: u32,
     s: &Services,
     airport: &crate::newgrf_airport::Services,
 ) -> u8 {
-    crate::newgrf_airport::translate_tile((s.station_gfx)(tile), airport)
+    get_airport_gfx(TileIndex(tile), s, airport).0
 }
 
-/// `Station::GetByTile`, retaining its valid-station-or-null lookup.
+/// `Station::GetByTile`: get the station belonging to a specific tile,
+/// retaining its valid-station-or-null lookup.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn station_get_by_tile(
+    tile: TileIndex,
+    s: &crate::newgrf_airport::Services,
+) -> *mut crate::station::BaseStation {
+    (s.by_tile)(tile.0).cast()
+}
+/// Temporary raw adapter for `water.rs` and `airport.rs`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    (s.by_tile)(tile).cast()
+    station_get_by_tile(TileIndex(tile), s)
 }
-/// Original `IsHangar`, retaining its assertion and airport gate before lookup.
+/// Original `IsHangar` (`station_cmd.cpp`): check whether the given tile is a
+/// hangar, retaining its assertion and airport gate before lookup.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
-    (s.check)((s.shared().tile_type)(tile) == MP_STATION);
+pub(crate) fn is_hangar(tile: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
+    (s.check)((s.shared().tile_type)(tile.0) == MP_STATION);
+    // If the tile isn't an airport there's no chance it's a hangar.
     if !is_airport(tile, s.shared()) {
         return false;
     }
-    let st = station_by_tile(tile, s);
+    let st = station_get_by_tile(tile, s);
     let spec = crate::newgrf_airport::station_spec(st, s);
     for i in 0..(s.depot_count)(spec) {
         let offset = (s.depot_offset)(spec, i);
-        if (s.rotated_offset)(st, offset, spec) == tile {
+        if (s.rotated_offset)(st, offset, spec) == tile.0 {
             return true;
         }
     }
     false
 }
-/// Original `IsHangarTile`, including its non-station early return.
+/// Temporary raw adapter for `newgrf_airport.rs`.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn is_hangar_raw(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
+    is_hangar(TileIndex(tile), s)
+}
+/// Original `IsHangarTile`: is tile `t` a hangar tile? Includes its
+/// non-station early return. Keeps its raw tile until `orders.rs` adopts it.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
-    (s.shared().tile_type)(tile) == MP_STATION && is_hangar(tile, s)
+    (s.shared().tile_type)(tile) == MP_STATION && is_hangar(TileIndex(tile), s)
 }
 
-fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
-    m.available(tile)?;
-    if m.assertions() && (m.read(tile) != MP_STATION || !is_road_waypoint(m, TileIndex(tile))?) {
+/// The `assert(IsRoadWaypointTile(t))` precondition of the road waypoint
+/// accessors.
+fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: TileIndex) -> Option<()> {
+    m.available(tile.0)?;
+    if m.assertions() && (m.read(tile.0) != MP_STATION || !is_road_waypoint(m, tile)?) {
         return None;
     }
     Some(())
 }
-/// `IsRoadWaypointOnSnowOrDesert`.
-pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
+/// `IsRoadWaypointOnSnowOrDesert`: check if a road waypoint tile has
+/// snow/desert.
+pub(crate) fn is_road_waypoint_on_snow_or_desert(
+    m: &crate::map_func::TileTypeAccess,
+    tile: TileIndex,
+) -> Option<bool> {
     require_road_waypoint(m, tile)?;
-    Some(has_bit(m.m8(tile)?, 15))
+    Some(has_bit(m.m8(tile.0)?, 15))
 }
-/// `ToggleRoadWaypointOnSnowOrDesert`.
+/// Temporary raw adapter for `station_lifecycle.rs`.
+pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
+    is_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
+}
+/// `ToggleRoadWaypointOnSnowOrDesert`: toggle the snow/desert state of a road
+/// waypoint tile.
 #[allow(clippy::cast_possible_truncation)] // The source stores back into uint16_t.
+pub(crate) fn toggle_road_waypoint_on_snow_or_desert(
+    m: &crate::map_func::TileTypeAccess,
+    tile: TileIndex,
+) -> Option<()> {
+    require_road_waypoint(m, tile)?;
+    let mut value = u32::from(m.m8(tile.0)?);
+    toggle_bit(&mut value, 15);
+    m.set_m8(tile.0, value as u16)
+}
+/// Temporary raw adapter for `station_lifecycle.rs`.
 pub(crate) fn toggle_road_waypoint_snow(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<()> {
-    require_road_waypoint(m, tile)?;
-    let mut value = u32::from(m.m8(tile)?);
-    toggle_bit(&mut value, 15);
-    m.set_m8(tile, value as u16)
+    toggle_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
 }
-/// `GetRoadWaypointRoadside`.
+/// `GetRoadWaypointRoadside`: get the decorations of a road waypoint.
 #[allow(clippy::cast_possible_truncation)] // GB returns the original two-bit value.
+pub(crate) fn get_road_waypoint_roadside(
+    m: &crate::map_func::TileTypeAccess,
+    tile: TileIndex,
+) -> Option<crate::services::Roadside> {
+    require_road_waypoint(m, tile)?;
+    Some(crate::services::Roadside(
+        gb(u32::from(m.m3(tile.0)?), 2, 2) as u8
+    ))
+}
+/// Temporary raw adapter for `station_lifecycle.rs`.
 pub(crate) fn road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<crate::services::Roadside> {
-    require_road_waypoint(m, tile)?;
-    Some(crate::services::Roadside(
-        gb(u32::from(m.m3(tile)?), 2, 2) as u8
-    ))
+    get_road_waypoint_roadside(m, TileIndex(tile))
 }
-/// `SetRoadWaypointRoadside`.
+/// `SetRoadWaypointRoadside`: set the decorations of a road waypoint. Keeps
+/// its raw tile until `station_lifecycle.rs` adopts it.
 #[allow(clippy::cast_possible_truncation)] // SB stores back into the source byte.
 pub(crate) fn set_road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
     value: crate::services::Roadside,
 ) -> Option<()> {
-    require_road_waypoint(m, tile)?;
+    require_road_waypoint(m, TileIndex(tile))?;
     let mut bits = u32::from(m.m3(tile)?);
     sb(&mut bits, 2, 2, u32::from(value.0));
     m.set_m3(tile, bits as u8)
 }
 
 impl crate::map_func::World<'_> {
+    /// `IsRailStationTile`: is this tile a station tile and a rail station?
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn rail_station(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION
-            && get_station_type(&self.types, TileIndex(t))
-                .expect("station tile")
-                .0
-                == crate::station_type::STATION_RAIL
+    pub(crate) fn is_rail_station_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION
+            && get_station_type(&self.types, t).expect("station tile") == StationType::Rail
     }
-    /// `IsRailStation`, with `GetStationType`'s tile-type assertion.
-    pub(crate) fn is_rail_station(&self, t: u32) -> bool {
-        self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::STATION_RAIL
+    /// `IsRailStation`: is this station tile a rail station? Keeps
+    /// `GetStationType`'s tile-type assertion.
+    pub(crate) fn is_rail_station(&self, t: TileIndex) -> bool {
+        self.asserted(|m| get_station_type(m, t)) == StationType::Rail
     }
-    /// `HasStationRail`, with `GetStationType`'s tile-type assertion.
-    pub(crate) fn station_has_rail(&self, t: u32) -> bool {
+    /// `HasStationRail`: has this station tile a rail? In other words, is this
+    /// station tile a rail station or rail waypoint? Keeps `GetStationType`'s
+    /// tile-type assertion.
+    pub(crate) fn has_station_rail(&self, t: TileIndex) -> bool {
         matches!(
-            self.asserted(|m| get_station_type(m, TileIndex(t))).0,
-            crate::station_type::STATION_RAIL | RAIL_WAYPOINT
+            self.asserted(|m| get_station_type(m, t)),
+            StationType::Rail | StationType::RailWaypoint
         )
     }
     /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
-    pub(crate) fn buoy(&self, t: u32) -> bool {
-        self.asserted(|m| is_buoy(m, TileIndex(t)))
+    pub(crate) fn is_buoy(&self, t: TileIndex) -> bool {
+        self.asserted(|m| is_buoy(m, t))
     }
-    /// `IsAnyRoadStopTile`.
-    pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION && self.asserted(|m| is_any_road_stop(m, TileIndex(t)))
+    /// `IsAnyRoadStopTile`: is tile `t` a road stop station?
+    pub(crate) fn is_any_road_stop_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION && self.asserted(|m| is_any_road_stop(m, t))
     }
-    /// `GetRailStationTrack`.
-    pub(crate) fn station_track(&self, t: u32) -> u8 {
-        let axis = crate::services::Axis(self.station_axis(t));
-        crate::track_func::axis_to_track(axis, |ok| self.check(ok)).0
+    /// `GetRailStationTrack`: get the rail track of a rail station tile.
+    pub(crate) fn get_rail_station_track(&self, t: TileIndex) -> Track {
+        let axis = self.get_rail_station_axis(t);
+        crate::track_func::axis_to_track(axis, |ok| self.check(ok))
     }
-    /// `IsDriveThroughStopTile`.
-    pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION
-            && is_any_road_stop(&self.types, TileIndex(t)).expect("station tile")
-            && self.station_gfx(t) >= GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+    /// `IsDriveThroughStopTile`: is tile `t` a drive through road stop
+    /// station or waypoint?
+    pub(crate) fn is_drive_through_stop_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION
+            && is_any_road_stop(&self.types, t).expect("station tile")
+            && self.get_station_gfx(t).0 >= GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
     }
-    /// `GetDriveThroughStopAxis`.
-    pub(crate) fn drive_through_axis(&self, t: u32) -> u8 {
-        self.check(self.drive_through_stop_tile(t));
-        self.station_gfx(t)
-            .wrapping_sub(GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET)
-    }
-    /// `GetRoadStopType`: `RoadStopType::Truck` or `Bus`.
-    pub(crate) fn road_stop_type(&self, t: u32) -> u8 {
-        let kind = get_station_type(&self.types, TileIndex(t))
-            .expect("station tile")
-            .0;
-        self.check(kind == STATION_TRUCK || kind == STATION_BUS);
-        u8::from(kind == STATION_TRUCK)
-    }
-    /// `IsRailWaypointTile`.
-    pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION
-            && get_station_type(&self.types, TileIndex(t))
-                .expect("station tile")
+    /// `GetDriveThroughStopAxis`: gets the axis of the drive through stop.
+    pub(crate) fn get_drive_through_stop_axis(&self, t: TileIndex) -> Axis {
+        self.check(self.is_drive_through_stop_tile(t));
+        Axis(
+            self.get_station_gfx(t)
                 .0
-                == RAIL_WAYPOINT
+                .wrapping_sub(GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET),
+        )
+    }
+    /// `GetRoadStopType`: get the road stop type of this tile.
+    pub(crate) fn get_road_stop_type(&self, t: TileIndex) -> RoadStopType {
+        let kind = get_station_type(&self.types, t).expect("station tile");
+        self.check(kind == StationType::Truck || kind == StationType::Bus);
+        if kind == StationType::Truck {
+            RoadStopType::Truck
+        } else {
+            RoadStopType::Bus
+        }
+    }
+    /// `IsRailWaypointTile`: is this tile a station tile and a rail waypoint?
+    pub(crate) fn is_rail_waypoint_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION
+            && get_station_type(&self.types, t).expect("station tile")
+                == StationType::RailWaypoint
+    }
+    /// `HasStationTileRail`: is this a station tile with rail, a rail station
+    /// or rail waypoint?
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn has_station_tile_rail(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION
+            && matches!(
+                get_station_type(&self.types, t).expect("station tile"),
+                StationType::Rail | StationType::RailWaypoint
+            )
+    }
+    /// `IsStationRoadStopTile`: is tile `t` a road stop station?
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn is_station_road_stop_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION
+            && matches!(
+                get_station_type(&self.types, t).expect("station tile"),
+                StationType::Truck | StationType::Bus
+            )
+    }
+    /// `IsBayRoadStopTile`: is tile `t` a bay (non-drive through) road stop
+    /// station?
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn is_bay_road_stop_tile(&self, t: TileIndex) -> bool {
+        self.is_station_road_stop_tile(t)
+            && self.get_station_gfx(t).0 < GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+    }
+    /// `GetBayRoadStopDir`: gets the direction the bay road stop entrance
+    /// points towards.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_bay_road_stop_dir(&self, t: TileIndex) -> DiagDirection {
+        self.check(self.is_bay_road_stop_tile(t));
+        DiagDirection(self.get_station_gfx(t).0)
+    }
+    /// `GetStationGfx`: get the station graphics of this tile.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_station_gfx(&self, t: TileIndex) -> StationGfx {
+        self.check(self.kind(t.0) == MP_STATION);
+        StationGfx(Self::byte(self.types.m5(t.0)))
+    }
+    /// `GetStationIndex`: get `StationID` from a tile.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_station_index(&self, t: TileIndex) -> StationID {
+        self.check(self.kind(t.0) == MP_STATION);
+        StationID(Self::word(self.types.m2(t.0)))
+    }
+    /// `IsStationTileBlocked`: is tile `t` a blocked tile?
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn is_station_tile_blocked(&self, t: TileIndex) -> bool {
+        self.check(self.has_station_tile_rail(t));
+        has_bit(Self::byte(self.types.m3(t.0)), 0)
+    }
+    /// `GetRailStationAxis`: get the rail direction of a rail station.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_rail_station_axis(&self, t: TileIndex) -> Axis {
+        self.check(self.has_station_tile_rail(t));
+        if has_bit(self.get_station_gfx(t).0, 0) {
+            Axis::AXIS_Y
+        } else {
+            Axis::AXIS_X
+        }
+    }
+    /// `HasStationReservation`: get the reservation state of the rail station.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn has_station_reservation(&self, t: TileIndex) -> bool {
+        self.check(self.has_station_tile_rail(t));
+        has_bit(Self::byte(self.types.m6(t.0)), 2)
+    }
+    /// `IsCompatibleTrainStationTile`: check if `test_tile` is a valid
+    /// continuation to the rail station tile `station_tile`: it is a rail
+    /// station tile with a compatible railtype, tracks in the same direction,
+    /// the same station, and not blocked.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn is_compatible_train_station_tile(
+        &self,
+        test_tile: TileIndex,
+        station_tile: TileIndex,
+    ) -> bool {
+        self.check(self.is_rail_station_tile(station_tile));
+        self.is_rail_station_tile(test_tile)
+            && !self.is_station_tile_blocked(test_tile)
+            && crate::rail::is_compatible_rail(
+                self.shared,
+                self.rail_type(test_tile.0),
+                self.rail_type(station_tile.0),
+            )
+            && self.get_rail_station_axis(test_tile) == self.get_rail_station_axis(station_tile)
+            && self.get_station_index(test_tile) == self.get_station_index(station_tile)
+    }
+}
+
+/// Temporary raw adapters for callers outside workset 03; each delegates to
+/// the typed accessor named after the original.
+impl crate::map_func::World<'_> {
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn rail_station(&self, t: u32) -> bool {
+        self.is_rail_station_tile(TileIndex(t))
+    }
+    pub(crate) fn is_rail_station_raw(&self, t: u32) -> bool {
+        self.is_rail_station(TileIndex(t))
+    }
+    pub(crate) fn station_has_rail(&self, t: u32) -> bool {
+        self.has_station_rail(TileIndex(t))
+    }
+    pub(crate) fn buoy(&self, t: u32) -> bool {
+        self.is_buoy(TileIndex(t))
+    }
+    pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
+        self.is_any_road_stop_tile(TileIndex(t))
+    }
+    pub(crate) fn station_track(&self, t: u32) -> u8 {
+        self.get_rail_station_track(TileIndex(t)).0
+    }
+    pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
+        self.is_drive_through_stop_tile(TileIndex(t))
+    }
+    pub(crate) fn drive_through_axis(&self, t: u32) -> u8 {
+        self.get_drive_through_stop_axis(TileIndex(t)).0
+    }
+    pub(crate) fn road_stop_type(&self, t: u32) -> u8 {
+        self.get_road_stop_type(TileIndex(t)).0
+    }
+    pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
+        self.is_rail_waypoint_tile(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn has_station_rail(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION
-            && matches!(
-                get_station_type(&self.types, TileIndex(t))
-                    .expect("station tile")
-                    .0,
-                crate::station_type::STATION_RAIL | RAIL_WAYPOINT
-            )
+    pub(crate) fn has_station_rail_raw(&self, t: u32) -> bool {
+        self.has_station_tile_rail(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn station_road_stop(&self, t: u32) -> bool {
-        self.kind(t) == MP_STATION
-            && matches!(
-                get_station_type(&self.types, TileIndex(t))
-                    .expect("station tile")
-                    .0,
-                STATION_TRUCK | STATION_BUS
-            )
+        self.is_station_road_stop_tile(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn bay_stop(&self, t: u32) -> bool {
-        self.station_road_stop(t) && self.station_gfx(t) < GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+        self.is_bay_road_stop_tile(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn bay_dir(&self, t: u32) -> u8 {
-        self.check(self.bay_stop(t));
-        self.station_gfx(t)
+        self.get_bay_road_stop_dir(TileIndex(t)).0
     }
-    /// `GetStationGfx`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn station_gfx(&self, t: u32) -> u8 {
-        self.check(self.kind(t) == MP_STATION);
-        Self::byte(self.types.m5(t))
+    pub(crate) fn station_index(&self, t: u32) -> StationID {
+        self.get_station_index(TileIndex(t))
     }
-    /// `GetStationIndex`.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    pub(crate) fn station_index(&self, t: u32) -> crate::station_type::StationID {
-        self.check(self.kind(t) == MP_STATION);
-        crate::station_type::StationID(Self::word(self.types.m2(t)))
-    }
-    /// `IsStationTileBlocked`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn station_blocked(&self, t: u32) -> bool {
-        self.check(self.has_station_rail(t));
-        has_bit(Self::byte(self.types.m3(t)), 0)
+        self.is_station_tile_blocked(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn station_axis(&self, t: u32) -> u8 {
-        self.check(self.has_station_rail(t));
-        u8::from(has_bit(self.station_gfx(t), 0))
+        self.get_rail_station_axis(TileIndex(t)).0
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn station_reserved(&self, t: u32) -> bool {
-        self.check(self.has_station_rail(t));
-        has_bit(Self::byte(self.types.m6(t)), 2)
+        self.has_station_reservation(TileIndex(t))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
-        self.check(self.rail_station(start));
-        self.rail_station(t)
-            && !self.station_blocked(t)
-            && crate::rail::is_compatible_rail(
-                self.shared,
-                self.rail_type(t),
-                self.rail_type(start),
-            )
-            && self.station_axis(t) == self.station_axis(start)
-            && self.station_index(t) == self.station_index(start)
+        self.is_compatible_train_station_tile(TileIndex(t), TileIndex(start))
     }
 }

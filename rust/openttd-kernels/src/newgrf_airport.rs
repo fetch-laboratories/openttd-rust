@@ -398,7 +398,7 @@ fn id_at_offset(tile: u32, st: *mut BaseStation, grfid: u32, s: &Services) -> u3
     if !(s.belongs)(st, tile) {
         return 0xffff;
     }
-    let gfx = crate::station_map::get_airport_gfx(tile, s.shared(), s);
+    let gfx = crate::station_map::get_airport_gfx_raw(tile, s.shared(), s);
     let spec = (s.tile_spec)(gfx);
     if gfx < NEW_AIRPORTTILE_OFFSET {
         let over = (s.shared().specs().airport_tile().substitute().override_id)(spec);
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
                 (s.shared().nearby_tile)(parameter as u8, c.tile)
             };
             let same = (s.shared().tile_type)(tile) == crate::tile_type::MP_STATION
-                && crate::station_map::is_airport(tile, s.shared())
+                && crate::station_map::is_airport_raw(tile, s.shared())
                 && (s.shared().station_index)(tile) == (s.station_id)(c.station);
             (s.shared().nearby_tile_information)(
                 tile,
@@ -535,7 +535,7 @@ pub(crate) fn tile_spec_by_gfx(gfx: u8, s: &Services) -> *const TileSpec {
     (s.tile_spec)(translate_tile(gfx, s))
 }
 pub(crate) fn tile_spec_by_tile(tile: u32, s: &Services) -> *const TileSpec {
-    (s.tile_spec)(crate::station_map::get_airport_gfx(tile, s.shared(), s))
+    (s.tile_spec)(crate::station_map::get_airport_gfx_raw(tile, s.shared(), s))
 }
 pub(crate) fn tile_callback(
     callback: u16,
@@ -586,7 +586,7 @@ pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {
-    u8::from(crate::station_map::is_hangar(tile, unsafe { &*s }))
+    u8::from(crate::station_map::is_hangar_raw(tile, unsafe { &*s }))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_pos_on_build(tile: u32, s: *const Services) -> u8 {

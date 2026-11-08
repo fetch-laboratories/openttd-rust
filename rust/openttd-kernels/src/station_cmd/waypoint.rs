@@ -28,14 +28,14 @@ use crate::station_type::{
     MAX_LENGTH_STATION_NAME_CHARS, NEW_STATION, RAIL_WAYPOINT, ROAD_WAYPOINT,
 };
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_STATION};
+use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_STATION, TileIndex};
 use crate::track_type::{TRACK_BIT_X, TRACK_BIT_Y};
 use crate::witness as w;
 
 impl Ctx<'_> {
     fn waypoint_rail_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_RAIL);
-        if crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
+        if crate::station_map::is_rail_waypoint_tile(TileIndex(tile), self.shared) {
             return (self.s.rail_axis)(tile).0;
         }
         if (self.shared.tile_type)(tile) != MP_RAILWAY
@@ -55,7 +55,7 @@ impl Ctx<'_> {
     }
     fn waypoint_road_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_ROAD);
-        if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
+        if crate::station_map::is_road_waypoint_tile(TileIndex(tile), self.shared) {
             return crate::map_func::World::new(self.shared).drive_through_axis(tile);
         }
         if !crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
@@ -229,7 +229,7 @@ impl Ctx<'_> {
     fn valid_waypoint_tile(&self, out: Cost<'_>, tile: u32, axis: u8, waypoint: &mut u16) {
         w::hit(w::WAYPOINT_VALIDATE);
         if (self.shared.tile_type)(tile) == MP_STATION {
-            if !crate::station_map::is_rail_waypoint(tile, self.shared) {
+            if !crate::station_map::is_rail_waypoint(TileIndex(tile), self.shared) {
                 return self.auto_clear(out, tile);
             }
             let wp = (self.shared.station_index)(tile);
@@ -315,7 +315,7 @@ impl Ctx<'_> {
         };
         cost.set(0);
         for tile in area.tiles(self.map()) {
-            if !crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
+            if !crate::station_map::is_rail_waypoint_tile(TileIndex(tile), self.shared) {
                 cost.add_money(crate::company::price(PR_BUILD_WAYPOINT_RAIL));
             }
         }
@@ -432,12 +432,12 @@ impl Ctx<'_> {
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
-            let old = if crate::map_func::World::new(self.shared).has_station_rail(tile) {
+            let old = if crate::map_func::World::new(self.shared).has_station_rail_raw(tile) {
                 (self.s.custom_rail_index)(tile) as u8
             } else {
                 0
             };
-            if !crate::map_func::World::new(self.shared).has_station_rail(tile) {
+            if !crate::map_func::World::new(self.shared).has_station_rail_raw(tile) {
                 (self.s.station_infrastructure)(owner, 1);
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis), |ok| {
@@ -655,7 +655,7 @@ impl Ctx<'_> {
             } else {
                 owner
             };
-            if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
+            if crate::station_map::is_road_waypoint_tile(TileIndex(tile), self.shared) {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
             self.area_add((self.s.road_waypoint_tile_area)(wp), tile);
