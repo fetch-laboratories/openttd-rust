@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Development resumed on 2026-11-08 in the cleanup stage; this session runs at most two implementers (user, 2026-11-08). Code main is integration 132, `5661d54e0a` (#807). The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). The next regular stocktake/profile is 137 and the next platform cadence 135.
+Development resumed on 2026-11-08 in the cleanup stage; the session ran two implementers until the user restored the four-implementer cap the same evening (user, 2026-11-08). Code main is integration 132, `5661d54e0a` (#807). The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). The next regular stocktake/profile is 137 and the next platform cadence 135.
 
 Fork C++ change since stocktake 125 (2026-11-07): −467 counted lines, all on 11-07 (127 and 129); 0 on 11-08. Tooling since 129: +33 (130) and +563 (131) code lines.
 
@@ -316,7 +316,7 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Active with at most two implementers this session (user, 2026-11-08): one slot runs #734/#735 file passes, the other runs work order items 2 to 4 in order (#806 and #726 done; #736 U now). A running profile takes a slot. Code main is integration 132, `5661d54e0a`.
+Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day): two slots run #734/#735 file passes and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. Under this Claude Code root, `gpt-6.1-sol` reviewers report findings and Opus implementers fix them ([team](team.md#claude-code-root)). Code main is integration 132, `5661d54e0a`.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
