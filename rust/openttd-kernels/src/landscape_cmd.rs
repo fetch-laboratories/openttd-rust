@@ -224,10 +224,10 @@ impl<'a> World<'a> {
                     flags,
                     tile,
                 ),
-                MP_INDUSTRY => crate::industry::openttd_rust_industry_tile_clear(
+                MP_INDUSTRY => crate::industry::clear_tile_industry(
                     out.0.cast(),
-                    tile,
-                    flags,
+                    crate::tile_type::TileIndex(tile),
+                    crate::command_type::DoCommandFlags(flags),
                     owners.industry,
                     t.industry_policy,
                     t.industry_costs,
@@ -292,16 +292,18 @@ impl<'a> World<'a> {
                 MP_WATER => {
                     crate::water_cmd::openttd_rust_water_terraform(owners.water, out.0, flags, tile)
                 }
-                MP_INDUSTRY => crate::industry::openttd_rust_industry_tile_terraform(
+                MP_INDUSTRY => crate::industry::terraform_tile_industry(
                     out.0.cast(),
-                    tile,
-                    flags,
+                    crate::tile_type::TileIndex(tile),
+                    crate::command_type::DoCommandFlags(flags),
                     z,
-                    slope,
-                    self.s,
-                    owners.industry,
-                    t.industry_policy,
-                    t.industry_costs,
+                    crate::slope_type::Slope(slope),
+                    &crate::industry::TerraformServices {
+                        shared: self.s,
+                        tiles: &*owners.industry,
+                        policy: &*t.industry_policy,
+                        costs: &*t.industry_costs,
+                    },
                 ),
                 MP_OBJECT => crate::objects::openttd_rust_object_terraform(
                     owners.objects,
