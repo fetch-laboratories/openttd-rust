@@ -3,8 +3,9 @@
 ## Policy
 
 Speed is checked on the merged branch; PRs have no speed check (user, 2026-10-22).
-Ceiling and band decisions use the mean of a scenario's last three quiet-pass ratios,
-carried forward by the projection; never use one pass alone.
+Ceiling and band decisions use the mean of a scenario's last three quiet-pass ratios
+on this host, carried forward by the projection. Until a scenario has three passes
+here, use the mean of those it has (provisional; the record restarted on 2026-11-05).
 
 | Scenario | Ceiling | Band starts |
 | --- | --- | --- |
@@ -37,7 +38,7 @@ python3 tools/migration.py simulate --instructions --jobs 2
 - Before expensive profiling, `python3 tools/simulate.py speed prepare DIR` checks existing instruction builds without games and reports current and anchor identity mismatches. Its manifest retains diagnostic configuration, input and selected tool details outside the identity hash; mismatches print the selected dispatcher version, tool/core hashes and compiler fields. Anchor component details are unavailable, so the cause remains unknown until compared with retained evidence. Only proven discovery bookkeeping is normalized: CMake's INTERNAL `prefix_result` is the last `pkg_get_variable` query result, not a selected dependency; compiler flags, package settings and runtime bytes remain checked.
 - Exact Callgrind selectors: `StateGameLoop()` and, for generation, `_GenerateWorld()`. Never use a wildcard: it toggles off collection in the nested link-graph pause helper. Loading, saving and early generation setup are excluded.
 - The driver verifies release `line-tables-only` debug information. It caches only reference Ir; profile times do not enter `plain_speed`.
-- Anchors and pass history before 2026-11-05 came from the previous Ubuntu 26.04 host. Its Ir counts, ratios and pinned zlib and lzma runtime do not carry to this Ubuntu 24.04 host, whose compiler and CPU differ, and `simulate --instructions` rejects their identity. `speed prepare` accepts a profile whose only failures are that identity mismatch, after equal games and recorded counts. The first quiet pass here, at `27de6f8c18` on 2026-11-05, replaced every anchor. It pins this host's system zlib `1:1.3.dfsg-3.1ubuntu2.3` and liblzma `5.6.1+really5.4.5-1ubuntu0.4` (empty `LD_LIBRARY_PATH`), with GCC 13.3.0 and the retained local Callgrind 3.26.0 (the dispatcher alone reports 3.22.0; quote the selected tool/core identity and `VALGRIND_LIB`) on an Intel i7-4790K. The three-pass record restarts with it: until a scenario has three passes on this host, ceiling and band decisions use the mean of those it has (provisional, an exception to the three-pass rule above).
+- Anchors and pass history before 2026-11-05 came from the previous Ubuntu 26.04 host. Its Ir counts, ratios and pinned zlib and lzma runtime do not carry to this Ubuntu 24.04 host, whose compiler and CPU differ, and `simulate --instructions` rejects their identity. `speed prepare` accepts a profile whose only failures are that identity mismatch, after equal games and recorded counts. The first quiet pass here, at `27de6f8c18` on 2026-11-05, replaced every anchor. It pins this host's system zlib `1:1.3.dfsg-3.1ubuntu2.3` and liblzma `5.6.1+really5.4.5-1ubuntu0.4` (empty `LD_LIBRARY_PATH`), with GCC 13.3.0 and the retained local Callgrind 3.26.0 (the dispatcher alone reports 3.22.0; quote the selected tool/core identity and `VALGRIND_LIB`) on an Intel i7-4790K. The three-pass record restarts with it ([policy](#policy)).
 
 ## Wall timing
 
@@ -66,7 +67,7 @@ python3 tools/migration.py simulate play-opus-55-167-002-manual --benchmark 3 --
 
 An anchor is a `SPEED_ANCHORS` record in `tools/simulation/instructions.py`: `{head, ratio, Ir, identity}` for a quiet pass; a separate `integrated` record holds its head and Ir. Empty anchors permit collection only, not a passing guard.
 
-`SPEED_PASS` keeps the last three quiet-pass ratios, oldest first; collection prints the shifted history. `projected_ratio` uses the latest anchor, while ceiling and band decisions use the three-pass mean carried forward by the projection.
+`SPEED_PASS` keeps the last three quiet-pass ratios, oldest first; collection prints the shifted history. `projected_ratio` uses the latest anchor; ceiling and band decisions follow [policy](#policy).
 
 - Quiet passes replace the whole anchor and refresh `integrated` together; never reset anchor Ir alone.
 - PRs never edit `SPEED_ANCHORS` or `SPEED_INTEGRATED` (user, 2026-10-22).

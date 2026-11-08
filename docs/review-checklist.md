@@ -23,6 +23,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 - Each claim traces to production code and an expectation taken from the original.
 - Each new scenario, test or checker names behaviour existing checks cannot distinguish; one that names none is deleted.
 - Changed fixtures and expectations are explained. Growth or lint exceptions name the original behaviour that requires them and what retires them.
+- Each declared carry pairs the same item before and after a rename or move, and each fidelity suppression's reason names the original definition or cast it preserves.
 
 ## Cleanup PRs
 

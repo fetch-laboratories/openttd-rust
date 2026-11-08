@@ -28,5 +28,5 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 - Before pushing, run your work order's focused checks, `python3 tools/migration.py rust-checks` and `python3 tools/preflight.py --base origin/rust-migration`. Follow [quick cleanup checks](rust-migration.md#quick-cleanup-checks) for lint/growth ratchets, refactor proof and reviewed exception contracts. Fix failures while preserving the original's operations.
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
-- Commit coherent steps with a supported prefix (`Add:`, `Change:`, `Fix:`, `Doc:`, `Update:`). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
+- Commit coherent steps under titles the preflight commit checker accepts ([commits](workflow.md#commits-and-pushes)). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
 - Finish with what you delivered, what stays in C++, exact commands, limits and the next action.

@@ -69,8 +69,14 @@ def debt_errors(
         for key in sorted(left):
             values = sorted(left[key], reverse=True)
             allowed = sorted(right.get(key, []), reverse=True)
-            if len(values) > len(allowed) or any(
-                value > limit for value, limit in zip(values, allowed, strict=False)
-            ):
+            if exceeds(values, allowed):
                 errors.append(f"{label}: {key}: {values} exceeds {allowed}")
     return errors
+
+
+def exceeds(values: list[int], allowed: list[int]) -> bool:
+    """More sites, or any larger magnitude after sorting both descending."""
+    values, allowed = sorted(values, reverse=True), sorted(allowed, reverse=True)
+    return len(values) > len(allowed) or any(
+        value > limit for value, limit in zip(values, allowed, strict=False)
+    )

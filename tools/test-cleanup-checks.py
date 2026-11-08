@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Seed independent cleanup gate failures, including relocations and constant data."""
 
+import contextlib
 import importlib
 import importlib.util
+import io
 import json
 import subprocess
 import tempfile
 import unittest
+from collections import Counter
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
 from baseline_ratchet import debt_errors
-from cleanup_contract import associated_pull, reviewed
+from cleanup_contract import associated_pull, reviewed, source_reviews
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 from vcs import git
@@ -608,6 +612,7 @@ class GrowthTests(unittest.TestCase):
             [],
             [report("/implementation", "head")],
             [report("/review", "stale")],
+            [report("/review", "a" * 40)],
         ):
             self.assertFalse(
                 GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
@@ -625,6 +630,301 @@ class GrowthTests(unittest.TestCase):
         self.assertFalse(
             reviewed(changed, [report("/review", "head")], "/implementation", "head")
         )
+
+
+def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:
+    return (
+        "Agent: /review | Model: test | Reasoning effort: high\n"
+        "```cleanup-acceptance\n"
+        + json.dumps({"head": head, "accept": [proposal]})
+        + "\n```"
+    )
+
+
+def commit(root: Path) -> str:
+    git(
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qam",
+        "Change: fixture",
+        cwd=root,
+    )
+    return git("rev-parse", "HEAD", cwd=root).strip()
+
+
+class CarryTests(unittest.TestCase):
+    OLD = "rust/a.rs | fn curve_limit | too_many_lines | 4a33eacd5fa65f2b2e28"
+    NEW = "rust/a.rs | fn get_curve_speed_limit | too_many_lines | 4a33eacd5fa65f2b2e28"
+
+    def ratchet(
+        self, previous: dict[str, list[int]], head: dict[str, list[int]], *carries: dict
+    ) -> tuple[list[str], str]:
+        output = io.StringIO()
+        with (
+            patch.object(
+                LINT, "context", return_value=("/impl", list(carries), [], "h")
+            ),
+            contextlib.redirect_stdout(output),
+        ):
+            allowed = LINT.reviewed_debt("clippy", head, previous, head)
+        return debt_errors(head, head, allowed), output.getvalue()
+
+    @staticmethod
+    def carry(old: str, new: str, tool: str = "clippy") -> dict[str, str]:
+        return {"kind": "carry", "tool": tool, "from": old, "to": new}
+
+    def test_rename_move_and_changed_nesting_fingerprint_carry(self) -> None:
+        moved = self.NEW.replace("rust/a.rs", "rust/curve.rs")
+        nest = "rust/a.rs | fn curve_limit | excessive_nesting | 2839a77535b6b381d6fa"
+        renamed = "rust/a.rs | fn model | excessive_nesting | 0000000000aaaaaaaaaa"
+        for old, new, values in (
+            (self.OLD, self.NEW, [281]),
+            (self.OLD, moved, [281]),
+            (nest, renamed, [6]),
+        ):
+            with self.subTest(new=new):
+                errors, _ = self.ratchet(
+                    {old: values}, {new: values}, self.carry(old, new)
+                )
+                self.assertEqual(errors, [])
+        # The check prints a ready record for a one-to-one same-lint pair.
+        errors, printed = self.ratchet({self.OLD: [281]}, {self.NEW: [281]})
+        self.assertTrue(errors)
+        self.assertIn(
+            "ready carry: " + json.dumps(self.carry(self.OLD, self.NEW)), printed
+        )
+
+    def test_invalid_ratchet_carries_fail(self) -> None:
+        other = self.NEW.replace("too_many_lines", "too_many_arguments")
+        for previous, head, carry in (
+            ({self.OLD: [281]}, {self.NEW: [292]}, self.carry(self.OLD, self.NEW)),
+            (
+                {self.OLD: [281]},
+                {self.OLD: [281], self.NEW: [281]},
+                self.carry(self.OLD, self.NEW),
+            ),
+            (
+                {self.OLD: [281], self.NEW: [120]},
+                {self.NEW: [281]},
+                self.carry(self.OLD, self.NEW),
+            ),
+            ({self.OLD: [8]}, {other: [8]}, self.carry(self.OLD, other)),
+            (
+                {self.OLD: [281]},
+                {self.NEW: [281]},
+                self.carry(self.OLD, self.NEW, "ruff"),
+            ),
+        ):
+            with self.subTest(head=head, carry=carry):
+                errors, printed = self.ratchet(previous, head, carry)
+                self.assertTrue(errors)
+                self.assertEqual(carry["tool"] == "clippy", "invalid carry" in printed)
+
+    def test_carries_cannot_multiply_retired_debt(self) -> None:
+        other = self.NEW.replace("get_curve_speed_limit", "another")
+        for head, carries in (
+            ({self.NEW: [281, 281]}, [self.carry(self.OLD, self.NEW)]),
+            (
+                {self.NEW: [281], other: [281]},
+                [self.carry(self.OLD, self.NEW), self.carry(self.OLD, other)],
+            ),
+        ):
+            self.assertTrue(self.ratchet({self.OLD: [281]}, head, *carries)[0])
+
+    def test_component_reviews_use_agent_paths_under_shared_login(self) -> None:
+        proposal = {"kind": "lint"}
+        owner = acceptance_comment("h", proposal).replace("/review", "/impl")
+        independent = acceptance_comment("h", proposal)
+        body = '```cleanup-acceptance\n{"kind":"reviews","pulls":[12]}\n```'
+        with (
+            patch("cleanup_contract.gh", return_value=json.dumps({"body": owner})),
+            patch("cleanup_contract.discussion", return_value=[owner, independent]),
+        ):
+            comments = source_reviews("repos/shared/account", body, 13)
+        self.assertEqual(comments, [independent])
+        self.assertTrue(reviewed(proposal, comments, "/integration", "h"))
+        self.assertFalse(reviewed(proposal, [owner], "/impl", "h"))
+
+    def test_attribute_and_signature_changes_invalidate_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = "#[cfg_attr(test, allow(dead_code))]\npub fn work() {}\n"
+            initialize(root, {"rust/x.rs": original})
+            accepted = git("rev-parse", "HEAD", cwd=root).strip()
+            site = "rust/x.rs | fn work | allow dead_code"
+            row = "rust/x.rs | fn work | too_many_lines | item"
+            proposal = {"kind": "suppression"}
+            comment = acceptance_comment(accepted, proposal)
+            for changed in (
+                original.replace(
+                    "cfg_attr(test, allow(dead_code))", "allow(dead_code)"
+                ),
+                original.replace("pub fn", "pub unsafe fn"),
+                original.replace("pub fn", "fn"),
+                original.replace("pub fn", "/// changed contract\npub fn"),
+            ):
+                (root / "rust/x.rs").write_text(changed)
+                for module, predicate in (
+                    (POLICY, partial(POLICY.unchanged_scope, site)),
+                    (LINT, partial(LINT.unchanged_item, "clippy", row)),
+                ):
+                    with (
+                        patch.object(module, "ROOT", root),
+                        patch.object(module, "git", partial(git, cwd=root)),
+                    ):
+                        self.assertFalse(
+                            reviewed(
+                                proposal, [comment], "/impl", "new-head", predicate
+                            )
+                        )
+
+    def test_python_decorator_is_part_of_reviewed_item(self) -> None:
+        before = "@original\ndef work():\n    return 1\n"
+        after = before.replace("@original", "@changed")
+        self.assertNotEqual(
+            LINT.item_text("ruff", "tools/x.py", before, "work"),
+            LINT.item_text("ruff", "tools/x.py", after, "work"),
+        )
+
+    def test_suppression_carry_and_fidelity_reasons(self) -> None:
+        old = "rust/a.rs | impl Flag > const ReplaceProtection | allow non_upper_case_globals"
+        new = old.replace("rust/a.rs", "rust/group.rs")
+        before, after = Counter({old: 1}), Counter({new: 1})
+        carry = self.carry(old, new, "rust")
+        for carries, grown, expected in (
+            ([carry], after, []),
+            ([], after, [f"new suppression: {new} (1)"]),
+            ([carry], Counter({new: 2}), [f"new suppression: {new} (2)"]),
+            (
+                [
+                    self.carry(
+                        old, "rust/a.rs | module | allow non_upper_case_globals", "rust"
+                    )
+                ],
+                Counter({"rust/a.rs | module | allow non_upper_case_globals": 1}),
+                [
+                    "new suppression: rust/a.rs | module | allow non_upper_case_globals (1)"
+                ],
+            ),
+        ):
+            with (
+                patch.object(
+                    POLICY, "context", return_value=("/impl", carries, [], "h")
+                ),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(POLICY.suppression_errors(before, grown), expected)
+        reason = 'reason = "original GroupFlag::ReplaceProtection enumerator"'
+        source = (
+            "pub struct GroupFlag;\n"
+            f"#[allow(non_upper_case_globals, {reason})]\n"
+            "impl GroupFlag { pub const ReplaceProtection: u8 = 1; }\n"
+            f"#[expect(clippy::cast_possible_truncation, {reason})]\n"
+            "pub fn length(x: u32) -> u8 { x as u8 }\n"
+        )
+        reasoned = POLICY.fidelity_sites({"rust/x.rs": source})
+        self.assertEqual(
+            reasoned,
+            {
+                "rust/x.rs | impl GroupFlag | allow non_upper_case_globals",
+                "rust/x.rs | fn length | expect clippy::cast_possible_truncation",
+            },
+        )
+        with patch.object(POLICY, "context", side_effect=AssertionError):
+            self.assertEqual(
+                POLICY.suppression_errors(
+                    Counter(), POLICY.suppressions({"rust/x.rs": source}), reasoned
+                ),
+                [],
+            )
+        for rejected in (
+            source.replace(f", {reason}", ""),
+            source.split("#[expect", 1)[0].replace(
+                "impl GroupFlag", "#[allow(non_upper_case_globals)]\nimpl GroupFlag"
+            ),
+            source.replace(reason, 'reason = " "'),
+            f"#![allow(non_upper_case_globals, {reason})]\npub const Original: u8 = 1;\n",
+            f"#[allow(non_upper_case_globals, {reason})]\n"
+            "pub mod nested { pub const Original: u8 = 1; }\n",
+            f"#[allow(nonstandard_style, {reason})]\nimpl A {{ const Original: u8 = 1; }}\n",
+            f"#[allow(clippy::cast_lossless, {reason})]\nfn widen(x: u8) -> u32 {{ x as u32 }}\n",
+        ):
+            with self.subTest(rejected=rejected):
+                self.assertEqual(POLICY.fidelity_sites({"rust/x.rs": rejected}), set())
+
+    def test_accepted_contract_binds_to_unchanged_item_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"rust/x.rs": "pub struct Native;\npub fn other() {}\n"})
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            allowed = (
+                "#[allow(non_upper_case_globals)]\n"
+                "impl Native { pub const OriginalName: u8 = 1; }\n"
+            )
+            (root / "rust/x.rs").write_text(
+                "pub struct Native;\npub fn other() {}\n" + allowed
+            )
+            reviewed_head = commit(root)
+            site = "rust/x.rs | impl Native | allow non_upper_case_globals"
+            proposal = {
+                "kind": "suppression",
+                "tool": "rust",
+                "site": site,
+                "before": 0,
+                "after": 1,
+                "operation": "Native::OriginalName",
+                "source_contract": "original enumerator spelling",
+                "reason": "Keep the original's public vocabulary",
+                "retiring_owner": "header consumer",
+                "retirement_condition": "When the corresponding API is removed",
+            }
+            comment = acceptance_comment(reviewed_head, proposal)
+            (root / "rust/x.rs").write_text(
+                "pub struct Native;\npub fn other() { let _ = 1; }\n" + allowed
+            )
+            unchanged = commit(root)
+            (root / "rust/x.rs").write_text(
+                "pub struct Native;\npub fn other() {}\n"
+                + allowed.replace("= 1", "= 2")
+            )
+            changed = commit(root)
+            for head, expected in ((unchanged, 0), (changed, 1)):
+                git("checkout", "-q", head, cwd=root)
+                with (
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch.object(
+                        POLICY,
+                        "context",
+                        return_value=("/impl", [proposal], [comment], head),
+                    ),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(POLICY.main(), expected)
+            # The same binding holds for a reviewed lint row: `fn other` differs
+            # from the reviewed head at `unchanged` and matches it at `changed`.
+            row = "rust/x.rs | fn other | too_many_lines | 4a33eacd5fa65f2b2e28"
+            lint = dict(
+                proposal, kind="lint", tool="clippy", site=row, before=[], after=[120]
+            )
+            comment = acceptance_comment(reviewed_head, lint)
+            for head, expected in ((unchanged, {}), (changed, {row: [120]})):
+                git("checkout", "-q", head, cwd=root)
+                with (
+                    patch.object(LINT, "ROOT", root),
+                    patch.object(LINT, "git", partial(git, cwd=root)),
+                    patch.object(
+                        LINT, "context", return_value=("/impl", [lint], [comment], head)
+                    ),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(
+                        LINT.reviewed_debt("clippy", {row: [120]}, {}), expected
+                    )
 
 
 class ArchiveTests(unittest.TestCase):
