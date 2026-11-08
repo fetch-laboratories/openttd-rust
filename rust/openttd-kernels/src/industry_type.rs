@@ -7,12 +7,6 @@ pub const IT_INVALID: u8 = IndustryType::IT_INVALID.0;
 /// Native `NEW_INDUSTRYTILEOFFSET`.
 pub const NEW_INDUSTRYTILEOFFSET: u16 = IndustryGfx::NEW_INDUSTRYTILEOFFSET.0;
 
-/// Masks from `industrytype.h::IndustryBehaviour`. Temporary: their only callers moved to
-/// typed tests; they retire with their `industrytype.rs` definitions after #816.
-pub use crate::industrytype::BUILT_ON_WATER;
-/// Native `PROD_MULTI_HANDLING`.
-pub use crate::industrytype::PROD_MULTI_HANDLING;
-
 /// Native `NEW_INDUSTRYOFFSET`.
 pub const NEW_INDUSTRYOFFSET: u16 = IndustryType::NEW_INDUSTRYOFFSET.0 as u16;
 /// Native `NUM_INDUSTRYTILES`.
