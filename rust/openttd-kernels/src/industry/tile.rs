@@ -13,7 +13,7 @@ use super::{
     ConstructionServices, Industry, IndustryCost, IndustryCostServices, LifecycleServices,
     Services, SpecHandle,
 };
-use crate::bitmath_func::{gb, has_bit};
+use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::CargoType;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
@@ -390,7 +390,7 @@ fn make_industry_tile_bigger(
             l,
         );
         if i32::from(stage) == INDUSTRY_COMPLETED {
-            (t.set_completed)(tile.0);
+            t.set_industry_completed(tile);
         }
     }
     mark_tile_dirty_by_tile(tile, s);
@@ -712,7 +712,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             continue;
         }
         // If the industry itself doesn't accept this cargo, set 'always accepted' bit.
-        unsafe { *always_accepted |= bit };
+        unsafe { set_bit64(&mut *always_accepted, cargo.0) };
     }
 }
 
