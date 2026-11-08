@@ -5,11 +5,11 @@
 //! time, so a malformed later feature leaves earlier towns founded and unexpanded.
 use super::State;
 use super::founding::{FoundingServices, Tile, TownLayout, TownSize};
-use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
+use crate::heightmap::HeightmapRotation;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
 use crate::town_type::TownID;
-use crate::town_type::{TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TSZ_SMALL};
+use crate::town_type::{TownExpandMode, TownExpandModes};
 
 #[repr(C)]
 pub struct Frame {
@@ -74,17 +74,22 @@ impl ImportServices {
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
     )]
-    pub(crate) fn target(&self, rotation: u8, x_proportion: f32, y_proportion: f32) -> TileIndex {
+    pub(crate) fn target(
+        &self,
+        rotation: HeightmapRotation,
+        x_proportion: f32,
+        y_proportion: f32,
+    ) -> TileIndex {
         let s = unsafe { &*self.shared };
         let map = s.map();
         let max_x = map.max_x() as f32;
         let max_y = (s.map_max_y)() as f32;
         match rotation {
-            HM_CLOCKWISE => {
+            HeightmapRotation::HM_CLOCKWISE => {
                 // Tile coordinates align with what we expect.
                 TileIndex(map.tile_xy((x_proportion * max_x) as u32, (y_proportion * max_y) as u32))
             }
-            HM_COUNTER_CLOCKWISE => {
+            HeightmapRotation::HM_COUNTER_CLOCKWISE => {
                 // Tile coordinates are rotated and must be adjusted.
                 // AArch64 compilers contract the original subtraction and multiplication.
                 #[cfg(target_arch = "aarch64")]
@@ -128,8 +133,8 @@ impl ImportServices {
             let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
             town_id = (self.found)(
                 frame,
-                Tile(tile.0),
-                TownSize(TSZ_SMALL),
+                tile,
+                TownSize::TSZ_SMALL,
                 feature.city,
                 layout,
                 false,
@@ -145,7 +150,7 @@ impl ImportServices {
     }
 
     /// `genworld.cpp::LoadTownData`: found towns, then expand to target populations.
-    fn load_town_data(&self, frame: *mut Frame, rotation: u8) {
+    fn load_town_data(&self, frame: *mut Frame, rotation: HeightmapRotation) {
         // Load the JSON file as a string, parse it, and check that the result is an array.
         if !(self.load)(frame) {
             self.format_error();
@@ -190,7 +195,7 @@ impl ImportServices {
             if town_id == TownID::INVALID {
                 // Leave a sign at the intended location and count the failure, so the
                 // player can diagnose heightmap misalignment or place rough-terrain towns manually.
-                (self.place_sign)(Tile(target_tile.0), frame);
+                (self.place_sign)(target_tile, frame);
                 failed_towns = failed_towns.wrapping_add(1);
                 continue;
             }
@@ -221,7 +226,9 @@ impl ImportServices {
                 (self.expand)(
                     town_id,
                     HOUSES_TO_GROW,
-                    TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS,
+                    TownExpandModes::from_element(TownExpandMode::Buildings)
+                        .with(TownExpandModes::from_element(TownExpandMode::Roads))
+                        .0,
                 );
                 if unsafe { super::num_houses(state) } <= before {
                     fail_limit -= 1;
@@ -249,7 +256,7 @@ pub unsafe extern "C" fn openttd_rust_load_town_data(
     frame: *mut Frame,
     rotation: u8,
 ) {
-    unsafe { &*services }.load_town_data(frame, rotation);
+    unsafe { &*services }.load_town_data(frame, HeightmapRotation(rotation));
 }
 
 crate::abi::layouts! {

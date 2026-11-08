@@ -1294,7 +1294,7 @@ impl<'a> House<'a> {
             if (self.s.tile_type)(tile) != MP_HOUSE {
                 continue;
             }
-            crate::town_map::increment_house_age(self.h, tile);
+            crate::town_map::increment_house_age(self.h, crate::tile_type::TileIndex(tile));
         }
     }
     fn part_valid(&self, tile: u32, house: u32) -> bool {
