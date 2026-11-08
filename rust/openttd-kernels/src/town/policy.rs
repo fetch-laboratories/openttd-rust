@@ -3,11 +3,12 @@
 use super::{Leaves, State};
 use crate::cargo_type::{CargoType, INVALID_CARGO};
 use crate::cargotype::TownProductionEffect;
-use crate::road_type::{RoadTramType, RoadType, RoadTypes};
+use crate::road_type::{RoadTramType, RoadTypes};
 use crate::timer_game_calendar::CalendarDate;
 use crate::{cargo_registry, services::Services};
 
-/// `UpdateTownMaxPass`: update maximum monthly passengers and mail from population.
+/// Update the maximum amount of monthly passengers and mail for a town, based on its
+/// population (`UpdateTownMaxPass`).
 pub(crate) fn update_town_max_pass(leaves: &Leaves, owner: *mut State) {
     for (effect, shift) in [
         (TownProductionEffect::TPE_PASSENGERS, 3),
@@ -30,33 +31,44 @@ pub(crate) fn update_town_max_pass(leaves: &Leaves, owner: *mut State) {
         }
     }
 }
-/// `CheckTownRoadTypes`: whether towns can currently build a road type.
-pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
-    // GetTownRoadTypeFirstIntroductionDate: earliest town-buildable road type,
-    // or INT32_MAX if none is available.
-    let mut mask = RoadTypes(crate::road::get_mask_for_road_tram_type(
+/// Get the calendar date of the earliest town-buildable road type
+/// (`GetTownRoadTypeFirstIntroductionDate`).
+/// Return the introduction date of the earliest road type, or `INT32_MAX` if none is available.
+fn get_town_road_type_first_introduction_date(leaves: &Leaves) -> CalendarDate {
+    let mut best = CalendarDate(i32::MAX);
+    for rt in RoadTypes(crate::road::get_mask_for_road_tram_type(
         RoadTramType::RTT_ROAD,
-    ));
-    let mut first = CalendarDate(i32::MAX);
-    while mask.0 != 0 {
-        let road = RoadType(mask.0.trailing_zeros() as u8);
-        mask.0 &= mask.0 - 1;
-        let info = (leaves.road_info)(road.0);
-        // Town can't build a road type without the TownBuild flag.
-        if info.town_build && CalendarDate(info.introduction_date) < first {
-            first = CalendarDate(info.introduction_date);
+    ))
+    .iter()
+    {
+        let rti = (leaves.road_info)(rt.0);
+        // Town can't build this road type.
+        if !rti.town_build {
+            continue;
         }
+        if CalendarDate(rti.introduction_date) >= best {
+            continue;
+        }
+        best = CalendarDate(rti.introduction_date);
     }
-    if first <= crate::timer_game_common::calendar_date() {
+    best
+}
+/// Check if towns are able to build road (`CheckTownRoadTypes`).
+/// Return true iff the towns are currently able to build road.
+pub(crate) fn check_town_road_types(leaves: &Leaves) -> bool {
+    let min_date = get_town_road_type_first_introduction_date(leaves);
+    if min_date <= crate::timer_game_common::calendar_date() {
         return true;
     }
-    (leaves.road_type_error)(first.0);
+    // The native error distinguishes "not yet" from "not at all" by `min_date < INT32_MAX`.
+    (leaves.road_type_error)(min_date.0);
     false
 }
 // Compatibility name for the scalar world-generation caller.
 pub(crate) use check_town_road_types as road_types;
 
-/// `HouseSpec::GetRemovalCost`: cost of removing this house, adjusted for inflation.
+/// Get the cost for removing this house (`HouseSpec::GetRemovalCost`).
+/// Return the cost adjusted for inflation, etc.; `Money` multiplication saturates.
 pub(crate) fn get_removal_cost(factor: u8) -> i64 {
     crate::company::price(crate::economy_type::PR_CLEAR_HOUSE).saturating_mul(i64::from(factor))
         >> 8
@@ -87,5 +99,5 @@ pub extern "C" fn openttd_rust_town_first_cargo(effect: u8) -> u8 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_climate_mask(landscape: u8) -> u16 {
-    crate::house::climate_mask(landscape)
+    crate::house::get_climate_mask_for_landscape(crate::landscape_type::LandscapeType(landscape)).0
 }
