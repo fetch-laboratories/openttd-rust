@@ -4,11 +4,11 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-07, integration 129; paused)
+## Where the fork stands (2026-11-07, integration 129)
 
 Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host
 
-Development is paused at the user's request in the cleanup stage. Code main is integration 129, `7b6887f43d` (#803). Integrations 104 to 129 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. Quick validation passes on the pause commit `a9ca01d657`. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) is accepted on clean `46864a207c`, with profiles 113/119 retained; the user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). The next regular stocktake/profile is 131 and the next platform cadence 130.
+Development resumed on 2026-11-08 in the cleanup stage. Code main is integration 130, `b7b686b51a` (#805, tooling only; the measurements below are integration 129's). Integrations 104 to 129 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. Quick validation passes on the pause commit `a9ca01d657`. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) is accepted on clean `46864a207c`, with profiles 113/119 retained; the user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). The next regular stocktake/profile is 131 and the next platform cadence 130.
 
 | Measured quantity | Integration 129 |
 | --- | ---: |
@@ -293,11 +293,12 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 | 128 | #735 P1 Station helper contexts #801 (`5d43172624`) | Eight parameter-count rows retire; Rust +310/−200. |
 | 104, 107, 108, 127, 129 | #736 R0 #740, cargo/engine #749/#750, MovementGap #748, Company finance #802 (`0c8a0f8a05`), Town/Industry policy #803 (`7b6887f43d`) | 127 and 129 retire 467 counted C++ lines for 1,273 net Rust test lines and 2,071,485 raw oracle bytes. All 40,320 finance and 21,128 policy cases preserved. |
 | 104, 106, 108 | #737 C #741, H #745, R #744 | Compiled C++ −151, exports −10. |
+| 130 | Housekeeping retention of unpublished detached commits #804/#805 (`b7b686b51a`) | Tooling +33 code lines; C++, Rust and boundary unchanged. |
 
 ## Recurring
 
 - After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. Integration 125 stocktake/profile are accepted; profiles 113/119 remain retained for comparison. The next regular stocktake/profile follows integration 131.
-- Run the platform cadence after every fifth integration; 115, 120 and 125 passed. The next follows 130. A new failure stops integrations.
+- Run the platform cadence after every fifth integration; 115, 120 and 125 passed. Cadence 130 runs as [42511544906](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -309,18 +310,19 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 ## Resume checkpoint
 
-Paused at the user's request. Normal work stopped at the recorded 2026-11-07 16:28 UTC state. Code main is integration 129, `7b6887f43d`; pre-pause main is `5df157bfb1`. This docs-only pause moves main without advancing code. There is no merge or rollback to perform during wind-down, no running child, and no newly commissioned implementation, branch or brief. Later CI or background completion does not restart normal work; explicit user resume is required. On resume, apply the thirty-second steering review first.
+Agent: /root (Claude Code) | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-| Work / state at pause | Next action on explicit resume |
-| --- | --- |
-| #804 / #805, `root/804-detached-housekeeping`, head `7fac379c436cb7d879c409c38d420776afd92daf` over `5df157bfb1` | Keep `.local/worktrees/root-804-detached-housekeeping`. Both Python blobs equal reviewed `df984cab30`; all 23 housekeeping tests and prior Python/gate receipts pass. Review carries. The pause commit moves base under strict protection: adopt the new main tip preserving those blobs, then obtain exact-head Full and the final report before protected merge. Platform cadence 130 follows delivery. |
-| #805 Full `42391323158` | Passed at the pre-pause head; the pause and steering commits have since moved base. Update #805 from base preserving the reviewed blobs; its review carries. Request exact-head Full only if the carried status is pending, then merge. |
-| Metrics job `24514`, `.local/130-final-measure.sh` | Running for pre-pause head `7fac379c43`; do not wait. Keep all outputs. This is not #805's final integrating report; the actual resume head needs that report. Completion does not restart wind-down. |
-| Main CI | Quick, CI - Build and baseline validation passed on `7b6887f43d`; Quick passed on `5df157bfb1` and `a9ca01d657`. |
-| Integrations 127–129 | Delivered with independent source/evidence review, exact-head Full and matching tested/merged trees. #736 F/W and #735 P1 remain open for their other families. No rollback occurred. |
-| Next cadence | Platform 130 after its delivery; next regular stocktake/profile 131. Profile/platform 125 remain accepted, with profiles 113/119 retained. |
+Active since 2026-11-08 with at most two implementers this session (user, 2026-11-08). Slots follow the [cleanup work order](#cleanup-work-order) in proportion: one #734/#735 file pass and one slot for items 2 to 4 in order, starting with #806. #738's docs agent runs outside the count. Code main is integration 130, `b7b686b51a`.
 
-The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue (`.local/cleanup-after128-plan.json`); its three items lead item 4. No implementation, branch or brief has started for any of them.
+| Work | Owner (T3 child) | Next action |
+| --- | --- | --- |
+| #734/#735 workset 01 Town/house pass | `/root/cleanup_734_pass_01_town` | Draft PR from integration 130; then a fresh `gpt-6.1-sol` high reviewer, root exact-head Full. Adopts #806's carries after #806 integrates. |
+| #806 lint carries, one tools PR | `/root/cleanup_806_lint_carries` | Draft PR; then review and Full. Its slot then passes to #726, then #736 U. |
+| #738 rule corpus | `/root/cleanup_738_rules` | Pushes a docs branch without a PR; root reviews each commit and pushes it to `rust-migration` between integrations. |
+| Platform cadence 130 | Root | Run 42511544906 on `b7b686b51a`; a red result stops integrations. |
+| Next stocktake/profile | Root | After integration 131, including the [stream inventory](#cleanup-stream-inventories) rows. |
+
+The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue; its three items lead item 4.
 
 Remaining placement and limits:
 
@@ -330,9 +332,7 @@ Remaining placement and limits:
 
 Retained state for housekeeping:
 
-- Keep #805's one checkout `.local/worktrees/root-804-detached-housekeeping`, its pushed branch/head above, and the planning checkout `t3-20fec9ce` with its private plan. Preserve every checkout with uncommitted or unpushed work.
-- Only the two user-named finished W checkouts, `t3-366d4384` and `t3-e935c6f1`, were removed in this wind-down, after proving their exact heads are merged or remotely retained and checking live-output guards. No broad housekeeping apply or ad hoc-log deletion followed. Until #805 integrates, manually verify Git retention before any removal; keep origin `preserve/housekeeping-foundation-6ab9c20e5d`.
-- Keep job `24514` outputs: `.local/130-whole-fork.json`, `.local/130-source.json`, `.local/130-growth.json`, `.local/130-final-measure.log`, `.local/130-whole-fork.stderr.log`, `.local/130-source.stderr.log`, `.local/130-growth.stderr.log`, and the script/request/metadata. Keep the source-head label; none is promoted to a final integration receipt during wind-down.
+- Keep the planning checkout `t3-20fec9ce` with its private plan, and origin `preserve/housekeeping-foundation-6ab9c20e5d`. Preserve every checkout with uncommitted or unpushed work. #805 integrated in 130, so `tools/housekeeping.py` now keeps detached unpublished commits; the 11-08 apply removed 40 eligible entries (1.7 GB).
 - Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
 - Keep `.local/retained-network-693` with the failed Full artifact, inconclusive diagnostics, passing traces and bounded original/original evidence. Keep main `.local/integration-records/`, `.local/speed-pass/` anchors, frozen runtimes and the retained simulation evidence.
 - Leave dirty/staged trees untouched: `t3-3b491ddb` (five files), locked #565 WIP `t3-431c84b4`, locked native evidence `t3-d78d5f8b`, `t3-32cf4edc` (`tools/simulation/roads.py` staged), and `t3-e130d5a3` (`migration/saves/README.md` staged).
