@@ -1024,7 +1024,7 @@ impl Engine<'_> {
         self.map().distance_square(a.0, b.0)
     }
     fn tile_index_to_tile_index_diff_c(&self, a: TileIndex, b: TileIndex) -> TileIndexDiffC {
-        self.map().tile_index_to_tile_index_diff_c(a.0, b.0)
+        self.map().tile_index_to_tile_index_diff_c(a, b)
     }
     /// `tile + TileDiffXY(x, y)`.
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
@@ -1050,9 +1050,7 @@ impl Engine<'_> {
         RoadBits(diag_dir_to_road_bits(dir.0, self.check()))
     }
     fn inclined_slope(dir: DiagDirection) -> Slope {
-        Slope(inclined_slope(dir.0, || {
-            unreachable!("native inclined slope direction")
-        }))
+        inclined_slope(dir, || unreachable!("native inclined slope direction"))
     }
     fn is_valid_tile(&self, tile: TileIndex) -> bool {
         (self.services.tile_valid)(tile.0)
@@ -2258,7 +2256,7 @@ impl Engine<'_> {
             }
             /* Exclude the source position from the bitmask
              * and return if no more road blocks available */
-            if is_valid_diag_direction(target_dir.0) {
+            if is_valid_diag_direction(target_dir) {
                 cur_rb &= !self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir));
             }
             if cur_rb == RoadBits::ROAD_NONE {

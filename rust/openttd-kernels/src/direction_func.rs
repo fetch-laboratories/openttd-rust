@@ -61,8 +61,8 @@ pub const fn change_diag_dir(direction: u8, difference: u8) -> u8 {
 }
 
 /// `IsValidDiagDirection`.
-pub const fn is_valid_diag_direction(d: u8) -> bool {
-    d < crate::direction_type::DIAGDIR_END
+pub const fn is_valid_diag_direction(d: crate::direction_type::DiagDirection) -> bool {
+    d.0 < crate::direction_type::DIAGDIR_END
 }
 
 /// `IsValidAxis`.

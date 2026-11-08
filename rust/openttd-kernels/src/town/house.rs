@@ -929,7 +929,7 @@ impl<'a> House<'a> {
                     // SAFETY: Immediate copied owner read.
                     let xy = unsafe { super::position(t.state) };
                     // `TileIndexToTileIndexDiffC(t->xy, tile)`, clamped to 0..=1.
-                    let grid_pos = map.tile_index_to_tile_index_diff_c(xy.0, tile.0);
+                    let grid_pos = map.tile_index_to_tile_index_diff_c(xy, tile);
                     let x = i32::from(grid_pos.x.clamp(0, 1));
                     let y = i32::from(grid_pos.y.clamp(0, 1));
                     if flags.test(BuildingFlag::Size2x2) {

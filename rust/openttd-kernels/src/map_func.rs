@@ -154,12 +154,12 @@ impl Map {
     )]
     pub fn tile_index_to_tile_index_diff_c(
         self,
-        a: u32,
-        b: u32,
+        tile_a: crate::tile_type::TileIndex,
+        tile_b: crate::tile_type::TileIndex,
     ) -> crate::map_type::TileIndexDiffC {
         crate::map_type::TileIndexDiffC {
-            x: self.tile_x(a).wrapping_sub(self.tile_x(b)) as i16,
-            y: self.tile_y(a).wrapping_sub(self.tile_y(b)) as i16,
+            x: self.tile_x(tile_a.0).wrapping_sub(self.tile_x(tile_b.0)) as i16,
+            y: self.tile_y(tile_a.0).wrapping_sub(self.tile_y(tile_b.0)) as i16,
         }
     }
     /// Original `DistanceSquare` over captured map dimensions.
