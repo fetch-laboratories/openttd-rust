@@ -172,7 +172,7 @@
       6
     ],
     "rust/openttd-kernels/src/engine.rs | fn available | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
-      28
+      27
     ],
     "rust/openttd-kernels/src/engine_capabilities.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       138
@@ -1592,7 +1592,7 @@
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 32a0d0af8f9c42c0edd9": [
       6
     ],
-    "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 42717f3905e22d9affae": [
+    "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | a8cd0e2478fd5a9a1743": [
       6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 44cab5e48328b2ef422d": [
@@ -1646,7 +1646,7 @@
     "rust/openttd-kernels/src/station_service.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       121,
       172,
-      300
+      299
     ],
     "rust/openttd-kernels/src/tgp.rs | impl Generator::fn curves | excessive_nesting | 1fa3c768c38eca4caae0": [
       5
