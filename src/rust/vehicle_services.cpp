@@ -245,22 +245,9 @@ static OpenTTDVehiclePoolCursor OPENTTD_RUST_CALL VehicleSchedulerPool() noexcep
 	return {.slots = _vehicle_pool.descriptor->slots.items, .slots_len = _vehicle_pool.descriptor->slots.size(), .first_unused = &_vehicle_pool.descriptor->first_unused};
 }
 /* Existing virtual facades own the original controller timing scopes. The
- * timing destructor completes before this callback returns to Rust assertions.
- * Only a surviving vehicle fills the post-Tick address bundle; the fill reads
- * type and First() without side effects, and Rust reads it after its assertion. */
-static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell, OpenTTDVehiclePostTick *out) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	if (!v->Tick()) return false;
-	const VehicleType type = v->GetType(); // Fresh after Tick survives.
-	if (type > VEH_AIRCRAFT) {
-		*out = {.type = type, .period = nullptr, .counter = nullptr, .motion = nullptr, .speed = nullptr, .front_type = nullptr, .subtype = nullptr, .tick = nullptr, .front_status = nullptr, .status = nullptr};
-		return true;
-	}
-	Vehicle *front = RustVehicleFirst(v);
-	*out = {.type = type, .period = RustVehicleCargoPeriodAddress(v), .counter = RustVehicleCargoCounterAddress(v), .motion = RustVehicleMotionAddress(v), .speed = RustVehicleSpeedAddress(front), .front_type = RustVehicleVehicleTypeAddress(front), .subtype = RustVehicleSubtypeAddress(v), .tick = RustVehicleTickAddress(v), .front_status = RustVehicleStatusAddress(front), .status = RustVehicleStatusAddress(v)};
-	return true;
-}
+ * timing destructor completes before this callback returns to Rust assertions;
+ * Rust then reads the survivor's type and First() from its records. */
+static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell) noexcept { return VehicleOf(shell)->Tick(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_RUST_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
