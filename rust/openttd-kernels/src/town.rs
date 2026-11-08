@@ -2026,8 +2026,8 @@ impl Engine<'_> {
                 && !unsafe {
                     resolver::allow_construction(
                         self.leaves,
-                        town as u16,
-                        tile,
+                        TownId(town as u16),
+                        crate::tile_type::TileIndex(tile),
                         house as u16,
                         random as u8,
                     )

@@ -14,14 +14,14 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::{OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::history_type::THIS_MONTH;
-use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::random_func::chance16_i;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
 };
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{INVALID_TILE, MP_HOUSE};
+use crate::tile_type::{INVALID_TILE, MP_HOUSE, TileIndex};
 use crate::witness;
 use std::cell::{OnceCell, RefCell};
 
@@ -345,8 +345,17 @@ impl<'a> House<'a> {
         }
         if (self.l.house_callbacks)(house) & CBM_DENY != 0 {
             // SAFETY: The entry resolved the live town; no owner borrow spans resolution.
-            let res =
-                unsafe { super::resolver::callback(CB_DENY, 0, 0, house, town.shell, tile, false) };
+            let res = unsafe {
+                super::resolver::callback(
+                    CallbackID(CB_DENY),
+                    0,
+                    0,
+                    house,
+                    town.shell,
+                    TileIndex(tile),
+                    false,
+                )
+            };
             res == CALLBACK_FAILED
                 || !(self.s.grf_boolean_callback)((self.h.cargo_file)(house), CB_DENY, res)
         } else {
@@ -476,7 +485,8 @@ impl<'a> House<'a> {
         let waiting = rec.triggers | (1 << trigger);
         (self.h.set_random_triggers)(tile, waiting);
         // SAFETY: The entry resolved the live town; no owner borrow spans resolution.
-        let reseed = unsafe { super::resolver::reseed(house, tile, town.shell, waiting) };
+        let reseed =
+            unsafe { super::resolver::reseed(house, TileIndex(tile), town.shell, waiting) };
         (self.h.set_random_triggers)(tile, waiting & !reseed.used);
         let new_random = self.s.random() as u8;
         let mut bits = (u32::from(rec.bits) & !reseed.reseed) as u8;
@@ -549,7 +559,15 @@ impl<'a> House<'a> {
             let house = (self.h.house_type)(tile);
             // SAFETY: Live town; the destruction command follows resolution.
             let res = unsafe {
-                super::resolver::callback(CB_DESTRUCTION, 0, 0, house, town.shell, tile, false)
+                super::resolver::callback(
+                    CallbackID(CB_DESTRUCTION),
+                    0,
+                    0,
+                    house,
+                    town.shell,
+                    TileIndex(tile),
+                    false,
+                )
             };
             if res != CALLBACK_FAILED && (self.h.convert_8bit)(house, CB_DESTRUCTION, res) {
                 self.clear_town_house(town, tile, house);
@@ -729,7 +747,15 @@ impl<'a> House<'a> {
             for i in 0..256 {
                 // SAFETY: Live town; no owner borrow spans the callback.
                 let cb = unsafe {
-                    super::resolver::callback(CB_PRODUCE, i, r, house, town.shell, tile, false)
+                    super::resolver::callback(
+                        CallbackID(CB_PRODUCE),
+                        i,
+                        r,
+                        house,
+                        town.shell,
+                        TileIndex(tile),
+                        false,
+                    )
                 };
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;
@@ -928,12 +954,12 @@ impl<'a> House<'a> {
                     // SAFETY: Live town; no owner borrow spans the callback.
                     let res = unsafe {
                         super::resolver::callback(
-                            CB_AUTOSLOPE,
+                            CallbackID(CB_AUTOSLOPE),
                             0,
                             0,
                             house,
                             town.shell,
-                            tile,
+                            TileIndex(tile),
                             false,
                         )
                     };
@@ -1092,8 +1118,17 @@ impl<'a> House<'a> {
         let prototype = tile == INVALID_TILE;
         if callbacks & CBM_ACCEPT != 0 {
             // SAFETY: The caller supplies a live town, or null for a prototype.
-            let cb =
-                unsafe { super::resolver::callback(CB_ACCEPT, 0, 0, house, town, tile, prototype) };
+            let cb = unsafe {
+                super::resolver::callback(
+                    CallbackID(CB_ACCEPT),
+                    0,
+                    0,
+                    house,
+                    town,
+                    TileIndex(tile),
+                    prototype,
+                )
+            };
             if cb != CALLBACK_FAILED {
                 accepts[0] = crate::cargo_registry::openttd_rust_cargo_translate(
                     (cb & 31) as u8,
@@ -1115,7 +1150,15 @@ impl<'a> House<'a> {
         if callbacks & CBM_ACCEPTANCE != 0 {
             // SAFETY: The caller supplies a live town, or null for a prototype.
             let cb = unsafe {
-                super::resolver::callback(CB_ACCEPTANCE, 0, 0, house, town, tile, prototype)
+                super::resolver::callback(
+                    CallbackID(CB_ACCEPTANCE),
+                    0,
+                    0,
+                    house,
+                    town,
+                    TileIndex(tile),
+                    prototype,
+                )
             };
             if cb != CALLBACK_FAILED {
                 Self::add_acceptance(ctx, always, accepts[0], u32::from(cb & 15));
@@ -1154,7 +1197,15 @@ impl<'a> House<'a> {
             for i in 0..256 {
                 // SAFETY: Live town; no owner borrow spans the callback.
                 let cb = unsafe {
-                    super::resolver::callback(CB_PRODUCE, i, 0, house, town.shell, tile, false)
+                    super::resolver::callback(
+                        CallbackID(CB_PRODUCE),
+                        i,
+                        0,
+                        house,
+                        town.shell,
+                        TileIndex(tile),
+                        false,
+                    )
                 };
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;

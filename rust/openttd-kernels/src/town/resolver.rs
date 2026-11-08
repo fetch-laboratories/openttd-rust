@@ -7,8 +7,14 @@ use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
-use crate::tile_type::{INVALID_TILE, MP_HOUSE};
+use crate::tile_type::{INVALID_TILE, TileIndex, TileType};
 use std::{cell::OnceCell, ffi::c_void};
+
+use crate::bitmath_func::gb;
+use crate::cargotype::TownAcceptanceEffect;
+use crate::house::HouseZone;
+use crate::house_type::{HouseClassID, HouseID};
+use crate::newgrf_callbacks::CallbackID;
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
 use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
@@ -80,36 +86,49 @@ impl ResolverServices {
         unsafe { &*self.shared }
     }
 }
+/// Makes class IDs unique to each GRF file (`HouseClassMapping`).
 #[derive(Clone, Copy, Default)]
-struct ClassMapping {
+struct HouseClassMapping {
+    /// The GRF ID of the file this class belongs to.
     grfid: u32,
-    class: u8,
+    /// The class id within the grf file.
+    class_id: u8,
 }
-static CLASSES: GameState<Vec<ClassMapping>> = GameState::new(Vec::new());
+/// Original `_class_mapping`.
+static CLASSES: GameState<Vec<HouseClassMapping>> = GameState::new(Vec::new());
+/// `ResetHouseClassIDs`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_classes_reset() {
     unsafe {
         let classes = &mut *CLASSES.get();
         classes.clear();
-        classes.push(ClassMapping::default());
+        // Add initial entry for HOUSE_NO_CLASS.
+        classes.push(HouseClassMapping::default());
     }
 }
+/// `AllocateHouseClassID`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_house_class_allocate(class: u8, grfid: u32) -> u16 {
+pub extern "C" fn openttd_rust_house_class_allocate(grf_class_id: u8, grfid: u32) -> HouseClassID {
     unsafe {
         let classes = &mut *CLASSES.get();
+        // Start from 1 because 0 means that no class has been assigned.
         if let Some(index) = classes
             .iter()
             .skip(1)
-            .position(|c| c.class == class && c.grfid == grfid)
+            .position(|map| map.class_id == grf_class_id && map.grfid == grfid)
         {
-            return (index + 1) as u16;
+            return (index + 1) as HouseClassID;
         }
+        // HouseClass not found, allocate a new one.
         let index = classes.len();
-        classes.push(ClassMapping { grfid, class });
-        index as u16
+        classes.push(HouseClassMapping {
+            grfid,
+            class_id: grf_class_id,
+        });
+        index as HouseClassID
     }
 }
+/// Initialise building counts for a town (`InitializeBuildingCounts(Town *)`).
 unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     let owner = unsafe { &mut *owner };
     owner.id_counts.clear();
@@ -117,6 +136,8 @@ unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     owner.id_counts.resize(specs, 0);
     owner.class_counts.resize(classes, 0);
 }
+/// Initialise global building counts and all town building counts
+/// (`InitializeBuildingCounts()`), or only `owner`'s counts when it is not null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_counts_init(
     l: &Leaves,
@@ -136,33 +157,41 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
     };
-    let mut id = (l.next_town)(0);
+    let mut id = (l.next_town)(u32::from(crate::town_type::TownID::BEGIN.0));
     while id != u32::MAX {
         let owner = (s.town_owner_by_id)(id);
         unsafe { initialize_counts(owner, specs, classes) };
         id = (l.next_town)(id + 1);
     }
 }
-/// `GetNumHouses`: direct canonical counts; all four clamps precede packing.
-unsafe fn num_houses(owner: *const State, house: u16, class: u16) -> u32 {
-    let (town_id, town_class) = unsafe {
+/// `GetNumHouses`: direct canonical counts; all four `ClampTo<uint8_t>` precede packing.
+unsafe fn get_num_houses(owner: *const State, house_id: HouseID, class_id: HouseClassID) -> u32 {
+    let (town_id_count, town_class_count) = unsafe {
         let state = &*owner;
         (
-            state.id_counts[usize::from(house)],
-            state.class_counts[usize::from(class)],
+            state.id_counts[usize::from(house_id)],
+            state.class_counts[usize::from(class_id)],
         )
     };
-    let (map_id, map_class) = unsafe {
+    let (map_id_count, map_class_count) = unsafe {
         let c = &*BUILDING_COUNTS.get();
-        (c.ids[usize::from(house)], c.classes[usize::from(class)])
+        (
+            c.ids[usize::from(house_id)],
+            c.classes[usize::from(class_id)],
+        )
     };
-    map_class.min(255) << 24
-        | u32::from(town_class.min(255)) << 16
-        | map_id.min(255) << 8
-        | u32::from(town_id.min(255))
+    map_class_count.min(u32::from(u8::MAX)) << 24
+        | u32::from(town_class_count.min(u16::from(u8::MAX))) << 16
+        | map_id_count.min(u32::from(u8::MAX)) << 8
+        | u32::from(town_id_count.min(u16::from(u8::MAX)))
 }
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
-unsafe fn history(owner: *const State, cargo: u8, period: u8, transported: bool) -> u32 {
+unsafe fn town_history_helper(
+    owner: *const State,
+    cargo: u8,
+    period: u8,
+    transported: bool,
+) -> u32 {
     unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
         (if transported {
             h.transported
@@ -173,6 +202,7 @@ unsafe fn history(owner: *const State, cargo: u8, period: u8, transported: bool)
     })
 }
 #[unsafe(no_mangle)]
+/// `TownScopeResolver::GetVariable`.
 pub unsafe extern "C" fn openttd_rust_town_variable(
     s: &ResolverServices,
     scope: *const TownScope,
@@ -186,6 +216,8 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         unsafe { *available = false };
         return u32::MAX;
     }
+    // Get a variable from the persistent storage; the shared storage reads the
+    // GrfID stored in register 100h.
     if variable == 0x7C {
         let file = (s.shared().resolver_grf_file)(ro);
         return unsafe {
@@ -197,12 +229,14 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             )
         };
     }
+    // Larger towns.
     if variable == 0x40 {
         if (s.larger_towns)() == 0 {
             return 2;
         }
         return u32::from(unsafe { (*scope.owner).simulation.larger_town });
     }
+    // Passenger and mail production and transport, this and last month.
     if (0xBA..=0xC9).contains(&variable) {
         let index = variable - 0xBA;
         let cargo = crate::cargo_registry::openttd_rust_cargo_by_label(if index & 2 == 0 {
@@ -211,7 +245,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             CT_MAIL
         });
         let value = unsafe {
-            history(
+            town_history_helper(
                 scope.owner,
                 cargo,
                 if index < 8 { THIS_MONTH } else { LAST_MONTH },
@@ -231,15 +265,22 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
     let value = unsafe {
         let state = &*scope.owner;
         match variable {
+            // Town index.
             0x41 => u32::from(scope.id),
+            // Town properties.
             0x80 => state.simulation.xy,
-            0x81 => (state.simulation.xy >> 8) & 255,
-            0x82 | 0x83 => state.simulation.population.min(65535) >> (8 * (variable & 1)),
+            0x81 => gb(state.simulation.xy, 8, 8),
+            0x82 | 0x83 => {
+                state.simulation.population.min(u32::from(u16::MAX)) >> (8 * (variable & 1))
+            }
             0x8A => u32::from(state.growth.counter / TOWN_GROWTH_TICKS),
+            // In original game, 0x92 and 0x93 are one word.
             0x92 => u32::from(state.growth.flags),
             0x93 => 0,
+            // Squared zone radii from `HouseZone::TownEdge` to `HouseZone::TownCentre`.
             0x94..=0x9D => {
-                state.simulation.radius[usize::from((variable - 0x94) / 2)].min(65535)
+                state.simulation.radius[usize::from(HouseZone::TownEdge.0 + (variable - 0x94) / 2)]
+                    .min(u32::from(u16::MAX))
                     >> (8 * (variable & 1))
             }
             0x9E..=0xAD => {
@@ -252,16 +293,16 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             }
             0xAE => u32::from(state.simulation.have_ratings),
             0xB2 => u32::from(state.simulation.statues),
-            0xB6 => state.simulation.num_houses.min(65535),
+            0xB6 => state.simulation.num_houses.min(u32::from(u16::MAX)),
             0xB9 => u32::from(state.growth.rate / TOWN_GROWTH_TICKS),
             0xCC..=0xD3 => {
                 let index = variable - 0xCC;
                 let effect = if index & 2 == 0 {
-                    crate::cargotype::TAE_FOOD
+                    TownAcceptanceEffect::TAE_FOOD
                 } else {
-                    crate::cargotype::TAE_WATER
+                    TownAcceptanceEffect::TAE_WATER
                 };
-                let received = state.simulation.received[usize::from(effect)];
+                let received = state.simulation.received[usize::from(effect.0)];
                 let value = if index < 4 {
                     received.new_act
                 } else {
@@ -279,12 +320,12 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             }
         }
     };
-    // Only the high-byte aliases mask to eight bits; full words retain their widths.
+    // Only the high-byte aliases take GB(..., 8, 8); full words retain their widths.
     if matches!(
         variable,
         0x83 | 0x95 | 0x97 | 0x99 | 0x9B | 0x9D | 0xCD | 0xCF | 0xD1 | 0xD3
     ) {
-        value & 255
+        gb(value, 0, 8)
     } else {
         value
     }
@@ -313,6 +354,7 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
         );
     }
 }
+/// `HouseScopeResolver::GetRandomBits` and `GetRandomTriggers`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_random(
     s: &ResolverServices,
@@ -320,6 +362,8 @@ pub unsafe extern "C" fn openttd_rust_house_random(
     triggers: bool,
 ) -> u32 {
     let scope = unsafe { *scope };
+    // Note: Towns build houses over houses. So during construction checks 'tile' may be a
+    // valid but unrelated house.
     if scope.prospective {
         return if triggers {
             0
@@ -333,44 +377,62 @@ pub unsafe extern "C" fn openttd_rust_house_random(
         (s.random_bits)(scope.tile)
     })
 }
-unsafe fn distance(s: &ResolverServices, scope: HouseScope, parameter: u8, map: Map) -> u32 {
-    let kind = parameter >> 6;
-    let radius = parameter & 63;
-    if radius < 1 {
+/// Activate a search around a central tile, looking for houses that fit the requested
+/// characteristics (`GetDistanceFromNearbyHouse`). `parameter` bits 0..5 are the radius
+/// of the search and bits 6..7 the search type: 0 = houseID, 1 = classID, 2 = grfID.
+/// Return the Manhattan distance from the center tile, if any, and 0 if failure.
+unsafe fn get_distance_from_nearby_house(
+    s: &ResolverServices,
+    parameter: u8,
+    start_tile: TileIndex,
+    start_house: HouseID,
+    map: Map,
+) -> u32 {
+    let searchtype = gb(u32::from(parameter), 6, 2);
+    let searchradius = gb(u32::from(parameter), 0, 6);
+    // Do not use a too low radius.
+    if searchradius < 1 {
         return 0;
     }
-    let start_spec = (s.search_spec)(scope.house);
-    let mut start_house = scope.house;
+    let start_hs = (s.search_spec)(start_house);
+    let mut start_house = start_house;
     let leaves = unsafe { &*s.towns };
-    let start_north = scope
-        .tile
-        .wrapping_add(house::north_part(leaves, &mut start_house, map));
+    // Modifies 'start_house'!
+    let start_north_tile =
+        start_tile
+            .0
+            .wrapping_add(house::north_part(leaves, &mut start_house, map));
     let size_y = (unsafe { &*s.shared }.map_max_y)() + 1;
     let mut spiral = crate::spiral::square(
-        map.tile_x(scope.tile),
-        map.tile_y(scope.tile),
-        2 * u32::from(radius) + 1,
+        map.tile_x(start_tile.0),
+        map.tile_y(start_tile.0),
+        2 * searchradius + 1,
         map.size_x(),
         size_y,
     );
     while !spiral.is_end() {
-        let tile = map.tile_xy(spiral.x, spiral.y);
-        if (unsafe { &*s.shared }.tile_type)(tile) == MP_HOUSE {
-            let mut house = (unsafe { &*leaves.houses }.house_type)(tile);
-            let spec = (s.search_spec)(house);
-            if spec.has_file
-                && start_north != tile.wrapping_add(house::north_part(leaves, &mut house, map))
+        let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
+        if TileType((unsafe { &*s.shared }.tile_type)(tile.0)) == TileType::MP_HOUSE {
+            let mut house = (unsafe { &*leaves.houses }.house_type)(tile.0);
+            let hs = (s.search_spec)(house);
+            // Must be one from a grf file, and always ignore the origin house.
+            if hs.has_file
+                && start_north_tile
+                    != tile
+                        .0
+                        .wrapping_add(house::north_part(leaves, &mut house, map))
             {
-                let matched = match kind {
-                    0 => spec.local == start_spec.local && spec.grfid == start_spec.grfid,
-                    1 => {
-                        spec.house_class == start_spec.house_class && spec.grfid == start_spec.grfid
-                    }
-                    2 => spec.grfid == start_spec.grfid,
+                let matched = match searchtype {
+                    // Same local id as the one requested, from the same grf.
+                    0 => hs.local == start_hs.local && hs.grfid == start_hs.grfid,
+                    // Same classid as the one requested, from the same grf.
+                    1 => hs.house_class == start_hs.house_class && hs.grfid == start_hs.grfid,
+                    // From the same grf.
+                    2 => hs.grfid == start_hs.grfid,
                     _ => return 0,
                 };
                 if matched {
-                    return map.distance_manhattan(tile, scope.tile);
+                    return map.distance_manhattan(tile.0, start_tile.0);
                 }
             }
         }
@@ -378,6 +440,8 @@ unsafe fn distance(s: &ResolverServices, scope: HouseScope, parameter: u8, map: 
     }
     0
 }
+/// `HouseScopeResolver::GetVariable`, used by the resolver to get values for feature 07
+/// deterministic spritegroups.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_variable(
     s: &ResolverServices,
@@ -391,10 +455,14 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let l = unsafe { &*s.towns };
     let shared = unsafe { &*s.shared };
     if scope.tile == INVALID_TILE {
+        // House does not yet exist, nor is it being planned to exist. Provide some
+        // default values instead.
         return match variable {
+            // Construction stage.
             0x40 => u32::from(TOWN_HOUSE_COMPLETED) | (scope.view as u32).wrapping_shl(2),
             0x41..=0x44 | 0x46 | 0x47 | 0x60..=0x65 | 0x67 => 0,
             0x45 => u32::from((l.generating_world)()),
+            // Class and ID of nearby house.
             0x66 => u32::MAX,
             0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
             _ => {
@@ -407,22 +475,26 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let dimensions = OnceCell::new();
     let map = || *dimensions.get_or_init(|| Map::from_log_x((l.map_log_x)()));
     let tile = scope.tile;
+    let is_house = |tile: u32| TileType((shared.tile_type)(tile)) == TileType::MP_HOUSE;
     match variable {
+        // Construction stage.
         0x40 => {
-            let stage = if (shared.tile_type)(tile) == MP_HOUSE {
+            let stage = if is_house(tile) {
                 u32::from((s.stage)(tile))
             } else {
                 0
             };
             stage | crate::tile_map::tile_hash_2bit(map().tile_x(tile), map().tile_y(tile)) << 2
         }
+        // Building age.
         0x41 => {
-            if (shared.tile_type)(tile) == MP_HOUSE {
+            if is_house(tile) {
                 (s.age)(tile) as u32
             } else {
                 0
             }
         }
+        // Town zone.
         0x42 => {
             let map = map();
             unsafe {
@@ -434,11 +506,17 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 ))
             }
         }
+        // Terrain type.
         0x43 => (shared.terrain_type)(tile),
-        0x44 => unsafe { num_houses(scope.town.owner, scope.house, (l.house_class)(scope.house)) },
+        // Number of this type of building on the map.
+        0x44 => unsafe {
+            get_num_houses(scope.town.owner, scope.house, (l.house_class)(scope.house))
+        },
+        // Whether the town is being created or just expanded.
         0x45 => u32::from((l.generating_world)()),
+        // Current animation frame.
         0x46 => {
-            if (shared.tile_type)(tile) == MP_HOUSE {
+            if is_house(tile) {
                 u32::from(crate::animated_tile_map::animation_frame(
                     crate::animated_tile::services(),
                     tile,
@@ -447,20 +525,23 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
+        // Position of the house.
         0x47 => map().tile_y(tile) << 16 | map().tile_x(tile),
+        // Building counts for old houses with id = parameter.
         0x60 => {
             if parameter < u32::from(NEW_HOUSE_OFFSET) {
                 unsafe {
-                    num_houses(
+                    get_num_houses(
                         scope.town.owner,
-                        parameter as u16,
-                        (l.house_class)(parameter as u16),
+                        parameter as HouseID,
+                        (l.house_class)(parameter as HouseID),
                     )
                 }
             } else {
                 0
             }
         }
+        // Building counts for new houses with id = parameter.
         0x61 => {
             let spec = (s.file_identity)(scope.house);
             if !spec.has_file {
@@ -469,23 +550,25 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             let house = unsafe {
                 crate::override_manager::get(
                     crate::override_manager::house(),
-                    parameter as u16,
+                    parameter as HouseID,
                     spec.grfid,
                 )
             };
             if house == INVALID_HOUSE_ID {
                 0
             } else {
-                unsafe { num_houses(scope.town.owner, house, (l.house_class)(house)) }
+                unsafe { get_num_houses(scope.town.owner, house, (l.house_class)(house)) }
             }
         }
+        // Land info for nearby tiles.
         0x62 => (shared.nearby_tile_information)(
             (shared.nearby_tile)(parameter as u8, tile),
             (shared.grf_file_version)((s.shared().resolver_grf_file)(ro)) >= 8,
         ),
+        // Current animation frame of nearby house tiles.
         0x63 => {
             let tile = (shared.nearby_tile)(parameter as u8, tile);
-            if (shared.tile_type)(tile) == MP_HOUSE {
+            if is_house(tile) {
                 u32::from(crate::animated_tile_map::animation_frame(
                     crate::animated_tile::services(),
                     tile,
@@ -494,40 +577,58 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
-        // Use the canonical GoodsEntry::ConvertState helper.
+        // Cargo acceptance history of nearby stations, through the canonical
+        // GoodsEntry::ConvertState helper.
         0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
-        0x65 => unsafe { distance(s, scope, parameter as u8, map()) },
+        // Distance test for some house types.
+        0x65 => unsafe {
+            get_distance_from_nearby_house(
+                s,
+                parameter as u8,
+                TileIndex(scope.tile),
+                scope.house,
+                map(),
+            )
+        },
+        // Class and ID of nearby house tile.
         0x66 => {
-            let tile = (shared.nearby_tile)(parameter as u8, tile);
-            if (shared.tile_type)(tile) != MP_HOUSE {
+            let testtile = (shared.nearby_tile)(parameter as u8, tile);
+            if !is_house(testtile) {
                 return u32::MAX;
             }
-            let house = (unsafe { &*l.houses }.house_type)(tile);
-            let spec = (s.nearby_spec)(house);
+            let nearby_house_id = (unsafe { &*l.houses }.house_type)(testtile);
+            let hs = (s.nearby_spec)(nearby_house_id);
             let file = (s.shared().resolver_grf_file)(ro);
-            let same_file = if spec.file == file { 1 } else { 2 };
-            let class = if spec.house_class == HOUSE_NO_CLASS {
+            let same_file = if hs.file == file { 1 } else { 2 };
+            // Information about the grf local classid if the house has a class.
+            let houseclass = if hs.house_class == HOUSE_NO_CLASS {
                 0
             } else {
-                let local_class = unsafe { (&*CLASSES.get())[usize::from(spec.house_class)].class };
+                let local_class =
+                    unsafe { (&*CLASSES.get())[usize::from(hs.house_class)].class_id };
                 same_file << 8 | u32::from(local_class)
             };
-            let local = if house < NEW_HOUSE_OFFSET {
-                u32::from(house)
+            // Old house type or grf-local houseid.
+            let local_houseid = if nearby_house_id < NEW_HOUSE_OFFSET {
+                u32::from(nearby_house_id)
             } else {
-                same_file << 8 | u32::from(spec.local.min(255))
+                // Spec only allows 8 bits, so all local-ids above 254 are clamped.
+                same_file << 8 | u32::from(hs.local.min(u16::from(u8::MAX)))
             };
-            class << 16 | local
+            houseclass << 16 | local_houseid
         }
+        // GRFID of nearby house tile.
         0x67 => {
-            let tile = (shared.nearby_tile)(parameter as u8, tile);
-            if (shared.tile_type)(tile) != MP_HOUSE {
+            let testtile = (shared.nearby_tile)(parameter as u8, tile);
+            if !is_house(testtile) {
                 return u32::MAX;
             }
-            let house = (unsafe { &*l.houses }.house_type)(tile);
+            let house = (unsafe { &*l.houses }.house_type)(testtile);
             if house < NEW_HOUSE_OFFSET {
                 0
             } else {
+                // Checking the grffile information via HouseSpec doesn't work in case the
+                // newgrf was removed.
                 unsafe {
                     crate::override_manager::openttd_rust_override_grfid(
                         crate::override_manager::house(),
@@ -559,16 +660,19 @@ unsafe fn acceptance_history(
     if !is_valid_cargo_type(cargo) {
         return 0;
     }
-    // ResolverObject::GetRegister uses this process-wide canonical temporary
-    // storage. The fixed 0x100 index satisfies its original <0x110 precondition.
+    // Extract tile offset. ResolverObject::GetRegister uses this process-wide canonical
+    // temporary storage. The fixed 0x100 index satisfies its original <0x110 precondition.
     let register = unsafe { newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
-    let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
+    let x_offs = gb(register, 0, 8) as i8;
+    let y_offs = gb(register, 8, 8) as i8;
+    let offset = map.diff(i32::from(x_offs), i32::from(y_offs));
     let shared = unsafe { &*s.shared };
     let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
     let c = crate::station::Ctx::from_shared(shared);
     let mut stations =
         crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });
     let list = std::ptr::from_ref(stations.get_stations(&c));
+    // Collect acceptance stats.
     let mut result = 0;
     // SAFETY: The call-local finder's set; each visit reads canonical status only.
     unsafe {
@@ -583,8 +687,9 @@ unsafe fn acceptance_history(
             ));
         });
     }
+    // Cargo triggered CB 148?
     if scope.watched & (1_u64 << cargo) != 0 {
-        result |= 1 << 4;
+        crate::bitmath_func::set_bit(&mut result, 4);
     }
     result
 }
@@ -639,77 +744,71 @@ pub unsafe extern "C" fn openttd_rust_house_callback(
     // Action2. No Rust owner/context reference spans its evaluation or reentry.
     (services().evaluate)(args, registers, count)
 }
-/// Direct owner entry for lifecycle, production, acceptance and animation.
+/// `GetHouseCallback`: direct owner entry for lifecycle, production, acceptance and animation.
 pub(super) unsafe fn callback(
-    callback: u16,
+    callback: CallbackID,
     param1: u32,
     param2: u32,
-    house: u16,
+    house_id: HouseID,
     town: *mut TownHandle,
-    tile: u32,
-    prospective: bool,
+    tile: TileIndex,
+    not_yet_constructed: bool,
 ) -> u16 {
     let args = CallbackArgs {
         town,
         watched: 0,
         param1,
         param2,
-        tile,
+        tile: tile.0,
         view: 0,
-        house,
-        callback,
+        house: house_id,
+        callback: callback.0,
         initial_random: 0,
-        prospective,
+        prospective: not_yet_constructed,
     };
     unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
 }
+/// Native random reseeding of a house tile and its waiting triggers.
 pub(super) unsafe fn reseed(
-    house: u16,
-    tile: u32,
+    house: HouseID,
+    tile: TileIndex,
     town: *mut TownHandle,
     waiting: u8,
 ) -> house::HouseReseed {
-    (services().reseed)(house, tile, town, waiting)
+    (services().reseed)(house, tile.0, town, waiting)
 }
+/// `GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, ...)` with `Convert8bitBooleanCallback`
+/// (`TryBuildTownHouse`): whether the house may be built here.
 pub(super) unsafe fn allow_construction(
     l: &Leaves,
-    town: u16,
-    tile: u32,
-    house: u16,
-    initial_random: u8,
+    town: crate::town_type::TownID,
+    tile: TileIndex,
+    house: HouseID,
+    random_bits: u8,
 ) -> bool {
-    let town = (unsafe { &*services().shared }.town_by_id)(u32::from(town));
+    let town = (unsafe { &*services().shared }.town_by_id)(u32::from(town.0));
     let args = CallbackArgs {
         town,
         watched: 0,
         param1: 0,
         param2: 0,
-        tile,
+        tile: tile.0,
         view: 0,
         house,
         callback: CBID_HOUSE_ALLOW_CONSTRUCTION.0,
-        initial_random,
+        initial_random: random_bits,
         prospective: true,
     };
     let result = unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) };
     result == crate::newgrf_callbacks::CALLBACK_FAILED
         || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
 }
-pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
+/// `CBID_HOUSE_DRAW_FOUNDATIONS` for the house on `tile`, in the tile's town.
+pub(crate) unsafe fn foundation(tile: TileIndex, house: HouseID) -> u16 {
     let s = services();
     let town =
-        (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile)));
-    unsafe {
-        callback(
-            CBID_HOUSE_DRAW_FOUNDATIONS.0,
-            0,
-            0,
-            house,
-            town,
-            tile,
-            false,
-        )
-    }
+        (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile.0)));
+    unsafe { callback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, house, town, tile, false) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {
