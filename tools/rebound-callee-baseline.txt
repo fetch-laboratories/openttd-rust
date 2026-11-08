@@ -18,8 +18,6 @@ forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices(
 forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
 forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicleServices().newgrf
-forwarded | src/rust/fleet_group_services.hpp | next_vehicle = GetRustSharedServices().vehicle_next
-forwarded | src/rust/fleet_group_services.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
@@ -114,7 +112,6 @@ rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
-rebound | RustCurrentCompanyID | src/rust/fleet_group_services.hpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
 rebound | RustCustomRoadStopIndex | src/rust/station_command_services.hpp | custom_road_index

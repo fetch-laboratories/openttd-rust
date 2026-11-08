@@ -26,7 +26,6 @@ struct OpenTTDFleetGroupServices {
 	void * (*group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(group);
 	uint32_t (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
 	uint32_t (*next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
-	OpenTTDVehicle * (*next_vehicle)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	void * (*vehicle)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(vehicle);
 	const OpenTTDVehicleServices *vehicles;
 	uint32_t (*vehicle_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
@@ -45,7 +44,6 @@ struct OpenTTDFleetGroupServices {
 	void * (*renew_state)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_state);
 	void * (*next_renew)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_renew);
 	uint32_t (*renew_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(renew_id);
-	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	bool (*buildable_type)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(buildable_type);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (*allocate)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
@@ -59,7 +57,6 @@ struct OpenTTDFleetGroupServices {
 	void (*remove_vehicles)(uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(remove_vehicles);
 	void (*delete_child)(uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(delete_child);
 	void (*add_to_group)(uint16_t id, uint32_t vehicle, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(add_to_group);
-	size_t (*utf8_length)(const uint8_t *text, size_t length) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	void (*list_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(list_dirty);
 	void (*list_set_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(list_set_dirty);
 	void (*colour_dirty)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(colour_dirty);

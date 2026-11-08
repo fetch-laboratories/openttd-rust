@@ -303,7 +303,6 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	/* Rust borrows complete service values even when the pending map is empty.
 	 * Every function-pointer slot must be non-null, including unused callbacks. */
 	auto group = FleetGroupServices();
-	group.current_company = []() noexcept -> uint8_t { return 0; };
 	const auto unused = [](auto...) noexcept { FAIL_CHECK("Unexpected pending fleet operation"); };
 	OpenTTDFleetPendingServices pending{
 		.set_current = [](uint8_t) noexcept {},
