@@ -31,4 +31,4 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 ## Report
 
-List each finding, its fixing commit and the check that found it, then the disposition. Send scope or policy questions to root unfixed. Record branches no scenario reaches on #156.
+List each finding, its fixing commit and the check that found it, then the disposition. Under a Claude Code root, list each finding with its location and the original it departs from, and leave the fix to the implementer ([team](team.md#claude-code-root)). Send scope or policy questions to root unfixed. Record branches no scenario reaches on #156.
