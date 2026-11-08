@@ -973,9 +973,10 @@ pub struct CommandResult {
     pub cost: i64,
     pub success: bool,
 }
-/// The possible states of town growth (`town_cmd.cpp`).
+/// The possible states of town growth (`town_cmd.cpp`), over its `int` underlying type.
+#[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct TownGrowthResult(u8);
+struct TownGrowthResult(i32);
 #[allow(
     non_upper_case_globals,
     reason = "original town_cmd.cpp TownGrowthResult enumerators"
