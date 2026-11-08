@@ -4,14 +4,18 @@
 import argparse
 import ast
 import io
+import operator
 import re
+import subprocess
 import tokenize
 import tomllib
 from collections import Counter
+from collections.abc import Container
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import context, reviewed
+from cleanup_contract import carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
 from rust_syntax import Node, nodes, syntax_trees
 from vcs import git
@@ -42,6 +46,13 @@ LINT_GROUPS = {
     "unknown_or_malformed_diagnostic_attributes",
     "unused",
     "warnings",
+}
+# Original enumerator spellings and faithful native casts; see #806.
+FIDELITY = {
+    "non_upper_case_globals",
+    "clippy::cast_possible_truncation",
+    "clippy::cast_possible_wrap",
+    "clippy::cast_sign_loss",
 }
 CONFIG_NAMES = {
     "Cargo.toml",
@@ -162,13 +173,17 @@ def attribute_scopes(path: str, text: str) -> dict[tuple[int, int], str]:
     return scopes
 
 
-def rust_suppressions(path: str, text: str) -> Counter[str]:
-    rows: Counter[str] = Counter()
+def rust_attributes(path: str, text: str) -> list[tuple[str, str]]:
+    """Each suppressed rule's site and its attribute's `reason` text."""
+    rows = []
     masked = without_comments(text, path, strings=True)
     scopes = attribute_scopes(path, text)
     for match in re.finditer(r"#\s*!?\s*\[([^\]]*)\]", masked, re.S):
         for allow in re.finditer(r"\b(allow|expect)\s*\(([^)]*)\)", match[1]):
             rules = re.sub(r",?\s*reason\s*=.*", "", allow[2], flags=re.S)
+            offset = match.start(1)
+            raw = text[offset + allow.start(2) : offset + allow.end(2)]
+            reason = re.search(r'\breason\s*=\s*"((?:[^"\\]|\\.)*)"', raw)
             prefix = text[: match.start()]
             point = (prefix.count("\n"), len(prefix.rsplit("\n", 1)[-1].encode()))
             scope = scopes.get(point, "module")
@@ -176,8 +191,27 @@ def rust_suppressions(path: str, text: str) -> Counter[str]:
                 scope = "module"
             for rule in rules.split(","):
                 if rule.strip():
-                    rows[f"{path} | {scope} | {allow[1]} {rule.strip()}"] += 1
+                    site = f"{path} | {scope} | {allow[1]} {rule.strip()}"
+                    rows.append((site, reason[1].strip() if reason else ""))
     return rows
+
+
+def rust_suppressions(path: str, text: str) -> Counter[str]:
+    return Counter(site for site, _ in rust_attributes(path, text))
+
+
+def fidelity_sites(files: dict[str, str]) -> set[str]:
+    """Item-scoped fidelity suppressions whose every attribute gives a reason."""
+    reasons: dict[str, list[str]] = {}
+    for path, text in files.items():
+        if path.endswith(".rs"):
+            for site, reason in rust_attributes(path, text):
+                reasons.setdefault(site, []).append(reason)
+    return {
+        site
+        for site, texts in reasons.items()
+        if all(texts) and item_scoped(site) and rule_name(site) in FIDELITY
+    }
 
 
 def python_suppressions(path: str, text: str) -> Counter[str]:
@@ -225,6 +259,51 @@ def inventory(revision: str | None) -> dict[str, str]:
     }
 
 
+def rule_name(site: str) -> str:
+    return re.sub(r"\s+|r#", "", site.rsplit(" | ", 1)[1].split(" ", 1)[1])
+
+
+def item_scoped(site: str) -> bool:
+    """A named Rust item below module level, suppressing one lint, not a group."""
+    path, scope, _ = site.rsplit(" | ", 2)
+    return (
+        path.endswith(".rs")
+        and scope != "module"
+        and not scope.rsplit(" > ", 1)[-1].startswith("mod ")
+        and rule_name(site).rsplit("::", 1)[-1] not in LINT_GROUPS
+    )
+
+
+def carry_rule(site: str) -> tuple[str, bool]:
+    """Carries keep the suppression and cannot broaden an item to a module."""
+    return site.rsplit(" | ", 1)[1], item_scoped(site)
+
+
+def scope_text(path: str, text: str, scope: str) -> str | None:
+    """Source text of the items the attribute scope names."""
+    parts = [
+        node.text.decode()
+        for node in nodes(syntax_trees({path: text})[path])
+        if node.type.endswith("_item") and item_scope(node) == scope
+    ]
+    return "\n".join(parts) if parts and scope != "module" else None
+
+
+def unchanged_scope(site: str, revision: str) -> bool:
+    path, scope, _ = site.rsplit(" | ", 2)
+    try:
+        old = git("show", f"{revision}:{path}")
+    except subprocess.CalledProcessError:
+        return False
+    current = ROOT / path
+    before = scope_text(path, old, scope)
+    return (
+        before is not None
+        and current.is_file()
+        and before == scope_text(path, current.read_text(), scope)
+    )
+
+
 def accepted_suppression(
     site: str,
     before: int,
@@ -232,15 +311,7 @@ def accepted_suppression(
     contract: tuple[str, list[dict[str, Any]], list[str], str],
 ) -> bool:
     """Permit a reviewed Rust item operation, never a module or lint group."""
-    path, scope, suppression = site.rsplit(" | ", 2)
-    if (
-        not path.endswith(".rs")
-        or scope == "module"
-        or scope.rsplit(" > ", 1)[-1].startswith("mod ")
-    ):
-        return False
-    rule = re.sub(r"\s+|r#", "", suppression.split(" ", 1)[1])
-    if rule.rsplit("::", 1)[-1] in LINT_GROUPS:
+    if not item_scoped(site):
         return False
     author, proposals, comments, head = contract
     expected = {
@@ -265,22 +336,52 @@ def accepted_suppression(
         if all(
             isinstance(proposal.get(key), str) and proposal[key].strip()
             for key in required
-        ) and reviewed(proposal, comments, author, head):
+        ) and reviewed(
+            proposal, comments, author, head, partial(unchanged_scope, site)
+        ):
             print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
             return True
     return False
 
 
-def suppression_errors(before: Counter[str], after: Counter[str]) -> list[str]:
-    added = after - before
+def suppression_errors(
+    before: Counter[str], after: Counter[str], reasoned: Container[str] = frozenset()
+) -> list[str]:
+    added = {site: n for site, n in (after - before).items() if site not in reasoned}
     if not added:
         return []
     contract = context()
-    return [
-        f"new suppression: {site} ({count})"
-        for site, count in sorted(added.items())
-        if not accepted_suppression(site, before[site], after[site], contract)
-    ]
+    errors = []
+    for tool, suffix in (("rust", ".rs"), ("python", ".py")):
+        old, new = (
+            {
+                site: n
+                for site, n in rows.items()
+                if site.split(" | ")[0].endswith(suffix)
+            }
+            for rows in (before, after)
+        )
+        valid = checked_carries(contract[1], tool, old, new, carry_rule, operator.le)
+        unexplained = [
+            site
+            for site in sorted(added)
+            if site.split(" | ")[0].endswith(suffix)
+            and site not in valid
+            and not accepted_suppression(site, before[site], after[site], contract)
+        ]
+        errors.extend(
+            f"new suppression: {site} ({added[site]})" for site in unexplained
+        )
+        carry_hints(
+            tool,
+            old.keys() - new.keys() - set(valid.values()),
+            [site for site in unexplained if site not in old],
+            old,
+            new,
+            carry_rule,
+            operator.le,
+        )
+    return errors
 
 
 def main() -> int:
@@ -314,9 +415,12 @@ def main() -> int:
                 errors.append("invalid initial Clippy thresholds")
         else:
             errors.extend(config_errors(before, after, path))
+    head = inventory(None)
     errors.extend(
         suppression_errors(
-            suppressions(inventory(args.base_ref)), suppressions(inventory(None))
+            suppressions(inventory(args.base_ref)),
+            suppressions(head),
+            fidelity_sites(head),
         )
     )
     for error in errors:

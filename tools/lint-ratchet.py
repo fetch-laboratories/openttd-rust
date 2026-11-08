@@ -8,11 +8,11 @@ import json
 import re
 import subprocess
 from collections import defaultdict
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
-from baseline_ratchet import debt_errors
-from cleanup_contract import context, reviewed
+from baseline_ratchet import debt_errors, exceeds
+from cleanup_contract import carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
 from vcs import git
 
@@ -204,26 +204,68 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
     return run.stdout, version
 
 
+def lint_of(key: str) -> list[str]:
+    return key.split(" | ")[2:3]
+
+
+def fits(values: list[int], limit: list[int]) -> bool:
+    return not exceeds(values, limit)
+
+
+def item_text(kind: str, path: str, text: str, item: str) -> str | None:
+    """Source text of every item with this key identity, or None for modules."""
+    if kind == "clippy":
+        _, items = rust_items(path, text)
+        parts = [text[start:end] for start, end, name in items if name == item]
+    else:
+        tree = ast.parse(text)
+        parts = [
+            ast.get_source_segment(text, node) or ""
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and python_item(tree, node.lineno) == item
+        ]
+    return "\n".join(parts) if parts and item not in ("module", "") else None
+
+
+def unchanged_item(kind: str, site: str, revision: str) -> bool:
+    """Whether the site's item text at the reviewed revision equals head's."""
+    path, item = site.split(" | ")[:2]
+    try:
+        old = git("show", f"{revision}:{path}")
+    except subprocess.CalledProcessError:
+        return False
+    current = ROOT / path
+    before = item_text(kind, path, old, item)
+    return (
+        before is not None
+        and current.is_file()
+        and before == item_text(kind, path, current.read_text(), item)
+    )
+
+
 def reviewed_debt(
-    kind: str, baseline: dict[str, list[int]], previous: dict[str, list[int]]
+    kind: str,
+    baseline: dict[str, list[int]],
+    previous: dict[str, list[int]],
+    rows: dict[str, list[int]] | None = None,
 ) -> dict[str, list[int]]:
+    """Allowed head debt: base rows, valid carries and reviewed lint contracts."""
+    measured = baseline if rows is None else rows
     growth = {
         key: values
         for key, values in baseline.items()
-        if any(
-            error.startswith("new site:")
-            for error in debt_errors(
-                {key: values},
-                {key: previous.get(key, [])},
-                {key: previous.get(key, [])},
-            )
-        )
+        if exceeds(values, previous.get(key, []))
     }
-    if not growth:
+    if not growth and measured.keys() <= previous.keys():
         return previous
     author, proposals, comments, head = context()
+    carried = checked_carries(proposals, kind, previous, baseline, lint_of, fits)
     allowed = dict(previous)
+    allowed.update({new: previous[old] for new, old in carried.items()})
     for site, values in growth.items():
+        if site in carried:
+            continue
         for proposal in proposals:
             expected = {
                 "kind": "lint",
@@ -244,7 +286,9 @@ def reviewed_debt(
             if all(
                 isinstance(proposal.get(key), str) and proposal[key].strip()
                 for key in required
-            ) and reviewed(proposal, comments, author, head):
+            ) and reviewed(
+                proposal, comments, author, head, partial(unchanged_item, kind, site)
+            ):
                 allowed[site] = values
                 print(
                     json.dumps(
@@ -252,6 +296,15 @@ def reviewed_debt(
                         sort_keys=True,
                     )
                 )
+    carry_hints(
+        kind,
+        previous.keys() - measured.keys() - set(carried.values()),
+        [key for key in measured if key not in allowed],
+        previous,
+        measured,
+        lint_of,
+        fits,
+    )
     return allowed
 
 
@@ -296,7 +349,7 @@ def main() -> int:
     previous = (
         json.loads(git("show", f"{args.base_ref}:{path}")) if tracked else baseline
     )
-    allowed = reviewed_debt(kind, baseline["sites"], previous["sites"])
+    allowed = reviewed_debt(kind, baseline["sites"], previous["sites"], rows)
     errors = debt_errors(rows, baseline["sites"], allowed)
     if baseline["version"] != version or previous["version"] != version:
         errors.append("compiler/linter version differs from the recorded inventory")
