@@ -47,7 +47,6 @@ public:
 	CargoPacket();
 	CargoPacket(StationID first_station, uint16_t count, Source source);
 	CargoPacket(uint16_t count, uint16_t periods, StationID first, TileIndex tile, Money feeder);
-	CargoPacket(uint16_t count, Money feeder, CargoPacket &original);
 	explicit CargoPacket(const OpenTTDCargoPacket &fields);
 	~CargoPacket();
 	OpenTTDCargoPacket *RustOwner() const { return this->state; }

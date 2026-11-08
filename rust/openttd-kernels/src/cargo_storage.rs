@@ -21,6 +21,7 @@
     clippy::too_many_lines
 )]
 use crate::cargopacket::{CargoPacket, MoveToAction};
+use crate::services_assert::check;
 use crate::vehicle::VehicleRef;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
@@ -165,6 +166,9 @@ unsafe fn split(p: *mut Packet, s: Services, amount: u32) -> *mut c_void {
 }
 unsafe fn reduce(p: *mut Packet, amount: u32) {
     let old = unsafe { read(p) };
+    if amount >= u32::from(old.count) {
+        check(false);
+    }
     unsafe {
         (*p).feeder_share = old.feeder_share.saturating_sub(share(old, amount));
         (*p).count = old.count.wrapping_sub(amount as u16);
@@ -183,12 +187,18 @@ unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
             if (*p).source_xy == u32::MAX {
                 (*p).source_xy = at;
             }
+            if (*p).in_vehicle != 0 {
+                check(false);
+            }
             (*p).in_vehicle = 1;
             // Add the known loading tile now; subtract the unloading tile later
             // to obtain the vector of travel inside a vehicle.
             (*p).travelled_x = (*p).travelled_x.wrapping_add(x);
             (*p).travelled_y = (*p).travelled_y.wrapping_add(y);
         } else {
+            if (*p).in_vehicle == 0 {
+                check(false);
+            }
             (*p).in_vehicle = 0;
             (*p).travelled_x = (*p).travelled_x.wrapping_sub(x);
             (*p).travelled_y = (*p).travelled_y.wrapping_sub(y);
@@ -575,7 +585,12 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_new(p: *const Packet) -> *mut
         Packet::default()
     } else {
         // SAFETY: a non-null input points to a live canonical packet for this copy.
-        unsafe { read(p) }
+        let packet = unsafe { read(p) };
+        // The copy is the split constructor `CargoPacket(count, feeder_share, original)`.
+        if packet.count == 0 {
+            check(false);
+        }
+        packet
     }))
 }
 #[unsafe(no_mangle)]
@@ -612,6 +627,12 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
     at: u32,
 ) -> u32 {
     let p = unsafe { read(p) };
+    if p.source_xy == crate::tile_type::INVALID_TILE {
+        check(false);
+    }
+    if p.in_vehicle == 0 {
+        check(false);
+    }
     let s = unsafe { *s };
     // SAFETY: the synchronous service table keeps the shared map view live;
     // these coordinate reads neither call back nor yield.
@@ -1879,6 +1900,13 @@ mod tests {
         };
         create(&raw const fields)
     }
+    /// A packet waiting at a station: not yet in a vehicle (`UpdateLoadingTile`'s precondition).
+    fn station_cargo(count: u16, first: u16, feeder: i64) -> *mut c_void {
+        let shell = cargo(count, first, feeder);
+        // SAFETY: the fixture shell was just created and owns its live packet.
+        unsafe { (*owner(shell)).in_vehicle = 0 };
+        shell
+    }
     fn list(vehicle: bool) -> *mut List {
         openttd_rust_cargo_list_new(u8::from(vehicle))
     }
@@ -1938,6 +1966,70 @@ mod tests {
         assert_eq!(cases, 48);
     }
 
+    thread_local! {
+        static FAILED_CHECKS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn record_failed_check(condition: bool) {
+        if !condition {
+            FAILED_CHECKS.with(|failed| failed.set(failed.get() + 1));
+        }
+    }
+    extern "C" fn abort_failed_check(condition: bool) {
+        if !condition {
+            std::process::abort();
+        }
+    }
+    /// Failed native checks on this thread while running `operation`. Other tests
+    /// keep failing fast afterwards.
+    fn failed_checks(operation: impl FnOnce()) -> u32 {
+        crate::services_assert::openttd_rust_assert_bind(record_failed_check);
+        FAILED_CHECKS.with(|failed| failed.set(0));
+        operation();
+        crate::services_assert::openttd_rust_assert_bind(abort_failed_check);
+        FAILED_CHECKS.with(Cell::get)
+    }
+
+    #[test]
+    fn cargo_packet_preconditions_call_the_native_check_once() {
+        let service = services();
+        let mut packet = Packet {
+            count: 4,
+            feeder_share: 8,
+            ..Packet::default()
+        };
+        let p = &raw mut packet;
+        // SAFETY: the stack packet and the fixture map outlive each synchronous call.
+        unsafe {
+            // `Reduce`: count < this->count.
+            assert_eq!(failed_checks(|| reduce(p, 3)), 0);
+            assert_eq!(((*p).count, (*p).feeder_share), (1, 2));
+            assert_eq!(failed_checks(|| reduce(p, 1)), 1);
+            (*p).count = 4;
+            // `GetDistance`: a valid source, then in a vehicle.
+            let at = 3 + 4 * 256;
+            let both = failed_checks(|| {
+                openttd_rust_cargo_packet_distance(p, &raw const service, at);
+            });
+            assert_eq!(both, 2);
+            // `UpdateUnloadingTile`: in a vehicle.
+            assert_eq!(failed_checks(|| tile(p, service, at, false)), 1);
+            // `UpdateLoadingTile`: not yet in a vehicle; it sets the missing source.
+            assert_eq!(failed_checks(|| tile(p, service, at, true)), 0);
+            assert_eq!(((*p).source_xy, (*p).in_vehicle), (at, 1));
+            let distance = openttd_rust_cargo_packet_distance(p, &raw const service, at);
+            assert_eq!(failed_checks(|| tile(p, service, at, true)), 1);
+            assert_eq!(distance, 0);
+            // The split constructor: count != 0.
+            (*p).count = 0;
+            let copy = Cell::new(std::ptr::null_mut());
+            assert_eq!(
+                failed_checks(|| copy.set(openttd_rust_cargo_packet_new(p))),
+                1
+            );
+            openttd_rust_cargo_packet_destroy(copy.get());
+        }
+    }
+
     #[test]
     fn canonical_packet_defaults_and_rectangular_map_coordinates() {
         let service = services();
@@ -1995,7 +2087,7 @@ mod tests {
         let station = list(false);
         let vehicle = list(true);
         unsafe {
-            append(station, service, cargo(17, 10, 23), 100);
+            append(station, service, station_cargo(17, 10, 23), 100);
             let next = [100];
             assert_eq!(
                 openttd_rust_cargo_list_move(
@@ -2142,8 +2234,8 @@ mod tests {
             for via in [10_u16, 90] {
                 let flows = flow_fixture(via);
                 let station = list(false);
-                append(station, service, cargo(8, 10, 0), 70);
-                append(station, service, cargo(8, 11, 0), 70);
+                append(station, service, station_cargo(8, 10, 0), 70);
+                append(station, service, station_cargo(8, 11, 0), 70);
                 assert_eq!(
                     openttd_rust_cargo_list_move(
                         station,
@@ -2215,8 +2307,8 @@ mod tests {
         unsafe {
             let station = list(false);
             let vehicle = list(true);
-            append(station, service, cargo(8, 10, 3), 100);
-            append(station, service, cargo(9, 10, 4), 100);
+            append(station, service, station_cargo(8, 10, 3), 100);
+            append(station, service, station_cargo(9, 10, 4), 100);
             assert_eq!(nodes(station).len(), 1);
             let next = [100];
             openttd_rust_cargo_list_move(
