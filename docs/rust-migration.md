@@ -176,6 +176,7 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | --- | --- |
 | `python3 tools/shared-accessors.py --base-ref origin/rust-migration` | Enforce #249 in quick CI. `tools/shared-accessor-baseline.txt` can shrink, not gain exemptions. Macros, derived fields and compound callbacks need review. |
 | `python3 tools/rebound-callees.py --base-ref origin/rust-migration` | Reject duplicate bindings and forwarded service fields in quick CI. `tools/rebound-callee-baseline.txt` can shrink, not grow. Macros, lambdas, wrappers, some templates and namespace resolution remain review work. |
+| `python3 tools/rust-only.py` | Reject `WITH_RUST` conditionals in `src/` in quick CI. CMake still defines `WITH_RUST` for dual-build harnesses under `tools/`. |
 | `python3 tools/ffi-bool-returns.py` | Reject Rust-defined C `bool` returns, including callbacks, macro templates and visible simple aliases (#644). Rust-only `cfg(test)` service mocks are excluded. |
 | `python3 tools/orphan-exports.py --base-ref origin/rust-migration` | Check Rust exports and C++ declarations for production use. `tools/orphan-export-baseline.txt` can shrink, not grow. Macros and arbitrary conditional compilation need review; reviewers also check orphan `WITH_RUST` bodies. |
 | `python3 tools/port-metrics.py` | Report code lines with Pygments 2.19.2, using `uv` if needed. Original retirement may be negative; removing fork glue does not retire original C++. |
@@ -189,8 +190,3 @@ Metrics count code lines, excluding comments, directives, blank lines and Python
 Evidence rows identify direct Rust/dual-build dependencies as candidate/shared. The pinned-original Monocypher vector generator's documented reference-only compile recipe places it separately; fixtures with reference-like names can still exercise candidate Rust. Other sources stay unresolved and count toward `candidate_cpp_upper_bound`. This conservative bound includes all source-area C++ and unresolved evidence; it is not an exact build graph.
 
 JSON records the metric version, implementation hash, head, baseline and scope. Recount historical endpoints with the same implementation and report inventory corrections separately from deletion. No line metric claims behavioral completion.
-
-## Rust-only source sweep
-
-`tools/rust-only.py` rejects `WITH_RUST` conditionals in `src/` in quick CI.
-`WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.

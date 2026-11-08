@@ -24,9 +24,8 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 
 ## Commits and pushes
 
-- The inherited commit checker examines every commit's diff and title. Fix style in the introducing commit; use supported prefixes such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:`, including integration merges (`Merge:` is rejected).
-- Commit messages, including bodies, use ASCII without tabs. A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user` (#512).
-- Before pushing, run `python3 tools/preflight.py --base origin/rust-migration`.
+- Before pushing, run `python3 tools/preflight.py --base origin/rust-migration`. Its inherited commit checker rejects titles without a supported prefix such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:` (integration merges included; `Merge:` fails), non-ASCII or tab characters in messages, and non-ASCII text or space indentation in C and C++ diffs. Fix style in the introducing commit.
+- A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user` (#512).
 - Keep an unfinished checkpoint's PR in draft, recording what is incomplete, pending or failed checks and the next action. A checkpoint is not integration evidence. A review that stops before recording findings and disposition counts as no review.
 
 ## Checks
