@@ -1,4 +1,9 @@
 # Monocypher 4.0.2, baseline 14ec60f248547d4d062a1160f0fc26d742319888.
+# Capture: the original-only generator tools/migration/crypto-vectors.cpp at 305ac20c28 (retired by #736 U;
+# view with `git show 305ac20c28:tools/migration/crypto-vectors.cpp`), built against the unchanged pinned tree:
+# R=.local/reference/openttd/src; g++ -std=c++20 -I$R crypto-vectors.cpp $R/3rdparty/monocypher/monocypher.cpp
+# $R/3rdparty/monocypher/monocypher-ed25519.cpp && ./a.out > vectors.txt (GCC 13.3.0, GNU/Linux x86_64).
+# Re-run on 2026-11-08 reproduced every data line byte for byte. Data lines echo their pattern inputs.
 x 0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a 29cc338b389cd2d35e0ccd9311d59e8b552424a10c6c64e0edeba6e5f987253f e34f3af41287036e7fdd6b53f661e0623c2e0d45b6c260428efcf3fcc810a163
 x 0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a 0000000000000000000000000000000000000000000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000000
 x 0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a 0100000000000000000000000000000000000000000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000000

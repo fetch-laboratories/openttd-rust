@@ -84,6 +84,8 @@ mod movement;
 mod native_test_support;
 mod network_config;
 mod newgrf;
+#[cfg(test)]
+mod oracle;
 /// Canonical native `NewGRF` feature identity.
 pub use newgrf::GrfSpecFeature;
 mod newgrf_act2;

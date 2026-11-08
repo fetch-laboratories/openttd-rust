@@ -158,3 +158,393 @@ crate::abi::layouts! {
         consumed_length,
     };
 }
+
+/// Retired `tools/integer_probe.cpp` consumer stream (#736 U), frozen from the pinned
+/// original in `integer/probe-oracle.txt`. [`tests::Consumer`] mirrors the candidate C++
+/// `StringConsumer` glue line for line (cursor commits, the "Source buffer too short" and
+/// integer diagnostics it formats from these Rust results); every computed value comes from
+/// the production helpers behind `openttd_rust_consumer_*`, `openttd_rust_parse_integer`,
+/// `openttd_rust_skip_integer` and `openttd_rust_decode_utf8`.
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::{bound, find, little_endian};
+    use crate::{integer, utf8};
+    use std::fmt::Write as _;
+
+    pub(crate) fn hex(bytes: &[u8]) -> String {
+        bytes.iter().fold(String::new(), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+    }
+
+    /// `"-"` for an empty observation, as the probe printed it.
+    pub(crate) fn hex_or_dash(bytes: &[u8]) -> String {
+        if bytes.is_empty() {
+            "-".into()
+        } else {
+            hex(bytes)
+        }
+    }
+
+    /// Candidate `StringConsumer` glue over the production Rust helpers. Each logged
+    /// message records the cursor at logging time, as the probe's `DebugPrint` did.
+    pub(crate) struct Consumer<'a> {
+        pub(crate) src: &'a [u8],
+        pub(crate) position: usize,
+        pub(crate) log: Vec<(usize, Vec<u8>)>,
+    }
+
+    impl<'a> Consumer<'a> {
+        pub(crate) fn new(src: &'a [u8]) -> Self {
+            Self {
+                src,
+                position: 0,
+                log: Vec::new(),
+            }
+        }
+
+        fn left(&self) -> &'a [u8] {
+            &self.src[self.position..]
+        }
+
+        fn log_error(&mut self, message: Vec<u8>) {
+            self.log.push((self.position, message));
+        }
+
+        fn too_short(&mut self, requested: usize, length: usize) {
+            self.log_error(format!("Source buffer too short: {requested} > {length}").into_bytes());
+        }
+
+        /// `Skip`, then `SkipClamped`: log before committing the bounded cursor.
+        pub(crate) fn skip(&mut self, len: usize) {
+            if len <= self.left().len() {
+                self.position += len;
+            } else {
+                let bounds = bound(self.src.len(), self.position, len);
+                if bounds.shortfall != 0 {
+                    self.too_short(len, bounds.length);
+                }
+                self.position = bounds.position;
+            }
+        }
+
+        /// `Peek`, then `PeekClamped`.
+        pub(crate) fn peek(&self, len: usize) -> &'a [u8] {
+            if len <= self.left().len() {
+                return &self.left()[..len];
+            }
+            let bounds = bound(self.src.len(), self.position, len);
+            &self.left()[..bounds.length]
+        }
+
+        /// `Read`, then `ReadClamped`: commit only after the logger returns.
+        pub(crate) fn read(&mut self, len: usize) -> &'a [u8] {
+            if len <= self.left().len() {
+                let result = &self.left()[..len];
+                self.position += len;
+                return result;
+            }
+            let bounds = bound(self.src.len(), self.position, len);
+            let result = &self.left()[..bounds.length];
+            if bounds.shortfall != 0 {
+                self.too_short(len, bounds.length);
+            }
+            self.position = bounds.position;
+            result
+        }
+
+        /// `PeekUintN` through `PeekBinary`.
+        pub(crate) fn peek_binary(&self, width: u8) -> Option<u64> {
+            let result = little_endian(self.left(), width);
+            (result.length != 0).then_some(result.value_bits)
+        }
+
+        /// `ReadUintN(def)`: peek, always advance by the width.
+        pub(crate) fn read_binary(&mut self, width: u8, default: u64) -> u64 {
+            let value = self.peek_binary(width);
+            self.skip(usize::from(width));
+            value.unwrap_or(default)
+        }
+
+        /// `TryReadUintN`: advance only on success.
+        pub(crate) fn try_read_binary(&mut self, width: u8) -> Option<u64> {
+            let value = self.peek_binary(width);
+            if value.is_some() {
+                self.skip(usize::from(width));
+            }
+            value
+        }
+
+        /// `PeekUtf8`: the C++ ASCII fast path returns what the Rust decoder returns.
+        pub(crate) fn peek_utf8(&self) -> (usize, u32) {
+            let decoded = utf8::decode(self.left());
+            (decoded.length, decoded.codepoint)
+        }
+
+        /// `ReadUtf8(def)`: advance at least one byte.
+        pub(crate) fn read_utf8(&mut self, default: u32) -> u32 {
+            let (len, value) = self.peek_utf8();
+            self.skip(if len > 0 { len } else { 1 });
+            if len > 0 { value } else { default }
+        }
+
+        /// `SkipUtf8`: advance at least one byte.
+        pub(crate) fn skip_utf8(&mut self) {
+            let len = self.peek_utf8().0;
+            self.skip(if len > 0 { len } else { 1 });
+        }
+
+        /// `TryReadUtf8`: advance only on success.
+        pub(crate) fn try_read_utf8(&mut self) -> Option<u32> {
+            let (len, value) = self.peek_utf8();
+            if len == 0 {
+                return None;
+            }
+            self.skip(len);
+            Some(value)
+        }
+
+        /// `SkipUntilCharNotIn` through `FindBytes` mode 2; not found is `npos`.
+        pub(crate) fn skip_until_char_not_in(&mut self, chars: &[u8]) {
+            let len = find(self.left(), chars, 2);
+            self.skip(len);
+        }
+
+        /// `ParseIntegerBase<T>`: the Rust parse, plus the C++ diagnostic formatting.
+        fn parse_integer(
+            &mut self,
+            base: u8,
+            width: u8,
+            signed: bool,
+            clamp: bool,
+            log_errors: bool,
+        ) -> (usize, u64) {
+            let src = self.left();
+            let result = integer::parse(src, base, width, signed, clamp);
+            if log_errors && result.error_kind != 0 {
+                self.log_error(diagnostic(src, &result));
+            }
+            if result.length == 0 {
+                return (0, 0);
+            }
+            (result.length, result.value_bits)
+        }
+
+        /// `PeekIntegerBase<T>`.
+        pub(crate) fn peek_integer(
+            &mut self,
+            base: u8,
+            width: u8,
+            signed: bool,
+            clamp: bool,
+        ) -> (usize, u64) {
+            self.parse_integer(base, width, signed, clamp, false)
+        }
+
+        /// `SkipIntegerBase`.
+        pub(crate) fn skip_integer(&mut self, base: u8) {
+            let len = integer::skip(self.left(), base);
+            self.skip(len);
+        }
+
+        /// `TryReadIntegerBase<T>`.
+        pub(crate) fn try_read_integer(
+            &mut self,
+            base: u8,
+            width: u8,
+            signed: bool,
+            clamp: bool,
+        ) -> Option<u64> {
+            let (len, value) = self.peek_integer(base, width, signed, clamp);
+            if len == 0 {
+                return None;
+            }
+            self.skip_integer(base);
+            Some(value)
+        }
+
+        /// `ReadIntegerBase<T>(base, def, clamp)`: log, then always advance.
+        pub(crate) fn read_integer(
+            &mut self,
+            base: u8,
+            width: u8,
+            signed: bool,
+            default: u64,
+            clamp: bool,
+        ) -> u64 {
+            let (len, value) = self.parse_integer(base, width, signed, clamp, true);
+            self.skip_integer(base);
+            if len > 0 { value } else { default }
+        }
+    }
+
+    /// The candidate `ParseIntegerBase<T>` diagnostic text for a failed Rust parse.
+    fn diagnostic(src: &[u8], result: &integer::IntegerResult) -> Vec<u8> {
+        let part = &src[result.error_offset..];
+        let head = &part[..result.error_length.min(part.len())];
+        let mut message = Vec::new();
+        if result.error_kind == 3 {
+            message.extend_from_slice(b"Integer out of range: '");
+            message.extend_from_slice(head);
+            message.push(b'\'');
+            return message;
+        }
+        let tail = &part[result.error_length..];
+        message.extend_from_slice(if result.error_kind == 2 {
+            b"Integer out of range: '"
+        } else {
+            b"Cannot parse integer: '"
+        });
+        message.extend_from_slice(head);
+        message.extend_from_slice(b"'+'");
+        message.extend_from_slice(&tail[..tail.len().min(4)]);
+        message.push(b'\'');
+        message
+    }
+
+    /// `ParseInteger<T>`: surrounding non-newline whitespace, no trailing bytes.
+    pub(crate) fn parse_integer(
+        src: &[u8],
+        base: u8,
+        width: u8,
+        signed: bool,
+        clamp: bool,
+    ) -> Option<u64> {
+        const WHITESPACE_NO_NEWLINE: &[u8] = b"\t\x0b\x0c\r ";
+        let mut consumer = Consumer::new(src);
+        consumer.skip_until_char_not_in(WHITESPACE_NO_NEWLINE);
+        let result = consumer.try_read_integer(base, width, signed, clamp);
+        consumer.skip_until_char_not_in(WHITESPACE_NO_NEWLINE);
+        if consumer.position < consumer.src.len() {
+            return None;
+        }
+        result
+    }
+
+    pub(crate) fn messages(log: &[(usize, Vec<u8>)]) -> String {
+        log.iter()
+            .fold(log.len().to_string(), |mut text, (position, message)| {
+                let _ = write!(text, " {position} {}", hex(message));
+                text
+            })
+    }
+
+    /// `compare-integers.py` `compare_consumers` corpus: operation, offset, request, bytes.
+    fn corpus() -> Vec<(u8, usize, usize, &'static [u8])> {
+        let maximum = usize::MAX;
+        let mut corpus = Vec::new();
+        for operation in 0..3 {
+            for (offset, requested, src) in [
+                (0, 0, &b""[..]),
+                (0, maximum, b""),
+                (1, 0, b"A\x00\xff"),
+                (1, 8, b"A\x00\xff"),
+                (1, maximum - 1, b"A\x00\xff"),
+                (3, 0, b"A\x00\xff"),
+                (3, maximum, b"A\x00\xff"),
+                (1, 1, b"A\x00\xff"),
+                (1, 2, b"A\x00\xff"),
+            ] {
+                corpus.push((operation, offset, requested, src));
+            }
+        }
+        for operation in 3..12 {
+            for (offset, src) in [
+                (0, &b""[..]),
+                (1, b"ABC"),
+                (3, b"ABC"),
+                (1, b"X\x01\x02\x03\x04\x05\x06\x07\x80"),
+            ] {
+                corpus.push((operation, offset, 0, src));
+            }
+        }
+        for operation in 12..16 {
+            for (offset, src) in [
+                (0, &b""[..]),
+                (0, b"\x00A"),
+                (1, b"\x00A"),
+                (1, b"A\xc2\x80B"),
+                (3, b"A\xc2\x80B"),
+                (4, b"A\xc2\x80B"),
+                (1, b"A\xed\xa0\x80B"),
+                (1, b"A\xff\x80B"),
+                (2, b"A\xff\x80B"),
+                (1, b"A\xf1\x80\x80"),
+            ] {
+                corpus.push((operation, offset, 0, src));
+            }
+        }
+        corpus
+    }
+
+    fn optional(value: Option<u64>) -> String {
+        format!("{}:{}", u8::from(value.is_some()), value.unwrap_or(42))
+    }
+
+    /// One probe line without its echoed operation number.
+    fn observe(operation: u8, offset: usize, requested: usize, src: &[u8]) -> String {
+        let mut consumer = Consumer::new(src);
+        consumer.skip(offset);
+        let observation = match operation {
+            0 => hex(consumer.peek(requested)),
+            1 => hex(consumer.read(requested)),
+            2 => {
+                consumer.skip(requested);
+                String::new()
+            }
+            // ReadChar(42) is ReadUint8 through PeekChar; the probe prints its byte.
+            3 | 8 => consumer.read_binary(1, 42).to_string(),
+            4 => consumer.read_binary(2, 42).to_string(),
+            5 => consumer.read_binary(4, 42).to_string(),
+            6 => consumer.read_binary(8, 42).to_string(),
+            7 | 10 => optional(consumer.try_read_binary(4)),
+            9 => optional(consumer.try_read_binary(2)),
+            11 => optional(consumer.try_read_binary(8)),
+            12 => {
+                let (length, value) = consumer.peek_utf8();
+                format!("{length}:{value}")
+            }
+            13 => consumer.read_utf8(42).to_string(),
+            14 => {
+                consumer.skip_utf8();
+                String::new()
+            }
+            15 => optional(consumer.try_read_utf8().map(u64::from)),
+            _ => unreachable!(),
+        };
+        // Peek/Read return src.substr(position, length) in the C++ glue, so the borrowed
+        // view always starts at the cursor; the probe's pointer flag is that fact.
+        format!(
+            "{} 1 {} {}",
+            if observation.is_empty() {
+                "-"
+            } else {
+                &observation
+            },
+            consumer.position,
+            messages(&consumer.log)
+        )
+    }
+
+    #[test]
+    fn integer_probe_consumer_gaps_match_original() {
+        let oracle = crate::oracle::parse(include_str!("integer/probe-oracle.txt"));
+        let count = crate::oracle::check(
+            &oracle,
+            "consumer",
+            corpus()
+                .into_iter()
+                .map(|(operation, offset, requested, src)| {
+                    (
+                        format!(
+                            "op {operation} offset {offset} requested {requested} src {}",
+                            hex_or_dash(src)
+                        ),
+                        observe(operation, offset, requested, src),
+                    )
+                }),
+        );
+        assert_eq!(count, 103);
+    }
+}
