@@ -741,7 +741,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x68 | 0x6a | 0x6b => {
             let nearby = (native.shared().nearby_tile)(parameter as u8, tile);
-            if !crate::map_func::World::new(native.shared()).has_station_rail_raw(nearby) {
+            if !crate::map_func::World::new(native.shared()).station_rail_raw(nearby) {
                 return u32::MAX;
             }
             let index = (native.commands().custom_rail_index)(nearby);

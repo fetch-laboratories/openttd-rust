@@ -157,9 +157,8 @@ unsafe fn station_change_info(
                         spec = (s.station_new)(file, id);
                     }
                     // Swap classid because we read it in BE meaning WAYP or DFLT
-                    let label = reader.dword()?.swap_bytes();
                     let class = StationClassID(crate::newgrf_class::station::allocate(
-                        label,
+                        reader.dword()?.swap_bytes(),
                         crate::newgrf_station::STAT_CLASS_MAX,
                         s.empty_string,
                     ));

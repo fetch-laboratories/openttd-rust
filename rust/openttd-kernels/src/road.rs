@@ -1181,12 +1181,8 @@ impl Game<'_> {
             } else if crate::map_func::World::new(self.ss).road_stop_type(tile) != u8::from(!bus)
                 || (!self.queue
                     && !crate::road_stop::has_free_bay(
-                        crate::road_stop::get_by_tile_raw(
-                            self.ss,
-                            tile,
-                            RoadStopType(u8::from(!bus)),
-                        )
-                        .1,
+                        crate::road_stop::by_tile_raw(self.ss, tile, RoadStopType(u8::from(!bus)))
+                            .1,
                     ))
             {
                 trackdirs = 0;

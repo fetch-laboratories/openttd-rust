@@ -1564,11 +1564,8 @@
     "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn build_road_waypoint | too_many_lines | 4a33eacd5fa65f2b2e28": [
       223
     ],
-    "rust/openttd-kernels/src/station_definitions.rs | fn station_change | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/station_definitions.rs | fn station_change_info | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       33
-    ],
-    "rust/openttd-kernels/src/station_definitions.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
     ],
     "rust/openttd-kernels/src/station_definitions.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       265

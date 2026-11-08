@@ -84,7 +84,7 @@ fn rail_tile(s: &Services, tile: u32) -> bool {
         return false;
     }
     (w.kind(tile) == crate::tile_type::MP_RAILWAY && !w.rail_depot(tile))
-        || (w.has_station_rail_raw(tile) && !w.station_blocked(tile))
+        || (w.station_rail_raw(tile) && !w.station_blocked(tile))
         || w.level_crossing_tile(tile)
 }
 

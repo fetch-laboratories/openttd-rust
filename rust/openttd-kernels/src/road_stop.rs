@@ -253,11 +253,7 @@ pub(crate) fn get_by_tile(
     }
 }
 /// Temporary raw adapter for `road.rs`.
-pub(crate) fn get_by_tile_raw(
-    s: &Services,
-    tile: u32,
-    kind: RoadStopType,
-) -> (*mut Stop, *mut State) {
+pub(crate) fn by_tile_raw(s: &Services, tile: u32, kind: RoadStopType) -> (*mut Stop, *mut State) {
     get_by_tile(s, TileIndex(tile), kind)
 }
 /// `RoadStop::GetByTile(tile, GetRoadStopType(tile))`.

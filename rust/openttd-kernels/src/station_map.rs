@@ -465,7 +465,7 @@ impl crate::map_func::World<'_> {
         self.is_rail_waypoint_tile(TileIndex(t))
     }
     #[inline]
-    pub(crate) fn has_station_rail_raw(&self, t: u32) -> bool {
+    pub(crate) fn station_rail_raw(&self, t: u32) -> bool {
         self.has_station_tile_rail(TileIndex(t))
     }
     #[inline]

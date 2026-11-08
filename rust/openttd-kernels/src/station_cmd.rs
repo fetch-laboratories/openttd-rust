@@ -30,13 +30,18 @@ use crate::station_type::{
     StationType,
 };
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
+use crate::tile_type::{
+    MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER, TileIndex,
+};
 use crate::tilearea::TileArea;
 mod waypoint;
 use crate::newgrf_roadstop::RoadStopAvailabilityType;
 use crate::newgrf_station::station_spec::{TileFlag, TileFlags};
 use crate::rail_cmd::RailCommandServices;
-use crate::road_stop::{RoadStopServices, Stop};
+use crate::road_stop::{
+    RoadStopServices, Stop, clear_drive_through, get_by_tile as road_stop_by_tile,
+    make_drive_through,
+};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
@@ -509,7 +514,7 @@ impl<'a> Ctx<'a> {
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
         let ok = rect.before_add_rect(
-            crate::tile_type::TileIndex(area.tile),
+            TileIndex(area.tile),
             i32::from(area.w),
             i32::from(area.h),
             mode,
@@ -534,7 +539,7 @@ impl<'a> Ctx<'a> {
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
-        let ok = rect.before_add_tile(crate::tile_type::TileIndex(tile), mode, &c);
+        let ok = rect.before_add_tile(TileIndex(tile), mode, &c);
         unsafe { *r = rect };
         if ok {
             out.zero();
@@ -549,7 +554,7 @@ impl<'a> Ctx<'a> {
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
-        rect.after_remove_tile(id, crate::tile_type::TileIndex(tile), &c);
+        rect.after_remove_tile(id, TileIndex(tile), &c);
         unsafe { *r = rect };
     }
     /// `st->rect.AfterRemoveRect(st, area)`.
@@ -2804,11 +2809,7 @@ impl Ctx<'_> {
                 (self.s.make_drive_stop)(
                     tile, owner, road_owner, tram_owner, id, kind, road, tram, axis,
                 );
-                crate::road_stop::make_drive_through(
-                    self.shared,
-                    crate::tile_type::TileIndex(tile),
-                    (self.stops().state)(stop),
-                );
+                make_drive_through(self.shared, TileIndex(tile), (self.stops().state)(stop));
             } else {
                 if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
@@ -2904,11 +2905,7 @@ impl Ctx<'_> {
         let (stop, stop_state) = if waypoint {
             (std::ptr::null_mut(), std::ptr::null_mut())
         } else {
-            crate::road_stop::get_by_tile(
-                self.shared,
-                crate::tile_type::TileIndex(tile),
-                RoadStopType(u8::from(truck)),
-            )
+            road_stop_by_tile(self.shared, TileIndex(tile), RoadStopType(u8::from(truck)))
         };
         if waypoint {
             if flags & DoCommandFlag::BANKRUPT == 0 {
@@ -2981,11 +2978,7 @@ impl Ctx<'_> {
             (self.s.close_stop_inspect)(tile);
             if !waypoint && crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
                 // ClearDriveThrough clears the tile for us.
-                crate::road_stop::clear_drive_through(
-                    self.shared,
-                    crate::tile_type::TileIndex(tile),
-                    stop_state,
-                );
+                clear_drive_through(self.shared, TileIndex(tile), stop_state);
                 crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
                 crate::ground::clear_square(tile, self.shared);
