@@ -6,9 +6,10 @@ Each migration/evidence-replacements/*.json is a list of per-file records:
  "observations": {"named behavior": ["rust:lib:module::tests::case",
                                        "scenario:default-scenario-name"]}}
 
-An optional "platform": "linux" registers the record's Rust checks only on
-Linux, for observations the original probe could make only there (for example
-glibc locale behaviour).
+An optional "platform" registers the record's Rust checks only where the
+original evidence was captured: "linux" for observations the original probe could
+make only there (for example glibc locale behaviour), "64-bit" for oracles whose
+size_t-dependent outputs were captured on a 64-bit original.
 
 Use rust:<lib or auto-discovered integration target>:<exact test name>.
 Every observation needs a destination. Review establishes that these names carry
@@ -43,7 +44,10 @@ class Replacement(_RequiredReplacement, total=False):
     platform: str
 
 
-PLATFORMS = {"linux": 'CMAKE_SYSTEM_NAME STREQUAL "Linux"'}
+PLATFORMS = {
+    "linux": 'CMAKE_SYSTEM_NAME STREQUAL "Linux"',
+    "64-bit": "CMAKE_SIZEOF_VOID_P EQUAL 8",
+}
 
 
 def load(root: Path = ROOT) -> list[Replacement]:
@@ -244,13 +248,15 @@ def cmake(records: Sequence[Replacement]) -> str:
     for check in sorted(destinations(records)):
         if not check.startswith("rust:"):
             continue
-        # A check is platform-limited only when every record naming it is.
+        # A check is platform-limited only when every record naming it shares
+        # one platform.
         platforms = {
             record.get("platform")
             for record in records
             if check in destinations([record])
         }
-        condition = PLATFORMS["linux"] if platforms == {"linux"} else None
+        only = next(iter(platforms)) if len(platforms) == 1 else None
+        condition = PLATFORMS[only] if only else None
         if condition:
             lines.append(f"if({condition})")
         lines.append(

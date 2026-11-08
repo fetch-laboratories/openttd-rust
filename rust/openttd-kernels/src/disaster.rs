@@ -1230,8 +1230,7 @@ pub(crate) unsafe fn openttd_rust_disaster_daily(s: *const Services) {
 }
 /// # Safety
 /// As `openttd_rust_disaster_tick`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_startup(s: *const Services) {
+pub(crate) unsafe fn openttd_rust_disaster_startup(s: *const Services) {
     entry!(s, w, {
         w.reset_delay();
     });

@@ -8,16 +8,28 @@
 //! Industry initialization, tile planting and nearby-station policy. World callbacks can
 //! inspect partially initialized owners.
 use super::{
-    Accepted, Builder, GenerationServices, Industry, LifecycleServices, Map, Produced, Services,
-    SpecHandle, accepted, fields, produced, produced_count, valid,
+    Accepted, GenerationServices, Industry, LifecycleServices, Produced, Services, SpecHandle,
+    TransactionContext, accepted, fields, produced, valid,
 };
+use crate::bitmath_func::gb;
+use crate::cargo_type::CargoType;
 use crate::command_type::DoCommandFlag;
-use crate::company_type::{CompanyID, Owner};
+use crate::company_type::Owner;
+use crate::economy_type::EconomyType;
 use crate::history_type::LAST_MONTH;
-use crate::industrytype::{self, IndustryBehaviour, IndustryBehaviours, IndustryConstructionType};
+use crate::industry_type::{
+    INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
+    INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryAnimationTrigger, IndustryGfx, IndustryID, IndustryType,
+};
+use crate::industrytype::{
+    IndustryBehaviour, IndustryBehaviours, IndustryConstructionType, get_industry_spec,
+    get_industry_tile_spec,
+};
 use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::newgrf_callbacks::{CallbackID, IndustryCallbackMask, IndustryCallbackMasks};
+use crate::tile_type::TileIndex;
+use crate::tilearea::TileArea;
 use std::ffi::c_void;
 
 /// One `IndustrySpec::layouts` entry, read in place.
@@ -35,8 +47,8 @@ pub(crate) fn layout_tile(layout: *const LayoutHandle, n: usize) -> LayoutTile {
 pub use crate::station_type::Station as StationHandle;
 #[repr(C)]
 pub struct CargoLists {
-    pub produced: [u8; crate::industry_type::INDUSTRY_NUM_OUTPUTS],
-    pub accepted: [u8; crate::industry_type::INDUSTRY_NUM_INPUTS],
+    pub produced: [u8; INDUSTRY_NUM_OUTPUTS],
+    pub accepted: [u8; INDUSTRY_NUM_INPUTS],
 }
 #[repr(C)]
 pub struct LayoutTile {
@@ -73,30 +85,11 @@ pub struct ConstructionServices {
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
 }
-fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
-    let area = unsafe { super::lifecycle::location(owner) };
-    let x = area.tile % size_x;
-    let y = area.tile / size_x;
-    let tx = tile % size_x;
-    let ty = tile / size_x;
-    let nx = x.min(tx);
-    let ny = y.min(ty);
-    unsafe {
-        (*owner).metadata.tile = ny.wrapping_mul(size_x).wrapping_add(nx);
-        (*owner).metadata.width = x
-            .wrapping_add(u32::from(area.w))
-            .max(tx.wrapping_add(1))
-            .wrapping_sub(nx) as u16;
-        (*owner).metadata.height = y
-            .wrapping_add(u32::from(area.h))
-            .max(ty.wrapping_add(1))
-            .wrapping_sub(ny) as u16;
-    }
-}
-/// `PopulateStationsNearby`.
+/// `PopulateStationsNearby`: populate an industry's list of nearby stations, and the
+/// stations' lists of nearby industries.
 fn populate(
     industry: *mut c_void,
-    id: u16,
+    id: IndustryID,
     owner: *mut Industry,
     s: &Services,
     l: &LifecycleServices,
@@ -106,20 +99,16 @@ fn populate(
     let shell = industry.cast::<crate::industry::tile::ShellHandle>();
     let neutral = (cc.c.industry_neutral)(shell);
     if !neutral.is_null() && !unsafe { (c.serve_neutral)() } {
-        // The neutral station is used and other nearby stations are ignored.
+        // Industry has a neutral station. Use it and ignore any other nearby stations.
         // SAFETY: Live owners; immediate mutations.
         unsafe {
             (*super::stations_near(owner)).insert(neutral, (cc.c.id)(neutral));
-            crate::station::set_neutral_industry(
-                (cc.c.owner)(neutral),
-                shell,
-                crate::industry_type::IndustryID(id),
-            );
+            crate::station::set_neutral_industry((cc.c.owner)(neutral), shell, id);
         }
         return;
     }
     crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
-        if !unsafe { (l.belongs)(tile, id) } {
+        if !unsafe { (l.belongs)(tile, id.0) } {
             return false;
         }
         // SAFETY: Live owner; immediate mutation.
@@ -134,21 +123,23 @@ fn populate(
         false
     });
 }
-#[allow(clippy::too_many_arguments)]
+/// The `CBID_INDUSTRY_INPUT_CARGO_TYPES` or `CBID_INDUSTRY_OUTPUT_CARGO_TYPES` branch of
+/// `DoCreateNewIndustry`; `output` selects the produced list.
 fn cargo_callbacks(
     industry: *mut c_void,
     owner: *mut Industry,
-    spec: *const SpecHandle,
+    indspec: *const SpecHandle,
     lists: &CargoLists,
     output: bool,
     c: &ConstructionServices,
     shared: &crate::services::Services,
 ) {
     let callback = if output {
-        CallbackID::CBID_INDUSTRY_OUTPUT_CARGO_TYPES.0
+        CallbackID::CBID_INDUSTRY_OUTPUT_CARGO_TYPES
     } else {
-        CallbackID::CBID_INDUSTRY_INPUT_CARGO_TYPES.0
+        CallbackID::CBID_INDUSTRY_INPUT_CARGO_TYPES
     };
+    // Clear all input or output cargo types.
     unsafe {
         if output {
             (*owner).produced.clear();
@@ -156,162 +147,169 @@ fn cargo_callbacks(
             (*owner).accepted.clear();
         }
     }
-    let unlimited = IndustryBehaviours(unsafe { (*spec).behaviour })
+    // Query actual types.
+    let unlimited = IndustryBehaviours(unsafe { (*indspec).behaviour })
         .test(IndustryBehaviour::CargoTypesUnlimited);
     let maxcargoes = if unlimited {
         if output {
-            crate::industry_type::INDUSTRY_NUM_OUTPUTS
+            INDUSTRY_NUM_OUTPUTS
         } else {
-            crate::industry_type::INDUSTRY_NUM_INPUTS
+            INDUSTRY_NUM_INPUTS
         }
     } else if output {
-        crate::industry_type::INDUSTRY_ORIGINAL_NUM_OUTPUTS
+        INDUSTRY_ORIGINAL_NUM_OUTPUTS
     } else {
-        crate::industry_type::INDUSTRY_ORIGINAL_NUM_INPUTS
+        INDUSTRY_ORIGINAL_NUM_INPUTS
     };
     for j in 0..maxcargoes {
-        let res = unsafe { (c.callback)(industry, callback, j as u32, 0) };
-        if res == CALLBACK_FAILED || res as u8 == u8::MAX {
+        let res = unsafe { (c.callback)(industry, callback.0, j as u32, 0) };
+        if res == CALLBACK_FAILED || gb(u32::from(res), 0, 8) == u32::from(u8::MAX) {
             break;
         }
-        if (shared.grf_file_version)(unsafe { (*spec).grf_prop.grffile }) >= 8 && res >= 0x100 {
-            unsafe { (c.callback_error)(spec, callback, res) };
+        if (shared.grf_file_version)(unsafe { (*indspec).grf_prop.grffile }) >= 8 && res >= 0x100 {
+            unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }
-        let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
-            res as u8,
-            unsafe { (*spec).grf_prop.grffile },
+        let cargo = CargoType(crate::cargo_registry::openttd_rust_cargo_translate(
+            gb(u32::from(res), 0, 8) as u8,
+            unsafe { (*indspec).grf_prop.grffile },
             false,
-        );
-        // Older GRFs rely on fixed cargo slot order and blank slots by returning
-        // undefined cargo indices. Keep an invalid slot without ending the callbacks.
-        if !valid(cargo) && !unlimited {
+        ));
+        // Industries without "unlimited" cargo types support depend on the specific
+        // order/slots of cargo types. They need to be able to blank out specific slots
+        // without aborting the callback sequence, and solve this by returning undefined
+        // cargo indexes. Skip these.
+        if !valid(cargo.0) && !unlimited {
+            // As slots are allocated as needed now, this means we do need to add a slot
+            // for the invalid cargo.
             unsafe {
                 if output {
                     (*owner).produced.push(Produced {
-                        cargo: crate::cargo_type::INVALID_CARGO,
+                        cargo: CargoType::INVALID_CARGO.0,
                         ..Produced::default()
                     });
                 } else {
                     (*owner).accepted.push(Accepted {
-                        cargo: crate::cargo_type::INVALID_CARGO,
+                        cargo: CargoType::INVALID_CARGO.0,
                         ..Accepted::default()
                     });
                 }
             }
             continue;
         }
-        // The cargo must occur in the specification; otherwise this is a GRF error.
+        // Verify valid cargo.
         let in_spec = if output {
-            lists.produced.contains(&cargo)
+            lists.produced.contains(&cargo.0)
         } else {
-            lists.accepted.contains(&cargo)
+            lists.accepted.contains(&cargo.0)
         };
         if !in_spec {
-            unsafe { (c.callback_error)(spec, callback, res) };
+            // Cargo not in spec, error in NewGRF.
+            unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }
         let duplicate = unsafe {
             if output {
-                (0..j).any(|n| (*produced(owner, n)).cargo == cargo)
+                (0..j).any(|n| (*produced(owner, n)).cargo == cargo.0)
             } else {
-                (0..j).any(|n| (*accepted(owner, n)).cargo == cargo)
+                (0..j).any(|n| (*accepted(owner, n)).cargo == cargo.0)
             }
         };
-        // Duplicate cargoes are also a GRF error.
         if duplicate {
-            unsafe { (c.callback_error)(spec, callback, res) };
+            // Duplicate cargo.
+            unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }
         unsafe {
             if output {
                 (*owner).produced.push(Produced {
-                    cargo,
+                    cargo: cargo.0,
                     ..Produced::default()
                 });
             } else {
                 (*owner).accepted.push(Accepted {
-                    cargo,
+                    cargo: cargo.0,
                     ..Accepted::default()
                 });
             }
         }
     }
 }
+/// `DoCreateNewIndustry`: put an industry on the map. `request` carries the north tile,
+/// type, layout and its index, nearest town, founder (`OWNER_NONE` in case of random
+/// construction) and initial random bits; `context` carries the transaction's services.
+///
 /// # Safety
 /// Live newly allocated shell/owner, builder and immutable request/spec/layout.
 /// Native town/station relationships remain native. Resolver and world callbacks
 /// may reenter; raw scalar/slot access ends before every such call. Panics abort.
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn openttd_rust_industry_initialize(
+pub(crate) unsafe fn do_create_new_industry(
     industry: *mut c_void,
     owner: *mut Industry,
-    builder: *mut Builder,
-    request: *const ConstructionRequest,
-    s: *const Services,
-    g: *const GenerationServices,
-    l: *const LifecycleServices,
-    c: *const ConstructionServices,
+    request: &ConstructionRequest,
+    context: &TransactionContext,
 ) {
-    let r = unsafe { *request };
-    let s = unsafe { &*s };
-    let g = unsafe { &*g };
-    let l = unsafe { &*l };
-    let c = unsafe { &*c };
-    let spec = industrytype::industry(u16::from(r.kind));
+    let r = *request;
+    let s = unsafe { &*context.production };
+    let g: &GenerationServices = unsafe { &*context.generation };
+    let l = unsafe { &*context.lifecycle };
+    let c = unsafe { &*context.construction };
+    let (tile, kind, id) = (TileIndex(r.tile), IndustryType(r.kind), IndustryID(r.id));
+    let map = crate::map_func::Map::from_log_x(r.size_x.ilog2());
+    let indspec = get_industry_spec(kind);
     unsafe {
-        (*owner).metadata.tile = r.tile;
+        (*owner).metadata.tile = tile.0;
         (*owner).metadata.width = 1;
         (*owner).metadata.height = 1;
-        (*owner).metadata.kind = r.kind;
-        super::openttd_rust_industry_registry_insert(builder, r.kind, r.id);
+        (*owner).metadata.kind = kind.0;
+        super::openttd_rust_industry_registry_insert(context.builder, kind.0, id.0);
     }
     let lists = unsafe {
         CargoLists {
-            produced: (*spec).produced_cargo,
-            accepted: (*spec).accepts_cargo,
+            produced: (*indspec).produced_cargo,
+            accepted: (*indspec).accepts_cargo,
         }
     };
-    let mut count = 0;
-    for (n, cargo) in lists.produced.iter().enumerate() {
+    let mut produced_count = 0;
+    for (index, cargo) in lists.produced.iter().enumerate() {
         if valid(*cargo) {
-            count = n + 1;
+            produced_count = index + 1;
         }
     }
-    for n in 0..count {
+    for index in 0..produced_count {
         unsafe {
             (*owner).produced.push(Produced {
-                cargo: lists.produced[n],
+                cargo: lists.produced[index],
                 ..Produced::default()
             });
         }
-        let rate = unsafe { (*spec).production_rate[n] };
-        unsafe {
-            (*produced(owner, n)).rate = rate;
-        }
+        unsafe { (*produced(owner, index)).rate = (*indspec).production_rate[index] };
     }
-    count = 0;
-    for (n, cargo) in lists.accepted.iter().enumerate() {
+    let mut accepted_count = 0;
+    for (index, cargo) in lists.accepted.iter().enumerate() {
         if valid(*cargo) {
-            count = n + 1;
+            accepted_count = index + 1;
         }
     }
-    for n in 0..count {
+    for index in 0..accepted_count {
         unsafe {
             (*owner).accepted.push(Accepted {
-                cargo: lists.accepted[n],
+                cargo: lists.accepted[index],
                 ..Accepted::default()
             });
         }
     }
-    let callbacks = unsafe { (*spec).callback_mask };
-    if !super::original_economy(callbacks, unsafe { (s.economy_type)() }) {
-        for n in 0..produced_count(owner) {
+    let callbacks = IndustryCallbackMasks(unsafe { (*indspec).callback_mask });
+    // Randomize initial production if non-original economy is used and there are no
+    // production related callbacks.
+    if !super::uses_original_economy(callbacks, EconomyType(unsafe { (s.economy_type)() })) {
+        for n in 0..super::produced_count(owner) {
             let random = s.shared().random_range(256);
             let p = produced(owner, n);
             let rate = unsafe { u32::from((*p).rate) };
             unsafe {
-                (*p).rate = ((random.wrapping_add(128)).wrapping_mul(rate) >> 8).min(255) as u8;
+                (*p).rate = ((random.wrapping_add(128)).wrapping_mul(rate) >> 8)
+                    .min(u32::from(u8::MAX)) as u8;
             }
         }
     }
@@ -322,8 +320,8 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     let random = s.shared().random() as u16;
     let f = fields(owner);
     unsafe {
-        (*owner).metadata.random_colour = (random & 15) as u8;
-        (*f).counter = random >> 4;
+        (*owner).metadata.random_colour = gb(u32::from(random), 0, 4) as u8;
+        (*f).counter = gb(u32::from(random), 4, 12) as u16;
         (*owner).metadata.random = r.random_bits;
         (*f).was_cargo_delivered = 0;
     }
@@ -334,9 +332,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         (*f).ctlflags = 0;
     }
     let date = crate::timer_game_common::calendar_date().0;
-    unsafe {
-        (*owner).metadata.construction_date = date;
-    }
+    unsafe { (*owner).metadata.construction_date = date };
     let construction_type = if (g.environment.editor)() {
         IndustryConstructionType::ICT_SCENARIO_EDITOR
     } else if unsafe { (c.generating)() } {
@@ -346,14 +342,15 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     };
     unsafe {
         (*owner).metadata.construction_type = construction_type.0;
-        // Zero means unknown (old save); known layouts are saved one-based.
+        // Adding 1 here makes it conform to specs of var44 of varaction2 for industries:
+        // 0 = created prior of newindustries, else chosen layout + 1.
         (*owner).metadata.selected_layout = r.layout_index.wrapping_add(1) as u8;
-        (*owner).metadata.exclusive_supplier = CompanyID::INVALID.0;
-        (*owner).metadata.exclusive_consumer = CompanyID::INVALID.0;
+        (*owner).metadata.exclusive_supplier = Owner::INVALID.0;
+        (*owner).metadata.exclusive_consumer = Owner::INVALID.0;
         (*f).prod_level = super::PRODLEVEL_DEFAULT;
     }
-    // Call callbacks after the regular fields are initialized.
-    if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::ProdChangeBuild) {
+    // Call callbacks after the regular fields got initialised.
+    if callbacks.test(IndustryCallbackMask::ProdChangeBuild) {
         let random = s.shared().random();
         let res = unsafe {
             (c.callback)(
@@ -368,7 +365,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 .contains(&res)
             {
                 unsafe {
-                    (c.callback_error)(spec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
+                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
                 };
             } else {
                 unsafe {
@@ -379,11 +376,11 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     if unsafe { (c.generating)() } {
-        if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::Production256Ticks) {
+        if callbacks.test(IndustryCallbackMask::Production256Ticks) {
             unsafe {
                 (s.production_callback)(industry, 1);
             }
-            for n in 0..produced_count(owner) {
+            for n in 0..super::produced_count(owner) {
                 let p = produced(owner, n);
                 if valid(unsafe { (*p).cargo }) {
                     let waiting = unsafe { u32::from((*p).waiting) };
@@ -398,7 +395,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 }
             }
         }
-        for n in 0..produced_count(owner) {
+        for n in 0..super::produced_count(owner) {
             let p = produced(owner, n);
             if valid(unsafe { (*p).cargo }) {
                 let rate = unsafe { u32::from((*p).rate) };
@@ -417,40 +414,40 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             super::update_history(&mut (*f).valid_history, u32::from(month));
         }
     }
-    if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::DecideColour) {
+    if callbacks.test(IndustryCallbackMask::DecideColour) {
         let res =
             unsafe { (c.callback)(industry, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, 0, 0) };
         if res != CALLBACK_FAILED {
-            if res & 0x7ff0 != 0 {
+            if gb(u32::from(res), 4, 11) != 0 {
                 unsafe {
-                    (c.callback_error)(spec, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, res);
+                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, res);
                 }
             }
-            unsafe {
-                (*owner).metadata.random_colour = (res & 15) as u8;
-            }
+            unsafe { (*owner).metadata.random_colour = gb(u32::from(res), 0, 4) as u8 };
         }
     }
-    if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::InputCargoTypes) {
-        cargo_callbacks(industry, owner, spec, &lists, false, c, s.shared());
+    if callbacks.test(IndustryCallbackMask::InputCargoTypes) {
+        cargo_callbacks(industry, owner, indspec, &lists, false, c, s.shared());
     }
-    if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::OutputCargoTypes) {
-        cargo_callbacks(industry, owner, spec, &lists, true, c, s.shared());
+    if callbacks.test(IndustryCallbackMask::OutputCargoTypes) {
+        cargo_callbacks(industry, owner, indspec, &lists, true, c, s.shared());
     }
+    // Plant the tiles.
     let count = unsafe { (*r.layout).len() };
     for n in 0..count {
-        let layout = layout_tile(r.layout, n);
-        let tile = r.tile.wrapping_add(
-            (i32::from(layout.y)
-                .wrapping_mul(r.size_x as i32)
-                .wrapping_add(i32::from(layout.x))) as u32,
+        let it = layout_tile(r.layout, n);
+        let cur_tile = TileIndex(
+            tile.0
+                .wrapping_add(map.diff(i32::from(it.x), i32::from(it.y))),
         );
-        if layout.gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
-            add_location(owner, tile, r.size_x);
-            let water = unsafe { (c.water_class)(tile) };
+        if IndustryGfx(it.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
+            let mut location = super::location(owner);
+            location.add(cur_tile.0, map);
+            set_location(owner, location);
+            let wc = unsafe { (c.water_class)(cur_tile.0) };
             unsafe {
                 (c.clear_tile)(
-                    tile,
+                    cur_tile.0,
                     DoCommandFlag::EXECUTE
                         | DoCommandFlag::NO_TEST_TOWN_RATING
                         | DoCommandFlag::NO_MODIFY_TOWN_RATING,
@@ -458,35 +455,41 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             }
             let random = s.shared().random();
             unsafe {
-                (c.make_industry)(tile, r.id, layout.gfx, random, water);
+                (c.make_industry)(cur_tile.0, id.0, it.gfx, random, wc);
             }
             if unsafe { (c.generating)() } {
                 unsafe {
-                    (c.set_construction_counter)(tile, 3);
-                    (c.set_construction_stage)(tile, 2);
+                    (c.set_construction_counter)(cur_tile.0, 3);
+                    (c.set_construction_stage)(cur_tile.0, 2);
                 }
             }
-            let gfx = unsafe { (c.translated_gfx)(layout.gfx) };
-            if unsafe {
-                (*industrytype::tile(gfx)).animation.status != AnimationStatus::NoAnimation.0
-            } {
-                crate::animated_tile::openttd_rust_animation_add(tile, true);
+            // `it.gfx` is stored in the map. But the translated ID `cur_gfx` is the
+            // interesting one.
+            let cur_gfx = IndustryGfx(unsafe { (c.translated_gfx)(it.gfx) });
+            let its = get_industry_tile_spec(cur_gfx);
+            if unsafe { (*its).animation.status != AnimationStatus::NoAnimation.0 } {
+                crate::animated_tile::openttd_rust_animation_add(cur_tile.0, true);
             }
         }
     }
-    super::lifecycle::tiles(
-        unsafe { super::lifecycle::location(owner) },
-        r.size_x,
-        |tile| unsafe {
-            if (l.belongs)(tile.0, r.id) {
-                super::openttd_rust_industry_animate_tile_abi(tile.0, 0, 0x100, s, l);
-            }
-        },
-    );
-    let kind = unsafe { (*owner).metadata.kind };
-    let behaviour = unsafe { (*industrytype::industry(u16::from(kind))).behaviour };
-    if IndustryBehaviours(behaviour).test(IndustryBehaviour::PlantOnBuild) {
-        let map = Map {
+    // Call callbacks after all tiles have been created.
+    super::lifecycle::tiles(super::location(owner), r.size_x, |cur_tile| unsafe {
+        if (l.belongs)(cur_tile.0, id.0) {
+            // There are no shared random bits, consistent with "MakeIndustryTileBigger"
+            // in tile loop. So, trigger tiles individually; `first_call` adds 0x100.
+            super::openttd_rust_industry_animate_tile_abi(
+                cur_tile.0,
+                IndustryAnimationTrigger::ConstructionStageChanged.0,
+                0x100,
+                s,
+                l,
+            );
+        }
+    });
+    let kind = IndustryType(unsafe { (*owner).metadata.kind });
+    let behaviour = IndustryBehaviours(unsafe { (*get_industry_spec(kind)).behaviour });
+    if behaviour.test(IndustryBehaviour::PlantOnBuild) {
+        let map = super::Map {
             size_x: r.size_x,
             size_y: r.size_y,
             landscape: 0,
@@ -494,14 +497,23 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::farm_with_landscape(industry, r.id, map, s, &|| unsafe { (s.landscape)() });
+            super::farm_with_landscape(industry, id.0, map, s, &|| unsafe { (s.landscape)() });
         }
     }
     unsafe {
-        (s.directory_dirty)(0);
+        (s.directory_dirty)(super::IndustryDirectoryInvalidateWindowData::IDIWD_FORCE_REBUILD.0);
         (c.build_window_dirty)();
     }
     if !unsafe { (c.generating)() } {
-        populate(industry, r.id, owner, s, l, c);
+        populate(industry, id, owner, s, l, c);
+    }
+}
+/// Write `location` back to `Industry::location`.
+fn set_location(owner: *mut Industry, location: TileArea) {
+    // SAFETY: Live owner supplied by the caller's resolved shell; immediate writes.
+    unsafe {
+        (*owner).metadata.tile = location.tile;
+        (*owner).metadata.width = location.w;
+        (*owner).metadata.height = location.h;
     }
 }
