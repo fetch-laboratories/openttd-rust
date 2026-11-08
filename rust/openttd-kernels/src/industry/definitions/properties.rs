@@ -312,10 +312,8 @@ unsafe fn industrytiles_change_info(
     for id in ids {
         let mut tsp = file_tile(c.file, id);
         if prop != 0x08 && tsp.is_null() {
-            let cir = ignore_industry_tile_property(prop, buf)?;
-            if cir > ret {
-                ret = cir;
-            }
+            // `if (cir > ret) ret = cir;`
+            ret = ret.max(ignore_industry_tile_property(prop, buf)?);
             continue;
         }
         match prop {
@@ -480,10 +478,8 @@ unsafe fn industries_change_info(
     for id in ids {
         let mut indsp = file_industry(c.file, id);
         if prop != 0x08 && indsp.is_null() {
-            let cir = ignore_industry_property(prop, buf)?;
-            if cir > ret {
-                ret = cir;
-            }
+            // `if (cir > ret) ret = cir;`
+            ret = ret.max(ignore_industry_property(prop, buf)?);
             continue;
         }
         match prop {
