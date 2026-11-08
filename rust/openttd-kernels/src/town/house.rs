@@ -1405,8 +1405,8 @@ impl<'a> House<'a> {
         // `DoTriggerHouseAnimation_WatchedCargoAccepted`: run the callback for a single
         // house tile, with `TileIndexToTileIndexDiffC(origin, tile)`.
         let trigger = |part: TileIndex| {
-            let x = map.tile_x(tile.0).wrapping_sub(map.tile_x(part.0)) as u8;
-            let y = map.tile_y(tile.0).wrapping_sub(map.tile_y(part.0)) as u8;
+            let diff = map.tile_index_to_tile_index_diff_c(tile, part);
+            let (x, y) = (diff.x as u8, diff.y as u8);
             let cb_info = u32::from(r) << 16 | u32::from(y) << 8 | u32::from(x);
             // SAFETY: The entry resolved this live town shell; no owner borrow
             // spans the synchronous animation callback.
