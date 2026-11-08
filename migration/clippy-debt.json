@@ -1408,14 +1408,14 @@
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       31
     ],
+    "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 6717e4044750ffe89cc5": [
+      8
+    ],
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 6b619a50d6345a155d00": [
       7
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 8c6e648e48006686af61": [
       7
-    ],
-    "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | 6717e4044750ffe89cc5": [
-      8
     ],
     "rust/openttd-kernels/src/signal.rs | fn explore_segment | excessive_nesting | f9d1d6175282e0d63c2b": [
       10
@@ -1694,7 +1694,7 @@
       1
     ],
     "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn build_house | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      127
+      120
     ],
     "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn expand::mod es ) | excessive_nesting | 4bcbfe1de16ae68a3637": [
       1
@@ -1762,26 +1762,26 @@
     "rust/openttd-kernels/src/town/founding.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       127
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn place | excessive_nesting | ff81917911f6f7974e17": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn add_produced_cargo_town | excessive_nesting | 4bcbfe1de16ae68a3637": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn produced | excessive_nesting | 4bcbfe1de16ae68a3637": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn cmd_place_house | excessive_nesting | f4c98e2d2ac1cdee7e39": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn terraform | excessive_nesting | 6a45a7f9092729b4f36d": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn terraform_tile_town | excessive_nesting | 674da53d3aebc117b9cc": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop | excessive_nesting | a31b07cba13fc533be8b": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | excessive_nesting | 22fc41d3629b7e884544": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop | excessive_nesting | d0946ce06fbc171d231d": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | excessive_nesting | 6acc4cb58671b9550276": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop | excessive_nesting | db2a9e3c6ab646c9d4e1": [
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | excessive_nesting | 6ea71450c543e44f09bc": [
       5
     ],
-    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      111
+    "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      107
     ],
     "rust/openttd-kernels/src/town/resolver.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       108,

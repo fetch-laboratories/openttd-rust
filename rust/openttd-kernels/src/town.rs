@@ -37,6 +37,7 @@ use crate::services::{Map, Services};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
 use crate::tile_type::{
     MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_VOID,
+    TileIndex,
 };
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
@@ -47,6 +48,55 @@ pub const CUSTOM_TOWN_NUMBER_DIFFICULTY: u32 = 4;
 pub const TOWN_GROWTH_WINTER: u32 = 0xFFFF_FFFE;
 /// The town needs the cargo for growth when on desert (any amount).
 pub const TOWN_GROWTH_DESERT: u32 = 0xFFFF_FFFF;
+
+/// Town flags (`town.h`), as bit positions, retaining every underlying byte.
+/// `CustomGrowth` joins with its first Rust user, `town.rs`'s growth pass.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownFlag(pub u8);
+#[allow(
+    non_upper_case_globals,
+    reason = "original town.h TownFlag enumerators"
+)]
+impl TownFlag {
+    /// Conditions for town growth are met. Grow according to `Town::growth_rate`.
+    pub const IsGrowing: Self = Self(0);
+    /// There can be only one church by town.
+    pub const HasChurch: Self = Self(1);
+    /// There can be only one stadium by town.
+    pub const HasStadium: Self = Self(2);
+}
+/// Set of `TownFlag`s (`town.h`), retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownFlags(pub u8);
+impl TownFlags {
+    /// Native element-to-set conversion.
+    #[must_use]
+    pub const fn from_element(element: TownFlag) -> Self {
+        Self(1 << element.0)
+    }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: TownFlag) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+    /// Native `Reset` of one element.
+    pub fn reset(&mut self, element: TownFlag) {
+        self.0 &= !Self::from_element(element).0;
+    }
+}
+
+/// Settings for town council attitudes (`town.h`), retaining every underlying byte.
+/// The lenient, tolerant and hostile values join with their first Rust user,
+/// `town.rs`'s rating pass.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownCouncilAttitudes(pub u8);
+impl TownCouncilAttitudes {
+    /// Permissive (local authority disabled).
+    pub const TOWN_COUNCIL_PERMISSIVE: Self = Self(3);
+}
 
 /// Town actions of a company (`town.h`), retaining every underlying byte.
 #[repr(transparent)]
@@ -1966,30 +2016,23 @@ impl Engine<'_> {
             state: self.owner,
             id: TownId(town as u16),
         };
-        house::stage_changed(self.leaves, self.services, town_ref, tile);
-        if size & 24 != 0 {
-            house::stage_changed(
+        let stage_changed = |part: u32| {
+            house::trigger_house_animation_construction_stage_changed(
                 self.leaves,
                 self.services,
                 town_ref,
-                self.offset(tile, 0, 1),
+                TileIndex(part),
             );
+        };
+        stage_changed(tile);
+        if size & 24 != 0 {
+            stage_changed(self.offset(tile, 0, 1));
         }
         if size & 20 != 0 {
-            house::stage_changed(
-                self.leaves,
-                self.services,
-                town_ref,
-                self.offset(tile, 1, 0),
-            );
+            stage_changed(self.offset(tile, 1, 0));
         }
         if size & 16 != 0 {
-            house::stage_changed(
-                self.leaves,
-                self.services,
-                town_ref,
-                self.offset(tile, 1, 1),
-            );
+            stage_changed(self.offset(tile, 1, 1));
         }
     }
     fn try_house(&self, town: u32, base: u32, modes: u32) -> bool {
