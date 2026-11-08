@@ -17,7 +17,7 @@ from typing import Any
 
 from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
-from rust_syntax import Node, nodes, syntax_trees
+from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -282,7 +282,7 @@ def carry_rule(site: str) -> tuple[str, bool]:
 def scope_text(path: str, text: str, scope: str) -> str | None:
     """Source text of the items the attribute scope names."""
     parts = [
-        node.text.decode()
+        item_source(node, text)
         for node in nodes(syntax_trees({path: text})[path])
         if node.type.endswith("_item") and item_scope(node) == scope
     ]

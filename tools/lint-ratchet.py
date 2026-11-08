@@ -14,6 +14,7 @@ from pathlib import Path
 from baseline_ratchet import debt_errors, exceeds
 from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
 from code_lines import without_comments
+from rust_syntax import item_source, nodes, syntax_trees
 from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,11 +217,35 @@ def item_text(kind: str, path: str, text: str, item: str) -> str | None:
     """Source text of every item with this key identity, or None for modules."""
     if kind == "clippy":
         _, items = rust_items(path, text)
-        parts = [text[start:end] for start, end, name in items if name == item]
+        tree = list(nodes(syntax_trees({path: text})[path]))
+        parts = []
+        for start, end, name in items:
+            if name != item:
+                continue
+            a, b = len(text[:start].encode()), len(text[:end].encode())
+            targets = [
+                node
+                for node in tree
+                if node.type.endswith("_item")
+                and node.start_byte <= a < node.end_byte == b
+            ]
+            if not targets:
+                return None
+            target = max(targets, key=lambda node: node.start_byte)
+            parts.append(item_source(target, text))
     else:
         tree = ast.parse(text)
         parts = [
-            ast.get_source_segment(text, node) or ""
+            "".join(
+                text.splitlines(keepends=True)[
+                    min(
+                        (decorator.lineno for decorator in node.decorator_list),
+                        default=node.lineno,
+                    )
+                    - 1 : node.lineno - 1
+                ]
+            )
+            + (ast.get_source_segment(text, node) or "")
             for node in ast.walk(tree)
             if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
             and python_item(tree, node.lineno) == item

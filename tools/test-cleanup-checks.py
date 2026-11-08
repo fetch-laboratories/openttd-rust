@@ -17,7 +17,7 @@ from types import ModuleType
 from unittest.mock import patch
 
 from baseline_ratchet import debt_errors
-from cleanup_contract import associated_pull, reviewed
+from cleanup_contract import associated_pull, reviewed, source_reviews
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 from vcs import git
@@ -612,6 +612,7 @@ class GrowthTests(unittest.TestCase):
             [],
             [report("/implementation", "head")],
             [report("/review", "stale")],
+            [report("/review", "a" * 40)],
         ):
             self.assertFalse(
                 GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
@@ -722,6 +723,72 @@ class CarryTests(unittest.TestCase):
                 self.assertTrue(errors)
                 self.assertEqual(carry["tool"] == "clippy", "invalid carry" in printed)
 
+    def test_carries_cannot_multiply_retired_debt(self) -> None:
+        other = self.NEW.replace("get_curve_speed_limit", "another")
+        for head, carries in (
+            ({self.NEW: [281, 281]}, [self.carry(self.OLD, self.NEW)]),
+            (
+                {self.NEW: [281], other: [281]},
+                [self.carry(self.OLD, self.NEW), self.carry(self.OLD, other)],
+            ),
+        ):
+            self.assertTrue(self.ratchet({self.OLD: [281]}, head, *carries)[0])
+
+    def test_component_reviews_use_agent_paths_under_shared_login(self) -> None:
+        proposal = {"kind": "lint"}
+        owner = acceptance_comment("h", proposal).replace("/review", "/impl")
+        independent = acceptance_comment("h", proposal)
+        body = '```cleanup-acceptance\n{"kind":"reviews","pulls":[12]}\n```'
+        with (
+            patch("cleanup_contract.gh", return_value=json.dumps({"body": owner})),
+            patch("cleanup_contract.discussion", return_value=[owner, independent]),
+        ):
+            comments = source_reviews("repos/shared/account", body, 13)
+        self.assertEqual(comments, [independent])
+        self.assertTrue(reviewed(proposal, comments, "/integration", "h"))
+        self.assertFalse(reviewed(proposal, [owner], "/impl", "h"))
+
+    def test_attribute_and_signature_changes_invalidate_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = "#[cfg_attr(test, allow(dead_code))]\npub fn work() {}\n"
+            initialize(root, {"rust/x.rs": original})
+            accepted = git("rev-parse", "HEAD", cwd=root).strip()
+            site = "rust/x.rs | fn work | allow dead_code"
+            row = "rust/x.rs | fn work | too_many_lines | item"
+            proposal = {"kind": "suppression"}
+            comment = acceptance_comment(accepted, proposal)
+            for changed in (
+                original.replace(
+                    "cfg_attr(test, allow(dead_code))", "allow(dead_code)"
+                ),
+                original.replace("pub fn", "pub unsafe fn"),
+                original.replace("pub fn", "fn"),
+                original.replace("pub fn", "/// changed contract\npub fn"),
+            ):
+                (root / "rust/x.rs").write_text(changed)
+                for module, predicate in (
+                    (POLICY, partial(POLICY.unchanged_scope, site)),
+                    (LINT, partial(LINT.unchanged_item, "clippy", row)),
+                ):
+                    with (
+                        patch.object(module, "ROOT", root),
+                        patch.object(module, "git", partial(git, cwd=root)),
+                    ):
+                        self.assertFalse(
+                            reviewed(
+                                proposal, [comment], "/impl", "new-head", predicate
+                            )
+                        )
+
+    def test_python_decorator_is_part_of_reviewed_item(self) -> None:
+        before = "@original\ndef work():\n    return 1\n"
+        after = before.replace("@original", "@changed")
+        self.assertNotEqual(
+            LINT.item_text("ruff", "tools/x.py", before, "work"),
+            LINT.item_text("ruff", "tools/x.py", after, "work"),
+        )
+
     def test_suppression_carry_and_fidelity_reasons(self) -> None:
         old = "rust/a.rs | impl Flag > const ReplaceProtection | allow non_upper_case_globals"
         new = old.replace("rust/a.rs", "rust/group.rs")
@@ -775,6 +842,9 @@ class CarryTests(unittest.TestCase):
             )
         for rejected in (
             source.replace(f", {reason}", ""),
+            source.split("#[expect", 1)[0].replace(
+                "impl GroupFlag", "#[allow(non_upper_case_globals)]\nimpl GroupFlag"
+            ),
             source.replace(reason, 'reason = " "'),
             f"#![allow(non_upper_case_globals, {reason})]\npub const Original: u8 = 1;\n",
             f"#[allow(non_upper_case_globals, {reason})]\n"
