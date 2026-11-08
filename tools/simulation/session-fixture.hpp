@@ -76,7 +76,7 @@ struct SessionFixture {
 		station_tiles.shared = &shared;
 		station_tiles.roadstop = &roadstops;
 		tiles.station = &station_tiles;
-		group.current_company = []() noexcept -> uint8_t { return 0; };
+		group.shared = &shared; shared.current_company = []() noexcept -> uint8_t { return 0; };
 		pending.set_current = [](uint8_t) noexcept {};
 		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };

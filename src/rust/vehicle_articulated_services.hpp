@@ -12,7 +12,7 @@ static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint1
 	RustVehicleSetCargoType(RustVehicle(v), cargo);
 	if (validate) assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), capacity);
-	RustVehicleSetRefitCap(RustVehicle(v), 0);
+	v->Record().refit_cap = 0;
 }
 template <class T> static void VehicleArticMark(void *v) noexcept { static_cast<T *>(v)->SetArticulatedPart(); }
 static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noexcept

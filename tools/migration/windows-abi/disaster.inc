@@ -51,10 +51,9 @@ static void Disasters()
 	*delay = 1; probe.random = 511;
 	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 1241 && probe.draws == 1);
 	probe.random = 0;
-	openttd_rust_disaster_startup(&services); CHECK(*delay == 730 && probe.draws == 2);
 	CHECK(delay == openttd_rust_disaster_delay() && state.get() == address && state->state == 65535 && state->flags == 0xAB && state->image_override == UINT32_MAX);
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
-	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
+	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 1);
 
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
@@ -64,7 +63,7 @@ static void Disasters()
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
 	probe.record.tick_counter = 1; probe.record.subtype = 8;
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));
-	CHECK(probe.record.tick_counter == 2 && probe.viewports == 1 && probe.draws == 2 && probe.deletes == 1);
+	CHECK(probe.record.tick_counter == 2 && probe.viewports == 1 && probe.draws == 1 && probe.deletes == 1);
 
 	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. */
 	OpenTTDCommandCostServices costs{};

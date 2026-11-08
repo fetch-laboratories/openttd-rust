@@ -32,11 +32,6 @@ pub struct CargoKind {
     pub subtype: u8,
 }
 #[repr(C)]
-pub struct Commit {
-    pub cargo: u8,
-    pub capacity: u16,
-}
-#[repr(C)]
 pub struct Prices {
     pub train: u32,
     pub wagon: u32,
@@ -63,20 +58,30 @@ pub struct Services {
     pub road_ground: &'static crate::vehicle::GroundServices,
     pub prices: Prices,
     pub engine: extern "C" fn(u16) -> *const OpenTTDEngine,
-    pub vehicle_engine: extern "C" fn(*mut OpenTTDVehicle) -> *const OpenTTDEngine,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
     pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
-    pub commit: extern "C" fn(*mut OpenTTDVehicle) -> Commit,
-    pub write_refit: extern "C" fn(*mut OpenTTDVehicle, u8, u16, u8),
-    pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
     pub road_acceleration: extern "C" fn() -> u8,
     pub details_ui: extern "C" fn(*mut OpenTTDVehicle),
     pub lists_ui: extern "C" fn(u8),
+}
+// Canonical vehicle-table slots for refit callers; no refit copy is bound.
+impl Services {
+    /// `v->GetEngine()`.
+    pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
+        (self.common.vehicles.engine)(crate::vehicle::VehicleRef::of(v))
+            .0
+            .as_ptr()
+            .cast_const()
+    }
+    /// `Train::From(v)` as its typed handle.
+    pub(crate) fn train_handle(&self, v: *mut OpenTTDVehicle) -> crate::train::Handle {
+        (self.common.vehicles.train_handle)(v)
+    }
 }
 #[derive(Clone, Copy)]
 struct Result {
@@ -269,7 +274,7 @@ unsafe fn refit_chain(
             v = unsafe { next(s, v) };
             continue;
         }
-        let e = (s.vehicle_engine)(
+        let e = s.vehicle_engine(
             unsafe { super::vehicle_ref(v, s.common.vehicles) }
                 .0
                 .as_ptr(),
@@ -397,33 +402,20 @@ unsafe fn refit_chain(
             // Copy only the private result; no Vec borrow crosses a callback.
             let result = transaction.0.results[index];
             let v = result.vehicle;
-            let old = (s.commit)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-            );
+            let u = unsafe { super::vehicle_ref(v, s.common.vehicles) };
+            let old = (s.cargo_kind)(u.0.as_ptr());
             let cap = if old.cargo == cargo {
-                (result.capacity as u16).min(old.capacity)
+                (result.capacity as u16).min(u.refit_cap())
             } else {
                 0
             };
-            crate::vehicle::VehicleRef::of(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-            )
-            .write_refit_cap(cap);
+            u.write_refit_cap(cap);
             unsafe {
                 truncate(s, v, cap);
             }
-            (s.write_refit)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-                cargo,
-                result.capacity as u16,
-                result.subtype,
-            );
+            // `u->cargo_type`, `u->cargo_cap` and `u->cargo_subtype` are plain stores.
+            u.write_cargo_cap(result.capacity as u16);
+            (s.set_cargo_kind)(u.0.as_ptr(), cargo, result.subtype);
             if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
@@ -543,7 +535,7 @@ pub(crate) unsafe fn refit(
         match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    (s.train_handle)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
+                    s.train_handle(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                     if automatic {
                         s.prices.auto_refit
                     } else {
@@ -654,13 +646,10 @@ crate::abi::layouts! {
     "OpenTTDRefitCargoKind" ["probe"] => CargoKind {
         cargo, subtype,
     };
-    "OpenTTDRefitCommit" ["probe"] => Commit {
-        cargo, capacity,
-    };
     "OpenTTDRefitPrices" ["probe"] => Prices {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

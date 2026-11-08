@@ -49,8 +49,7 @@ pub struct TransactionServices {
 unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     let mut from = 0;
     loop {
-        let v =
-            crate::vehicle::VehicleRef::shell_from_record(unsafe { (s.groups.next_vehicle)(from) });
+        let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
         if v.is_null() {
             return true;
         }
@@ -379,8 +378,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     }
     let mut from = 0;
     loop {
-        let v =
-            crate::vehicle::VehicleRef::shell_from_record(unsafe { (s.groups.next_vehicle)(from) });
+        let v = crate::vehicle::VehicleRef::shell_from_record(s.groups.next_vehicle(from));
         if v.is_null() {
             break;
         }

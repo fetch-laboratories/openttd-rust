@@ -552,7 +552,7 @@ unsafe fn new_engine(
     if kind == 0 && crate::ground_vehicle::is_rear_dualheaded(record(w, v).subtype()) {
         return INVALID_ENGINE;
     }
-    let company = unsafe { (gw.current_company)() };
+    let company = gw.current_company();
     let head = unsafe { (gw.head)(company).cast::<*mut ()>().read() };
     let from = crate::fleet::record(gw, v).engine_id();
     let id = unsafe { (gw.vehicle_group)(v) };
@@ -607,12 +607,13 @@ unsafe fn build(
         check!(w, unsafe { (w.success)(cost) });
     }
     if crate::fleet::record(gw, new).vehicle_type() == 0
-        && ((w.refit_services)().train_handle)(
-            unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
-                .0
-                .as_ptr(),
-        )
-        .get_flags()
+        && (w.refit_services)()
+            .train_handle(
+                unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
+                    .0
+                    .as_ptr(),
+            )
+            .get_flags()
             & (1 << crate::train::FLIPPED)
             != 0
         && !unsafe {
@@ -1094,7 +1095,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let company = unsafe { (gw.current_company)() };
+    let company = gw.current_company();
     let mut wagon_removal = unsafe { (gw.keep_length)(company) };
     let group_id = unsafe { (gw.vehicle_group)(v) };
     let g = unsafe { group(gw, group_id) };
@@ -1192,7 +1193,7 @@ unsafe fn set_rule(
     to: u16,
     old: bool,
 ) -> u32 {
-    let company = unsafe { (gw.current_company)() };
+    let company = gw.current_company();
     if !unsafe { (w.company_valid)(company) } {
         return ERROR;
     }
