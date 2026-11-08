@@ -625,3 +625,165 @@ int main()
 	return ByteStringsBoundary();
 }
 #endif /* CORE_BOUNDARY_BYTES */
+
+#if defined(CORE_BOUNDARY_PACKET)
+/*
+ * From packet-comparison.cpp (#736 P); build -O0, and -O2 -DNDEBUG, with -DUNIX and
+ * src/network/core/packet.cpp, src/string.cpp and src/core/{string_builder,string_consumer,
+ * string_inplace,utf8}.cpp. The driver requires the candidate's output to equal the pinned
+ * original's in both modes. Rust tests (packet::comparison_tests) carry every Rust-routed value;
+ * this section keeps the fork's C++ Packet glue:
+ * 1. Move construction and assignment (inline in src/network/core/packet.h) leave the source
+ *    empty with its cursor, and Send_bytes returns the unwritten suffix as a subspan of its
+ *    input. Retire with the C++ Packet facade.
+ * 2. The TransferIn/TransferOutWithLimit templates (packet.h) call the C++ callback once with
+ *    the planned span, propagate its exception uncommitted and commit a normal return to the
+ *    live cursor after reentry. Retires with the last C++ transfer caller.
+ * 3. packet.cpp's native encryption-handler path: virtual MACSize/Encrypt/Decrypt order, spans,
+ *    exceptions with their partial effects and reentry, the strict MAC frame and GetPacketType's
+ *    send-handler MAC; and the socket services' base MarkClosed dispatch (the derived count
+ *    stays 0). Retires with the native NetworkEncryptionHandler implementations and socket
+ *    services (the final native Packet consumer).
+ */
+#include "network/core/packet.h"
+#include <cstdio>
+#include <cstdlib>
+#include <stdexcept>
+
+[[noreturn]] void NOT_REACHED(const std::source_location) { throw std::runtime_error("NOT_REACHED"); }
+[[noreturn]] void AssertFailedError(std::string_view, const std::source_location) { throw std::runtime_error("assertion"); }
+void DebugPrint(std::string_view, int, std::string &&) { std::abort(); }
+
+struct Socket : NetworkSocketHandler {
+	using NetworkSocketHandler::receive_encryption_handler;
+	using NetworkSocketHandler::send_encryption_handler;
+	unsigned derived_closed = 0;
+	void MarkClosed() { ++derived_closed; }
+};
+static void Bytes(std::span<const uint8_t> bytes)
+{
+	for (uint8_t byte : bytes) std::printf("%02x", byte);
+	std::printf("/");
+}
+static void State(const char *name, Packet &packet, Socket &socket)
+{
+	std::printf("%s %zu %zu %d %d %u ", name, packet.Size(), packet.RemainingBytesToTransfer(), packet.HasPacketSizeData(), socket.HasClientQuit(), socket.derived_closed);
+	Packet copy = packet;
+	copy.TransferOut([](std::span<const uint8_t> bytes) { Bytes(bytes); return static_cast<ssize_t>(bytes.size()); });
+	std::printf("\n");
+}
+static Packet Read(Socket &socket, std::span<const uint8_t> bytes)
+{
+	Packet packet(&socket, size_t{70000}, bytes.size());
+	packet.TransferIn([&](std::span<uint8_t> output) { std::ranges::copy(bytes, output.begin()); return static_cast<ssize_t>(bytes.size()); });
+	(void)packet.PrepareToRead();
+	return packet;
+}
+struct Encryption : NetworkEncryptionHandler {
+	Packet *packet = nullptr;
+	unsigned mode = 0;
+	size_t mac_size = 2;
+	size_t MACSize() const override
+	{
+		std::printf("mac %u %zu\n", mode, mac_size);
+		if (mode == 4) throw std::runtime_error("MACSize");
+		if (mode == 5) packet->Recv_uint8();
+		return mac_size;
+	}
+	void Crypt(const char *name, std::span<uint8_t> mac, std::span<uint8_t> message, uint8_t mac_mark, uint8_t message_mark) const
+	{
+		std::printf("%s %zu %zu ", name, mac.size(), message.size()); Bytes(message); std::printf("\n");
+		if (!mac.empty()) mac[0] = mac_mark;
+		if (!message.empty()) message[0] = message_mark;
+		if (mode == 2 || mode == 3) packet->Recv_uint8();
+		if (mode == 1 || mode == 3) throw std::runtime_error(name);
+	}
+	void Encrypt(std::span<uint8_t> mac, std::span<uint8_t> message) override { Crypt("encrypt", mac, message, 0xA1, 0xB2); }
+	bool Decrypt(std::span<uint8_t> mac, std::span<uint8_t> message) override
+	{
+		Crypt("decrypt", mac, message, 0xC3, 0xD4);
+		return mode != 0;
+	}
+};
+
+static void Move()
+{
+	Socket socket; Packet source(&socket, PacketType{7}, 100); source.Send_uint32(0xABCDEF01); (void)source.PrepareToRead(); source.Recv_uint8();
+	Packet moved(std::move(source));
+	std::printf("move-source %zu %d %zu\n", source.Size(), source.HasPacketSizeData(), source.RemainingBytesToTransfer());
+	Packet assigned(&socket, PacketType{0}, 100); assigned = std::move(moved);
+	std::printf("move-result %u %zu %d %zu\n", assigned.Recv_uint32(), moved.Size(), moved.HasPacketSizeData(), moved.RemainingBytesToTransfer());
+}
+
+/* Send_bytes's facade returns a subspan aliasing its input. */
+static void SendBytes()
+{
+	for (size_t limit : {size_t{3}, size_t{4}, size_t{8}}) {
+		Socket socket; Packet packet(&socket, PacketType{0}, limit); std::array<uint8_t, 8> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+		auto suffix = packet.Send_bytes(bytes);
+		std::printf("send-bytes %zu %zu %td\n", limit, suffix.size(), suffix.data() - bytes.data()); State("send-bytes-state", packet, socket);
+	}
+}
+
+/* Callback return, exception and reentrant live-cursor commit. */
+static void Transfer()
+{
+	for (unsigned mode = 0; mode < 7; ++mode) for (bool incoming : {false, true}) {
+		Socket socket; Packet packet(&socket, size_t{20}, size_t{10}); unsigned calls = 0; ssize_t result = 99; bool threw = false;
+		auto callback = [&](auto bytes) -> ssize_t {
+			++calls; std::printf("transfer-call %u %d %zu\n", mode, incoming, bytes.size());
+			if constexpr (!std::is_const_v<typename decltype(bytes)::element_type>) bytes[0] = 0xEE;
+			if (mode == 3) throw std::runtime_error("transfer");
+			if (mode == 4 || mode == 5) { (void)packet.PrepareToRead(); packet.Recv_uint8(); }
+			if (mode == 5) { Packet other(&socket, size_t{20}, size_t{4}); other.TransferIn([](auto) { return ssize_t{1}; }); }
+			return mode == 0 ? 0 : mode == 1 ? -1 : 2;
+		};
+		try { result = incoming ? packet.TransferIn(callback) : packet.TransferOutWithLimit(callback, mode == 6 ? 0 : 4); } catch (const std::runtime_error &) { threw = true; }
+		std::printf("transfer-result %u %d %zd %u %d\n", mode, incoming, result, calls, threw); State("transfer-state", packet, socket);
+	}
+}
+
+/* Native handlers: construction, PrepareToSend/PrepareToRead, strict MAC frame, packet type. */
+static void Crypto()
+{
+	for (unsigned mode = 0; mode < 6; ++mode) for (bool sending : {false, true}) {
+		Socket socket; auto handler = std::make_unique<Encryption>(); auto *observed = handler.get();
+		(sending ? socket.send_encryption_handler : socket.receive_encryption_handler) = std::move(handler);
+		Packet packet(&socket, PacketType{7}, 100); packet.Send_uint8(9); packet.Send_uint8(10); packet.Send_uint8(11);
+		observed->packet = &packet; observed->mode = mode; bool threw = false, valid = false;
+		try { if (sending) packet.PrepareToSend(); else valid = packet.PrepareToRead(); } catch (const std::runtime_error &) { threw = true; }
+		std::printf("crypto-result %u %d %d %d\n", mode, sending, valid, threw); State("crypto-state", packet, socket);
+	}
+	for (size_t mac : {size_t{0}, size_t{3}, size_t{4}}) {
+		Socket socket; auto handler = std::make_unique<Encryption>(); handler->mac_size = mac; socket.receive_encryption_handler = std::move(handler);
+		Packet packet(&socket, PacketType{1}, 100); packet.Send_uint8(2); packet.Send_uint8(3);
+		std::printf("strict-mac %zu %d\n", mac, packet.PrepareToRead()); State("strict-mac-state", packet, socket);
+	}
+	Socket socket; std::array<uint8_t, 6> bytes{6, 0, 0xAA, 0xBB, 0xCC, 0xDD}; auto packet = Read(socket, bytes);
+	auto send = std::make_unique<Encryption>(); send->mac_size = 1; send->packet = &packet; auto *observed = send.get();
+	/* The receive handler's different MAC size must not be used. */
+	auto receive = std::make_unique<Encryption>(); receive->mac_size = 2;
+	socket.send_encryption_handler = std::move(send); socket.receive_encryption_handler = std::move(receive);
+	std::printf("type-send-handler %u\n", packet.GetPacketType());
+	observed->mode = 4; bool threw = false; try { packet.GetPacketType(); } catch (const std::runtime_error &) { threw = true; }
+	std::printf("type-throw %d\n", threw);
+}
+
+/* Bounds failure closes through the base MarkClosed only. */
+static void Close()
+{
+	Socket socket; Packet packet(&socket, size_t{10}, size_t{3}); (void)packet.PrepareToRead();
+	bool first = packet.CanReadFromPacket(2, true), closed = socket.HasClientQuit();
+	std::printf("close %d %d\n", first, closed); State("close-state", packet, socket);
+}
+
+int main()
+{
+	Move();
+	SendBytes();
+	Transfer();
+	Crypto();
+	Close();
+	std::printf("packet boundary passed\n");
+}
+#endif /* CORE_BOUNDARY_PACKET */
