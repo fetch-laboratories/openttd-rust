@@ -323,26 +323,7 @@ pub(crate) mod tests {
             let src = self.left();
             let result = integer::parse(src, base, width, signed, clamp);
             if log_errors && result.error_kind != 0 {
-                let part = &src[result.error_offset..];
-                let head = &part[..result.error_length.min(part.len())];
-                let mut message = Vec::new();
-                if result.error_kind == 3 {
-                    message.extend_from_slice(b"Integer out of range: '");
-                    message.extend_from_slice(head);
-                    message.push(b'\'');
-                } else {
-                    let tail = &part[result.error_length..];
-                    message.extend_from_slice(if result.error_kind == 2 {
-                        b"Integer out of range: '"
-                    } else {
-                        b"Cannot parse integer: '"
-                    });
-                    message.extend_from_slice(head);
-                    message.extend_from_slice(b"'+'");
-                    message.extend_from_slice(&tail[..tail.len().min(4)]);
-                    message.push(b'\'');
-                }
-                self.log_error(message);
+                self.log_error(diagnostic(src, &result));
             }
             if result.length == 0 {
                 return (0, 0);
@@ -396,6 +377,30 @@ pub(crate) mod tests {
             self.skip_integer(base);
             if len > 0 { value } else { default }
         }
+    }
+
+    /// The candidate `ParseIntegerBase<T>` diagnostic text for a failed Rust parse.
+    fn diagnostic(src: &[u8], result: &integer::IntegerResult) -> Vec<u8> {
+        let part = &src[result.error_offset..];
+        let head = &part[..result.error_length.min(part.len())];
+        let mut message = Vec::new();
+        if result.error_kind == 3 {
+            message.extend_from_slice(b"Integer out of range: '");
+            message.extend_from_slice(head);
+            message.push(b'\'');
+            return message;
+        }
+        let tail = &part[result.error_length..];
+        message.extend_from_slice(if result.error_kind == 2 {
+            b"Integer out of range: '"
+        } else {
+            b"Cannot parse integer: '"
+        });
+        message.extend_from_slice(head);
+        message.extend_from_slice(b"'+'");
+        message.extend_from_slice(&tail[..tail.len().min(4)]);
+        message.push(b'\'');
+        message
     }
 
     /// `ParseInteger<T>`: surrounding non-newline whitespace, no trailing bytes.

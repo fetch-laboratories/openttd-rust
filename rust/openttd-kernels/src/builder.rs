@@ -115,52 +115,55 @@ mod tests {
         }
     }
 
+    /// Representable range of one probe integer type.
+    fn range(width: u32, signed: bool) -> (i128, i128) {
+        if signed {
+            (-(1_i128 << (width - 1)), (1_i128 << (width - 1)) - 1)
+        } else {
+            (0, i128::from(u64::MAX >> (64 - width)))
+        }
+    }
+
+    /// One `builder_cases()` sample set: the range edges, plus each representable
+    /// `base**30/31/32` neighbour and (signed) its negation, sorted and deduplicated.
+    fn samples(width: u32, signed: bool, base: i32) -> Vec<i128> {
+        let (low, high) = range(width, signed);
+        let mut samples = vec![low, low + 1, 0, 1, high - 1, high];
+        if signed {
+            samples.push(-1);
+        }
+        let neighbours = [30_u32, 31, 32]
+            .into_iter()
+            .filter_map(|exponent| i128::from(base).checked_pow(exponent))
+            .flat_map(|boundary| [boundary - 1, boundary, boundary + 1]);
+        let candidates = neighbours
+            .flat_map(|value| [Some(value), signed.then_some(-value)])
+            .flatten();
+        samples.extend(candidates.filter(|value| (low..=high).contains(value)));
+        samples.sort_unstable();
+        samples.dedup();
+        samples
+    }
+
+    /// Two's complement masking, as Python's `value & mask`.
+    fn masked(value: i128, width: u32) -> u64 {
+        u64::try_from(value.rem_euclid(1 << 64)).unwrap() & (u64::MAX >> (64 - width))
+    }
+
     /// `compare-integers.py` `builder_cases()`: width, signedness, base, masked bits.
     fn corpus() -> Vec<(u32, bool, i32, u64)> {
-        let mut corpus = Vec::new();
-        for width in [8_u32, 16, 32, 64] {
-            let mask = u64::MAX >> (64 - width);
-            for signed in [false, true] {
-                let low: i128 = if signed { -(1_i128 << (width - 1)) } else { 0 };
-                let high: i128 = if signed {
-                    (1_i128 << (width - 1)) - 1
-                } else {
-                    i128::from(mask)
-                };
-                let mut values = vec![low, low + 1, 0, 1, high - 1, high];
-                if signed {
-                    values.push(-1);
-                }
-                for base in 2..=36_i32 {
-                    let mut samples = values.clone();
-                    for exponent in [30_u32, 31, 32] {
-                        let Some(boundary) = i128::from(base).checked_pow(exponent) else {
-                            continue;
-                        };
-                        for value in [boundary - 1, boundary, boundary + 1] {
-                            if (low..=high).contains(&value) {
-                                samples.push(value);
-                            }
-                            if signed && (low..=high).contains(&-value) {
-                                samples.push(-value);
-                            }
-                        }
-                    }
-                    samples.sort_unstable();
-                    samples.dedup();
-                    for value in samples {
-                        // Two's complement masking, as Python's `value & mask`.
-                        corpus.push((
-                            width,
-                            signed,
-                            base,
-                            u64::try_from(value.rem_euclid(1 << 64)).unwrap() & mask,
-                        ));
-                    }
-                }
-            }
-        }
-        corpus
+        let types = [8_u32, 16, 32, 64]
+            .into_iter()
+            .flat_map(|width| [(width, false), (width, true)]);
+        let formats =
+            types.flat_map(|(width, signed)| (2..=36_i32).map(move |base| (width, signed, base)));
+        formats
+            .flat_map(|(width, signed, base)| {
+                samples(width, signed, base)
+                    .into_iter()
+                    .map(move |value| (width, signed, base, masked(value, width)))
+            })
+            .collect()
     }
 
     #[test]

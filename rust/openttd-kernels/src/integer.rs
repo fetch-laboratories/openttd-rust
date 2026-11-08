@@ -235,26 +235,29 @@ mod tests {
         )
     }
 
+    /// `cases()` loop order outside the samples: width, signedness, base, clamp.
+    fn modes() -> impl Iterator<Item = (u8, bool, u8, bool)> {
+        let types = [8_u8, 16, 32, 64]
+            .into_iter()
+            .flat_map(|width| [(width, false), (width, true)]);
+        let bases =
+            types.flat_map(|(width, signed)| [0_u8, 8, 10, 16].map(|base| (width, signed, base)));
+        bases.flat_map(|(width, signed, base)| {
+            [(width, signed, base, false), (width, signed, base, true)]
+        })
+    }
+
     #[test]
     fn integer_probe_api_matches_original() {
         let oracle = crate::oracle::parse(include_str!("integer/probe-oracle.txt"));
         let mut cases = Vec::new();
-        for width in [8_u8, 16, 32, 64] {
-            let samples = samples(u32::from(width));
-            for signed in [false, true] {
-                for base in [0_u8, 8, 10, 16] {
-                    for clamp in [false, true] {
-                        for src in &samples {
-                            cases.push((
-                                format!(
-                                    "width {width} signed {signed} base {base} clamp {clamp} src {}",
-                                    hex_or_dash(src)
-                                ),
-                                probe(src, width, signed, base, clamp),
-                            ));
-                        }
-                    }
-                }
+        for (width, signed, base, clamp) in modes() {
+            for src in &samples(u32::from(width)) {
+                let inputs = format!(
+                    "width {width} signed {signed} base {base} clamp {clamp} src {}",
+                    hex_or_dash(src)
+                );
+                cases.push((inputs, probe(src, width, signed, base, clamp)));
             }
         }
         assert_eq!(crate::oracle::check(&oracle, "api", cases), 5312);
