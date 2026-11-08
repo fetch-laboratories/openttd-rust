@@ -81,12 +81,12 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                     c.vehicles.set_next_shell(previous.cast(), v.cast());
                     (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
                 }
-                let front = (r.train_handle)(
+                let front = r.train_handle(
                     unsafe { super::vehicle_ref(first, r.common.vehicles) }
                         .0
                         .as_ptr(),
                 );
-                let train = (r.train_handle)(
+                let train = r.train_handle(
                     unsafe { super::vehicle_ref(v, r.common.vehicles) }
                         .0
                         .as_ptr(),
@@ -156,7 +156,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                 )
             };
             if probability >= 0 {
-                (r.train_handle)(
+                r.train_handle(
                     unsafe { super::vehicle_ref(v, r.common.vehicles) }
                         .0
                         .as_ptr(),
@@ -175,7 +175,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
 pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     let r = s.refit;
     let c = r.common;
-    let e = (r.vehicle_engine)(
+    let e = r.vehicle_engine(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
             .as_ptr(),

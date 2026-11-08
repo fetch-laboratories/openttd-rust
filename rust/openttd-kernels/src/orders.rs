@@ -27,6 +27,7 @@
 )]
 use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
+use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
 use crate::order_type::{
     OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
     OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
@@ -37,6 +38,7 @@ use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN, VehicleType};
 use std::ffi::c_void;
 
@@ -501,11 +503,8 @@ pub struct Leaves {
     pub backup: unsafe extern "C" fn(*mut c_void) -> *mut Backup,
     pub backup_vector: unsafe extern "C" fn(*mut c_void) -> *mut Vector,
     pub backup_consist: unsafe extern "C" fn(*mut c_void) -> *mut Consist,
-    pub first_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> *mut c_void,
-    pub last_station: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub ownerless_station: unsafe extern "C" fn(station: u16, if_valid: u8) -> u64,
     pub vehicle_type: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub vehicle_status: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub tick_counter: extern "C" fn() -> u64,
     pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
@@ -513,9 +512,7 @@ pub struct Leaves {
     pub economy_fraction: extern "C" fn() -> u64,
     pub maximum_date: extern "C" fn() -> u64,
     pub timetable_year_limit: extern "C" fn() -> u64,
-    pub stopped_or_crashed: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub allocate_list: extern "C" fn() -> *mut c_void,
-    pub suppress_implicit: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -559,7 +556,6 @@ pub struct Leaves {
     pub network_client: extern "C" fn() -> u64,
     pub server_client: extern "C" fn() -> u64,
     pub default_group: extern "C" fn() -> u64,
-    pub vehicle_tile: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub vehicle_group: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub review_setting: extern "C" fn() -> u64,
@@ -571,11 +567,9 @@ pub struct Leaves {
     pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
     pub delete_order_news: unsafe extern "C" fn(ctx: *mut c_void),
-    pub suppress_implicit_write: unsafe extern "C" fn(ctx: *mut c_void, suppress: u8),
     pub invalidate_vehicle_list: unsafe extern "C" fn(ctx: *mut c_void),
     pub close_shared_window: unsafe extern "C" fn(ctx: *mut c_void, window: u32),
     pub invalidate_shared_window: unsafe extern "C" fn(ctx: *mut c_void, window: u32, data: i32),
-    pub last_station_write: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
     pub dirty_vehicle_windows: unsafe extern "C" fn(ctx: *mut c_void),
     pub capture_backup_metadata: unsafe extern "C" fn(ctx: *mut c_void, source: *mut c_void),
     pub clear_backup_name: unsafe extern "C" fn(ctx: *mut c_void),
@@ -624,15 +618,10 @@ macro_rules! leaves {
     };
 }
 leaves! {
-    fn first_vehicle(ctx: *mut c_void) -> *mut c_void;
-    fn last_station(ctx: *mut c_void) -> u64;
     fn ownerless_station(station: u16, if_valid: u8) -> u64;
     fn vehicle_type(ctx: *mut c_void) -> u64;
-    fn vehicle_status(ctx: *mut c_void) -> u64;
     fn primary_vehicle(ctx: *mut c_void) -> u64;
     fn unit_number(ctx: *mut c_void) -> u64;
-    fn stopped_or_crashed(ctx: *mut c_void) -> u64;
-    fn suppress_implicit(ctx: *mut c_void) -> u64;
     fn shared_window(ctx: *mut c_void, first: *mut c_void) -> u64;
     fn vehicle_id(ctx: *mut c_void) -> u64;
     fn reliability(ctx: *mut c_void) -> u64;
@@ -662,7 +651,6 @@ leaves! {
     fn waypoint_owner(destination: u16) -> u64;
     fn aircraft_range_square(ctx: *mut c_void) -> u64;
     fn create_backup(ctx: *mut c_void, user: u32) -> *mut c_void;
-    fn vehicle_tile(ctx: *mut c_void) -> u64;
     fn vehicle_group(ctx: *mut c_void) -> u64;
     fn unique_backup_name(ctx: *mut c_void) -> u64;
     fn local_owner(ctx: *mut c_void) -> u64;
@@ -670,11 +658,9 @@ leaves! {
     fn timetable_dirty(ctx: *mut c_void);
     fn invalidate_order(ctx: *mut c_void, data: i32);
     fn delete_order_news(ctx: *mut c_void);
-    fn suppress_implicit_write(ctx: *mut c_void, suppress: u8);
     fn invalidate_vehicle_list(ctx: *mut c_void);
     fn close_shared_window(ctx: *mut c_void, window: u32);
     fn invalidate_shared_window(ctx: *mut c_void, window: u32, data: i32);
-    fn last_station_write(ctx: *mut c_void, station: u16);
     fn dirty_vehicle_windows(ctx: *mut c_void);
     fn capture_backup_metadata(ctx: *mut c_void, source: *mut c_void);
     fn clear_backup_name(ctx: *mut c_void);
@@ -691,6 +677,51 @@ leaves! {
     fn delete_backup(ctx: *mut c_void);
     fn missing_aircraft_orders(ctx: *mut c_void);
     fn change_timetable_command(ctx: *mut c_void, index: u8, field: u8, value: u16);
+}
+
+// Fields the canonical vehicle record owns, read and written in place at the
+// former callbacks' observation points.
+impl Game {
+    /// `v->First()`.
+    fn first_vehicle(self, v: *mut c_void) -> *mut c_void {
+        native_vehicle(v, self.0.base).first().shell()
+    }
+    /// `v->GetLastStationVisited()`.
+    fn last_station(self, v: *mut c_void) -> u64 {
+        u64::from(native_vehicle(v, self.0.base).last_station())
+    }
+    /// `v->GetVehStatus()`.
+    fn vehicle_status(self, v: *mut c_void) -> u64 {
+        u64::from(native_vehicle(v, self.0.base).status())
+    }
+    /// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
+    fn stopped_or_crashed(self, v: *mut c_void) -> u64 {
+        u64::from(native_vehicle(v, self.0.base).status() & (VS_STOPPED | VS_CRASHED) != 0)
+    }
+    /// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
+    fn suppress_implicit(self, v: *mut c_void) -> u64 {
+        let flags = native_vehicle(v, self.0.base).ground_vehicle_flags();
+        u64::from(flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS) != 0)
+    }
+    /// `v->GetTile()`.
+    fn vehicle_tile(self, v: *mut c_void) -> u64 {
+        u64::from(native_vehicle(v, self.0.base).tile())
+    }
+    /// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress != 0)`.
+    fn suppress_implicit_write(self, v: *mut c_void, suppress: u8) {
+        let v = native_vehicle(v, self.0.base);
+        let flags = v.ground_vehicle_flags();
+        let mask = 1 << GVF_SUPPRESS_IMPLICIT_ORDERS;
+        v.write_ground_vehicle_flags(if suppress != 0 {
+            flags | mask
+        } else {
+            flags & !mask
+        });
+    }
+    /// `v->SetLastStationVisited(station)`.
+    fn last_station_write(self, v: *mut c_void, station: u16) {
+        native_vehicle(v, self.0.base).write_last_station(station);
+    }
 }
 
 impl Game {
@@ -4699,11 +4730,8 @@ crate::abi::layouts! {
         backup,
         backup_vector,
         backup_consist,
-        first_vehicle,
-        last_station,
         ownerless_station,
         vehicle_type,
-        vehicle_status,
         tick_counter,
         primary_vehicle,
         ticks_per_second,
@@ -4711,9 +4739,7 @@ crate::abi::layouts! {
         economy_fraction,
         maximum_date,
         timetable_year_limit,
-        stopped_or_crashed,
         allocate_list,
-        suppress_implicit,
         shared_window,
         vehicle_id,
         reliability,
@@ -4757,7 +4783,6 @@ crate::abi::layouts! {
         network_client,
         server_client,
         default_group,
-        vehicle_tile,
         vehicle_group,
         unique_backup_name,
         review_setting,
@@ -4769,11 +4794,9 @@ crate::abi::layouts! {
         timetable_dirty,
         invalidate_order,
         delete_order_news,
-        suppress_implicit_write,
         invalidate_vehicle_list,
         close_shared_window,
         invalidate_shared_window,
-        last_station_write,
         dirty_vehicle_windows,
         capture_backup_metadata,
         clear_backup_name,

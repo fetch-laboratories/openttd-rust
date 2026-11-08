@@ -83,10 +83,6 @@ static_assert(VehicleRailFlags{VehicleRailFlag::Reversed}.base() == 128 && Vehic
 static_assert(CCF_ARRANGE.base() == 3 && TRACK_BIT_DEPOT == 0x80 && VehicleCargoList::MTA_LOAD == 3);
 static_assert(OrderDepotTypeFlags{OrderDepotTypeFlag::PartOfOrders}.base() == 2 && OrderDepotActionFlags{OrderDepotActionFlag::Halt}.base() == 1 && OrderDepotActionFlags{OrderDepotActionFlag::NearestDepot}.base() == 2);
 static_assert(to_underlying(OrderLoadType::FullLoad) == 2 && to_underlying(OrderLoadType::FullLoadAny) == 3);
-static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcept
-{
-	return {.capacity = RustVehicleCargoCap(handle), .remaining = RustVehicleRefitCap(handle), .cargo = RustVehicleCargoType(handle)};
-}
 static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -151,7 +147,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.loading = &GetRustStationLoading(),
 		.refit = &GetRustVehicleRefitServices(),
 		.schedule = &LinkGraphSchedule::services,
-		.capacity = VehicleVisitCapacity,
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
 		.location = RustStationLocation,

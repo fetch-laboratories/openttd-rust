@@ -42,16 +42,6 @@ use crate::{
 };
 use std::{collections::BTreeSet, ffi::c_void};
 
-/// One consist part's `cargo_cap`, `refit_cap` and `cargo_type`.
-#[allow(clippy::struct_field_names)]
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Capacity {
-    pub capacity: u16,
-    pub remaining: u16,
-    pub cargo: u8,
-}
-
 /// Front loading fields; none changes during one prediction or arrival.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -86,7 +76,6 @@ pub struct Services {
     pub loading: &'static Loading,
     pub refit: &'static refit::Services,
     pub(crate) schedule: &'static ScheduleServices,
-    pub capacity: extern "C" fn(VehicleRef) -> Capacity,
     pub prediction: extern "C" fn(VehicleRef) -> Prediction,
     /// Virtual `GetDisplayMaxSpeed()`.
     pub display_speed: extern "C" fn(VehicleRef) -> i32,
@@ -255,16 +244,16 @@ fn increase_vehicle_stats(
 ) {
     let mut part = Some(front);
     while let Some(v) = part {
-        let c = (s.capacity)(v);
-        if c.remaining > 0 {
+        let remaining = v.refit_cap();
+        if remaining > 0 {
             // The stored count can exceed refit_cap after autoreplace/autorefit.
             witness::hit(witness::VISITS_ARRIVAL_STATS);
-            let usage = u32::from(c.remaining).min((s.loading.stored_count)(v));
+            let usage = u32::from(remaining).min(s.loading.stored_count(v));
             increase_stats(
                 st,
-                c.cargo,
+                (s.refit.cargo_kind)(v.0.as_ptr()).cargo,
                 next,
-                u32::from(c.remaining),
+                u32::from(remaining),
                 usage,
                 time,
                 EdgeUpdateModes::INCREASE,
@@ -331,7 +320,7 @@ impl Refresher {
         let mut part = Some(self.vehicle);
         while let Some(v) = part {
             let shell = v.0.as_ptr();
-            let e = (r.vehicle_engine)(shell);
+            let e = r.vehicle_engine(shell);
             if crate::vehicle::EngineRef::of(e).refit_mask() >> self.cargo & 1 == 0 {
                 index += 1;
                 part = (v).next();
@@ -668,16 +657,16 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
     };
     let mut part = Some(v);
     while let Some(u) = part {
-        let c = (s.capacity)(u);
-        refresher.refits.push(RefitDesc {
-            cargo: c.cargo,
-            capacity: c.capacity,
-            remaining: c.remaining,
-        });
-        if c.remaining > 0 {
-            s.check(|| c.cargo < NUM_CARGO);
-            let total = refresher.capacity(c.cargo);
-            *total = total.wrapping_add(u32::from(c.remaining));
+        let desc = RefitDesc {
+            cargo: (s.refit.cargo_kind)(u.0.as_ptr()).cargo,
+            capacity: u.cargo_cap(),
+            remaining: u.refit_cap(),
+        };
+        refresher.refits.push(desc);
+        if desc.remaining > 0 {
+            s.check(|| desc.cargo < NUM_CARGO);
+            let total = refresher.capacity(desc.cargo);
+            *total = total.wrapping_add(u32::from(desc.remaining));
         }
         part = (u).next();
     }
@@ -761,7 +750,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
 
     let mut part = Some(front);
     while let Some(v) = part {
-        count = count.wrapping_add((s.loading.stored_count)(v).cast_signed());
+        count = count.wrapping_add(s.loading.stored_count(v).cast_signed());
         let capacity = v.cargo_cap();
         max = max.wrapping_add(i32::from(capacity));
         if capacity != 0 && wants_colour {
@@ -906,7 +895,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
                 crate::station_type::SRT_VEHICLE_DEPARTS,
             );
         }
-        let train = (s.refit.train_handle)(v.0.as_ptr());
+        let train = s.refit.train_handle(v.0.as_ptr());
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
     }
     if kind == VehicleType::ROAD && (v).status() & VS_CRASHED == 0 {
@@ -987,7 +976,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
-            let train = (s.refit.train_handle)(v.0.as_ptr());
+            let train = s.refit.train_handle(v.0.as_ptr());
             crate::train::enter_depot(train, s.refit.train, s.shared);
         }
         VehicleType::ROAD => {}
@@ -1165,7 +1154,6 @@ crate::abi::layouts! {
         loading,
         refit,
         schedule,
-        capacity,
         prediction,
         display_speed,
         location,
@@ -1189,7 +1177,6 @@ crate::abi::layouts! {
     "OpenTTDVisitCosts" ["probe"] => Costs { out, temporary, };
     "OpenTTDVisitPercentStrings" ["probe"] => PercentStrings { up, down, up_down, none, };
     "OpenTTDVisitPrediction" ["probe"] => Prediction { loading_tick, last_loading, last_station, ticks, };
-    "OpenTTDVisitCapacity" ["probe"] => Capacity { capacity, remaining, cargo, };
 }
 
 #[cfg(test)]

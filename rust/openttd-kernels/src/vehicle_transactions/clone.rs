@@ -128,7 +128,7 @@ unsafe fn clone(
     }
     if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
         && (!crate::fleet::record(b.groups, v).is_front_engine()
-            || (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
+            || r.train_handle(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
                 .get_crash_anim_pos()
                 >= 4400)
     {
@@ -204,7 +204,7 @@ unsafe fn clone(
                 w = unsafe { (b.groups.vehicle)(new_id) };
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0 {
                     let old_train =
-                        (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
+                        r.train_handle(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
                         && !unsafe {
                             crate::newgrf_vehicle::reverse_probability(
@@ -219,7 +219,7 @@ unsafe fn clone(
                             )
                         }
                     {
-                        (r.train_handle)(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr())
+                        r.train_handle(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr())
                             .set_flag(crate::train::FLIPPED, true);
                     }
                 }
@@ -311,7 +311,7 @@ unsafe fn clone(
                     break;
                 }
             } else {
-                let e = (r.vehicle_engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
+                let e = r.vehicle_engine(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                 let initial = if unsafe {
                     crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e)
                         != 0

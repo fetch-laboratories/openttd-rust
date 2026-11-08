@@ -172,15 +172,11 @@ unsafe fn dispatch<const AMBIENT: bool>(
         },
         8 => unsafe {
             industry::tile_loop(
-                tile,
+                crate::tile_type::TileIndex(tile),
                 // Existing industry ABI stores legal map logarithms in a byte.
-                log_x as u8,
+                crate::map_func::Map::from_log_x(log_x),
                 g.call,
-                s.industry.production,
-                s.industry.construction,
-                s.industry.lifecycle,
-                s.industry.tiles,
-                s.industry.generation,
+                &s.industry,
             );
         },
         9 => unsafe { ground::tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },

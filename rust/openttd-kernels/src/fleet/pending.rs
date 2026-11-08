@@ -73,7 +73,7 @@ pub(crate) unsafe fn drain(
     let w = unsafe { &*services };
     let t = unsafe { &*transaction };
     let g = unsafe { &*group };
-    let previous = unsafe { (g.current_company)() };
+    let previous = g.current_company();
     let visit = |id, leave| {
         let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
         let owner = v.owner();

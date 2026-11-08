@@ -46,17 +46,34 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 		if (id == 2) {
 			REQUIRE(Vehicle::CanAllocateItem(3));
 			new (VehicleID(0)) SchedulerLifetimeVehicle(); // Behind: waits one tick.
+			/* A reused slot gets a fresh record: poisoned counters must not survive. */
+			Vehicle::Get(VehicleID(4))->Record().cargo_age_counter = UINT16_MAX;
+			Vehicle::Get(VehicleID(4))->Record().motion_counter = UINT32_MAX;
 			delete Vehicle::Get(VehicleID(4));
-			new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
+			auto *reused = new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
+			CHECK(reused->Record().cargo_age_counter == 1);
+			CHECK(reused->Record().motion_counter == 0);
 			new (VehicleID(3)) SchedulerLifetimeVehicle(); // Inside initialized storage.
 			delete Vehicle::Get(VehicleID(5)); // Hole ahead must be skipped.
 			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.capacity);
+			/* Native shell construction and pool growth must retain the Rust record
+			 * and the scalar addresses CallVehicleTicks uses after Tick returns. */
+			auto *record = &this->Record();
+			auto *counter = &record->cargo_age_counter;
+			auto *motion = &record->motion_counter;
+			*counter = UINT16_MAX;
+			*motion = UINT32_MAX;
 			REQUIRE(Vehicle::CanAllocateItem(2));
 			new (VehicleID(_lifetime_growth)) SchedulerLifetimeVehicle();
 			new (VehicleID(_lifetime_growth + 1)) SchedulerLifetimeVehicle();
 			/* Growth may extend an allocation in place. The visit trace below
 			 * independently requires the newly initialized slots to be discovered. */
 			CHECK(_vehicle_pool.descriptor->slots.capacity > _lifetime_growth);
+			CHECK(&this->Record() == record);
+			CHECK(&this->Record().cargo_age_counter == counter);
+			CHECK(&this->Record().motion_counter == motion);
+			CHECK(this->Record().cargo_age_counter == UINT16_MAX);
+			CHECK(this->Record().motion_counter == UINT32_MAX);
 		}
 		if (id == _lifetime_growth) {
 			delete this; // Newly discovered shell dies before the next slot is read.
@@ -192,66 +209,6 @@ TEST_CASE("Vehicle records - distinct native shells and inline scalar aliases")
 	CHECK(record->direction == DIR_NE);
 	delete v;
 }
-/* Base Vehicle::Tick survives without a controller, so the Tick facade fills
- * the actual post-Tick member addresses of these road-typed shells. */
-static OpenTTDVehiclePostTick SurvivingPostTick(Vehicle *v)
-{
-	OpenTTDVehiclePostTick post{};
-	REQUIRE(GetRustVehicleSchedulerServices().tick(RustVehicle(v), &post));
-	return post;
-}
-TEST_CASE("Base vehicle scheduler - scalar member identity and lifetime")
-{
-	REQUIRE(Vehicle::CanAllocateItem(2));
-	auto *v = new Vehicle(VEH_ROAD);
-	auto *part = new Vehicle(VEH_ROAD);
-	v->SetNext(part);
-	const auto post = SurvivingPostTick(part);
-	static_assert(std::is_same_v<decltype(post.period), const uint16_t *>);
-	static_assert(std::is_same_v<decltype(post.counter), uint16_t *>);
-	static_assert(std::is_same_v<decltype(post.motion), uint32_t *>);
-	static_assert(std::is_same_v<decltype(post.speed), const uint16_t *>);
-	static_assert(std::is_same_v<decltype(post.front_type), const uint8_t *>);
-	static_assert(std::is_same_v<decltype(post.front_status), const uint8_t *>);
-	static_assert(std::is_same_v<decltype(post.status), const uint8_t *>);
-	static_assert(std::is_same_v<decltype(&std::as_const(*v).Record().vehstatus), const uint8_t *>);
-	CHECK(post.type == VEH_ROAD);
-	CHECK(part->First() == v);
-	CHECK(post.period == &part->Record().cached_cargo_age_period);
-	CHECK(post.counter == &part->Record().cargo_age_counter);
-	CHECK(post.motion == &part->Record().motion_counter);
-	CHECK(post.speed == &v->Record().cur_speed);
-	CHECK(post.front_type == &v->Record().type);
-	CHECK(post.subtype == &part->Record().subtype);
-	CHECK(post.tick == &part->Record().tick_counter);
-	CHECK(post.front_status == &v->Record().vehstatus);
-	CHECK(post.status == &part->Record().vehstatus);
-	CHECK(post.front_status != post.status);
-	v->SetVehStatus(v->GetVehStatus().Set(VehState::Stopped));
-	part->SetVehStatus(part->GetVehStatus().Set(VehState::Hidden));
-	CHECK(*post.front_status == RustVehicleStatus(v));
-	CHECK(*post.status == RustVehicleStatus(part));
-	v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped));
-	CHECK(*post.front_status == 0);
-	*post.counter = UINT16_MAX;
-	*post.motion = UINT32_MAX;
-	CHECK(part->Record().cargo_age_counter == UINT16_MAX);
-	CHECK(part->Record().motion_counter == UINT32_MAX);
-	const auto old_id = v->index;
-	const auto grow_id = VehicleID(static_cast<uint32_t>(_vehicle_pool.descriptor->slots.size()));
-	REQUIRE(Vehicle::CanAllocateItem());
-	new (grow_id) RoadVehicle();
-	CHECK(SurvivingPostTick(part).counter == post.counter);
-	CHECK(SurvivingPostTick(part).front_status == post.front_status);
-	_vehicle_pool.CleanPool(); // All earlier descriptors are discarded here.
-	REQUIRE(Vehicle::CanAllocateItem());
-	auto *reused = new (old_id) Vehicle(VEH_ROAD);
-	const auto fresh = SurvivingPostTick(reused);
-	CHECK(fresh.counter == &reused->Record().cargo_age_counter);
-	CHECK(*fresh.counter == 1);
-	CHECK(*fresh.motion == 0);
-	_vehicle_pool.CleanPool();
-}
 /* Mutate the actual pool after each visit, identically for Rust and unchanged
  * PoolIterator. No copied IDs or test replica of native indexing metadata. */
 static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth = true)
@@ -320,8 +277,8 @@ TEST_CASE("Base vehicle scheduler - live cursor equals unchanged PoolIterator")
 	CHECK(within_size == std::vector<uint32_t>{0, 2, 3, 6});
 }
 /* Synthetic virtual Tick on actual pool shells checks the transient ordering
- * saves cannot show: growth before assertion, timing scope return before the
- * bundle fill, post-Tick type mutation, then deletion with no bundle write. */
+ * saves cannot show: growth before assertion, timing scope return before Rust's
+ * post-Tick reads, post-Tick type mutation, then deletion. */
 static bool _scheduler_tick_scope_ended;
 static uint32_t _scheduler_post_visits;
 static uint32_t _scheduler_pool_reads;
@@ -352,25 +309,17 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 		++_scheduler_pool_reads;
 		return GetRustVehicleSchedulerServices().pool();
 	};
-	services.tick = [](OpenTTDVehicle *shell, OpenTTDVehiclePostTick *out) noexcept {
-		out->type = VEH_INVALID;
-		const bool survives = GetRustVehicleSchedulerServices().tick(shell, out);
+	services.tick = [](OpenTTDVehicle *shell) noexcept {
+		const bool survives = GetRustVehicleSchedulerServices().tick(shell);
 		CHECK(_scheduler_tick_scope_ended);
-		if (!survives) {
-			CHECK(out->type == VEH_INVALID); // Deleted shell: no bundle fill.
-			return false;
-		}
+		if (!survives) return false; // Deleted shell: Rust reads no record.
 		++_scheduler_post_visits;
-		CHECK(out->type == VEH_DISASTER); // Mutable pre-Tick Effect tag must not be reused.
-		CHECK(out->front_type == nullptr);
-		CHECK(out->period == nullptr);
-		CHECK(out->status == nullptr);
+		CHECK(shell->type == VEH_DISASTER); // Rust reads this fresh type, not the pre-Tick Effect tag.
 		return true;
 	};
 	/* Rust borrows complete service values even when the pending map is empty.
 	 * Every function-pointer slot must be non-null, including unused callbacks. */
 	auto group = FleetGroupServices();
-	group.current_company = []() noexcept -> uint8_t { return 0; };
 	const auto unused = [](auto...) noexcept { FAIL_CHECK("Unexpected pending fleet operation"); };
 	OpenTTDFleetPendingServices pending{
 		.set_current = [](uint8_t) noexcept {},

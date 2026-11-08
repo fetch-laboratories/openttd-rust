@@ -219,6 +219,11 @@ impl DoCommandFlags {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet::Reset`, with an element rather than a set mask.
+    #[must_use]
+    pub const fn reset(self, element: DoCommandFlag) -> Self {
+        Self(self.0 & !Self::from_element(element).0)
+    }
 }
 
 impl CommandFlags {

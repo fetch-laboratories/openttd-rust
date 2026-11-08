@@ -787,6 +787,16 @@ impl IndustryBehaviours {
     pub const fn test(self, element: IndustryBehaviour) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
     }
+    /// Native `BaseBitSet::Any`: whether any of the given values are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
 }
 
 /// Native `industrytype.h::IndustryTileSpecialFlag`, retaining the full underlying integer domain.
