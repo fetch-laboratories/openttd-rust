@@ -143,3 +143,120 @@ crate::abi::layouts! {
         error_kind,
     };
 }
+
+/// Retired `tools/integer_probe.cpp` API stream (#736 U), frozen from the pinned original in
+/// `integer/probe-oracle.txt`: `PeekIntegerBase`, `TryReadIntegerBase`, `ReadIntegerBase`
+/// (with its logged diagnostics), `SkipIntegerBase` and `ParseInteger` for every width,
+/// signedness, base and clamp over the `compare-integers.py` `cases()` corpus.
+#[cfg(test)]
+mod tests {
+    use crate::consumer::tests::{Consumer, hex_or_dash, messages, parse_integer};
+
+    fn octal(value: u128) -> String {
+        format!("{value:o}")
+    }
+
+    /// `cases()` samples for one width, deduplicated in first-appearance order.
+    fn samples(width: u32) -> Vec<Vec<u8>> {
+        let mut samples: Vec<Vec<u8>> = [
+            &b""[..],
+            b"-",
+            b"+1",
+            b" 1",
+            b"0x",
+            b"-0x",
+            b"0X-1",
+            b"0x-1",
+            b"0x-",
+            b"-0x-1",
+            b"0x+1",
+            b"01",
+            b"0129",
+            b"0y",
+            b"0x0x1",
+            b"42\x00junk",
+            b"x\x00\xff\n",
+            b"0x\x00\xffab",
+            b"999999999999999999999999999999999999999999x\x00\xff\nmore",
+        ]
+        .iter()
+        .map(|sample| sample.to_vec())
+        .collect();
+        let half = 1_u128 << (width - 1);
+        let full = 1_u128 << width;
+        let mut bounds = vec![0, 1, half - 1, half, half + 1, full - 1, full, full + 1];
+        bounds.sort_unstable();
+        bounds.dedup();
+        for value in bounds {
+            let decimal = value.to_string();
+            let hexadecimal = format!("{value:x}");
+            let octal = octal(value);
+            for text in [
+                decimal.clone(),
+                format!("-{decimal}"),
+                format!("{decimal}xyz!tail"),
+                format!("0x{hexadecimal}"),
+                format!("-0x{hexadecimal}"),
+                hexadecimal.clone(),
+                format!("-{hexadecimal}"),
+                octal.clone(),
+                format!("-{octal}"),
+            ] {
+                samples.push(text.into_bytes());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        samples.retain(|sample| seen.insert(sample.clone()));
+        samples
+    }
+
+    /// One probe line: peek, try-read, read (default 42, with diagnostics), skip, parse.
+    fn probe(src: &[u8], width: u8, signed: bool, base: u8, clamp: bool) -> String {
+        let mut peek = Consumer::new(src);
+        let (len, value) = peek.peek_integer(base, width, signed, clamp);
+        let mut attempt = Consumer::new(src);
+        let tried = attempt.try_read_integer(base, width, signed, clamp);
+        let mut read = Consumer::new(src);
+        let result = read.read_integer(base, width, signed, 42, clamp);
+        let mut skip = Consumer::new(src);
+        skip.skip_integer(base);
+        let whole = parse_integer(src, base, width, signed, clamp);
+        format!(
+            "{len} {value} {} {} {} {} {result} {} {} {} {} {}",
+            peek.position,
+            u8::from(tried.is_some()),
+            tried.unwrap_or(42),
+            attempt.position,
+            read.position,
+            skip.position,
+            u8::from(whole.is_some()),
+            whole.unwrap_or(42),
+            messages(&read.log),
+        )
+    }
+
+    #[test]
+    fn integer_probe_api_matches_original() {
+        let oracle = crate::oracle::parse(include_str!("integer/probe-oracle.txt"));
+        let mut cases = Vec::new();
+        for width in [8_u8, 16, 32, 64] {
+            let samples = samples(u32::from(width));
+            for signed in [false, true] {
+                for base in [0_u8, 8, 10, 16] {
+                    for clamp in [false, true] {
+                        for src in &samples {
+                            cases.push((
+                                format!(
+                                    "width {width} signed {signed} base {base} clamp {clamp} src {}",
+                                    hex_or_dash(src)
+                                ),
+                                probe(src, width, signed, base, clamp),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(crate::oracle::check(&oracle, "api", cases), 5312);
+    }
+}
