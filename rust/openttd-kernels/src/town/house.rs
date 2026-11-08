@@ -1130,32 +1130,27 @@ impl<'a> House<'a> {
         crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile.0, flags.0);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
-    fn cmd_place_house(
-        &self,
-        HouseCommandCall { result, flags }: HouseCommandCall,
-        CmdPlaceHouse {
-            tile,
-            house,
-            is_protected,
-            replace,
-        }: CmdPlaceHouse,
-    ) {
+    fn cmd_place_house(&self, call: HouseCommandCall, args: CmdPlaceHouse) {
+        let tile = args.tile;
+        let house = args.house;
+        let replace = args.replace;
+        let flags = call.flags;
         let c = self.costs();
         if !(self.l.environment.editor)()
             && PlaceHouses((self.h.place_houses)()) == PlaceHouses::PH_FORBIDDEN
         {
             // CMD_ERROR.
-            (c.error)(result, INVALID_STRING_ID);
+            (c.error)(call.result, INVALID_STRING_ID);
             return;
         }
         if (self.s.town_count)() == 0 {
-            (c.error)(result, self.h.errors.no_town);
+            (c.error)(call.result, self.h.errors.no_town);
             return;
         }
         if u32::from(house) >= (self.l.house_count)() || !(self.l.house_availability)(house).enabled
         {
             // CMD_ERROR.
-            (c.error)(result, INVALID_STRING_ID);
+            (c.error)(call.result, INVALID_STRING_ID);
             return;
         }
         let maxz = (self.s.tile_max_z)(tile.0);
@@ -1178,42 +1173,42 @@ impl<'a> House<'a> {
             // Houses cannot be built on steep slopes.
             let slope = Slope(crate::map_func::World::new(self.s).tile_slope(subtile.0));
             if is_steep_slope(slope.0) {
-                (c.error)(result, self.h.errors.sloped);
+                (c.error)(call.result, self.h.errors.sloped);
                 return;
             }
             // Houses cannot be built under bridges.
             if crate::map_func::World::new(self.s).bridge_above(subtile.0) {
-                (c.error)(result, self.h.errors.bridge);
+                (c.error)(call.result, self.h.errors.bridge);
                 return;
             }
             // Make sure there is no slope?
             let noslope = building_flags.test(BuildingFlag::NotSloped);
             if noslope && slope != Slope::SLOPE_FLAT {
-                (c.error)(result, self.h.errors.flat);
+                (c.error)(call.result, self.h.errors.flat);
                 return;
             }
             // All tiles of a multi-tile house must have the same z-level.
             if (self.s.tile_max_z)(subtile.0) != maxz {
-                (c.error)(result, self.h.errors.sloped);
+                (c.error)(call.result, self.h.errors.sloped);
                 return;
             }
             // We might be replacing an existing house, otherwise check if we can clear land.
             if !(replace && TileType((self.s.tile_type)(subtile.0)) == TileType::MP_HOUSE) {
                 crate::landscape_cmd::clear_command(
                     commands,
-                    result,
+                    call.result,
                     subtile.0,
                     DoCommandFlags::from_element(DoCommandFlag::Auto)
                         .with(DoCommandFlags::from_element(DoCommandFlag::NoWater))
                         .0,
                 );
-                if !(c.success)(result) {
+                if !(c.success)(call.result) {
                     witness::hit(W_PLACE_ERROR);
                     return;
                 }
             }
         }
-        (c.zero)(result);
+        (c.zero)(call.result);
         if flags.test(DoCommandFlag::Execute) {
             witness::hit(W_PLACE);
             // If replacing, clear any existing houses first.
@@ -1245,7 +1240,7 @@ impl<'a> House<'a> {
                 u32::from(house),
                 random,
                 house_completed,
-                is_protected,
+                args.is_protected,
             );
         }
     }
