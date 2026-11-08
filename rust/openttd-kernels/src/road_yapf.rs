@@ -370,7 +370,7 @@ impl Search<'_> {
         if t.r#type == 5 && t.waypoint == 0 {
             // SAFETY: Production leaves carry the static shared table.
             let shared = unsafe { &*self.leaves.shared };
-            let rs = crate::road_stop::at(shared, tile);
+            let rs = crate::road_stop::at_raw(shared, tile);
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
                 let dir = crate::track_func::trackdir_to_exitdir(td);
@@ -380,7 +380,7 @@ impl Search<'_> {
                     tile,
                     tile.wrapping_sub(map.offs_by_diag_dir(dir)),
                 ) {
-                    let entry = crate::road_stop::entry_read(rs, dir);
+                    let entry = crate::road_stop::entry_read_raw(rs, dir);
                     cost = cost.wrapping_add(
                         (u32::from(entry.occupied).wrapping_mul(self.input.occupied as u32)
                             / u32::from(entry.length)) as i32,

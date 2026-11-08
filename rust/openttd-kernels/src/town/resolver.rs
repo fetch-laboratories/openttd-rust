@@ -402,7 +402,7 @@ unsafe fn get_distance_from_nearby_house(
     let start_north_tile =
         start_tile
             .0
-            .wrapping_add(house::north_part(leaves, &mut start_house, map));
+            .wrapping_add(house::get_house_north_part(leaves, &mut start_house, map));
     let size_y = (unsafe { &*s.shared }.map_max_y)() + 1;
     let mut spiral = crate::spiral::square(
         map.tile_x(start_tile.0),
@@ -421,7 +421,7 @@ unsafe fn get_distance_from_nearby_house(
                 && start_north_tile
                     != tile
                         .0
-                        .wrapping_add(house::north_part(leaves, &mut house, map))
+                        .wrapping_add(house::get_house_north_part(leaves, &mut house, map))
             {
                 let matched = match searchtype {
                     // Same local id as the one requested, from the same grf.
@@ -769,28 +769,6 @@ pub(super) unsafe fn get_house_callback(
     };
     unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
 }
-/// Raw adapter for `get_house_callback`, retained for `town/house.rs` until its pass.
-pub(super) unsafe fn callback(
-    callback: u16,
-    param1: u32,
-    param2: u32,
-    house: HouseID,
-    town: *mut TownHandle,
-    tile: u32,
-    not_yet_constructed: bool,
-) -> u16 {
-    unsafe {
-        get_house_callback(
-            CallbackID(callback),
-            param1,
-            param2,
-            house,
-            town,
-            TileIndex(tile),
-            not_yet_constructed,
-        )
-    }
-}
 /// Native random reseeding of a house tile and its waiting triggers.
 pub(super) unsafe fn reseed_house_tile(
     house: HouseID,
@@ -799,15 +777,6 @@ pub(super) unsafe fn reseed_house_tile(
     waiting: HouseRandomTriggers,
 ) -> house::HouseReseed {
     (services().reseed)(house, tile.0, town, waiting.0)
-}
-/// Raw adapter for `reseed_house_tile`, retained for `town/house.rs` until its pass.
-pub(super) unsafe fn reseed(
-    house: HouseID,
-    tile: u32,
-    town: *mut TownHandle,
-    waiting: u8,
-) -> house::HouseReseed {
-    unsafe { reseed_house_tile(house, TileIndex(tile), town, HouseRandomTriggers(waiting)) }
 }
 /// `GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, ...)` with `Convert8bitBooleanCallback`
 /// (`TryBuildTownHouse`): whether the house may be built here.

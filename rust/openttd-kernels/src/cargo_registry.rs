@@ -227,16 +227,19 @@ pub extern "C" fn openttd_rust_cargo_bitnum_changed(spec: Handle, cargo: u8, fil
     }
     openttd_rust_cargo_labels_rebuild();
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
+/// `GetCargoTypeByLabel`: the cargo type of `label`, or `INVALID_CARGO`.
+pub(crate) fn get_cargo_type_by_label(label: CargoLabel) -> CargoType {
     unsafe {
         (*REGISTRY.get())
             .label_map
-            .get(&CargoLabel(label))
+            .get(&label)
             .copied()
             .unwrap_or(CargoType::INVALID_CARGO)
-            .0
     }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
+    get_cargo_type_by_label(CargoLabel(label)).0
 }
 /// Canonical `CargoSpec::label`, including duplicate labels in distinct slots.
 pub(crate) fn cargo_label(cargo: u8) -> u32 {
@@ -430,8 +433,7 @@ pub extern "C" fn openttd_rust_cargo_translation_table(file: Handle) -> Labels {
 /// `usebit` defines whether pre-v7 cargo is a bitnum (true) or cargo slot (false).
 /// For GRF version >= 7 cargo is always a translated cargo bit.
 /// Returns `CargoType` or `INVALID_CARGO` if the cargo is not available.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: bool) -> u8 {
+pub(crate) fn get_cargo_translation(cargo: u8, file: Handle, usebit: bool) -> CargoType {
     let grffile = (services().file)(file);
     // We can't use GetCargoTranslationTable here as the usebit flag changes behaviour.
     // Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places..
@@ -442,13 +444,16 @@ pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: 
     } else {
         openttd_rust_cargo_bitnum_labels()
     };
-    let cargo_type = if usize::from(cargo) < cargo_list.size {
+    if usize::from(cargo) < cargo_list.size {
         let label = CargoLabel(unsafe { cargo_list.data.add(usize::from(cargo)).read() });
-        CargoType(openttd_rust_cargo_by_label(label.0))
+        get_cargo_type_by_label(label)
     } else {
         CargoType::INVALID_CARGO
-    };
-    cargo_type.0
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: bool) -> u8 {
+    get_cargo_translation(cargo, file, usebit).0
 }
 /// `BuildCargoTranslationMap`: construct the cargo mapping, the reverse of a cargo translation table.
 #[unsafe(no_mangle)]

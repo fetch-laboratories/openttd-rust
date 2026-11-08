@@ -1181,7 +1181,7 @@ impl Game<'_> {
             } else if crate::map_func::World::new(self.ss).road_stop_type(tile) != u8::from(!bus)
                 || (!self.queue
                     && !crate::road_stop::has_free_bay(
-                        crate::road_stop::get_by_tile(self.ss, tile, RoadStopType(u8::from(!bus)))
+                        crate::road_stop::by_tile_raw(self.ss, tile, RoadStopType(u8::from(!bus)))
                             .1,
                     ))
             {
@@ -1703,7 +1703,7 @@ impl Game<'_> {
                     && frame == 11
                     && self.stops_here(v, s.tile)))
         {
-            let rs = crate::road_stop::at(self.ss, s.tile);
+            let rs = crate::road_stop::at_raw(self.ss, s.tile);
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile) {

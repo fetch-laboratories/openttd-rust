@@ -35,8 +35,6 @@ pub(crate) fn rebuild_town_kdtree(s: &Services) {
         });
     }
 }
-// Compatibility name for callers outside this pass.
-pub(crate) use rebuild_town_kdtree as rebuild;
 /// `_town_kdtree.Insert`.
 pub(crate) fn insert(s: &Services, id: TownId) {
     let map = s.map();
