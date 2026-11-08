@@ -1,0 +1,11 @@
+[
+  {
+    "retires": ["source:tools/migration/crypto-vectors.cpp"],
+    "oracle": "Original-only generator: tools/migration/crypto-vectors.cpp at 305ac20c28 linked only with pinned 14ec60f248547d4d062a1160f0fc26d742319888 Monocypher 4.0.2 (GCC 13.3.0, GNU/Linux x86_64; recipe in rust/openttd-kernels/src/crypto/vectors.txt header). A re-run before deletion reproduced vectors.txt byte for byte. The generator never linked candidate code.",
+    "observations": {
+      "Hostile X25519 points, public keys, BLAKE2b sizes and block splits, key derivation, XChaCha20-Poly1305 streams and one-shot locks with tamper rejection, SHA-512 and Ed25519 signature checks including noncanonical and small-order encodings": [
+        "rust:lib:crypto::tests::monocypher_known_answers"
+      ]
+    }
+  }
+]
