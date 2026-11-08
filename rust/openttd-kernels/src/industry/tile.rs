@@ -612,11 +612,7 @@ pub(crate) unsafe fn tile_loop(
         }
         IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, s, map),
         IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile),
-        IndustryGfx::GFX_SUGAR_MINE_SIEVE => {
-            if chance16(s, 1, 3) {
-                add_animated_tile(tile);
-            }
-        }
+        IndustryGfx::GFX_SUGAR_MINE_SIEVE if chance16(s, 1, 3) => add_animated_tile(tile),
         _ => {}
     }
 }
