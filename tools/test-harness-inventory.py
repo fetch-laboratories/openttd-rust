@@ -261,6 +261,10 @@ class ReplacementTests(unittest.TestCase):
         self.assertIn(er.ctest_name(self.RUST), guarded[1].split("endif()", 1)[0])
         # A check another record runs everywhere stays unconditional.
         self.assertNotIn("if(", er.cmake([linux, record]))
+        wide: er.Replacement = {**record, "platform": "64-bit"}
+        self.assertIn("if(CMAKE_SIZEOF_VOID_P EQUAL 8)\n", er.cmake([wide]))
+        # Records naming one check under different platforms leave it unconditional.
+        self.assertNotIn("if(", er.cmake([linux, wide]))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / "migration/evidence-replacements/crypto.json"
