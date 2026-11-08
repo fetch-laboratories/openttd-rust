@@ -590,8 +590,14 @@
   "company-command-comparison.py": [
    "company financial command gap: 40320 unchanged-reference cases passed"
   ],
+  "core-boundary-comparison.py": [
+   "Core boundary comparison passed: 5 sections, 17 builds"
+  ],
   "encoded-comparison.py": [
    "Encoded comparison passed: 882 cases, 4 assertion modes"
+  ],
+  "generator-comparison.py": [
+   "Generator comparison passed: 4 generated outputs, 4 malformed strgen pragmas"
   ],
   "history-comparison.py": [
    "History comparison passed: 11133 records at O0 and O2"
@@ -608,6 +614,9 @@
   ],
   "math-comparison.py": [
    "Math comparison passed: 4868311 asserts lines, 4868311 ndebug lines, 3 preserved rejections, 6 wide lines"
+  ],
+  "math-extension-comparison.py": [
+   "Math extension comparison passed: 6 wide lines"
   ],
   "packet-comparison.py": [
    "Packet comparison passed: 271 O0 lines, 277 O2 lines"
@@ -708,6 +717,7 @@
   "tools/migration/byte-strings-comparison.cpp",
   "tools/migration/cargo-income-gap.cpp",
   "tools/migration/controller-orders.hpp",
+  "tools/migration/core-boundary-comparison.cpp",
   "tools/migration/crypto-vectors.cpp",
   "tools/migration/encoded-comparison.cpp",
   "tools/migration/history-comparison.cpp",

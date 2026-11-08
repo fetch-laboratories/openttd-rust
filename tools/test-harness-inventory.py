@@ -47,12 +47,12 @@ class InventoryTests(unittest.TestCase):
             self.recorded[key].pop()
             self.assertEqual(self.errors(), [])
             self.assertEqual(len(hi.removals(self.recorded, RECORDED)), 1)
-        del self.tree["comparisons"]["math-comparison.py"]
+        del self.tree["comparisons"]["widget-parser-comparison.py"]
         self.assertIn("comparison drivers differ", " ".join(self.errors()))
-        del self.recorded["comparisons"]["math-comparison.py"]
+        del self.recorded["comparisons"]["widget-parser-comparison.py"]
         self.assertEqual(self.errors(), [])
         removed = hi.removals(self.recorded, RECORDED)
-        self.assertIn("comparison math-comparison.py", removed)
+        self.assertIn("comparison widget-parser-comparison.py", removed)
 
     def test_zero_missing_or_fewer_cases_fail(self) -> None:
         recorded = {"a.py": ["A passed: 27 O0 records, 3 cases"]}
@@ -66,7 +66,9 @@ class InventoryTests(unittest.TestCase):
             self.assertRegex(" ".join(errors), message)
         more = {"a.py": ["A passed: 28 O0 records, 3 cases"]}
         self.assertEqual(hi.case_errors(recorded, more), [])
-        self.recorded["comparisons"]["math-comparison.py"] = ["M passed: 0 lines"]
+        self.recorded["comparisons"]["widget-parser-comparison.py"] = [
+            "M passed: 0 lines"
+        ]
         self.tree["comparisons"] = self.recorded["comparisons"]
         self.assertRegex(" ".join(self.errors()), "zero count")
 
