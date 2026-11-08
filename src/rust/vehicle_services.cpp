@@ -92,9 +92,6 @@ uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->SetVehStatus(v->GetVehStatus().Flip(VehState::Stopped)); }
 
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().refit_cap; }
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().cargo_cap; }
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().refit_cap = cap; }
 void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().cargo_cap = cap; }
 void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept { VehicleOf(v)->cargo_type = cargo; }
 void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept { VehicleOf(v)->cargo_subtype = subtype; }

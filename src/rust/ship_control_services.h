@@ -198,7 +198,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineShipCapacity(RustEngine(e)));
-	RustVehicleSetRefitCap(RustVehicle(v), 0);
+	v->Record().refit_cap = 0;
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());

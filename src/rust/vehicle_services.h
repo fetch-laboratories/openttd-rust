@@ -177,9 +177,6 @@ inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEn
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return e == nullptr ? nullptr : &e->Record(); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return e == nullptr ? nullptr : e->shell; }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
 void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
 void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept;
 void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;

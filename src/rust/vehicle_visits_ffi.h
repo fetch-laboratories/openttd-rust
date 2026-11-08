@@ -11,12 +11,6 @@
 #include "station_service_ffi.h"
 #include "vehicle_refit_ffi.h"
 
-/** One consist part's cargo_cap, refit_cap and cargo_type. */
-struct OpenTTDVisitCapacity {
-	uint16_t capacity;
-	uint16_t remaining;
-	uint8_t cargo;
-};
 /** Front loading fields read by one link prediction or arrival. */
 struct OpenTTDVisitPrediction {
 	uint64_t loading_tick;
@@ -46,7 +40,6 @@ struct OpenTTDVehicleVisits {
 	const OpenTTDStationLoading *loading;
 	const OpenTTDVehicleRefitServices *refit;
 	const OpenTTDScheduleServices *schedule;
-	OpenTTDVisitCapacity (*capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
 	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);
 	uint32_t (*location)(const OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);

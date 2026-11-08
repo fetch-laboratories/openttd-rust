@@ -14,13 +14,6 @@ static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexc
 	const Vehicle *v = VehicleOf(handle);
 	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
 }
-static OpenTTDRefitCommit VehicleRefitCommit(OpenTTDVehicle *v) noexcept { return {.cargo = RustVehicleCargoType(v), .capacity = RustVehicleRefitCap(v)}; }
-static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t cap, uint8_t subtype) noexcept
-{
-	RustVehicleSetCargoType(handle, cargo);
-	RustVehicleSetCargoCap(handle, cap);
-	RustVehicleSetCargoSubtype(handle, subtype);
-}
 static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
 static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
@@ -50,8 +43,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.set_cargo_kind = RustVehicleSetCargoKind,
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
-		.commit = VehicleRefitCommit,
-		.write_refit = VehicleRefitWrite,
 
 		.train_handle = RustVehicleTrain,
 		.road_state = VehicleRefitRoadState,
