@@ -59,7 +59,7 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
 void openttd_rust_cargo_invalidate(const OpenTTDCargoStorageServices *, uint16_t, uint8_t);
-/* Null initializes original packet defaults; non-null copies fields into a new allocation. */
+/* Null initializes original packet defaults; non-null is Split's copy constructor and asserts count != 0. */
 OpenTTDCargoPacket *openttd_rust_cargo_packet_new(const OpenTTDCargoPacket *);
 void openttd_rust_cargo_packet_destroy(OpenTTDCargoPacket *);
 void openttd_rust_cargo_packet_tile(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t, uint8_t);

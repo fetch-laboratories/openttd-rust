@@ -25,7 +25,12 @@ PATH_LISTS = {
     "CPATH",
     "PKG_CONFIG_PATH",
 }
-DIRECTORIES = {"CARGO_HOME", "RUSTUP_HOME", "PKG_CONFIG_SYSROOT_DIR"}
+DIRECTORIES = {
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "PKG_CONFIG_SYSROOT_DIR",
+    "CARGO_TARGET_DIR",
+}
 
 
 class MigrationEnvTests(unittest.TestCase):
@@ -41,6 +46,9 @@ class MigrationEnvTests(unittest.TestCase):
             self.addCleanup(patch.stop)
         self.build = self.local / "build-rust"
         patch = mock.patch.object(migration, "CANDIDATE_BUILD", self.build)
+        patch.start()
+        self.addCleanup(patch.stop)
+        patch = mock.patch.object(migration, "CARGO_TARGET_DIR", self.build / "cargo")
         patch.start()
         self.addCleanup(patch.stop)
 
@@ -110,7 +118,11 @@ class MigrationEnvTests(unittest.TestCase):
     def test_generated_headers_exported_without_bootstrap(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
-                self.exports(), {"CPATH": str(self.build / "generated-abi")}
+                self.exports(),
+                {
+                    "CARGO_TARGET_DIR": str(self.build / "cargo"),
+                    "CPATH": str(self.build / "generated-abi"),
+                },
             )
 
     @unittest.skipUnless(shutil.which("c++"), "needs a C++ compiler")

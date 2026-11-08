@@ -110,9 +110,6 @@ extern "C" fn invalidate(_: VehicleRef) {
 extern "C" fn check(ok: bool) {
     assert!(ok);
 }
-extern "C" fn add(_: u32, _: u8) -> u32 {
-    unreachable!()
-}
 #[cfg(test)]
 extern "C" fn owned(_: u32) -> bool {
     unreachable!()
@@ -141,7 +138,6 @@ fn services(shared: &Services) -> MovementServices {
         resolve,
         depot_invalidate: invalidate,
         native_assert: check,
-        add_by_diag_dir: add,
         owned_land: owned,
         object_foundation: object,
         house_foundation: callback,

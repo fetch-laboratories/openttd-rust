@@ -14,14 +14,17 @@ use crate::rail_map::is_pbs_signal as pbs;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
+use crate::direction_func::reverse_diag_dir;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::direction_type::{
     Axis, DIAGDIR_BEGIN, DIAGDIR_END, DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW,
 };
 use crate::map_func::Map;
+use crate::movement::native_assert;
 use crate::services::{RailMapServices, Services};
 use crate::signal_func::SigSegState;
 use crate::signal_type::{SignalState, SignalType};
+use crate::track_func::track_status_to_track_bits;
 use crate::track_type::TrackBits;
 use std::ffi::c_uint;
 
@@ -193,7 +196,10 @@ macro_rules! read {
 #[derive(Clone, Copy)]
 struct RailSignalPresence {
     signals: bool,
-    track: bool,
+    /// `TrackBitsToTrack` of the masked tracks, read only with signals.
+    track: u8,
+    /// `HasSignalOnTrack` for that track.
+    on_track: bool,
     kind: SignalType,
     forward: bool,
     reverse: bool,
@@ -223,17 +229,18 @@ fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailS
     let view = w.view();
     let mut r = RailSignalPresence {
         signals: view.has_signals(tile),
-        track: false,
+        track: crate::track_type::INVALID_TRACK,
+        on_track: false,
         kind: SignalType::SIGTYPE_BLOCK,
         forward: false,
         reverse: false,
     };
     if r.signals {
-        let track = crate::track_func::track_bits_to_track(masked_tracks, |ok| view.check(ok));
+        r.track = crate::track_func::track_bits_to_track(masked_tracks, |ok| view.check(ok));
         let present = view.present_signals(tile);
-        r.track = present & crate::signal_func::signal_on_track(track) != 0;
-        if r.track {
-            r.kind = SignalType(view.signal_type(tile, track));
+        r.on_track = present & crate::signal_func::signal_on_track(r.track) != 0;
+        if r.on_track {
+            r.kind = SignalType(view.signal_type(tile, r.track));
             r.forward = present & crate::signal_func::signal_along_trackdir(td) != 0;
             r.reverse = present
                 & crate::signal_func::signal_along_trackdir(crate::track_func::reverse_trackdir(
@@ -273,16 +280,6 @@ fn crossing_admission(w: &World<'_>, tile: u32, owner: u8) -> RailCrossingAdmiss
         }
     }
     r
-}
-fn track_status_to_track_bits(status: u32) -> u8 {
-    crate::track_func::track_status_to_track_bits(status)
-}
-// Raw scalar adapter: this existing path does not issue a direction assertion.
-fn reverse(dir: u8) -> u8 {
-    crate::direction_func::reverse_diag_dir(dir, |_| {})
-}
-fn is_presignal_exit(kind: u8) -> bool {
-    SignalType(kind) == SignalType::SIGTYPE_EXIT || SignalType(kind) == SignalType::SIGTYPE_COMBO
 }
 fn overflow_tbu() {
     debug!(
@@ -378,7 +375,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
         let mut exitdir = if dir == INVALID_DIAGDIR {
             INVALID_DIAGDIR
         } else {
-            reverse(dir)
+            reverse_diag_dir(dir, |ok| native_assert(w.shared, ok))
         };
         match read!(w, shared, tile_type, tile) {
             MP_RAILWAY => {
@@ -395,7 +392,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         train_on_tile(w, tile, &mut flags);
                         exitdir = w.view().rail_depot_dir(tile);
                         tile = w.map.add_diag(tile, exitdir);
-                        dir = reverse(exitdir);
+                        dir = reverse_diag_dir(exitdir, |ok| native_assert(w.shared, ok));
                     } else if dir == w.view().rail_depot_dir(tile) {
                         // Entered a depot.
                         train_on_tile(w, tile, &mut flags);
@@ -431,15 +428,13 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     }
                     let td = ((u32::from(tracks.0) * 0x101)
                         & u32::from(crate::track_func::diagdir_reaches_trackdirs(
-                            crate::direction_func::reverse_diag_dir(dir, |ok| {
-                                crate::movement::native_assert(w.shared, ok);
-                            }),
+                            reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)),
                         )))
                     .trailing_zeros() as u8;
                     let signal = signal_presence(w, tile, masked.0, td);
                     if signal.signals {
                         // Exactly one track, not zero: there is an exit from this tile.
-                        if signal.track {
+                        if signal.on_track {
                             // Check the whole track, rather than only the trackdir.
                             let kind = signal.kind;
                             let back = crate::track_func::reverse_trackdir(td);
@@ -465,7 +460,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                             }
                             // Check a pre-signal exit in our direction until two green exits are found.
                             if flags & SigFlags::MULTI_GREEN == SigFlags(0)
-                                && is_presignal_exit(kind.0)
+                                && w.view().is_presignal_exit(tile, signal.track)
                                 && signal.forward
                             {
                                 if flags & SigFlags::EXIT != SigFlags(0) {
@@ -496,7 +491,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         {
                             let next = Item {
                                 tile: w.map.add_diag(tile, exit),
-                                dir: reverse(exit),
+                                dir: reverse_diag_dir(exit, |ok| native_assert(w.shared, ok)),
                             };
                             if !maybe_add_to_todo_set(w, next, Item { tile, dir: exit }) {
                                 return flags | SigFlags::FULL;
@@ -543,10 +538,10 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     // Incoming from the wormhole.
                     train_on_tile(w, tile, &mut flags);
                     dir = direction;
-                    exitdir = reverse(direction);
+                    exitdir = reverse_diag_dir(direction, |ok| native_assert(w.shared, ok));
                     tile = w.map.add_diag(tile, exitdir);
                 } else {
-                    if reverse(dir) != direction {
+                    if reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)) != direction {
                         continue;
                     }
                     train_on_tile(w, tile, &mut flags);
@@ -606,7 +601,7 @@ fn update_signals_around_segment(w: &World<'_>, flags: SigFlags) {
                 crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
             }
             // Entry signal, at least one exit, no green exit.
-        } else if (kind == SignalType::SIGTYPE_ENTRY || kind == SignalType::SIGTYPE_COMBO)
+        } else if w.view().is_presignal_entry(tile, track)
             && flags & SigFlags::EXIT != SigFlags(0)
             && flags & SigFlags::GREEN == SigFlags(0)
         {
@@ -616,7 +611,7 @@ fn update_signals_around_segment(w: &World<'_>, flags: SigFlags) {
         if new_state != SignalState(w.view().signal_state_by_trackdir(tile, td)) {
             // For pre-signal exits, add the block globally without checking for a
             // full global set: update all signals first.
-            if is_presignal_exit(kind.0) {
+            if w.view().is_presignal_exit(tile, track) {
                 add_global(Item {
                     tile,
                     dir: crate::track_func::trackdir_to_exitdir(
@@ -691,11 +686,11 @@ fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
             add_tbd(Item { tile, dir });
             add_tbd(Item {
                 tile: w.map.add_diag(tile, dir),
-                dir: reverse(dir),
+                dir: reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)),
             });
         } else {
             tile = w.map.add_diag(tile, dir);
-            dir = reverse(dir);
+            dir = reverse_diag_dir(dir, |ok| native_assert(w.shared, ok));
             if (track_status_to_track_bits(crate::movement::track_status(
                 w.shared,
                 tile,
