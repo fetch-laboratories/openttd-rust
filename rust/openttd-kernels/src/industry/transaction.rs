@@ -710,15 +710,11 @@ impl Engine<'_> {
                 founder,
             };
             unsafe {
-                super::openttd_rust_industry_initialize(
+                super::do_create_new_industry(
                     allocation.shell.cast(),
                     allocation.owner,
-                    self.context.builder,
-                    &raw const request,
-                    self.context.production,
-                    self.context.generation,
-                    self.context.lifecycle,
-                    self.context.construction,
+                    &request,
+                    self.context,
                 );
             };
         }
