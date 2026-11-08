@@ -12,6 +12,8 @@ class Node(Protocol):
     """The syntax-tree node interface used by this inventory."""
 
     type: str
+    start_byte: int
+    end_byte: int
     text: bytes
     has_error: bool
     is_missing: bool
@@ -54,6 +56,18 @@ def nodes(node: "Node") -> Iterator["Node"]:
     yield node
     for child in node.named_children:
         yield from nodes(child)
+
+
+def item_source(node: Node, text: str) -> str:
+    """Raw item text including its outer attributes and leading comments."""
+    first = node
+    while (previous := first.prev_named_sibling) is not None and previous.type in (
+        "attribute_item",
+        "line_comment",
+        "block_comment",
+    ):
+        first = previous
+    return text.encode()[first.start_byte : node.end_byte].decode()
 
 
 def parser_input(text: str) -> bytes:

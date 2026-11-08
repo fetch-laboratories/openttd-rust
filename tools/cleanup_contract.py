@@ -1,4 +1,4 @@
-"""Exact-head, attributed review contracts for cleanup checks.
+"""Attributed review contracts and declared carries for cleanup checks.
 
 A review record uses a fenced cleanup-acceptance JSON block. Shared GitHub
 credentials are deliberate: independence is the Agent path, not the login.
@@ -7,7 +7,8 @@ credentials are deliberate: independence is the Agent path, not the login.
 import json
 import os
 import re
-from typing import Any
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, NamedTuple
 
 from vcs import gh, git
 
@@ -21,9 +22,17 @@ def records(body: str) -> list[dict[str, Any]]:
 
 
 def reviewed(
-    proposal: dict[str, Any], comments: list[str], author: str, head: str
+    proposal: dict[str, Any],
+    comments: list[str],
+    author: str,
+    head: str,
+    unchanged: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Require another attributed agent to accept the exact payload and head."""
+    """Require another attributed agent to accept the exact payload and head.
+
+    With `unchanged`, an acceptance at an earlier full SHA also holds while the
+    site's item text there equals the item text at the checked head.
+    """
     if not author:
         return False
     for body in comments:
@@ -31,9 +40,72 @@ def reviewed(
         if not attribution or attribution[1] == author:
             continue
         for record in records(body):
-            if record.get("head") == head and proposal in record.get("accept", []):
+            accepted = record.get("head")
+            if proposal in record.get("accept", []) and (
+                accepted == head
+                or unchanged is not None
+                and isinstance(accepted, str)
+                and re.fullmatch(r"[0-9a-f]{40}", accepted) is not None
+                and unchanged(accepted)
+            ):
                 return True
     return False
+
+
+class Ledger(NamedTuple):
+    """One tool's keyed debt at base and head, and how carries compare it."""
+
+    tool: str
+    before: Mapping[str, Any]
+    after: Mapping[str, Any]
+    rule: Callable[[str], object]
+    fits: Callable[[Any, Any], bool]
+
+
+def carry_problem(carry: dict[str, Any], ledger: Ledger, valid: dict[str, str]) -> str:
+    old, new = carry.get("from"), carry.get("to")
+    before, after = ledger.before, ledger.after
+    if not isinstance(old, str) or not isinstance(new, str):
+        return "from and to must be keys"
+    checks = (
+        ("from does not exist at base", lambda: old not in before),
+        ("from still exists at head", lambda: old in after),
+        ("to existed at base", lambda: new in before),
+        ("to does not exist at head", lambda: new not in after),
+        ("lint or scope differs", lambda: ledger.rule(old) != ledger.rule(new)),
+        ("head exceeds from", lambda: not ledger.fits(after[new], before[old])),
+        ("key carried twice", lambda: new in valid or old in valid.values()),
+    )
+    return next((problem for problem, failed in checks if failed()), "")
+
+
+def checked_carries(proposals: list[dict[str, Any]], ledger: Ledger) -> dict[str, str]:
+    """Return valid `to -> from` rekeys; print why each other carry fails."""
+    valid: dict[str, str] = {}
+    for carry in proposals:
+        if carry.get("kind") != "carry" or carry.get("tool") != ledger.tool:
+            continue
+        if problem := carry_problem(carry, ledger, valid):
+            print(f"invalid carry ({problem}): {json.dumps(carry, sort_keys=True)}")
+        else:
+            valid[carry["to"]] = carry["from"]
+    return valid
+
+
+def carry_hints(ledger: Ledger, retired: Iterable[str], added: Iterable[str]) -> None:
+    """Print ready records for one-to-one same-lint pairs, else candidates."""
+    retired, added = sorted(retired), sorted(added)
+    rule = ledger.rule
+    for new in added:
+        olds = [old for old in retired if rule(old) == rule(new)]
+        news = [other for other in added if rule(other) == rule(new)]
+        if len(olds) == len(news) == 1 and ledger.fits(
+            ledger.after[new], ledger.before[olds[0]]
+        ):
+            carry = {"kind": "carry", "tool": ledger.tool, "from": olds[0], "to": new}
+            print("ready carry: " + json.dumps(carry))
+        elif olds:
+            print(f"carry candidates for {new}: " + "; ".join(olds))
 
 
 def associated_pull(pulls: list[dict[str, Any]], head: str) -> dict[str, Any] | None:
@@ -81,8 +153,38 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         raise ValueError("PR head changed since the captured checkout")
     body = current["body"] or ""
     author = ATTRIBUTION.search(body)
+    comments = discussion(prefix, number) + source_reviews(prefix, body, number)
+    return author[1] if author else "", records(body), comments, head
+
+
+def source_reviews(prefix: str, body: str, number: int) -> list[str]:
+    """Comments on the component PRs an integration PR names.
+
+    Each component's own author still cannot accept its contract.
+    """
+    comments: list[str] = []
+    for record in records(body):
+        if record.get("kind") != "reviews":
+            continue
+        for source in record.get("pulls", []):
+            if not isinstance(source, int) or source == number:
+                continue
+            owner = ATTRIBUTION.search(
+                json.loads(gh("api", f"{prefix}/pulls/{source}"))["body"] or ""
+            )
+            if owner:
+                comments.extend(
+                    text
+                    for text in discussion(prefix, source)
+                    if (match := ATTRIBUTION.search(text)) and match[1] != owner[1]
+                )
+    return comments
+
+
+def discussion(prefix: str, number: int) -> list[str]:
+    """Ordinary comments and submitted review bodies of one PR."""
     comments: list[str] = []
     for endpoint in (f"issues/{number}/comments", f"pulls/{number}/reviews"):
         pages = json.loads(gh("api", "--paginate", "--slurp", f"{prefix}/{endpoint}"))
         comments.extend(row.get("body") or "" for page in pages for row in page)
-    return author[1] if author else "", records(body), comments, head
+    return comments
