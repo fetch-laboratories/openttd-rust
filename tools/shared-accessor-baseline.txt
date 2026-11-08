@@ -62,14 +62,7 @@ src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | 
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | def73589acac5540 | 1
 src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 30f910a9db971102 | 1
-src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
-src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
-src/rust/train_services.h | TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept | b7492fcfee760201 | 1
-src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1
-src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac10cb2f2f467c | 1
-src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e790d4250a | 1
-src/rust/train_services.h | TrainWaitTwoway(OpenTTDTrainHandle) noexcept | 508c48d22dab543e | 1
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
 src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1

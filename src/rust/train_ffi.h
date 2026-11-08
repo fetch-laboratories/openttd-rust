@@ -31,7 +31,6 @@ struct OpenTTDTrainServices {
 
 	void (*write_colourmap)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(write_colourmap);
 
-	uint64_t (*acc_model)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(acc_model);
 	uint64_t (*advance_distance)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(advance_distance);
 	uint64_t (*all_powered)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered);
 	void (*arrival_news)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
@@ -86,8 +85,6 @@ struct OpenTTDTrainServices {
 	void (*leave_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
 	void (*leave_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunch);
 	uint64_t (*local_company)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	uint64_t (*lost_warn)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(lost_warn);
-	uint64_t (*max_depot_penalty)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
 	uint64_t (*no_90)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(no_90);
 	uint64_t (*oneway_blocking)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(oneway_blocking);
 	void (*order_depot_service)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_depot_service);
@@ -101,7 +98,6 @@ struct OpenTTDTrainServices {
 	bool (*reserve_paths)() noexcept OPENTTD_SERVICE_DEFAULT(reserve_paths);
 	void (*reserve_under)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(reserve_under);
 	void (*reset_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(reset_unbunch);
-	uint64_t (*reverse_at_signals)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(reverse_at_signals);
 	void (*reverse_windows)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(reverse_windows);
 	void (*running_windows)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(running_windows);
 	uint64_t (*servint)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(servint);
@@ -141,9 +137,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*visit_type)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(visit_type);
 	uint64_t (*wagon_override)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 	uint64_t (*wagon_speed_limits)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wagon_speed_limits);
-	uint64_t (*wait_oneway)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_oneway);
-	uint64_t (*wait_pbs)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_pbs);
-	uint64_t (*wait_twoway)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_twoway);
 	uint64_t (*wait_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_unbunch);
 	void (*write_crossing_bar)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_crossing_bar);
 	void (*write_visit_type)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_visit_type);
