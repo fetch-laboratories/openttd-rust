@@ -216,7 +216,8 @@ impl HouseZones {
     }
     /// Native set iteration, visiting set elements in ascending bit order.
     pub fn iter(self) -> impl Iterator<Item = HouseZone> {
-        (0..u16::BITS as u8)
+        // `HouseZones` stores 16 bits.
+        (0..16_u8)
             .map(HouseZone)
             .filter(move |&zone| self.test(zone))
     }

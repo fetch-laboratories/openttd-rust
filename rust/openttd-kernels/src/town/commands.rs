@@ -257,12 +257,12 @@ impl<'a> Commands<'a> {
         out: *mut CommandCost,
         flags: DoCommandFlags,
     ) -> bool {
+        // Number of tiles in the center of the city, where we try to protect houses.
+        const STATUE_NUMBER_INNER_TILES: u32 = 25;
         if !unsafe { (self.objects().can_allocate)() } {
             (self.cost.error)(out, self.s.too_many_objects);
             return false;
         }
-        // Number of tiles in the center of the city, where we try to protect houses.
-        const STATUE_NUMBER_INNER_TILES: u32 = 25;
         let center = TileIndex(unsafe { super::position(t.state) });
         let mut spiral = crate::spiral::square(
             self.map().tile_x(center.0),
