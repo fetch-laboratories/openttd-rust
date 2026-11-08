@@ -34,15 +34,12 @@ struct OpenTTDShipLeaves {
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	uint32_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
 	uint32_t (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
-	bool (*lock_middle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_middle);
 	uint32_t (*lock_dir)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_dir);
 	uint32_t (*tile_min_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_min_z);
 	uint32_t (*tile_max_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	uint32_t (*offset)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(offset);
 	uint32_t (*diag_between)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_between);
 	uint32_t (*dist_square)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dist_square);
-	uint32_t (*dist_manhattan)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dist_manhattan);
-	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
 	bool (*dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dock);
 	bool (*dock_water)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dock_water);
 	uint32_t (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);

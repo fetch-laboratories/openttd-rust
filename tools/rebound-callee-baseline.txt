@@ -21,8 +21,6 @@ forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicl
 forwarded | src/rust/fleet_group_services.hpp | next_vehicle = GetRustSharedServices().vehicle_next
 forwarded | src/rust/fleet_group_services.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
-forwarded | src/rust/ship_control_services.h | docking = GetRustSharedServices().docking_tile
-forwarded | src/rust/ship_control_services.h | lock_middle = GetRustSharedServices().water_middle_lock
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
@@ -43,8 +41,6 @@ rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
 rebound | OpenTTDCargoSpecValid | src/subsidy.cpp | cargo_valid
 rebound | OpenTTDCompanyIsValid | src/rust/services.cpp | company_valid
 rebound | OpenTTDCompanyIsValid | src/rust/vehicle_services_newgrf.h | valid_company
-rebound | OpenTTDDistanceManhattan | src/newgrf_object.cpp | manhattan
-rebound | OpenTTDDistanceManhattan | src/rust/ship_control_services.h | dist_manhattan
 rebound | OpenTTDDistanceSquare | src/newgrf_object.cpp | square
 rebound | OpenTTDDistanceSquare | src/rust/ship_control_services.h | dist_square
 rebound | OpenTTDEditor | src/landscape.cpp | editor

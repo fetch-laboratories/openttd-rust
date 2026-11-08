@@ -167,15 +167,12 @@ pub struct Leaves {
     pub tile_valid: extern "C" fn(u32) -> bool,
     pub tile_type: extern "C" fn(u32) -> u32,
     pub water_class: extern "C" fn(u32) -> u32,
-    pub lock_middle: extern "C" fn(u32) -> bool,
     pub lock_dir: extern "C" fn(u32) -> u32,
     pub tile_min_z: extern "C" fn(u32) -> u32,
     pub tile_max_z: extern "C" fn(u32) -> u32,
     pub offset: extern "C" fn(u32) -> u32,
     pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
-    pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
-    pub docking: extern "C" fn(u32) -> bool,
     pub dock: extern "C" fn(u32) -> bool,
     pub dock_water: extern "C" fn(u32) -> bool,
     pub station: extern "C" fn(u32) -> u32,
@@ -499,7 +496,7 @@ impl Game<'_> {
     }
     fn lock_delta(&self) -> i32 {
         let tile = self.vehicle().tile();
-        if !(self.leaves.lock_middle)(tile)
+        if !(self.services.water_middle_lock)(tile)
             || (self.vehicle().x() as u32) & 15 != 8
             || (self.vehicle().y() as u32) & 15 != 8
         {
@@ -723,7 +720,11 @@ impl Game<'_> {
                             }
                         } else if observed_dest != 0 {
                             if observed_order_type == u32::from(OT_GOTO_WAYPOINT)
-                                && (self.leaves.dist_manhattan)(observed_dest, new_tile) <= 3
+                                && self
+                                    .services
+                                    .map()
+                                    .distance_manhattan(observed_dest, new_tile)
+                                    <= 3
                             {
                                 crate::witness::hit(crate::witness::SHIP_BUOY);
                                 (self.leaves.timetable)(id);
@@ -738,7 +739,7 @@ impl Game<'_> {
                                     return;
                                 }
                             } else if observed_order_type == u32::from(OT_GOTO_STATION)
-                                && (self.leaves.docking)(new_tile)
+                                && (self.services.docking_tile)(new_tile)
                             {
                                 let station = observed_order_destination;
                                 // SAFETY: The shared table is immutable; `Station::Get` names a
@@ -1161,15 +1162,12 @@ crate::abi::layouts! {
         tile_valid,
         tile_type,
         water_class,
-        lock_middle,
         lock_dir,
         tile_min_z,
         tile_max_z,
         offset,
         diag_between,
         dist_square,
-        dist_manhattan,
-        docking,
         dock,
         dock_water,
         station,
