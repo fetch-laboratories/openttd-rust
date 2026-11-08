@@ -182,6 +182,18 @@ impl RoadTypes {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet` iteration, visiting set elements in ascending bit order.
+    pub fn iter(self) -> impl Iterator<Item = RoadType> {
+        let mut bits = self.0;
+        std::iter::from_fn(move || {
+            if bits == 0 {
+                return None;
+            }
+            let element = RoadType(crate::bitmath_func::find_first_bit(bits));
+            bits &= bits - 1;
+            Some(element)
+        })
+    }
 }
 
 /// Native `RoadTypeLabel`, retaining every underlying `u32` value.
