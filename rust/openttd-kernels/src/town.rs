@@ -52,7 +52,10 @@ pub const TOWN_GROWTH_DESERT: u32 = 0xFFFF_FFFF;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TownAction(pub u8);
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "original town.h TownAction enumerators"
+)]
 impl TownAction {
     /// Small advertising campaign.
     pub const AdvertiseSmall: Self = Self(0);

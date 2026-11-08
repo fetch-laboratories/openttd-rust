@@ -45,7 +45,10 @@ impl TownId {
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TownExpandMode(pub u8);
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "original town_type.h TownExpandMode enumerators"
+)]
 impl TownExpandMode {
     /// Allow town to place buildings.
     pub const Buildings: Self = Self(0);
