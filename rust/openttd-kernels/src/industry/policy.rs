@@ -25,8 +25,8 @@ pub enum Servicing {
     Other,
     Company,
 }
-/// Original `CanCargoServiceIndustry`: check whether an industry temporarily refuses to
-/// accept or produce a certain cargo.
+/// Original `CanCargoServiceIndustry`: can the given cargo type be accepted or produced
+/// by the industry?
 fn can_cargo_service_industry(
     cargo: CargoType,
     shell: *mut c_void,
@@ -161,6 +161,7 @@ pub(crate) fn random_entry(s: &Services) -> super::Entry {
     let mut num = s.shared().random_range(u32::from(count as u16));
     let mut from = 0;
     loop {
+        // Make sure we have a valid industry
         let entry = unsafe { (s.next_tick)(from) };
         if num == 0 {
             return entry;

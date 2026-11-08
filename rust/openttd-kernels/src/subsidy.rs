@@ -499,18 +499,18 @@ impl Services {
             return;
         }
         let random_chance = self.shared().random_range(16);
-        // There is a 1/8 chance each month of generating a passenger subsidy.
-        // Cargo subsidies with a town as a source have a 1/16 chance.
-        // Cargo subsidies with an industry as a source have a 1/16 chance.
         // The original's `do { ... } while (!found && n--)` with `n = 1000` makes up to
         // 1001 attempts.
         if (random_chance < 2 && (self.manual_pax)()) || random_chance == 2 || random_chance == 3 {
             for _ in 0..=1000 {
                 let found = if random_chance < 2 {
+                    // There is a 1/8 chance each month of generating a passenger subsidy.
                     self.find_subsidy_passenger_route()
                 } else if random_chance == 2 {
+                    // Cargo subsidies with a town as a source have a 1/16 chance.
                     self.find_subsidy_town_cargo_route(scratch)
                 } else {
+                    // Cargo subsidies with an industry as a source have a 1/16 chance.
                     self.find_subsidy_industry_cargo_route(scratch)
                 };
                 if found {
