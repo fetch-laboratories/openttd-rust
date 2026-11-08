@@ -1130,14 +1130,16 @@ impl<'a> House<'a> {
         crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile.0, flags.0);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
-    fn cmd_place_house(&self, call: HouseCommandCall, args: CmdPlaceHouse) {
-        let HouseCommandCall { result, flags } = call;
-        let CmdPlaceHouse {
+    fn cmd_place_house(
+        &self,
+        HouseCommandCall { result, flags }: HouseCommandCall,
+        CmdPlaceHouse {
             tile,
             house,
             is_protected,
             replace,
-        } = args;
+        }: CmdPlaceHouse,
+    ) {
         let c = self.costs();
         if !(self.l.environment.editor)()
             && PlaceHouses((self.h.place_houses)()) == PlaceHouses::PH_FORBIDDEN
