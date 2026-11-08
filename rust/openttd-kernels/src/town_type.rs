@@ -18,6 +18,8 @@ pub const RATING_TUNNEL_BRIDGE_MINIMUM: i32 = 0;
 pub const RATING_MAXIMUM: i32 = 1000;
 /// Minimum town rating.
 pub const RATING_MINIMUM: i32 = -1000;
+/// Minimum rating after removing a town house.
+pub const RATING_HOUSE_MINIMUM: i32 = RATING_MINIMUM;
 /// Rating increase for a successful bribe.
 pub const RATING_BRIBE_UP_STEP: i32 = 200;
 /// Maximum rating a bribe can reach.
@@ -152,4 +154,19 @@ impl TownFounding {
     pub const TF_CUSTOM_LAYOUT: Self = Self(2);
     /// Used for iterations and limit testing.
     pub const TF_END: Self = Self(3);
+}
+
+/// Town cargo generation modes (`town_type.h`), retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownCargoGenMode(pub u8);
+impl TownCargoGenMode {
+    /// First cargo generation mode.
+    pub const TCGM_BEGIN: Self = Self(0);
+    /// Original algorithm (quadratic cargo by population).
+    pub const TCGM_ORIGINAL: Self = Self(0);
+    /// Bit-counted algorithm (normal distribution from individual house population).
+    pub const TCGM_BITCOUNT: Self = Self(1);
+    /// End of cargo generation modes.
+    pub const TCGM_END: Self = Self(2);
 }

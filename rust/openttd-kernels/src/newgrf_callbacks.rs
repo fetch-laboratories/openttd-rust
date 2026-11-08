@@ -68,6 +68,8 @@ pub const CBID_HOUSE_DRAW_FOUNDATIONS: CallbackID = CallbackID::CBID_HOUSE_DRAW_
 
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
+/// Sentinel indicating that the loop for `CBID_HOUSE_PRODUCE_CARGO` has ended.
+pub const CALLBACK_HOUSEPRODCARGO_END: u16 = 0x20FF;
 
 crate::abi::layouts! {
     fn abi_layout;
