@@ -125,6 +125,8 @@ impl From<Option<bool>> for HistoryQuery {
 // Maximum subdivision among the original month, quarter and year ranges.
 const HISTORY_MAX_DIVISION: usize = 4;
 
+use crate::history_type::{HISTORY_PERIODS, HISTORY_RECORDS};
+
 pub(crate) trait HistoryElement: Copy + Default {
     fn sum(history: &[Self]) -> Self;
 }
@@ -141,10 +143,6 @@ impl HistoryElement for crate::town::SuppliedHistory {
     }
 }
 
-/// `HISTORY_PERIODS`.
-pub(crate) const HISTORY_PERIODS: u8 = 24;
-/// `HISTORY_RECORDS`: `HISTORY_YEAR.last`.
-pub(crate) const HISTORY_RECORDS: usize = 61;
 /// The scalar fields of `HISTORY_MONTH`, `HISTORY_QUARTER` and `HISTORY_YEAR`, in the
 /// subdivision-first order of the original recursion over `HISTORY_YEAR`. Only the
 /// mask update and rotation fields are used; the query-only child fields stay zero.

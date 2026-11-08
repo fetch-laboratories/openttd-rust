@@ -41,8 +41,7 @@ use crate::direction_func::{
     change_diag_dir, diag_dir_to_axis, is_valid_diag_direction, reverse_diag_dir,
 };
 use crate::direction_type::{Axis, DiagDirDiff, DiagDirection, Direction};
-use crate::history::HISTORY_RECORDS;
-use crate::history_type::LAST_MONTH;
+use crate::history_type::{HISTORY_RECORDS, LAST_MONTH};
 use crate::house::{
     BuildingFlag, BuildingFlags, HOUSE_NO_CLASS, HouseExtraFlag, HouseExtraFlags, HouseZone,
     HouseZones, INVALID_HOUSE_ID, NUM_HOUSE_ZONES, NUM_HOUSES, TOWN_HOUSE_COMPLETED,
