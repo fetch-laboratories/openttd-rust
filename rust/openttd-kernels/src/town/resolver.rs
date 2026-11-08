@@ -193,7 +193,7 @@ unsafe fn town_history_helper(
     period: u8,
     transported: bool,
 ) -> u32 {
-    unsafe { super::supplied_history(owner, cargo.0, period) }.map_or(0, |h| {
+    unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
         (if transported {
             h.transported
         } else {
@@ -498,14 +498,9 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         // Town zone.
         0x42 => {
             let map = map();
-            unsafe {
-                let state = &*scope.town.owner;
-                u32::from(super::radius_group(
-                    state.growth.funding != 0,
-                    &state.simulation.radius,
-                    map.distance_square(tile, state.simulation.xy),
-                ))
-            }
+            u32::from(
+                unsafe { super::get_town_radius_group(scope.town.owner, TileIndex(tile), map) }.0,
+            )
         }
         // Terrain type.
         0x43 => (shared.terrain_type)(tile),
