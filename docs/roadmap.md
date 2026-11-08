@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Development resumed on 2026-11-08 in the cleanup stage; the session ran two implementers until the user restored the four-implementer cap the same evening (user, 2026-11-08). Code main is integration 132, `5661d54e0a` (#807). The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). The next regular stocktake/profile is 137 and the next platform cadence 135.
+Development resumed on 2026-11-08 in the cleanup stage; the session ran two implementers until the user restored the four-implementer cap the same evening (user, 2026-11-08). Code main was integration 132, `5661d54e0a` (#807), when this section was written; the [resume checkpoint](#resume-checkpoint) gives the current tip. The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). Stocktakes and profiles now run every twelfth integration (user, 2026-11-08), so 137 is skipped and the next is 143. Platform cadence 135 failed and was fixed in 137; the next follows 140.
 
 Fork C++ change since stocktake 125 (2026-11-07): −467 counted lines, all on 11-07 (127 and 129); 0 on 11-08. Tooling since 129: +33 (130) and +563 (131) code lines.
 
@@ -84,7 +84,7 @@ All seven nonempty canonical exit-save comparisons pass, and all six policy reco
 
 - **Execution order:** the cleanup stage, then phase 3 readers, then phase 2 storage with each pool's save/load, then phases 4, 5 and 6 ([planning](planning.md#goal-and-phases)).
 - **Yardstick:** net fork C++ removed, counting C++ under `tools/` and `src/tests`. Rust exports plus callback slots fall or hold; growth needs a reason the reviewer accepts ([cost decisions](planning.md#cost-decisions)).
-- **Limits:** at most four implementation agents ([team](team.md#roles-and-models)); stocktake and profile every sixth integration.
+- **Limits:** at most four implementation agents ([team](team.md#roles-and-models)); stocktake and profile every twelfth integration (user, 2026-11-08; every sixth from 2026-11-06, and stocktake 137 is skipped).
 - **Enforcement:** checks enforce mechanical rules on every push (#733); reviewers work from the [review checklist](review-checklist.md); implementers read the [implementer brief](implementer-brief.md) and their work order.
 - **Sizes, never durations:** plans, issues and briefs size work in counts (files, lines, call sites), never in time (user, 2026-11-06).
 
@@ -301,8 +301,8 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 
 ## Recurring
 
-- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)); a running profile counts as one implementer. Stocktake/profile 131 are accepted; profiles 113/119/125 remain retained for comparison. The next regular stocktake/profile follows integration 137.
-- Run the platform cadence after every fifth integration; 120, 125 and [130](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906) passed. The next follows 135. A new failure stops integrations.
+- After every twelfth integration (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). This supersedes the skill's "every sixth integration" (user, 2026-11-06) until `/steer` or `/navigate` updates it. A running profile counts as one implementer. Stocktake/profile 131 are accepted; profiles 113/119/125 remain retained for comparison. Stocktake/profile 137 are skipped (user, 2026-11-08); the next regular stocktake/profile follows integration 143.
+- Run the platform cadence after every fifth integration; 120, 125 and [130](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906) passed. [135](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42526994364) failed on Windows x86: #810's 64-bit oracle tests ran on a 32-bit build. #818 fixed this as integration 137, after which integrations resumed. The next cadence follows 140. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -316,17 +316,19 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day): two slots run #734/#735 file passes and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. Under this Claude Code root, `gpt-6.1-sol` reviewers report findings and Opus implementers fix them ([team](team.md#claude-code-root)). Code main is integration 132, `5661d54e0a`.
+Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. Under this Claude Code root, `gpt-6.1-sol` reviewers report findings and Opus implementers fix them ([team](team.md#claude-code-root)). Code main is integration 137, `0459951f36`. Integrations 133 to 137 are recorded on #809, #811, #810, #817 and #818. Five branches are unintegrated.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #726 maintenance PR #809 | `/root/maintenance_726_steering31_batch`; reviewed by `/root/review_809_maintenance` | Review done, fix `62b6576b05` spot-checked. Root updates from base (overlaps #807 only in separate `movement.rs` hunks), records the base-update condition, requests exact-head Full and merges. |
-| #736 U comparison probes | `/root/cleanup_736_u_vectors` | Draft PR; observations testing unchanged original C++ are deleted, real boundary checks go to one batch-A file. Then review and Full. |
-| #734 workset 02 Industry/subsidy pass | `/root/cleanup_734_pass_02_industry` | Draft PR; then one reviewer per function group if above about 1,000 changed lines. |
-| #734 workset 01 remainder (`town.rs`, `town/house.rs`) | Unassigned | Next file pass when a slot frees. |
-| Next stocktake/profile and cadence | Root | Stocktake/profile after 137; platform cadence after 135. |
+| #734 workset 02 Industry construction/transaction/tile pass, PR #816 | `/root/cleanup_734_pass_02b_industry`; reviewed by `/root/review_816_{construction,transaction,tile}` | Three reviews done and fixes spot-checked. Base updated to `11e29bc379`, with no file overlap with 137. Exact-head Full is running; merge when it passes. |
+| #737 batch V, PR #814 | `/root/cleanup_737_v_vehicle_boundary`; reviewed by `/root/review_814_{orders_fleet,tick_station}` | Opus remediation `bd2b7b6398`/`6218e756ea` is spot-checked. `/root/review_814_evidence_fix` is reviewing it (report only). Then root updates from base, requests Full and merges. The V remainder (about 325 lines, 11 families) waits for #814. |
+| #734 workset 01 `town.rs` pass, PR #819 | `/root/cleanup_734_pass_01c_town_rs` | Implementer is finishing its reload scenarios. When it is ready, root spawns about five report-only reviewers, one per function group in the PR body. |
+| #736 P packet comparison, draft PR #820 | `/root/cleanup_736_p_packet` | In progress; then review. |
+| #734 workset 02c industry resolver/property reader, draft PR #821 | `/root/cleanup_734_pass_02c_industry_resolver` | In progress; then review. |
+| Next file passes | Unassigned | Start each when its files are free and fewer than six branches are open. Candidates: the station remainder (`station.rs`, `station_map.rs`, `station_cmd.rs`, `station_cmd/waypoint.rs`, `station_lifecycle.rs`, `station_service.rs`, `is_hangar_tile`; these take #815's inherited items after reachability checks), `industry.rs`, and worksets 04 to 09. |
+| Next stocktake/profile and cadence | Root | Stocktake/profile after 143; platform cadence after 140. |
 
-Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records two missed Codex reviewer resumes on 11-08.
+Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08.
 
 The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue; its three items lead item 4.
 
