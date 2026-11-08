@@ -462,7 +462,7 @@ pub(crate) fn clear_file(file: *const c_void) {
 /// `NEW_INDUSTRYTILEOFFSET` records.
 pub(crate) unsafe fn reset(
     shared: *const crate::services::Services,
-    climate: u8,
+    climate: crate::landscape_type::LandscapeType,
     origin: *const IndustrySpec,
     origin_tiles: *const IndustryTileSpec,
 ) {
@@ -477,8 +477,8 @@ pub(crate) unsafe fn reset(
     }
     // Enable only the current climate industries
     for spec in &mut specs[..usize::from(IndustryType::NEW_INDUSTRYOFFSET.0)] {
-        spec.enabled = crate::landscape_type::LandscapeTypes(spec.climate_availability)
-            .test(crate::landscape_type::LandscapeType(climate));
+        spec.enabled =
+            crate::landscape_type::LandscapeTypes(spec.climate_availability).test(climate);
     }
     let tiles = unsafe { &mut *TILES.get() };
     for (gfx, spec) in tiles.iter_mut().enumerate() {

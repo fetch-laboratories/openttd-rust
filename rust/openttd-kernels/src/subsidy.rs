@@ -26,8 +26,8 @@ pub use crate::source_type::Source;
 use crate::station::Station;
 use crate::station_type::StationID;
 use crate::subsidy_type::{PartOfSubsidy, SubsidyID};
-use crate::tile_type::MP_HOUSE;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::town_type::TownID;
 use crate::{industry, services::Services as Shared, town};
 use crate::{
@@ -301,7 +301,7 @@ impl Services {
         };
         area.expand(SUBSIDY_TOWN_CARGO_RADIUS, map, (shared.map_max_y)() + 1);
         for tile in area.tiles(map) {
-            if (shared.tile_type)(tile) != MP_HOUSE {
+            if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
                 continue;
             }
             unsafe {
@@ -600,7 +600,7 @@ impl Services {
                 // SAFETY: The live station owner; the visits read only the map and caches.
                 unsafe {
                     crate::station::for_each_catchment_tile(station_state, &catchment, |tile| {
-                        if (shared.tile_type)(tile) != MP_HOUSE {
+                        if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
                             return;
                         }
                         let town = TownID((shared.town_index)(tile));
