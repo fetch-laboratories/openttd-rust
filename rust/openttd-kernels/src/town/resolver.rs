@@ -745,7 +745,7 @@ pub unsafe extern "C" fn openttd_rust_house_callback(
     (services().evaluate)(args, registers, count)
 }
 /// `GetHouseCallback`: direct owner entry for lifecycle, production, acceptance and animation.
-pub(super) unsafe fn callback(
+pub(super) unsafe fn get_house_callback(
     callback: CallbackID,
     param1: u32,
     param2: u32,
@@ -768,14 +768,45 @@ pub(super) unsafe fn callback(
     };
     unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
 }
+/// Raw adapter for `get_house_callback`, retained for `town/house.rs` until its pass.
+pub(super) unsafe fn callback(
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    house: HouseID,
+    town: *mut TownHandle,
+    tile: u32,
+    not_yet_constructed: bool,
+) -> u16 {
+    unsafe {
+        get_house_callback(
+            CallbackID(callback),
+            param1,
+            param2,
+            house,
+            town,
+            TileIndex(tile),
+            not_yet_constructed,
+        )
+    }
+}
 /// Native random reseeding of a house tile and its waiting triggers.
-pub(super) unsafe fn reseed(
+pub(super) unsafe fn reseed_house_tile(
     house: HouseID,
     tile: TileIndex,
     town: *mut TownHandle,
     waiting: u8,
 ) -> house::HouseReseed {
     (services().reseed)(house, tile.0, town, waiting)
+}
+/// Raw adapter for `reseed_house_tile`, retained for `town/house.rs` until its pass.
+pub(super) unsafe fn reseed(
+    house: HouseID,
+    tile: u32,
+    town: *mut TownHandle,
+    waiting: u8,
+) -> house::HouseReseed {
+    unsafe { reseed_house_tile(house, TileIndex(tile), town, waiting) }
 }
 /// `GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, ...)` with `Convert8bitBooleanCallback`
 /// (`TryBuildTownHouse`): whether the house may be built here.
@@ -808,7 +839,7 @@ pub(crate) unsafe fn foundation(tile: TileIndex, house: HouseID) -> u16 {
     let s = services();
     let town =
         (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile.0)));
-    unsafe { callback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, house, town, tile, false) }
+    unsafe { get_house_callback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, house, town, tile, false) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {

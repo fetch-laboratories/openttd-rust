@@ -75,6 +75,13 @@ impl TownExpandModes {
     }
 }
 crate::base_bitset_type::impl_bitset_ops!(TownExpandModes);
+/// Native `TownExpandModes{a, b}` from two elements.
+impl std::ops::BitOr for TownExpandMode {
+    type Output = TownExpandModes;
+    fn bitor(self, other: Self) -> TownExpandModes {
+        TownExpandModes::from_element(self).with(TownExpandModes::from_element(other))
+    }
+}
 
 impl TownId {
     /// Native `PoolID::Begin()`.

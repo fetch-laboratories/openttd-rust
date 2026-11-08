@@ -8,8 +8,8 @@ use super::founding::{FoundingServices, Tile, TownLayout, TownSize};
 use crate::heightmap::HeightmapRotation;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
+use crate::town_type::TownExpandMode;
 use crate::town_type::TownID;
-use crate::town_type::{TownExpandMode, TownExpandModes};
 
 #[repr(C)]
 pub struct Frame {
@@ -226,9 +226,7 @@ impl ImportServices {
                 (self.expand)(
                     town_id,
                     HOUSES_TO_GROW,
-                    TownExpandModes::from_element(TownExpandMode::Buildings)
-                        .with(TownExpandModes::from_element(TownExpandMode::Roads))
-                        .0,
+                    (TownExpandMode::Buildings | TownExpandMode::Roads).0,
                 );
                 if unsafe { super::num_houses(state) } <= before {
                     fail_limit -= 1;

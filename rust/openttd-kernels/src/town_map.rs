@@ -18,3 +18,7 @@ pub fn increment_house_age(h: &HouseServices, t: TileIndex) {
         (h.set_age)(t.0, house.age + 1);
     }
 }
+/// Raw adapter for `increment_house_age`, retained for `town/house.rs` until its pass.
+pub fn increment_house_age_raw(h: &HouseServices, t: u32) {
+    increment_house_age(h, TileIndex(t));
+}

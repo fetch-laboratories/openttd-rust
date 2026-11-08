@@ -401,9 +401,7 @@ fn property(
                 for _ in 0..count {
                     let cargo = translate(reader.byte()?, file, false);
                     if is_valid_cargo_type(cargo) {
-                        let mut watched = (s.watched)(spec);
-                        set_bit64(&mut watched, cargo);
-                        (s.set_watched)(spec, watched);
+                        (s.set_watched)(spec, set_bit64(&mut (s.watched)(spec), cargo));
                     }
                 }
             }

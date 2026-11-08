@@ -20,9 +20,7 @@ use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, Town
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{TileIndex, TileType};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
-use crate::town_type::{
-    MAX_LENGTH_TOWN_NAME_CHARS, RATING_INITIAL, TownExpandMode, TownExpandModes, TownID,
-};
+use crate::town_type::{MAX_LENGTH_TOWN_NAME_CHARS, RATING_INITIAL, TownExpandMode, TownID};
 use crate::tree_map::TreeGround;
 use crate::witness as w;
 use std::cell::OnceCell;
@@ -296,25 +294,17 @@ impl<'a> Founding<'a> {
     }
     /// Actually create a town (`town_cmd.cpp::DoCreateTown`); `town` is the town.
     unsafe fn do_create_town(&self, town: TownRef, args: &DoCreateTown) {
-        let DoCreateTown {
-            tile,
-            townnameparts,
-            size,
-            city,
-            layout,
-            manual,
-        } = *args;
         w::hit(w::TOWN_GENERATED);
-        if manual {
+        if args.manual {
             w::hit(w::TOWN_MANUAL);
         }
-        if layout == TownLayout::TL_2X2_GRID || layout == TownLayout::TL_3X3_GRID {
+        if args.layout == TownLayout::TL_2X2_GRID || args.layout == TownLayout::TL_3X3_GRID {
             w::hit(w::TOWN_GRID);
         }
         let previous = super::openttd_rust_town_generating_exchange_abi(true) != 0;
         // SAFETY: Immediate canonical field writes; no borrow spans callbacks.
         unsafe {
-            (*town.state).simulation.xy = tile.0;
+            (*town.state).simulation.xy = args.tile.0;
             (*town.state).simulation.num_houses = 0;
             (*town.state).simulation.time_until_rebuild = 10;
             update_radius(town.state);
@@ -383,16 +373,16 @@ impl<'a> Founding<'a> {
         unsafe {
             (*town.state).simulation.townnamegrfid = parameters.grfid;
             (*town.state).simulation.townnametype = parameters.kind;
-            (*town.state).simulation.townnameparts = townnameparts;
-            initialize_layout(town.state, layout, self.map());
-            (*town.state).simulation.larger_town = city;
+            (*town.state).simulation.townnameparts = args.townnameparts;
+            initialize_layout(town.state, args.layout, self.map());
+            (*town.state).simulation.larger_town = args.city;
         }
-        let mut x = i32::from(size.0).wrapping_mul(16).wrapping_add(3);
-        if size == TownSize::TSZ_RANDOM {
+        let mut x = i32::from(args.size.0).wrapping_mul(16).wrapping_add(3);
+        if args.size == TownSize::TSZ_RANDOM {
             x = (self.random() & 15).wrapping_add(8) as i32;
         }
         // Don't create huge cities when founding town in-game.
-        if city && (!manual || observed!((self.leaves.environment.editor)())) {
+        if args.city && (!args.manual || observed!((self.leaves.environment.editor)())) {
             x = x.wrapping_mul(i32::from(observed!((self.s.initial_city_size)())));
         }
         let engine = self.engine(town);
@@ -405,11 +395,7 @@ impl<'a> Founding<'a> {
             w::hit(w::TOWN_GROWTH);
             engine.grow(
                 u32::from(town.id.0),
-                u32::from(
-                    TownExpandModes::from_element(TownExpandMode::Buildings)
-                        .with(TownExpandModes::from_element(TownExpandMode::Roads))
-                        .0,
-                ),
+                u32::from((TownExpandMode::Buildings | TownExpandMode::Roads).0),
             );
             i = i.wrapping_sub(1);
             if i == 0 {
