@@ -55,6 +55,8 @@ TSAN = os.environ.get(TSAN_VARIABLE) == "1"
 SANITIZED = "-sanitized" if SANITIZE else "-tsan" if TSAN else ""
 REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
 CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
+# Cargo output shared by driver runs and `env` shells, whatever the sanitizer.
+CARGO_TARGET_DIR = ROOT / "build-rust/cargo"
 # Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
 # stays uninstrumented.
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -107,8 +109,10 @@ def environment() -> dict[str, str]:
 
 
 def shell_exports() -> str:
-    """Shell exports for each variable environment() sets or changes."""
+    """Shell exports for each variable environment() sets or changes, plus the
+    driver's Cargo target directory so hand-run Cargo reuses its output."""
     env = environment()
+    env["CARGO_TARGET_DIR"] = str(CARGO_TARGET_DIR)
     return "".join(
         f"export {name}={shlex.quote(value)}\n"
         for name, value in sorted(env.items())
@@ -830,7 +834,7 @@ def main() -> None:
     ):
         parser.error("--ccache requires ccache on PATH")
     args.ccache = cache_executable is not None
-    env["CARGO_TARGET_DIR"] = str(ROOT / "build-rust/cargo")
+    env["CARGO_TARGET_DIR"] = str(CARGO_TARGET_DIR)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     evidence = LOCAL / "verification" / stamp
     evidence.mkdir(parents=True)
