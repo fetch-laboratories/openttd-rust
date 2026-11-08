@@ -327,12 +327,18 @@ pub struct State {
     growth: GrowthFields,
     stations_near: crate::station::StationList,
 }
+/// `t->received[effect].new_act += amount` (`economy.cpp`'s `DeliverGoods`).
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
-pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
+pub(crate) unsafe fn add_received(owner: *mut State, effect: TownAcceptanceEffect, amount: u32) {
     unsafe {
-        let count = &mut (*owner).simulation.received[usize::from(effect)].new_act;
+        let count = &mut (*owner).simulation.received[usize::from(effect.0)].new_act;
         *count = count.wrapping_add(amount as u16);
     }
+}
+/// Raw adapter for `cargo_payment.rs`, outside workset 01; delegates to `add_received`.
+/// SAFETY: As `add_received`.
+pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
+    unsafe { add_received(owner, TownAcceptanceEffect(effect), amount) }
 }
 /// The town's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
@@ -3249,20 +3255,25 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     }
 }
 
-/// Read the original last-month transported percentage from the sole town owner.
+/// `Town::GetPercentTransported`: the last-month transported percentage of a cargo.
 /// SAFETY: Serialized live owner; no callback or owner borrow survives this call.
-pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
-    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+pub(crate) unsafe fn get_percent_transported(state: *const State, cargo_type: CargoType) -> u8 {
+    if !is_valid_cargo_type(cargo_type.0) {
         return 0;
     }
     let rows = unsafe { &(*state).supplied };
-    let at = unsafe { openttd_rust_town_supplied_find(state, cargo) };
+    let at = unsafe { openttd_rust_town_supplied_find(state, cargo_type.0) };
     if at == rows.len() {
         return 0;
     }
     unsafe {
         openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
     }
+}
+/// Raw adapter for `subsidy.rs`, outside workset 01; delegates to `get_percent_transported`.
+/// SAFETY: As `get_percent_transported`.
+pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
+    unsafe { get_percent_transported(state, CargoType(cargo)) }
 }
 
 crate::abi::layouts! {

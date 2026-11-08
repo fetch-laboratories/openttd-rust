@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, Leaves, State, house};
-use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, CargoType, is_valid_cargo_type};
+use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
@@ -240,15 +240,15 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
     // Passenger and mail production and transport, this and last month.
     if (0xBA..=0xC9).contains(&variable) {
         let index = variable - 0xBA;
-        let cargo = crate::cargo_registry::openttd_rust_cargo_by_label(if index & 2 == 0 {
-            CT_PASSENGERS
+        let cargo = crate::cargo_registry::get_cargo_type_by_label(if index & 2 == 0 {
+            CargoLabel::CT_PASSENGERS
         } else {
-            CT_MAIL
+            CargoLabel::CT_MAIL
         });
         let value = unsafe {
             town_history_helper(
                 scope.owner,
-                CargoType(cargo),
+                cargo,
                 if index < 8 { THIS_MONTH } else { LAST_MONTH },
                 index & 4 != 0,
             )
@@ -256,12 +256,12 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         return if index & 1 == 0 { value } else { value >> 8 };
     }
     if variable == 0xCA || variable == 0xCB {
-        let cargo = crate::cargo_registry::openttd_rust_cargo_by_label(if variable == 0xCA {
-            CT_PASSENGERS
+        let cargo = crate::cargo_registry::get_cargo_type_by_label(if variable == 0xCA {
+            CargoLabel::CT_PASSENGERS
         } else {
-            CT_MAIL
+            CargoLabel::CT_MAIL
         });
-        return u32::from(unsafe { super::subsidy_percent_transported(scope.owner, cargo) });
+        return u32::from(unsafe { super::get_percent_transported(scope.owner, cargo) });
     }
     let value = unsafe {
         let state = &*scope.owner;
