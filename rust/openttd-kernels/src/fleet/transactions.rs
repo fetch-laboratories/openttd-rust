@@ -607,12 +607,13 @@ unsafe fn build(
         check!(w, unsafe { (w.success)(cost) });
     }
     if crate::fleet::record(gw, new).vehicle_type() == 0
-        && ((w.refit_services)().train_handle)(
-            unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
-                .0
-                .as_ptr(),
-        )
-        .get_flags()
+        && (w.refit_services)()
+            .train_handle(
+                unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
+                    .0
+                    .as_ptr(),
+            )
+            .get_flags()
             & (1 << crate::train::FLIPPED)
             != 0
         && !unsafe {

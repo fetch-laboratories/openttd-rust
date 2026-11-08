@@ -58,18 +58,30 @@ pub struct Services {
     pub road_ground: &'static crate::vehicle::GroundServices,
     pub prices: Prices,
     pub engine: extern "C" fn(u16) -> *const OpenTTDEngine,
-    pub vehicle_engine: extern "C" fn(*mut OpenTTDVehicle) -> *const OpenTTDEngine,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
     pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
-    pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
     pub road_acceleration: extern "C" fn() -> u8,
     pub details_ui: extern "C" fn(*mut OpenTTDVehicle),
     pub lists_ui: extern "C" fn(u8),
+}
+// Canonical vehicle-table slots for refit callers; no refit copy is bound.
+impl Services {
+    /// `v->GetEngine()`.
+    pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
+        (self.common.vehicles.engine)(crate::vehicle::VehicleRef::of(v))
+            .0
+            .as_ptr()
+            .cast_const()
+    }
+    /// `Train::From(v)` as its typed handle.
+    pub(crate) fn train_handle(&self, v: *mut OpenTTDVehicle) -> crate::train::Handle {
+        (self.common.vehicles.train_handle)(v)
+    }
 }
 #[derive(Clone, Copy)]
 struct Result {
@@ -262,7 +274,7 @@ unsafe fn refit_chain(
             v = unsafe { next(s, v) };
             continue;
         }
-        let e = (s.vehicle_engine)(
+        let e = s.vehicle_engine(
             unsafe { super::vehicle_ref(v, s.common.vehicles) }
                 .0
                 .as_ptr(),
@@ -523,7 +535,7 @@ pub(crate) unsafe fn refit(
         match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    (s.train_handle)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
+                    s.train_handle(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                     if automatic {
                         s.prices.auto_refit
                     } else {
@@ -638,6 +650,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

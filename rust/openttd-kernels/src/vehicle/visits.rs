@@ -320,7 +320,7 @@ impl Refresher {
         let mut part = Some(self.vehicle);
         while let Some(v) = part {
             let shell = v.0.as_ptr();
-            let e = (r.vehicle_engine)(shell);
+            let e = r.vehicle_engine(shell);
             if crate::vehicle::EngineRef::of(e).refit_mask() >> self.cargo & 1 == 0 {
                 index += 1;
                 part = (v).next();
@@ -895,7 +895,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
                 crate::station_type::SRT_VEHICLE_DEPARTS,
             );
         }
-        let train = (s.refit.train_handle)(v.0.as_ptr());
+        let train = s.refit.train_handle(v.0.as_ptr());
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
     }
     if kind == VehicleType::ROAD && (v).status() & VS_CRASHED == 0 {
@@ -976,7 +976,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
-            let train = (s.refit.train_handle)(v.0.as_ptr());
+            let train = s.refit.train_handle(v.0.as_ptr());
             crate::train::enter_depot(train, s.refit.train, s.shared);
         }
         VehicleType::ROAD => {}

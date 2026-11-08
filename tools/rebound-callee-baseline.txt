@@ -284,14 +284,11 @@ rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
 rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
-rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle
-rebound | RustVehicleTrain | src/rust/vehicle_services.cpp | train_handle
 rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta
 rebound | RustVehicleUpdateDelta | src/rust/aircraft_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/rust/disaster_adapter.hpp | update_delta
