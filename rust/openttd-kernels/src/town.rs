@@ -1374,7 +1374,8 @@ impl Engine<'_> {
         }
         if self.fund_buildings_months() == 0 {
             /* Check if all goals are reached for this town to grow (given we are not funding it) */
-            for i in 0..NUM_TAE {
+            for tae in TownAcceptanceEffect::TAE_BEGIN.0..TownAcceptanceEffect::TAE_END.0 {
+                let i = usize::from(tae);
                 match self.goal()[i] {
                     TOWN_GROWTH_WINTER => {
                         if crate::tile_map::tile_height_in(
