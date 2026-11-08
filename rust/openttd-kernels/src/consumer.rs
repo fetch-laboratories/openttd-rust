@@ -528,6 +528,10 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(target_pointer_width = "64"),
+        ignore = "oracle captured from the original on 64-bit GNU/Linux; its size_t-dependent outputs differ on 32-bit targets"
+    )]
     fn integer_probe_consumer_gaps_match_original() {
         let oracle = crate::oracle::parse(include_str!("integer/probe-oracle.txt"));
         let count = crate::oracle::check(

@@ -273,6 +273,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(target_pointer_width = "64"),
+        ignore = "oracle captured from the original on 64-bit GNU/Linux; its size_t-dependent outputs differ on 32-bit targets"
+    )]
     fn validation_and_in_place_replacement_match_original() {
         let oracle = oracle::parse(ORACLE);
         let corpus = corpus();

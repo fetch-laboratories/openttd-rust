@@ -832,6 +832,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(target_pointer_width = "64"),
+        ignore = "oracle captured from the original on 64-bit GNU/Linux; its size_t-dependent outputs differ on 32-bit targets"
+    )]
     fn encoded_operations_match_original() {
         let modes = [
             Mode {
