@@ -13,7 +13,7 @@ use super::{
     change_population, engine, update_radius,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
+use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
 use crate::cargotype::{TOWN_PRODUCTION_DIVISOR, TownProductionEffect};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
@@ -1385,12 +1385,12 @@ impl<'a> House<'a> {
     fn trigger_house_animation_watched_cargo_accepted(
         &self,
         tile: TileIndex,
-        trigger_cargoes: u64,
+        trigger_cargoes: CargoTypes,
     ) {
         let mut id = self.get_house_type(tile);
-        let trigger_cargoes = trigger_cargoes & (self.h.watched)(id);
+        let trigger_cargoes = CargoTypes(trigger_cargoes.0 & (self.h.watched)(id));
         // None of the trigger cargoes is watched?
-        if trigger_cargoes == 0 {
+        if trigger_cargoes.0 == 0 {
             return;
         }
         // Same random value for all tiles of a multi-tile house.
@@ -1416,7 +1416,7 @@ impl<'a> House<'a> {
                     part.0,
                     0,
                     cb_info,
-                    trigger_cargoes,
+                    trigger_cargoes.0,
                 );
             }
         };
@@ -1699,7 +1699,7 @@ pub(crate) unsafe fn trigger_house_animation_watched_cargo_accepted(
     leaves: *const Leaves,
     services: *const Services,
     tile: TileIndex,
-    trigger_cargoes: u64,
+    trigger_cargoes: CargoTypes,
 ) {
     house(leaves, services).trigger_house_animation_watched_cargo_accepted(tile, trigger_cargoes);
 }

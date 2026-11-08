@@ -591,7 +591,7 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
                     c.c.town,
                     shared,
                     crate::tile_type::TileIndex(tile),
-                    cargoes,
+                    crate::cargo_type::CargoTypes(cargoes),
                 );
             }
         });
