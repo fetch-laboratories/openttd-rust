@@ -94,9 +94,10 @@ pub unsafe extern "C" fn openttd_rust_town_names_clear(names: *mut Names) {
         (*names).clear();
     }
 }
-/// `town_cmd.cpp::IsUniqueTownName`: only custom names are checked.
+/// Verifies this custom name is unique. Only custom names are checked
+/// (`town_cmd.cpp::IsUniqueTownName`). Return true if the name is unique.
 pub(super) unsafe fn is_unique_town_name(s: &NameServices, name: ByteSpan) -> bool {
-    let mut town = observed!((s.next)(0));
+    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
     while !town.shell.is_null() {
         // SAFETY: Iteration supplies a live owner; borrow ends before next callback.
         let equal = unsafe { !(*town.state).name.is_empty() && (*town.state).name == bytes(name) };
@@ -135,7 +136,9 @@ unsafe fn get_town_name(
     }
 }
 
-/// `townname.cpp::VerifyTownName`: verify that the name is valid and unique.
+/// Verifies the town name is valid and unique (`townname.cpp::VerifyTownName`).
+/// `seed` holds the random bits; `names`, when present, checks a generated name's
+/// uniqueness against the set. Return true iff the name is valid and unique.
 pub(super) unsafe fn verify_town_name(
     s: &NameServices,
     frame: *mut NameFrame,
@@ -163,7 +166,7 @@ pub(super) unsafe fn verify_town_name(
         }
         return true;
     }
-    let mut town = observed!((s.next)(0));
+    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
     while !town.shell.is_null() {
         // We cannot just compare the numbers: several numbers may map to one name.
         // SAFETY: Short canonical name observation before resolver reentry.
@@ -184,7 +187,9 @@ pub(super) unsafe fn verify_town_name(
     }
     true
 }
-/// `townname.cpp::GenerateTownName`: store the encoded parts only on success.
+/// Generates valid town name (`townname.cpp::GenerateTownName`).
+/// If a name is generated, it is stored in `result`; `names`, when present, checks
+/// its uniqueness against the set. Return true iff a name was generated.
 pub(super) unsafe fn generate_town_name(
     s: &NameServices,
     frame: *mut NameFrame,
@@ -211,8 +216,6 @@ pub(super) unsafe fn generate_town_name(
     w::hit(w::TOWN_NAME_EXHAUSTED);
     false
 }
-// Compatibility name for generation callers outside this checkpoint.
-pub(super) use generate_town_name as generate;
 
 /// # Safety
 /// Tables, rendering frame and parameters remain live. Optional scratch is exclusively owned; rendering frames keep candidate and other bytes distinct.

@@ -13,16 +13,14 @@ use super::{
 };
 use crate::cargotype::TownAcceptanceEffect;
 use crate::clear_map::ClearGround;
-use crate::company_type::{CompanyID, MAX_COMPANIES, OWNER_DEITY};
+use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::landscape_type::LandscapeType;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Services, TownHandle};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{TileIndex, TileType};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
-use crate::town_type::{
-    MAX_LENGTH_TOWN_NAME_CHARS, RATING_INITIAL, TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TownID,
-};
+use crate::town_type::{MAX_LENGTH_TOWN_NAME_CHARS, RATING_INITIAL, TownExpandMode, TownID};
 use crate::tree_map::TreeGround;
 use crate::witness as w;
 use std::cell::OnceCell;
@@ -99,6 +97,22 @@ pub struct FoundingServices {
     pub too_many_error: u32,
     pub no_space_error: u32,
 }
+/// Arguments of `town_cmd.cpp::DoCreateTown` after the town itself.
+#[derive(Clone, Copy)]
+struct DoCreateTown {
+    /// Where to put it.
+    tile: TileIndex,
+    /// The town name.
+    townnameparts: u32,
+    /// The preset size of the town.
+    size: TownSize,
+    /// Should we create a city?
+    city: bool,
+    /// The (road) layout of the town.
+    layout: TownLayout,
+    /// Whether the town was placed manually.
+    manual: bool,
+}
 struct Founding<'a> {
     road: *const crate::road_cmd::CommandContext,
     s: &'a FoundingServices,
@@ -148,10 +162,10 @@ impl<'a> Founding<'a> {
     fn random(&self) -> u32 {
         observed!(self.shared.random())
     }
-    fn spiral(&self, tile: Tile, diameter: u32) -> crate::spiral::SpiralState {
+    fn spiral(&self, tile: TileIndex, diameter: u32) -> crate::spiral::SpiralState {
         crate::spiral::square(
-            tile.0 % self.map().size_x(),
-            tile.0 / self.map().size_x(),
+            self.map().tile_x(tile.0),
+            self.map().tile_y(tile.0),
             diameter,
             self.map().size_x(),
             self.size_y(),
@@ -160,25 +174,22 @@ impl<'a> Founding<'a> {
     /// Towns must all share a grid so their road networks mesh when they interpenetrate.
     /// Tell whether the tile is properly aligned (`town_cmd.cpp::IsTileAlignedToGrid`).
     fn is_tile_aligned_to_grid(&self, tile: TileIndex, layout: TownLayout) -> bool {
-        let x = tile.0 % self.map().size_x();
-        let y = tile.0 / self.map().size_x();
+        let x = self.map().tile_x(tile.0);
+        let y = self.map().tile_y(tile.0);
         match layout {
             TownLayout::TL_2X2_GRID => x.is_multiple_of(3) && y.is_multiple_of(3),
             TownLayout::TL_3X3_GRID => x.is_multiple_of(4) && y.is_multiple_of(4),
             _ => true,
         }
     }
-    // Towns must share a grid so their road networks mesh when they interpenetrate.
-    fn align_tile_to_grid(&self, tile: Tile, layout: TownLayout) -> Tile {
-        let x = tile.0 % self.map().size_x();
-        let y = tile.0 / self.map().size_x();
+    /// Towns must all share a grid so their road networks mesh when they interpenetrate.
+    /// Return the tile aligned to the layout's grid (`town_cmd.cpp::AlignTileToGrid`).
+    fn align_tile_to_grid(&self, tile: TileIndex, layout: TownLayout) -> TileIndex {
+        let x = self.map().tile_x(tile.0);
+        let y = self.map().tile_y(tile.0);
         match layout {
-            TownLayout::TL_2X2_GRID => {
-                Tile((x - x % 3).wrapping_add((y - y % 3).wrapping_mul(self.map().size_x())))
-            }
-            TownLayout::TL_3X3_GRID => {
-                Tile((x & !3).wrapping_add((y & !3).wrapping_mul(self.map().size_x())))
-            }
+            TownLayout::TL_2X2_GRID => TileIndex(self.map().tile_xy(x - x % 3, y - y % 3)),
+            TownLayout::TL_3X3_GRID => TileIndex(self.map().tile_xy(x & !3, y & !3)),
             _ => tile,
         }
     }
@@ -192,7 +203,7 @@ impl<'a> Founding<'a> {
             return Some(self.s.edge_error);
         }
         // Check distance to all other towns.
-        if observed!(super::spatial::close(self.shared, tile.0, 20)) {
+        if observed!(super::spatial::is_close_to_town(self.shared, tile, 20)) {
             return Some(self.s.close_error);
         }
         // Can only build on clear flat areas, possibly with trees.
@@ -214,11 +225,7 @@ impl<'a> Founding<'a> {
                 if counter == VALID_TILE_GOAL {
                     break;
                 }
-                let at = TileIndex(
-                    spiral
-                        .x
-                        .wrapping_add(spiral.y.wrapping_mul(self.map().size_x())),
-                );
+                let at = TileIndex(self.map().tile_xy(spiral.x, spiral.y));
                 let valid = match TileType(observed!((self.shared.tile_type)(at.0))) {
                     // Don't allow rough tiles, as they are likely wetlands.
                     TileType::MP_CLEAR => {
@@ -257,21 +264,14 @@ impl<'a> Founding<'a> {
         w::hit(w::TOWN_COAST);
         let mut coast = self.spiral(tile, 40);
         while !coast.is_end() {
-            let at = TileIndex(
-                coast
-                    .x
-                    .wrapping_add(coast.y.wrapping_mul(self.map().size_x())),
-            );
+            let at = TileIndex(self.map().tile_xy(coast.x, coast.y));
             // Find nearest land tile.
             if TileType(observed!((self.shared.tile_type)(at.0))) == TileType::MP_CLEAR {
                 let mut furthest = TileIndex::INVALID;
                 let mut max_dist = 0;
                 let mut test = self.spiral(at, 10);
                 while !test.is_end() {
-                    let tile = TileIndex(
-                        test.x
-                            .wrapping_add(test.y.wrapping_mul(self.map().size_x())),
-                    );
+                    let tile = TileIndex(self.map().tile_xy(test.x, test.y));
                     if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_CLEAR
                         && observed!((self.s.flat)(tile))
                         && self.is_tile_aligned_to_grid(tile, layout)
@@ -292,32 +292,19 @@ impl<'a> Founding<'a> {
         // If we get here just give up.
         TileIndex::INVALID
     }
-    /// Actually create a town (`town_cmd.cpp::DoCreateTown`).
-    ///
-    /// `town` is the town, `tile` is where to put it, and `townnameparts` is its name.
-    /// `size` is the preset size; `city` selects a city; `layout` is the road layout.
-    /// `manual` records whether the town was placed manually.
-    unsafe fn do_create_town(
-        &self,
-        town: TownRef,
-        tile: TileIndex,
-        townnameparts: u32,
-        size: TownSize,
-        city: bool,
-        layout: TownLayout,
-        manual: bool,
-    ) {
+    /// Actually create a town (`town_cmd.cpp::DoCreateTown`); `town` is the town.
+    unsafe fn do_create_town(&self, town: TownRef, args: &DoCreateTown) {
         w::hit(w::TOWN_GENERATED);
-        if manual {
+        if args.manual {
             w::hit(w::TOWN_MANUAL);
         }
-        if layout == TownLayout::TL_2X2_GRID || layout == TownLayout::TL_3X3_GRID {
+        if args.layout == TownLayout::TL_2X2_GRID || args.layout == TownLayout::TL_3X3_GRID {
             w::hit(w::TOWN_GRID);
         }
         let previous = super::openttd_rust_town_generating_exchange_abi(true) != 0;
         // SAFETY: Immediate canonical field writes; no borrow spans callbacks.
         unsafe {
-            (*town.state).simulation.xy = tile.0;
+            (*town.state).simulation.xy = args.tile.0;
             (*town.state).simulation.num_houses = 0;
             (*town.state).simulation.time_until_rebuild = 10;
             update_radius(town.state);
@@ -386,16 +373,16 @@ impl<'a> Founding<'a> {
         unsafe {
             (*town.state).simulation.townnamegrfid = parameters.grfid;
             (*town.state).simulation.townnametype = parameters.kind;
-            (*town.state).simulation.townnameparts = townnameparts;
-            initialize_layout(town.state, layout, self.map().size_x());
-            (*town.state).simulation.larger_town = city;
+            (*town.state).simulation.townnameparts = args.townnameparts;
+            initialize_layout(town.state, args.layout, self.map());
+            (*town.state).simulation.larger_town = args.city;
         }
-        let mut x = i32::from(size.0).wrapping_mul(16).wrapping_add(3);
-        if size == TownSize::TSZ_RANDOM {
+        let mut x = i32::from(args.size.0).wrapping_mul(16).wrapping_add(3);
+        if args.size == TownSize::TSZ_RANDOM {
             x = (self.random() & 15).wrapping_add(8) as i32;
         }
         // Don't create huge cities when founding town in-game.
-        if city && (!manual || observed!((self.leaves.environment.editor)())) {
+        if args.city && (!args.manual || observed!((self.leaves.environment.editor)())) {
             x = x.wrapping_mul(i32::from(observed!((self.s.initial_city_size)())));
         }
         let engine = self.engine(town);
@@ -408,7 +395,7 @@ impl<'a> Founding<'a> {
             w::hit(w::TOWN_GROWTH);
             engine.grow(
                 u32::from(town.id.0),
-                u32::from(TOWN_EXPAND_BUILDINGS | TOWN_EXPAND_ROADS),
+                u32::from((TownExpandMode::Buildings | TownExpandMode::Roads).0),
             );
             i = i.wrapping_sub(1);
             if i == 0 {
@@ -442,15 +429,9 @@ impl<'a> Founding<'a> {
         }
         loop {
             // Generate a tile index not too close to the edge.
-            let mut tile: TileIndex = self.align_tile_to_grid(
-                Tile(
-                    self.random()
-                        & self
-                            .map()
-                            .size_x()
-                            .wrapping_mul(self.size_y())
-                            .wrapping_sub(1),
-                ),
+            let random = self.random();
+            let mut tile = self.align_tile_to_grid(
+                TileIndex(self.map().random_tile_seed(self.size_y(), random)),
                 layout,
             );
             // If the random tile is water, find suitable land nearby; otherwise evaluate it.
@@ -465,7 +446,17 @@ impl<'a> Founding<'a> {
                 // Allocate a town struct.
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
-                    self.do_create_town(town, tile, townnameparts, size, city, layout, false);
+                    self.do_create_town(
+                        town,
+                        &DoCreateTown {
+                            tile,
+                            townnameparts,
+                            size,
+                            city,
+                            layout,
+                            manual: false,
+                        },
+                    );
                 }
                 // A population still at zero means the placement was too bad to grow at all.
                 if unsafe { super::population(town.state) } > 0 {
@@ -508,7 +499,7 @@ impl<'a> Founding<'a> {
         let parameters =
             unsafe { crate::townname_type::from_style(observed!((self.s.name_style)())) };
         unsafe {
-            names::generate(
+            names::generate_town_name(
                 self.names,
                 name_frame,
                 self.s.random,
@@ -521,18 +512,16 @@ impl<'a> Founding<'a> {
 }
 /// Assign the town layout (`town_cmd.cpp::Town::InitializeLayout`).
 /// `layout` is the desired layout. If `TL_RANDOM`, pick one based on `TileHash`.
-unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) {
+unsafe fn initialize_layout(state: *mut State, layout: TownLayout, map: crate::services::Map) {
     let result = if layout == TownLayout::TL_RANDOM {
         let xy = unsafe { super::position(state) };
-        let x = xy % size_x;
-        let y = xy / size_x;
-        let hash = ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6);
-        (hash % u32::from(TownLayout::NUM_TLS.0 - 1)) as u8
+        let hash = crate::tile_map::tile_hash(map.tile_x(xy), map.tile_y(xy));
+        TownLayout((hash % u32::from(TownLayout::NUM_TLS.0 - 1)) as u8)
     } else {
-        layout.0
+        layout
     };
     unsafe {
-        (*state).simulation.layout = result;
+        (*state).simulation.layout = result.0;
     }
 }
 /// `town_cmd.cpp::GetDefaultTownsForMapSize`.
@@ -563,7 +552,8 @@ pub unsafe extern "C" fn openttd_rust_town_found(
 ) {
     // Multidimensional arrays have to have defined length of non-first dimension.
     #[allow(non_upper_case_globals)]
-    const price_mult: [[i32; 4]; 2] = [[15, 25, 40, 25], [20, 35, 55, 35]];
+    const price_mult: [[i32; TownSize::TSZ_RANDOM.0 as usize + 1]; 2] =
+        [[15, 25, 40, 25], [20, 35, 55, 35]];
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
@@ -578,11 +568,11 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     if editor {
         w::hit(w::TOWN_EDITOR);
     }
-    if company.0 == OWNER_DEITY {
+    if company == CompanyID::DEITY {
         w::hit(w::TOWN_DEITY);
     }
     // Some things are allowed only in the scenario editor and for game scripts.
-    if !editor && company.0 != OWNER_DEITY {
+    if !editor && company != CompanyID::DEITY {
         let setting = observed!((f.s.found_setting)());
         if setting == TownFounding::TF_FORBIDDEN || size == TownSize::TSZ_LARGE || random_location {
             return;
@@ -591,7 +581,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         {
             return;
         }
-    } else if company.0 == OWNER_DEITY && random_location {
+    } else if company == CompanyID::DEITY && random_location {
         // Random parameter is not allowed for Game Scripts.
         return;
     }
@@ -657,7 +647,17 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         } else {
             let town = observed!((f.s.allocate)(tile));
             unsafe {
-                f.do_create_town(town, tile, townnameparts, size, city, layout, true);
+                f.do_create_town(
+                    town,
+                    &DoCreateTown {
+                        tile,
+                        townnameparts,
+                        size,
+                        city,
+                        layout,
+                        manual: true,
+                    },
+                );
             }
             Some(town)
         };
@@ -767,7 +767,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     }
     town_names.clear();
     // Rebuild the town k-d tree so it is well balanced.
-    observed!(crate::town::spatial::rebuild(f.shared));
+    observed!(crate::town::spatial::rebuild_town_kdtree(f.shared));
     if current_number != 0 {
         unsafe {
             result.write(true);

@@ -41,12 +41,50 @@ impl TownId {
     pub const INVALID: Self = Self(u16::MAX);
 }
 
-/// `TSZ_SMALL`.
-pub const TSZ_SMALL: u8 = TownSize::TSZ_SMALL.0;
-/// `TownExpandModes{TownExpandMode::Buildings}`.
-pub const TOWN_EXPAND_BUILDINGS: u8 = 1 << 0;
-/// `TownExpandModes{TownExpandMode::Roads}`.
-pub const TOWN_EXPAND_ROADS: u8 = 1 << 1;
+/// Native `TownExpandMode` bit positions, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownExpandMode(pub u8);
+#[allow(
+    non_upper_case_globals,
+    reason = "original town_type.h TownExpandMode enumerators"
+)]
+impl TownExpandMode {
+    /// Allow town to place buildings.
+    pub const Buildings: Self = Self(0);
+    /// Allow town to place roads.
+    pub const Roads: Self = Self(1);
+}
+
+/// Native `TownExpandModes`, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownExpandModes(pub u8);
+impl TownExpandModes {
+    /// Native element-to-set conversion.
+    #[must_use]
+    pub const fn from_element(element: TownExpandMode) -> Self {
+        Self(1 << element.0)
+    }
+    /// Native set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: TownExpandMode) -> bool {
+        self.0 & Self::from_element(element).0 != 0
+    }
+}
+crate::base_bitset_type::impl_bitset_ops!(TownExpandModes);
+/// Native `TownExpandModes{a, b}` from two elements.
+impl std::ops::BitOr for TownExpandMode {
+    type Output = TownExpandModes;
+    fn bitor(self, other: Self) -> TownExpandModes {
+        TownExpandModes::from_element(self).with(TownExpandModes::from_element(other))
+    }
+}
 
 impl TownId {
     /// Native `PoolID::Begin()`.

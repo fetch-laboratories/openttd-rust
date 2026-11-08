@@ -4,13 +4,15 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-07, integration 129)
+## Where the fork stands (2026-11-08, stocktake 131)
 
-Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host
+Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Development resumed on 2026-11-08 in the cleanup stage. Code main is integration 130, `b7b686b51a` (#805, tooling only; the measurements below are integration 129's). Integrations 104 to 129 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. Quick validation passes on the pause commit `a9ca01d657`. [Profile 125](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6707980382) is accepted on clean `46864a207c`, with profiles 113/119 retained; the user skipped 107. Platform cadences 120 and [125 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42380211065). The next regular stocktake/profile is 131 and the next platform cadence 130.
+Development resumed on 2026-11-08 in the cleanup stage; this session runs at most two implementers (user, 2026-11-08). Code main is integration 132, `5661d54e0a` (#807). The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). The next regular stocktake/profile is 137 and the next platform cadence 135.
 
-| Measured quantity | Integration 129 |
+Fork C++ change since stocktake 125 (2026-11-07): −467 counted lines, all on 11-07 (127 and 129); 0 on 11-08. Tooling since 129: +33 (130) and +563 (131) code lines.
+
+| Measured quantity | Integration 131 |
 | --- | ---: |
 | Original C++ remaining | 221,645 |
 | Fork source glue, including generated records | 34,923 |
@@ -25,7 +27,7 @@ Development resumed on 2026-11-08 in the cleanup stage. Code main is integration
 | Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 |
 | Retained Clippy keys / diagnostics | 664 / 757 |
 | Ruff keys / diagnostics | 296 / 296 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,272 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 |
 
 Fork-added C++ under `src/tests` (5,684 lines) is within source glue. The 6,137 ABI-generated lines are 615 record declarations within source glue plus the 5,522 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support. Clippy retains five approved families.
 
@@ -45,38 +47,38 @@ These are source-area subtotals, not ownership or phase-exit claims. Null-driver
 
 ### Cleanup stream inventories
 
-Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)); steering re-measures the others.
+Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)), here at integration 132; steering re-measures the others.
 
-| Stream | Inventory | Overhaul | Integration 129 |
-| --- | --- | ---: | ---: |
-| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 |
-| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 |
-| #735 | Functions over seven parameters | 150 | 141 |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 |
-| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 |
-| #738 | Rule corpus lines † | 3,312 | 3,362 |
-| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged |
+| Stream | Inventory | Overhaul | Integration 129 | Integration 132 † |
+| --- | --- | ---: | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched | 12 of 319 (#807) |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – |
+| #735 | Functions over seven parameters | 150 | 141 | – |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 62 / 19 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 16,869 / 5,684 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 117 / 314 / 40 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,120 |
+| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 440 / 106 / 49; 296 |
 
-Since integration 103, raw fork C++ fell by 923 lines: `tools/` −649, `src/tests` −192, other `src/` −82. Original C++ retired held at 22.05%. #734 added about 4,900 Rust lines in 33 PRs. Rust comments rose by 3,524 lines, but only 438 of those sit inside bodies. Counting commands: #734 from its issue's per-workset counts; #735 from `migration/clippy-debt.json` and `grep -rn 'allow(clippy::too_many_arguments' rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user.
+Since integration 103, raw fork C++ fell by 923 lines: `tools/` −649, `src/tests` −192, other `src/` −82. Original C++ retired held at 22.05%. #734 added about 4,900 Rust lines in 33 PRs. Rust comments rose by 3,524 lines, but only 438 of those sit inside bodies. Counting commands: #734 from its issue's per-workset counts; #735 from `migration/clippy-debt.json` and `grep -rn 'allow(clippy::too_many_arguments' rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user. Between 129 and 132, #734 finished 12 files, #735 retired one parameter-count row (`DoCreateTown`), #738 cut 243 corpus lines, and #736/#737 held while their first items (#736 U, #809) are in progress.
 
 ### Speed
 
-The instruction counts below measure profile 125 on clean `46864a207c`, the documentation successor of code integration 125, with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
+The instruction counts below measure profile 131 on clean `305ac20c28` (integration 131), with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
 
-| Scenario | Original Ir | Candidate Ir (125) | Projection (125) |
-| --- | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,783,244,380 | 1.168161x |
-| Opus | 21,773,343,583 | 27,864,737,336 | 1.345115x |
-| Grok | 20,969,727,163 | 26,586,132,618 | 1.346652x |
-| P1996 | 3,600,502,896 | 4,590,881,782 | 1.352193x |
-| P2000 | 6,049,922,238 | 7,557,248,562 | 1.444531x |
-| P2016 | 11,343,424,651 | 13,926,293,082 | 1.382593x |
-| Drawing | 2,149,015,961 | 2,154,353,683 | 1.004635x |
+| Scenario | Original Ir | Candidate Ir (131) | Projection (131) | Change since 125 |
+| --- | ---: | ---: | ---: | ---: |
+| TGP | 2,265,528,237 | 2,783,264,555 | 1.168178x | +0.0007% |
+| Opus | 21,773,343,583 | 27,864,805,576 | 1.345115x | +0.0002% |
+| Grok | 20,969,727,163 | 26,586,023,846 | 1.346652x | −0.0004% |
+| P1996 | 3,600,502,896 | 4,589,688,730 | 1.352193x | −0.0260% |
+| P2000 | 6,049,922,238 | 7,576,521,293 | 1.444531x | +0.2550% |
+| P2016 | 11,343,424,651 | 13,924,870,889 | 1.382593x | −0.0102% |
+| Drawing | 2,149,015,961 | 2,154,257,138 | 1.004635x | −0.0045% |
 
-All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. TGP rose 0.13% since 119, below the 3% attribution trigger. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. No anchor or history was reset.
+All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. No loop Ir rose by 3% since 125, so there is no attribution trigger. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. No anchor or history was reset. The five play scenarios now report nonempty stderr, the original's own script debug lines (a saved AI is unavailable, so the dummy AI loads), identical between reference and candidate apart from timestamps.
 
 ## Course (user, 2026-11-06)
 
@@ -294,11 +296,13 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 | 104, 107, 108, 127, 129 | #736 R0 #740, cargo/engine #749/#750, MovementGap #748, Company finance #802 (`0c8a0f8a05`), Town/Industry policy #803 (`7b6887f43d`) | 127 and 129 retire 467 counted C++ lines for 1,273 net Rust test lines and 2,071,485 raw oracle bytes. All 40,320 finance and 21,128 policy cases preserved. |
 | 104, 106, 108 | #737 C #741, H #745, R #744 | Compiled C++ −151, exports −10. |
 | 130 | Housekeeping retention of unpublished detached commits #804/#805 (`b7b686b51a`) | Tooling +33 code lines; C++, Rust and boundary unchanged. |
+| 131 | #806 declared lint carries, fidelity suppressions and content-bound acceptance #808 (`305ac20c28`) | Tooling +563 code lines; C++, Rust and boundary unchanged. Module-scoped rows still bind acceptance to the exact head (#806). |
+| 132 | #734/#735 workset 01 Town/house pass, 12 of 14 files #807 (`5661d54e0a`) | Two function-group reviews and exact-head Full. Five wrappers, about 45 constant/helper sites and 110 original comment lines restored; one parameter-count row retires. Fork C++ and boundary unchanged. `town.rs` and `town/house.rs` remain. |
 
 ## Recurring
 
-- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). The user skipped stocktake/profile 107 after the notes above were collected. Integration 125 stocktake/profile are accepted; profiles 113/119 remain retained for comparison. The next regular stocktake/profile follows integration 131.
-- Run the platform cadence after every fifth integration; 115, 120 and 125 passed. Cadence 130 runs as [42511544906](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). A new failure stops integrations.
+- After every sixth integration, take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)); a running profile counts as one implementer. Stocktake/profile 131 are accepted; profiles 113/119/125 remain retained for comparison. The next regular stocktake/profile follows integration 137.
+- Run the platform cadence after every fifth integration; 120, 125 and [130](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906) passed. The next follows 135. A new failure stops integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -310,17 +314,19 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 ## Resume checkpoint
 
-Agent: /root (Claude Code) | Model: claude-opus-5-5 | Reasoning effort: xhigh
+Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Active since 2026-11-08 with at most two implementers this session (user, 2026-11-08). Slots follow the [cleanup work order](#cleanup-work-order) in proportion: one #734/#735 file pass and one slot for items 2 to 4 in order, starting with #806. #738's docs agent runs outside the count. Code main is integration 130, `b7b686b51a`.
+Active with at most two implementers this session (user, 2026-11-08): one slot runs #734/#735 file passes, the other runs work order items 2 to 4 in order (#806 and #726 done; #736 U now). A running profile takes a slot. Code main is integration 132, `5661d54e0a`.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #734/#735 workset 01 Town/house pass | `/root/cleanup_734_pass_01_town` | Draft PR from integration 130; then a fresh `gpt-6.1-sol` high reviewer, root exact-head Full. Adopts #806's carries after #806 integrates. |
-| #806 lint carries, one tools PR | `/root/cleanup_806_lint_carries` | Draft PR; then review and Full. Its slot then passes to #726, then #736 U. |
-| #738 rule corpus | `/root/cleanup_738_rules` | Pushes a docs branch without a PR; root reviews each commit and pushes it to `rust-migration` between integrations. |
-| Platform cadence 130 | Root | Run 42511544906 on `b7b686b51a`; a red result stops integrations. |
-| Next stocktake/profile | Root | After integration 131, including the [stream inventory](#cleanup-stream-inventories) rows. |
+| #726 maintenance PR #809 | `/root/maintenance_726_steering31_batch`; reviewed by `/root/review_809_maintenance` | Review done, fix `62b6576b05` spot-checked. Root updates from base (overlaps #807 only in separate `movement.rs` hunks), records the base-update condition, requests exact-head Full and merges. |
+| #736 U comparison probes | `/root/cleanup_736_u_vectors` | Draft PR; observations testing unchanged original C++ are deleted, real boundary checks go to one batch-A file. Then review and Full. |
+| #734 workset 02 Industry/subsidy pass | `/root/cleanup_734_pass_02_industry` | Draft PR; then one reviewer per function group if above about 1,000 changed lines. |
+| #734 workset 01 remainder (`town.rs`, `town/house.rs`) | Unassigned | Next file pass when a slot frees. |
+| Next stocktake/profile and cadence | Root | Stocktake/profile after 137; platform cadence after 135. |
+
+Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records two missed Codex reviewer resumes on 11-08.
 
 The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue; its three items lead item 4.
 

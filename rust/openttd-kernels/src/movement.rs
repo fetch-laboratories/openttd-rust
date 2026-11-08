@@ -244,7 +244,12 @@ impl Context<'_> {
                 };
                 if p.callback {
                     let result = if house {
-                        unsafe { crate::town::resolver::foundation(tile, p.kind) }
+                        unsafe {
+                            crate::town::resolver::foundation(
+                                crate::tile_type::TileIndex(tile),
+                                p.kind,
+                            )
+                        }
                     } else {
                         (self.industry_callback)(tile, p.kind)
                     };
