@@ -10,10 +10,10 @@
 )]
 use crate::cargo_type::CargoTypes;
 use crate::newgrf_class::Identity;
+use crate::newgrf_station::NUM_STATIONSSPECS_PER_STATION;
 use crate::station_cmd::{RailSpec, SpecIndex};
 use crate::station_type::BaseStation;
 use crate::station_type::StationAnimationTriggers;
-use crate::newgrf_station::NUM_STATIONSSPECS_PER_STATION;
 use std::ptr;
 #[repr(C)]
 pub struct Vacancy {
@@ -159,7 +159,8 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     let map = shared.map();
     // Check all tiles over the station to check if the specindex is still in use
     for tile in area.tiles(map) {
-        if (animation.rail_belongs)(st, tile) && (command.custom_rail_index)(tile) == u32::from(index)
+        if (animation.rail_belongs)(st, tile)
+            && (command.custom_rail_index)(tile) == u32::from(index)
         {
             return;
         }

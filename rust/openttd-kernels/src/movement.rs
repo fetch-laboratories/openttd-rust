@@ -846,7 +846,9 @@ impl Context<'_> {
                 w::hit(w::MOVE_TRACK_STATION);
                 match mode {
                     TRANSPORT_RAIL => {
-                        if self.world.has_station_rail_raw(tile) && !self.world.station_blocked(tile) {
+                        if self.world.has_station_rail_raw(tile)
+                            && !self.world.station_blocked(tile)
+                        {
                             bits = crate::track_func::track_to_track_bits(
                                 self.world.station_track(tile),
                                 |ok| (self.native_assert)(ok),

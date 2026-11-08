@@ -117,8 +117,7 @@ pub(crate) unsafe fn goods_get_via(
         return StationID::INVALID;
     }
     // The fork's flow-map lookup: operation 1 is `flows.find(source)`.
-    let entry =
-        unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(source.0), 1) };
+    let entry = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(source.0), 1) };
     if entry.found == 0 {
         return StationID::INVALID;
     }

@@ -508,7 +508,13 @@ impl<'a> Ctx<'a> {
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
-        let ok = rect.before_add_rect(area.tile, i32::from(area.w), i32::from(area.h), mode, &c);
+        let ok = rect.before_add_rect(
+            crate::tile_type::TileIndex(area.tile),
+            i32::from(area.w),
+            i32::from(area.h),
+            mode,
+            &c,
+        );
         unsafe { *r = rect };
         if ok {
             out.zero();
@@ -528,7 +534,7 @@ impl<'a> Ctx<'a> {
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
-        let ok = rect.before_add_tile(tile, mode, &c);
+        let ok = rect.before_add_tile(crate::tile_type::TileIndex(tile), mode, &c);
         unsafe { *r = rect };
         if ok {
             out.zero();
@@ -543,7 +549,7 @@ impl<'a> Ctx<'a> {
         let r = self.rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
-        rect.after_remove_tile(id, tile, &c);
+        rect.after_remove_tile(id, crate::tile_type::TileIndex(tile), &c);
         unsafe { *r = rect };
     }
     /// `st->rect.AfterRemoveRect(st, area)`.

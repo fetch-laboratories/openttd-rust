@@ -7,9 +7,9 @@
 
 //! Shared `station_map.h` helpers for live map fields and remaining typed services.
 use crate::bitmath_func::{gb, has_bit, sb, toggle_bit};
+use crate::direction_type::{Axis, DiagDirection};
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
-use crate::direction_type::{Axis, DiagDirection};
 use crate::station_type::{RoadStopType, StationID, StationType};
 use crate::tile_type::{MP_STATION, TileIndex};
 use crate::track_type::Track;
@@ -238,7 +238,7 @@ pub(crate) fn get_road_waypoint_roadside(
 ) -> Option<crate::services::Roadside> {
     require_road_waypoint(m, tile)?;
     Some(crate::services::Roadside(
-        gb(u32::from(m.m3(tile.0)?), 2, 2) as u8
+        gb(u32::from(m.m3(tile.0)?), 2, 2) as u8,
     ))
 }
 /// Temporary raw adapter for `station_lifecycle.rs`.
@@ -326,8 +326,7 @@ impl crate::map_func::World<'_> {
     /// `IsRailWaypointTile`: is this tile a station tile and a rail waypoint?
     pub(crate) fn is_rail_waypoint_tile(&self, t: TileIndex) -> bool {
         self.kind(t.0) == MP_STATION
-            && get_station_type(&self.types, t).expect("station tile")
-                == StationType::RailWaypoint
+            && get_station_type(&self.types, t).expect("station tile") == StationType::RailWaypoint
     }
     /// `HasStationTileRail`: is this a station tile with rail, a rail station
     /// or rail waypoint?
