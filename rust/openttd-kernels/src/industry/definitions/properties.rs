@@ -6,7 +6,6 @@ use crate::bitmath_func::{gb, sb};
 use crate::cargo_registry::get_cargo_translation;
 use crate::cargo_type::{CT_INVALID, CargoType};
 use crate::debug::grf_msg;
-use crate::industry_map::IndustryGraphics;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, IndustryGfx, IndustryType,
@@ -35,9 +34,6 @@ const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
 };
 /// `STR_NULL` (`table/strings.h`).
 const STR_NULL: StringID = StringID(0);
-/// `GFX_WATERTILE_SPECIALCHECK`, promoted to `IndustryGfx` as in the original comparisons.
-const GFX_WATERTILE_SPECIALCHECK: IndustryGfx =
-    IndustryGfx(IndustryGraphics::GFX_WATERTILE_SPECIALCHECK.0 as u16);
 /// `GRFFilePropsBase::SetGRFFile` with the context's non-null file.
 fn set_grf_file(props: &mut industrytype::SubstituteProps, c: &Context) {
     props.grffile = c.file;
@@ -150,7 +146,7 @@ fn validate_industry_layout(layout: &[LayoutTile]) -> bool {
     }
     layout
         .iter()
-        .any(|tilelayout| IndustryGfx(tilelayout.gfx) != GFX_WATERTILE_SPECIALCHECK)
+        .any(|tilelayout| IndustryGfx(tilelayout.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK)
 }
 /// Industry property 0x0A: set industry layout(s).
 unsafe fn read_industry_layouts(
@@ -249,7 +245,7 @@ unsafe fn read_industry_layouts(
                     // Declared as been valid, can be used
                     it.gfx = tempid.0;
                 }
-            } else if IndustryGfx(it.gfx) == GFX_WATERTILE_SPECIALCHECK {
+            } else if IndustryGfx(it.gfx) == IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
                 it.ti.x = i16::from(gb(it.ti.x as u32, 0, 8) as i8);
                 it.ti.y = i16::from(gb(it.ti.y as u32, 0, 8) as i8);
                 // When there were only 256x256 maps, TileIndex was a uint16_t and
