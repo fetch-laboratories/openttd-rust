@@ -97,7 +97,7 @@ impl ResolverServices {
     }
     /// `IsTileType(tile, MP_INDUSTRY)`.
     fn is_industry_tile(&self, tile: TileIndex) -> bool {
-        TileType((self.shared().tile_type)(tile.0)) == TileType::MP_INDUSTRY
+        crate::tile_map::is_tile_type(self.shared(), tile.0, TileType::MP_INDUSTRY.0)
     }
     /// `Industry::TileBelongsToIndustry`, for the industry with this index.
     fn tile_belongs_to_industry(&self, tile: TileIndex, index: IndustryID) -> bool {
