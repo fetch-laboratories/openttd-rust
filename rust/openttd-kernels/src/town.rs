@@ -48,6 +48,50 @@ pub const TOWN_GROWTH_WINTER: u32 = 0xFFFF_FFFE;
 /// The town needs the cargo for growth when on desert (any amount).
 pub const TOWN_GROWTH_DESERT: u32 = 0xFFFF_FFFF;
 
+/// Town actions of a company (`town.h`), retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownAction(pub u8);
+#[allow(non_upper_case_globals)]
+impl TownAction {
+    /// Small advertising campaign.
+    pub const AdvertiseSmall: Self = Self(0);
+    /// Medium advertising campaign.
+    pub const AdvertiseMedium: Self = Self(1);
+    /// Large advertising campaign.
+    pub const AdvertiseLarge: Self = Self(2);
+    /// Rebuild the roads.
+    pub const RoadRebuild: Self = Self(3);
+    /// Build a statue.
+    pub const BuildStatue: Self = Self(4);
+    /// Fund new buildings.
+    pub const FundBuildings: Self = Self(5);
+    /// Buy exclusive transport rights.
+    pub const BuyRights: Self = Self(6);
+    /// Try to bribe the council.
+    pub const Bribe: Self = Self(7);
+    /// End marker.
+    pub const End: Self = Self(8);
+}
+
+/// Native `TownActions`, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TownActions(pub u8);
+impl TownActions {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `Set` of one element.
+    pub fn set(&mut self, element: TownAction) {
+        self.0 |= 1 << element.0;
+    }
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: TownAction) -> bool {
+        self.0 & (1 << element.0) != 0
+    }
+}
+
 pub use crate::town_type::TownId;
 #[repr(C)]
 #[derive(Clone, Copy)]
