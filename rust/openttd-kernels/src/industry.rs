@@ -2529,6 +2529,11 @@ impl IndustryControlFlags {
     pub const fn test(self, element: IndustryControlFlag) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
     }
+    /// Native `BaseBitSet::IsValid`: no bit outside the defined flags is set.
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.0 & !Self::MASK == 0
+    }
 }
 
 /// Consecutive economy years without production before a processing industry may close.

@@ -138,7 +138,23 @@ impl IndustryRandomTriggers {
     pub const fn test(self, element: IndustryRandomTrigger) -> bool {
         (self.0 as u64) & (1_u64 << element.0) != 0
     }
+    /// Native bit set containing one element.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "EnumBitSet<IndustryRandomTrigger, uint8_t> stores the element bit in uint8_t"
+    )]
+    pub const fn from_element(element: IndustryRandomTrigger) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
 }
+
+crate::base_bitset_type::impl_bitset_ops!(IndustryRandomTriggers);
 
 /// Native `industry_type.h::IndustryAnimationTrigger`, retaining the full underlying integer domain.
 #[repr(transparent)]

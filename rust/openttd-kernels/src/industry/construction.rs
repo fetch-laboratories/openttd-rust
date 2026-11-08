@@ -73,13 +73,6 @@ pub struct ConstructionServices {
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
 }
-pub(super) const ORIGINAL_CALLBACKS: u16 =
-    IndustryCallbackMasks::from_element(IndustryCallbackMask::Production256Ticks).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionCargoArrival).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::MonthlyProdChange).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionChange).0
-        | IndustryCallbackMasks::from_element(IndustryCallbackMask::ProdChangeBuild).0;
-
 fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
     let area = unsafe { super::lifecycle::location(owner) };
     let x = area.tile % size_x;
@@ -485,8 +478,8 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         unsafe { super::lifecycle::location(owner) },
         r.size_x,
         |tile| unsafe {
-            if (l.belongs)(tile, r.id) {
-                super::openttd_rust_industry_animate_tile_abi(tile, 0, 0x100, s, l);
+            if (l.belongs)(tile.0, r.id) {
+                super::openttd_rust_industry_animate_tile_abi(tile.0, 0, 0x100, s, l);
             }
         },
     );

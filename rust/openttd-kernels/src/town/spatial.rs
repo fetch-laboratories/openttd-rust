@@ -174,8 +174,6 @@ pub(crate) fn get_random_town(s: &Services) -> TownRef {
         id: TownId(id as u16),
     }
 }
-// Compatibility name for callers outside this pass.
-pub(crate) use get_random_town as random;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rebuild_index(s: *const Services) {
     rebuild_town_kdtree(unsafe { &*s });
