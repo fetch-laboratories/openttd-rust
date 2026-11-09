@@ -13,7 +13,8 @@
 //! placeholders that no test may rely on; a test that reads one sets it. References name
 //! the matching table, so `&'static` chains are valid. No builders, macros, traits,
 //! defaults or behaviour. A later item adds only the tables it needs.
-//! `crate::engine_capabilities::TEST_TABLE` stays in its module for its private fields.
+//! `crate::engine_capabilities::TEST_TABLE` and `crate::town::resolver::TEST_TABLE` stay in
+//! their modules for their private fields.
 
 use std::ptr;
 
@@ -57,6 +58,19 @@ pub(crate) extern "C" fn unreachable6<A, B, C, D, E, F, R>(
     _: F,
 ) -> R {
     unreachable!("unexpected 6-argument service call")
+}
+
+/// Every 7-argument entry; any call is a test error.
+pub(crate) extern "C" fn unreachable7<A, B, C, D, E, F, G, R>(
+    _: A,
+    _: B,
+    _: C,
+    _: D,
+    _: E,
+    _: F,
+    _: G,
+) -> R {
+    unreachable!("unexpected 7-argument service call")
 }
 
 /// Every 9-argument entry; any call is a test error.
@@ -707,4 +721,104 @@ pub(crate) const WATER_REGION_LEAVES: crate::water_regions::Leaves = crate::wate
     shared: ptr::null(),
     aqueduct: unreachable1,
     debug: unreachable3,
+};
+
+/// `crate::station::CatchmentServices` with every entry unreachable.
+pub(crate) const CATCHMENT: crate::station::CatchmentServices = crate::station::CatchmentServices {
+    shared: ptr::null(),
+    airport: ptr::null(),
+    industry_tile: ptr::null(),
+    object: ptr::null(),
+    town: ptr::null(),
+    station: ptr::null(),
+    visits: ptr::null(),
+    station_count: unreachable0,
+    station_if_valid: unreachable1,
+    next_station: unreachable1,
+    owner: unreachable1,
+    station_owner: unreachable1,
+    id: unreachable1,
+    location: unreachable1,
+    associated_industry: unreachable1,
+    radius_facilities: unreachable1,
+    modified_catchment: unreachable0,
+    spread: unreachable0,
+    industry_by_id: unreachable1,
+    industry_id: unreachable1,
+    industry_owner: unreachable1,
+    industry_neutral: unreachable1,
+    next_industry: unreachable1,
+};
+
+/// `crate::movement::MovementServices` with every entry unreachable.
+pub(crate) const MOVEMENT: crate::movement::MovementServices = crate::movement::MovementServices {
+    shared: ptr::null(),
+    orders: ptr::null(),
+    train: ptr::null(),
+    vehicle: ptr::null(),
+    tunnel_bridge: ptr::null(),
+    road_compatible: unreachable1,
+    road_type_speed: unreachable1,
+    road_kind: unreachable1,
+    road_vehicle: ptr::null(),
+    resolve: unreachable1,
+    depot_invalidate: unreachable1,
+    native_assert: unreachable1,
+    owned_land: unreachable1,
+    object_foundation: unreachable1,
+    house_foundation: unreachable1,
+    industry_foundation: unreachable1,
+    industry_callback: unreachable2,
+};
+
+/// `crate::animated_tile::Services` with every entry unreachable.
+pub(crate) const ANIMATION: crate::animated_tile::Services = crate::animated_tile::Services {
+    shared: ptr::null(),
+    station_base: unreachable1,
+    as_station: unreachable1,
+    location: unreachable1,
+    is_station: unreachable1,
+    roadstop_resolver: ptr::null(),
+    town: ptr::null(),
+    industries: ptr::null(),
+    construction: ptr::null(),
+    industry_tiles: ptr::null(),
+    house: ptr::null(),
+    industry: ptr::null(),
+    station: ptr::null(),
+    airport: ptr::null(),
+    airport_runtime: ptr::null(),
+    object: ptr::null(),
+    roadstop: ptr::null(),
+    state: unreachable1,
+    set_state: unreachable2,
+    house_spec: unreachable1,
+    road_frame: unreachable2,
+    set_road_frame: unreachable3,
+    rail_belongs: unreachable2,
+    station_triggers: unreachable2,
+    road_triggers: unreachable2,
+    rail_spec: unreachable1,
+    industry_object: unreachable1,
+    rail_spec_triggers: unreachable1,
+    road_spec_triggers: unreachable1,
+    airport_spec_triggers: unreachable1,
+    airport_area: unreachable1,
+    airport_belongs: unreachable2,
+    road_count: unreachable1,
+    road_tile: unreachable2,
+};
+
+/// `crate::newgrf_animation_base::Binding` for houses with every entry unreachable.
+pub(crate) const HOUSE_ANIMATION: crate::newgrf_animation_base::Binding<
+    crate::animated_tile::HouseSpec,
+    crate::services::TownHandle,
+    u64,
+> = crate::newgrf_animation_base::Binding {
+    entry: unreachable1,
+    info: unreachable1,
+    callback: unreachable7,
+    sound: unreachable3,
+    version8: unreachable1,
+    speed_error: unreachable3,
 };
