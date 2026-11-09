@@ -93,10 +93,6 @@ pub(crate) fn for_all_stations_radius(
         );
     }
 }
-/// Temporary raw adapter for callers outside workset 03.
-pub(crate) fn radius(s: &Services, center: u32, radius: u32, visit: impl FnMut(*mut BaseStation)) {
-    for_all_stations_radius(s, TileIndex(center), radius, visit);
-}
 /// `Station::MoveSign`, dispatching a waypoint to `Waypoint::MoveSign`.
 pub(crate) fn station_move_sign(s: &Services, st: *mut BaseStation, new_xy: TileIndex) {
     let commands = unsafe { &*(s.station_commands)() };
@@ -113,10 +109,6 @@ pub(crate) fn station_move_sign(s: &Services, st: *mut BaseStation, new_xy: Tile
     remove(s, (c.id)(st));
     (commands.base_move_sign)(st, new_xy.0);
     insert(s, st);
-}
-/// Temporary raw adapter for callers outside workset 03.
-pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
-    station_move_sign(s, st, TileIndex(tile));
 }
 /// `ModifyStationRatingAround`: forcibly modify station ratings near a given
 /// tile. Used when a crash hurts a company's station ratings nearby, or when

@@ -221,15 +221,6 @@ fn station_name_information(
     }
     sni
 }
-/// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `generate_station_name`.
-pub(crate) fn generate_name(
-    st: *mut BaseStation,
-    tile: u32,
-    class: StationNaming,
-    s: &Services,
-) -> u32 {
-    generate_station_name(st, TileIndex(tile), class, s).0
-}
 /// `GenerateStationName`, including industry aliases and fallback exhaustion.
 pub(crate) fn generate_station_name(
     st: *mut BaseStation,

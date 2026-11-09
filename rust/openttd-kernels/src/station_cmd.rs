@@ -1005,7 +1005,7 @@ impl Ctx<'_> {
             (self.map().tile_x(xy) as i32).clamp(r.left, r.right) as u32,
             (self.map().tile_y(xy) as i32).clamp(r.top, r.bottom) as u32,
         ));
-        crate::station::spatial::move_sign(self.shared, st, new_xy.0);
+        crate::station::spatial::station_move_sign(self.shared, st, new_xy);
         if !(self.world().is_station)(st) {
             return;
         }
@@ -1157,7 +1157,7 @@ impl Ctx<'_> {
     fn get_closest_deleted_station(&self, tile: TileIndex) -> *mut BaseStation {
         let mut threshold = 8;
         let mut best_station: *mut BaseStation = std::ptr::null_mut();
-        crate::station::spatial::radius(self.shared, tile.0, threshold, |st| {
+        crate::station::spatial::for_all_stations_radius(self.shared, tile, threshold, |st| {
             if (self.world().in_use)(st)
                 || CompanyID((self.world().station_owner)(st))
                     != CompanyID((self.shared.current_company)())
@@ -1217,13 +1217,21 @@ impl Ctx<'_> {
             if flags.test(DoCommandFlag::Execute) {
                 st = (self.s.new_station)(area.tile);
                 crate::station::spatial::insert(self.shared, st);
-                let town = crate::town::spatial::closest(self.shared, area.tile, u32::MAX);
+                let town = crate::town::spatial::closest_town_from_tile(
+                    self.shared,
+                    TileIndex(area.tile),
+                    u32::MAX,
+                );
                 (self.s.set_town)(st, town);
                 (self.s.set_string_id)(
                     st,
-                    crate::station_lifecycle::generate_name(st, area.tile, name_class, unsafe {
-                        &*self.s.lifecycle
-                    }),
+                    crate::station_lifecycle::generate_station_name(
+                        st,
+                        TileIndex(area.tile),
+                        name_class,
+                        unsafe { &*self.s.lifecycle },
+                    )
+                    .0,
                 );
                 let current = CompanyID((self.shared.current_company)());
                 if (self.shared.company_valid)(current.0) {
@@ -1349,7 +1357,7 @@ impl Ctx<'_> {
             other: false,
         };
         /* Check if the tile is the base tile of another station */
-        crate::station::spatial::radius(self.shared, tile.0, 0, |st| unsafe {
+        crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| unsafe {
             sign_visit((&raw mut search).cast(), st);
         });
         if search.other {
@@ -1357,7 +1365,7 @@ impl Ctx<'_> {
             return StationID::INVALID;
         }
         if flags.test(DoCommandFlag::Execute) {
-            crate::station::spatial::move_sign(self.shared, st, tile.0);
+            crate::station::spatial::station_move_sign(self.shared, st, tile);
             (self.s.virtual_coord)(st);
         }
         out.zero();
@@ -3983,7 +3991,8 @@ impl Ctx<'_> {
                 && (road_type[RTT_ROAD] != RoadType::INVALID_ROADTYPE
                     || road_type[RTT_TRAM] != RoadType::INVALID_ROADTYPE)
             {
-                let town = crate::town::spatial::closest(self.shared, cur_tile.0, u32::MAX);
+                let town =
+                    crate::town::spatial::closest_town_from_tile(self.shared, cur_tile, u32::MAX);
                 let authority = unsafe { &*self.s.authority };
                 let town = (authority.town_index)(town);
                 (self.rail().make_road)(
@@ -4336,7 +4345,7 @@ impl Ctx<'_> {
         } else if TownCouncilAttitudes((authority.council_tolerance)())
             != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
         {
-            let t = crate::town::spatial::closest(self.shared, tile.0, u32::MAX);
+            let t = crate::town::spatial::closest_town_from_tile(self.shared, tile, u32::MAX);
             let mut num = 0_u32;
             for id in 0..(self.world().pool_size)() {
                 let st = self.full_station(StationID(id as u16));
@@ -5240,16 +5249,17 @@ impl Ctx<'_> {
         crate::station::spatial::insert(self.shared, st);
         (self.s.set_town)(
             st,
-            crate::town::spatial::closest(self.shared, tile.0, u32::MAX),
+            crate::town::spatial::closest_town_from_tile(self.shared, tile, u32::MAX),
         );
         (self.s.set_string_id)(
             st,
-            crate::station_lifecycle::generate_name(
+            crate::station_lifecycle::generate_station_name(
                 st,
-                tile.0,
+                tile,
                 StationNaming::STATIONNAMING_OILRIG,
                 unsafe { &*self.s.lifecycle },
-            ),
+            )
+            .0,
         );
         /* Mark industry as associated both ways */
         (self.s.associate_industry)(st, tile.0);
