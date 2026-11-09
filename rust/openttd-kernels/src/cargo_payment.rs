@@ -230,7 +230,7 @@ fn deliver_goods(
         }
         let amount = unsafe {
             crate::industry::accept_delivery(owner, slot, remaining, || {
-                crate::timer_game_common::economy_date().0
+                crate::timer_game_common::economy_date()
             })
         };
         remaining -= amount;

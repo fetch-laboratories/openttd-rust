@@ -660,7 +660,7 @@ pub(crate) unsafe fn accept_delivery(
     owner: *mut Industry,
     slot: usize,
     pieces: u32,
-    date: impl FnOnce() -> i32,
+    date: impl FnOnce() -> crate::timer_game_economy::EconomyDate,
 ) -> u32 {
     let a = accepted(owner, slot);
     let amount = pieces.min(u32::from(u16::MAX - unsafe { (*a).waiting }));
@@ -671,7 +671,7 @@ pub(crate) unsafe fn accept_delivery(
         *count = count.wrapping_add(amount as u16);
     }
     let now = date();
-    unsafe { (*a).last_accepted = now };
+    unsafe { (*a).last_accepted = now.0 };
     amount
 }
 impl Pair {
@@ -2713,7 +2713,12 @@ mod delivery_tests {
             assert_eq!(get_cargo_accepted(owner, CargoType(8)), None);
             // Saturated stockpiles still create history and update last_accepted.
             for (pieces, amount, waiting, date) in [(20, 5, 65535, -12), (20, 0, 65535, 73)] {
-                assert_eq!(accept_delivery(owner, 0, pieces, || date), amount);
+                assert_eq!(
+                    accept_delivery(owner, 0, pieces, || {
+                        crate::timer_game_economy::EconomyDate(date)
+                    }),
+                    amount
+                );
                 assert_eq!(industry.accepted[0].waiting, waiting);
                 assert_eq!(industry.accepted[0].last_accepted, date);
                 assert_eq!(
@@ -2726,7 +2731,12 @@ mod delivery_tests {
             industry.accepted[0].waiting = 0;
             (*industry.accepted[0].history)[usize::from(THIS_MONTH)].first = 65530;
             let history = industry.accepted[0].history;
-            assert_eq!(accept_delivery(owner, 0, 10, || 99), 10);
+            assert_eq!(
+                accept_delivery(owner, 0, 10, || {
+                    crate::timer_game_economy::EconomyDate(99)
+                }),
+                10
+            );
             assert_eq!(industry.accepted[0].history, history);
             assert_eq!((*history)[usize::from(THIS_MONTH)].first, 4);
             assert_eq!((*history)[usize::from(LAST_MONTH)].first, 0);
