@@ -3107,8 +3107,7 @@ impl Ctx<'_> {
         let build_over_road = is_drive_through && world.is_normal_road_tile(cur_tile.0);
         /* Road bits in the wrong direction. */
         let rb = if world.is_normal_road_tile(cur_tile.0) {
-            self.get_road_bits(cur_tile, RoadTramType::RTT_ROAD)
-                | self.get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
+            RoadBits(world.all_road_bits(cur_tile.0))
         } else {
             RoadBits::ROAD_NONE
         };
