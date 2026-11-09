@@ -84,9 +84,6 @@ impl Services {
     fn check(&self) -> extern "C" fn(bool) {
         crate::movement::table(self.shared).native_assert
     }
-    fn climate() -> u8 {
-        unsafe { ((*crate::animated_tile::services().industries).landscape)() }
-    }
     fn map_access(&self) -> TileTypeAccess {
         crate::map_func::World::new(self.shared).types
     }
@@ -96,7 +93,7 @@ impl Services {
     }
     /// `_settings_game.game_creation.landscape`.
     fn landscape() -> LandscapeType {
-        LandscapeType(Self::climate())
+        LandscapeType(unsafe { ((*crate::animated_tile::services().industries).landscape)() })
     }
 }
 
