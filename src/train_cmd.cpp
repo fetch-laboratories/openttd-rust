@@ -960,7 +960,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
 		.write_colourmap = TrainWriteColourmap,
-		.acc_model = TrainAccModel,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,
 		.arrival_news = TrainArrivalNews,
@@ -1015,8 +1014,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.leave_sound = TrainLeaveSound,
 		.leave_unbunch = TrainLeaveUnbunch,
 		.local_company = TrainLocalCompany,
-		.lost_warn = TrainLostWarn,
-		.max_depot_penalty = TrainMaxDepotPenalty,
 		.no_90 = OpenTTDLegacyMapQuery<uint64_t, RustDefaultRail90Disallowed, OpenTTDTrainHandle, uint8_t, uint8_t>,
 		.oneway_blocking = OpenTTDLegacyMapQuery<uint64_t, RustOnewaySignalBlocking, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.order_depot_service = TrainOrderDepotService,
@@ -1030,7 +1027,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.reserve_paths = RustTrainReservePaths,
 		.reserve_under = TrainReserveUnder,
 		.reset_unbunch = TrainResetUnbunch,
-		.reverse_at_signals = TrainReverseAtSignals,
 		.reverse_windows = TrainReverseWindows,
 		.running_windows = TrainRunningWindows,
 		.servint = TrainServint,
@@ -1065,22 +1061,15 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.track_direction = TrainTrackDirection,
 
 		.train_list = TrainTrainList,
-		.train_visit = TrainTrainVisit,
 		.truncate_cargo = TrainTruncateCargo,
 
 
-		.update_delta = RustVehicleUpdateDelta<OpenTTDTrainHandle>,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
-		.visit_type = TrainVisitType,
 		.wagon_override = TrainVehicleRead<uint64_t, RustVehicleUsesWagonOverride>,
 		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
-		.wait_oneway = TrainWaitOneway,
-		.wait_pbs = TrainWaitPbs,
-		.wait_twoway = TrainWaitTwoway,
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
-		.write_visit_type = TrainWriteVisitType,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;
@@ -1138,8 +1127,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.vehicle = &GetRustVehicleServices(),
 		.shared = &GetRustSharedServices(),
 		.start_stop = TrainReservationStartStop,
-		.station_train = TrainReservationStationTrain,
-		.station_xy = TrainReservationStationXy,
 		.stuck = TrainReservationStuck,
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,

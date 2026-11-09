@@ -139,16 +139,6 @@ extern "C" uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept
 	return RustStationAirportTile(Station::Get(StationID(destination)));
 }
 
-extern "C" uint64_t openttd_orders_base_station_tile(uint16_t destination) noexcept
-{
-	return BaseStation::Get(StationID(destination))->xy.base();
-}
-
-extern "C" uint64_t openttd_orders_station_tile(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->xy.base();
-}
-
 extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
 {
 	return Depot::Get(DepotID(destination))->xy.base();
@@ -505,8 +495,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.needs_service = openttd_orders_needs_service,
 	.remaining_years = openttd_orders_remaining_years,
 	.airport_tile = openttd_orders_airport_tile,
-	.base_station_tile = openttd_orders_base_station_tile,
-	.station_tile = openttd_orders_station_tile,
 	.depot_tile = openttd_orders_depot_tile,
 	.distance = OpenTTDLegacyOrderDistance,
 	.station_location = RustVehicleLegacyOrderStationLocation,

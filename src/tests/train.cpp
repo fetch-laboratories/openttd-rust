@@ -53,10 +53,6 @@ TEST_CASE("Train reservation - native front-engine assertion precedes depot retu
 	}
 }
 
-namespace {
-uint64_t _train_speed_model;
-}
-
 TEST_CASE("Train speed - depot break and wormhole limits")
 {
 	/* Abort defaults stand for every service the original loop must not reach. */
@@ -71,17 +67,19 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	const OpenTTDTrainHandle handle{&record, owner.get()};
 	owner->cached_max_curve_speed = 180;
 	auto table = OpenTTDTrainServices{};
-	table.acc_model = [](OpenTTDTrainHandle) noexcept { return _train_speed_model; };
+	uint8_t acceleration = 0;
+	const OpenTTDSettingAddresses settings{.train_acceleration_model = &acceleration};
 	table.is_station = [](OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
 	table.order_max_speed = [](OpenTTDTrainHandle) noexcept -> uint64_t { return 160; };
 	OpenTTDSharedServices shared{};
+	shared.settings = &settings;
 	shared.bridge_speed = [](uint32_t tile) noexcept -> uint16_t {
 		CHECK(tile == 23);
 		return 90;
 	};
 	struct Case { TrackBits track; uint8_t status; int speed; };
 	for (uint64_t model : {0, 1}) {
-		_train_speed_model = model;
+		acceleration = static_cast<uint8_t>(model);
 		for (const Case test : {
 			Case{TRACK_BIT_X, 0, 160},
 			Case{TRACK_BIT_WORMHOLE, 1, 160},

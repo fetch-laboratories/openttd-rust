@@ -70,13 +70,13 @@ pub struct Invocation {
     root: Handle,
     callback: u16,
     param1: u32,
-    param2: u32,
+    pub(crate) param2: u32,
 }
 #[repr(C)]
 pub struct Services {
     shared: *const crate::services::Services,
     common: *const newgrf_spritegroup::Services,
-    spec: extern "C" fn(u8) -> Handle,
+    pub(crate) spec: extern "C" fn(u8) -> Handle,
     copy_default: extern "C" fn(u8, u8),
     clear_specs: extern "C" fn(u8),
     label_spec: extern "C" fn(Handle) -> LabelSpec,
@@ -99,11 +99,44 @@ pub struct Services {
     set_fallback: extern "C" fn(*mut c_void, u32, u32),
     clear_inverse: extern "C" fn(*mut c_void),
     set_inverse: extern "C" fn(*mut c_void, u8, u8),
-    invocation: extern "C" fn(Handle, *mut Invocation),
-    callback_frame: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
+    pub(crate) invocation: extern "C" fn(Handle, *mut Invocation),
+    pub(crate) callback_frame: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
     sprite_frame: extern "C" fn(*const Invocation) -> u32,
     sprite: extern "C" fn(Handle) -> Sprite,
 }
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: Services = Services {
+    shared: std::ptr::null(),
+    common: std::ptr::null(),
+    spec: crate::test_tables::unreachable1,
+    copy_default: crate::test_tables::unreachable2,
+    clear_specs: crate::test_tables::unreachable1,
+    label_spec: crate::test_tables::unreachable1,
+    bitnum: crate::test_tables::unreachable1,
+    town_acceptance_effect: crate::test_tables::unreachable1,
+    finalise_spec: crate::test_tables::unreachable1,
+    order_spec: crate::test_tables::unreachable1,
+    index: crate::test_tables::unreachable1,
+    production: crate::test_tables::unreachable1,
+    sort: crate::test_tables::unreachable2,
+    publish_sorted: crate::test_tables::unreachable2,
+    publish_standard: crate::test_tables::unreachable2,
+    publish_town: crate::test_tables::unreachable3,
+    set_file: crate::test_tables::unreachable2,
+    set_effect: crate::test_tables::unreachable2,
+    invalidate_strings: crate::test_tables::unreachable1,
+    file: crate::test_tables::unreachable1,
+    assign_fallback: crate::test_tables::unreachable2,
+    resize_fallback: crate::test_tables::unreachable2,
+    set_fallback: crate::test_tables::unreachable3,
+    clear_inverse: crate::test_tables::unreachable1,
+    set_inverse: crate::test_tables::unreachable3,
+    invocation: crate::test_tables::unreachable2,
+    callback_frame: crate::test_tables::unreachable3,
+    sprite_frame: crate::test_tables::unreachable1,
+    sprite: crate::test_tables::unreachable1,
+};
 struct Registry {
     services: *const Services,
     /// Available cargoes, including phony cargoes such as regearing cargoes.
