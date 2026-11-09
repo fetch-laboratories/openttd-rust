@@ -7,7 +7,7 @@
 
 //! `tile_cmd.h`: vehicle tile-admission results and the tile-type cargo procedures.
 #![allow(unsafe_code)]
-use crate::tile_type::TileType;
+use crate::tile_type::{TileIndex, TileType};
 
 /// Native `VehicleEnterTileState`, retaining every underlying `u8` value.
 #[repr(transparent)]
@@ -51,16 +51,13 @@ pub const CANNOT_ENTER: u8 =
 /// `AddAcceptedCargo`: the tile type's `add_accepted_cargo_proc`, with a fresh
 /// dummy mask when the caller passes none. Only houses, industries and objects
 /// have one.
-///
-/// `tile` stays a raw `TileIndex` base until `station.rs`, its only caller, adopts the
-/// typed form after #827.
 pub(crate) fn add_accepted_cargo(
-    tile: u32,
+    tile: TileIndex,
     acceptance: &mut [u32; 64],
     always_accepted: *mut u64,
     c: &crate::station::Ctx<'_>,
 ) {
-    let kind = TileType((c.s.tile_type)(tile));
+    let kind = TileType((c.s.tile_type)(tile.0));
     if !matches!(
         kind,
         TileType::MP_HOUSE | TileType::MP_INDUSTRY | TileType::MP_OBJECT
@@ -79,41 +76,60 @@ pub(crate) fn add_accepted_cargo(
         match kind {
             TileType::MP_HOUSE => {
                 crate::town::house::openttd_rust_house_accepted_tile(
-                    c.c.town, c.s, tile, cargoes, always,
+                    c.c.town, c.s, tile.0, cargoes, always,
                 );
             }
             TileType::MP_INDUSTRY => {
                 crate::industry::tile::openttd_rust_industry_tile_acceptance(
-                    tile,
+                    tile.0,
                     cargoes,
                     always,
                     c.c.industry_tile,
                 );
             }
-            _ => crate::objects::openttd_rust_object_cargo(c.c.object, tile, cargoes, always),
+            _ => crate::objects::openttd_rust_object_cargo(c.c.object, tile.0, cargoes, always),
         }
     }
 }
 
 /// `AddProducedCargo`: the tile type's `add_produced_cargo_proc`. Only houses
 /// and objects have one.
-///
-/// `tile` stays a raw `TileIndex` base until `station.rs` adopts the typed form.
-pub(crate) fn add_produced_cargo(tile: u32, produced: &mut [u32; 64], c: &crate::station::Ctx<'_>) {
+pub(crate) fn add_produced_cargo(
+    tile: TileIndex,
+    produced: &mut [u32; 64],
+    c: &crate::station::Ctx<'_>,
+) {
     let cargoes = produced.as_mut_ptr();
     // SAFETY: Live immutable tables; the output outlives the synchronous procs.
     unsafe {
-        match TileType((c.s.tile_type)(tile)) {
+        match TileType((c.s.tile_type)(tile.0)) {
             TileType::MP_HOUSE => {
-                crate::town::house::openttd_rust_house_produced(c.c.town, c.s, tile, cargoes);
+                crate::town::house::openttd_rust_house_produced(c.c.town, c.s, tile.0, cargoes);
             }
             TileType::MP_OBJECT => crate::objects::openttd_rust_object_cargo(
                 c.c.object,
-                tile,
+                tile.0,
                 cargoes,
                 std::ptr::null_mut(),
             ),
             _ => {}
         }
     }
+}
+/// Temporary raw adapter for [`add_accepted_cargo`], used by `station.rs` until its pass.
+pub(crate) fn add_accepted_cargo_raw(
+    tile: u32,
+    acceptance: &mut [u32; 64],
+    always_accepted: *mut u64,
+    c: &crate::station::Ctx<'_>,
+) {
+    add_accepted_cargo(TileIndex(tile), acceptance, always_accepted, c);
+}
+/// Temporary raw adapter for [`add_produced_cargo`], used by `station.rs` until its pass.
+pub(crate) fn add_produced_cargo_raw(
+    tile: u32,
+    produced: &mut [u32; 64],
+    c: &crate::station::Ctx<'_>,
+) {
+    add_produced_cargo(TileIndex(tile), produced, c);
 }

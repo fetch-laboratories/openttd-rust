@@ -965,7 +965,7 @@ pub(crate) fn production_around_tiles(
         if (c.s.tile_type)(tile.0) == MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
-        crate::tile_cmd::add_produced_cargo(tile.0, &mut produced, c);
+        crate::tile_cmd::add_produced_cargo_raw(tile.0, &mut produced, c);
     }
     // Loop over the seen industries. They produce cargo for
     // anything that is within 'rad' of any one of their tiles.
@@ -1014,7 +1014,7 @@ pub(crate) fn acceptance_around_tiles(
         {
             continue;
         }
-        crate::tile_cmd::add_accepted_cargo(tile.0, &mut acceptance, always_accepted.cast(), c);
+        crate::tile_cmd::add_accepted_cargo_raw(tile.0, &mut acceptance, always_accepted.cast(), c);
     }
     acceptance
 }
@@ -1035,7 +1035,7 @@ pub(crate) unsafe fn acceptance_around_station(
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
-        crate::tile_cmd::add_accepted_cargo(it.tile(), &mut acceptance, always_accepted, c);
+        crate::tile_cmd::add_accepted_cargo_raw(it.tile(), &mut acceptance, always_accepted, c);
         unsafe { it.advance(bitmap, c.map, check) };
     }
     acceptance
