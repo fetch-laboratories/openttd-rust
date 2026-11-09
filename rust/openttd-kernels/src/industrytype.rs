@@ -432,6 +432,18 @@ pub(crate) fn get_industry_tile_spec(gfx: IndustryGfx) -> *mut IndustryTileSpec 
         spec_assert,
     )
 }
+/// `IndustrySpec::behaviour`, as its `IndustryBehaviours` wrapper.
+pub(crate) fn spec_behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
+    // SAFETY: Callers pass a spec from `GetIndustrySpec`, live for the process.
+    IndustryBehaviours(unsafe { (*spec).behaviour })
+}
+/// `IndustrySpec::callback_mask`, as its `IndustryCallbackMasks` wrapper.
+pub(crate) fn spec_callback_mask(
+    spec: *const IndustrySpec,
+) -> crate::newgrf_callbacks::IndustryCallbackMasks {
+    // SAFETY: Callers pass a spec from `GetIndustrySpec`, live for the process.
+    crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*spec).callback_mask })
+}
 /// Temporary raw adapter for [`get_industry_spec`]; every caller widens an `IndustryType`.
 #[allow(
     clippy::cast_possible_truncation,

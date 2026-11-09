@@ -32,7 +32,7 @@ use crate::industry_type::{
 };
 use crate::industrytype::{
     INDUSTRYLIFE_BLACK_HOLE, IndustryBehaviour, IndustryBehaviours, IndustryLifeType,
-    IndustryLifeTypes, IndustrySpec, get_industry_spec,
+    IndustryLifeTypes, IndustrySpec, get_industry_spec, spec_behaviour, spec_callback_mask,
 };
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
@@ -551,14 +551,6 @@ fn industry_type(owner: *const Industry) -> IndustryType {
 /// `GetIndustrySpec(i->type)` through the owner's type.
 fn spec_of(owner: *mut Industry) -> *const IndustrySpec {
     get_industry_spec(industry_type(owner))
-}
-/// `IndustrySpec::behaviour`.
-fn spec_behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
-    IndustryBehaviours(unsafe { (*spec).behaviour })
-}
-/// `IndustrySpec::callback_mask`.
-fn spec_callback_mask(spec: *const IndustrySpec) -> IndustryCallbackMasks {
-    IndustryCallbackMasks(unsafe { (*spec).callback_mask })
 }
 /// `Industry::ctlflags`.
 fn ctlflags(f: *const Fields) -> IndustryControlFlags {
