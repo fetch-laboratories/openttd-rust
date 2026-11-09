@@ -1,0 +1,24 @@
+[
+  {
+    "retires": [
+      "source:src/tests/town_protocol.hpp"
+    ],
+    "oracle": "PARTIAL SOURCE TRANSFER ONLY (#736 W, #819 D1 observations 1 to 3). The fixture's own checks, not regenerated: buildings-only expansion makes no road, draw or company change; road expansion makes one road command and one draw with the company restored; after the radii are restored, a failing clear makes 25 growth attempts of 13 clears each with no further draw. town::expansion_tests replays them on Engine::expand_town over the fixture's services, built from crate::test_tables. The three expansion calls stay in town_protocol.hpp as setup for its house steps. D1's observation 4 (town_protocol.hpp:362), openttd_rust_town_expand and the house rebuild, placement and animation observations move to the #736 W house-protocol follow-up.",
+    "observations": {
+      "CmdExpandTown execution for buildings, roads and failing clears: road commands, RNG draws, company restore and the 25 x 13 clear count": [
+        "rust:lib:town::expansion_tests::expansion_matches_fixture_checks"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:src/tests/townname.cpp"
+    ],
+    "oracle": "PARTIAL SOURCE TRANSFER ONLY (#736 W). The fixture's expected names from the unchanged pinned generators, not regenerated: all 21 built-in generators at seeds 0 and UINT32_MAX, and Finnish seed 3797316664. townname::generator_tests checks the production Rust generators. townname.cpp keeps the C++ GenerateTownNameString append after existing bytes, repeated appends and the company-name dispatch, at generators 0 and 20 and for the Finnish stem case; these retire with the C++ string-builder facade.",
+    "observations": {
+      "Built-in town-name generators: every language at both seed endpoints and the Finnish stem-vowel suffix": [
+        "rust:lib:townname::generator_tests::generators_match_original_names"
+      ]
+    }
+  }
+]
