@@ -14,7 +14,7 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 - Write with the original's vocabulary. Each enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`). Use that name wherever the original does; when it is missing, add it there.
 - Carry the original's explanatory comments with every ported body, at the matching branch or operation.
 - Pass a command's arguments as its argument struct, and a helper's shared state as a context struct.
-- Port each original helper once, in the module named after its original file, and call it everywhere.
+- Port each original helper once, in the module named after its original file, and call it everywhere. Rust code calls the typed Rust function, never a `_raw` adapter or an `openttd_rust_*` export that has one ([code standards](porting.md#code-standards)).
 - Cross the C++ boundary through typed `noexcept` services with synchronous calls, allocating only where the original allocates. End Rust borrows before a callback that can reenter Rust.
 - A C++ global or static becomes a process-wide Rust static.
 - Delete the C++ you replace in the same change, with its exports, declarations and service fields.

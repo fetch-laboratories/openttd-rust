@@ -63,8 +63,8 @@ Under a Claude Code root, these rules move routine work off root, so that root's
 
 #### Ready queue and pipelining
 
-- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three work orders. Each gives its scope, its file set checked against open PRs and reservations, and the PR or reservation it waits on, if any.
-- A planner (Opus, high) refreshes the queue whenever fewer than two entries are ready. It edits only that roadmap section, in docs-only commits. An entry becomes selected when root dispatches it.
+- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next integration lands. Each gives its scope, its file set checked against open PRs and reservations, and what it waits on, in a few lines. Fan-in and held-caller analysis goes on the stream issue.
+- A planner (Opus, high) refreshes the queue whenever fewer than two entries are ready. It edits only that roadmap section, in docs-only commits; these are the one exception to roadmap commits only at stocktakes, course changes and wind-down. An entry becomes selected when root dispatches it, and then leaves the queue: its state lives on its PR, not in the roadmap.
 - An implementer whose PR waits on review or Full takes the next ready entry on a new branch, within the six-branch limit. Findings on its earlier PR come first. It keeps its agent path; each PR's title names the work. The four implementer slots therefore count agents that stay busy, not PRs.
 
 ## Provider handoff
