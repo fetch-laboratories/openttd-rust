@@ -25,7 +25,9 @@ use crate::bitmath_func::{gb, has_bit, sb};
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::company_type::{CompanyID, Owner};
 use crate::economy_type::EconomyType;
-use crate::history::{rotate_history_year, update_valid_history_year};
+use crate::history::{
+    get_and_reset_accumulated_average, rotate_history_year, update_valid_history_year,
+};
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
     IndustryAnimationTrigger, IndustryID, IndustryRandomTrigger, IndustryType,
@@ -946,11 +948,10 @@ fn update_industry_statistics(owner: *mut Industry, s: &Services) {
                 continue;
             }
             let history = (*a).history;
-            // GetAndResetAccumulatedAverage<uint16_t>(a.accumulated_waiting)
-            (*history)[usize::from(THIS_MONTH)].second =
-                ((*a).accumulated_waiting / (s.days_since_last_month)().max(1))
-                    .min(u32::from(u16::MAX)) as u16;
-            (*a).accumulated_waiting = 0;
+            (*history)[usize::from(THIS_MONTH)].second = get_and_reset_accumulated_average(
+                &mut (*a).accumulated_waiting,
+                (s.days_since_last_month)(),
+            );
             rotate_history_year(&mut *history, (*f).valid_history, month);
         }
     }
