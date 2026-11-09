@@ -63,7 +63,7 @@ pub struct NearbySpec {
 #[repr(C)]
 pub struct ResolverServices {
     towns: *const Leaves,
-    shared: *const Services,
+    pub(crate) shared: *const Services,
     storage: *const newgrf_storage::Services,
     larger_towns: extern "C" fn() -> u8,
     stage: extern "C" fn(u32) -> u8,
@@ -78,9 +78,31 @@ pub struct ResolverServices {
     spec_house: extern "C" fn(*const c_void) -> u16,
     local_id: extern "C" fn(u16) -> u16,
     base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
-    evaluate: extern "C" fn(*const CallbackArgs, *mut i32, usize) -> u16,
+    pub(crate) evaluate: extern "C" fn(*const CallbackArgs, *mut i32, usize) -> u16,
     reseed: extern "C" fn(u16, u32, *mut TownHandle, u8) -> house::HouseReseed,
 }
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: ResolverServices = ResolverServices {
+    towns: std::ptr::null(),
+    shared: std::ptr::null(),
+    storage: std::ptr::null(),
+    larger_towns: crate::test_tables::unreachable0,
+    stage: crate::test_tables::unreachable1,
+    age: crate::test_tables::unreachable1,
+    random_bits: crate::test_tables::unreachable1,
+    random_triggers: crate::test_tables::unreachable1,
+    search_spec: crate::test_tables::unreachable1,
+    nearby_spec: crate::test_tables::unreachable1,
+    file_identity: crate::test_tables::unreachable1,
+    badges: crate::test_tables::unreachable1,
+    root: crate::test_tables::unreachable2,
+    spec_house: crate::test_tables::unreachable1,
+    local_id: crate::test_tables::unreachable1,
+    base_scope: crate::test_tables::unreachable3,
+    evaluate: crate::test_tables::unreachable3,
+    reseed: crate::test_tables::unreachable4,
+};
 impl ResolverServices {
     pub(crate) fn shared(&self) -> &Services {
         // SAFETY: `GetHouseResolverServices` points at the process-lifetime shared table.

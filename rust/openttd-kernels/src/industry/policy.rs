@@ -151,6 +151,10 @@ pub(crate) fn random_industry(s: &Services) -> *mut c_void {
     random_entry(s).industry
 }
 /// `Industry::GetRandom` with the canonical owner: return a random valid industry.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Industry::GetRandom keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) fn random_entry(s: &Services) -> super::Entry {
     let count = unsafe { (s.num_items)() };
     if count == 0 {
@@ -174,6 +178,10 @@ pub(crate) fn random_entry(s: &Services) -> super::Entry {
 }
 /// Original `GetCurrentTotalNumberOfIndustries`: get total number of industries existing in
 /// the game.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetCurrentTotalNumberOfIndustries keeps the original's implicit C++ integer conversions"
+)]
 pub(super) fn total(builder: *const Builder) -> u32 {
     unsafe {
         (*builder).registry.iter().fold(0u32, |total, kinds| {
@@ -287,6 +295,10 @@ pub(crate) fn get_construction_cost(
 /// `IndustrySpec::GetRemovalCost`: get the cost for removing this industry.
 /// Take note that the cost will always be zero for non-grf industries.
 /// Only if the grf author did specified a cost will it be applicable.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "IndustrySpec::GetRemovalCost keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) fn removal_cost(removal_cost_multiplier: u32) -> i64 {
     // OverflowSafeInt::operator*= takes int, including the unsigned multiplier conversion.
     crate::company::price(usize::from(Price::PR_CLEAR_INDUSTRY.0))
@@ -305,6 +317,10 @@ pub unsafe extern "C" fn openttd_rust_industry_sum_history(
 }
 /// The `SumHistory` specialisations for `Industry::ProducedHistory` and
 /// `Industry::AcceptedHistory`: average each field, clamped to `uint16_t`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SumHistory keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) fn sum_history(history: &[Pair]) -> Pair {
     let count = history.len();
     let a = history

@@ -8,6 +8,8 @@
 //! Tile-kind ownership dispatch over immutable tables. Three distinct constructed native costs and
 //! the road context belong to the outer C++ frame; AI startup stays in C++.
 #![allow(unsafe_code, missing_docs, clippy::too_many_arguments)]
+use crate::company_type::{CompanyID, Owner};
+use crate::tile_type::{TileIndex, TileType};
 use crate::{industry, objects, rail_cmd, road_cmd, services, station_cmd, water_cmd};
 
 #[repr(C)]
@@ -32,24 +34,28 @@ pub struct Context {
     pub error: *mut services::CommandCost,
     pub road: *const road_cmd::CommandContext,
 }
-/// `ChangeTileOwner`, retaining each original named tile handler.
+/// `ChangeTileOwner`: change the owner of a tile from `old_owner` to `new_owner`, through
+/// the tile type's `change_tile_owner_proc`, retaining each original named tile handler.
+///
 /// # Safety
 /// Tables and exclusive native scratch outlive the synchronous serialized call.
 /// Slots may be reused only after a nested owner has returned.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tile_change_owner(
+pub(crate) unsafe fn change_tile_owner(
     context: &Context,
-    tile: u32,
-    old: u8,
-    new: u8,
+    tile: TileIndex,
+    old_owner: Owner,
+    new_owner: Owner,
 ) {
+    let (tile, old, new) = (tile.0, old_owner.0, new_owner.0);
     // SAFETY: The native outer frame supplies the canonical tables and live slots.
     unsafe {
         let s = &*context.services;
-        match ((*s.shared).tile_type)(tile) {
-            0 => (s.clear)(tile, old, new),
-            1 => rail_cmd::openttd_rust_rail_change_owner(s.rail, context.cost, tile, old, new),
-            2 => {
+        match TileType(((*s.shared).tile_type)(tile)) {
+            TileType::MP_CLEAR => (s.clear)(tile, old, new),
+            TileType::MP_RAILWAY => {
+                rail_cmd::openttd_rust_rail_change_owner(s.rail, context.cost, tile, old, new);
+            }
+            TileType::MP_ROAD => {
                 let road = &*context.road;
                 road_cmd::openttd_rust_road_change_owner(
                     road.services,
@@ -60,20 +66,20 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
                     new,
                 );
             }
-            3 => (s.house)(tile, old, new),
-            4 => (s.trees)(tile, old, new),
-            5 => station_cmd::openttd_rust_station_change_owner(s.station, context, tile, old, new),
-            6 => water_cmd::openttd_rust_water_change_owner(s.water, context.cost, tile, old, new),
-            7 => (s.void)(tile, old, new),
-            8 => {
-                let owner = ((*s.industry).industry)(tile).owner;
-                industry::change_tile_owner_industry(
-                    owner,
-                    crate::company_type::CompanyID(old),
-                    crate::company_type::CompanyID(new),
-                );
+            TileType::MP_HOUSE => (s.house)(tile, old, new),
+            TileType::MP_TREES => (s.trees)(tile, old, new),
+            TileType::MP_STATION => {
+                station_cmd::openttd_rust_station_change_owner(s.station, context, tile, old, new);
             }
-            9 => {
+            TileType::MP_WATER => {
+                water_cmd::openttd_rust_water_change_owner(s.water, context.cost, tile, old, new);
+            }
+            TileType::MP_VOID => (s.void)(tile, old, new),
+            TileType::MP_INDUSTRY => {
+                let owner = ((*s.industry).industry)(tile).owner;
+                industry::change_tile_owner_industry(owner, old_owner, new_owner);
+            }
+            TileType::MP_TUNNELBRIDGE => {
                 crate::tunnelbridge_cmd::change_owner(
                     s.tunnel_bridge,
                     context.cost,
@@ -82,11 +88,24 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
                     new,
                 );
             }
-            10 => objects::openttd_rust_object_change_owner(s.objects, context, tile, old, new),
+            TileType::MP_OBJECT => {
+                objects::openttd_rust_object_change_owner(s.objects, context, tile, old, new);
+            }
             // Like the native table, the map supplies only defined tile kinds.
             _ => std::hint::unreachable_unchecked(),
         }
     }
+}
+/// # Safety
+/// As [`change_tile_owner`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_change_owner(
+    context: &Context,
+    tile: u32,
+    old: u8,
+    new: u8,
+) {
+    unsafe { change_tile_owner(context, TileIndex(tile), CompanyID(old), CompanyID(new)) };
 }
 
 crate::abi::layouts! {
