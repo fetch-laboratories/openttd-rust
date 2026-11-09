@@ -88,13 +88,6 @@ pub(crate) fn is_airport_raw(tile: u32, s: &Services) -> bool {
     is_airport(TileIndex(tile), s)
 }
 
-/// `IsRailWaypoint`: is this station tile a rail waypoint? The station type
-/// leaf keeps its native assertion.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) fn is_rail_waypoint(tile: TileIndex, s: &Services) -> bool {
-    (s.station_type)(tile.0) == StationType::RailWaypoint
-}
 /// `IsRailWaypointTile`: is this tile a station tile and a rail waypoint?
 #[allow(clippy::inline_always)]
 #[inline(always)]
