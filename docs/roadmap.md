@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
 
-Integrations 132 to 143 merged between 19:23 UTC on 11-08 and 02:31 UTC on 11-09 with the four-implementer cap (user, 2026-11-08), a delegated integrator and a planner-filled ready queue. The table measures stocktake 143 (`da020b52c7`, #827) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full; none was rolled back. Integration 141's Full needed one authorized rerun of a simulation shard that hung on `network-protocol-loopback` (#693). Platform cadence 135 failed on Windows x86 oracle tests and 137 (#818) fixed it; cadence 140 failed on a `-Wmissing-field-initializers` warning from #814 and 141 (#831) fixed it, with the rerun green. The next cadence follows 145, and the next stocktake and profile follow 155. Profile 143: TBD (profile 143).
+Integrations 132 to 143 merged between 19:23 UTC on 11-08 and 02:31 UTC on 11-09 with the four-implementer cap (user, 2026-11-08), a delegated integrator and a planner-filled ready queue. The table measures stocktake 143 (`da020b52c7`, #827) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full; none was rolled back. Integration 141's Full needed one authorized rerun of a simulation shard that hung on `network-protocol-loopback` (#693). Platform cadence 135 failed on Windows x86 oracle tests and 137 (#818) fixed it; cadence 140 failed on a `-Wmissing-field-initializers` warning from #814 and 141 (#831) fixed it, with the rerun green. The next cadence follows 145, and the next stocktake and profile follow 155. Profile 143 ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) has all seven scenarios equal and all six policy records below band and ceiling. TGP's projection rose 5.32%, which triggers attribution (see [Speed](#speed)).
 
 Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 138) −1,067: −759 by 137, almost all #810's #736 U vector transfer (135, tools C++ −746), and −308 at 138 (#814 #737 V, compiled −263). On 11-09 (139 to 143) −326: −77 at 139 (#820 #736 P), −246 at 142 (#829 #736 W) and −3 at 143 (#827). Original C++ retired fell by 9 lines in simulation logic at 138 (#814's glue edits in `src/economy.cpp`, `src/order_cmd.cpp`, `src/train_cmd.cpp` and `src/vehicle.cpp`; 137 still measures 62,710). Root checked every line #814 added to those four files against the pinned original, and none is original code. The −9 is a classification shift in the metric, not restored original C++ (root, 2026-11-09). Tooling since 131: −1,692 code lines, mostly #810's Python fixture retirement at 135; 140 (#826) added 287.
 
@@ -28,7 +28,7 @@ Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 13
 | Retained Clippy keys / diagnostics | 664 / 757 | 649 / 739 |
 | Ruff keys / diagnostics | 296 / 296 | 287 / 287 |
 | Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 | 190,613 / 62,128 |
-| Play-save speed ratio | profile 131 (below) | TBD (profile 143) |
+| Play-save speed ratio | profile 131 (below) | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
 
 Fork-added C++ under `src/tests` (5,615 lines) is within source glue. The 6,090 ABI-generated lines are 615 record declarations within source glue plus the 5,475 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support; most of its +14,954 is #734 file passes and #736 oracle tests and data. Clippy retains five approved families.
 
@@ -78,19 +78,21 @@ Between 132 and 143:
 
 ### Speed
 
-Profile 143 on clean `da020b52c7`: TBD (profile 143). Until it is accepted, the instruction counts below measure profile 131 on clean `305ac20c28` (integration 131), with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
+Profile 143 on clean `da020b52c7` (integration 143, [#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) used the same tools as profile 131: Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
 
-| Scenario | Original Ir | Candidate Ir (131) | Projection (131) | Change since 125 |
+| Scenario | Original Ir | Candidate Ir (143) | Projection (143) | Ir change since 131 |
 | --- | ---: | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,783,264,555 | 1.168178x | +0.0007% |
-| Opus | 21,773,343,583 | 27,864,805,576 | 1.345115x | +0.0002% |
-| Grok | 20,969,727,163 | 26,586,023,846 | 1.346652x | −0.0004% |
-| P1996 | 3,600,502,896 | 4,589,688,730 | 1.352193x | −0.0260% |
-| P2000 | 6,049,922,238 | 7,576,521,293 | 1.444531x | +0.2550% |
-| P2016 | 11,343,424,651 | 13,924,870,889 | 1.382593x | −0.0102% |
-| Drawing | 2,149,015,961 | 2,154,257,138 | 1.004635x | −0.0045% |
+| TGP | 2,265,528,237 | 2,857,546,676 | 1.230318x | +2.6689% |
+| Opus | 21,773,343,583 | 27,569,546,889 | 1.345115x | −1.0596% |
+| Grok | 20,969,727,163 | 26,309,996,893 | 1.346652x | −1.0382% |
+| P1996 | 3,600,502,896 | 4,564,266,895 | 1.352193x | −0.5539% |
+| P2000 | 6,049,922,238 | 7,497,361,602 | 1.444531x | −1.0448% |
+| P2016 | 11,343,424,651 | 13,744,477,974 | 1.382593x | −1.2955% |
+| Drawing | 2,149,015,961 | 2,154,326,198 | 1.004635x | +0.0032% |
 
-All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. No loop Ir rose by 3% since 125, so there is no attribution trigger. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. No anchor or history was reset. The five play scenarios now report nonempty stderr, the original's own script debug lines (a saved AI is unavailable, so the dummy AI loads), identical between reference and candidate apart from timestamps.
+All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. The five play loops fell, consistent with #737 batch V moving vehicle reads and station loading into Rust; their projections stay at the anchor floors.
+
+TGP's projection rose 5.32% (1.168178x to 1.230318x), over the 3% projection-rise row, so root ruled that the row applies. TGP is 0.0047x under its 1.235x band start. `/root/profile_143` is attributing the +74.3M Ir per function to integrations 132 to 143. The fix-forward goes in the next maintenance PR, and ownership PRs proceed meanwhile. If TGP reaches its band first, a speed pass follows. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
@@ -403,20 +405,19 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 143, `da020b52c7`. Stocktake 143 is in "Where the fork stands"; profile 143 (`/root/profile_143`) is running and holds one implementer slot. Unintegrated branches: #825, #832, #833, #834, #837 and #838.
+Code main is integration 144, `1b8b85c524` (#833). Stocktake 143 and profile 143 are in "Where the fork stands". `/root/profile_143` is attributing TGP's rise and holds one implementer slot. Unintegrated branches: #825, #832, #834, #837, #838, #839, #840, #841 and #842.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| Integration queue | `/root/integrator` | 144: #833, rerunning one Emscripten job after an `apt` network failure. 145: #834 or #832, whichever is ready first, then the platform cadence. Then #825, after its stub-table fix. |
-| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary` | Accepted with no findings. Its base update onto 142 failed to compile, because #829's shared `test_tables.rs` initializes the structs #825 changes. The fix is prepared and waits for 144. After the fix, the reviewer re-posts both acceptances at the new head. |
-| #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Paused for #825's fix. |
-| #832, #734 entry 6a | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_832_leaf_helpers` | Accepted. The resolution of its `station.rs` conflict with #827 is awaiting the reviewer's check. |
-| #838, #734 entry 10 (#830 allows) | same | Draft, scenarios running. 17 suppression proposals await review. |
-| #834, #815 station items | `/root/cleanup_734_pass_01c_town_rs`; reviewed by `/root/review_834_station_815` | Accepted and queued. |
-| #734 4a, `station_cmd.rs` pass | same | In progress, including a `Fix:` commit for the `TILE_HEIGHT_STEP` error parameter. Entry 5 (`station_service.rs`) follows. |
-| #833, #736 W landscape tile loop | `/root/cleanup_736_p_packet`; reviewed by `/root/review_833_tile_loop` | Accepted, integrating as 144. |
-| #736 W house-protocol follow-up (entry 12) | same | Written, with focused `cargo test` allowed. It retires `town_protocol.hpp`, `openttd_rust_town_expand` and eight orphaned exports. Native builds wait for profile 143. |
-| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence after 145. |
+| Integration queue | Root for 145; `/root/integrator` from 146 | 145 is #842, root's Emscripten apt-mirror fix (Canonical's archive timed out three times on 11-09), on bootstrap Full with `CI_ON_DEMAND` unset; root restores the variable after the merge. 146 is #841 (#832 and #834), after a base update and a new Full; the platform cadence runs alongside it. Then #838, and #825 once its re-check passes. |
+| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary`; re-check by `/root/review_825_recheck` | The stub-table fix is pushed at `cb2b8b77b4`. The re-check verifies the merge and the stubs, then re-posts both acceptances at that head. |
+| #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Resuming with a merge of 144. |
+| #838, #734 entry 10 (#830 allows) | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_838_industry_allows` | Accepted at `00519a0107`: eight naming findings fixed by renames, nine suppressions and two lint-growth rows accepted, lint-policy at 0 errors. Queued after 146. |
+| #734 entry 6b-1 | same | Starts after #825, #841, #838 and #840 merge. |
+| #734 4a, `station_cmd.rs` pass (#839) | `/root/cleanup_734_pass_01c_town_rs` | Draft, groups 1 and 2 pushed, group 3 (road stops) in progress. It includes a `Fix:` commit for the `TILE_HEIGHT_STEP` error parameter. Five reviewers by group when ready. Entry 5 (`station_service.rs`) follows. |
+| #840, #736 W house-protocol follow-up (entry 12) | `/root/cleanup_736_p_packet` | Draft; local gates pass, the native verify is running. An evidence reviewer follows when it is ready. |
+| TGP speed attribution | `/root/profile_143` | Ranking TGP's per-function rise since 131 by intervening PR; the fix-forward goes in the next maintenance PR. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence alongside 146 (due after 145). |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 
@@ -431,7 +432,7 @@ Remaining placement and limits:
 Retained state for housekeeping:
 
 - Keep the planning checkout `t3-20fec9ce` with its private plan, and origin `preserve/housekeeping-foundation-6ab9c20e5d`. Preserve every checkout with uncommitted or unpushed work. #805 integrated in 130, so `tools/housekeeping.py` now keeps detached unpublished commits; the 11-08 apply removed 40 eligible entries (1.7 GB).
-- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Keep `t3-a490295e` (profile 131, clean `305ac20c28`) with its HDD `.local` (`profile-131-prepare`, `simulation`, `verification`). Its `build-rust` was reclaimed on 11-09; the outputs are intact. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
+- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Keep `t3-a490295e` (profile 131, clean `305ac20c28`) with its HDD `.local` (`profile-131-prepare`, `simulation`, `verification`). Keep `t3-d3ff7564` (profile 143, clean `da020b52c7`) with its HDD `.local` (`profile-143-prepare`, `simulation`, `verification`, `profile-143.log`). Its `build-rust` was reclaimed on 11-09; the outputs are intact. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
 - Keep `.local/retained-network-693` with the failed Full artifact, inconclusive diagnostics, passing traces and bounded original/original evidence. Keep main `.local/integration-records/`, `.local/speed-pass/` anchors, frozen runtimes and the retained simulation evidence.
 - Leave dirty/staged trees untouched: `t3-3b491ddb` (five files), locked #565 WIP `t3-431c84b4`, locked native evidence `t3-d78d5f8b`, `t3-32cf4edc` (`tools/simulation/roads.py` staged), and `t3-e130d5a3` (`migration/saves/README.md` staged).
 - Keep protected `.local/worktrees/root-docs-72` and locked `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main. Keep the pinned original and main's uncommitted user-owned `.codex/config.toml` unchanged.
