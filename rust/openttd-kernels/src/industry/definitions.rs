@@ -32,6 +32,10 @@ impl Services {
 /// `IndustryOverrideManager::AddEntityID`: method to find an entity ID and to mark it as
 /// reserved for the Industry to be included. Returns a free entity id (slotid) if ever one
 /// has been found, or the invalid marker otherwise.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "IndustryOverrideManager::AddEntityID keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe fn add_entity_id(
     manager: *mut override_manager::Manager,
     grf_local_id: u16,
@@ -101,6 +105,10 @@ unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> u8 {
 }
 /// `IndustryOverrideManager::SetEntitySpec`: method to install the new industry data in its
 /// proper slot, moving the per-file spec into it.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "IndustryOverrideManager::SetEntitySpec keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe fn publish(manager: *mut override_manager::Manager, inds: *mut IndustrySpec) {
     let props = unsafe { (*inds).grf_prop };
     let invalid_id = unsafe { (*manager).invalid };

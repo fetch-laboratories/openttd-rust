@@ -87,8 +87,6 @@ struct OpenTTDHouseServices {
 extern "C" {
 void openttd_rust_house_accepted_tile(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t, uint32_t *, uint64_t *);
 void openttd_rust_house_accepted_prototype(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint16_t, uint32_t *);
-void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
-void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_place(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint16_t house, bool is_protected, bool replace);
 void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint32_t *produced);
 void openttd_rust_house_rebuild_caches(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);

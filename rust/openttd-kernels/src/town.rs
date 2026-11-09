@@ -674,13 +674,6 @@ pub unsafe extern "C" fn openttd_rust_town_id_counts(state: *mut State) -> Slots
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_id_counts_resize(state: *mut State, count: usize) {
-    // SAFETY: No native view survives a structural vector mutation.
-    unsafe {
-        (*state).id_counts.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_class_counts(state: *mut State) -> Slots {
     // SAFETY: Canonical serialized vector. Native views end before resize.
     let counts = unsafe { &mut (*state).class_counts };
@@ -690,42 +683,12 @@ pub unsafe extern "C" fn openttd_rust_town_class_counts(state: *mut State) -> Sl
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_class_counts_resize(state: *mut State, count: usize) {
-    // SAFETY: No native view survives a structural vector mutation.
-    unsafe {
-        (*state).class_counts.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts() -> Slots {
     // SAFETY: Game-state-mutex serialized access; no service call or reentry.
     let counts = unsafe { &mut (*BUILDING_COUNTS.get()).ids };
     Slots {
         data: counts.as_mut_ptr().cast(),
         size: counts.len(),
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_id_counts_resize(count: usize) {
-    // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    unsafe {
-        (*BUILDING_COUNTS.get()).ids.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_class_counts() -> Slots {
-    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).classes };
-    Slots {
-        data: counts.as_mut_ptr().cast(),
-        size: counts.len(),
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
-    // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    unsafe {
-        (*BUILDING_COUNTS.get()).classes.resize(count, 0);
     }
 }
 /// `IncreaseBuildingCount`: count one built house part in its town and the
@@ -2973,22 +2936,6 @@ pub(crate) unsafe fn tick_all(
     engine.on_tick_town();
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_expand(
-    leaves: *const Leaves,
-    services: *const Services,
-    road: *const crate::road_cmd::CommandContext,
-    town: u32,
-    amount: u32,
-    modes: u32,
-) {
-    let mut engine = engine(leaves, services);
-    engine.road = road;
-    let t = TownID(town as u16);
-    engine
-        .bind(t)
-        .expand_town(t, amount, TownExpandModes(modes as u8));
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_road_type(
     leaves: *const Leaves,
     services: *const Services,
@@ -3396,10 +3343,15 @@ mod tests {
         let _guard = GLOBAL_LOCK.lock().unwrap();
         // Spawn/join serializes each access like the native game-state mutex.
         // Size a NewGRF-range house ID on the command thread before ottd:game.
-        openttd_rust_town_global_id_counts_resize(4096);
-        openttd_rust_town_global_class_counts_resize(16);
+        // SAFETY: Serialized by the lock; no view of the counts is live.
+        unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            counts.ids.resize(4096, 0);
+            counts.classes.resize(16, 0);
+        }
         let ids = openttd_rust_town_global_id_counts();
-        let classes = openttd_rust_town_global_class_counts();
+        // SAFETY: Serialized by the lock; sized above and not resized until the end.
+        let classes = unsafe { (*BUILDING_COUNTS.get()).classes.as_mut_ptr() };
         let mut owner = State {
             id_counts: vec![0; 4096],
             class_counts: vec![0; 16],
@@ -3431,25 +3383,26 @@ mod tests {
             let rating = unsafe { openttd_rust_town_rating(owner, 42, 0) };
             (
                 openttd_rust_town_global_id_counts().data as usize,
-                openttd_rust_town_global_class_counts().data as usize,
+                // SAFETY: The parent does not touch the counts until this join.
+                unsafe { (*BUILDING_COUNTS.get()).classes.as_ptr() } as usize,
                 rating,
             )
         })
         .join()
         .unwrap();
         assert_eq!(ids.data as usize, id_pointer);
-        assert_eq!(classes.data as usize, class_pointer);
+        assert_eq!(classes as usize, class_pointer);
         assert_eq!(rating, -99);
         assert_eq!(take_house_candidate(0), (4095, 1));
         assert_eq!(openttd_rust_town_generating_exchange_abi(false), 0);
         // SAFETY: Child has joined; original pointers remain valid without resize.
         unsafe {
             assert_eq!(*ids.data.cast::<u32>().add(110), 1);
-            assert_eq!(*classes.data.cast::<u32>().add(15), 1);
+            assert_eq!(*classes.add(15), 1);
             assert_eq!(openttd_rust_town_rating(&raw const owner, 42, 0), -99);
             decrease_building(&raw mut owner, 110, 15);
             assert_eq!(*ids.data.cast::<u32>().add(110), 0);
-            assert_eq!(*classes.data.cast::<u32>().add(15), 0);
+            assert_eq!(*classes.add(15), 0);
         }
         assert_eq!(owner.id_counts[110], 0);
         openttd_rust_town_rating_test(false);
@@ -3458,8 +3411,12 @@ mod tests {
             unsafe { openttd_rust_town_rating(&raw const owner, 42, 0) },
             77
         );
-        openttd_rust_town_global_id_counts_resize(0);
-        openttd_rust_town_global_class_counts_resize(0);
+        // SAFETY: Serialized by the lock; the views above are no longer used.
+        unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            counts.ids.clear();
+            counts.classes.clear();
+        }
     }
 }
 
@@ -4484,32 +4441,40 @@ mod tunnel_tests {
     }
 }
 
-/// `CmdExpandTown`'s execution (`Engine::expand_town`) over the retired
-/// `src/tests/town_protocol.hpp` expansion fixture (#736 W, #819 D1). Expected counts are the
-/// fixture's existing checks.
+/// The retired `src/tests/town_protocol.hpp` fixture (#736 W, #819 D1): `CmdExpandTown`'s
+/// execution, the house tile loop's rebuild, `CmdPlaceHouse`, the skipped lift tick and bound
+/// growth, replayed in the fixture's order over its services. Each check is one of the fixture's
+/// own; every input state comes from the fixture's earlier steps.
 #[cfg(test)]
-mod expansion_tests {
+mod protocol_tests {
+    use super::house::{HouseEntry, HouseLoopSpec, HouseLoopTile};
     use super::*;
-    use crate::services::{CommandCost, CommandCostStorage};
+    use crate::services::{CommandCost, CommandCostStorage, TownHandle};
     use crate::test_tables::{
-        CLEAR_GROUND, COMMAND_COSTS, COMMANDS, HOUSES, LANDSCAPE, LANDSCAPE_TILES, RAIL_COMMANDS,
-        ROAD_COMMANDS, TILE_OWNERS, TOWN_LEAVES, WATER_REGION_LEAVES, unreachable0,
+        ANIMATION, CATCHMENT, CLEAR_GROUND, COMMAND_COSTS, COMMANDS, HOUSE_ANIMATION, HOUSES,
+        LANDSCAPE, LANDSCAPE_TILES, MOVEMENT, RAIL_COMMANDS, ROAD_COMMANDS, SHARED, TILE_OWNERS,
+        TOWN_LEAVES, WATER_REGION_LEAVES, unreachable0,
     };
     use std::cell::{Cell, RefCell};
     use std::ptr;
 
-    /// The fixture's observable counters and settings.
+    /// The fixture's `TownProtocolWorld`: observable counters and settings.
     #[derive(Default)]
     struct World {
+        population: u32,
         draws: u32,
         company: u32,
-        roads: u32,
-        clears: u32,
-        square_clears: u32,
-        clear_fails: bool,
         owner_reads: u32,
         map_reads: u32,
+        square_clears: u32,
+        house_callback: bool,
+        clear_fails: bool,
+        placing: bool,
         house_class: u16,
+        roads: u32,
+        clears: u32,
+        animations: u32,
+        landscape_clears: u32,
         house_count: u32,
         writes: Vec<[u32; 4]>,
     }
@@ -4519,6 +4484,9 @@ mod expansion_tests {
     }
     fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
         WORLD.with(|world| f(&mut world.borrow_mut()))
+    }
+    fn owner() -> *mut State {
+        OWNER.get()
     }
 
     extern "C" fn map_log_x() -> u32 {
@@ -4562,7 +4530,7 @@ mod expansion_tests {
         0
     }
     extern "C" fn house_callbacks(_: u16) -> u16 {
-        1 << 3
+        (1 << 3) | u16::from(with(|w| w.house_callback))
     }
     extern "C" fn road_info(_: u8) -> RoadChoice {
         RoadChoice {
@@ -4573,7 +4541,7 @@ mod expansion_tests {
     }
     extern "C" fn resolve_owner(_: u32) -> *mut State {
         with(|w| w.owner_reads += 1);
-        OWNER.get()
+        owner()
     }
     extern "C" fn dirty(_: u32) {}
     extern "C" fn terraform_price() -> i64 {
@@ -4589,7 +4557,11 @@ mod expansion_tests {
     extern "C" fn make_house(tile: u32, town: u32, house: u32, construction: u32) {
         with(|w| w.writes.push([tile, town, house, construction]));
     }
-    extern "C" fn population_changed(_: u32) {}
+    extern "C" fn population_changed(_: u32) {
+        // SAFETY: The fixture's live owner; no other borrow spans this leaf.
+        let population = unsafe { (*owner()).simulation.population };
+        with(|w| w.population = population);
+    }
     extern "C" fn house_count() -> u32 {
         with(|w| w.house_count)
     }
@@ -4614,8 +4586,8 @@ mod expansion_tests {
     unsafe extern "C" fn do_build(
         _: *const crate::road_cmd::RoadCommandServices,
         _: *mut crate::road_cmd::CommandScratch,
-        out: *mut crate::services::CommandCost,
-        _: *mut crate::services::CommandCost,
+        out: *mut CommandCost,
+        _: *mut CommandCost,
         flags: u16,
         _: u32,
         _: u8,
@@ -4627,8 +4599,8 @@ mod expansion_tests {
         // SAFETY: The context's cost slot is this test's bool.
         unsafe { *out.cast::<bool>() = flags & 1 == 0 };
     }
-    extern "C" fn success(out: *const crate::services::CommandCost) -> bool {
-        // SAFETY: The context's cost slot is this test's bool.
+    extern "C" fn success(out: *const CommandCost) -> bool {
+        // SAFETY: Every fixture cost is one bool.
         unsafe { *out.cast::<bool>() }
     }
 
@@ -4662,29 +4634,173 @@ mod expansion_tests {
         // SAFETY: A live fixture cost.
         unsafe { *flag(cost) = false };
     }
-    /// The landscape tile procedure: count each clear and apply the fixture's outcome.
-    extern "C" fn clear(cost: *mut CommandCost, _: u32, _: u16) {
+    /// The landscape tile procedure: count each clear (a placement's tests apart) and apply the
+    /// fixture's outcome.
+    extern "C" fn clear(cost: *mut CommandCost, _: u32, flags: u16) {
         let ok = with(|w| {
-            w.clears += 1;
+            if w.placing && flags & 1 == 0 {
+                w.landscape_clears += 1;
+            } else {
+                w.clears += 1;
+            }
             !w.clear_fails
         });
         // SAFETY: A live fixture cost.
         unsafe { *flag(cost) = ok };
     }
-    extern "C" fn town_index(_: *const crate::services::TownHandle) -> u16 {
+    extern "C" fn town_index(_: *const TownHandle) -> u16 {
         0
     }
+
+    /// House 2 is an unpopulated, completed old 1x1 house; its rebuild reaches
+    /// `TryBuildTownHouse`.
+    extern "C" fn house_entry(_: u32) -> HouseEntry {
+        HouseEntry {
+            town: house_town(0),
+            house: 2,
+        }
+    }
+    extern "C" fn house_town(_: u32) -> TownRef {
+        with(|w| w.owner_reads += 1);
+        TownRef {
+            shell: ptr::null_mut(),
+            state: owner(),
+            id: TownId(0),
+        }
+    }
+    extern "C" fn loop_tile(_: u32) -> HouseLoopTile {
+        HouseLoopTile {
+            age: 255,
+            completed: true,
+            lift_has_destination: false,
+        }
+    }
+    extern "C" fn house_type(_: u32) -> u16 {
+        2
+    }
+    extern "C" fn completed(_: u32) -> bool {
+        true
+    }
+    extern "C" fn loop_spec(id: u16) -> HouseLoopSpec {
+        HouseLoopSpec {
+            callbacks: house_callbacks(id),
+            flags: house_flags(id),
+            population: house_population(id),
+            mail: 0,
+            minimum_life: 0,
+        }
+    }
+    extern "C" fn delete_inspect(_: u32) {}
+    extern "C" fn cargogen_mode() -> u8 {
+        0
+    }
+    extern "C" fn place_houses() -> u8 {
+        2
+    }
+
+    /// The callback reenters the town owner through the direct resolver entry; the original
+    /// fixture's mutation and success are preserved.
+    extern "C" fn evaluate(_: *const resolver::CallbackArgs, _: *mut i32, _: usize) -> u16 {
+        // SAFETY: The fixture's live owner; no other borrow spans this callback.
+        unsafe { (*owner()).growth.flags = 0x88 };
+        u16::MAX
+    }
+    extern "C" fn animation_callback(
+        _: u16,
+        _: u32,
+        _: u32,
+        _: *const crate::animated_tile::HouseSpec,
+        _: *mut TownHandle,
+        _: u32,
+        _: u64,
+    ) -> u16 {
+        with(|w| w.animations += 1);
+        u16::MAX
+    }
+    extern "C" fn animation_state(_: u32) -> crate::animated_tile_map::AnimatedTileState {
+        crate::animated_tile_map::AnimatedTileState::DELETED
+    }
+    extern "C" fn set_animation_state(_: u32, _: crate::animated_tile_map::AnimatedTileState) {}
+    extern "C" fn animation_spec(_: u16) -> *const crate::animated_tile::HouseSpec {
+        ptr::null()
+    }
+
+    extern "C" fn no_tile(_: u32) -> bool {
+        false
+    }
+    extern "C" fn yes_tile(_: u32) -> bool {
+        true
+    }
+    extern "C" fn human(_: u8) -> bool {
+        true
+    }
+    extern "C" fn no_town_shell(_: u32) -> *mut TownHandle {
+        ptr::null_mut()
+    }
+    extern "C" fn no_road_bits(_: u32, _: u8, _: bool) -> u8 {
+        0
+    }
+    extern "C" fn clear_type(_: u32) -> u8 {
+        0
+    }
+    extern "C" fn flat(_: u32) -> u8 {
+        0
+    }
+    extern "C" fn sea_level(_: u32) -> i32 {
+        0
+    }
+    extern "C" fn untouched(_: u32) {}
+    extern "C" fn map_max() -> u32 {
+        63
+    }
+    extern "C" fn no_towns() -> usize {
+        0
+    }
+    extern "C" fn one_town() -> usize {
+        1
+    }
+    extern "C" fn first_town(from: u32) -> u32 {
+        if from == 0 { 0 } else { u32::MAX }
+    }
+    extern "C" fn no_next_town(_: u32) -> u32 {
+        u32::MAX
+    }
+    extern "C" fn town_owner_by_id(_: u32) -> *mut State {
+        owner()
+    }
+    extern "C" fn town_owner(_: *const TownHandle) -> *mut State {
+        with(|w| w.owner_reads += 1);
+        owner()
+    }
+    extern "C" fn no_road_type(_: u32) -> u8 {
+        63
+    }
+    extern "C" fn no_stations() -> usize {
+        0
+    }
+    extern "C" fn second_tick() -> u64 {
+        1
+    }
+    extern "C" fn road_at_centre(tile: u32, _: u8, _: bool) -> u8 {
+        u8::from(tile == 2080)
+    }
+    extern "C" fn road_tile_at_centre(tile: u32) -> u8 {
+        if tile == 2080 {
+            crate::tile_type::MP_ROAD
+        } else {
+            0
+        }
+    }
+    extern "C" fn road_type_at_centre(tile: u32) -> u8 {
+        if tile == 2080 { 0 } else { 63 }
+    }
+
     thread_local! {
         static LANDSCAPE_TABLE: Cell<*const crate::landscape_cmd::LandscapeServices> =
             const { Cell::new(ptr::null()) };
         static SHARED_TABLE: Cell<*const Services> = const { Cell::new(ptr::null()) };
-    }
-    /// The synthetic map has no docking tiles and no water neighbours.
-    extern "C" fn make_clear(_: u32, _: crate::services::ClearGroundType, _: u32) {
-        with(|w| w.square_clears += 1);
-    }
-    unsafe extern "C" fn debug(_: u8, _: i32, _: i32) {}
-    thread_local! {
+        static CATCHMENT_TABLE: Cell<*const crate::station::CatchmentServices> =
+            const { Cell::new(ptr::null()) };
         static WATER_TABLE: Cell<*const crate::water::WaterServices> = const { Cell::new(ptr::null()) };
         static REGIONS: Cell<crate::water_regions::Context> = const {
             Cell::new(crate::water_regions::Context {
@@ -4693,11 +4809,19 @@ mod expansion_tests {
             })
         };
     }
+    /// The synthetic map has no docking tiles and no water neighbours.
+    extern "C" fn make_clear(_: u32, _: crate::services::ClearGroundType, _: u32) {
+        with(|w| w.square_clears += 1);
+    }
+    unsafe extern "C" fn debug(_: u8, _: i32, _: i32) {}
     extern "C" fn water_services() -> *const crate::water::WaterServices {
         WATER_TABLE.get()
     }
     extern "C" fn region_context() -> crate::water_regions::Context {
         REGIONS.get()
+    }
+    extern "C" fn station_catchment() -> *const crate::station::CatchmentServices {
+        CATCHMENT_TABLE.get()
     }
     extern "C" fn landscape_commands() -> *const crate::landscape_cmd::LandscapeServices {
         LANDSCAPE_TABLE.get()
@@ -4714,38 +4838,10 @@ mod expansion_tests {
         }
     }
 
-    fn leaves() -> Leaves {
-        let mut leaves = TOWN_LEAVES;
-        leaves.map_log_x = map_log_x;
-        leaves.growth_rate = growth_rate;
-        leaves.environment.editor = no;
-        leaves.environment.freeform_edges = no;
-        leaves.generating_world = no;
-        leaves.allow_crossings = no;
-        leaves.climate = zero_byte;
-        leaves.road_flags = zero_flags;
-        leaves.house_availability = house_availability;
-        leaves.house_placement = house_placement;
-        leaves.house_population = house_population;
-        leaves.house_flags = house_flags;
-        leaves.house_extra_flags = house_extra_flags;
-        leaves.house_callbacks = house_callbacks;
-        leaves.road_info = road_info;
-        leaves.resolve_owner = resolve_owner;
-        leaves.dirty_authority = dirty;
-        leaves.dirty_town = dirty;
-        leaves.terraform_price = terraform_price;
-        leaves.set_road_town = set_road_town;
-        leaves.exchange_company = exchange_company;
-        leaves.house_class = house_class;
-        leaves.make_house = make_house;
-        leaves.population_changed = population_changed;
-        leaves.house_count = house_count;
-        leaves.next_town = next_town;
-        leaves.build_bridge = no_bridge;
-        leaves.build_tunnel = no_tunnel;
-        leaves.assert_clear_house = assert_clear_house;
-        leaves
+    /// The fixture's tables live for the test process; its tests hold `&'static` chains, as the
+    /// native facades do.
+    fn leak<T>(table: T) -> &'static T {
+        Box::leak(Box::new(table))
     }
 
     /// The fixture's 64x64 map: flat, empty clear ground, installed for this thread.
@@ -4785,13 +4881,14 @@ mod expansion_tests {
     }
 
     /// The fixture's town: 5 house IDs, 2 classes, centred on tile 2080 with radii of 100.
-    fn fixture_owner() -> Box<State> {
+    fn fixture_owner() -> *mut State {
         let mut owner = Box::new(State::default());
         owner.id_counts = vec![0; 5];
         owner.class_counts = vec![0; 2];
         owner.simulation.xy = 2080;
         owner.simulation.radius = [100; 5];
-        OWNER.set(&raw mut *owner);
+        let owner = Box::into_raw(owner);
+        OWNER.set(owner);
         WORLD.with(|w| {
             *w.borrow_mut() = World {
                 company: 7,
@@ -4803,8 +4900,198 @@ mod expansion_tests {
         owner
     }
 
+    /// The fixture's water services: no docking or water neighbours; square clears counted.
+    fn install_water(regions: *mut crate::water_regions::Regions) {
+        let mut region_leaves = WATER_REGION_LEAVES;
+        region_leaves.debug = debug;
+        REGIONS.set(crate::water_regions::Context {
+            owner: regions,
+            leaves: leak(region_leaves),
+        });
+        let mut clear_ground = CLEAR_GROUND;
+        clear_ground.make_clear = make_clear;
+        let mut water = crate::water::fixture();
+        water.clear = leak(clear_ground);
+        water.region_context = region_context;
+        WATER_TABLE.set(leak(water));
+    }
+
+    /// `OpenTTDFixtureSharedServices` with the fixture's overrides: flat, empty ground without
+    /// roads, depots, bridges or stations, and no town yet.
+    fn fixture_services() -> *mut Services {
+        let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
+        services.company_human = human;
+        // The removed allow_roads fixture leaf returned false; the catalog keeps that setting.
+        services.settings = leak(crate::settings_type::SettingAddresses {
+            allow_town_roads: leak(false),
+            ..crate::settings_type::SettingAddresses::NULL
+        });
+        services.town_by_id = no_town_shell;
+        services.is_road_depot = no_tile;
+        services.is_bay_stop = no_tile;
+        services.road_bits = no_road_bits;
+        services.tile_type = clear_type;
+        services.tile_slope = flat;
+        let mut movement_world = SHARED;
+        movement_world.tile_type = clear_type;
+        movement_world.map = crate::map_func::fixture::statics();
+        let mut movement = MOVEMENT;
+        movement.shared = leak(movement_world);
+        services.movement = leak(movement);
+        services.tile_max_z = sea_level;
+        services.tile_z = sea_level;
+        services.has_water_ground = no_tile;
+        services.mark_dirty = untouched;
+        services.clear_square_services.docking = no_tile;
+        services.clear_square_services.generating_world = no;
+        services.water_services = water_services;
+        services.station_catchment = station_catchment;
+        services.map = crate::map_func::fixture::statics();
+        services.map_max_x = map_max;
+        services.map_max_y = map_max;
+        services.town_count = no_towns;
+        services.tile_valid = yes_tile;
+        services.road_type = no_road_type;
+        let services = Box::into_raw(Box::new(services));
+        SHARED_TABLE.set(services);
+        // No stations exist, so placed houses find no nearby station.
+        let mut catchment = CATCHMENT;
+        catchment.shared = services;
+        catchment.station_count = no_stations;
+        CATCHMENT_TABLE.set(leak(catchment));
+
+        services
+    }
+
+    /// The fixture's leaves, with the house services the rebuild and `CmdPlaceHouse` reach.
+    fn fixture_leaves(services: *const Services) -> &'static Leaves {
+        let mut costs = COMMAND_COSTS;
+        costs.construct = construct;
+        costs.destroy = destroy;
+        costs.expense_money = expense_money;
+        costs.add = add;
+        costs.money = money;
+        costs.zero = zero;
+        costs.error = error;
+        costs.success = success;
+        let costs = leak(costs);
+        let mut owners = TILE_OWNERS;
+        owners.shared = services;
+        let mut tiles = LANDSCAPE_TILES;
+        tiles.clear = clear;
+        tiles.owners = leak(owners);
+        let mut commands = COMMANDS;
+        commands.landscape_commands = landscape_commands;
+        let commands = leak(commands);
+        // SAFETY: Read once, before any later override; the copy keeps the setup's services.
+        let mut landscape_world = unsafe { services.read() };
+        landscape_world.tile_type = landscape_tile_type;
+        let mut landscape = LANDSCAPE;
+        landscape.shared = leak(landscape_world);
+        landscape.costs = costs;
+        landscape.commands = commands;
+        landscape.tile_procs = leak(tiles);
+        LANDSCAPE_TABLE.set(leak(landscape));
+        let mut houses = HOUSES;
+        houses.cost = costs;
+        houses.commands = commands;
+        houses.authority = leak(AuthorityServices {
+            council_tolerance: unreachable0,
+            bulldozer: unreachable0,
+            authority_distance: unreachable0,
+            town_index,
+            refusal: 0,
+        });
+        houses.entry = house_entry;
+        houses.loop_tile = loop_tile;
+        houses.house_type = house_type;
+        houses.completed = completed;
+        houses.town = house_town;
+        houses.loop_spec = loop_spec;
+        houses.delete_inspect = delete_inspect;
+        houses.cargogen_mode = cargogen_mode;
+        houses.place_houses = place_houses;
+        let mut leaves = TOWN_LEAVES;
+        leaves.map_log_x = map_log_x;
+        leaves.growth_rate = growth_rate;
+        leaves.environment.editor = no;
+        leaves.environment.freeform_edges = no;
+        leaves.generating_world = no;
+        leaves.allow_crossings = no;
+        leaves.climate = zero_byte;
+        leaves.road_flags = zero_flags;
+        leaves.house_availability = house_availability;
+        leaves.house_placement = house_placement;
+        leaves.house_population = house_population;
+        leaves.house_flags = house_flags;
+        leaves.house_extra_flags = house_extra_flags;
+        leaves.house_callbacks = house_callbacks;
+        leaves.road_info = road_info;
+        leaves.resolve_owner = resolve_owner;
+        leaves.dirty_authority = dirty;
+        leaves.dirty_town = dirty;
+        leaves.terraform_price = terraform_price;
+        leaves.set_road_town = set_road_town;
+        leaves.exchange_company = exchange_company;
+        leaves.house_class = house_class;
+        leaves.make_house = make_house;
+        leaves.population_changed = population_changed;
+        leaves.house_count = house_count;
+        leaves.next_town = next_town;
+        leaves.build_bridge = no_bridge;
+        leaves.build_tunnel = no_tunnel;
+        leaves.assert_clear_house = assert_clear_house;
+        leaves.houses = leak(houses);
+        leak(leaves)
+    }
+
+    /// The fixture's resolver and animation tables, installed like the native scopes; returns the
+    /// previous tables.
+    fn install_callbacks(
+        services: *const Services,
+    ) -> (
+        *const resolver::ResolverServices,
+        *const crate::animated_tile::Services,
+    ) {
+        let mut callbacks = resolver::TEST_TABLE;
+        callbacks.shared = services;
+        callbacks.evaluate = evaluate;
+        let mut binding = HOUSE_ANIMATION;
+        binding.callback = animation_callback;
+        let mut animation = ANIMATION;
+        animation.shared = services;
+        animation.house = leak(binding);
+        animation.state = animation_state;
+        animation.set_state = set_animation_state;
+        animation.house_spec = animation_spec;
+        // SAFETY: Both tables are leaked, so they outlive their installation.
+        unsafe {
+            (
+                resolver::openttd_rust_house_resolver_exchange(leak(callbacks)),
+                crate::animated_tile::openttd_rust_animation_exchange(leak(animation)),
+            )
+        }
+    }
+
+    /// The fixture's road command context: tests succeed, executions fail.
+    fn fixture_road() -> &'static crate::road_cmd::CommandContext {
+        let mut costs = COMMAND_COSTS;
+        costs.success = success;
+        let mut rail = RAIL_COMMANDS;
+        rail.cost = leak(costs);
+        let mut roads = ROAD_COMMANDS;
+        roads.do_build = do_build;
+        roads.rail_commands = leak(rail);
+        leak(crate::road_cmd::CommandContext {
+            services: leak(roads),
+            scratch: ptr::null_mut(),
+            cost: Box::into_raw(Box::new(false)).cast(),
+            ret: ptr::null_mut(),
+        })
+    }
+
     /// The fixture's checks after each expansion (`town_protocol.hpp` lines 301, 303 and 308).
-    fn check_expansions(owner: &mut State, expand: impl Fn(u8)) {
+    fn check_expansions(owner: *mut State, expand: impl Fn(u8)) {
         let counts = || with(|w| (w.roads, w.draws, w.company));
 
         // town_protocol.hpp:301: buildings only.
@@ -4815,7 +5102,8 @@ mod expansion_tests {
         assert_eq!(counts(), (1, 1, 7), "roads: roads, draws, company");
         // town_protocol.hpp:308: expansion updates radii; restore the isolated setup. A failing
         // clear makes each of the 25 growth attempts clear 13 tiles, with no further draw.
-        owner.simulation.radius = [100; 5];
+        // SAFETY: The fixture's live owner; no borrow spans this write.
+        unsafe { (*owner).simulation.radius = [100; 5] };
         with(|w| {
             w.clears = 0;
             w.clear_fails = true;
@@ -4826,11 +5114,172 @@ mod expansion_tests {
             (25 * 13, 7, 1),
             "failing clears: clears, company, draws"
         );
+        with(|w| w.clear_fails = false);
+    }
+
+    /// A growing town rebuilds the expired house: one draw, clear, then `TryBuildTownHouse`
+    /// (`town_protocol.hpp` lines 311 to 327).
+    fn check_rebuilds(owner: *mut State, leaves: &Leaves, services: *const Services) {
+        let rebuild = move || {
+            // SAFETY: The fixture's live owner; no borrow spans these writes.
+            unsafe {
+                (*owner).simulation.time_until_rebuild = 1;
+                (*owner).simulation.num_houses += 1;
+                (*owner).growth.flags |= 1;
+            }
+            with(|w| (w.owner_reads, w.map_reads) = (0, 0));
+            // SAFETY: Live fixture tables and owner.
+            unsafe { house::tile_loop(leaves, services, TileIndex(2080)) };
+            assert_eq!(
+                with(|w| (w.owner_reads, w.map_reads)),
+                (1, 1),
+                "rebuild: reads"
+            );
+        };
+        with(|w| w.house_callback = true);
+        // SAFETY: The fixture's live owner; no borrow spans this write.
+        unsafe { (&mut (*owner).id_counts)[0] = u16::MAX };
+        rebuild();
+        assert_eq!(
+            with(|w| (w.writes.len(), w.draws, w.company)),
+            (0, 2, 7),
+            "full house id: writes, draws, company"
+        );
+        // SAFETY: As above.
+        assert_eq!(
+            unsafe { (*owner).simulation.time_until_rebuild },
+            0xCD + 192
+        );
+        // SAFETY: As above.
+        unsafe {
+            (&mut (*owner).id_counts)[0] = 0;
+            (&mut (*owner).class_counts)[1] = u16::MAX;
+        }
+        with(|w| w.house_class = 1);
+        rebuild();
+        assert_eq!(
+            with(|w| (w.writes.len(), w.draws)),
+            (0, 3),
+            "full class: writes, draws"
+        );
+        // SAFETY: As above.
+        unsafe { (&mut (*owner).class_counts)[1] = 0 };
+        with(|w| w.house_class = 0);
+        rebuild();
+        // SAFETY: As above.
+        let (houses, flags) = unsafe { ((*owner).simulation.num_houses, (*owner).growth.flags) };
+        assert_eq!(
+            (houses, with(|w| (w.writes.len(), w.animations)), flags),
+            (1, (1, 1), 0x88),
+            "rebuilt: houses, (writes, animations), growth flags"
+        );
+        assert_eq!(with(|w| w.square_clears), 3, "rebuilds: square clears");
+    }
+
+    /// `CmdPlaceHouse` executes a completed, protected 2x2 house through `BuildTownHouse`
+    /// (`town_protocol.hpp` lines 328 to 346).
+    fn check_placement(owner: *mut State, leaves: &Leaves, services: *mut Services) {
+        with(|w| {
+            w.placing = true;
+            w.writes.clear();
+            w.house_callback = false;
+            w.clears = 0;
+            w.animations = 0;
+            w.house_count = 5;
+        });
+        let mut cost = false;
+        // SAFETY: The test's own services; no table reads them during these writes.
+        unsafe {
+            (*services).town_count = one_town;
+            (*services).town_next_id = first_town;
+            (*services).town_owner_by_id = town_owner_by_id;
+            spatial::openttd_rust_town_rebuild_index(services);
+            (*services).town_owner = town_owner;
+        }
+        with(|w| (w.owner_reads, w.map_reads) = (0, 0));
+        // SAFETY: Live fixture tables, owner and cost.
+        unsafe {
+            house::openttd_rust_house_place(
+                leaves,
+                services,
+                (&raw mut cost).cast(),
+                1,
+                2080,
+                1,
+                true,
+                false,
+            );
+        }
+        assert_eq!(
+            with(|w| (w.owner_reads, w.map_reads)),
+            (1, 1),
+            "placement: reads"
+        );
+        assert_eq!(
+            (cost, with(|w| (w.landscape_clears, w.clears, w.animations))),
+            (true, (4, 4, 4)),
+            "placement: success, (landscape clears, clears, animations)"
+        );
+        let writes = with(|w| w.writes.iter().map(|w| (w[0], w[2])).collect::<Vec<_>>());
+        assert_eq!(
+            writes,
+            [(2080, 1), (2144, 2), (2081, 3), (2145, 4)],
+            "placement: (tile, house) writes"
+        );
+        // SAFETY: The fixture's live owner; no borrow spans these reads.
+        let (houses, ids) = unsafe { ((*owner).simulation.num_houses, (*owner).id_counts.clone()) };
+        assert_eq!(
+            (with(|w| w.population), houses),
+            (10, 2),
+            "placement: population, houses"
+        );
+        assert_eq!(ids, [1; 5], "placement: house id counts");
+    }
+
+    /// A skipped builtin lift tick observes neither owner nor map (`town_protocol.hpp` lines 347
+    /// to 352); the lift observation stays unreachable, so an eager read fails.
+    fn check_skipped_lift(leaves: &Leaves, services: *mut Services) {
+        // SAFETY: The test's own services; no table reads them during this write.
+        unsafe { (*services).tick_counter = second_tick };
+        with(|w| (w.owner_reads, w.map_reads) = (0, 0));
+        // SAFETY: Live fixture tables and owner.
+        unsafe { house::animate(leaves, services, TileIndex(2080)) };
+        assert_eq!(
+            with(|w| (w.owner_reads, w.map_reads)),
+            (0, 0),
+            "skipped lift: reads"
+        );
+    }
+
+    /// D1 observation 4 (`town_protocol.hpp` lines 353 to 361): ordinary growth binds its town
+    /// before walking the road; construction triggers reuse that context rather than resolve the
+    /// owner again.
+    fn check_bound_growth(services: *mut Services, expand: impl Fn(u8)) {
+        // SAFETY: The test's own services; no table reads them during these writes.
+        unsafe {
+            (*services).road_bits = road_at_centre;
+            (*services).tile_type = road_tile_at_centre;
+            (*services).road_type = road_type_at_centre;
+        }
+        with(|w| {
+            w.writes.clear();
+            w.animations = 0;
+            w.house_count = 1;
+            (w.owner_reads, w.map_reads) = (0, 0);
+        });
+        expand(1);
+        assert_eq!(
+            with(|w| (w.writes.len(), w.animations, w.owner_reads, w.map_reads)),
+            (1, 1, 1, 1),
+            "bound growth: writes, animations, owner reads, map reads"
+        );
     }
 
     #[test]
-    fn expansion_matches_fixture_checks() {
+    fn protocol_matches_fixture_checks() {
         let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
+        // Commands the protocol reaches run nested, without the top-level money steps.
+        crate::command::openttd_rust_command_enter();
         let mask = crate::type_registry::openttd_rust_road_mask();
         // SAFETY: Process-wide registry scalar serialized by the lock.
         let saved_mask = unsafe { mask.replace(0) };
@@ -4840,91 +5289,54 @@ mod expansion_tests {
             1950,
         ));
         crate::timer_game_common::write_calendar_date(crate::services::CalendarDate(0));
+        // Preserve the process-wide game counters around the isolated fixture.
+        // SAFETY: Serialized by the lock; no view of the counters is live.
+        let saved_counts = unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            let saved = (counts.ids.clone(), counts.classes.clone());
+            counts.ids.resize(saved.0.len().max(5), 0);
+            counts.classes.resize(saved.1.len().max(2), 0);
+            saved
+        };
         // The tile arrays stay allocated until the test ends.
         let _map = fixture_map();
-        let mut owner = fixture_owner();
-        let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
-        services.map = crate::map_func::fixture::statics();
-        SHARED_TABLE.set(&raw const services);
+        let owner = fixture_owner();
         let regions = crate::water_regions::openttd_rust_water_new(64, 64);
-        let mut region_leaves = WATER_REGION_LEAVES;
-        region_leaves.debug = debug;
-        REGIONS.set(crate::water_regions::Context {
-            owner: regions,
-            leaves: &raw const region_leaves,
-        });
-        let mut clear_ground = CLEAR_GROUND;
-        clear_ground.make_clear = make_clear;
-        let mut water = crate::water::fixture();
-        water.clear = &raw const clear_ground;
-        water.region_context = region_context;
-        WATER_TABLE.set(&raw const water);
-        services.water_services = water_services;
-        let mut costs_table = COMMAND_COSTS;
-        costs_table.construct = construct;
-        costs_table.destroy = destroy;
-        costs_table.expense_money = expense_money;
-        costs_table.add = add;
-        costs_table.money = money;
-        costs_table.zero = zero;
-        costs_table.error = error;
-        costs_table.success = success;
-        let mut owners = TILE_OWNERS;
-        owners.shared = &raw const services;
-        let mut tiles = LANDSCAPE_TILES;
-        tiles.clear = clear;
-        tiles.owners = &raw const owners;
-        let mut commands = COMMANDS;
-        commands.landscape_commands = landscape_commands;
-        let mut landscape_world = services;
-        landscape_world.tile_type = landscape_tile_type;
-        let mut landscape = LANDSCAPE;
-        landscape.shared = &raw const landscape_world;
-        landscape.costs = &raw const costs_table;
-        landscape.commands = &raw const commands;
-        landscape.tile_procs = &raw const tiles;
-        LANDSCAPE_TABLE.set(&raw const landscape);
-        let authority = AuthorityServices {
-            council_tolerance: unreachable0,
-            bulldozer: unreachable0,
-            authority_distance: unreachable0,
-            town_index,
-            refusal: 0,
-        };
-        let mut houses = HOUSES;
-        houses.cost = &raw const costs_table;
-        houses.commands = &raw const commands;
-        houses.authority = &raw const authority;
-        let mut leaves = leaves();
-        leaves.houses = &raw const houses;
-        let mut costs = COMMAND_COSTS;
-        costs.success = success;
-        let mut rail = RAIL_COMMANDS;
-        rail.cost = &raw const costs;
-        let mut roads = ROAD_COMMANDS;
-        roads.do_build = do_build;
-        roads.rail_commands = &raw const rail;
-        let mut road_ok = false;
-        let context = crate::road_cmd::CommandContext {
-            services: &raw const roads,
-            scratch: ptr::null_mut(),
-            cost: (&raw mut road_ok).cast(),
-            ret: ptr::null_mut(),
-        };
-        let expand = |services: &Services, modes: u8| {
-            let mut engine = engine(&raw const leaves, services);
-            engine.road = &raw const context;
+        install_water(regions);
+        let services = fixture_services();
+        let leaves = fixture_leaves(services);
+        let (resolver, animation) = install_callbacks(services);
+        let road = fixture_road();
+        let expand = |modes: u8| {
+            let mut engine = engine(leaves, services);
+            engine.road = road;
             let t = TownID(0);
             engine.bind(t).expand_town(t, 1, TownExpandModes(modes));
         };
-        check_expansions(&mut owner, |modes| expand(&services, modes));
 
-        // SAFETY: Process-wide registry scalar serialized by the lock.
-        unsafe { mask.write(saved_mask) };
+        check_expansions(owner, expand);
+        check_rebuilds(owner, leaves, services);
+        check_placement(owner, leaves, services);
+        check_skipped_lift(leaves, services);
+        check_bound_growth(services, expand);
+
+        // SAFETY: Serialized by the lock; the fixture's tables are restored or unused hereafter.
+        unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            (counts.ids, counts.classes) = saved_counts;
+            (*services).town_count = no_towns;
+            (*services).town_next_id = no_next_town;
+            spatial::openttd_rust_town_rebuild_index(services);
+            resolver::openttd_rust_house_resolver_exchange(resolver);
+            crate::animated_tile::openttd_rust_animation_exchange(animation);
+            mask.write(saved_mask);
+            crate::water_regions::openttd_rust_water_destroy(regions);
+        }
         crate::timer_game_common::write_calendar_year(saved_year);
         crate::timer_game_common::write_calendar_date(saved_date);
+        crate::command::openttd_rust_command_leave();
         OWNER.set(ptr::null_mut());
-        // SAFETY: Created above; no context uses it after this point.
-        unsafe { crate::water_regions::openttd_rust_water_destroy(regions) };
+        // SAFETY: Created by `fixture_owner`; no table or index refers to it any more.
+        drop(unsafe { Box::from_raw(owner) });
     }
 }

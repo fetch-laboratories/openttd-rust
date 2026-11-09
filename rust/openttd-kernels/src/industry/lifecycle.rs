@@ -196,6 +196,10 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
 /// Original `DoTriggerIndustryTileRandomisation`: trigger random triggers for an industry
 /// tile and reseed its random bits. Returns the bits to reseed for the industry, which the
 /// caller collects.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoTriggerIndustryTileRandomisation keeps the original's implicit C++ integer conversions"
+)]
 unsafe fn do_trigger_industry_tile_randomisation(
     tile: TileIndex,
     trigger: IndustryRandomTrigger,
@@ -225,6 +229,10 @@ unsafe fn do_trigger_industry_tile_randomisation(
     object.parent
 }
 /// Original `DoReseedIndustry`: reseeds the random bits of an industry.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoReseedIndustry keeps the original's implicit C++ integer conversions"
+)]
 unsafe fn do_reseed_industry(ind: *mut Industry, reseed: u32, s: &Services) {
     if reseed == 0 || ind.is_null() {
         return;

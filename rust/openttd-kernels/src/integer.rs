@@ -5,6 +5,16 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+//! `StringConsumer::ParseIntegerBase` and `StringConsumer::SkipIntegerBase` from
+//! `core/string_consumer.hpp` and `core/string_consumer.cpp`.
+
+/// `IntegerResult::error_kind` of the "Cannot parse integer" diagnostic.
+pub(crate) const INTEGER_INVALID: u8 = 1;
+/// `IntegerResult::error_kind` of the "Integer out of range" diagnostic.
+pub(crate) const INTEGER_OUT_OF_RANGE: u8 = 2;
+/// `IntegerResult::error_kind` of the negative-hex "Integer out of range" diagnostic.
+pub(crate) const INTEGER_NEGATIVE_HEX_OUT_OF_RANGE: u8 = 3;
+
 /// Scalar parse result with byte spans for the original C++ diagnostic formatter.
 /// Value bits are zero-extended from the requested integer width. Failure has
 /// zero matched length/value; error kind 1/2/3 means invalid/range/negative-hex.
@@ -18,6 +28,7 @@ pub struct IntegerResult {
     pub(crate) error_kind: u8,
 }
 
+/// The value of one digit of `base`, as `std::from_chars` reads it.
 fn digit(byte: u8, base: u8) -> Option<u64> {
     let value = match byte {
         b'0'..=b'9' => byte - b'0',
@@ -28,6 +39,7 @@ fn digit(byte: u8, base: u8) -> Option<u64> {
     (value < base).then_some(u64::from(value))
 }
 
+/// `src.starts_with("0x") || src.starts_with("0X")`.
 fn hexadecimal(src: &[u8]) -> bool {
     src.starts_with(b"0x") || src.starts_with(b"0X")
 }
@@ -41,10 +53,16 @@ fn failure(kind: u8, offset: usize, length: usize) -> IntegerResult {
     }
 }
 
+/// `ParseIntegerBase<T>`, with `T` given as its `width` and signedness. If `base == 0`, then
+/// a prefix '0x' decides between base 16 or base 10. With `clamp`, a valid number out of
+/// range for T returns the maximum (or lowest) representable value; negative values for
+/// unsigned results are still treated as invalid. The parser rejects leading whitespace
+/// and unary plus.
 pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) -> IntegerResult {
     let mask = u64::MAX >> (64 - width);
     let signed_min = 1_u64 << (width - 1);
     if base == 0 {
+        // Try positive hex
         if hexadecimal(src) {
             let mut result = parse(&src[2..], 16, width, signed, clamp);
             if result.length > 0 {
@@ -54,6 +72,7 @@ pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
             }
             return result;
         }
+        // Try negative hex
         if signed && src.starts_with(b"-") && hexadecimal(&src[1..]) {
             // The original first parses/clamps the corresponding UNSIGNED type.
             let mut result = parse(&src[3..], 16, width, false, clamp);
@@ -67,15 +86,17 @@ pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
             // 8/16 bits). Only a positive narrowed signed value is rejected.
             if result.value_bits > 0 && result.value_bits < signed_min {
                 if !clamp {
-                    return failure(3, 0, result.length);
+                    return failure(INTEGER_NEGATIVE_HEX_OUT_OF_RANGE, 0, result.length);
                 }
                 result.value_bits = signed_min;
             }
             return result;
         }
+        // Try decimal
         return parse(src, 10, width, signed, clamp);
     }
 
+    // Base is 8, 10 or 16: we only support these bases when skipping.
     let negative = signed && src.starts_with(b"-");
     let start = usize::from(negative);
     let limit = if signed {
@@ -99,12 +120,13 @@ pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
         pos += 1; // Overflow still consumes the complete digit run.
     }
     if pos == start {
-        return failure(1, 0, 0);
+        return failure(INTEGER_INVALID, 0, 0);
     }
     if overflow {
         if !clamp {
-            return failure(2, 0, pos);
+            return failure(INTEGER_OUT_OF_RANGE, 0, pos);
         }
+        // The lowest value when negative, otherwise the maximum value.
         value = limit;
     }
     if negative {
@@ -117,6 +139,8 @@ pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
     }
 }
 
+/// `SkipIntegerBase`: skip an optional minus sign, a '0x'/'0X' prefix when `base == 0`, and
+/// the digits of the resulting base. Returns the skipped length.
 pub(crate) fn skip(src: &[u8], mut base: u8) -> usize {
     let mut pos = usize::from(src.starts_with(b"-"));
     if base == 0 {

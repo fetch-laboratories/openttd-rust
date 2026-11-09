@@ -192,6 +192,10 @@ fn place_initial_industry(
 // Keep the wanted-number services inside the source nonzero-total branch.
 #[allow(clippy::manual_checked_ops)]
 #[unsafe(no_mangle)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GenerateIndustries keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
     builder: *mut Builder,
     context: *mut GenerationContext,
