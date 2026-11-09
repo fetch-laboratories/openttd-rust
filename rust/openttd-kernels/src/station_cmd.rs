@@ -349,7 +349,6 @@ pub struct CommandServicesTable {
     pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
     pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
     pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
-    pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub road_ground: *const crate::ground::RoadServices,
     /// `road_waypoint_area`, in place.
     pub road_waypoint_tile_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
@@ -4758,7 +4757,6 @@ crate::abi::layouts! {
         make_buoy,
         make_rail_waypoint,
         new_waypoint,
-        rail_axis,
         road_ground,
         road_waypoint_tile_area,
         set_facility_bits,

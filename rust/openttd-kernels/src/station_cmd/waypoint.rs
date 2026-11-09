@@ -116,7 +116,7 @@ impl Ctx<'_> {
         w::hit(w::WAYPOINT_AXIS_RAIL);
         /* The axis for rail waypoints is easy. */
         if crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
-            return Axis((self.s.rail_axis)(tile.0).0);
+            return crate::map_func::World::new(self.shared).get_rail_station_axis(tile);
         }
         /* Non-plain rail type, no valid axis for waypoints. */
         if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_RAILWAY
@@ -633,7 +633,7 @@ impl Ctx<'_> {
             let reserved = if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_RAILWAY {
                 crate::bitmath_func::has_bit((self.rail_map().rail_reservation)(tile.0).0, track)
             } else {
-                (self.s.reserved)(tile.0)
+                world().has_station_reservation(tile)
             };
             (self.s.make_rail_waypoint)(
                 tile.0,
