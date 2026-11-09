@@ -4792,7 +4792,7 @@ impl Ctx<'_> {
             TileType::MP_RAILWAY | TileType::MP_STATION | TileType::MP_TUNNELBRIDGE => (),
             _ => return false,
         }
-        crate::movement::water_tracks(self.shared, t.0, 255)
+        crate::movement::water_tracks(self.shared, t.0, DiagDirection::INVALID_DIAGDIR.0)
             != u32::from(TrackBits::TRACK_BIT_NONE.0)
     }
     /// `CheckForDockingTile`.
