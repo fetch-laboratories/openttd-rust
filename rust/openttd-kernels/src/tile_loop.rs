@@ -11,6 +11,7 @@
 //! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
+use crate::tile_type::TileIndex;
 use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
 
@@ -87,7 +88,7 @@ pub struct Services {
 #[allow(clippy::inline_always, clippy::cast_possible_truncation)]
 #[inline(always)]
 unsafe fn dispatch<const AMBIENT: bool>(
-    tile: u32,
+    tile: TileIndex,
     log_x: c_uint,
     size_y: c_uint,
     settings: trees::LoopSettings,
@@ -96,12 +97,12 @@ unsafe fn dispatch<const AMBIENT: bool>(
 ) {
     // SAFETY: Reached tables are immutable and live for the synchronous batch. Owner
     // entries end their accesses before callbacks; only scalar cursor is local.
-    let tile_type = types.read(tile);
+    let tile_type = types.read(tile.0);
     let g = &s.ground;
     match tile_type {
         0 => unsafe {
             ground::clear_tile_loop(
-                tile,
+                tile.0,
                 g.climate,
                 g.editor,
                 AMBIENT,
@@ -113,7 +114,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
         },
         1 => unsafe {
             ground::rail_tile_loop(
-                tile,
+                tile.0,
                 g.climate,
                 settings.size_x,
                 size_y,
@@ -126,7 +127,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
         },
         2 => unsafe {
             ground::road_tile_loop(
-                tile,
+                tile.0,
                 g.climate,
                 settings.ambient,
                 g.rebuild,
@@ -138,17 +139,17 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 s.shared,
             );
         },
-        3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile) },
+        3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile.0) },
         4 => unsafe {
             let settings = trees::LoopSettings {
                 ambient_callback: AMBIENT,
                 ..settings
             };
-            trees::tile_loop(tile, settings, g.call, s.trees, s.shared, types);
+            trees::tile_loop(tile.0, settings, g.call, s.trees, s.shared, types);
         },
         5 => unsafe {
             crate::station_lifecycle::tile_loop(
-                tile,
+                tile.0,
                 g.call,
                 &*s.station,
                 types,
@@ -159,7 +160,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
         // `TileLoop_Void` is exactly `TileLoop_Water(tile)`.
         6 | 7 => unsafe {
             water::water_tile_loop(
-                tile,
+                tile.0,
                 tile_type,
                 AMBIENT,
                 settings.size_x,
@@ -175,16 +176,16 @@ unsafe fn dispatch<const AMBIENT: bool>(
             // so its hot fields stay in registers for the other arms.
             let industry_services = s.industry;
             industry::tile_loop(
-                crate::tile_type::TileIndex(tile),
+                tile,
                 // Existing industry ABI stores legal map logarithms in a byte.
                 crate::map_func::Map::from_log_x(log_x),
                 g.call,
                 &industry_services,
             );
         },
-        9 => unsafe { ground::tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
+        9 => unsafe { ground::tunnel_tile_loop(tile.0, g.climate, g.tunnel, s.shared) },
         10 => unsafe {
-            crate::objects::openttd_rust_object_tile_loop(s.objects, g.call, tile);
+            crate::objects::openttd_rust_object_tile_loop(s.objects, g.call, tile.0);
         },
         // The source dispatch table has handlers only for original live tile types.
         _ => unsafe { std::hint::unreachable_unchecked() },
@@ -241,11 +242,11 @@ unsafe fn run_batch<const AMBIENT: bool>(
     let mut count: c_uint = 1 << (log_sum - 8);
     let size_y: c_uint = 1 << log_y;
     if settings.tick_counter.is_multiple_of(256) {
-        unsafe { dispatch::<AMBIENT>(0, log_x, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(TileIndex(0), log_x, size_y, settings, s, &types) };
         count -= 1;
     }
     while count != 0 {
-        unsafe { dispatch::<AMBIENT>(tile, log_x, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(TileIndex(tile), log_x, size_y, settings, s, &types) };
         tile = (tile >> 1) ^ (0_u32.wrapping_sub(tile & 1) & feedback);
         count -= 1;
     }
