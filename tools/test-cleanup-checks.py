@@ -585,15 +585,14 @@ class GrowthTests(unittest.TestCase):
             [report("/review", "a" * 40)],
         ):
             self.assertFalse(
-                GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
+                GROWTH.accepted(
+                    delta, ("/implementation", [proposal], comments, "head")
+                )
             )
         self.assertTrue(
             GROWTH.accepted(
                 delta,
-                [proposal],
-                [report("/review", "head")],
-                "/implementation",
-                "head",
+                ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
         changed = dict(proposal, reason="different operation")
@@ -635,7 +634,7 @@ class GrowthTests(unittest.TestCase):
                 patch.object(GROWTH.METRICS, "show", lambda r, p: text.get((r, p), "")),
             ):
                 return GROWTH.accepted(
-                    delta, [proposal], [comment], "/implementation", "new-head"
+                    delta, ("/implementation", [proposal], [comment], "new-head")
                 )
 
         self.assertTrue(check("generated_records", "abi-record-x.h", {}))

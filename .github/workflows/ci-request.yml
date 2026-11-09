@@ -95,20 +95,30 @@ jobs:
           const {data: tested} = await github.rest.repos.getCommit({
             ...context.repo, ref: pull.merge_commit_sha
           });
-          // Only Quick reads these checker scripts, their debt records and Markdown;
-          // no native or platform job does. A full request whose PR changes nothing
-          // else runs Quick alone. The base's post-merge run still builds the tree.
+          // Only Quick reads these checker scripts and debt records, and no build reads
+          // inert Markdown. A full request whose merge changes nothing else runs Quick
+          // alone. The base's post-merge run still builds the tree.
           const checkerPaths = new RegExp('^(tools/(lint-ratchet|lint-policy|growth-ratchet|refactor-proof|' +
             'baseline_ratchet|cleanup_contract|test-cleanup-checks)\\.py|' +
-            'migration/(clippy-debt|ruff-debt)\\.json|migration/lints/clippy\\.toml|.*\\.md)$');
+            'migration/(clippy-debt|ruff-debt)\\.json|migration/lints/clippy\\.toml)$');
+          // Markdown that no build reads: AGENTS.md and docs/, except the docs CMake packages for
+          // the in-game viewer (tools/test-ci.py checks this list against CMake).
+          const builtDocs = ['admin_network', 'debugging_desyncs', 'desync', 'directory_structure', 'eints', 'fonts',
+            'game_coordinator', 'linkgraph', 'logging_and_performance_metrics', 'multiplayer', 'savegame_format',
+            'symbol_server'];
+          const inert = path => typeof path === 'string' && (path === 'AGENTS.md' || path.startsWith('docs/') &&
+            path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
+          const quickOnly = path => typeof path === 'string' && (checkerPaths.test(path) || inert(path));
           let checker = false;
           if (profile === 'full') {
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              ...context.repo, pull_number: pr, per_page: 100
+            // Classify the captured base and merge commits, never the mutable PR file list.
+            const {data: comparison} = await github.rest.repos.compareCommitsWithBasehead({
+              ...context.repo, basehead: `${pull.base.sha}...${pull.merge_commit_sha}`
             });
-            // The files API lists at most 3000 entries; a longer list stays full.
-            checker = files.length > 0 && files.length < 3000 && files.every(file =>
-              [file.filename, file.previous_filename].every(path => path === undefined || checkerPaths.test(path)));
+            // GitHub caps comparison files at 300: fail closed if the list may be truncated.
+            const files = comparison?.files;
+            checker = Array.isArray(files) && files.length > 0 && files.length < 300 && files.every(file =>
+              quickOnly(file?.filename) && (file.previous_filename == null || quickOnly(file.previous_filename)));
           }
           for (const [key, value] of Object.entries({head, base: pull.base.sha, merge: pull.merge_commit_sha,
               tree: tested.commit.tree.sha, profile, pr, checker})) {

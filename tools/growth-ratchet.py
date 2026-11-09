@@ -81,12 +81,11 @@ def same_source(growth: dict[str, Any], current: str, accepted_at: str) -> bool:
 
 def accepted(
     growth: dict[str, Any],
-    proposals: list[dict[str, Any]],
-    comments: list[str],
-    author: str,
-    head: str,
+    contract: tuple[str, list[dict[str, Any]], list[str], str],
     current: str = "HEAD",
 ) -> bool:
+    """`contract` is `cleanup_contract.context()`: author, proposals, comments, head."""
+    author, proposals, comments, head = contract
     for proposal in proposals:
         if proposal.get("kind") != "growth" or any(
             proposal.get(key) != value for key, value in growth.items()
@@ -135,10 +134,11 @@ def main() -> int:
     )
     if not growth:
         return 0
-    author, proposals, comments, head = context()
+    contract = context()
+    head = contract[3]
     errors = []
     for delta in growth:
-        if accepted(delta, proposals, comments, author, head, args.head):
+        if accepted(delta, contract, args.head):
             print(json.dumps({"accepted_at": head, "growth": delta}, sort_keys=True))
         else:
             errors.append(delta["counter"])
