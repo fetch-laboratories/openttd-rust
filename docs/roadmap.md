@@ -374,7 +374,7 @@ Undispatched, work order item 4:
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
 Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. [Delegation](team.md#delegation-user-2026-11-08) applies (user, 2026-11-08):
-- an Opus xhigh integrator owns integration;
+- an Opus integrator at medium effort owns integration;
 - each finding's reviewer verifies its fixes;
 - reviewers start from the [review brief](review-brief.md);
 - a planner keeps the [ready queue](#ready-queue) filled;
