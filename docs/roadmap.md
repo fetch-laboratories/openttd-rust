@@ -4,69 +4,81 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-08, stocktake 131)
+## Where the fork stands (2026-11-09, stocktake 143)
 
-Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
+Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
 
-Development resumed on 2026-11-08 in the cleanup stage; the session ran two implementers until the user restored the four-implementer cap the same evening (user, 2026-11-08). Code main was integration 132, `5661d54e0a` (#807), when this section was written; the [resume checkpoint](#resume-checkpoint) gives the current tip. The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). Stocktakes and profiles now run every twelfth integration (user, 2026-11-08), so 137 is skipped and the next is 143. Platform cadence 135 failed and was fixed in 137; the next follows 140.
+Integrations 132 to 143 merged between 19:23 UTC on 11-08 and 02:31 UTC on 11-09 with the four-implementer cap (user, 2026-11-08), a delegated integrator and a planner-filled ready queue. The table measures stocktake 143 (`da020b52c7`, #827) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full; none was rolled back. Integration 141's Full needed one authorized rerun of a simulation shard that hung on `network-protocol-loopback` (#693). Platform cadence 135 failed on Windows x86 oracle tests and 137 (#818) fixed it; cadence 140 failed on a `-Wmissing-field-initializers` warning from #814 and 141 (#831) fixed it, with the rerun green. The next cadence follows 145, and the next stocktake and profile follow 155. Profile 143: TBD (profile 143).
 
-Fork C++ change since stocktake 125 (2026-11-07): −467 counted lines, all on 11-07 (127 and 129); 0 on 11-08. Tooling since 129: +33 (130) and +563 (131) code lines.
+Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 138) −1,067: −759 by 137, almost all #810's #736 U vector transfer (135, tools C++ −746), and −308 at 138 (#814 #737 V, compiled −263). On 11-09 (139 to 143) −326: −77 at 139 (#820 #736 P), −246 at 142 (#829 #736 W) and −3 at 143 (#827). Original C++ retired fell by 9 lines in simulation logic at 138 (#814's glue edits in `src/economy.cpp`, `src/order_cmd.cpp`, `src/train_cmd.cpp` and `src/vehicle.cpp`; 137 still measures 62,710). Root should confirm this is a classification shift, not restored original code. Tooling since 131: −1,692 code lines, mostly #810's Python fixture retirement at 135; 140 (#826) added 287.
 
-| Measured quantity | Integration 131 |
-| --- | ---: |
-| Original C++ remaining | 221,645 |
-| Fork source glue, including generated records | 34,923 |
-| Compiled source and generated records C++ | 256,568 |
-| Tracked tools C++ evidence | 16,869 |
-| ABI-generated non-record C++ evidence | 5,522 |
-| Measured fork C++ series (scope below) | 278,959 |
-| Original C++ retired | 62,710 of 284,355 (22.05%) |
-| Simulation C++ retired | 41,550 of 61,148 (67.95%) |
-| Expanded Rust exports / callback fields | 1,709 / 3,418 |
-| Historical regex exports / callback slots | 1,553 / 3,376 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 |
-| Retained Clippy keys / diagnostics | 664 / 757 |
-| Ruff keys / diagnostics | 296 / 296 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 |
+| Measured quantity | Integration 131 | Integration 143 |
+| --- | ---: | ---: |
+| Original C++ remaining | 221,645 | 221,654 |
+| Fork source glue, including generated records | 34,923 | 34,616 |
+| Compiled source and generated records C++ | 256,568 | 256,270 |
+| Tracked tools C++ evidence | 16,869 | 15,821 |
+| ABI-generated non-record C++ evidence | 5,522 | 5,475 |
+| Measured fork C++ series (scope below) | 278,959 | 277,566 |
+| Original C++ retired | 62,710 of 284,355 (22.05%) | 62,701 of 284,355 (22.05%) |
+| Simulation C++ retired | 41,550 of 61,148 (67.95%) | 41,541 of 61,148 (67.94%) |
+| Expanded Rust exports / callback fields | 1,709 / 3,418 | 1,708 / 3,374 |
+| Historical regex exports / callback slots | 1,553 / 3,376 | 1,552 / 3,332 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 | 104 / 304 / 39 |
+| Retained Clippy keys / diagnostics | 664 / 757 | 649 / 739 |
+| Ruff keys / diagnostics | 296 / 296 | 287 / 287 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 | 190,613 / 62,128 |
+| Play-save speed ratio | profile 131 (below) | TBD (profile 143) |
 
-Fork-added C++ under `src/tests` (5,684 lines) is within source glue. The 6,137 ABI-generated lines are 615 record declarations within source glue plus the 5,522 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support. Clippy retains five approved families.
+Fork-added C++ under `src/tests` (5,615 lines) is within source glue. The 6,090 ABI-generated lines are 615 record declarations within source glue plus the 5,475 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support; most of its +14,954 is #734 file passes and #736 oracle tests and data. Clippy retains five approved families.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,338 | 9,086 | 6,556 |
-| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,388 |
+| Simulation logic (phase 1) | 47,424 | 38,329 | 9,095 | 6,456 |
+| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,387 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,067 | 38,727 | 3,360 |
 | Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 551 |
 | GUI and platform (phase 5) | 64,120 | 415 | 63,705 | 465 |
 | Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
 | Data tables | 17,295 | 4,367 | 12,928 | 14 |
-| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,684 |
-| Boundary layer | 0 | 0 | 0 | 16,905 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,615 |
+| Boundary layer | 0 | 0 | 0 | 16,768 |
 
-These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference (#726). #503 deep checks remain user-requested.
+These are source-area subtotals, not ownership or phase-exit claims. Since 131, simulation logic glue fell by 100, storage glue by 1, test glue by 69 and boundary glue by 137; phases 3 to 6 are unchanged. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. Since 131, #156 records two further limits, neither a demonstrated defect: #810's encoded corpus, history and fatal-check reach, and the industry property branches that #821's cited scenarios do not supply. The inherited missing CargoPacket precondition assertions remain a fidelity difference (#726). #503 deep checks remain user-requested.
+
+Unintegrated branches at 143: five component PRs, #825 (#737 V remainder part 1), #832 (#734 13/23 part a), #834 (#815 station items), #837 (#737 V remainder part 2) and #833 (#736 W landscape loop, accepted and queued). Draft #838 (#830) opened after 143.
 
 ### Cleanup stream inventories
 
-Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)), here at integration 132; steering re-measures the others.
+Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)), here at integration 143; steering re-measures the others.
 
-| Stream | Inventory | Overhaul | Integration 129 | Integration 132 † |
-| --- | --- | ---: | ---: | ---: |
-| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched | 12 of 319 (#807) |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – |
-| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – |
-| #735 | Functions over seven parameters | 150 | 141 | – |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 62 / 19 |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 16,869 / 5,684 |
-| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 117 / 314 / 40 |
-| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,120 |
-| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 440 / 106 / 49; 296 |
+| Stream | Inventory | Overhaul | Integration 129 | Integration 132 | Integration 143 † |
+| --- | --- | ---: | ---: | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched | 12 of 319 (#807) | 41 of 319 |
+| #734 | Workset lines in finished files † | – | – | – | 32,080 of 176,930 (18.1%) |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – | – |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – | – |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – | – |
+| #735 | Functions over seven parameters | 150 | 141 | – | – |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 62 / 19 | 53 / 11 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 16,869 / 5,684 | 15,821 / 5,615 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 117 / 314 / 40 | 104 / 304 / 39 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,120 | 3,229 |
+| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 440 / 106 / 49; 296 | 438 / 105 / 47; 287 |
 
-Since integration 103, raw fork C++ fell by 923 lines: `tools/` −649, `src/tests` −192, other `src/` −82. Original C++ retired held at 22.05%. #734 added about 4,900 Rust lines in 33 PRs. Rust comments rose by 3,524 lines, but only 438 of those sit inside bodies. Counting commands: #734 from its issue's per-workset counts; #735 from `migration/clippy-debt.json` and `grep -rn 'allow(clippy::too_many_arguments' rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user. Between 129 and 132, #734 finished 12 files, #735 retired one parameter-count row (`DoCreateTown`), #738 cut 243 corpus lines, and #736/#737 held while their first items (#736 U, #809) are in progress.
+Counting commands: #734 from its issue's Worksets table and file lists, with lines as `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head (the issue's 18,297 of 173,403 lines at integration 138 reproduces this way); #735 from `migration/clippy-debt.json` and `git grep 'allow(clippy::too_many_arguments' -- rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user.
+
+Between 132 and 143:
+- **#734** finished 29 more files: workset 01 completes with #812 (`town/house.rs`, 136) and #819 (`town.rs`, 139); workset 02 completes with #811 (9 files, 134), #816 (3, 138), #821 (2, 139) and #828 (`industry.rs`, 142); workset 03 reaches 12 of 14 with #813 (8, 136) and #827 (the station group, 143). `station_cmd.rs` and `station_service.rs` remain; #832 (13/23 part a) is open. Finished lines rose from 18,297 at 138 to 32,080; the workset total grew from 173,403 to 176,930 lines as passes restored comments.
+- **#735** retired nine `too_many_arguments` rows and eight `allow` sites inside #734 passes: one at 136, five rows and eight sites at 138, one at 139 and two at 143 (#827's waypoint builders).
+- **#736** retired 1,048 tools C++ lines and 69 `src/tests` lines: U at 135 (#810, −746), P at 139 (#820, −77) and the W town observations at 142 (#829, −223). #833 (W landscape loop) is queued.
+- **#737** V (#814, 138) cut 13 shared-accessor, 8 rebound-callee and 1 orphan-export rows; #827 removed two more rebound-callee rows at 143. The V remainder is open as #825 and #837; W waits behind the `station_cmd.rs` and industry passes.
+- **#738** grew by 109 lines (3,120 to 3,229) with no cut: the new `docs/review-brief.md` (+70) and Claude Code delegation in `docs/team.md` (+36).
+- **Lint baselines** fell: Clippy keys 664 to 649, Ruff 296 to 287 (#826 split `worktree_refusal` and `remove`).
 
 ### Speed
 
-The instruction counts below measure profile 131 on clean `305ac20c28` (integration 131), with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
+Profile 143 on clean `da020b52c7`: TBD (profile 143). Until it is accepted, the instruction counts below measure profile 131 on clean `305ac20c28` (integration 131), with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
 
 | Scenario | Original Ir | Candidate Ir (131) | Projection (131) | Change since 125 |
 | --- | ---: | ---: | ---: | ---: |
