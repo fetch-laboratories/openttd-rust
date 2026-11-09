@@ -5069,7 +5069,6 @@ impl Ctx<'_> {
             return;
         }
         self.make_dock_station(ret, st, tile, direction, wc, dock_area);
-        self.after_station_tile_set_change(st, true, StationType::Dock);
     }
     /// `FindDockLandPart`: find the part of a dock that is land-based.
     fn find_dock_land_part(&self, t: TileIndex) -> TileIndex {
