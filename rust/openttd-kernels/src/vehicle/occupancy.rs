@@ -511,3 +511,173 @@ impl crate::services::CommandServices {
         }
     }
 }
+
+/// The Rust parts of "Vehicle occupancy - canonical links, stale removal and copied cursors"
+/// from the retired `src/tests/vehicle_scheduler.cpp` (#736 F), with the fixture's own expected
+/// values: the ground check against the tile's highest pixel, head insertion links, removal
+/// that keeps the stale successor without reading the map size, and a reset that clears only
+/// current positions. The native `VehiclesOnTile` copied-iterator part stays a C++ case.
+/// No other test sets `tile_links`, so none shares the process-wide tile index.
+#[cfg(test)]
+mod index_tests {
+    use super::*;
+    use crate::test_tables::{COMMAND_COSTS, SCHEDULER, VEHICLE};
+    use crate::vehicle_base::VehicleRecord;
+    use std::cell::Cell;
+
+    /// Tile (1, 1) of the fixture's 64x64 map, with its highest corner at pixel height 8.
+    const TILE: u32 = 1 + 64;
+    const MAX_PIXEL_Z: i32 = 8;
+    const VEHICLE_ERROR: u32 = 100;
+
+    thread_local! {
+        /// The two vehicles' native `tile_links` members, by record.
+        static LINKS: Cell<[(*mut VehicleRecord, *mut Links); 2]> =
+            const { Cell::new([(ptr::null_mut(), ptr::null_mut()); 2]) };
+        static RESULT: Cell<Option<u32>> = const { Cell::new(None) };
+        static SLOTS: Cell<*const crate::pool::PoolSlot> = const { Cell::new(ptr::null()) };
+        static FIRST_UNUSED: Cell<usize> = const { Cell::new(0) };
+    }
+    extern "C" fn tile_links(v: VehicleRef) -> *mut Links {
+        LINKS
+            .get()
+            .iter()
+            .find(|(record, _)| *record == v.0.as_ptr())
+            .unwrap()
+            .1
+    }
+    extern "C" fn map_log_x() -> u32 {
+        6
+    }
+    extern "C" fn no_map_read() -> u32 {
+        panic!("removal resolves no map dimensions")
+    }
+    extern "C" fn max_pixel_z(tile: u32) -> i32 {
+        assert_eq!(tile, TILE);
+        MAX_PIXEL_Z
+    }
+    extern "C" fn error(_: *mut crate::services::CommandCost, message: u32) {
+        RESULT.set(Some(message));
+    }
+    extern "C" fn zero(_: *mut crate::services::CommandCost) {
+        RESULT.set(None);
+    }
+    extern "C" fn pool() -> crate::vehicle::scheduler::PoolCursor {
+        crate::vehicle::scheduler::PoolCursor {
+            slots: SLOTS.get(),
+            slots_len: 2,
+            first_unused: FIRST_UNUSED.with(Cell::as_ptr),
+        }
+    }
+
+    fn road_vehicle(z: i32) -> *mut VehicleRecord {
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            ptr::null_mut(),
+            VehicleType::ROAD,
+        );
+        // SAFETY: The fresh record.
+        unsafe {
+            (*record).tile = TileIndex(TILE);
+            (*record).z_pos = z;
+        }
+        record
+    }
+    fn set_z(records: [*mut VehicleRecord; 2], z: i32) {
+        for record in records {
+            // SAFETY: The test's live records.
+            unsafe { (*record).z_pos = z };
+        }
+    }
+    /// `EnsureNoVehicleOnGround(tile)`: the error, or `None` when the ground is free.
+    fn ground(commands: &Commands) -> Option<u32> {
+        // SAFETY: The test's live index, records and tables.
+        unsafe { openttd_rust_occupancy_ground(commands, ptr::null_mut(), TILE) };
+        RESULT.get()
+    }
+
+    #[test]
+    fn index_links_removal_and_reset() {
+        let mut links = [
+            Links {
+                next: ptr::null_mut(),
+                prev: ptr::null_mut(),
+                current: ptr::null_mut(),
+            },
+            Links {
+                next: ptr::null_mut(),
+                prev: ptr::null_mut(),
+                current: ptr::null_mut(),
+            },
+        ];
+        let (a, b) = (road_vehicle(MAX_PIXEL_Z), road_vehicle(MAX_PIXEL_Z));
+        let (la, lb): (*mut Links, *mut Links) = (&raw mut links[0], &raw mut links[1]);
+        LINKS.set([(a, la), (b, lb)]);
+        let mut vehicles = VEHICLE;
+        vehicles.tile_links = tile_links;
+        vehicles.map_log_x = map_log_x;
+        let vehicles: &'static VehicleServices = Box::leak(Box::new(vehicles));
+        let mut costs = COMMAND_COSTS;
+        costs.error = error;
+        costs.zero = zero;
+        let commands = Commands {
+            vehicles,
+            max_pixel_z,
+            costs: Box::leak(Box::new(costs)),
+            vehicle_error: VEHICLE_ERROR,
+        };
+        let (va, vb) = (VehicleRef::of(a), VehicleRef::of(b));
+        // SAFETY: The test's live records, links and services throughout.
+        unsafe {
+            update(vehicles, va, false);
+            update(vehicles, vb, false);
+            // A vehicle at the tile's highest pixel blocks the ground; one above it does not.
+            assert_eq!(
+                ground(&commands),
+                Some(VEHICLE_ERROR + u32::from(VehicleType::ROAD.0))
+            );
+            set_z([a, b], MAX_PIXEL_Z + 1);
+            assert_eq!(ground(&commands), None);
+            // The later insertion heads the bucket.
+            assert_eq!((*lb).next, a);
+            assert_eq!((*la).prev, &raw mut (*lb).next);
+            // Removal reads no map size and leaves the source's stale successor.
+            let mut removal = VEHICLE;
+            removal.tile_links = tile_links;
+            removal.map_log_x = no_map_read;
+            update(&removal, vb, true);
+            assert!((*lb).current.is_null());
+            assert_eq!((*lb).next, a);
+            // Reset clears current positions only, keeping stale links.
+            let slots = [
+                crate::pool::PoolSlot {
+                    shell: ptr::null_mut(),
+                    record: a.cast(),
+                },
+                crate::pool::PoolSlot {
+                    shell: ptr::null_mut(),
+                    record: b.cast(),
+                },
+            ];
+            SLOTS.set(slots.as_ptr());
+            FIRST_UNUSED.set(2);
+            let mut scheduler = SCHEDULER;
+            scheduler.pool = pool;
+            scheduler.vehicle = vehicles;
+            openttd_rust_occupancy_reset(&scheduler);
+            assert!((*la).current.is_null());
+            assert_eq!((*lb).next, a);
+            // Reinsertion makes the later vehicle the tile's first again.
+            update(vehicles, va, false);
+            update(vehicles, vb, false);
+            assert_eq!(
+                OnTile::new(vehicles, TILE).get().map(|v| v.0.as_ptr()),
+                Some(b)
+            );
+            update(vehicles, vb, true);
+            update(vehicles, va, true);
+            for record in [a, b] {
+                crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            }
+        }
+    }
+}
