@@ -2698,3 +2698,80 @@ mod financial_command_tests {
         assert!(used.iter().all(|seen| *seen));
     }
 }
+
+/// "Commands - road price saturation, rounding and independent type masks" from the retired
+/// part of `src/tests/company_economy.cpp` (#736 F), with the fixture's own expected values:
+/// unclassified `NewGRF` masks and extreme prices that the default maps never load.
+/// It lives with the price table it writes, since `road_cost.rs` admits no unsafe code.
+#[cfg(test)]
+mod road_price_tests {
+    use crate::economy_type::Price;
+    use crate::road_cost::{build_cost, clear_cost, convert_cost};
+
+    const PR_BUILD_ROAD: Price = Price::PR_BUILD_ROAD;
+    const PR_CLEAR_ROAD: Price = Price::PR_CLEAR_ROAD;
+
+    const ROAD: u8 = 0;
+    const TRAM: u8 = 1;
+    extern "C" fn cost_multiplier(road_type: u8) -> u16 {
+        match road_type {
+            ROAD => 3,
+            TRAM => u16::MAX,
+            _ => unreachable!(),
+        }
+    }
+    fn set_price(index: usize, value: i64) {
+        // SAFETY: Process-wide price table, serialized by the game-state test lock.
+        unsafe {
+            crate::company::openttd_rust_economy_prices()
+                .add(index)
+                .write(value);
+        }
+    }
+
+    #[test]
+    fn road_price_saturation_rounding_and_type_masks() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let prices = crate::company::openttd_rust_economy_prices();
+        let (road_mask, tram_mask) = (
+            crate::type_registry::openttd_rust_road_mask(),
+            crate::type_registry::openttd_rust_tram_mask(),
+        );
+        // SAFETY: Process-wide scalars, serialized by the lock and restored below.
+        let saved = unsafe {
+            (
+                prices.add(PR_BUILD_ROAD.0 as usize).read(),
+                prices.add(PR_CLEAR_ROAD.0 as usize).read(),
+                road_mask.replace(1 << ROAD),
+                tram_mask.replace(1 << TRAM),
+            )
+        };
+        let mut s = crate::test_tables::SHARED;
+        s.road_cost_multiplier = cost_multiplier;
+        set_price(PR_BUILD_ROAD.0 as usize, 7);
+        set_price(PR_CLEAR_ROAD.0 as usize, -27);
+        assert_eq!(build_cost(&s, ROAD), 2);
+        assert_eq!(clear_cost(&s, ROAD), -27);
+        assert_eq!(convert_cost(&s, ROAD, ROAD), 0);
+        // Neither road nor tram: the source clear policy still earns removal value.
+        // SAFETY: As above.
+        unsafe { road_mask.write(0) };
+        assert_eq!(clear_cost(&s, ROAD), -28);
+        set_price(PR_BUILD_ROAD.0 as usize, -7);
+        assert_eq!(build_cost(&s, ROAD), -3);
+        assert_eq!(clear_cost(&s, ROAD), -25);
+        set_price(PR_BUILD_ROAD.0 as usize, i64::MAX);
+        assert_eq!(build_cost(&s, TRAM), 1_152_921_504_606_846_975);
+        assert_eq!(clear_cost(&s, TRAM), -864_691_128_455_135_258);
+        set_price(PR_BUILD_ROAD.0 as usize, i64::MIN);
+        assert_eq!(build_cost(&s, TRAM), -1_152_921_504_606_846_976);
+        assert_eq!(clear_cost(&s, TRAM), 864_691_128_455_135_205);
+        // SAFETY: As above.
+        unsafe {
+            prices.add(PR_BUILD_ROAD.0 as usize).write(saved.0);
+            prices.add(PR_CLEAR_ROAD.0 as usize).write(saved.1);
+            road_mask.write(saved.2);
+            tram_mask.write(saved.3);
+        }
+    }
+}
