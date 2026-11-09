@@ -419,7 +419,8 @@ unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u1
         )
     };
     let u = unsafe { order_vehicle(w, gw, v) };
-    let orders = order_list(crate::fleet::record(gw, u));
+    let orders =
+        crate::vehicle_base::order_list(crate::fleet::record(gw, u).0.as_ptr()).cast::<()>();
     if orders.is_null() {
         return true;
     }
@@ -441,11 +442,6 @@ unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u1
     }
     true
 }
-/// `v->orders`: the native `OrderList` shell named by the canonical order state.
-fn order_list(v: crate::vehicle::VehicleRef) -> *mut () {
-    let state = crate::raw_field::read_field!(v.0.as_ptr(), orders);
-    crate::raw_field::read_field!(state, orders).cast()
-}
 unsafe fn incompatible_refit(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> i32 {
     let mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_union(
@@ -455,7 +451,8 @@ unsafe fn incompatible_refit(w: &Services, gw: &GroupServices, v: *mut (), engin
         )
     };
     let u = unsafe { order_vehicle(w, gw, v) };
-    let orders = order_list(crate::fleet::record(gw, u));
+    let orders =
+        crate::vehicle_base::order_list(crate::fleet::record(gw, u).0.as_ptr()).cast::<()>();
     if orders.is_null() {
         return -1;
     }
