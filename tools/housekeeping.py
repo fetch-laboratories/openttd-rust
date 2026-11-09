@@ -771,12 +771,7 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     except OSError as error:
         return f"cannot inspect output candidate: {error}"
     if not item.worktree:
-        writable(item.path)
-        if item.path.is_dir() and not item.path.is_symlink():
-            shutil.rmtree(item.path)
-        else:
-            item.path.unlink()
-        return None
+        return delete_output(item)
     command = ["git", "-C", str(main), "worktree", "remove", str(item.path)]
     if git(item.path, "status", "--porcelain").strip():
         return "worktree became dirty"
@@ -787,6 +782,29 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     if item.branch is not None:
         # -d compares with the local HEAD or a pruned upstream; the plan checked origin.
         git(main, "branch", "-D", item.branch)
+    return None
+
+
+def delete_output(item: Item) -> str | None:
+    """Delete a non-worktree item; a build first rechecks after the output scans."""
+    if item.owner is not None and (
+        refusal := indexed_refusal(item.owner) or idle_refusal(item)
+    ):
+        return refusal
+    writable(item.path)
+    if item.path.is_dir() and not item.path.is_symlink():
+        shutil.rmtree(item.path)
+    else:
+        item.path.unlink()
+    return None
+
+
+def idle_refusal(item: Item) -> str | None:
+    if item.idle_seconds is None or item.owner is None:
+        return None
+    newest = latest_activity(item.owner)
+    if newest is None or time.time() - newest < item.idle_seconds:
+        return "activity since planning"
     return None
 
 
@@ -810,11 +828,7 @@ def build_refusal(main: Path, item: Item, references: str) -> str | None:
         or cwd_refusal(owner)
     ):
         return refusal
-    if item.idle_seconds is not None:
-        newest = latest_activity(owner)
-        if newest is None or time.time() - newest < item.idle_seconds:
-            return "activity since planning"
-    return None
+    return idle_refusal(item)
 
 
 def main(

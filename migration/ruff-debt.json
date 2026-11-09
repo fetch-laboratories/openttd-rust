@@ -63,9 +63,6 @@
     "tools/housekeeping.py | plan_worktrees | PLR0915": [
       55
     ],
-    "tools/housekeeping.py | remove | C901": [
-      11
-    ],
     "tools/housekeeping.py | remove | PLR0911": [
       9
     ],

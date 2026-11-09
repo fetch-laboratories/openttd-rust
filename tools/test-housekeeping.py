@@ -917,6 +917,23 @@ class HousekeepingTests(unittest.TestCase):
             )
             self.assertTrue((tree / "build-rust/CMakeCache.txt").exists())
 
+    def test_activity_during_output_inspection_keeps_the_build(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        tree = self.t3_tree("t3-inspected")
+        build = self.build(tree, idle + 60)
+        with patch.dict(PR_STATES, {tree.name: "OPEN"}):
+            item = self.planned_builds()[build]
+        self.assertTrue(item.remove, item.reason)
+        inspect = housekeeping.open_outputs
+
+        def touched_during_scan() -> tuple[list[housekeeping.OutputHandle], str | None]:
+            os.utime(build / "CMakeCache.txt")
+            return inspect()
+
+        with patch.object(housekeeping, "open_outputs", touched_during_scan):
+            self.assertIn("activity", housekeeping.remove(self.main, item) or "")
+        self.assertTrue((build / "CMakeCache.txt").exists())
+
     def test_idle_boundary_uses_the_option(self) -> None:
         tree = self.t3_tree("t3-boundary")
         build = self.build(tree, 3 * 3600)
