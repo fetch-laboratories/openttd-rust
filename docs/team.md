@@ -6,7 +6,7 @@ Readers: Root and user-invoked skills that spawn agents.
 
 - Root (`gpt-6.1-sol`, xhigh) orchestrates and delegates heavily, selects components, integrates and spot-checks delegated diffs.
 - Run at most four implementation agents at once (user, 2026-11-06): builds on this 8-core host are CPU-bound, so more implementers lengthen every build and test loop without adding throughput. Reviews, planning and research use the remaining slots and do not count; a running profile counts as one implementer. Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unintegrated component branches in [integration](root-workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
-- Specify model and effort on every spawn. Each subagent uses less effort than root's xhigh, except a Claude Code root's [integrator](#integrator), which is part of root (user, 2026-11-08).
+- Specify model and effort on every spawn. Each subagent uses less effort than root's xhigh. Under a Claude Code root, root may run one role at xhigh when its work justifies it (user, 2026-11-09). No role is designated now.
 - Use `gpt-6.1-sol` for most implementation and analysis and all independent review. Use high effort unless a clearly bounded task justifies lower.
 - Use `gpt-6-luna` at low or medium effort for bounded mechanical work.
 - Use `gpt-6-astra` at high effort for all delegated planning.
@@ -37,7 +37,7 @@ Under a Claude Code root, these rules move routine work off root, so that root's
 
 #### Integrator
 
-- One integrator runs at a time: Opus at xhigh, outside the implementer count. It works from the main checkout but only through worktrees under `.local/worktrees`. It never changes the main checkout's branch or tracked files, including the user's `.codex/config.toml`. It edits no docs and selects no work.
+- One integrator runs at a time, outside the implementer count. Its work is mechanical, so it runs Opus at medium effort (user, 2026-11-09). It works from the main checkout but only through worktrees under `.local/worktrees`. It never changes the main checkout's branch or tracked files, including the user's `.codex/config.toml`. It edits no docs and selects no work.
 - It owns every step of [integration](root-workflow.md#integration):
   - **Readiness.** A PR is ready when every review accepts, or each finding's reviewer has verified the fix.
   - **Base updates.** Merge commits titled `Update: Merge integration N into ...`, never `gh pr update-branch`. The integrator records the base-update condition on the PR.

@@ -63,20 +63,8 @@
     "tools/housekeeping.py | plan_worktrees | PLR0915": [
       55
     ],
-    "tools/housekeeping.py | remove | C901": [
-      11
-    ],
     "tools/housekeeping.py | remove | PLR0911": [
       9
-    ],
-    "tools/housekeeping.py | worktree_refusal | C901": [
-      15
-    ],
-    "tools/housekeeping.py | worktree_refusal | PLR0911": [
-      8
-    ],
-    "tools/housekeeping.py | worktree_refusal | PLR0912": [
-      14
     ],
     "tools/migration.py | build_games | C901": [
       11
