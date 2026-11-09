@@ -2973,22 +2973,6 @@ pub(crate) unsafe fn tick_all(
     engine.on_tick_town();
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_expand(
-    leaves: *const Leaves,
-    services: *const Services,
-    road: *const crate::road_cmd::CommandContext,
-    town: u32,
-    amount: u32,
-    modes: u32,
-) {
-    let mut engine = engine(leaves, services);
-    engine.road = road;
-    let t = TownID(town as u16);
-    engine
-        .bind(t)
-        .expand_town(t, amount, TownExpandModes(modes as u8));
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_road_type(
     leaves: *const Leaves,
     services: *const Services,

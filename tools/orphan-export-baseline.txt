@@ -29,7 +29,6 @@ no production user | openttd_rust_signal_workset_probe
 no production user | openttd_rust_subsidy_delete_with
 no production user | openttd_rust_tgp_estimate
 no production user | openttd_rust_town_class_counts_resize
-no production user | openttd_rust_town_expand
 no production user | openttd_rust_town_global_class_counts
 no production user | openttd_rust_town_global_class_counts_resize
 no production user | openttd_rust_town_global_id_counts_resize

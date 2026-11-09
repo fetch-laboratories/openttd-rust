@@ -16,7 +16,6 @@
 #include "command_cost_ffi.h"
 #include <cstddef>
 struct OpenTTDTownState;
-struct OpenTTDRoadCommandContext;
 struct Town;
 /** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
@@ -131,7 +130,6 @@ void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSha
 OpenTTDTownState *openttd_rust_town_new();
 void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
-void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 }
 const OpenTTDTownLeaves &GetRustTownServices() noexcept;
