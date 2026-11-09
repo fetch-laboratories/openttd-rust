@@ -248,29 +248,72 @@ def unchanged_item(kind: str, site: str, revision: str) -> bool:
     )
 
 
-def paired_renames(ledger: Ledger, taken: dict[str, str]) -> dict[str, str]:
-    """Pair a retired base row with a new head row when the pairing is unambiguous.
+@lru_cache(maxsize=4096)
+def item_names(kind: str, path: str, revision: str | None) -> frozenset[str]:
+    """Named items in a file at a revision, or in the working tree for None."""
+    if revision is None:
+        file = ROOT / path
+        if not file.is_file():
+            return frozenset()
+        text = file.read_text()
+    else:
+        try:
+            text = git("show", f"{revision}:{path}")
+        except subprocess.CalledProcessError:
+            return frozenset()
+    if kind == "clippy":
+        return frozenset(name for _, _, name in rust_items(path, text)[1])
+    tree = ast.parse(text)
+    return frozenset(
+        python_item(tree, node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    )
 
-    Rows pair one-to-one within the same lint: first by item name (a move),
-    then within one file (a rename), then across the change. The head row may
-    not grow over the base row. Returns `new -> old`; declared carries in
-    `taken` keep precedence.
+
+def item_exists(kind: str, key: str, revision: str | None) -> bool:
+    """Whether a row's item exists; module-level rows always do."""
+    path, item = key.split(" | ")[:2]
+    return item in ("module", "") or item in item_names(kind, path, revision)
+
+
+def paired_renames(
+    kind: str, ledger: Ledger, taken: dict[str, str], base: str | None
+) -> dict[str, str]:
+    """Pair a renamed or moved item's base row with its head row.
+
+    A pair needs evidence of a rename, not just a retired and a new
+    diagnostic: the old item existed at base and is gone at head, and the new
+    item did not exist at base. Rows pair one-to-one within the same lint,
+    first by item name (a move), then within one file (a rename). The head row
+    may not grow over the base row. Returns `new -> old`; declared carries in
+    `taken` keep precedence, and anything else needs a declared carry.
     """
+    if base is None:
+        return {}
     pairs = dict(taken)
     scopes: tuple[Callable[[str], tuple[str, ...]], ...] = (
         lambda key: (*lint_of(key), *key.split(" | ")[1:2]),
         lambda key: (*lint_of(key), *key.split(" | ")[:1]),
-        lambda key: tuple(lint_of(key)),
     )
     for scope in scopes:
         olds: dict[tuple[str, ...], list[str]] = defaultdict(list)
         news: dict[tuple[str, ...], list[str]] = defaultdict(list)
         used = set(pairs.values())
         for key in ledger.before:
-            if key not in ledger.after and key not in used:
+            if (
+                key not in ledger.after
+                and key not in used
+                and item_exists(kind, key, base)
+                and not item_exists(kind, key, None)
+            ):
                 olds[scope(key)].append(key)
         for key in ledger.after:
-            if key not in ledger.before and key not in pairs:
+            if (
+                key not in ledger.before
+                and key not in pairs
+                and not item_exists(kind, key, base)
+            ):
                 news[scope(key)].append(key)
         for group, added in news.items():
             retired = olds.get(group, [])
@@ -286,8 +329,13 @@ def reviewed_debt(
     baseline: dict[str, list[int]],
     previous: dict[str, list[int]],
     rows: dict[str, list[int]] | None = None,
+    base: str | None = None,
 ) -> dict[str, list[int]]:
-    """Allowed head debt: base rows, renamed rows and reviewed lint contracts."""
+    """Allowed head debt: base rows, renamed rows and reviewed lint contracts.
+
+    A renamed row's allowance moves to its new key; the old key loses it, so
+    one diagnostic never holds two allowances.
+    """
     measured = baseline if rows is None else rows
 
     def grown(allowed: dict[str, list[int]]) -> dict[str, list[int]]:
@@ -303,11 +351,13 @@ def reviewed_debt(
     ledger = Ledger(kind, previous, measured, lint_of, fits)
     author, proposals, comments, head = context()
     carried = checked_carries(proposals, ledger)
-    renamed = paired_renames(ledger, carried)
+    renamed = paired_renames(kind, ledger, carried, base)
     allowed = dict(previous)
     for new, old in {**carried, **renamed}.items():
         allowed[new] = previous[old]
         print(f"carried: {old} -> {new}")
+    for old in {**carried, **renamed}.values():
+        allowed.pop(old, None)
     for site, values in grown(allowed).items():
         for proposal in proposals:
             expected = {
@@ -352,12 +402,45 @@ def merge_base(base_ref: str) -> str:
     """The base the change started from, not a base tip that moved since.
 
     CI passes the base branch's current tip; comparing against it would count
-    base's own later changes as this change's growth.
+    base's own later changes as this change's growth. Without a common
+    ancestor there is no inventory to compare against, so the check stops.
     """
     try:
         return git("merge-base", "HEAD", base_ref).strip()
-    except subprocess.CalledProcessError:
-        return base_ref
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(
+            f"no common ancestor of HEAD and {base_ref}; fetch full history"
+            " (git fetch --unshallow) or pass the branch's real base"
+        ) from error
+
+
+def check(
+    kind: str,
+    rows: dict[str, list[int]],
+    recorded: dict[str, list[int]],
+    previous: dict[str, list[int]],
+    base: str | None,
+) -> tuple[list[str], list[str]]:
+    """Return growth errors in the measured and in the recorded debt.
+
+    Base rows whose item no longer exists at base are stale and allow nothing
+    new. The recorded file may keep stale or improved base rows unchanged, but
+    not a renamed item's old row: a rename is recorded in the same change.
+    """
+    live = (
+        previous
+        if base is None
+        else {key: v for key, v in previous.items() if item_exists(kind, key, base)}
+    )
+    changed = {key: v for key, v in recorded.items() if previous.get(key) != v}
+    allowed = reviewed_debt(kind, changed, live, rows, base)
+    renamed_from = live.keys() - allowed.keys()
+    kept = {key: v for key, v in previous.items() if key not in renamed_from}
+    measured = debt_errors(rows, {}, allowed)
+    stored = debt_errors({}, recorded, {**kept, **allowed})
+    for key in sorted(renamed_from & recorded.keys()):
+        stored.append(f"rename not recorded: {key}; run with --write")
+    return measured, stored
 
 
 def main() -> int:
@@ -372,7 +455,7 @@ def main() -> int:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="record measured debt after a passing check; never required",
+        help="record measured debt, renames included, when nothing grew",
     )
     parser.add_argument(
         "--input", type=Path, help="replay compiler JSON for diagnostic investigation"
@@ -401,34 +484,31 @@ def main() -> int:
             f"Initialized {kind}: {sum(map(len, rows.values()))} distinct diagnostics"
         )
         return 0
-    families = CLIPPY if kind == "clippy" else RUFF
+    families, parts = (CLIPPY, 4) if kind == "clippy" else (RUFF, 3)
 
     def collected(sites: dict[str, list[int]]) -> dict[str, list[int]]:
-        return {
-            key: values for key, values in sites.items() if lint_of(key)[0] in families
-        }
+        malformed = [key for key in sites if len(key.split(" | ")) != parts]
+        if malformed:
+            raise SystemExit(f"malformed {path} keys: {malformed[:3]}")
+        return {key: v for key, v in sites.items() if lint_of(key)[0] in families}
 
     recorded = json.loads((ROOT / path).read_text())
     base = merge_base(args.base_ref)
     tracked = git("ls-tree", "--name-only", base, path).strip()
     previous = json.loads(git("show", f"{base}:{path}")) if tracked else recorded
-    baseline = collected(recorded["sites"])
-    allowed = reviewed_debt(kind, baseline, collected(previous["sites"]), rows)
-    errors = debt_errors(rows, baseline, allowed)
+    measured, stored = check(
+        kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
+    )
+    if args.write and not measured:
+        recorded["sites"] = rows
+        (ROOT / path).write_text(json.dumps(recorded, indent=2) + "\n")
+        print(f"recorded the measured debt in {path}")
+        stored = []
+    errors = measured + stored
     if recorded["version"] != version or previous["version"] != version:
         errors.append("compiler/linter version differs from the recorded inventory")
     for error in errors:
         print(error)
-    improved = [
-        key for key, values in baseline.items() if exceeds(values, rows.get(key, []))
-    ]
-    if improved and not errors:
-        if args.write:
-            recorded["sites"] = rows
-            (ROOT / path).write_text(json.dumps(recorded, indent=2) + "\n")
-            print(f"recorded {len(improved)} improved or retired rows in {path}")
-        else:
-            print(f"{len(improved)} rows improved or retired; --write records them")
     print(f"{kind}: {sum(map(len, rows.values()))} diagnostics; {len(errors)} errors")
     return int(bool(errors))
 

@@ -625,34 +625,105 @@ def commit(root: Path) -> str:
     return git("rev-parse", "HEAD", cwd=root).strip()
 
 
+Item = tuple[str, ...]
+
+
+def items(keys: Mapping[str, object]) -> set[Item]:
+    return {tuple(key.split(" | ")[:2]) for key in keys}
+
+
 class CarryTests(unittest.TestCase):
     OLD = "rust/a.rs | fn curve_limit | too_many_arguments | 4a33eacd5fa65f2b2e28"
     NEW = "rust/a.rs | fn get_curve_speed_limit | too_many_arguments | 4a33eacd5fa65f2b2e28"
 
     def ratchet(
-        self, previous: dict[str, list[int]], head: dict[str, list[int]], *carries: dict
+        self,
+        previous: dict[str, list[int]],
+        head: dict[str, list[int]],
+        *carries: dict,
+        recorded: dict[str, list[int]] | None = None,
+        at_base: set[Item] | None = None,
+        at_head: set[Item] | None = None,
     ) -> tuple[list[str], str]:
+        """Run the check; items default to those the debt rows name."""
+        base_items = items(previous) if at_base is None else at_base
+        head_items = items(head) if at_head is None else at_head
+
+        def exists(kind: str, key: str, revision: str | None) -> bool:
+            item = tuple(key.split(" | ")[:2])
+            return item in (base_items if revision else head_items)
+
         output = io.StringIO()
         with (
             patch.object(
                 LINT, "context", return_value=("/impl", list(carries), [], "h")
             ),
+            patch.object(LINT, "item_exists", exists),
             contextlib.redirect_stdout(output),
         ):
-            allowed = LINT.reviewed_debt("clippy", previous, previous, head)
-        return debt_errors(head, previous, allowed), output.getvalue()
+            measured, stored = LINT.check(
+                "clippy", head, head if recorded is None else recorded, previous, "b"
+            )
+        return measured + stored, output.getvalue()
 
     @staticmethod
     def carry(old: str, new: str, tool: str = "clippy") -> dict[str, str]:
         return {"kind": "carry", "tool": tool, "from": old, "to": new}
 
-    def test_unambiguous_rename_and_move_need_no_record(self) -> None:
+    def test_unambiguous_rename_and_move_need_no_carry(self) -> None:
         moved = self.OLD.replace("rust/a.rs", "rust/curve.rs")
         for new, values in ((self.NEW, [9]), (moved, [9]), (self.NEW, [8])):
             with self.subTest(new=new, values=values):
                 errors, printed = self.ratchet({self.OLD: [9]}, {new: values})
                 self.assertEqual(errors, [])
                 self.assertIn(f"carried: {self.OLD} -> {new}", printed)
+
+    def test_pairing_needs_a_real_rename(self) -> None:
+        # Both functions exist at base and head; one improves and the other grows.
+        both = items({self.OLD: 0, self.NEW: 0})
+        errors, _ = self.ratchet(
+            {self.OLD: [8]}, {self.NEW: [8]}, at_base=both, at_head=both
+        )
+        self.assertTrue(errors)
+        # The new item existed at base: an existing function grew.
+        errors, _ = self.ratchet({self.OLD: [8]}, {self.NEW: [8]}, at_base=both)
+        self.assertTrue(errors)
+        # The old item still exists at head: it improved, and something else grew.
+        errors, _ = self.ratchet({self.OLD: [8]}, {self.NEW: [8]}, at_head=both)
+        self.assertTrue(errors)
+        # A different file and a different name never pair without a carry.
+        far = self.NEW.replace("rust/a.rs", "rust/b.rs")
+        errors, printed = self.ratchet({self.OLD: [8]}, {far: [8]})
+        self.assertTrue(errors)
+        errors, _ = self.ratchet({self.OLD: [8]}, {far: [8]}, self.carry(self.OLD, far))
+        self.assertEqual(errors, [])
+
+    def test_rename_is_recorded_once(self) -> None:
+        # Recorded under its new key only: passes.
+        self.assertEqual(self.ratchet({self.OLD: [9]}, {self.NEW: [9]})[0], [])
+        # Old row left behind: the next change could restore the old item.
+        for recorded in ({self.OLD: [9]}, {self.OLD: [9], self.NEW: [9]}):
+            with self.subTest(recorded=recorded):
+                errors, _ = self.ratchet(
+                    {self.OLD: [9]}, {self.NEW: [9]}, recorded=recorded
+                )
+                self.assertIn(
+                    f"rename not recorded: {self.OLD}; run with --write", errors
+                )
+
+    def test_stale_rows_allow_nothing_new(self) -> None:
+        # The base file still lists an item that no longer exists at base.
+        errors, _ = self.ratchet(
+            {self.OLD: [9]}, {}, recorded={self.OLD: [9]}, at_base=set()
+        )
+        self.assertEqual(errors, [])
+        errors, _ = self.ratchet({self.OLD: [9]}, {self.OLD: [9]}, at_base=set())
+        self.assertTrue(errors)
+        # An improvement left unrecorded keeps its row and still passes.
+        errors, _ = self.ratchet(
+            {self.OLD: [9]}, {self.OLD: [8]}, recorded={self.OLD: [9]}
+        )
+        self.assertEqual(errors, [])
 
     def test_ambiguous_renames_pair_by_item_then_file_or_need_a_carry(self) -> None:
         other_old = self.OLD.replace("curve_limit", "brake_limit")
@@ -709,6 +780,77 @@ class CarryTests(unittest.TestCase):
             ),
         ):
             self.assertTrue(self.ratchet({self.OLD: [9]}, head, *carries)[0])
+
+    def test_merge_base_needs_common_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"a.txt": "a\n"})
+            first = git("rev-parse", "HEAD", cwd=root).strip()
+            git("checkout", "-q", "--orphan", "unrelated", cwd=root)
+            (root / "a.txt").write_text("b\n")
+            git("add", "-A", cwd=root)
+            commit(root)
+            git("checkout", "-q", "--detach", first, cwd=root)
+            with patch.object(LINT, "git", partial(git, cwd=root)):
+                self.assertEqual(LINT.merge_base(first), first)
+                with self.assertRaises(SystemExit):
+                    LINT.merge_base("unrelated")
+
+    def test_write_records_a_rename_found_by_the_check(self) -> None:
+        signature = "(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}\n"
+        old = "rust/a.rs | fn curve_limit | too_many_arguments | " + LINT.ITEM
+        new = old.replace("curve_limit", "get_curve_speed_limit")
+        debt = {"schema": 1, "version": "1.99.0", "inventory_head": "x"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(
+                root,
+                {
+                    "rust/a.rs": "fn curve_limit" + signature,
+                    "migration/clippy-debt.json": json.dumps(
+                        {**debt, "sites": {old: [8]}}
+                    ),
+                },
+            )
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            text = "fn get_curve_speed_limit" + signature
+            (root / "rust/a.rs").write_text(text)
+            commit(root)
+            span = {
+                "is_primary": True,
+                "file_name": "rust/a.rs",
+                "byte_start": 0,
+                "byte_end": len(text.encode()),
+            }
+            replay = root / "clippy.json"
+            replay.write_text(
+                json.dumps(
+                    {
+                        "reason": "compiler-message",
+                        "message": {
+                            "code": {"code": "clippy::too_many_arguments"},
+                            "message": "this function has too many arguments (8/7)",
+                            "spans": [span],
+                        },
+                    }
+                )
+            )
+            argv = ["lint-ratchet.py", "clippy", "--base-ref", base, "--input"]
+            results = []
+            for extra in ([], ["--write"], []):
+                LINT.item_names.cache_clear()
+                with (
+                    patch.object(LINT, "ROOT", root),
+                    patch.object(LINT, "git", partial(git, cwd=root)),
+                    patch.object(LINT, "context", return_value=("", [], [], "h")),
+                    patch("sys.argv", [*argv, str(replay), *extra]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    results.append(LINT.main())
+            LINT.item_names.cache_clear()
+            self.assertEqual(results, [1, 0, 0])
+            recorded = json.loads((root / "migration/clippy-debt.json").read_text())
+            self.assertEqual(recorded["sites"], {new: [8]})
 
     def test_component_reviews_use_agent_paths_under_shared_login(self) -> None:
         proposal = {"kind": "lint"}
@@ -901,6 +1043,19 @@ class CarryTests(unittest.TestCase):
                     self.assertEqual(
                         LINT.reviewed_debt("clippy", {row: [9]}, {}), expected
                     )
+
+
+class RetiredThresholdTests(unittest.TestCase):
+    def test_only_the_three_retired_thresholds_may_be_removed(self) -> None:
+        for key, before in (
+            ("too-many-lines-threshold", 100),
+            ("cognitive-complexity-threshold", 25),
+            ("excessive-nesting-threshold", 5),
+        ):
+            self.assertTrue(POLICY.permitted_change(key, before, None))
+            self.assertFalse(POLICY.permitted_change(key, before, before + 1))
+        for key, before in (("too-many-arguments-threshold", 7), ("max-args", 5)):
+            self.assertFalse(POLICY.permitted_change(key, before, None))
 
 
 class ArchiveTests(unittest.TestCase):
