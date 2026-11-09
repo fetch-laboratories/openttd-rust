@@ -2,6 +2,7 @@
 """Exercise bounded validation, lock coordination, and runtime capture."""
 
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -13,9 +14,11 @@ import time
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import IO, cast
 from unittest.mock import patch
 
+import validation_execution
 from simulation import configuration, core, game
 from validation_execution import file_lock, run_logged
 
@@ -31,6 +34,48 @@ def running(pid: int) -> bool:
     except (FileNotFoundError, ProcessLookupError):
         return False
     return state.split(") ", 1)[1][0] != "Z"
+
+
+def ready_clock(log: Path, lines: int, limit: float = 30.0) -> SimpleNamespace:
+    """Stand in for `run_logged`'s `time`, with a clock that starts at child readiness.
+
+    The clock reads zero until the log holds `lines` lines, so a timeout or
+    heartbeat window counts from the child's readiness, not from interpreter
+    startup under host load. After `limit` real seconds without readiness it
+    reports the real elapsed time, so a child that never becomes ready still
+    times out and fails the test's log assertion.
+    """
+    real = time.monotonic
+    origin = real()
+    ready: list[float] = []
+
+    def monotonic() -> float:
+        now = real()
+        if not ready:
+            try:
+                text = log.read_text()
+            except FileNotFoundError:
+                text = ""
+            if len(text.splitlines()) < lines:
+                return 0.0 if now - origin < limit else now - origin
+            ready.append(now)
+        return now - ready[0]
+
+    return SimpleNamespace(monotonic=monotonic)
+
+
+class HeartbeatSignal(io.StringIO):
+    """Captured driver output that marks a file once a heartbeat line is written."""
+
+    def __init__(self, marker: Path) -> None:
+        super().__init__()
+        self.marker = marker
+
+    def write(self, text: str) -> int:
+        written = super().write(text)
+        if ": running " in text:
+            self.marker.touch()
+        return written
 
 
 class ExecutionTests(unittest.TestCase):
@@ -64,15 +109,28 @@ class ExecutionTests(unittest.TestCase):
 
     def test_quiet_child_reports_heartbeat_and_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            code, log, output = self.capture(
-                "import time; time.sleep(.12); print('retained'); raise SystemExit(7)",
-                directory,
-                "quiet",
+            # The quiet child exits only after the driver has reported a heartbeat
+            # (bounded at 30 s), so the claim holds however the host schedules it.
+            log, marker = Path(directory) / "quiet.log", Path(directory) / "heartbeat"
+            output = HeartbeatSignal(marker)
+            script = (
+                "import os,time; deadline=time.monotonic()+30\n"
+                + f"while not os.path.exists({str(marker)!r}) and time.monotonic()<deadline: time.sleep(.01)\n"
+                + "print('retained'); raise SystemExit(7)"
             )
+            with contextlib.redirect_stdout(output):
+                code = run_logged(
+                    [sys.executable, "-c", script],
+                    cwd=directory,
+                    env=None,
+                    log=log,
+                    phase="quiet",
+                    heartbeat=0.02,
+                )
             self.assertEqual(code, 7)
             self.assertEqual(log.read_text(), "retained\n")
             for expected in ("quiet: running", str(log), "exit 7"):
-                self.assertIn(expected, output)
+                self.assertIn(expected, output.getvalue())
 
     def test_streaming_preserves_split_utf8_and_complete_log(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -90,7 +148,11 @@ class ExecutionTests(unittest.TestCase):
     def test_timeout_reaps_child_and_retains_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "timeout.log"
-            with contextlib.redirect_stdout(io.StringIO()):
+            # The 0.09 s timeout counts from the child's `started` line.
+            with (
+                contextlib.redirect_stdout(io.StringIO()),
+                patch.object(validation_execution, "time", ready_clock(log, 1)),
+            ):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     run_logged(
                         [
@@ -121,9 +183,14 @@ class ExecutionTests(unittest.TestCase):
                     "import os,subprocess,sys,time; print(os.getpid(),flush=True); "
                     + f"subprocess.Popen([sys.executable,'-c',{child!r}]); time.sleep(60)"
                 )
+                # In the timeout case the driver's 0.5 s timeout counts from both
+                # descendants having logged their pids.
                 driver = (
-                    "from validation_execution import run_logged; "
-                    + f"run_logged({[sys.executable, '-c', command]!r},cwd={directory!r},env=None,log={str(log)!r},phase='kill',timeout={None if killed else 0.5!r})"
+                    "import time\nfrom pathlib import Path\nfrom types import SimpleNamespace\n"
+                    + inspect.getsource(ready_clock)
+                    + "import validation_execution\n"
+                    + f"validation_execution.time = ready_clock(Path({str(log)!r}), 2)\n"
+                    + f"validation_execution.run_logged({[sys.executable, '-c', command]!r},cwd={directory!r},env=None,log={str(log)!r},phase='kill',timeout={None if killed else 0.5!r})"
                 )
                 process = subprocess.Popen(
                     [sys.executable, "-c", driver],
@@ -134,7 +201,7 @@ class ExecutionTests(unittest.TestCase):
                 )
                 descendants: list[int] = []
                 try:
-                    deadline = time.monotonic() + 5
+                    deadline = time.monotonic() + 30
                     while not log.exists() or len(log.read_text().splitlines()) < 2:
                         if time.monotonic() >= deadline:
                             self.fail("descendants did not start")
@@ -144,7 +211,7 @@ class ExecutionTests(unittest.TestCase):
                         (os.killpg if index < len(signals) else os.kill)(
                             process.pid, killed
                         )
-                    process.wait(timeout=5)
+                    process.wait(timeout=30)
                     for descendant in descendants:
                         while running(descendant):
                             if time.monotonic() >= deadline:
