@@ -771,3 +771,51 @@ pub unsafe extern "C" fn openttd_rust_townname_data(
 pub unsafe extern "C" fn openttd_rust_townname_destroy(owner: *mut String) {
     drop(unsafe { Box::from_raw(owner) });
 }
+
+/// Every built-in generator at both seed endpoints, with the retired `src/tests/townname.cpp`
+/// fixture's expected names from the unchanged pinned generators (#736 W).
+#[cfg(test)]
+mod generator_tests {
+    use super::GENERATORS;
+
+    const EXPECTED: [[&str; 2]; 21] = [
+        ["Invenville", "Fort Wenfingburg Springs"],
+        ["Agincourt", "Alen\u{e7}on"],
+        ["Berlin", "W\u{fc}rzwald"],
+        ["Stanningville", "Old Stanthwaite Springs"],
+        ["Caracas", "Santa Rosa"],
+        ["Binkyton", "Griddlebridge"],
+        ["Backarp", "Stora \u{d6}ster\u{e5}s"],
+        ["Drogestad", "Klein Hilend"],
+        ["Hiekkaharju", "Lieksa"],
+        ["Frombork", "Opoczno"],
+        ["Bratislava", "Zvolen"],
+        ["Alta", "V\u{e5}g\u{e5}sen"],
+        ["Ajka", "V\u{e1}s\u{e1}rosv\u{f6}lgy"],
+        ["Bruck", "Maria Weissenhaag ob der Ill"],
+        ["Adjud", "Zal\u{103}u"],
+        ["A\u{161}", "Lipi\u{161}t\u{11b}"],
+        ["Aarau", "Zug"],
+        ["Agerbasse", "Kongens \u{c5}lskov"],
+        ["Ak\u{e7}aaga\u{e7}dere", "Yeniayva"],
+        ["Roma", "Roccaforte"],
+        ["Barcelona", "Vilafranca del Pened\u{e8}s"],
+    ];
+
+    fn generate(lang: usize, seed: u32) -> String {
+        let mut output = String::new();
+        GENERATORS[lang](&mut output, seed);
+        output
+    }
+
+    #[test]
+    fn generators_match_original_names() {
+        for (lang, names) in EXPECTED.iter().enumerate() {
+            for (seed, name) in [0, u32::MAX].into_iter().zip(names) {
+                assert_eq!(generate(lang, seed), *name, "lang={lang} seed={seed:#x}");
+            }
+        }
+        // Finnish chooses its suffix from its own stem's vowels.
+        assert_eq!(generate(8, 3_797_316_664), "Hein\u{e4}l\u{e4}");
+    }
+}
