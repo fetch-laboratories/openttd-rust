@@ -707,7 +707,6 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         loading: crate::test_tables::unreachable0,
         cargo_classes: crate::test_tables::unreachable1,
         multiplier: crate::test_tables::unreachable1,
-        pool_available: crate::test_tables::unreachable1,
         new_temporary: crate::test_tables::unreachable0,
         destroy_temporary: crate::test_tables::unreachable1,
         vehicle_engine_object: crate::test_tables::unreachable1,
