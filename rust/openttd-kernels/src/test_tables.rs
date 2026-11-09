@@ -497,3 +497,214 @@ pub(crate) const TOWN_LEAVES: crate::town::Leaves = crate::town::Leaves {
     assert_clear_house: unreachable1,
     houses: ptr::null(),
 };
+
+/// `crate::town::house::HouseServices` with every entry unreachable.
+pub(crate) const HOUSES: crate::town::house::HouseServices = crate::town::house::HouseServices {
+    cost: ptr::null(),
+    commands: ptr::null(),
+    authority: ptr::null(),
+    entry: unreachable1,
+    loop_tile: unreachable1,
+    house_type: unreachable1,
+    completed: unreachable1,
+    protected: unreachable1,
+    lift: unreachable1,
+    random: unreachable1,
+    construction: unreachable1,
+    cache: unreachable1,
+    age: unreachable1,
+    processing: unreachable1,
+    clean_type: unreachable1,
+    town: unreachable1,
+    loop_spec: unreachable1,
+    animation_spec: unreachable1,
+    new_spec: unreachable1,
+    production: unreachable1,
+    sprite_groups: unreachable1,
+    removal: unreachable1,
+    acceptance: unreachable1,
+    watched: unreachable1,
+    inc_construction: unreachable1,
+    reset_age: unreachable1,
+    set_age: unreachable2,
+    set_lift_destination: unreachable2,
+    set_lift_position: unreachable2,
+    halt_lift: unreachable1,
+    dec_processing: unreachable1,
+    set_processing: unreachable2,
+    set_random_bits: unreachable2,
+    set_random_triggers: unreachable2,
+    set_type: unreachable2,
+    delete_inspect: unreachable1,
+    cargo_file: unreachable1,
+    convert_8bit: unreachable3,
+    scale_cargo: unreachable1,
+    cargogen_mode: unreachable0,
+    place_houses: unreachable0,
+    errors: crate::town::house::HouseErrors {
+        demolish: 0,
+        protected: 0,
+        refuses: 0,
+        sloped: 0,
+        bridge: 0,
+        flat: 0,
+        no_town: 0,
+    },
+};
+
+/// `crate::services::CommandServices` with every entry unreachable.
+pub(crate) const COMMANDS: crate::services::CommandServices = crate::services::CommandServices {
+    command_flags: unreachable1,
+    command_type: unreachable1,
+    command_valid: unreachable1,
+    finance: &FINANCE,
+    infinite_money: unreachable0,
+    money_error: unreachable2,
+    infrastructure_dirty: unreachable1,
+    landscape_commands: unreachable0,
+    company: unreachable0,
+    occupancy: unreachable0,
+    shared: &SHARED,
+    cost: &COMMAND_COSTS,
+    rail_map: &RAIL_MAP,
+    signals: &SIGNALS,
+    shift_pressed: unreachable0,
+    pause_level: unreachable0,
+    last_build_coordinate: unreachable2,
+    not_enough_cash: 0,
+    paused_error: unreachable3,
+    error_message: unreachable4,
+    estimate: unreachable3,
+};
+
+/// `crate::company::FinanceServices` with every entry unreachable.
+pub(crate) const FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
+    current_company: unreachable0,
+    set_current_company: unreachable1,
+    networking: unreachable0,
+    company_finances: unreachable1,
+    invalidate_company_windows: unreachable1,
+    give_money_message: unreachable2,
+    money_animation: unreachable2,
+};
+
+/// `crate::services::RailMapServices` with every entry unreachable.
+pub(crate) const RAIL_MAP: crate::services::RailMapServices = crate::services::RailMapServices {
+    ground: ptr::null(),
+    traversal: unreachable1,
+    station_admission: unreachable3,
+    wormhole_admission: unreachable2,
+    set_signal_state: unreachable3,
+    other_tunnel_bridge_end: unreachable1,
+    invalid_rail_type: unreachable0,
+    set_rail_type: unreachable2,
+    set_track_bits: unreachable2,
+    set_present_signals: unreachable2,
+    set_signal_states: unreachable2,
+    set_has_signals: unreachable2,
+    set_signal_type: unreachable3,
+    signal_variant: unreachable2,
+    set_signal_variant: unreachable3,
+    cycle_signal_side: unreachable2,
+    rail_reservation: unreachable1,
+    set_track_reservation: unreachable2,
+    depot_reserved: unreachable1,
+    set_depot_exit: unreachable2,
+    make_rail_normal: unreachable4,
+    make_rail_depot: unreachable5,
+    wormhole_reserved: unreachable1,
+};
+
+/// `crate::signal::SignalServices` with every entry unreachable.
+pub(crate) const SIGNALS: crate::signal::SignalServices = crate::signal::SignalServices {
+    assertions: false,
+    assert_condition: unreachable1,
+    assert_wormhole_start: unreachable2,
+    vehicles: ptr::null(),
+    assert_company: unreachable1,
+};
+
+/// `crate::landscape_cmd::LandscapeServices` with every entry unreachable.
+pub(crate) const LANDSCAPE: crate::landscape_cmd::LandscapeServices =
+    crate::landscape_cmd::LandscapeServices {
+        shared: ptr::null(),
+        costs: ptr::null(),
+        commands: ptr::null(),
+        strings: crate::landscape_cmd::Strings {
+            canal: 0,
+            clear_limit: 0,
+            water: 0,
+            sea_level: 0,
+            high: 0,
+            edge: 0,
+            bridge: 0,
+            bridge_high: 0,
+            tunnel: 0,
+            terraform_limit: 0,
+            levelled: 0,
+        },
+        tile_procs: ptr::null(),
+        water: ptr::null(),
+        on_water: unreachable1,
+        coast: unreachable1,
+        buoy: unreachable1,
+        canal: unreachable1,
+        max_bridge_height: unreachable0,
+        freeform_edges: unreachable0,
+        editor: unreachable0,
+        exchange_generating: unreachable1,
+        tunnel_in_way: unreachable2,
+        mark_dirty_height: unreachable2,
+        set_height: unreachable2,
+        paused: unreachable0,
+    };
+
+/// `crate::landscape_cmd::TileServices` with every entry unreachable.
+pub(crate) const LANDSCAPE_TILES: crate::landscape_cmd::TileServices =
+    crate::landscape_cmd::TileServices {
+        clear: unreachable3,
+        terraform: unreachable5,
+        owners: ptr::null(),
+        trees: ptr::null(),
+        industry_policy: ptr::null(),
+        industry_costs: ptr::null(),
+        industry_generation: ptr::null(),
+    };
+
+/// `crate::tile_owner::Services` with every entry unreachable.
+pub(crate) const TILE_OWNERS: crate::tile_owner::Services = crate::tile_owner::Services {
+    clear: unreachable3,
+    house: unreachable3,
+    industry: ptr::null(),
+    objects: ptr::null(),
+    rail: ptr::null(),
+    shared: ptr::null(),
+    station: ptr::null(),
+    trees: unreachable3,
+    tunnel_bridge: ptr::null(),
+    void: unreachable3,
+    water: ptr::null(),
+};
+/// `crate::ground::ClearServices` with every entry unreachable.
+pub(crate) const CLEAR_GROUND: crate::ground::ClearServices = crate::ground::ClearServices {
+    field_tile: unreachable1,
+    density: unreachable1,
+    counter: unreachable1,
+    snow: unreachable1,
+    surface: unreachable1,
+    set_ground: unreachable3,
+    set_density: unreachable2,
+    set_counter: unreachable2,
+    clear_snow: unreachable1,
+    make_clear: unreachable3,
+    fences: unreachable1,
+    field: unreachable1,
+    set_field: unreachable2,
+};
+
+/// `crate::water_regions::Leaves` with every entry unreachable.
+pub(crate) const WATER_REGION_LEAVES: crate::water_regions::Leaves = crate::water_regions::Leaves {
+    shared: ptr::null(),
+    aqueduct: unreachable1,
+    debug: unreachable3,
+};
