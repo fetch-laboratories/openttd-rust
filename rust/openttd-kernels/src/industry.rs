@@ -543,6 +543,7 @@ impl Map {
     }
 }
 use crate::clear_map::ClearGround;
+use crate::direction_func::{diag_dir_to_axis, other_axis};
 use crate::direction_type::DiagDirection;
 use crate::landscape_type::LandscapeType;
 use crate::tree_map::TreeGround;
@@ -1721,12 +1722,11 @@ fn setup_farm_field_fence(
     map: Map,
     s: &Services,
 ) {
-    // TileOffsByAxis(OtherAxis(DiagDirToAxis(side)))
-    let diff = if side == DiagDirection::DIAGDIR_NE || side == DiagDirection::DIAGDIR_SW {
-        map.size_x
-    } else {
-        1
-    };
+    let world = crate::map_func::World::new(s.shared());
+    let check = |ok| world.check(ok);
+    let diff = map
+        .coordinates()
+        .offs_by_axis(other_axis(diag_dir_to_axis(side.0, check), check));
     loop {
         tile = TileIndex(map.coordinates().wrap_to_map(tile.0, map.size_y));
         // The tile is a field whose neighbour in `side` is not a field with a fence in the
