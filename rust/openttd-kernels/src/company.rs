@@ -1327,7 +1327,14 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     let map_size = (s.map_size)();
     for tile in 0..map_size {
         // SAFETY: The outer C++ frame owns live scratch across this traversal.
-        unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
+        unsafe {
+            crate::tile_owner::change_tile_owner(
+                ownership,
+                crate::tile_type::TileIndex(tile),
+                CompanyID(old),
+                CompanyID(new),
+            );
+        };
     }
     if new != INVALID_OWNER {
         for tile in 0..map_size {
