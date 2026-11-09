@@ -2775,3 +2775,224 @@ mod road_price_tests {
         }
     }
 }
+
+/// Company control cases from the retired part of `src/tests/company_economy.cpp` (#736 F),
+/// with the fixture's own expected values: the first playable company, service intervals and
+/// ownership errors ("Company control - human preference, allocation credit, defaults and
+/// encoded owners"; its native string encodings stay a C++ case) and "Company ownership - both
+/// original assertions precede error selection".
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use crate::company_type::{
+        COMPANY_SPECTATOR, CompanyID, OWNER_END, OWNER_NONE, OWNER_TOWN, OpenTTDCompany, Owner,
+    };
+    use crate::settings_table::VehicleDefaults;
+    use crate::test_tables::{COMMAND_COSTS, COMPANY, COMPANY_IDENTITY, FINANCE, MOVEMENT, SHARED};
+    use crate::tile_type::TileIndex;
+    use std::cell::{Cell, RefCell};
+
+    /// Per company slot: `None` free, else whether it is an AI.
+    type Slots = [Option<bool>; MAX_COMPANIES as usize];
+    thread_local! {
+        static SLOTS: RefCell<Slots> = const { RefCell::new([None; MAX_COMPANIES as usize]) };
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+        static LOCAL: Cell<u8> = const { Cell::new(0) };
+        static ERRORS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static FAILED: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+    fn handle(id: u8) -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id) + 1)
+    }
+    extern "C" fn company(id: CompanyID) -> *mut OpenTTDCompany {
+        handle(id.0)
+    }
+    extern "C" fn company_id(c: *mut OpenTTDCompany) -> CompanyID {
+        CompanyID((c.addr() - 1) as u8)
+    }
+    extern "C" fn next_company(from: u32) -> *mut OpenTTDCompany {
+        SLOTS.with(|s| {
+            let s = s.borrow();
+            (from..u32::from(MAX_COMPANIES))
+                .find(|&id| s[id as usize].is_some())
+                .map_or(std::ptr::null_mut(), |id| handle(id as u8))
+        })
+    }
+    extern "C" fn is_ai(c: *mut OpenTTDCompany) -> bool {
+        SLOTS.with(|s| s.borrow()[usize::from(company_id(c).0)].unwrap())
+    }
+    extern "C" fn company_valid(id: u8) -> bool {
+        SLOTS.with(|s| s.borrow().get(usize::from(id)).copied().flatten().is_some())
+    }
+    extern "C" fn can_allocate() -> bool {
+        SLOTS.with(|s| s.borrow().iter().any(Option::is_none))
+    }
+    extern "C" fn current_company() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn local_company() -> u8 {
+        LOCAL.get()
+    }
+    fn log(entry: String) {
+        ERRORS.with(|e| e.borrow_mut().push(entry));
+    }
+    extern "C" fn zero(_: *mut crate::services::CommandCost) {
+        log("zero".to_owned());
+    }
+    extern "C" fn error(_: *mut crate::services::CommandCost, message: u32) {
+        log(format!("error {message}"));
+    }
+    extern "C" fn encode_owned_by(
+        _: *mut crate::services::CommandCost,
+        owner: Owner,
+        tile: TileIndex,
+    ) {
+        log(format!("encode {} {}", owner.0, tile.0));
+    }
+    extern "C" fn error_owner(_: *mut crate::services::CommandCost, owner: Owner) {
+        log(format!("owner {}", owner.0));
+    }
+    extern "C" fn native_assert(condition: bool) {
+        FAILED.with(|f| f.borrow_mut().push(condition));
+    }
+
+    const OWNED_BY: u32 = 0x7001;
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn services() -> Services {
+        let mut identity = COMPANY_IDENTITY;
+        identity.company = company;
+        identity.company_id = company_id;
+        identity.next_company = next_company;
+        identity.is_ai = is_ai;
+        let mut movement = MOVEMENT;
+        movement.native_assert = native_assert;
+        let mut shared = SHARED;
+        shared.company_valid = company_valid;
+        shared.movement = leak(movement);
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        let mut costs = COMMAND_COSTS;
+        costs.zero = zero;
+        costs.error = error;
+        costs.encode_owned_by = encode_owned_by;
+        costs.error_owner = error_owner;
+        let mut s = COMPANY;
+        s.identity = leak(identity);
+        s.shared = leak(shared);
+        s.finance = leak(finance);
+        s.cost = leak(costs);
+        s.can_allocate_company = can_allocate;
+        s.local_company = local_company;
+        s.owned_by = OWNED_BY;
+        s
+    }
+    fn set(id: u8, slot: Option<bool>) {
+        SLOTS.with(|s| s.borrow_mut()[usize::from(id)] = slot);
+    }
+    fn check(s: &Services, owner: u8, tile: u32) -> Vec<String> {
+        ERRORS.with(|e| e.borrow_mut().clear());
+        check_ownership(
+            s,
+            crate::services::Cost(std::ptr::null_mut(), s.cost),
+            CompanyID(owner),
+            TileIndex(tile),
+        );
+        ERRORS.with(|e| e.borrow().clone())
+    }
+
+    /// The first existing human company wins, then the first free slot, then the first ID.
+    #[test]
+    fn first_playable_prefers_humans_then_free_slots() {
+        let s = services();
+        SLOTS.with(|slots| *slots.borrow_mut() = [None; MAX_COMPANIES as usize]);
+        set(3, Some(false));
+        assert_eq!(first_playable(&s).0, 3, "a human wins before the hole at 0");
+        set(3, Some(true));
+        assert_eq!(first_playable(&s).0, 0);
+        for id in (0..MAX_COMPANIES).filter(|&id| id != 3) {
+            set(id, Some(true));
+        }
+        assert_eq!(first_playable(&s).0, CompanyID::BEGIN.0, "a full AI pool");
+        set(9, Some(false));
+        set(12, Some(false));
+        assert_eq!(first_playable(&s).0, 9);
+        set(1, None);
+        assert_eq!(first_playable(&s).0, 9);
+        set(9, Some(true));
+        set(12, Some(true));
+        assert_eq!(first_playable(&s).0, 1);
+    }
+
+    /// Each vehicle type reads its own interval field, ignoring the percent flag.
+    #[test]
+    fn service_intervals_read_the_type_field() {
+        let s = services();
+        for percent in [false, true] {
+            let company = VehicleDefaults {
+                servint_ispercent: percent,
+                servint_trains: 0,
+                servint_roadveh: 121,
+                servint_aircraft: 65535,
+                servint_ships: 423,
+            };
+            let client = VehicleDefaults {
+                servint_ispercent: !percent,
+                servint_trains: 224,
+                servint_roadveh: 0,
+                servint_aircraft: 426,
+                servint_ships: 65535,
+            };
+            for (kind, company_interval, client_interval) in [
+                (crate::vehicle_type::VehicleType::VEH_TRAIN, 0, 224),
+                (crate::vehicle_type::VehicleType::VEH_ROAD, 121, 0),
+                (crate::vehicle_type::VehicleType::VEH_AIRCRAFT, 65535, 426),
+                (crate::vehicle_type::VehicleType::VEH_SHIP, 423, 65535),
+            ] {
+                assert_eq!(
+                    service_interval_from(s.shared, &raw const company, kind),
+                    company_interval
+                );
+                assert_eq!(
+                    service_interval_from(s.shared, &raw const client, kind),
+                    client_interval
+                );
+            }
+        }
+    }
+
+    /// The current company owns; another owner fails with the owned-by error, encoded with its
+    /// owner only for the local company.
+    #[test]
+    fn ownership_errors_and_assertions() {
+        let s = services();
+        CURRENT.set(0);
+        for observer in [0, COMPANY_SPECTATOR] {
+            LOCAL.set(observer);
+            assert_eq!(check(&s, 0, 0), ["zero"]);
+            for owner in [3, OWNER_NONE] {
+                let mut expected = vec![format!("error {OWNED_BY}")];
+                if observer == 0 {
+                    expected.extend([format!("encode {owner} 0"), format!("owner {owner}")]);
+                }
+                assert_eq!(
+                    check(&s, owner, 0),
+                    expected,
+                    "observer {observer} owner {owner}"
+                );
+            }
+        }
+        // Both original assertions precede error selection; a spectator gets no encoding.
+        LOCAL.set(COMPANY_SPECTATOR);
+        for (owner, tile) in [(OWNER_END, 1), (OWNER_TOWN, 0)] {
+            FAILED.with(|f| f.borrow_mut().clear());
+            assert_eq!(check(&s, owner, tile), [format!("error {OWNED_BY}")]);
+            assert_eq!(
+                FAILED.with(|f| f.borrow().clone()),
+                [false],
+                "owner {owner}"
+            );
+        }
+    }
+}
