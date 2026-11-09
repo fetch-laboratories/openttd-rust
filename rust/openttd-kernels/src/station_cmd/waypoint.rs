@@ -376,7 +376,7 @@ impl Ctx<'_> {
          * Or it points to a waypoint if we're only allowed to build on exactly that waypoint. */
         if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_STATION {
             if !crate::map_func::World::new(self.shared).is_rail_waypoint(tile) {
-                return self.auto_clear(out, tile.0); // get error message
+                return self.auto_clear(out, tile); // get error message
             }
             let wp = StationID((self.shared.station_index)(tile.0));
             if *waypoint == StationID::INVALID {

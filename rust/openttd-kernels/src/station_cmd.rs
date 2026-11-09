@@ -1717,7 +1717,7 @@ impl Ctx<'_> {
          * Or it points to a station if we're only allowed to build on exactly that station. */
         if TileType((self.shared.tile_type)(tile_cur.0)) == TileType::MP_STATION {
             if !crate::map_func::World::new(self.shared).is_rail_station(tile_cur) {
-                return self.auto_clear(cost, tile_cur.0); // get error message
+                return self.auto_clear(cost, tile_cur); // get error message
             }
             let st = StationID((self.shared.station_index)(tile_cur.0));
             if *station == StationID::INVALID {
@@ -2912,12 +2912,12 @@ impl Ctx<'_> {
          * Or it points to a station if we're only allowed to build on exactly that station. */
         if TileType((self.shared.tile_type)(cur_tile.0)) == TileType::MP_STATION {
             if !world.any_road_stop_tile(cur_tile.0) {
-                return self.auto_clear(cost, cur_tile.0); // Get error message.
+                return self.auto_clear(cost, cur_tile); // Get error message.
             }
             if station_type != StationType((self.shared.station_type)(cur_tile.0).0)
                 || is_drive_through != world.drive_through_stop_tile(cur_tile.0)
             {
-                return self.auto_clear(cost, cur_tile.0); // Get error message.
+                return self.auto_clear(cost, cur_tile); // Get error message.
             }
             /* Drive-through station in the wrong direction. */
             if is_drive_through
@@ -5287,8 +5287,7 @@ pub unsafe extern "C" fn openttd_rust_station_in_orders_abi(
 
 impl Ctx<'_> {
     /// `ClearTile_Station`'s `DoCommandFlag::Auto` errors.
-    fn auto_clear(&self, cost: Cost<'_>, tile: u32) {
-        let tile = TileIndex(tile);
+    fn auto_clear(&self, cost: Cost<'_>, tile: TileIndex) {
         let has_tram =
             || self.get_road_type(tile, RoadTramType::RTT_TRAM) != RoadType::INVALID_ROADTYPE;
         let error = match StationType((self.shared.station_type)(tile.0).0) {
@@ -5385,7 +5384,7 @@ impl Ctx<'_> {
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_CLEAR);
         if flags.test(DoCommandFlag::Auto) {
-            return self.auto_clear(cost, tile.0);
+            return self.auto_clear(cost, tile);
         }
         match StationType((self.shared.station_type)(tile.0).0) {
             StationType::Rail => self.remove_rail_station(cost, ret, error, flags, tile, false),
