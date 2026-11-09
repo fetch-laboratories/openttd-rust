@@ -7,7 +7,7 @@ or locked one is kept. Live output handles are checked again before removal. Out
 live worktree's own `.local` stays with that worktree.
 
 A worktree that is kept still gives up its git-ignored `build-rust` (#824) once its work is
-merged or closed, or once it has been idle for `--idle-hours`. Locked, referenced, evidence
+merged or closed, or, for a T3 task's checkout, once it has been idle for `--idle-hours`. Locked, referenced, evidence
 and profile worktrees, a live cwd inside, and a symlinked `build-rust` keep the build. Only
 that directory is deleted, never the checkout or its staged or uncommitted files.
 """
@@ -297,7 +297,9 @@ def plan_build(
     newest = latest_activity(tree.path)
     shown = "unknown" if newest is None else stamp(newest)
     idle = 0.0 if newest is None else time.time() - newest
-    if newest is not None and idle >= idle_hours * 3600:
+    task = ".t3/worktrees/" in tree.path.as_posix()
+    # Ruling B (#824): only a T3 task's checkout is reclaimed for idleness.
+    if task and newest is not None and idle >= idle_hours * 3600:
         why = f"idle {idle / 3600:.0f}h; newest activity {shown}"
         seconds = idle_hours * 3600
         return Item(
@@ -306,6 +308,8 @@ def plan_build(
     if work_done(main, tree, pr_state):
         why = f"merged/closed; newest activity {shown}"
         return Item(build, True, f"{label}: {why}", owner=tree.path)
+    if not task:
+        return Item(build, False, f"{label}: not a T3 task; work not merged or closed")
     return Item(build, False, f"{label}: active within {idle_hours:g}h ({shown})")
 
 

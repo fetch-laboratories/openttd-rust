@@ -832,11 +832,13 @@ class HousekeepingTests(unittest.TestCase):
         (linked / "build-rust").symlink_to(target)
         self.age(linked, idle + 60)
         # Listed by its resolved path, as main-local worktrees are on the HDD.
+        # An idle non-T3 checkout under an open PR keeps its build (ruling B).
+        plain = self.build(self.top / "trees/open", idle + 60)
         profile = self.top / "storage/worktrees/root-profile-824"
         git(self.main, "worktree", "add", "--quiet", "--detach", str(profile))
         self.build(profile, idle + 60)
         references = f"Retained: {issue.name}"
-        states = {"t3-review-over": "OPEN", "t3-review-under": "OPEN"}
+        states = {"t3-review-over": "OPEN", "t3-review-under": "OPEN", "open": "OPEN"}
         with patch.dict(PR_STATES, states):
             builds = self.planned_builds(references)
             listed = self.run_main(references=references)
@@ -851,6 +853,7 @@ class HousekeepingTests(unittest.TestCase):
             locked / "build-rust": "locked",
             issue / "build-rust": "referenced",
             linked / "build-rust": "symlinked",
+            plain: "not a T3 task",
             profile / "build-rust": "retained profile",
         }
         for build, reason in expected.items():
