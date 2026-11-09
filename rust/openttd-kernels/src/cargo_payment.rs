@@ -623,99 +623,106 @@ mod income_tests {
         SHARE.get()
     }
 
+    /// Split a case index of nested loops into its digits, innermost loop first.
+    fn digits<const N: usize>(mut index: usize, radices: [usize; N]) -> [usize; N] {
+        radices.map(|radix| {
+            let digit = index % radix;
+            index /= radix;
+            digit
+        })
+    }
+
     /// Income for each case of the fixture's nested domain: (inputs, "income calls argument").
     fn income_cases(s: &Services) -> Vec<(String, String)> {
-        let mut cases = Vec::new();
-        for payment in PAYMENTS {
-            for (p1, p2) in PERIODS1
-                .into_iter()
-                .flat_map(|p1| PERIODS2.map(|p2| (p1, p2)))
-            {
-                for (pieces, distance) in PIECES
-                    .into_iter()
-                    .flat_map(|pieces| DISTANCES.map(|distance| (pieces, distance)))
-                {
-                    for (periods, callback) in PERIODS
-                        .into_iter()
-                        .flat_map(|periods| CALLBACKS.map(|callback| (periods, callback)))
-                    {
-                        CALLBACK.set(callback);
-                        CALLS.set(0);
-                        SPEC.set((payment, 1, p1, p2));
-                        // SAFETY: The test's live services.
-                        let income =
-                            unsafe { openttd_rust_cargo_income(s, pieces, distance, periods, 0) };
-                        cases.push((
-                            format!(
-                                "payment {payment} periods {p1}/{p2} pieces {pieces} distance {distance} transit {periods} callback {callback:#x}"
-                            ),
-                            format!("{income} {} {}", CALLS.get(), ARGUMENT.get()),
-                        ));
-                    }
-                }
-            }
-        }
-        cases
+        let radices = [
+            CALLBACKS.len(),
+            PERIODS.len(),
+            DISTANCES.len(),
+            PIECES.len(),
+            PERIODS2.len(),
+            PERIODS1.len(),
+            PAYMENTS.len(),
+        ];
+        (0..radices.iter().product())
+            .map(|index| {
+                let [callback, periods, distance, pieces, p2, p1, payment] = digits(index, radices);
+                let (callback, periods, distance, pieces) = (
+                    CALLBACKS[callback],
+                    PERIODS[periods],
+                    DISTANCES[distance],
+                    PIECES[pieces],
+                );
+                let (p1, p2, payment) = (PERIODS1[p1], PERIODS2[p2], PAYMENTS[payment]);
+                CALLBACK.set(callback);
+                CALLS.set(0);
+                SPEC.set((payment, 1, p1, p2));
+                // SAFETY: The test's live services.
+                let income = unsafe { openttd_rust_cargo_income(s, pieces, distance, periods, 0) };
+                (
+                    format!(
+                        "payment {payment} periods {p1}/{p2} pieces {pieces} distance {distance} transit {periods} callback {callback:#x}"
+                    ),
+                    format!("{income} {} {}", CALLS.get(), ARGUMENT.get()),
+                )
+            })
+            .collect()
     }
 
     /// `PayTransfer` of 65535 of a 65535-piece packet, distance 250 and 45 periods, with the
     /// income loop's last spec: (inputs, "profit `visual_transfer` calls argument").
     fn transfer_cases(s: &Services) -> Vec<(String, String)> {
-        let mut cases = Vec::new();
-        for initial in EXTREMES {
-            for feeder in EXTREMES {
-                for share in SHARES {
-                    SHARE.set(share);
-                    CALLS.set(0);
-                    let payment =
-                        openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
-                    // SAFETY: Allocated above and released below; the packet is a local.
-                    let (profit, fields) = unsafe {
-                        (*payment).fields = Fields {
-                            front: ptr::null_mut(),
-                            route_profit: i64::MIN,
-                            visual_profit: i64::MAX,
-                            visual_transfer: initial,
-                        };
-                        let packet = crate::cargo_storage::Packet {
-                            feeder_share: feeder,
-                            count: 65535,
-                            ..crate::cargo_storage::Packet::default()
-                        };
-                        let profit = openttd_rust_cargo_payment_transfer(
-                            payment,
-                            s,
-                            0,
-                            &raw const packet,
-                            65535,
-                            250,
-                            45,
-                        );
-                        let fields = (*payment).fields;
-                        openttd_rust_cargo_payment_destroy(payment, ptr::null(), 1);
-                        (profit, fields)
-                    };
-                    let inputs =
-                        format!("visual_transfer {initial} feeder_share {feeder} share {share}");
-                    // The fixture's own check: a transfer leaves the route and visual profits alone.
-                    assert_eq!(
-                        (fields.route_profit, fields.visual_profit),
-                        (i64::MIN, i64::MAX),
-                        "{inputs}: route and visual profit"
-                    );
-                    cases.push((
-                        inputs,
-                        format!(
-                            "{profit} {} {} {}",
-                            fields.visual_transfer,
-                            CALLS.get(),
-                            ARGUMENT.get()
-                        ),
-                    ));
-                }
-            }
-        }
-        cases
+        let radices = [SHARES.len(), EXTREMES.len(), EXTREMES.len()];
+        (0..radices.iter().product())
+            .map(|index| {
+                let [share, feeder, initial] = digits(index, radices);
+                transfer_case(s, EXTREMES[initial], EXTREMES[feeder], SHARES[share])
+            })
+            .collect()
+    }
+    fn transfer_case(s: &Services, initial: i64, feeder: i64, share: u8) -> (String, String) {
+        SHARE.set(share);
+        CALLS.set(0);
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        let packet = crate::cargo_storage::Packet {
+            feeder_share: feeder,
+            count: 65535,
+            ..crate::cargo_storage::Packet::default()
+        };
+        // SAFETY: Allocated above and released below; the packet is a local.
+        let (profit, fields) = unsafe {
+            (*payment).fields = Fields {
+                front: ptr::null_mut(),
+                route_profit: i64::MIN,
+                visual_profit: i64::MAX,
+                visual_transfer: initial,
+            };
+            let profit = openttd_rust_cargo_payment_transfer(
+                payment,
+                s,
+                0,
+                &raw const packet,
+                65535,
+                250,
+                45,
+            );
+            let fields = (*payment).fields;
+            openttd_rust_cargo_payment_destroy(payment, ptr::null(), 1);
+            (profit, fields)
+        };
+        let inputs = format!("visual_transfer {initial} feeder_share {feeder} share {share}");
+        // The fixture's own check: a transfer leaves the route and visual profits alone.
+        assert_eq!(
+            (fields.route_profit, fields.visual_profit),
+            (i64::MIN, i64::MAX),
+            "{inputs}: route and visual profit"
+        );
+        let output = format!(
+            "{profit} {} {} {}",
+            fields.visual_transfer,
+            CALLS.get(),
+            ARGUMENT.get()
+        );
+        (inputs, output)
     }
 
     #[test]
