@@ -181,14 +181,14 @@ pub struct Metadata {
 impl Default for Metadata {
     fn default() -> Self {
         Self {
-            tile: u32::MAX,
+            tile: TileIndex::INVALID.0,
             width: 0,
             height: 0,
             construction_date: 0,
             random: 0,
             kind: 0,
             owner: Owner::INVALID.0,
-            random_colour: 0,
+            random_colour: crate::gfx_type::Colours::COLOUR_BEGIN.0,
             founder: CompanyID::INVALID.0,
             construction_type: 0,
             selected_layout: 0,
