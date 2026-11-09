@@ -29,6 +29,9 @@ use crate::order_type::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
+use crate::settings_type::SettingAddresses;
+use crate::station_type::StationHadVehicleOfType;
+const HVOT_TRAIN: StationHadVehicleOfType = StationHadVehicleOfType::HVOT_TRAIN;
 use crate::station_type::StationID;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE, TILE_SIZE, TileIndex};
@@ -240,7 +243,6 @@ pub struct Leaves {
 
     pub write_colourmap: extern "C" fn(Handle, u64),
 
-    pub acc_model: extern "C" fn(Handle) -> u64,
     pub advance_distance: extern "C" fn(Handle) -> u64,
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
     pub arrival_news: extern "C" fn(Handle, u16),
@@ -295,8 +297,6 @@ pub struct Leaves {
     pub leave_sound: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub local_company: extern "C" fn(Handle) -> u64,
-    pub lost_warn: extern "C" fn(Handle) -> u64,
-    pub max_depot_penalty: extern "C" fn(Handle) -> u64,
     pub no_90: extern "C" fn(Handle, u8, u8) -> u64,
     pub oneway_blocking: extern "C" fn(Handle, u32, u8) -> u64,
     pub order_depot_service: extern "C" fn(Handle, u16),
@@ -310,7 +310,6 @@ pub struct Leaves {
     pub reserve_paths: extern "C" fn() -> bool,
     pub reserve_under: extern "C" fn(Handle),
     pub reset_unbunch: extern "C" fn(Handle),
-    pub reverse_at_signals: extern "C" fn(Handle) -> u64,
     pub reverse_windows: extern "C" fn(Handle),
     pub running_windows: extern "C" fn(Handle),
     pub servint: extern "C" fn(Handle) -> u64,
@@ -342,20 +341,13 @@ pub struct Leaves {
     pub track_crosses: extern "C" fn(Handle, u8) -> u64,
     pub track_direction: extern "C" fn(Handle, u8, u8) -> u64,
     pub train_list: extern "C" fn(Handle),
-    pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub update_delta: extern "C" fn(Handle),
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
-    pub visit_type: extern "C" fn(Handle, u16) -> u64,
     pub wagon_override: extern "C" fn(Handle) -> u64,
     pub wagon_speed_limits: extern "C" fn(Handle) -> u64,
-    pub wait_oneway: extern "C" fn(Handle) -> u64,
-    pub wait_pbs: extern "C" fn(Handle) -> u64,
-    pub wait_twoway: extern "C" fn(Handle) -> u64,
     pub wait_unbunch: extern "C" fn(Handle) -> u64,
     pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
-    pub write_visit_type: extern "C" fn(Handle, u16),
 
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
@@ -372,6 +364,41 @@ struct Game<'a> {
     leaves: &'a Leaves,
     services: &'a Services,
     movement: crate::movement::CachedTable<'a>,
+}
+// Canonical settings, loaded in place from the shared catalog at each observation.
+impl Game<'_> {
+    fn setting<T: Copy + Into<u64>>(&self, field: fn(&SettingAddresses) -> *const T) -> u64 {
+        // SAFETY: The catalog addresses live process-wide settings; one field-sized load.
+        unsafe { field(self.services.settings()).read() }.into()
+    }
+    /// `_settings_game.vehicle.train_acceleration_model`.
+    fn acc_model(&self) -> u64 {
+        self.setting(|s| s.train_acceleration_model)
+    }
+    /// `_settings_client.gui.lost_vehicle_warn`.
+    fn lost_warn(&self) -> u64 {
+        self.setting(|s| s.lost_vehicle_warn)
+    }
+    /// `_settings_game.pf.yapf.maximum_go_to_depot_penalty`.
+    fn max_depot_penalty(&self) -> u64 {
+        self.setting(|s| s.maximum_go_to_depot_penalty)
+    }
+    /// `_settings_game.pf.reverse_at_signals`.
+    fn reverse_at_signals(&self) -> u64 {
+        self.setting(|s| s.reverse_at_signals)
+    }
+    /// `_settings_game.pf.wait_oneway_signal`.
+    fn wait_oneway(&self) -> u64 {
+        self.setting(|s| s.wait_oneway_signal)
+    }
+    /// `_settings_game.pf.wait_for_pbs_path`.
+    fn wait_pbs(&self) -> u64 {
+        self.setting(|s| s.wait_for_pbs_path)
+    }
+    /// `_settings_game.pf.wait_twoway_signal`.
+    fn wait_twoway(&self) -> u64 {
+        self.setting(|s| s.wait_twoway_signal)
+    }
 }
 impl<'a> Game<'a> {
     fn new(leaves: &'a Leaves, services: &'a Services) -> Self {
@@ -663,7 +690,7 @@ impl Game<'_> {
     fn get_curve_speed_limit(&self, id: Handle) -> u16 {
         let absolute_max_speed = i32::from(u16::MAX);
         let mut max_speed = absolute_max_speed;
-        if (self.leaves.acc_model)(id) == u64::from(AccelerationModel::AM_ORIGINAL.0) {
+        if self.acc_model() == u64::from(AccelerationModel::AM_ORIGINAL.0) {
             return max_speed as u16;
         }
         let mut curvecount = [0_i32; 2];
@@ -790,7 +817,7 @@ impl Game<'_> {
         let v_max_track_speed: u16 =
             read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
         let v_speed: u16 = id.vehicle().speed();
-        let model = (self.leaves.acc_model)(id);
+        let model = self.acc_model();
         let mut max_speed = if model == u64::from(AccelerationModel::AM_ORIGINAL.0) {
             i32::from(v_max_track_speed)
         } else {
@@ -855,7 +882,7 @@ impl Game<'_> {
         let v_acceleration: u8 = id.vehicle().acceleration();
         let braking = v_status & 2 != 0 || id.flag(0) || id.flag(8);
         let max = self.get_current_max_speed(id);
-        if (self.leaves.acc_model)(id) == 0 {
+        if self.acc_model() == 0 {
             crate::ground_vehicle::update_speed(
                 id.vehicle(),
                 (i64::from(i32::from(v_acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
@@ -1524,8 +1551,8 @@ impl Game<'_> {
     fn enter_station(&self, id: Handle, station: u16) {
         (id).vehicle()
             .write_last_station((u64::from(station)) as u16);
-        if (self.leaves.visit_type)(id, station) & (self.leaves.train_visit)(id) == 0 {
-            (self.leaves.write_visit_type)(id, station);
+        if (self.services.station_had_vehicle_of_type)(station) & HVOT_TRAIN.0 == 0 {
+            (self.services.station_add_vehicle_of_type)(station, HVOT_TRAIN.0);
             (self.leaves.arrival_news)(id, station);
         }
         id.set_force_proceed(0);
@@ -1543,7 +1570,7 @@ impl Game<'_> {
         let v_max_track_speed: u16 =
             read_field!(id.vehicle().ground_cache(), cached_max_track_speed);
         let v_speed: u16 = id.vehicle().speed();
-        if old == v_z || (self.leaves.acc_model)(id) != 0 {
+        if old == v_z || self.acc_model() != 0 {
             return;
         }
         if old < v_z {
@@ -1677,11 +1704,9 @@ impl Game<'_> {
                             (id).vehicle().write_subspeed(0_u8);
                             (id).vehicle().write_progress(255_u8);
                             crate::witness::hit(crate::witness::TRAIN_RED_ONEWAY);
-                            if (self.leaves.reverse_at_signals)(id) == 0
+                            if self.reverse_at_signals() == 0
                                 || u64::from(id.wait_inc())
-                                    < (self.leaves.wait_oneway)(id)
-                                        * (self.leaves.day_ticks)(id)
-                                        * 2
+                                    < self.wait_oneway() * (self.leaves.day_ticks)(id) * 2
                             {
                                 return (1, false);
                             }
@@ -1690,11 +1715,9 @@ impl Game<'_> {
                             (id).vehicle().write_subspeed(0_u8);
                             (id).vehicle().write_progress(255_u8);
                             crate::witness::hit(crate::witness::TRAIN_RED_TWOWAY);
-                            if (self.leaves.reverse_at_signals)(id) == 0
+                            if self.reverse_at_signals() == 0
                                 || u64::from(id.wait_inc())
-                                    < (self.leaves.wait_twoway)(id)
-                                        * (self.leaves.day_ticks)(id)
-                                        * 2
+                                    < self.wait_twoway() * (self.leaves.day_ticks)(id) * 2
                             {
                                 let dir = (self.leaves.trackdir_exit)(id, td) as u8;
                                 let tile = self.services.map().add_diag(new, dir);
@@ -1720,7 +1743,7 @@ impl Game<'_> {
                                 }
                             }
                         }
-                        if (self.leaves.reverse_at_signals)(id) == 0
+                        if self.reverse_at_signals() == 0
                             && (self.leaves.oneway_blocking)(id, new, td) == 0
                             && self.signal_segment(id, (id).vehicle().tile(), entered)
                                 == (self.leaves.sigseg_pbs)(id)
@@ -1786,7 +1809,7 @@ impl Game<'_> {
                 }
                 signals = true;
                 if dir != (id).vehicle().direction() {
-                    if prev == Handle::NONE && (self.leaves.acc_model)(id) == 0 {
+                    if prev == Handle::NONE && self.acc_model() == 0 {
                         let diff = (id).vehicle().direction().wrapping_sub(dir) & 7;
                         let small = if u64::from(crate::ground_vehicle::acceleration_type(
                             self.leaves.physics,
@@ -1844,7 +1867,7 @@ impl Game<'_> {
                 return (0, false);
             }
         }
-        (self.leaves.update_delta)(id);
+        (self.vs().update_delta)(id.vehicle());
         (id).vehicle().write_x((x as u64) as i32);
         (id).vehicle().write_y((y as u64) as i32);
         self.update_occupancy(id);
@@ -2352,8 +2375,8 @@ impl Game<'_> {
         if !mode && id.flag(8) {
             crate::witness::hit(crate::witness::TRAIN_STUCK_RETRY);
             let wait = u64::from(id.wait_inc());
-            let turn = wait % ((self.leaves.wait_pbs)(id) * (self.leaves.day_ticks)(id)) == 0
-                && (self.leaves.reverse_at_signals)(id) != 0;
+            let turn = wait % (self.wait_pbs() * (self.leaves.day_ticks)(id)) == 0
+                && self.reverse_at_signals() != 0;
             if !turn
                 && wait % u64::from((self.leaves.backoff)()) != 0
                 && id.get_force_proceed() == 0
@@ -2366,10 +2389,9 @@ impl Game<'_> {
                     self.reverse(id);
                 }
                 if id.flag(8)
-                    && id.get_wait_counter()
-                        > 2 * (self.leaves.wait_pbs)(id) * (self.leaves.day_ticks)(id)
+                    && id.get_wait_counter() > 2 * self.wait_pbs() * (self.leaves.day_ticks)(id)
                 {
-                    if (self.leaves.lost_warn)(id) != 0
+                    if self.lost_warn() != 0
                         && u64::from((id).vehicle().owner()) == (self.leaves.local_company)(id)
                     {
                         (self.leaves.stuck_news)(id);
@@ -2487,7 +2509,7 @@ impl Game<'_> {
             self.service_in_depot(id);
             return;
         }
-        let max = (self.leaves.max_depot_penalty)(id) as u32;
+        let max = self.max_depot_penalty() as u32;
         let depot = (self.leaves.find_depot)(id, max as i32);
         let length = depot.length;
         if length == u32::MAX || length > max {
@@ -2613,7 +2635,7 @@ impl Game<'_> {
                 }
                 id.set_force_proceed(0);
                 self.view_dirty(id);
-                if (self.leaves.acc_model)(id) != 0 && (id).vehicle().speed() != 0 {
+                if self.acc_model() != 0 && (id).vehicle().speed() != 0 {
                     id.set_flag(0, !id.flag(0));
                 } else {
                     (id).vehicle().write_speed(0_u16);
@@ -2953,7 +2975,6 @@ crate::abi::layouts! {
     };
     "OpenTTDTrainServices" ["probe"] => Leaves {
         write_colourmap,
-        acc_model,
         advance_distance,
         all_powered,
         arrival_news,
@@ -3008,8 +3029,6 @@ crate::abi::layouts! {
         leave_sound,
         leave_unbunch,
         local_company,
-        lost_warn,
-        max_depot_penalty,
         no_90,
         oneway_blocking,
         order_depot_service,
@@ -3023,7 +3042,6 @@ crate::abi::layouts! {
         reserve_paths,
         reserve_under,
         reset_unbunch,
-        reverse_at_signals,
         reverse_windows,
         running_windows,
         servint,
@@ -3055,20 +3073,13 @@ crate::abi::layouts! {
         track_crosses,
         track_direction,
         train_list,
-        train_visit,
         truncate_cargo,
-        update_delta,
         veh_exit_dir,
         viewport,
-        visit_type,
         wagon_override,
         wagon_speed_limits,
-        wait_oneway,
-        wait_pbs,
-        wait_twoway,
         wait_unbunch,
         write_crossing_bar,
-        write_visit_type,
         vehicle,
         physics,
     };

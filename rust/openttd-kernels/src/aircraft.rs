@@ -198,7 +198,6 @@ pub struct Leaves {
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
-    pub update_delta: unsafe extern "C" fn(Vehicle),
 
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
@@ -488,7 +487,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };
         airport_type(self; s: *const Station) => unsafe { (self.leaves.airport_type)(s) };
         station_owner(self; s: *const Station) => unsafe { (self.leaves.station_owner)(s) };
-        had_vehicle(self; s: *const Station) => unsafe { (self.leaves.had_vehicle)(s) };
         airport_elements(self; airport: *const c_void) => unsafe { (self.leaves.airport_elements)(airport) };
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
         airport_flags(self; airport: *const c_void) => unsafe { (self.leaves.airport_flags)(airport) };
@@ -555,7 +553,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         first_arrival(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.first_arrival)(vehicle, station as u16) };
         begin_loading(self; vehicle: Vehicle) -> () => crate::vehicle::visits::begin_loading(vehicle.base(), self.vs.visits());
         dirty_details(self; vehicle: Vehicle) -> () => (self.maintenance().details_dirty)(vehicle.base());
-        update_delta(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_delta)(vehicle) };
+        update_delta(self; vehicle: Vehicle) -> () => (unsafe { &*self.leaves.vehicle }.update_delta)(vehicle.base());
 
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
         delete_range_news(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.delete_range_news)(vehicle) };
@@ -1432,7 +1430,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         let station = u32::from(self.target(id));
         self.set_last_station(id, i64::from(station));
-        if self.had_vehicle(self.station(station)) & 16 == 0 {
+        let hvot_aircraft = crate::station_type::StationHadVehicleOfType::HVOT_AIRCRAFT.0;
+        if (self.ss.station_had_vehicle_of_type)(station as u16) & hvot_aircraft == 0 {
             self.first_arrival(id, i64::from(station));
         }
         self.begin_loading(id);
@@ -2500,7 +2499,6 @@ crate::abi::layouts! {
         landing_rating,
         dirty_depot,
         first_arrival,
-        update_delta,
 
         destination_too_far,
         delete_range_news,

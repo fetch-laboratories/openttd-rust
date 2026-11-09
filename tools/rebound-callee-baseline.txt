@@ -266,11 +266,6 @@ rebound | RustTrainReservePaths | src/train_cmd.cpp | reserve_paths
 rebound | RustTrainReservePaths | src/train_cmd.cpp | reserve_paths | 2
 rebound | RustUpdateSignals | src/rust/company_adapter.cpp | update_signals_in_buffer
 rebound | RustUpdateSignals | src/rust/disaster_adapter.hpp | update_signals
-rebound | RustVehicleCanAllocate | src/effectvehicle.cpp | can_allocate
-rebound | RustVehicleCanAllocate | src/rust/disaster_adapter.hpp | can_allocate
-rebound | RustVehicleCanAllocate | src/rust/engine_capabilities_services.hpp | pool_available
-rebound | RustVehicleCanAllocate | src/rust/vehicle_articulated_services.hpp | pool_available
-rebound | RustVehicleCanAllocate | src/rust/vehicle_build_services.hpp | pool_available
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
@@ -286,10 +281,6 @@ rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta
-rebound | RustVehicleUpdateDelta | src/rust/aircraft_adapter.hpp | update_delta
-rebound | RustVehicleUpdateDelta | src/rust/disaster_adapter.hpp | update_delta
-rebound | RustVehicleUpdateDelta | src/train_cmd.cpp | update_delta
 rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
 rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
 rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction

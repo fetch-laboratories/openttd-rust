@@ -13,8 +13,9 @@
 //! placeholders that no test may rely on; a test that reads one sets it. References name
 //! the matching table, so `&'static` chains are valid. No builders, macros, traits,
 //! defaults or behaviour. A later item adds only the tables it needs.
-//! `crate::engine_capabilities::TEST_TABLE`, `crate::station_lifecycle::TEST_TABLE` and
-//! `crate::town::resolver::TEST_TABLE` stay in their modules for their private fields.
+//! `crate::engine_capabilities::TEST_TABLE`, `crate::station_lifecycle::TEST_TABLE`,
+//! `crate::town::resolver::TEST_TABLE` and `crate::cargo_registry::TEST_TABLE` stay in
+//! their modules for their private fields.
 
 use std::ptr;
 
@@ -225,6 +226,8 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     orders: unreachable0,
     ship_get: unreachable1,
     first_sprite: unreachable1,
+    update_delta: unreachable1,
+    can_allocate: unreachable1,
 };
 
 /// `crate::road::Leaves` with every entry unreachable.
@@ -320,6 +323,11 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
         destroy: unreachable1,
     },
     station_index: unreachable1,
+    station_had_vehicle_of_type: unreachable1,
+    station_add_vehicle_of_type: unreachable2,
+    station_xy: unreachable1,
+    base_station_xy: unreachable1,
+    station_facilities: unreachable1,
     road_commands: unreachable0,
     kdtree_partition: unreachable2,
     station_commands: unreachable0,
@@ -956,4 +964,38 @@ pub(crate) const HOUSE_ANIMATION: crate::newgrf_animation_base::Binding<
     sound: unreachable3,
     version8: unreachable1,
     speed_error: unreachable3,
+};
+
+/// `crate::cargo_payment::Services` with every entry unreachable.
+pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::Services {
+    spec: unreachable2,
+    registry: ptr::null(),
+    station_company: unreachable1,
+    station_town: unreachable1,
+    resolver: ptr::null(),
+    subsidies: unreachable0,
+    industry_delivery: ptr::null(),
+    detach_payment: unreachable1,
+    finance: ptr::null(),
+    vehicles: ptr::null(),
+    local_company: unreachable0,
+    expense: unreachable2,
+    profit: unreachable1,
+    shared: ptr::null(),
+    feeder_animation: unreachable5,
+    subsidy_multiplier: unreachable0,
+    feeder_payment_share: unreachable0,
+};
+
+/// `crate::cargo_storage::Services` with every entry unreachable.
+pub(crate) const CARGO_STORAGE: crate::cargo_storage::Services = crate::cargo_storage::Services {
+    can_allocate: unreachable0,
+    create: unreachable1,
+    packet: unreachable1,
+    destroy: unreachable1,
+    pay: unreachable6,
+    origin: unreachable4,
+    flow_map: unreachable1,
+    shared: ptr::null(),
+    packet_next: unreachable1,
 };

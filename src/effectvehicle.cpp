@@ -51,10 +51,8 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 	static const OpenTTDEffectCreationServices services{
 		.effect = &EffectServices(),
 		.shared = &GetRustSharedServices(),
-		.can_allocate = RustVehicleCanAllocate,
 		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, RustVehicle(v), v->rust_state.get()}; },
 		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
-		.delta = RustVehicleUpdateDelta<void *>,
 
 	};
 	return &services;

@@ -24,7 +24,6 @@ pub struct Services {
     pub mass: &'static mass::Services,
     pub random: &'static RandomServices,
     pub depot_kind: extern "C" fn(u32) -> VehicleType,
-    pub pool_available: extern "C" fn(usize) -> bool,
     pub free_unit: extern "C" fn(VehicleType) -> u16,
     pub construct: &'static construct::Services,
     pub rail: &'static rail::Services,
@@ -114,7 +113,7 @@ pub(crate) unsafe fn build(
         }
         _ => unreachable!("depot kind is a buildable vehicle type"),
     };
-    if !(s.pool_available)(count as usize) {
+    if !(s.refit.common.vehicles.can_allocate)(count as usize) {
         value.error(s.too_many);
         return Result::default();
     }
@@ -305,7 +304,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
-        refit, mass, random, depot_kind, pool_available,
+        refit, mass, random, depot_kind,
         free_unit, construct, rail, ship_tile, new_ship, set_purchase,
         is_engine, presentation, use_unit, too_many, unavailable,
     };

@@ -1,7 +1,6 @@
 """Cargo owners: active-list reload, forced staging, aging and packet references."""
 
 import hashlib
-import json
 import struct
 from pathlib import Path
 from typing import Any, Literal, NotRequired, cast
@@ -144,53 +143,3 @@ def check(
         "actions": action_totals,
         "state": observed,
     }
-
-
-def scaling_probe() -> None:
-    """Witness the large-list gap: saves currently reach at most six packets."""
-    import probe
-
-    import migration
-
-    out = ROOT / ".local/cargo-list-scaling"
-    out.mkdir(parents=True, exist_ok=True)
-    fixture = Path(__file__).with_name("cargo-list-scaling.cpp")
-    build = ROOT / "build-rust"
-    command = [
-        probe.compiler(build),
-        "-std=c++20",
-        *probe.target_flags(build),
-        "-O2",
-        "-I",
-        str(ROOT / "src"),
-        "-I",
-        str(build / "generated-abi"),
-        str(fixture),
-        str(migration.rust_archive(ROOT / "build-rust")),
-        "-ldl",
-        "-lpthread",
-        "-lm",
-        "-o",
-        str(out / "probe"),
-    ]
-    env = migration.environment()
-    probe.compile(command, out / "compile.log", env=env)
-    output = probe.execute(
-        [out / "probe"], out / "probe", env=env, stderr="inherited"
-    ).decode()
-    report = {
-        "gap": "large cargo queues absent from the committed play corpus",
-        "candidate_commit": migration.git("rev-parse", "HEAD"),
-        "candidate_status": migration.git("status", "--short"),
-        "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
-        "commands": [command, [str(out / "probe")]],
-        "measurements": output.splitlines(),
-        "checks": "identity/order/counts; 4 reads per first-hit append and keyed load",
-        "limit": "synthetic operation timings; C++ loop omits packet/services",
-    }
-    (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(output, end="")
-
-
-if __name__ == "__main__":
-    scaling_probe()

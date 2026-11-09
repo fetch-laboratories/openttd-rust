@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Check the pool-limit Split failure and large queues absent from play saves."""
+"""Check the pool-limit Split failure absent from play saves."""
 
 import evidence_replacements
 import probe
-from simulation.cargo_storage import scaling_probe
 
 
 def main() -> None:
@@ -15,4 +14,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    scaling_probe()
