@@ -324,14 +324,49 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 Work orders ready to dispatch, which root selects when a slot frees ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two entries are ready. File sets are checked against open PRs and reservations.
 
-| # | Work order | Files | Waits on |
+Checked on 2026-11-09 against open PRs #819, #820, #821, #823 and #825 (the #737 V remainder draft) and the reservations on #736 and #737. Line counts are at `418ba29e01`. A file pass covers every line of its files with all four parts of work order item 1: wrapper types in internal signatures, return types and accessors; named constants; the original's comments; and #735's argument and context structs. Callers outside a pass keep temporary raw adapters. Changed-line estimates apply the 8.6 to 15.5 changed lines per inventoried integer site that #807 and #819 measured. A pass whose diff exceeds about 2,000 changed lines splits at a file boundary.
+
+Dispatched:
+
+| # | Work order | Owner | Waits on |
 | ---: | --- | --- | --- |
-| 1 | #824: housekeeping reclaims `build-rust` from finished kept worktrees | `tools/housekeeping.py` and its test | Ready |
-| 2 | #734 02 `industry.rs` single-file pass (2,874 lines) | `industry.rs`, plus callers adopting typed forms | #823 (`industry/resolver.rs`) |
-| 3 | #734 03 `station_cmd.rs` single-file pass (4,868 lines) | `station_cmd.rs`, plus callers | #823 (`station_cmd.rs` caller edits); #737 W waits behind it |
-| 4 | #734 03 station group: `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs`, `station_lifecycle.rs`, with #815's inherited items | those files | #823 (`station_lifecycle.rs`) |
-| 5 | #734 03 `station_service.rs` single-file pass (2,285 lines) | `station_service.rs` | Check against the #737 V remainder reservation |
-| 6 | #734 13 Map/terrain core with 23's type-bearing files | `map_func.rs`, `tile_map.rs`, `slope_func.rs`, `direction_func.rs`, `tilearea.rs` and the rest of 13's non-tree files; `bitmath_func.rs`, `random_func.rs`, `pool.rs`, `math.rs`, `kdtree.rs` | #823 (`map_func.rs`, `slope_func.rs`, `direction_func.rs`, `math.rs`) |
+| 1 | #824: housekeeping reclaims `build-rust` from finished kept worktrees (`tools/housekeeping.py` and its test) | `/root/cleanup_736_p_packet` | – |
+| 2 | #734 02 `industry.rs` single-file pass (2,874 lines) | `/root/cleanup_734_pass_02c_industry_resolver` | #823 |
+| 3 | #734 03 `station_cmd.rs` single-file pass (4,868 lines) | `/root/cleanup_734_pass_01c_town_rs` | #823 |
+
+Undispatched, work order item 1:
+
+4. **#734 03 station group, with #815's `station_map.rs` items.**
+   - Files: `station.rs` (1,365), `station_map.rs` (503), `station_cmd/waypoint.rs` (897) and `station_lifecycle.rs` (609). Together they hold 3,374 lines, 201 integer sites and 63 missing comment lines, an estimated 1,700 to 3,100 changed lines.
+   - #815 items: the `HasStationRail` assertions of `is_station_tile_blocked`, `get_rail_station_axis` and `has_station_reservation`, and the single reads in `get_road_stop_type` and `has_station_rail`. Each gets a reachability check against the original; a confirmed difference gets its own `Fix:` commit with `Found-by: review`. #815's `road_stop.rs`, `station_association.rs` and `industry/construction.rs` items are not part of this entry.
+   - Waits on #823 (`station_lifecycle.rs`). `waypoint.rs` is a submodule of `station_cmd.rs`, so confirm that entry 3's draft leaves it untouched; otherwise wait on entry 3. `station.rs` is also in #737 W's manifest (entry 10).
+5. **#734 03 `station_service.rs` single-file pass.**
+   - 2,285 lines, 61 integer sites and 30 missing comment lines; an estimated 520 to 950 changed lines.
+   - Waits on #825. The V remainder reservation on #737 includes this file, and its family 2 (economy loading services) edits the `load_vehicle` service table at lines 1287 to 1299 (`load_unload_ticks`, `cargo_multiplier`, `passenger_cargo`, `station_length_penalty`, `subtract_profit`). Starts when #825 integrates or its owner releases the file on #737.
+6. **#734 13 and 23, part a: leaf files.** The 13 and 23 group holds 391 integer sites in 4,583 lines, an estimated 3,400 to 6,100 changed lines, so it splits at file boundaries with callees first.
+   - Files: 23's eight type-bearing files, which are `bitmath_func.rs` (89), `random_func.rs` (11), `pool.rs` (490), `math.rs` (171), `kdtree.rs` (414), `binaryheap.rs` (74), `integer.rs` (265) and `container_func.rs` (54). Also 13's files that call no other 13 file: `direction_func.rs` (118), `slope_func.rs` (183), `spiral.rs` (157), `tile_cmd.rs` (80) and `tile_owner.rs` (114). Together they hold 2,220 lines and 164 integer sites, an estimated 1,400 to 2,500 changed lines. `pool/tests.rs` changes only as a caller.
+   - Waits on #823 (`math.rs`, `slope_func.rs`, `direction_func.rs`).
+7. **#734 13, part b: map core.**
+   - Files: `map_func.rs` (632), `tile_map.rs` (593), `clear_map.rs` (120), `tile_loop.rs` (283), `tilearea.rs` (648), `void_map.rs` (25), and the tree callees `tree_map.rs` (58) and `tree_cmd.rs` (4). Together they hold 2,363 lines and 227 integer sites, an estimated 1,950 to 3,500 changed lines. `map_func.rs` and `tile_map.rs` call each other, so a further split keeps them together.
+   - Waits on #823 (`map_func.rs`). It starts after entry 6 integrates, so that `tile_map.rs` adopts the typed `slope_func` and `bitmath_func` forms.
+8. **#734 13 `trees.rs` single-file pass.**
+   - 2,062 lines, 137 integer sites and 53 missing comment lines; an estimated 1,200 to 2,100 changed lines. It is over 1,500 lines, so it follows entry 7 under the large-file rule.
+   - It calls eight files from entries 6 and 7, so it starts after entry 7 integrates. `trees.rs` is also in #737 W's manifest.
+9. **#734 09 Pathfinding/signals.** The workset holds 12 files, 7,580 lines and 606 integer sites. `movement.rs` (1,554) and `rail_yapf.rs` (1,901) each get their own single-file pass after the workset passes. The other ten files hold 5,125 lines and 346 integer sites, an estimated 3,000 to 5,400 changed lines, so they split with callees first:
+   - 9a: `signal_func.rs` (33), `node_hash.rs` (75), `yapf_node.rs` (30), `pathfinder_func.rs` (61), `follow_track.rs` (563), `pbs.rs` (750) and `water_regions.rs` (503). Together they hold 2,015 lines and 127 integer sites. `follow_track.rs` and `pbs.rs` call each other.
+   - 9b: `signal.rs` (1,171), `road_yapf.rs` (907) and `ship_yapf.rs` (1,032). Together they hold 3,110 lines and 219 integer sites. Split again at a file boundary if needed.
+   - Sequence: after entries 6 to 8. 9b waits on #825, whose reservation includes `ship_yapf.rs`. `pbs.rs` and `signal.rs` are in #737 W's manifest.
+
+Undispatched, work order item 4:
+
+10. **#737 W World and stations.**
+    - The manifest counts 180 gross C++ lines in 85 files at the overhaul snapshot. Root re-checks source boundaries before commissioning. Its Rust files include `industry.rs`, `industry/tile.rs`, `industry/transaction.rs`, `station.rs`, `station_cmd.rs`, `subsidy.rs`, `town.rs`, `town/house.rs`, `town/resolver.rs`, `trees.rs`, `pbs.rs`, `signal.rs`, `services.rs`, `session.rs`, `objects.rs`, `landscape.rs` and `genworld.rs`. Its C++ files include `src/rust/services.cpp`, `services_ffi.h`, `town_ffi.h`, `industry_ffi.h` and the `station_command` glue.
+    - Waits on entries 2 and 3 (`industry.rs`, `station_cmd.rs`) and on #825, whose V remainder reservation covers `services.rs` and `src/rust/services*`. It also waits on whichever of entries 4, 8, 9 and 11 is dispatched first, because they share `station.rs`, `trees.rs`, `pbs.rs`, `signal.rs`, `town.rs` and `town_ffi.h`.
+11. **#736 W town observations, folding #819's D1.** Ready when #823 integrates.
+    - Retire `tools/simulation/town-reference-gaps.cpp` (257 lines: tunnels, history, rating, radius and authority callbacks). Move the behavioural observations of `src/tests/town_protocol.hpp` (374), `src/tests/town_growth.cpp` (94) and `src/tests/townname.cpp` (62) into Rust tests of production town code under #736's oracle rule. Calling-boundary checks stay. That is 787 raw C++ lines in scope.
+    - D1: the four expansion observations (`town_protocol.hpp` lines 301, 303, 308 and 362) move to Rust tests over `Engine::expand_town`. Then `openttd_rust_town_expand`, its `src/rust/town_ffi.h:134` declaration and orphan-baseline row 33 retire.
+    - Files: those four C++ files and their registration entries, test modules in `town.rs`, `town/*.rs` and `townname.rs`, the `town_expand` export in `town.rs`, and `src/rust/town_ffi.h`.
+    - Waits on #823 (`town.rs`, `town/*.rs`). No #736 reservation overlaps these files. It shares `town.rs` and `town_ffi.h` with entry 10.
 
 ## Resume checkpoint
 
