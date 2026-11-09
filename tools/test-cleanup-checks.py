@@ -591,9 +591,17 @@ class GrowthTests(unittest.TestCase):
         self.assertEqual(associated_pull([wrong, merged], "tested"), merged)
         self.assertIsNone(associated_pull([wrong], "tested"))
 
-    def pr_context(self, pulls: Mapping[str, list[dict[str, object]]]) -> str:
-        """Run `context` on a two-parent HEAD with no event payload."""
-        shas = {"HEAD": "merge", "HEAD^2": "second"}
+    def pr_context(
+        self,
+        pulls: Mapping[str, list[dict[str, object]]],
+        unknown: frozenset[str] = frozenset(),
+    ) -> str:
+        """Run `context` on a two-parent HEAD with no event payload or network.
+
+        GitHub's commit lookup fails for the `unknown` commits, as it does for an
+        unpushed local merge.
+        """
+        shas = {"HEAD": "merge", "HEAD^1": "first", "HEAD^2": "second"}
 
         def fake_git(*args: str) -> str:
             if args[:2] == ("rev-list", "--parents"):
@@ -601,10 +609,13 @@ class GrowthTests(unittest.TestCase):
             assert args[0] == "rev-parse", args
             return shas[args[1]] + "\n"
 
-        def fake_gh(*args: str) -> str:
+        def fake_gh(*args: str, capture_stderr: bool = False) -> str:
             route = args[1].removeprefix("repos/fork/")
             if route.startswith("commits/"):
-                return json.dumps(pulls.get(route.split("/")[1], []))
+                sha = route.split("/")[1]
+                if sha in unknown:
+                    raise subprocess.CalledProcessError(1, ["gh", *args])
+                return json.dumps(pulls.get(sha, []))
             number = int(route.removeprefix("pulls/"))
             head = next(
                 pull["head"]
@@ -645,6 +656,47 @@ class GrowthTests(unittest.TestCase):
         }
         self.assertEqual(self.pr_context({"second": [pr]}), "PR 9 at second")
         self.assertEqual(self.pr_context({}), "None at second")
+        # A push of the merge to the base branch reads the PR it merged.
+        merged: dict[str, object] = {
+            "number": 4,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "merge",
+        }
+        self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
+
+    def test_unknown_head_lookup_is_no_pr(self) -> None:
+        # GitHub errors for an unpushed commit; that is no PR, not an abort.
+        self.assertEqual(
+            self.pr_context({}, unknown=frozenset({"merge"})), "None at second"
+        )
+
+    def test_unpushed_local_merge_reads_first_parent_pr(self) -> None:
+        # The first parent is the open PR's pushed head and the second is the base,
+        # whose own merged PR (merged by another commit) must never match.
+        own: dict[str, object] = {
+            "number": 5,
+            "head": {"sha": "first"},
+            "state": "open",
+        }
+        base: dict[str, object] = {
+            "number": 3,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "base-merge",
+        }
+        self.assertEqual(
+            self.pr_context(
+                {"first": [own], "second": [base]}, unknown=frozenset({"merge"})
+            ),
+            "PR 5 at first",
+        )
+        self.assertEqual(
+            self.pr_context({"second": [base]}, unknown=frozenset({"merge"})),
+            "None at second",
+        )
 
     def test_review_requires_head_payload_and_different_agent(self) -> None:
         delta = {"counter": "exports", "old": 1, "new": 2, "added": {"x": 1}}
