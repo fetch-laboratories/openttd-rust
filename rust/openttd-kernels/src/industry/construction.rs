@@ -117,7 +117,7 @@ fn populate(
             st.station,
             (cc.c.owner)(st.station),
             shell,
-            tile,
+            TileIndex(tile),
             &cc,
         );
         false

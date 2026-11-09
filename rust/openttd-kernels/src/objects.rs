@@ -1519,7 +1519,7 @@ impl World<'_> {
                 };
                 // The call-local finder's set outlives the delivery and no
                 // service can reach it.
-                crate::station::move_goods_to_station(
+                crate::station::move_goods_to_station_raw(
                     cargo,
                     amount,
                     source,

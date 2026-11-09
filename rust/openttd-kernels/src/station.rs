@@ -24,7 +24,8 @@ pub(crate) mod spatial;
 
 use crate::base_station_base::StationRectMode;
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
-use crate::cargo_type::{CargoArray, CargoTypes, NUM_CARGO};
+use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO};
+use crate::company_type::CompanyID;
 use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
 use crate::industry_type::IndustryID;
@@ -36,7 +37,7 @@ use crate::station_type::StationID;
 use crate::station_type::{
     CA_BUS, CA_DOCK, CA_NONE, CA_TRAIN, CA_TRUCK, CA_UNMODIFIED, MAX_CATCHMENT, StationType,
 };
-use crate::tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_STATION, TileIndex};
+use crate::tile_type::{INVALID_TILE, TileIndex, TileType};
 use crate::tilearea::TileArea;
 use crate::town_type::TownID;
 use StationRectMode as RectMode;
@@ -237,9 +238,9 @@ fn scan_for_station_tiles(
         c.map.tile_xy(left as u32, top as u32),
         c.map.tile_xy(right as u32, bottom as u32),
     );
-    ta.tiles(c.map)
-        .map(TileIndex)
-        .any(|tile| (c.s.tile_type)(tile.0) == MP_STATION && c.station_index(tile) == id)
+    ta.tiles(c.map).map(TileIndex).any(|tile| {
+        TileType((c.s.tile_type)(tile.0)) == TileType::MP_STATION && c.station_index(tile) == id
+    })
 }
 
 crate::abi::shared_records! {
@@ -386,11 +387,15 @@ pub(crate) unsafe fn for_each_industry_near(
 /// `TileIsInCatchment`.
 /// # Safety
 /// `state` is a live station owner.
-pub(crate) unsafe fn tile_is_in_catchment(state: *mut Service, tile: u32, c: &Ctx<'_>) -> bool {
+pub(crate) unsafe fn tile_is_in_catchment(
+    state: *mut Service,
+    tile: TileIndex,
+    c: &Ctx<'_>,
+) -> bool {
     unsafe {
         (*catchment(state))
             .tiles
-            .has_tile(tile, c.map, |ok| c.check(ok))
+            .has_tile(tile.0, c.map, |ok| c.check(ok))
     }
 }
 /// `rect.IsEmpty()` of a live station owner.
@@ -511,7 +516,7 @@ impl<'a> Ctx<'a> {
 /// `GetTileCatchmentRadius`: get the catchment size of an individual station
 /// tile.
 fn tile_catchment_radius(tile: TileIndex, st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
-    c.check((c.s.tile_type)(tile.0) == MP_STATION);
+    c.check(TileType((c.s.tile_type)(tile.0)) == TileType::MP_STATION);
     let kind = (c.s.station_type)(tile.0);
     if (c.c.modified_catchment)() {
         match kind {
@@ -591,10 +596,10 @@ pub(crate) fn add_industry_to_deliver(
     st: *mut BaseStation,
     state: *mut Service,
     ind: *mut ShellHandle,
-    tile: u32,
+    tile: TileIndex,
     c: &Ctx<'_>,
 ) {
-    let distance = c.map.distance_max((c.c.location)(st), tile);
+    let distance = c.map.distance_max((c.c.location)(st), tile.0);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
@@ -665,10 +670,10 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
     // SAFETY: Live owner; immediate geometry copy.
     let area = unsafe { (*catchment(state)).tiles.area };
     for tile in area.tiles(c.map).map(TileIndex) {
-        let kind = (c.s.tile_type)(tile.0);
-        if kind == MP_HOUSE {
+        let kind = TileType((c.s.tile_type)(tile.0));
+        if kind == TileType::MP_HOUSE {
             flat_insert(&mut towns, c.town_index(tile));
-        } else if kind == MP_INDUSTRY {
+        } else if kind == TileType::MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
     }
@@ -687,13 +692,15 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
 /// `Station::CatchmentCoversTown`: explicit bitmap iteration.
 /// # Safety
 /// `state` is a live station owner.
-pub(crate) unsafe fn catchment_covers_town(state: *mut Service, town: u16, c: &Ctx<'_>) -> bool {
+pub(crate) unsafe fn catchment_covers_town(state: *mut Service, t: TownID, c: &Ctx<'_>) -> bool {
     let bitmap = unsafe { &raw const (*catchment(state)).tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
-    while it.tile() != INVALID_TILE {
+    while TileIndex(it.tile()) != TileIndex::INVALID {
         let tile = it.tile();
-        if (c.s.tile_type)(tile) == MP_HOUSE && (c.s.town_index)(tile) == town {
+        if TileType((c.s.tile_type)(tile)) == TileType::MP_HOUSE
+            && TownID((c.s.town_index)(tile)) == t
+        {
             return true;
         }
         unsafe { it.advance(bitmap, c.map, check) };
@@ -721,7 +728,9 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         unsafe { (*catchment(state)).tiles.initialize(location) };
         let industry_id = (c.c.industry_id)(industry);
         for tile in location.tiles(c.map).map(TileIndex) {
-            if (c.s.tile_type)(tile.0) == MP_INDUSTRY && c.industry_index(tile) == industry_id {
+            if TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY
+                && c.industry_index(tile) == industry_id
+            {
                 // SAFETY: Live owner; immediate mutation.
                 unsafe {
                     (*catchment(state))
@@ -767,7 +776,8 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     );
     let id = (c.c.id)(st);
     for tile in ta.tiles(c.map).map(TileIndex) {
-        if (c.s.tile_type)(tile.0) != MP_STATION || c.station_index(tile) != id {
+        if TileType((c.s.tile_type)(tile.0)) != TileType::MP_STATION || c.station_index(tile) != id
+        {
             continue;
         }
         let radius = tile_catchment_radius(tile, st, c);
@@ -797,20 +807,20 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     let bitmap = unsafe { &raw const (*catchment(state)).tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
-    while it.tile() != INVALID_TILE {
+    while TileIndex(it.tile()) != TileIndex::INVALID {
         let tile = TileIndex(it.tile());
-        let kind = (c.s.tile_type)(tile.0);
-        if kind == MP_HOUSE {
+        let kind = TileType((c.s.tile_type)(tile.0));
+        if kind == TileType::MP_HOUSE {
             // SAFETY: Live town owner; immediate mutation.
             unsafe { (*crate::town::stations_near(c.town_by_tile(tile))).insert(st, id) };
         }
-        if kind == MP_INDUSTRY {
+        if kind == TileType::MP_INDUSTRY {
             let i = (c.c.industry_by_id)(c.industry_index(tile));
             // An industry with a neutral station cannot be served by this station.
             if (c.s.station_serve_neutral)() || (c.c.industry_neutral)(i).is_null() {
                 // SAFETY: Live industry owner; immediate mutation.
                 unsafe { (*c.industry_stations(i)).insert(st, id) };
-                add_industry_to_deliver(st, state, i, tile.0, c);
+                add_industry_to_deliver(st, state, i, tile, c);
             }
         }
         unsafe { it.advance(bitmap, c.map, check) };
@@ -862,7 +872,7 @@ pub(crate) fn for_all_stations_around_tiles(
     #[allow(clippy::cast_possible_wrap)]
     ext.expand(max_c as i32, c.map, c.size_y);
     for tile in ext.tiles(c.map).map(TileIndex) {
-        if (c.s.tile_type)(tile.0) != MP_STATION {
+        if TileType((c.s.tile_type)(tile.0)) != TileType::MP_STATION {
             continue;
         }
         flat_insert(&mut seen, c.station_index(tile));
@@ -878,7 +888,7 @@ pub(crate) fn for_all_stations_around_tiles(
         let state = (c.c.owner)(st);
         for tile in ta.tiles(c.map) {
             // SAFETY: Live owner; the membership borrow ends before `func`.
-            if unsafe { tile_is_in_catchment(state, tile, c) }
+            if unsafe { tile_is_in_catchment(state, TileIndex(tile), c) }
                 && func(StationListEntry { station: st, id }, tile)
             {
                 break;
@@ -905,7 +915,7 @@ impl StationFinder {
     pub fn get_stations(&mut self, c: &Ctx<'_>) -> &StationList {
         if self.area.tile != INVALID_TILE {
             let tile = TileIndex(self.area.tile);
-            if (c.s.tile_type)(tile.0) == MP_HOUSE {
+            if TileType((c.s.tile_type)(tile.0)) == TileType::MP_HOUSE {
                 // Only one tile is supported: town nearby stations are
                 // filtered per tile.
                 c.check(self.area.w == 1 && self.area.h == 1);
@@ -934,7 +944,7 @@ fn add_nearby_stations_by_catchment(
     // SAFETY: Live town owner; the membership reads do not mutate the set.
     unsafe {
         for_each_station(nearby, |st| {
-            if tile_is_in_catchment((c.c.owner)(st.station), tile.0, c) {
+            if tile_is_in_catchment((c.c.owner)(st.station), tile, c) {
                 stations.insert(st.station, st.id);
             }
         });
@@ -962,7 +972,7 @@ pub(crate) fn production_around_tiles(
     // Loop over all tiles to get the produced cargo of
     // everything except industries.
     for tile in ta.tiles(c.map).map(TileIndex) {
-        if (c.s.tile_type)(tile.0) == MP_INDUSTRY {
+        if TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
         crate::tile_cmd::add_produced_cargo(tile.0, &mut produced, c);
@@ -1009,7 +1019,7 @@ pub(crate) fn acceptance_around_tiles(
     for tile in ta.tiles(c.map).map(TileIndex) {
         // Ignore industry if it has a neutral station.
         if !(c.s.station_serve_neutral)()
-            && (c.s.tile_type)(tile.0) == MP_INDUSTRY
+            && TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY
             && !(c.c.industry_neutral)((c.c.industry_by_id)(c.industry_index(tile))).is_null()
         {
             continue;
@@ -1025,8 +1035,8 @@ pub(crate) unsafe fn acceptance_around_station(
     state: *mut Service,
     always_accepted: *mut u64,
     c: &Ctx<'_>,
-) -> [u32; 64] {
-    let mut acceptance = [0_u32; 64];
+) -> [u32; NUM_CARGO as usize] {
+    let mut acceptance = [0_u32; NUM_CARGO as usize];
     // SAFETY: Null or the caller's writable mask.
     if let Some(always) = unsafe { always_accepted.as_mut() } {
         *always = 0;
@@ -1034,7 +1044,7 @@ pub(crate) unsafe fn acceptance_around_station(
     let bitmap = unsafe { &raw const (*catchment(state)).tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
-    while it.tile() != INVALID_TILE {
+    while TileIndex(it.tile()) != TileIndex::INVALID {
         crate::tile_cmd::add_accepted_cargo(it.tile(), &mut acceptance, always_accepted, c);
         unsafe { it.advance(bitmap, c.map, check) };
     }
@@ -1043,41 +1053,74 @@ pub(crate) unsafe fn acceptance_around_station(
 /// Visit each tile of a live catchment by explicit bitmap iteration.
 /// # Safety
 /// `state` is a live station owner whose catchment the visits do not reset.
+pub(crate) unsafe fn iterate_catchment_tiles(
+    state: *mut Service,
+    c: &Ctx<'_>,
+    mut visit: impl FnMut(TileIndex),
+) {
+    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
+    let check = |ok| c.check(ok);
+    let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
+    while TileIndex(it.tile()) != TileIndex::INVALID {
+        visit(TileIndex(it.tile()));
+        unsafe { it.advance(bitmap, c.map, check) };
+    }
+}
+/// Raw adapter for `subsidy.rs` and `station_service.rs`, outside this pass;
+/// delegates to `iterate_catchment_tiles`.
+/// # Safety
+/// As `iterate_catchment_tiles`.
 pub(crate) unsafe fn for_each_catchment_tile(
     state: *mut Service,
     c: &Ctx<'_>,
     mut visit: impl FnMut(u32),
 ) {
-    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
-    let check = |ok| c.check(ok);
-    let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
-    while it.tile() != INVALID_TILE {
-        visit(it.tile());
-        unsafe { it.advance(bitmap, c.map, check) };
-    }
+    unsafe { iterate_catchment_tiles(state, c, |tile| visit(tile.0)) }
 }
 
 /// `MoveGoodsToStation` with this entry's station and visit services.
 /// # Safety
-/// `stations` is live for the call.
+/// `all_stations` is live for the call.
 pub(crate) unsafe fn move_goods_to_station(
-    cargo: u8,
+    cargo: CargoType,
     amount: u32,
     source: crate::cargo_storage::Source,
-    stations: *const StationList,
-    exclusivity: u8,
+    all_stations: *const StationList,
+    exclusivity: CompanyID,
     c: &Ctx<'_>,
 ) -> u32 {
     // SAFETY: Live immutable tables; caller contract for the set.
     unsafe {
         crate::station_service::distribute(
-            cargo,
+            cargo.0,
             amount,
             source,
-            stations,
-            exclusivity,
+            all_stations,
+            exclusivity.0,
             c.c.station,
             &*c.c.visits,
+        )
+    }
+}
+/// Raw adapter for `objects.rs`, outside this pass; delegates to `move_goods_to_station`.
+/// # Safety
+/// As `move_goods_to_station`.
+pub(crate) unsafe fn move_goods_to_station_raw(
+    cargo: u8,
+    amount: u32,
+    source: crate::cargo_storage::Source,
+    all_stations: *const StationList,
+    exclusivity: u8,
+    c: &Ctx<'_>,
+) -> u32 {
+    unsafe {
+        move_goods_to_station(
+            CargoType(cargo),
+            amount,
+            source,
+            all_stations,
+            CompanyID(exclusivity),
+            c,
         )
     }
 }
