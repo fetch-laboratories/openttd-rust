@@ -101,6 +101,9 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     // `cached_anim_triggers = {}` and `cached_cargo_triggers = 0`.
     let mut anim = StationAnimationTriggers::EMPTY;
     let mut cargo = CargoTypes(0);
+    unsafe {
+        (s.set_cached)(st, anim.0, cargo.0);
+    }
     // Combine animation trigger bitmask for all station specs
     // of this station.
     for i in 0..unsafe { (s.count)(st) } {
@@ -108,12 +111,14 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
         if spec.is_null() {
             continue;
         }
+        // The native store writes both cached fields; each holds the
+        // original's value after this spec's `Set` and `|=`.
         let triggers = unsafe { (s.triggers)(spec) };
         anim |= StationAnimationTriggers(triggers.animation);
         cargo.0 |= triggers.cargo;
-    }
-    unsafe {
-        (s.set_cached)(st, anim.0, cargo.0);
+        unsafe {
+            (s.set_cached)(st, anim.0, cargo.0);
+        }
     }
 }
 /// `AssignSpecToStation`: assign a previously allocated `StationSpec` spec
