@@ -849,13 +849,23 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
     }
 }
 
-/// `ForAllStationsAroundTiles`: visit stations, in ID order, whose catchment
-/// covers part of `ta`; `func` returning `false` keeps testing the area's
-/// remaining tiles for that station.
+/// Raw adapter for `industry/construction.rs` and `town.rs`, which open PRs
+/// hold; delegates to `for_all_stations_around_tiles_typed`.
 pub(crate) fn for_all_stations_around_tiles(
     ta: TileArea,
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, u32) -> bool,
+) {
+    for_all_stations_around_tiles_typed(ta, c, |st, tile| func(st, tile.0));
+}
+/// `ForAllStationsAroundTiles`: visit stations, in ID order, whose catchment
+/// covers part of `ta`; `func` (a `Station*, TileIndex` callback) returning
+/// `false` keeps testing the area's remaining tiles for that station. Takes the
+/// plain name once its held callers adopt it.
+pub(crate) fn for_all_stations_around_tiles_typed(
+    ta: TileArea,
+    c: &Ctx<'_>,
+    mut func: impl FnMut(StationListEntry, TileIndex) -> bool,
 ) {
     // With no stations, the scan cannot find anything.
     if (c.c.station_count)() == 0 {
@@ -886,9 +896,9 @@ pub(crate) fn for_all_stations_around_tiles(
             continue;
         }
         let state = (c.c.owner)(st);
-        for tile in ta.tiles(c.map) {
+        for tile in ta.tiles(c.map).map(TileIndex) {
             // SAFETY: Live owner; the membership borrow ends before `func`.
-            if unsafe { tile_is_in_catchment(state, TileIndex(tile), c) }
+            if unsafe { tile_is_in_catchment(state, tile, c) }
                 && func(StationListEntry { station: st, id }, tile)
             {
                 break;
@@ -923,7 +933,7 @@ impl StationFinder {
                 add_nearby_stations_by_catchment(tile, &mut self.stations, nearby, c);
             } else {
                 let stations = &mut self.stations;
-                for_all_stations_around_tiles(self.area, c, |st, _| {
+                for_all_stations_around_tiles_typed(self.area, c, |st, _| {
                     stations.insert(st.station, st.id);
                     true
                 });
