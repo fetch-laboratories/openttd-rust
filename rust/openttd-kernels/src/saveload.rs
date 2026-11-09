@@ -26,103 +26,213 @@
 
 use crate::debug::debug;
 use crate::game_state::GameState;
+use crate::string_type::{StringValidationSetting, StringValidationSettings};
 use std::ffi::c_void;
 
+/// `SaveOrLoadResult` in `saveload.h`.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct SaveOrLoadResult(pub u8);
-pub(crate) const SL_OK: SaveOrLoadResult = SaveOrLoadResult(0);
-pub(crate) const SL_REINIT: SaveOrLoadResult = SaveOrLoadResult(2);
+impl SaveOrLoadResult {
+    /// Completed successfully.
+    pub(crate) const SL_OK: Self = Self(0);
+    /// Error that was caught in the middle of updating game state, need to clear it. (can
+    /// only happen during load)
+    pub(crate) const SL_REINIT: Self = Self(2);
+}
 
-/// `MEMORY_CHUNK_SIZE` in `saveload.cpp`: read and dump in chunks of 128 KiB.
+/// Save in chunks of 128 KiB (`MEMORY_CHUNK_SIZE` in `saveload.cpp`).
 const MEMORY_CHUNK_SIZE: usize = 128 * 1024;
 
 /// `SaveLoadAction` in `saveload.cpp`.
-pub(crate) const SLA_LOAD: u8 = 0;
-pub(crate) const SLA_SAVE: u8 = 1;
-pub(crate) const SLA_PTRS: u8 = 2;
-pub(crate) const SLA_NULL: u8 = 3;
-pub(crate) const SLA_LOAD_CHECK: u8 = 4;
-/// `NeedLength` in `saveload.cpp`.
-pub(crate) const NL_NONE: u8 = 0;
-pub(crate) const NL_WANTLENGTH: u8 = 1;
-pub(crate) const NL_CALCLENGTH: u8 = 2;
-/// `ChunkType` in `saveload.h`.
-pub(crate) const CH_RIFF: u8 = 0;
-pub(crate) const CH_ARRAY: u8 = 1;
-pub(crate) const CH_SPARSE_ARRAY: u8 = 2;
-pub(crate) const CH_TABLE: u8 = 3;
-pub(crate) const CH_SPARSE_TABLE: u8 = 4;
-
-/// `SaveLoadVersion` values in `saveload.h` that the codec tests.
-pub(crate) const SLV_4: u16 = 4;
-pub(crate) const SLV_69: u16 = 69;
-pub(crate) const SLV_169: u16 = 169;
-pub(crate) const SLV_SAVELOAD_LIST_LENGTH: u16 = 293;
-pub(crate) const SLV_ENCODED_STRING_FORMAT: u16 = 350;
-pub(crate) const SLV_FIX_SCC_ENCODED_NEGATIVE: u16 = 353;
-
-/// `SLRefType` in `saveload.h`.
-pub(crate) const REF_VEHICLE: u32 = 1;
-pub(crate) const REF_STATION: u32 = 2;
-pub(crate) const REF_TOWN: u32 = 3;
-pub(crate) const REF_VEHICLE_OLD: u32 = 4;
-pub(crate) const REF_ROADSTOPS: u32 = 5;
-pub(crate) const REF_ENGINE_RENEWS: u32 = 6;
-pub(crate) const REF_CARGO_PACKET: u32 = 7;
-pub(crate) const REF_ORDERLIST: u32 = 8;
-pub(crate) const REF_STORAGE: u32 = 9;
-pub(crate) const REF_LINK_GRAPH: u32 = 10;
-pub(crate) const REF_LINK_GRAPH_JOB: u32 = 11;
-/// Internal kinds for a reference held as a `VehicleRecord`, encoded as
-/// `REF_VEHICLE` and `REF_VEHICLE_OLD`.
-pub(crate) const REF_VEHICLE_RECORD: u32 = 12;
-pub(crate) const REF_VEHICLE_RECORD_OLD: u32 = 13;
-
-/// `VarTypes` in `saveload.h`.
-pub(crate) const SLE_FILE_END: u32 = 0;
-pub(crate) const SLE_FILE_I8: u32 = 1;
-pub(crate) const SLE_FILE_U8: u32 = 2;
-pub(crate) const SLE_FILE_I16: u32 = 3;
-pub(crate) const SLE_FILE_U16: u32 = 4;
-pub(crate) const SLE_FILE_I32: u32 = 5;
-pub(crate) const SLE_FILE_U32: u32 = 6;
-pub(crate) const SLE_FILE_I64: u32 = 7;
-pub(crate) const SLE_FILE_U64: u32 = 8;
-pub(crate) const SLE_FILE_STRINGID: u32 = 9;
-pub(crate) const SLE_FILE_STRING: u32 = 10;
-pub(crate) const SLE_VAR_BL: u32 = 0 << 4;
-pub(crate) const SLE_VAR_I8: u32 = 1 << 4;
-pub(crate) const SLE_VAR_U8: u32 = 2 << 4;
-pub(crate) const SLE_VAR_I16: u32 = 3 << 4;
-pub(crate) const SLE_VAR_U16: u32 = 4 << 4;
-pub(crate) const SLE_VAR_I32: u32 = 5 << 4;
-pub(crate) const SLE_VAR_U32: u32 = 6 << 4;
-pub(crate) const SLE_VAR_I64: u32 = 7 << 4;
-pub(crate) const SLE_VAR_U64: u32 = 8 << 4;
-pub(crate) const SLE_VAR_NULL: u32 = 9 << 4;
-pub(crate) const SLE_VAR_STR: u32 = 12 << 4;
-pub(crate) const SLE_VAR_STRQ: u32 = 13 << 4;
-pub(crate) const SLE_VAR_NAME: u32 = 14 << 4;
-pub(crate) const SLE_INT8: u32 = SLE_FILE_I8 | SLE_VAR_I8;
-pub(crate) const SLE_UINT8: u32 = SLE_FILE_U8 | SLE_VAR_U8;
-pub(crate) const SLE_INT16: u32 = SLE_FILE_I16 | SLE_VAR_I16;
-pub(crate) const SLE_UINT16: u32 = SLE_FILE_U16 | SLE_VAR_U16;
-pub(crate) const SLE_INT32: u32 = SLE_FILE_I32 | SLE_VAR_I32;
-pub(crate) const SLE_UINT32: u32 = SLE_FILE_U32 | SLE_VAR_U32;
-pub(crate) const SLE_STRINGID: u32 = SLE_FILE_STRINGID | SLE_VAR_U32;
-pub(crate) const SLF_ALLOW_CONTROL: u32 = 1 << 8;
-pub(crate) const SLF_ALLOW_NEWLINE: u32 = 1 << 9;
-pub(crate) const SLF_REPLACE_TABCRLF: u32 = 1 << 10;
-
-/// `GetVarMemType`.
-const fn mem_type(conv: u32) -> u32 {
-    conv & 0xF0
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SaveLoadAction(u8);
+impl SaveLoadAction {
+    /// Loading.
+    const SLA_LOAD: Self = Self(0);
+    /// Saving.
+    const SLA_SAVE: Self = Self(1);
+    /// Fixing pointers.
+    const SLA_PTRS: Self = Self(2);
+    /// Null all pointers (on loading error).
+    const SLA_NULL: Self = Self(3);
+    /// Partial loading into `_load_check_data`.
+    const SLA_LOAD_CHECK: Self = Self(4);
 }
 
-/// `GetVarFileType`.
-const fn file_type(conv: u32) -> u32 {
-    conv & 0xF
+/// `NeedLength` in `saveload.cpp`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NeedLength(u8);
+impl NeedLength {
+    /// Not working in NeedLength mode.
+    const NL_NONE: Self = Self(0);
+    /// Writing length and data.
+    const NL_WANTLENGTH: Self = Self(1);
+    /// Need to calculate the length.
+    const NL_CALCLENGTH: Self = Self(2);
+}
+
+/// `ChunkType` in `saveload.h`; `SaveLoadParams::block_mode` holds one as a `uint8_t`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ChunkType(u8);
+impl ChunkType {
+    const CH_RIFF: Self = Self(0);
+    const CH_ARRAY: Self = Self(1);
+    const CH_SPARSE_ARRAY: Self = Self(2);
+    const CH_TABLE: Self = Self(3);
+    const CH_SPARSE_TABLE: Self = Self(4);
+}
+
+/// `SaveLoadVersion` in `saveload.h`, with the versions the codec tests.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct SaveLoadVersion(u16);
+impl SaveLoadVersion {
+    /// 4.0     1
+    /// 4.1   122 0.3.3, 0.3.4
+    /// 4.2  1222 0.3.5
+    /// 4.3  1417
+    /// 4.4  1426
+    const SLV_4: Self = Self(4);
+    /// 69   10319
+    const SLV_69: Self = Self(69);
+    /// 169  23816
+    const SLV_169: Self = Self(169);
+    /// 293  PR#9374 Consistency in list length with `SL_STRUCT` / `SL_STRUCTLIST` /
+    /// `SL_DEQUE` / `SL_REFLIST`.
+    const SLV_SAVELOAD_LIST_LENGTH: Self = Self(293);
+    /// 350  PR#13499 Encoded String format changed.
+    const SLV_ENCODED_STRING_FORMAT: Self = Self(350);
+    /// 353  PR#14049 Fix encoding of negative parameters.
+    const SLV_FIX_SCC_ENCODED_NEGATIVE: Self = Self(353);
+}
+
+/// `SLRefType` in `saveload.h`. `SlSaveLoadRef` narrows its `VarType` to this byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SLRefType(u8);
+impl SLRefType {
+    /// Load/save a reference to a vehicle.
+    const REF_VEHICLE: Self = Self(1);
+    /// Load/save a reference to a station.
+    const REF_STATION: Self = Self(2);
+    /// Load/save a reference to a town.
+    const REF_TOWN: Self = Self(3);
+    /// Load/save an old-style reference to a vehicle (for pre-4.4 savegames).
+    const REF_VEHICLE_OLD: Self = Self(4);
+    /// Load/save a reference to a bus/truck stop.
+    const REF_ROADSTOPS: Self = Self(5);
+    /// Load/save a reference to an engine renewal (autoreplace).
+    const REF_ENGINE_RENEWS: Self = Self(6);
+    /// Load/save a reference to a cargo packet.
+    const REF_CARGO_PACKET: Self = Self(7);
+    /// Load/save a reference to an orderlist.
+    const REF_ORDERLIST: Self = Self(8);
+    /// Load/save a reference to a persistent storage.
+    const REF_STORAGE: Self = Self(9);
+    /// Load/save a reference to a link graph.
+    const REF_LINK_GRAPH: Self = Self(10);
+    /// Load/save a reference to a link graph job.
+    const REF_LINK_GRAPH_JOB: Self = Self(11);
+    /// Fork kind: a reference held as a `VehicleRecord`, encoded as `REF_VEHICLE`.
+    const REF_VEHICLE_RECORD: Self = Self(12);
+    /// Fork kind: a reference held as a `VehicleRecord`, encoded as `REF_VEHICLE_OLD`.
+    const REF_VEHICLE_RECORD_OLD: Self = Self(13);
+}
+
+/// `VarTypes` in `saveload.h`: the general bitmasked magic type that tells us certain
+/// characteristics about the variable it refers to. `SLE_FILE_*` gives the size (type) as
+/// it would be in the savegame and `SLE_VAR_*` the size (type) as it is in memory during
+/// runtime. These are the first 8 bits (0-3 `SLE_FILE`, 4-7 `SLE_VAR`). Bits 8-15 are
+/// reserved for various flags.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct VarTypes(u16);
+impl VarTypes {
+    /* 4 bits allocated a maximum of 16 types for NumberType.
+     * NOTE: the SLE_FILE_NNN values are stored in the savegame! */
+    /// Used to mark end-of-header in tables.
+    const SLE_FILE_END: Self = Self(0);
+    const SLE_FILE_I8: Self = Self(1);
+    const SLE_FILE_U8: Self = Self(2);
+    const SLE_FILE_I16: Self = Self(3);
+    const SLE_FILE_U16: Self = Self(4);
+    const SLE_FILE_I32: Self = Self(5);
+    const SLE_FILE_U32: Self = Self(6);
+    const SLE_FILE_I64: Self = Self(7);
+    const SLE_FILE_U64: Self = Self(8);
+    /// `StringID` offset into strings-array.
+    const SLE_FILE_STRINGID: Self = Self(9);
+    const SLE_FILE_STRING: Self = Self(10);
+
+    /* 4 bits allocated a maximum of 16 types for NumberType */
+    const SLE_VAR_BL: Self = Self(0 << 4);
+    const SLE_VAR_I8: Self = Self(1 << 4);
+    const SLE_VAR_U8: Self = Self(2 << 4);
+    const SLE_VAR_I16: Self = Self(3 << 4);
+    const SLE_VAR_U16: Self = Self(4 << 4);
+    const SLE_VAR_I32: Self = Self(5 << 4);
+    const SLE_VAR_U32: Self = Self(6 << 4);
+    const SLE_VAR_I64: Self = Self(7 << 4);
+    const SLE_VAR_U64: Self = Self(8 << 4);
+    /// Useful to write zeros in savegame.
+    const SLE_VAR_NULL: Self = Self(9 << 4);
+    /// String pointer.
+    const SLE_VAR_STR: Self = Self(12 << 4);
+    /// String pointer enclosed in quotes.
+    const SLE_VAR_STRQ: Self = Self(13 << 4);
+    /// Old custom name to be converted to a string pointer.
+    const SLE_VAR_NAME: Self = Self(14 << 4);
+
+    /* Default combinations of variables. As savegames change, so can variables and thus
+     * it is possible that the saved value and internal size do not match and you need to
+     * specify custom combo. The defaults are listed here. */
+    const SLE_INT8: Self = Self::SLE_FILE_I8.or(Self::SLE_VAR_I8);
+    const SLE_UINT8: Self = Self::SLE_FILE_U8.or(Self::SLE_VAR_U8);
+    const SLE_INT16: Self = Self::SLE_FILE_I16.or(Self::SLE_VAR_I16);
+    const SLE_UINT16: Self = Self::SLE_FILE_U16.or(Self::SLE_VAR_U16);
+    const SLE_INT32: Self = Self::SLE_FILE_I32.or(Self::SLE_VAR_I32);
+    const SLE_UINT32: Self = Self::SLE_FILE_U32.or(Self::SLE_VAR_U32);
+    const SLE_STRINGID: Self = Self::SLE_FILE_STRINGID.or(Self::SLE_VAR_U32);
+
+    /* 8 bits allocated for a maximum of 8 flags.
+     * Flags directing saving/loading of a variable */
+    /// Allow control codes in the strings.
+    const SLF_ALLOW_CONTROL: Self = Self(1 << 8);
+    /// Allow new lines in the strings.
+    const SLF_ALLOW_NEWLINE: Self = Self(1 << 9);
+    /// Replace tabs, cr and lf in the string with spaces.
+    const SLF_REPLACE_TABCRLF: Self = Self(1 << 10);
+
+    /// The enum's `|`, as the original's combinations and `conv` comparisons use it.
+    const fn or(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+/// `VarType` in `saveload.h`: a `VarTypes` combination widened to `uint32_t`.
+pub(crate) type VarType = u32;
+
+impl From<VarTypes> for VarType {
+    /// The enum's implicit conversion where the original compares or masks a `VarType`.
+    fn from(value: VarTypes) -> Self {
+        Self::from(value.0)
+    }
+}
+
+/// `GetVarMemType`: the `SLE_VAR_*` part of a variable-type description.
+const fn mem_type(conv: VarType) -> VarTypes {
+    // `GB(type, 4, 4) << 4`, which fits the enum's `uint16_t`.
+    VarTypes((conv & 0xF0) as u16)
+}
+
+/// `GetVarFileType`: the `SLE_FILE_*` part of a variable-type description.
+const fn file_type(conv: VarType) -> VarTypes {
+    // `GB(type, 0, 4)`, which fits the enum's `uint16_t`.
+    VarTypes((conv & 0xF) as u16)
 }
 
 /// Result of a codec entry that can fail.
@@ -249,7 +359,7 @@ static CODEC: GameState<Codec> = GameState::new(Codec {
         version: std::ptr::null(),
         minor_version: std::ptr::null(),
         action: 0,
-        need_length: NL_NONE,
+        need_length: NeedLength::NL_NONE.0,
         block_mode: 0,
         expect_table_header: false,
     },
@@ -269,6 +379,21 @@ fn codec<R>(f: impl FnOnce(&mut Codec) -> R) -> R {
 
 fn shared<R>(f: impl FnOnce(&mut OpenTTDRustSaveLoadCodec) -> R) -> R {
     codec(|c| f(&mut c.shared))
+}
+
+/// `_sl.action`.
+fn action() -> SaveLoadAction {
+    SaveLoadAction(shared(|s| s.action))
+}
+
+/// `_sl.need_length`.
+fn need_length() -> NeedLength {
+    NeedLength(shared(|s| s.need_length))
+}
+
+/// `_sl.block_mode`.
+fn block_mode() -> ChunkType {
+    ChunkType(shared(|s| s.block_mode))
 }
 
 fn corrupt(message: String) -> OpenTTDRustSaveLoadStatus {
@@ -336,8 +461,9 @@ fn grow() {
     });
 }
 
-/// `MemoryDumper::WriteByte`.
+/// `MemoryDumper::WriteByte`: write a single byte into the dumper.
 fn write_byte(b: u8) {
+    // Are we at the end of this chunk?
     if shared(|s| s.write_cursor == s.write_end) {
         grow();
     }
@@ -390,25 +516,33 @@ fn write_uint64(x: u64) {
 }
 
 /// `IsSavegameVersionBefore(major)`.
-fn version_before(major: u16) -> bool {
-    // SAFETY: Native code points the codec at `_sl_version` before any save or load.
-    unsafe { *shared(|s| s.version) < major }
+fn version_before(major: SaveLoadVersion) -> bool {
+    version() < major
 }
 
-/// `IsSavegameVersionBefore(major, minor)`.
-fn version_before_minor(major: u16, minor: u8) -> bool {
+/// `IsSavegameVersionBefore(major, minor)`: whether the savegame is below `major.minor`.
+/// If `minor` is 0, only the major number is checked.
+fn version_before_minor(major: SaveLoadVersion, minor: u8) -> bool {
     let (version, minor_version) = shared(|s| (s.version, s.minor_version));
-    // SAFETY: As in `version_before`, for both version globals.
-    unsafe { *version < major || (minor > 0 && *version == major && *minor_version < minor) }
+    // SAFETY: Native code points the codec at `_sl_version` and `_sl_minor_version` before
+    // any save or load.
+    unsafe {
+        let version = SaveLoadVersion(*version);
+        version < major || (minor > 0 && version == major && *minor_version < minor)
+    }
 }
 
 /// `_sl_version`.
-fn version() -> u16 {
-    // SAFETY: As in `version_before`.
-    unsafe { *shared(|s| s.version) }
+fn version() -> SaveLoadVersion {
+    // SAFETY: Native code points the codec at `_sl_version` before any save or load.
+    SaveLoadVersion(unsafe { *shared(|s| s.version) })
 }
 
-/// `SlReadSimpleGamma`.
+/// `SlReadSimpleGamma`: read in the header descriptor of an object or an array. If the
+/// highest bit is set (7), then the index is bigger than 127 elements, so use the next byte
+/// to read in the real value. The actual value is then both bytes added with the first
+/// shifted 8 bits to the left, and dropping the highest bit (which only indicated a big
+/// index): `x = ((x & 0x7F) << 8) + SlReadByte();`.
 fn read_simple_gamma(services: &OpenTTDSaveLoadServices) -> Result<u32, OpenTTDRustSaveLoadStatus> {
     let mut i = u32::from(read_byte(services)?);
     if i & 0x80 != 0 {
@@ -433,12 +567,27 @@ fn read_simple_gamma(services: &OpenTTDSaveLoadServices) -> Result<u32, OpenTTDR
     Ok(i)
 }
 
-/// `SlWriteSimpleGamma`.
+/// `SlWriteSimpleGamma`: write the header descriptor of an object or an array. If the
+/// element is bigger than 127, use 2 bytes for saving and use the highest byte of the first
+/// written one as a notice that the length consists of 2 bytes, etc.. like this:
+///
+/// ```text
+/// 0xxxxxxx
+/// 10xxxxxx xxxxxxxx
+/// 110xxxxx xxxxxxxx xxxxxxxx
+/// 1110xxxx xxxxxxxx xxxxxxxx xxxxxxxx
+/// 11110--- xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+/// ```
+///
+/// We could extend the scheme ad infinum to support arbitrarily large chunks, but as
+/// `sizeof(size_t) == 4` is still very common we don't support anything above 32 bits.
+/// That's why in the last case the 3 most significant bits are unused.
 fn write_simple_gamma(services: &OpenTTDSaveLoadServices, i: usize) {
     if i >= 1 << 7 {
         if i >= 1 << 14 {
             if i >= 1 << 21 {
                 if i >= 1 << 28 {
+                    // We can only support 32 bits for now.
                     (services.native_assert)(u32::try_from(i).is_ok());
                     write_byte(0xF0);
                     write_byte((i >> 24) as u8);
@@ -457,7 +606,7 @@ fn write_simple_gamma(services: &OpenTTDSaveLoadServices, i: usize) {
     write_byte(i as u8);
 }
 
-/// `SlGetGammaLength`.
+/// `SlGetGammaLength`: how many bytes are used to encode a gamma value.
 fn gamma_length(i: usize) -> u32 {
     1 + u32::from(i >= 1 << 7)
         + u32::from(i >= 1 << 14)
@@ -465,8 +614,11 @@ fn gamma_length(i: usize) -> u32 {
         + u32::from(i >= 1 << 28)
 }
 
-/// `SlIterateArray`.
+/// `SlIterateArray`: iterate through the elements of an array and read the whole thing.
+/// Returns the index of the object, or -1 if we have reached the end of current block.
 fn iterate_array(services: &OpenTTDSaveLoadServices) -> Result<i32, OpenTTDRustSaveLoadStatus> {
+    // After reading in the whole array inside the loop we must have read in all the data,
+    // so we must be at end of current block.
     let next_offs = shared(|s| s.next_offs);
     if next_offs != 0 && read_size() != next_offs {
         return Err(corrupt(format!(
@@ -495,16 +647,18 @@ fn iterate_array(services: &OpenTTDSaveLoadServices) -> Result<i32, OpenTTDRustS
             return Ok(i32::MAX);
         }
 
-        let index = match shared(|s| s.block_mode) {
-            CH_SPARSE_TABLE | CH_SPARSE_ARRAY => read_simple_gamma(services)? as i32,
-            CH_TABLE | CH_ARRAY => shared(|s| {
+        let index = match block_mode() {
+            ChunkType::CH_SPARSE_TABLE | ChunkType::CH_SPARSE_ARRAY => {
+                read_simple_gamma(services)? as i32
+            }
+            ChunkType::CH_TABLE | ChunkType::CH_ARRAY => shared(|s| {
                 let index = s.array_index;
                 s.array_index = index.wrapping_add(1);
                 index
             }),
             _ => {
                 debug!(sl, 0, "SlIterateArray error");
-                return Ok(-1);
+                return Ok(-1); // error
             }
         };
 
@@ -530,7 +684,7 @@ fn skip_bytes(services: &OpenTTDSaveLoadServices, mut length: usize) -> Status {
     Ok(())
 }
 
-/// `SlSkipArray`.
+/// `SlSkipArray`: skip an array or sparse array.
 fn skip_array(services: &OpenTTDSaveLoadServices) -> Status {
     while iterate_array(services)? != -1 {
         let skip = shared(|s| s.next_offs).wrapping_sub(read_size());
@@ -539,30 +693,35 @@ fn skip_array(services: &OpenTTDSaveLoadServices) -> Status {
     Ok(())
 }
 
-/// `SlSetLength`.
+/// `SlSetLength`: sets the length of either a RIFF object or the number of items in an
+/// array. This lets us load an object or an array of arbitrary size.
 fn set_length(services: &OpenTTDSaveLoadServices, length: usize) {
     let (action, need_length) = shared(|s| (s.action, s.need_length));
-    (services.native_assert)(action == SLA_SAVE);
+    (services.native_assert)(SaveLoadAction(action) == SaveLoadAction::SLA_SAVE);
 
-    match need_length {
-        NL_WANTLENGTH => {
+    match NeedLength(need_length) {
+        NeedLength::NL_WANTLENGTH => {
             let (block_mode, header) = shared(|s| {
-                s.need_length = NL_NONE;
-                (s.block_mode, s.expect_table_header)
+                s.need_length = NeedLength::NL_NONE.0;
+                (ChunkType(s.block_mode), s.expect_table_header)
             });
-            if (block_mode == CH_TABLE || block_mode == CH_SPARSE_TABLE) && header {
+            if (block_mode == ChunkType::CH_TABLE || block_mode == ChunkType::CH_SPARSE_TABLE)
+                && header
+            {
                 shared(|s| s.expect_table_header = false);
                 write_simple_gamma(services, length.wrapping_add(1));
                 return;
             }
 
             match block_mode {
-                CH_RIFF => {
-                    // Lower 24 bits are normal; bits 24:27 go in the uppermost 4 bits.
+                ChunkType::CH_RIFF => {
+                    // Ugly encoding of >16M RIFF chunks.
+                    // The lower 24 bits are normal.
+                    // The uppermost 4 bits are bits 24:27.
                     (services.native_assert)(length < 1 << 28);
                     write_uint32(((length & 0xFF_FFFF) | ((length >> 24) << 28)) as u32);
                 }
-                CH_TABLE | CH_ARRAY => {
+                ChunkType::CH_TABLE | ChunkType::CH_ARRAY => {
                     let (last, index) = shared(|s| (s.last_array_index, s.array_index));
                     (services.native_assert)(last <= index);
                     loop {
@@ -577,9 +736,10 @@ fn set_length(services: &OpenTTDSaveLoadServices, length: usize) {
                     }
                     write_simple_gamma(services, length.wrapping_add(1));
                 }
-                CH_SPARSE_TABLE | CH_SPARSE_ARRAY => {
+                ChunkType::CH_SPARSE_TABLE | ChunkType::CH_SPARSE_ARRAY => {
                     let index = shared(|s| s.array_index);
-                    // SlGetArrayLength takes size_t from int; SlWriteSparseIndex takes uint.
+                    // Also include length of sparse index. `SlGetArrayLength` takes `size_t`
+                    // from `int`; `SlWriteSparseIndex` takes `uint`.
                     let sparse = gamma_length(index as isize as usize) as usize;
                     write_simple_gamma(services, length.wrapping_add(1).wrapping_add(sparse));
                     write_simple_gamma(services, index as u32 as usize);
@@ -588,7 +748,7 @@ fn set_length(services: &OpenTTDSaveLoadServices, length: usize) {
             }
         }
         // `_sl.obj_len += (int)length`.
-        NL_CALCLENGTH => {
+        NeedLength::NL_CALCLENGTH => {
             shared(|s| s.obj_len = s.obj_len.wrapping_add(length as i32 as isize as usize));
         }
         _ => not_reached(services),
@@ -644,11 +804,14 @@ fn flush(services: &OpenTTDSaveLoadServices, writer: *mut c_void) -> Status {
     Ok(())
 }
 
-/// `SlCopyBytes`.
+/// `SlCopyBytes`: save/load bytes. These do not need to be converted to Little/Big Endian
+/// so directly write them or read them to/from file.
 fn copy_bytes(services: &OpenTTDSaveLoadServices, ptr: *mut u8, length: usize) -> Status {
-    match shared(|s| s.action) {
-        SLA_LOAD_CHECK | SLA_LOAD => read_bytes(services, ptr, length),
-        SLA_SAVE => {
+    match action() {
+        SaveLoadAction::SLA_LOAD_CHECK | SaveLoadAction::SLA_LOAD => {
+            read_bytes(services, ptr, length)
+        }
+        SaveLoadAction::SLA_SAVE => {
             write_bytes(ptr, length);
             Ok(())
         }
@@ -656,155 +819,165 @@ fn copy_bytes(services: &OpenTTDSaveLoadServices, ptr: *mut u8, length: usize) -
     }
 }
 
-/// `ReadValue`.
+/// `ReadValue`: a signed-long version of the value of a setting. `conv` can be a non-clean
+/// type, e.g. one with other flags, because it is parsed.
 ///
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
-unsafe fn read_value(services: &OpenTTDSaveLoadServices, ptr: *const c_void, conv: u32) -> i64 {
+unsafe fn read_value(services: &OpenTTDSaveLoadServices, ptr: *const c_void, conv: VarType) -> i64 {
     // SAFETY: The caller's contract.
     unsafe {
         match mem_type(conv) {
-            SLE_VAR_BL => i64::from(ptr.cast::<u8>().read_unaligned() != 0),
-            SLE_VAR_I8 => i64::from(ptr.cast::<i8>().read_unaligned()),
-            SLE_VAR_U8 => i64::from(ptr.cast::<u8>().read_unaligned()),
-            SLE_VAR_I16 => i64::from(ptr.cast::<i16>().read_unaligned()),
-            SLE_VAR_U16 => i64::from(ptr.cast::<u16>().read_unaligned()),
-            SLE_VAR_I32 => i64::from(ptr.cast::<i32>().read_unaligned()),
-            SLE_VAR_U32 => i64::from(ptr.cast::<u32>().read_unaligned()),
-            SLE_VAR_I64 => ptr.cast::<i64>().read_unaligned(),
-            SLE_VAR_U64 => ptr.cast::<u64>().read_unaligned() as i64,
-            SLE_VAR_NULL => 0,
+            VarTypes::SLE_VAR_BL => i64::from(ptr.cast::<u8>().read_unaligned() != 0),
+            VarTypes::SLE_VAR_I8 => i64::from(ptr.cast::<i8>().read_unaligned()),
+            VarTypes::SLE_VAR_U8 => i64::from(ptr.cast::<u8>().read_unaligned()),
+            VarTypes::SLE_VAR_I16 => i64::from(ptr.cast::<i16>().read_unaligned()),
+            VarTypes::SLE_VAR_U16 => i64::from(ptr.cast::<u16>().read_unaligned()),
+            VarTypes::SLE_VAR_I32 => i64::from(ptr.cast::<i32>().read_unaligned()),
+            VarTypes::SLE_VAR_U32 => i64::from(ptr.cast::<u32>().read_unaligned()),
+            VarTypes::SLE_VAR_I64 => ptr.cast::<i64>().read_unaligned(),
+            VarTypes::SLE_VAR_U64 => ptr.cast::<u64>().read_unaligned() as i64,
+            VarTypes::SLE_VAR_NULL => 0,
             _ => not_reached(services),
         }
     }
 }
 
-/// `WriteValue`.
+/// `WriteValue`: write the value of a setting. `conv` can be a non-clean type, e.g. with
+/// other flags; it is parsed upon read.
 ///
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
 unsafe fn write_value(
     services: &OpenTTDSaveLoadServices,
     ptr: *mut c_void,
-    conv: u32,
+    conv: VarType,
     val: i64,
 ) -> Status {
     // SAFETY: The caller's contract.
     unsafe {
         match mem_type(conv) {
-            SLE_VAR_BL => ptr.cast::<bool>().write_unaligned(val != 0),
-            SLE_VAR_I8 => ptr.cast::<i8>().write_unaligned(val as i8),
-            SLE_VAR_U8 => ptr.cast::<u8>().write_unaligned(val as u8),
-            SLE_VAR_I16 => ptr.cast::<i16>().write_unaligned(val as i16),
-            SLE_VAR_U16 => ptr.cast::<u16>().write_unaligned(val as u16),
-            SLE_VAR_I32 => ptr.cast::<i32>().write_unaligned(val as i32),
-            SLE_VAR_U32 => ptr.cast::<u32>().write_unaligned(val as u32),
-            SLE_VAR_I64 => ptr.cast::<i64>().write_unaligned(val),
-            SLE_VAR_U64 => ptr.cast::<u64>().write_unaligned(val as u64),
-            SLE_VAR_NAME => {
+            VarTypes::SLE_VAR_BL => ptr.cast::<bool>().write_unaligned(val != 0),
+            VarTypes::SLE_VAR_I8 => ptr.cast::<i8>().write_unaligned(val as i8),
+            VarTypes::SLE_VAR_U8 => ptr.cast::<u8>().write_unaligned(val as u8),
+            VarTypes::SLE_VAR_I16 => ptr.cast::<i16>().write_unaligned(val as i16),
+            VarTypes::SLE_VAR_U16 => ptr.cast::<u16>().write_unaligned(val as u16),
+            VarTypes::SLE_VAR_I32 => ptr.cast::<i32>().write_unaligned(val as i32),
+            VarTypes::SLE_VAR_U32 => ptr.cast::<u32>().write_unaligned(val as u32),
+            VarTypes::SLE_VAR_I64 => ptr.cast::<i64>().write_unaligned(val),
+            VarTypes::SLE_VAR_U64 => ptr.cast::<u64>().write_unaligned(val as u64),
+            VarTypes::SLE_VAR_NAME => {
                 if !(services.copy_from_old_name)(ptr, val as u32) {
                     return Err(SL_STATUS_NATIVE);
                 }
             }
-            SLE_VAR_NULL => {}
+            VarTypes::SLE_VAR_NULL => {}
             _ => not_reached(services),
         }
     }
     Ok(())
 }
 
-/// `SlSaveLoadConv`.
+/// `SlSaveLoadConv`: handle all conversion and typechecking of variables here. In the case
+/// of saving, read in the actual value from the struct and then write them to file, endian
+/// safely. Loading a value goes exactly the opposite way.
 ///
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
 unsafe fn save_load_conv(
     services: &OpenTTDSaveLoadServices,
     ptr: *mut c_void,
-    conv: u32,
+    conv: VarType,
 ) -> Status {
     let check = services.native_assert;
-    match shared(|s| s.action) {
-        SLA_SAVE => {
+    match action() {
+        SaveLoadAction::SLA_SAVE => {
             // SAFETY: The caller's contract.
             let x = unsafe { read_value(services, ptr, conv) };
+            // Write the value to the file and check if its value is in the desired range.
             match file_type(conv) {
-                SLE_FILE_I8 => {
+                VarTypes::SLE_FILE_I8 => {
                     check((-128..=127).contains(&x));
                     write_byte(x as u8);
                 }
-                SLE_FILE_U8 => {
+                VarTypes::SLE_FILE_U8 => {
                     check((0..=255).contains(&x));
                     write_byte(x as u8);
                 }
-                SLE_FILE_I16 => {
+                VarTypes::SLE_FILE_I16 => {
                     check((-32768..=32767).contains(&x));
                     write_uint16(x as u16);
                 }
-                SLE_FILE_STRINGID | SLE_FILE_U16 => {
+                VarTypes::SLE_FILE_STRINGID | VarTypes::SLE_FILE_U16 => {
                     check((0..=65535).contains(&x));
                     write_uint16(x as u16);
                 }
-                SLE_FILE_I32 | SLE_FILE_U32 => write_uint32(x as u32),
-                SLE_FILE_I64 | SLE_FILE_U64 => write_uint64(x as u64),
+                VarTypes::SLE_FILE_I32 | VarTypes::SLE_FILE_U32 => write_uint32(x as u32),
+                VarTypes::SLE_FILE_I64 | VarTypes::SLE_FILE_U64 => write_uint64(x as u64),
                 _ => not_reached(services),
             }
         }
-        SLA_LOAD_CHECK | SLA_LOAD => {
+        SaveLoadAction::SLA_LOAD_CHECK | SaveLoadAction::SLA_LOAD => {
+            // Read a value from the file.
             let x = match file_type(conv) {
-                SLE_FILE_I8 => i64::from(read_byte(services)? as i8),
-                SLE_FILE_U8 => i64::from(read_byte(services)?),
-                SLE_FILE_I16 => i64::from(read_uint16(services)? as i16),
-                SLE_FILE_U16 => i64::from(read_uint16(services)?),
-                SLE_FILE_I32 => i64::from(read_uint32(services)? as i32),
-                SLE_FILE_U32 => i64::from(read_uint32(services)?),
-                SLE_FILE_I64 | SLE_FILE_U64 => read_uint64(services)? as i64,
-                SLE_FILE_STRINGID => i64::from((services.remap_old_string)(u32::from(
+                VarTypes::SLE_FILE_I8 => i64::from(read_byte(services)? as i8),
+                VarTypes::SLE_FILE_U8 => i64::from(read_byte(services)?),
+                VarTypes::SLE_FILE_I16 => i64::from(read_uint16(services)? as i16),
+                VarTypes::SLE_FILE_U16 => i64::from(read_uint16(services)?),
+                VarTypes::SLE_FILE_I32 => i64::from(read_uint32(services)? as i32),
+                VarTypes::SLE_FILE_U32 => i64::from(read_uint32(services)?),
+                VarTypes::SLE_FILE_I64 | VarTypes::SLE_FILE_U64 => read_uint64(services)? as i64,
+                VarTypes::SLE_FILE_STRINGID => i64::from((services.remap_old_string)(u32::from(
                     read_uint16(services)?,
                 ))),
                 _ => not_reached(services),
             };
+            // Write the value to the struct. These ARE endian safe.
             // SAFETY: The caller's contract.
             unsafe { write_value(services, ptr, conv, x) }?;
         }
-        SLA_PTRS | SLA_NULL => {}
+        SaveLoadAction::SLA_PTRS | SaveLoadAction::SLA_NULL => {}
         _ => not_reached(services),
     }
     Ok(())
 }
 
-/// `SlCalcConvMemLen`; string types read their length from the savegame.
+/// `SlCalcConvMemLen`: the size in bytes of a type as it appears in memory. String types
+/// read their length from the savegame.
 fn calc_conv_mem_len(
     services: &OpenTTDSaveLoadServices,
-    conv: u32,
+    conv: VarType,
 ) -> Result<u32, OpenTTDRustSaveLoadStatus> {
     Ok(match mem_type(conv) {
-        SLE_VAR_BL | SLE_VAR_I8 | SLE_VAR_U8 => 1,
-        SLE_VAR_I16 | SLE_VAR_U16 => 2,
-        SLE_VAR_I32 | SLE_VAR_U32 => 4,
-        SLE_VAR_I64 | SLE_VAR_U64 => 8,
-        SLE_VAR_NULL => 0,
-        SLE_VAR_STR | SLE_VAR_STRQ => read_simple_gamma(services)?,
+        VarTypes::SLE_VAR_BL | VarTypes::SLE_VAR_I8 | VarTypes::SLE_VAR_U8 => 1,
+        VarTypes::SLE_VAR_I16 | VarTypes::SLE_VAR_U16 => 2,
+        VarTypes::SLE_VAR_I32 | VarTypes::SLE_VAR_U32 => 4,
+        VarTypes::SLE_VAR_I64 | VarTypes::SLE_VAR_U64 => 8,
+        VarTypes::SLE_VAR_NULL => 0,
+        VarTypes::SLE_VAR_STR | VarTypes::SLE_VAR_STRQ => read_simple_gamma(services)?,
         _ => not_reached(services),
     })
 }
 
-/// `SlCalcConvFileLen`; `SLE_FILE_STRING` reads its length, narrowed to `uint8_t`.
+/// `SlCalcConvFileLen`: the size in bytes of a type as it appears in a saved game.
+/// `SLE_FILE_STRING` reads its length, narrowed to `uint8_t`.
 fn calc_conv_file_len(
     services: &OpenTTDSaveLoadServices,
-    conv: u32,
+    conv: VarType,
 ) -> Result<u8, OpenTTDRustSaveLoadStatus> {
     Ok(match file_type(conv) {
-        SLE_FILE_END => 0,
-        SLE_FILE_I8 | SLE_FILE_U8 => 1,
-        SLE_FILE_I16 | SLE_FILE_U16 | SLE_FILE_STRINGID => 2,
-        SLE_FILE_I32 | SLE_FILE_U32 => 4,
-        SLE_FILE_I64 | SLE_FILE_U64 => 8,
-        SLE_FILE_STRING => read_simple_gamma(services)? as u8,
+        VarTypes::SLE_FILE_END => 0,
+        VarTypes::SLE_FILE_I8 | VarTypes::SLE_FILE_U8 => 1,
+        VarTypes::SLE_FILE_I16 | VarTypes::SLE_FILE_U16 | VarTypes::SLE_FILE_STRINGID => 2,
+        VarTypes::SLE_FILE_I32 | VarTypes::SLE_FILE_U32 => 4,
+        VarTypes::SLE_FILE_I64 | VarTypes::SLE_FILE_U64 => 8,
+        VarTypes::SLE_FILE_STRING => read_simple_gamma(services)? as u8,
         _ => not_reached(services),
     })
 }
 
-/// `SlCopyInternal`.
+/// `SlCopyInternal`: save/load a list of `SL_VAR`s. `SlCopy` and `SlArray` are very
+/// similar, with the exception of the header; this function represents the common part.
 ///
 /// # Safety
 /// `object` holds `length` values of the memory type of `conv`.
@@ -812,26 +985,31 @@ unsafe fn copy_internal(
     services: &OpenTTDSaveLoadServices,
     object: *mut c_void,
     length: usize,
-    conv: u32,
+    conv: VarType,
 ) -> Status {
-    let action = shared(|s| s.action);
-    if mem_type(conv) == SLE_VAR_NULL {
-        (services.native_assert)(action != SLA_SAVE);
+    let action = action();
+    if mem_type(conv) == VarTypes::SLE_VAR_NULL {
+        // Use SL_NULL if you want to write null-bytes.
+        (services.native_assert)(action != SaveLoadAction::SLA_SAVE);
         let size = length.wrapping_mul(usize::from(calc_conv_file_len(services, conv)?));
         return skip_bytes(services, size);
     }
 
-    // Really old versions saved everything as bytes.
-    if action != SLA_SAVE && version() == 0 {
-        if matches!(
-            conv,
-            SLE_INT16 | SLE_UINT16 | SLE_STRINGID | SLE_INT32 | SLE_UINT32
-        ) {
+    // NOTICE - handle some buggy stuff, in really old versions everything was saved as a
+    // byte-type. So detect this, and adjust object size accordingly.
+    if action != SaveLoadAction::SLA_SAVE && version() == SaveLoadVersion(0) {
+        // All objects except difficulty settings.
+        if conv == VarType::from(VarTypes::SLE_INT16)
+            || conv == VarType::from(VarTypes::SLE_UINT16)
+            || conv == VarType::from(VarTypes::SLE_STRINGID)
+            || conv == VarType::from(VarTypes::SLE_INT32)
+            || conv == VarType::from(VarTypes::SLE_UINT32)
+        {
             let size = length.wrapping_mul(usize::from(calc_conv_file_len(services, conv)?));
             return copy_bytes(services, object.cast(), size);
         }
-        // Money from 32 to 64 bits.
-        if conv == (SLE_FILE_I32 | SLE_VAR_I64) {
+        // Used for conversion of Money 32bit->64bit.
+        if conv == VarType::from(VarTypes::SLE_FILE_I32.or(VarTypes::SLE_VAR_I64)) {
             for i in 0..length {
                 let x = i64::from(read_uint32(services)?.swap_bytes() as i32);
                 // SAFETY: The caller's contract.
@@ -841,7 +1019,9 @@ unsafe fn copy_internal(
         }
     }
 
-    if conv == SLE_INT8 || conv == SLE_UINT8 {
+    // If the size of elements is 1 byte both in file and memory, no special conversion is
+    // needed, use specialized copy-copy function to speed up things.
+    if conv == VarType::from(VarTypes::SLE_INT8) || conv == VarType::from(VarTypes::SLE_UINT8) {
         copy_bytes(services, object.cast(), length)
     } else {
         let mut a = object.cast::<u8>();
@@ -850,14 +1030,15 @@ unsafe fn copy_internal(
             // SAFETY: The caller's contract.
             unsafe {
                 save_load_conv(services, a.cast(), conv)?;
-                a = a.add(usize::from(mem_size));
+                a = a.add(usize::from(mem_size)); // get size
             }
         }
         Ok(())
     }
 }
 
-/// `SlCopy`.
+/// `SlCopy`: copy a list of `SL_VAR`s to/from a savegame. These entries are copied as-is,
+/// and you as caller have to make sure things like length-fields are calculated correctly.
 ///
 /// # Safety
 /// As [`copy_internal`].
@@ -865,16 +1046,21 @@ unsafe fn copy(
     services: &OpenTTDSaveLoadServices,
     object: *mut c_void,
     length: usize,
-    conv: u32,
+    conv: VarType,
 ) -> Status {
-    if matches!(shared(|s| s.action), SLA_PTRS | SLA_NULL) {
+    if matches!(
+        action(),
+        SaveLoadAction::SLA_PTRS | SaveLoadAction::SLA_NULL
+    ) {
         return Ok(());
     }
 
-    if shared(|s| s.need_length) != NL_NONE {
+    // Automatically calculate the length?
+    if need_length() != NeedLength::NL_NONE {
         let size = length.wrapping_mul(usize::from(calc_conv_file_len(services, conv)?));
         set_length(services, size);
-        if shared(|s| s.need_length) == NL_CALCLENGTH {
+        // Determine length only?
+        if need_length() == NeedLength::NL_CALCLENGTH {
             return Ok(());
         }
     }
@@ -883,11 +1069,11 @@ unsafe fn copy(
     unsafe { copy_internal(services, object, length, conv) }
 }
 
-/// `SlCalcArrayLen`.
+/// `SlCalcArrayLen`: the size in bytes of a certain type of atomic array.
 fn calc_array_len(
     services: &OpenTTDSaveLoadServices,
     length: usize,
-    conv: u32,
+    conv: VarType,
 ) -> Result<usize, OpenTTDRustSaveLoadStatus> {
     let file = usize::from(calc_conv_file_len(services, conv)?);
     Ok(file
@@ -895,7 +1081,7 @@ fn calc_array_len(
         .wrapping_add(gamma_length(length) as usize))
 }
 
-/// `SlArray`.
+/// `SlArray`: save/load the length of the array followed by the array of `SL_VAR` elements.
 ///
 /// # Safety
 /// As [`copy_internal`].
@@ -903,19 +1089,20 @@ unsafe fn array(
     services: &OpenTTDSaveLoadServices,
     object: *mut c_void,
     mut length: usize,
-    conv: u32,
+    conv: VarType,
 ) -> Status {
-    match shared(|s| s.action) {
-        SLA_SAVE => {
+    match action() {
+        SaveLoadAction::SLA_SAVE => {
             write_simple_gamma(services, length);
             // SAFETY: The caller's contract.
             unsafe { copy_internal(services, object, length, conv) }
         }
-        SLA_LOAD_CHECK | SLA_LOAD => {
-            if !version_before(SLV_SAVELOAD_LIST_LENGTH) {
+        SaveLoadAction::SLA_LOAD_CHECK | SaveLoadAction::SLA_LOAD => {
+            if !version_before(SaveLoadVersion::SLV_SAVELOAD_LIST_LENGTH) {
                 let sv_length = read_simple_gamma(services)? as usize;
-                if mem_type(conv) == SLE_VAR_NULL {
-                    // An unknown field; trust the savegame's length.
+                if mem_type(conv) == VarTypes::SLE_VAR_NULL {
+                    // We don't know this field, so we assume the length in the savegame is
+                    // correct.
                     length = sv_length;
                 } else if sv_length != length {
                     return Err(corrupt("Fixed-length array is of wrong length".to_owned()));
@@ -924,85 +1111,107 @@ unsafe fn array(
             // SAFETY: The caller's contract.
             unsafe { copy_internal(services, object, length, conv) }
         }
-        SLA_PTRS | SLA_NULL => Ok(()),
+        SaveLoadAction::SLA_PTRS | SaveLoadAction::SLA_NULL => Ok(()),
         _ => not_reached(services),
     }
 }
 
-/// `ReferenceToInt`: index + 1, or 0 for null.
-fn reference_to_int(services: &OpenTTDSaveLoadServices, obj: *const c_void, rt: u32) -> usize {
-    (services.native_assert)(shared(|s| s.action) == SLA_SAVE);
+/// `ReferenceToInt`: pointers cannot be saved to a savegame, so this function gets the
+/// index of the item. Remember that a nullptr item has value 0, and all indices have +1, so
+/// vehicle 0 is saved as index 1.
+fn reference_to_int(
+    services: &OpenTTDSaveLoadServices,
+    obj: *const c_void,
+    rt: SLRefType,
+) -> usize {
+    (services.native_assert)(action() == SaveLoadAction::SLA_SAVE);
 
     if obj.is_null() {
         return 0;
     }
 
-    // Old vehicles are saved as new ones.
     let index = match rt {
-        REF_VEHICLE_RECORD_OLD | REF_VEHICLE_RECORD => {
+        SLRefType::REF_VEHICLE_RECORD_OLD | SLRefType::REF_VEHICLE_RECORD => {
             // SAFETY: A non-null record reference is a live record of a live shell.
             let shell = unsafe { (*obj.cast::<crate::vehicle_base::VehicleRecord>()).shell };
             return (services.vehicle_index)(shell.cast()) as usize + 1;
         }
-        REF_VEHICLE_OLD | REF_VEHICLE => services.vehicle_index,
-        REF_STATION => services.station_index,
-        REF_TOWN => services.town_index,
-        REF_ROADSTOPS => services.road_stop_index,
-        REF_ENGINE_RENEWS => services.engine_renew_index,
-        REF_CARGO_PACKET => services.cargo_packet_index,
-        REF_ORDERLIST => services.order_list_index,
-        REF_STORAGE => services.persistent_storage_index,
-        REF_LINK_GRAPH => services.link_graph_index,
-        REF_LINK_GRAPH_JOB => services.link_graph_job_index,
+        // Old vehicles we save as new ones.
+        SLRefType::REF_VEHICLE_OLD | SLRefType::REF_VEHICLE => services.vehicle_index,
+        SLRefType::REF_STATION => services.station_index,
+        SLRefType::REF_TOWN => services.town_index,
+        SLRefType::REF_ROADSTOPS => services.road_stop_index,
+        SLRefType::REF_ENGINE_RENEWS => services.engine_renew_index,
+        SLRefType::REF_CARGO_PACKET => services.cargo_packet_index,
+        SLRefType::REF_ORDERLIST => services.order_list_index,
+        SLRefType::REF_STORAGE => services.persistent_storage_index,
+        SLRefType::REF_LINK_GRAPH => services.link_graph_index,
+        SLRefType::REF_LINK_GRAPH_JOB => services.link_graph_job_index,
         _ => not_reached(services),
     };
     index(obj) as usize + 1
 }
 
-/// `IntToReference`: index 0 is null, other indices are one more than the pool index.
+/// `IntToReference`: pointers cannot be loaded from a savegame, so this function gets the
+/// index from the savegame and returns the appropriate pointer from the already loaded
+/// base. Remember that an index of 0 is a nullptr pointer so all indices are +1 so vehicle 0
+/// is saved as 1.
 fn int_to_reference(
     services: &OpenTTDSaveLoadServices,
     mut index: usize,
-    mut rt: u32,
+    mut rt: SLRefType,
 ) -> Result<*mut c_void, OpenTTDRustSaveLoadStatus> {
-    (services.native_assert)(shared(|s| s.action) == SLA_PTRS);
+    (services.native_assert)(action() == SaveLoadAction::SLA_PTRS);
 
     // Record references follow the vehicle encoding, then resolve to the shell's record.
-    let record = matches!(rt, REF_VEHICLE_RECORD | REF_VEHICLE_RECORD_OLD);
+    let record = matches!(
+        rt,
+        SLRefType::REF_VEHICLE_RECORD | SLRefType::REF_VEHICLE_RECORD_OLD
+    );
     if record {
-        rt = if rt == REF_VEHICLE_RECORD {
-            REF_VEHICLE
+        rt = if rt == SLRefType::REF_VEHICLE_RECORD {
+            SLRefType::REF_VEHICLE
         } else {
-            REF_VEHICLE_OLD
+            SLRefType::REF_VEHICLE_OLD
         };
     }
 
-    // From 4.4, REF_VEHICLE_OLD is saved as REF_VEHICLE.
-    if rt == REF_VEHICLE_OLD && !version_before_minor(SLV_4, 4) {
-        rt = REF_VEHICLE;
+    // After version 4.3 REF_VEHICLE_OLD is saved as REF_VEHICLE, and should be loaded like
+    // that.
+    if rt == SLRefType::REF_VEHICLE_OLD && !version_before_minor(SaveLoadVersion::SLV_4, 4) {
+        rt = SLRefType::REF_VEHICLE;
     }
 
-    if index == if rt == REF_VEHICLE_OLD { 0xFFFF } else { 0 } {
+    // No need to look up nullptr pointers, just return immediately.
+    let null_index = if rt == SLRefType::REF_VEHICLE_OLD {
+        0xFFFF
+    } else {
+        0
+    };
+    if index == null_index {
         return Ok(std::ptr::null_mut());
     }
 
-    // Old vehicles were saved differently: invalid was 0xFFFF.
-    if rt != REF_VEHICLE_OLD {
+    // Correct index. Old vehicles were saved differently: invalid vehicle was 0xFFFF, now we
+    // use 0x0000 for everything invalid.
+    if rt != SLRefType::REF_VEHICLE_OLD {
         index = index.wrapping_sub(1);
     }
 
     let (get, kind) = match rt {
-        REF_ORDERLIST => (services.order_list_get, "OrderList"),
-        REF_VEHICLE_OLD | REF_VEHICLE if record => (services.vehicle_record_get, "Vehicle"),
-        REF_VEHICLE_OLD | REF_VEHICLE => (services.vehicle_get, "Vehicle"),
-        REF_STATION => (services.station_get, "Station"),
-        REF_TOWN => (services.town_get, "Town"),
-        REF_ROADSTOPS => (services.road_stop_get, "RoadStop"),
-        REF_ENGINE_RENEWS => (services.engine_renew_get, "EngineRenew"),
-        REF_CARGO_PACKET => (services.cargo_packet_get, "CargoPacket"),
-        REF_STORAGE => (services.persistent_storage_get, "PersistentStorage"),
-        REF_LINK_GRAPH => (services.link_graph_get, "LinkGraph"),
-        REF_LINK_GRAPH_JOB => (services.link_graph_job_get, "LinkGraphJob"),
+        SLRefType::REF_ORDERLIST => (services.order_list_get, "OrderList"),
+        SLRefType::REF_VEHICLE_OLD | SLRefType::REF_VEHICLE if record => {
+            (services.vehicle_record_get, "Vehicle")
+        }
+        SLRefType::REF_VEHICLE_OLD | SLRefType::REF_VEHICLE => (services.vehicle_get, "Vehicle"),
+        SLRefType::REF_STATION => (services.station_get, "Station"),
+        SLRefType::REF_TOWN => (services.town_get, "Town"),
+        SLRefType::REF_ROADSTOPS => (services.road_stop_get, "RoadStop"),
+        SLRefType::REF_ENGINE_RENEWS => (services.engine_renew_get, "EngineRenew"),
+        SLRefType::REF_CARGO_PACKET => (services.cargo_packet_get, "CargoPacket"),
+        SLRefType::REF_STORAGE => (services.persistent_storage_get, "PersistentStorage"),
+        SLRefType::REF_LINK_GRAPH => (services.link_graph_get, "LinkGraph"),
+        SLRefType::REF_LINK_GRAPH_JOB => (services.link_graph_job_get, "LinkGraphJob"),
         _ => not_reached(services),
     };
     let obj = get(index);
@@ -1012,22 +1221,26 @@ fn int_to_reference(
     Ok(obj)
 }
 
-/// `SlSaveLoadRef`.
+/// `SlSaveLoadRef`: handle conversion for references.
 ///
 /// # Safety
 /// `ptr` points to a pointer field that holds an index between load and pointer fixing.
-unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
+unsafe fn save_load_ref(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    conv: VarType,
+) -> Status {
     let ptr = ptr.cast::<*mut c_void>();
     // `(SLRefType)conv` narrows to the enum's byte.
-    let rt = conv & 0xFF;
-    match shared(|s| s.action) {
-        SLA_SAVE => {
+    let rt = SLRefType(conv as u8);
+    match action() {
+        SaveLoadAction::SLA_SAVE => {
             // SAFETY: The caller's contract.
             let obj = unsafe { ptr.read_unaligned() };
             write_uint32(reference_to_int(services, obj, rt) as u32);
         }
-        SLA_LOAD_CHECK | SLA_LOAD => {
-            let index = if version_before(SLV_69) {
+        SaveLoadAction::SLA_LOAD_CHECK | SaveLoadAction::SLA_LOAD => {
+            let index = if version_before(SaveLoadVersion::SLV_69) {
                 usize::from(read_uint16(services)?)
             } else {
                 read_uint32(services)? as usize
@@ -1035,7 +1248,7 @@ unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, co
             // SAFETY: The caller's contract; size_t and pointers have the same size.
             unsafe { ptr.cast::<usize>().write_unaligned(index) };
         }
-        SLA_PTRS => {
+        SaveLoadAction::SLA_PTRS => {
             // SAFETY: The caller's contract.
             let index = unsafe { ptr.cast::<usize>().read_unaligned() };
             let obj = int_to_reference(services, index, rt)?;
@@ -1043,13 +1256,14 @@ unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, co
             unsafe { ptr.write_unaligned(obj) };
         }
         // SAFETY: The caller's contract.
-        SLA_NULL => unsafe { ptr.write_unaligned(std::ptr::null_mut()) },
+        SaveLoadAction::SLA_NULL => unsafe { ptr.write_unaligned(std::ptr::null_mut()) },
         _ => not_reached(services),
     }
     Ok(())
 }
 
-/// `SlCalcStdStringLen`: the string's length plus its gamma length.
+/// `SlCalcStdStringLen`: the gross length of the string that it will occupy in the
+/// savegame, including the length that the index will occupy.
 fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -> usize {
     let mut len = 0;
     (unsafe { &*services.shared }.string_data)(ptr, &raw mut len);
@@ -1085,17 +1299,34 @@ fn fix_encoded(
     Ok(())
 }
 
-/// `StrMakeValidInPlace(std::string &)`: compact the existing allocation in place.
-fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
+/// `SlStdString`'s validation settings for `conv`.
+fn validation_settings(conv: VarType) -> StringValidationSettings {
+    let mut settings =
+        StringValidationSettings::from_element(StringValidationSetting::ReplaceWithQuestionMark);
+    if conv & VarType::from(VarTypes::SLF_ALLOW_CONTROL) != 0 {
+        settings |=
+            StringValidationSettings::from_element(StringValidationSetting::AllowControlCode);
+    }
+    if conv & VarType::from(VarTypes::SLF_ALLOW_NEWLINE) != 0 {
+        settings |= StringValidationSettings::from_element(StringValidationSetting::AllowNewline);
+    }
+    if conv & VarType::from(VarTypes::SLF_REPLACE_TABCRLF) != 0 {
+        settings |= StringValidationSettings::from_element(
+            StringValidationSetting::ReplaceTabCrNlWithSpace,
+        );
+    }
+    settings
+}
+
+/// `StrMakeValidInPlace(std::string &)` with `SlStdString`'s settings for `conv`: compact
+/// the existing allocation in place.
+fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: VarType) -> Status {
     let mut length = 0;
     let data = (unsafe { &*services.shared }.string_data)(ptr, &raw mut length).cast_mut();
     if length == 0 {
         return Ok(());
     }
-    let settings = 1
-        | (u8::from(conv & SLF_ALLOW_NEWLINE != 0) << 1)
-        | (u8::from(conv & SLF_ALLOW_CONTROL != 0) << 2)
-        | (u8::from(conv & SLF_REPLACE_TABCRLF != 0) << 3);
+    let settings = validation_settings(conv).0;
     let mut consumed = 0;
     let mut written = 0;
     while consumed < length {
@@ -1133,53 +1364,53 @@ fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
     Ok(())
 }
 
-/// `SlStdString`.
-fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
-    match shared(|s| s.action) {
-        SLA_SAVE => {
+/// `SlStdString`: save/load a `std::string`; `conv` must be `SLE_FILE_STRING`.
+fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: VarType) -> Status {
+    match action() {
+        SaveLoadAction::SLA_SAVE => {
             let mut len = 0;
             let data = (unsafe { &*services.shared }.string_data)(ptr, &raw mut len);
             write_simple_gamma(services, len);
             copy_bytes(services, data.cast_mut(), len)?;
         }
-        SLA_LOAD_CHECK | SLA_LOAD => {
+        SaveLoadAction::SLA_LOAD_CHECK | SaveLoadAction::SLA_LOAD => {
             let len = read_simple_gamma(services)? as usize;
-            if mem_type(conv) == SLE_VAR_NULL {
+            if mem_type(conv) == VarTypes::SLE_VAR_NULL {
                 return skip_bytes(services, len);
             }
 
             read_string(services, ptr, len)?;
 
-            let control = conv & SLF_ALLOW_CONTROL != 0;
-            if control {
-                if version_before(SLV_ENCODED_STRING_FORMAT) {
-                    let fix_code = version_before(SLV_169);
+            if conv & VarType::from(VarTypes::SLF_ALLOW_CONTROL) != 0 {
+                if version_before(SaveLoadVersion::SLV_ENCODED_STRING_FORMAT) {
+                    let fix_code = version_before(SaveLoadVersion::SLV_169);
                     fix_encoded(services, ptr, |src| crate::encoded::legacy(src, fix_code))?;
                 }
-                if version_before(SLV_FIX_SCC_ENCODED_NEGATIVE) {
+                if version_before(SaveLoadVersion::SLV_FIX_SCC_ENCODED_NEGATIVE) {
                     fix_encoded(services, ptr, crate::encoded::negatives)?;
                 }
             }
             make_valid(services, ptr, conv)?;
         }
-        SLA_PTRS | SLA_NULL => {}
+        SaveLoadAction::SLA_PTRS | SaveLoadAction::SLA_NULL => {}
         _ => not_reached(services),
     }
     Ok(())
 }
 
-/// `SlSetStructListLength`.
+/// `SlSetStructListLength`: set the length of this list.
 fn set_struct_list_length(services: &OpenTTDSaveLoadServices, length: usize) {
-    if shared(|s| s.need_length) != NL_NONE {
+    // Automatically calculate the length?
+    if need_length() != NeedLength::NL_NONE {
         set_length(services, gamma_length(length) as usize);
-        if shared(|s| s.need_length) == NL_CALCLENGTH {
+        if need_length() == NeedLength::NL_CALCLENGTH {
             return;
         }
     }
     write_simple_gamma(services, length);
 }
 
-/// `SlGetStructListLength`.
+/// `SlGetStructListLength`: get the length of this list; if it exceeds the limit, error out.
 fn get_struct_list_length(
     services: &OpenTTDSaveLoadServices,
     limit: usize,
@@ -1193,20 +1424,20 @@ fn get_struct_list_length(
 
 /// `SlAutolength`.
 fn autolength(services: &OpenTTDSaveLoadServices, proc_: *const c_void, arg: i32) -> Status {
-    (services.native_assert)(shared(|s| s.action) == SLA_SAVE);
+    (services.native_assert)(action() == SaveLoadAction::SLA_SAVE);
 
-    // Calculate the length.
+    // Tell it to calculate the length.
     shared(|s| {
-        s.need_length = NL_CALCLENGTH;
+        s.need_length = NeedLength::NL_CALCLENGTH.0;
         s.obj_len = 0;
     });
     if !(services.autolength)(proc_, arg) {
         return Err(SL_STATUS_NATIVE);
     }
 
-    // Write the length, then the data.
+    // Setup length.
     let obj_len = shared(|s| {
-        s.need_length = NL_WANTLENGTH;
+        s.need_length = NeedLength::NL_WANTLENGTH.0;
         s.obj_len
     });
     set_length(services, obj_len);
@@ -1214,6 +1445,7 @@ fn autolength(services: &OpenTTDSaveLoadServices, proc_: *const c_void, arg: i32
     let start_pos = dumper_size();
     let expected_offs = start_pos.wrapping_add(shared(|s| s.obj_len));
 
+    // And write the stuff.
     if !(services.autolength)(proc_, arg) {
         return Err(SL_STATUS_NATIVE);
     }
@@ -1540,7 +1772,11 @@ pub unsafe extern "C" fn openttd_rust_saveload_ref(
 /// `SlCalcRefLen`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_ref_len() -> usize {
-    if version_before(SLV_69) { 2 } else { 4 }
+    if version_before(SaveLoadVersion::SLV_69) {
+        2
+    } else {
+        4
+    }
 }
 
 /// `SlStdString`.
@@ -1610,7 +1846,7 @@ pub unsafe extern "C" fn openttd_rust_saveload_get_struct_list_length(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_set_array_index(index: u32) {
     shared(|s| {
-        s.need_length = NL_WANTLENGTH;
+        s.need_length = NeedLength::NL_WANTLENGTH.0;
         s.array_index = index as i32;
     });
 }
@@ -1885,7 +2121,14 @@ mod tests {
         );
         // SAFETY: SLE_VAR_NAME delegates to the failing native frame without dereferencing ptr.
         assert_eq!(
-            unsafe { write_value(&services, std::ptr::null_mut(), SLE_VAR_NAME, 0) },
+            unsafe {
+                write_value(
+                    &services,
+                    std::ptr::null_mut(),
+                    VarType::from(VarTypes::SLE_VAR_NAME),
+                    0,
+                )
+            },
             Err(SL_STATUS_NATIVE)
         );
         assert_eq!(

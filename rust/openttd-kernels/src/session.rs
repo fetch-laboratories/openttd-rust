@@ -37,7 +37,7 @@ pub struct ScanCallback {
 }
 use crate::fileio_type::{AbstractFileType as FileKind, FT_HEIGHTMAP, FT_SAVEGAME, FT_SCENARIO};
 use crate::gfx_type::COLOUR_END;
-use crate::saveload::{SL_OK, SL_REINIT, SaveOrLoadResult as LoadResult};
+use crate::saveload::SaveOrLoadResult as LoadResult;
 #[repr(C)]
 pub struct Services {
     pub clock: *const crate::timer_game_common::ClockServices,
@@ -307,7 +307,7 @@ impl<'a> Session<'a> {
         (self.world().setup_windows)();
         let result = (s.intro_load)(self.frame);
         self.checked()?;
-        if result != SL_OK {
+        if result != LoadResult::SL_OK {
             self.generate(crate::genworld::GWM_EMPTY, 64, 64, true)?;
             crate::company::set_local_company(unsafe { &*s.company }, CompanyID::SPECTATOR);
         } else {
@@ -397,7 +397,7 @@ impl<'a> Session<'a> {
         set_mode(new_mode);
         let result = (s.load)(self.frame, input);
         self.checked()?;
-        if result == SL_OK {
+        if result == LoadResult::SL_OK {
             return Ok(true);
         }
         if (self.world().dedicated)() && old == GameMode::MENU {
@@ -405,7 +405,7 @@ impl<'a> Session<'a> {
             (self.world().set_exit)();
             return Ok(false);
         }
-        if result != SL_REINIT {
+        if result != LoadResult::SL_REINIT {
             set_mode(old);
             return Ok(false);
         }
@@ -611,7 +611,7 @@ impl<'a> Session<'a> {
             SwitchMode::SAVE_GAME => {
                 let result = (s.save)(self.frame);
                 self.checked()?;
-                if result == SL_OK {
+                if result == LoadResult::SL_OK {
                     (s.close_saveload)();
                 } else {
                     (s.show_load_error)(false);
