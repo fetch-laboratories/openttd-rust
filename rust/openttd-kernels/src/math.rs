@@ -5,15 +5,17 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Rounded square root and width-aware integer saturation.
+//! `core/math_func.hpp` and `core/math_func.cpp` integer functions: interval tests, rounded
+//! division, the rounded square root and width-aware `SoftClamp`.
 
-/// Original `IsInsideMM`, with an exclusive upper bound.
+/// `IsInsideMM`: checks if a value is in an interval. Returns true if a value is in the
+/// interval of `[min, max)`.
 pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
-/// Original `RoundDivSU`: integer division of a signed numerator by an unsigned
-/// denominator, rounded to nearest.
+/// `RoundDivSU`: computes round(a / b) for signed a and unsigned b; the quotient, rounded to
+/// nearest.
 pub(crate) const fn round_div_su(a: i32, b: u32) -> i32 {
     if a > 0 {
         /* 0.5 is rounded to 1 */
@@ -24,11 +26,20 @@ pub(crate) const fn round_div_su(a: i32, b: u32) -> i32 {
     }
 }
 
+/// `Align`: return the smallest multiple of `n` equal or greater than `x`. `n` must be a
+/// power of 2; the addition wraps as the original's `size_t` arithmetic does.
+pub(crate) const fn align(x: usize, n: usize) -> usize {
+    let n = n - 1;
+    x.wrapping_add(n) & !n
+}
+
+/// The value mask of a `width`-bit integer, for the template's integer types.
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));
     u64::MAX >> (64 - width)
 }
 
+/// The two's-complement value of the low `width` bits.
 fn signed_value(bits: u64, width: u8) -> i128 {
     let value = i128::from(bits & mask(width));
     if bits & (1_u64 << (width - 1)) != 0 {
@@ -38,9 +49,14 @@ fn signed_value(bits: u64, width: u8) -> i128 {
     }
 }
 
+/// `IntSqrt`: compute the integer square root of the radicand `num`. Returns the rounded
+/// integer square root.
+/// Algorithm taken from <http://en.wikipedia.org/wiki/Methods_of_computing_square_roots>.
 pub fn int_sqrt(mut num: u32) -> u32 {
     let mut res = 0;
+    // Second to top bit number.
     let mut bit = 1_u32 << 30;
+    // 'bit' starts at the highest power of four <= the argument.
     while bit > num {
         bit >>= 2;
     }
@@ -53,9 +69,19 @@ pub fn int_sqrt(mut num: u32) -> u32 {
         }
         bit >>= 2;
     }
+    // Arithmetic rounding to nearest integer.
     res + u32::from(num > res)
 }
 
+/// `SoftClamp`: clamp a value between an interval.
+///
+/// This function returns a value which is between the given interval of min and max. If the
+/// given value is in this interval the value itself is returned otherwise the border of the
+/// interval is returned, according which side of the interval was 'left'. If the min value
+/// is greater than the max, return value is the average of the min and max.
+///
+/// The template's integer type is given as its `width` and signedness; values travel as
+/// their bit patterns.
 pub fn soft_clamp(value: u64, min: u64, max: u64, width: u8, is_signed: bool) -> u64 {
     assert!(matches!(width, 8 | 16 | 32 | 64));
     let narrow_mask = mask(width);

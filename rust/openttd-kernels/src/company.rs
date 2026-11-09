@@ -24,6 +24,8 @@
 use crate::company_type::{CompanyID, INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::raw_field::{read_field, write_field};
+use crate::tile_owner::change_tile_owner;
+use crate::tile_type::TileIndex;
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -1327,7 +1329,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     let map_size = (s.map_size)();
     for tile in 0..map_size {
         // SAFETY: The outer C++ frame owns live scratch across this traversal.
-        unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
+        unsafe { change_tile_owner(ownership, TileIndex(tile), CompanyID(old), CompanyID(new)) };
     }
     if new != INVALID_OWNER {
         for tile in 0..map_size {
