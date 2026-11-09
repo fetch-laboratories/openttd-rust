@@ -88,6 +88,11 @@ crate::abi::shared_records! {
 
 }
 
+/// `Pool::BITMAP_SIZE`: the number of slots in one `BitmapStorage` (`size_t`) word.
+const BITMAP_SIZE: usize = usize::BITS as usize;
+/// `Pool::NO_FREE_ITEM`: constant to indicate we can't allocate any more items
+const NO_FREE_ITEM: usize = usize::MAX;
+
 /// Allocation failures returned before the native caller formats/throws an error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AllocationError {
@@ -151,6 +156,8 @@ impl PoolCore {
         }
     }
 
+    /// `ResizeFor`: resizes the pool so `index` can be addressed. Preconditions:
+    /// `index >= size` and `index < MAX_SIZE`.
     unsafe fn resize_for(pool: *mut Self, index: usize) {
         unsafe {
             let old_size = (*pool).view.slots.len();
@@ -166,21 +173,27 @@ impl PoolCore {
                     record: null_mut(),
                 },
             );
-            let bits = usize::BITS as usize;
-            (*pool).view.used_bitmap.resize(new_size.div_ceil(bits), 0);
+            (*pool)
+                .view
+                .used_bitmap
+                .resize(new_size.div_ceil(BITMAP_SIZE), 0);
             let bitmap = (*pool).view.used_bitmap.as_mut_ptr();
-            if !old_size.is_multiple_of(bits) {
-                *bitmap.add(old_size / bits) &= !(usize::MAX << (old_size % bits));
+            if !old_size.is_multiple_of(BITMAP_SIZE) {
+                // Already-allocated bits above old size are now unused.
+                *bitmap.add(old_size / BITMAP_SIZE) &= !(usize::MAX << (old_size % BITMAP_SIZE));
             }
-            if !new_size.is_multiple_of(bits) {
-                *bitmap.add(new_size / bits) |= usize::MAX << (new_size % bits);
+            if !new_size.is_multiple_of(BITMAP_SIZE) {
+                // Bits above new size are considered used.
+                *bitmap.add(new_size / BITMAP_SIZE) |= usize::MAX << (new_size % BITMAP_SIZE);
             }
         }
     }
 
+    /// `FindFirstFree`: searches for first free index. Returns the first free index,
+    /// `NO_FREE_ITEM` on failure.
     unsafe fn find_first_free(pool: *mut Self) -> usize {
         unsafe {
-            let bits = usize::BITS as usize;
+            let bits = BITMAP_SIZE;
             for word in ((*pool).view.first_free / bits)..(*pool).view.used_bitmap.len() {
                 let available = !*(*pool).view.used_bitmap.as_mut_ptr().add(word);
                 if available != 0 {
@@ -193,7 +206,7 @@ impl PoolCore {
                 return (*pool).view.first_unused;
             }
             Self::check(pool, (*pool).view.first_unused == (*pool).config.max_size);
-            usize::MAX
+            NO_FREE_ITEM
         }
     }
 
@@ -208,7 +221,7 @@ impl PoolCore {
                 Self::check(pool, (*pool).view.checked != 0);
                 (*pool).view.checked = (*pool).view.checked.wrapping_sub(1);
             }
-            if index == usize::MAX {
+            if index == NO_FREE_ITEM {
                 return Err(AllocationError::Exhausted);
             }
             (*pool).view.first_free = index + 1;
@@ -242,6 +255,8 @@ impl PoolCore {
         }
     }
 
+    /// `AllocateItem`: makes given index valid. Preconditions: `index < size` and the slot
+    /// is empty.
     unsafe fn allocate_item(pool: *mut Self, size: usize, index: usize) -> *mut c_void {
         unsafe {
             Self::check(
@@ -266,7 +281,7 @@ impl PoolCore {
                 .view
                 .used_bitmap
                 .as_mut_ptr()
-                .add(index / usize::BITS as usize) |= 1 << (index % usize::BITS as usize);
+                .add(index / BITMAP_SIZE) |= 1 << (index % BITMAP_SIZE);
             (ops.set_index)(ops.context, shell, index);
             shell
         }
@@ -308,7 +323,7 @@ impl PoolCore {
                     .view
                     .used_bitmap
                     .as_mut_ptr()
-                    .add(index / usize::BITS as usize) &= !(1 << (index % usize::BITS as usize));
+                    .add(index / BITMAP_SIZE) &= !(1 << (index % BITMAP_SIZE));
                 (ops.post_destructor)(ops.context, index);
             }
         }
