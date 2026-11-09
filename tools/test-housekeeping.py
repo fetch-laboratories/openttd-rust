@@ -885,7 +885,8 @@ class HousekeepingTests(unittest.TestCase):
         scratch = write(tree / "fresh-untracked.txt")
         with patch.dict(PR_STATES, {tree.name: "OPEN"}):
             self.assertIn("active within", self.planned_builds()[build].reason)
-            os.utime(scratch, (time.time() - idle - 60,) * 2)
+            when = time.time() - idle - 60
+            os.utime(scratch, (when, when))
             item = self.planned_builds()[build]
             self.assertTrue(item.remove, item.reason)
             os.utime(scratch)  # written between planning and removal
