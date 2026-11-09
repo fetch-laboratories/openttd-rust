@@ -7,6 +7,7 @@ credentials are deliberate: independence is the Agent path, not the login.
 import json
 import os
 import re
+import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any, NamedTuple
 
@@ -120,6 +121,17 @@ def associated_pull(pulls: list[dict[str, Any]], head: str) -> dict[str, Any] | 
     )
 
 
+def commit_pulls(repository: str, sha: str) -> list[dict[str, Any]]:
+    """PRs GitHub associates with a commit; none for a commit it does not know,
+    such as an unpushed local merge."""
+    try:
+        return json.loads(
+            gh("api", f"repos/{repository}/commits/{sha}/pulls", capture_stderr=True)
+        )
+    except subprocess.CalledProcessError:
+        return []
+
+
 def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
     """Read PR body and both ordinary comments and submitted review bodies."""
     head = git("rev-parse", "HEAD").strip()
@@ -129,15 +141,33 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         else {}
     )
     pull = event.get("pull_request", {})
-    # Without an event payload, HEAD is the PR head itself, including a local
-    # base-update merge. Only when HEAD has no associated PR is a two-parent HEAD
-    # taken to be CI's synthetic merge checkout, whose second parent is the PR head.
-    candidates = [head]
+    # Without an event payload, HEAD is normally the PR head itself, including a
+    # pushed local base-update merge. A two-parent HEAD without its own PR is
+    # either CI's synthetic merge checkout, whose second parent is the PR head
+    # (open, or merged by this very merge commit), or an unpushed local
+    # base-update merge, whose first parent is the open PR's head. A merged PR
+    # reached through a base parent never matches.
+    candidates: list[tuple[str, Callable[[dict[str, Any]], bool]]] = [
+        (head, lambda _: True)
+    ]
     if pull:
         head = pull["head"]["sha"]
     elif len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) == 3:
-        candidates.append(git("rev-parse", "HEAD^2").strip())
-        head = candidates[-1]
+        merge = head
+        second = git("rev-parse", "HEAD^2").strip()
+        candidates += [
+            (
+                second,
+                lambda found: (
+                    found["state"] == "open" or found.get("merge_commit_sha") == merge
+                ),
+            ),
+            (
+                git("rev-parse", "HEAD^1").strip(),
+                lambda found: found["state"] == "open",
+            ),
+        ]
+        head = second
     repository = os.getenv("GITHUB_REPOSITORY")
     if not repository:
         repository = json.loads(gh("repo", "view", "--json", "nameWithOwner"))[
@@ -145,8 +175,8 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         ]
     number = pull.get("number")
     if not number:
-        for sha in candidates:
-            pulls = json.loads(gh("api", f"repos/{repository}/commits/{sha}/pulls"))
+        for sha, accepts in candidates:
+            pulls = [found for found in commit_pulls(repository, sha) if accepts(found)]
             candidate = associated_pull(pulls, sha)
             if candidate:
                 number = candidate["number"]
