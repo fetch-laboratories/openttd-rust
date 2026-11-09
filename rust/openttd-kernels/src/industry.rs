@@ -888,11 +888,11 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
         // SAFETY: Live owner; the station set is re-read between observations.
         let am = unsafe {
             crate::station::move_goods_to_station(
-                (*p).cargo,
+                crate::cargo_type::CargoType((*p).cargo),
                 cw,
                 source,
                 stations_near(owner),
-                (*owner).metadata.exclusive_consumer,
+                crate::company_type::CompanyID((*owner).metadata.exclusive_consumer),
                 c,
             )
         };
