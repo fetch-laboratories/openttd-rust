@@ -1,9 +1,9 @@
 [
   {
     "retires": [
-      "source:src/tests/landscape_tile_loop.cpp"
+      "ctest:Rust shared tile-type out-of-range preserves callback policy"
     ],
-    "oracle": "PARTIAL SOURCE TRANSFER ONLY (#736 W). The fixture's own checks, not regenerated: the shared tile-type reader calls the original callback once for a tile at or beyond the allocation (Map::Size() and UINT32_MAX) and for an empty allocation, passing the tile and returning its value. tile_loop::comparison_tests checks crate::map_func::TileTypeAccess directly. The other cases stay as calling-boundary checks: native allocation, lvalues and every native byte value through the real map, ABI layouts, serialized threads, native handler calls, and the generation-sea case, which compares the fork's C++ RustGenerationSeaSet wrapper with std::unordered_set and retires with that wrapper. src/tests/newgrf_bytereader.cpp likewise stays: it observes only the fork's C++ RustGRFRead*/badge reader services against native ReadBadgeList and retires with those services.",
+    "oracle": "PARTIAL TRANSFER of src/tests/landscape_tile_loop.cpp (#736 W), which stays in the build; the retired identity is its moved test case. The fixture's own checks, not regenerated: the shared tile-type reader calls the original callback once for a tile at or beyond the allocation (Map::Size() and UINT32_MAX) and for an empty allocation, passing the tile and returning its value. tile_loop::comparison_tests checks crate::map_func::TileTypeAccess directly. The other cases stay as calling-boundary checks: native allocation, lvalues and every native byte value through the real map, ABI layouts, serialized threads, native handler calls, and the generation-sea case, which compares the fork's C++ RustGenerationSeaSet wrapper with std::unordered_set and retires with that wrapper. src/tests/newgrf_bytereader.cpp likewise stays: it observes only the fork's C++ RustGRFRead*/badge reader services against native ReadBadgeList and retires with those services.",
     "observations": {
       "Shared tile-type reader callback fallback for out-of-range tiles and an empty allocation": [
         "rust:lib:tile_loop::comparison_tests::tile_type_reader_falls_back_to_callback_out_of_range"
