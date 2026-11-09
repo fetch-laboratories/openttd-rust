@@ -49,6 +49,7 @@ use crate::track_func::reverse_trackdir;
 use crate::track_type::{Track, TrackBits, Trackdir};
 use crate::vehicle_type::VehicleType;
 use crate::viewport_func::TILE_HEIGHT_STEP;
+use crate::water_map::WaterClass;
 mod waypoint;
 use crate::newgrf_roadstop::RoadStopAvailabilityType;
 use crate::newgrf_station::station_spec::{TileFlag, TileFlags};
@@ -4236,7 +4237,7 @@ impl Ctx<'_> {
         spec: *const AirportSpec,
         rotation: Direction,
         tile: TileIndex,
-        it: impl Iterator<Item = u32>,
+        it: impl Iterator<Item = TileIndex>,
     ) -> (*const crate::services::TownHandle, u32) {
         let map = self.map();
         let mut nearest = std::ptr::null();
@@ -4253,7 +4254,7 @@ impl Ctx<'_> {
         let mut mindist = u32::MAX - 1; // prevent overflow
         let authority = unsafe { &*self.s.authority };
         for cur_tile in it {
-            let (x, y) = (map.tile_x(cur_tile), map.tile_y(cur_tile));
+            let (x, y) = (map.tile_x(cur_tile.0), map.tile_y(cur_tile.0));
             if x != perimeter_min_x
                 && x != perimeter_max_x
                 && y != perimeter_min_y
@@ -4261,13 +4262,16 @@ impl Ctx<'_> {
             {
                 continue;
             }
-            let t =
-                crate::town::spatial::calc_closest(self.shared, cur_tile, mindist.wrapping_add(1));
+            let t = crate::town::spatial::calc_closest(
+                self.shared,
+                cur_tile.0,
+                mindist.wrapping_add(1),
+            );
             if t.is_null() {
                 continue;
             }
             let xy = unsafe { crate::town::position_raw((self.shared.town_owner)(t)) };
-            let dist = map.distance_manhattan(xy, cur_tile);
+            let dist = map.distance_manhattan(xy, cur_tile.0);
             if dist == mindist && (authority.town_index)(t) < (authority.town_index)(nearest) {
                 nearest = t;
             }
@@ -4292,12 +4296,8 @@ impl Ctx<'_> {
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
             rotation,
             TileIndex(airport.tile),
-            airport.tiles(self.map()).filter(|&t| {
-                crate::station_base::tile_belongs_to_airport(
-                    self.shared,
-                    StationID(id),
-                    TileIndex(t),
-                )
+            airport.tiles(self.map()).map(TileIndex).filter(|&t| {
+                crate::station_base::tile_belongs_to_airport(self.shared, StationID(id), t)
             }),
         )
     }
@@ -4479,7 +4479,8 @@ impl Ctx<'_> {
             spec,
             rotation,
             tile,
-            self.airport_tiles(spec, layout, tile).map(|t| t.tile),
+            self.airport_tiles(spec, layout, tile)
+                .map(|t| TileIndex(t.tile)),
         );
         let newnoise_level = u32::from(self.get_airport_noise_level_for_distance(spec, dist));
         let noise_reached = self.noise_reached(nearest);
@@ -4677,7 +4678,7 @@ pub unsafe extern "C" fn openttd_rust_station_airport_nearest(
         if tile == TileIndex::INVALID.0 {
             None
         } else {
-            Some(tile)
+            Some(TileIndex(tile))
         }
     });
     let (town, mindist) =
@@ -4905,7 +4906,7 @@ impl Ctx<'_> {
         st: *mut BaseStation,
         tile: TileIndex,
         direction: DiagDirection,
-        wc: u8,
+        wc: WaterClass,
         dock_area: TileArea,
     ) {
         let world = crate::map_func::World::new(self.shared);
@@ -4921,10 +4922,9 @@ impl Ctx<'_> {
          * This is needed as we've cleared that tile before.
          * Clearing object tiles may result in water tiles which are already accounted for in the water infrastructure total.
          * See: MakeWaterKeepingClass() */
-        let canal = crate::water_map::WaterClass::Canal.0;
-        if wc == canal
+        if wc == WaterClass::Canal
             && !((self.shared.has_water_class)(flat_tile.0)
-                && world.water_class(flat_tile.0) == canal
+                && WaterClass(world.water_class(flat_tile.0)) == WaterClass::Canal
                 && (self.shared.tile_owner)(flat_tile.0) == (self.shared.current_company)())
         {
             (self.s.water_infrastructure)(owner.0, 1);
@@ -4935,7 +4935,7 @@ impl Ctx<'_> {
             owner.0,
             (self.links().graphs.station_id)(st),
             direction.0,
-            wc,
+            wc.0,
         );
         self.update_station_docking_tiles(st);
         self.after_station_tile_set_change(st, true, StationType::Dock);
@@ -5014,7 +5014,7 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         /* Get the water class of the water tile before it is cleared.*/
-        let wc = world.water_class(tile_cur.0);
+        let wc = WaterClass(world.water_class(tile_cur.0));
         let add_cost = !(self.shared.is_water_tile)(tile_cur.0);
         crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
         if !ret.ok() {
@@ -5413,13 +5413,19 @@ pub unsafe extern "C" fn openttd_rust_station_clear_docking_neighbours(
 /// Shared direct Rust entry for the original guarded docking registration.
 /// # Safety
 /// Services and the original valid tile remain live for the synchronous call.
-pub(crate) unsafe fn check_possible_docking(s: *const CommandServicesTable, tile: u32) {
+pub(crate) unsafe fn check_possible_docking(s: *const CommandServicesTable, tile: TileIndex) {
     // SAFETY: the caller supplies the process-lifetime tables under the game-state mutex.
     let c = unsafe { Ctx::new(s) };
-    let tile = TileIndex(tile);
     if c.is_possible_docking_tile(tile) {
         c.check_for_docking_tile(tile);
     }
+}
+/// Raw adapter for `water.rs` and `rail_cmd.rs`, outside this pass; delegates
+/// to `check_possible_docking`.
+/// # Safety
+/// As `check_possible_docking`.
+pub(crate) unsafe fn check_possible_docking_raw(s: *const CommandServicesTable, tile: u32) {
+    unsafe { check_possible_docking(s, TileIndex(tile)) };
 }
 /// # Safety
 /// Tables and the original valid tile remain live for this call.
