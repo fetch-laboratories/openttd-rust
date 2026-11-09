@@ -554,3 +554,462 @@ crate::abi::layouts! {
         feeder_payment_share,
     };
 }
+
+/// `GetTransportedGoodsIncome` and `CargoPayment::PayTransfer` over the retired
+/// `tools/migration/cargo-income-gap.cpp` domain (#736 F), against its original-only capture
+/// in `cargo_payment/income-oracle.txt`.
+#[cfg(test)]
+mod income_tests {
+    use super::*;
+    use crate::cargo_registry::Invocation;
+    use crate::oracle;
+    use crate::test_tables::CARGO;
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::ptr;
+
+    const ORACLE: &str = include_str!("cargo_payment/income-oracle.txt");
+    const PAYMENTS: [i64; 7] = [
+        i64::MIN,
+        i32::MIN as i64,
+        -1,
+        0,
+        6000,
+        i32::MAX as i64,
+        i64::MAX,
+    ];
+    const PERIODS1: [u8; 3] = [0, 20, 255];
+    const PERIODS2: [u8; 5] = [0, 20, 224, 225, 255];
+    const PIECES: [u32; 7] = [0, 1, 255, 256, 65535, 0x8000_0000, u32::MAX];
+    const DISTANCES: [u32; 6] = [0, 1, 65535, 65536, 0x8000_0000, u32::MAX];
+    const PERIODS: [u16; 7] = [0, 20, 244, 245, 255, 256, 65535];
+    const CALLBACKS: [u16; 6] = [0, 0x3FFF, 0x4000, 0x7FFF, 0x8000, 0xFFFF];
+    const EXTREMES: [i64; 4] = [i64::MIN, -1, 0, i64::MAX];
+    const SHARES: [u8; 4] = [0, 75, 100, 255];
+
+    thread_local! {
+        /// The fixture's spec: payment, valid, transit periods; its profit callback is enabled.
+        static SPEC: Cell<(i64, u8, u8, u8)> = const { Cell::new((0, 0, 0, 0)) };
+        static CALLBACK: Cell<u16> = const { Cell::new(0) };
+        static CALLS: Cell<u32> = const { Cell::new(0) };
+        /// The last callback's `var18`; like the fixture's global, never reset.
+        static ARGUMENT: Cell<u32> = const { Cell::new(0) };
+        static SHARE: Cell<u8> = const { Cell::new(0) };
+    }
+    extern "C" fn spec(_: u8, out: *mut Spec) {
+        let (payment, valid, periods1, periods2) = SPEC.get();
+        // SAFETY: The income routine's own spec slot.
+        unsafe {
+            out.write(Spec {
+                payment,
+                valid,
+                callback: 1,
+                periods1,
+                periods2,
+            });
+        }
+    }
+    extern "C" fn registry_spec(_: u8) -> *const c_void {
+        ptr::null()
+    }
+    extern "C" fn invocation(_: *const c_void, _: *mut Invocation) {}
+    extern "C" fn callback_frame(invocation: *const Invocation, _: *mut i32, _: usize) -> u16 {
+        CALLS.set(CALLS.get() + 1);
+        // SAFETY: The callback's live invocation.
+        ARGUMENT.set(unsafe { (*invocation).param2 });
+        CALLBACK.get()
+    }
+    extern "C" fn feeder_payment_share() -> u8 {
+        SHARE.get()
+    }
+
+    /// Split a case index of nested loops into its digits, innermost loop first.
+    fn digits<const N: usize>(mut index: usize, radices: [usize; N]) -> [usize; N] {
+        radices.map(|radix| {
+            let digit = index % radix;
+            index /= radix;
+            digit
+        })
+    }
+
+    /// Income for each case of the fixture's nested domain: (inputs, "income calls argument").
+    fn income_cases(s: &Services) -> Vec<(String, String)> {
+        let radices = [
+            CALLBACKS.len(),
+            PERIODS.len(),
+            DISTANCES.len(),
+            PIECES.len(),
+            PERIODS2.len(),
+            PERIODS1.len(),
+            PAYMENTS.len(),
+        ];
+        (0..radices.iter().product())
+            .map(|index| {
+                let [callback, periods, distance, pieces, p2, p1, payment] = digits(index, radices);
+                let (callback, periods, distance, pieces) = (
+                    CALLBACKS[callback],
+                    PERIODS[periods],
+                    DISTANCES[distance],
+                    PIECES[pieces],
+                );
+                let (p1, p2, payment) = (PERIODS1[p1], PERIODS2[p2], PAYMENTS[payment]);
+                CALLBACK.set(callback);
+                CALLS.set(0);
+                SPEC.set((payment, 1, p1, p2));
+                // SAFETY: The test's live services.
+                let income = unsafe { openttd_rust_cargo_income(s, pieces, distance, periods, 0) };
+                (
+                    format!(
+                        "payment {payment} periods {p1}/{p2} pieces {pieces} distance {distance} transit {periods} callback {callback:#x}"
+                    ),
+                    format!("{income} {} {}", CALLS.get(), ARGUMENT.get()),
+                )
+            })
+            .collect()
+    }
+
+    /// `PayTransfer` of 65535 of a 65535-piece packet, distance 250 and 45 periods, with the
+    /// income loop's last spec: (inputs, "profit `visual_transfer` calls argument").
+    fn transfer_cases(s: &Services) -> Vec<(String, String)> {
+        let radices = [SHARES.len(), EXTREMES.len(), EXTREMES.len()];
+        (0..radices.iter().product())
+            .map(|index| {
+                let [share, feeder, initial] = digits(index, radices);
+                transfer_case(s, EXTREMES[initial], EXTREMES[feeder], SHARES[share])
+            })
+            .collect()
+    }
+    fn transfer_case(s: &Services, initial: i64, feeder: i64, share: u8) -> (String, String) {
+        SHARE.set(share);
+        CALLS.set(0);
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        let packet = crate::cargo_storage::Packet {
+            feeder_share: feeder,
+            count: 65535,
+            ..crate::cargo_storage::Packet::default()
+        };
+        // SAFETY: Allocated above and released below; the packet is a local.
+        let (profit, fields) = unsafe {
+            (*payment).fields = Fields {
+                front: ptr::null_mut(),
+                route_profit: i64::MIN,
+                visual_profit: i64::MAX,
+                visual_transfer: initial,
+            };
+            let profit = openttd_rust_cargo_payment_transfer(
+                payment,
+                s,
+                0,
+                &raw const packet,
+                65535,
+                250,
+                45,
+            );
+            let fields = (*payment).fields;
+            openttd_rust_cargo_payment_destroy(payment, ptr::null(), 1);
+            (profit, fields)
+        };
+        let inputs = format!("visual_transfer {initial} feeder_share {feeder} share {share}");
+        // The fixture's own check: a transfer leaves the route and visual profits alone.
+        assert_eq!(
+            (fields.route_profit, fields.visual_profit),
+            (i64::MIN, i64::MAX),
+            "{inputs}: route and visual profit"
+        );
+        let output = format!(
+            "{profit} {} {} {}",
+            fields.visual_transfer,
+            CALLS.get(),
+            ARGUMENT.get()
+        );
+        (inputs, output)
+    }
+
+    #[test]
+    fn income_and_transfer_match_original() {
+        let mut registry = crate::cargo_registry::TEST_TABLE;
+        registry.spec = registry_spec;
+        registry.invocation = invocation;
+        registry.callback_frame = callback_frame;
+        let mut s = CARGO;
+        s.spec = spec;
+        s.registry = &raw const registry;
+        s.feeder_payment_share = feeder_payment_share;
+        let sections = oracle::parse(ORACLE);
+
+        // The three sections run in the fixture's order: its callback argument and spec carry over.
+        assert_eq!(
+            oracle::check(&sections, "income", income_cases(&s)),
+            185_220
+        );
+        assert_eq!(oracle::check(&sections, "transfer", transfer_cases(&s)), 64);
+        let (payment, _, periods1, periods2) = SPEC.get();
+        SPEC.set((payment, 0, periods1, periods2));
+        CALLS.set(0);
+        // SAFETY: The test's live services.
+        let income =
+            unsafe { openttd_rust_cargo_income(&raw const s, u32::MAX, u32::MAX, 65535, 0) };
+        let invalid = [(
+            "invalid spec, pieces and distance UINT32_MAX, transit 65535".to_owned(),
+            format!("{income} {}", CALLS.get()),
+        )];
+        assert_eq!(oracle::check(&sections, "invalid", invalid), 1);
+    }
+}
+
+/// `CargoPayment::~CargoPayment` settlement from the retired `src/tests/cargo_payment.cpp`
+/// (#736 F): the fixture's operation order, `Money` boundaries and cleanup, with its own
+/// expected values.
+#[cfg(test)]
+mod settlement_tests {
+    use super::*;
+    use crate::economy_type::ExpensesType;
+    use crate::test_tables::{CARGO, FINANCE, SHARED, VEHICLE};
+    use crate::vehicle::VehicleRef;
+    use std::cell::{Cell, RefCell};
+    use std::ptr;
+
+    /// The fixture's settlement log: (operation, first value, second value). Operations:
+    /// 0 detach, 1 current company, 2 select the owner, 3 invalidate its windows, 4 write the
+    /// profit, 5 local company, 6 vehicle sound, 7 cash-till sound, 8 feeder animation,
+    /// 9 cost animation, 10 restore the company.
+    type Settlement = Vec<(u8, i64, i64)>;
+    thread_local! {
+        static SETTLEMENT: RefCell<Settlement> = const { RefCell::new(Vec::new()) };
+        static FINANCES: Cell<*mut crate::company::Finances> = const { Cell::new(ptr::null_mut()) };
+        static LOCAL: Cell<bool> = const { Cell::new(false) };
+        static CUSTOM_SOUND: Cell<bool> = const { Cell::new(false) };
+        static VALID_COMPANY: Cell<bool> = const { Cell::new(false) };
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+    }
+    fn log(operation: u8, first: i64, second: i64) {
+        SETTLEMENT.with(|s| s.borrow_mut().push((operation, first, second)));
+    }
+    extern "C" fn current_company() -> u8 {
+        log(1, 0, 0);
+        CURRENT.get()
+    }
+    extern "C" fn set_current_company(id: u8) {
+        log(if id == 3 { 2 } else { 10 }, i64::from(id), 0);
+        CURRENT.set(id);
+    }
+    extern "C" fn company_finances(id: u8) -> *mut crate::company::Finances {
+        assert_eq!(id, 3);
+        if VALID_COMPANY.get() {
+            FINANCES.get()
+        } else {
+            ptr::null_mut()
+        }
+    }
+    extern "C" fn invalidate_company_windows(id: u8) {
+        log(3, i64::from(id), 0);
+    }
+    extern "C" fn write_profit(_: VehicleRef, value: i64) {
+        log(4, value, 0);
+    }
+    extern "C" fn play_vehicle_sound(
+        _: VehicleRef,
+        event: crate::newgrf_sound::VehicleSoundEvent,
+    ) -> bool {
+        assert_eq!(event.0, crate::newgrf_sound::VSE_LOAD_UNLOAD.0);
+        log(6, 0, 0);
+        CUSTOM_SOUND.get()
+    }
+    extern "C" fn play_sound(_: VehicleRef, sound: u16) {
+        assert_eq!(sound, crate::sound_type::SND_14_CASHTILL);
+        log(7, 0, 0);
+    }
+    extern "C" fn detach_payment(_: *mut OpenTTDVehicle) {
+        log(0, 0, 0);
+    }
+    extern "C" fn local_company() -> bool {
+        log(5, 0, 0);
+        LOCAL.get()
+    }
+    extern "C" fn expense(_: *mut OpenTTDVehicle, income: bool) -> ExpensesType {
+        assert!(income);
+        ExpensesType::EXPENSES_TRAIN_REVENUE
+    }
+    extern "C" fn profit(_: *mut OpenTTDVehicle) -> i64 {
+        1000
+    }
+    extern "C" fn cost_animation(x: i32, y: i32, z: i32, income: i64) {
+        assert_eq!((x, y, z), (11, 22, 33));
+        log(9, 0, income);
+    }
+    extern "C" fn feeder_animation(x: i32, y: i32, z: i32, transfer: i64, income: i64) {
+        assert_eq!((x, y, z), (11, 22, 33));
+        log(8, transfer, income);
+    }
+
+    /// One fixture case: cleanup or settlement, a maximal or no transfer, a local company,
+    /// a custom vehicle sound and a valid company.
+    /// The fixture's nested loop index: bit 4 cleaning, then transfer, local, custom and bit 0
+    /// valid, so counting up follows its loop order.
+    #[derive(Clone, Copy)]
+    struct Case(u8);
+    impl Case {
+        fn bit(self, n: u8) -> bool {
+            self.0 & (16 >> n) != 0
+        }
+        fn cleaning(self) -> bool {
+            self.bit(0)
+        }
+        fn transfer(self) -> bool {
+            self.bit(1)
+        }
+        fn local(self) -> bool {
+            self.bit(2)
+        }
+        fn custom(self) -> bool {
+            self.bit(3)
+        }
+        fn valid(self) -> bool {
+            self.bit(4)
+        }
+    }
+
+    /// The fixture's expected operation order for one settled payment.
+    fn expected_order(case: Case) -> Vec<u8> {
+        let mut order = vec![0, 1, 2];
+        if case.valid() {
+            order.push(3);
+        }
+        order.extend([4, 5]);
+        if case.local() {
+            order.push(6);
+            if !case.custom() {
+                order.push(7);
+            }
+        }
+        order.push(if case.transfer() { 8 } else { 9 });
+        order.push(10);
+        order
+    }
+
+    /// One fixture case: settle (or clean up) a payment whose route and visual profits are
+    /// `INT64_MIN`, with a maximal or no transfer.
+    fn settle(s: &Services, case: Case) {
+        let (cleaning, transfer, local, custom, valid) = (
+            case.cleaning(),
+            case.transfer(),
+            case.local(),
+            case.custom(),
+            case.valid(),
+        );
+        let inputs = format!(
+            "cleaning {cleaning} transfer {transfer} local {local} custom {custom} valid {valid}"
+        );
+        SETTLEMENT.with(|s| s.borrow_mut().clear());
+        // SAFETY: The case's zeroed finance record, owned by this thread.
+        unsafe { FINANCES.get().write(std::mem::zeroed()) };
+        CURRENT.set(17);
+        LOCAL.set(local);
+        CUSTOM_SOUND.set(custom);
+        VALID_COMPANY.set(valid);
+        let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            ptr::null_mut(),
+            crate::vehicle_type::VehicleType::TRAIN,
+        );
+        // SAFETY: The record allocated above, released at the end of the case.
+        unsafe {
+            (*front).owner = crate::company_type::CompanyID(3);
+            ((*front).x_pos, (*front).y_pos, (*front).z_pos) = (11, 22, 33);
+        }
+        let payment = openttd_rust_cargo_payment_new(front, StationID(42));
+        // SAFETY: The payment allocated above; destroy releases it.
+        unsafe {
+            (*payment).fields = Fields {
+                front,
+                route_profit: i64::MIN,
+                visual_profit: i64::MIN,
+                visual_transfer: if transfer { i64::MAX } else { 0 },
+            };
+            assert_eq!(
+                openttd_rust_cargo_payment_front(payment),
+                front,
+                "{inputs}: front"
+            );
+            openttd_rust_cargo_payment_destroy(payment, s, u8::from(cleaning));
+        }
+        let settlement = SETTLEMENT.with(|s| s.borrow().clone());
+        // SAFETY: The settlement has ended; nothing else holds the record or the finances.
+        let (money, revenue) = unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+            let finances = FINANCES.get();
+            (
+                (*finances).money,
+                (*finances).expenses[0][usize::from(ExpensesType::EXPENSES_TRAIN_REVENUE.0)],
+            )
+        };
+        if cleaning {
+            assert!(settlement.is_empty(), "{inputs}: cleanup settles nothing");
+            return;
+        }
+        let order: Vec<u8> = settlement
+            .iter()
+            .map(|&(operation, ..)| operation)
+            .collect();
+        assert_eq!(order, expected_order(case), "{inputs}: order");
+        let expected = if valid { (-i64::MAX, i64::MAX) } else { (0, 0) };
+        assert_eq!((money, revenue), expected, "{inputs}: money, revenue");
+        assert_eq!(
+            settlement[if valid { 4 } else { 3 }].1,
+            if transfer { 744 } else { 1000 },
+            "{inputs}: written profit"
+        );
+        assert_eq!(
+            settlement[settlement.len() - 2].2,
+            i64::MAX,
+            "{inputs}: animated income"
+        );
+        assert_eq!(CURRENT.get(), 17, "{inputs}: restored company");
+    }
+
+    #[test]
+    fn settlement_order_money_boundaries_and_cleanup() {
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        finance.set_current_company = set_current_company;
+        finance.company_finances = company_finances;
+        finance.invalidate_company_windows = invalidate_company_windows;
+        let mut vehicles = VEHICLE;
+        vehicles.write_profit = write_profit;
+        vehicles.play_vehicle_sound = play_vehicle_sound;
+        vehicles.play_sound = play_sound;
+        let mut shared = SHARED;
+        shared.cost_animation = cost_animation;
+        let mut s = CARGO;
+        s.finance = &raw const finance;
+        s.vehicles = &raw const vehicles;
+        s.detach_payment = detach_payment;
+        s.local_company = local_company;
+        s.expense = expense;
+        s.profit = profit;
+        s.shared = &raw const shared;
+        s.feeder_animation = feeder_animation;
+        // SAFETY: Plain integer record; every case rewrites it before use.
+        let mut finances: Box<crate::company::Finances> = Box::new(unsafe { std::mem::zeroed() });
+        FINANCES.set(&raw mut *finances);
+
+        // The fixture's nested loops, outermost first.
+        for case in 0..32 {
+            settle(&s, Case(case));
+        }
+        // A payment with neither visual profit nor transfer only detaches.
+        SETTLEMENT.with(|s| s.borrow_mut().clear());
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        // SAFETY: The payment allocated above; destroy releases it.
+        unsafe {
+            (*payment).fields = Fields {
+                front: ptr::null_mut(),
+                route_profit: i64::MAX,
+                visual_profit: 0,
+                visual_transfer: 0,
+            };
+            openttd_rust_cargo_payment_destroy(payment, &raw const s, 0);
+        }
+        assert_eq!(SETTLEMENT.with(|s| s.borrow().clone()), [(0, 0, 0)]);
+        FINANCES.set(ptr::null_mut());
+    }
+}
