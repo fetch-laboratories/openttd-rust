@@ -146,7 +146,7 @@ unsafe fn clone(
                 break;
             }
         }
-        if !(s.build.pool_available)(count as usize) {
+        if !(s.build.refit.common.vehicles.can_allocate)(count as usize) {
             total.error(s.build.too_many);
             return invalid;
         }

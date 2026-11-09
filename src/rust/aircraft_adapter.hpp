@@ -347,7 +347,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
-	.update_delta = RustVehicleUpdateDelta<OpenTTDAircraftVehicle>,
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,

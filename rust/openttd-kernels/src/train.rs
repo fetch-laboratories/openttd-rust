@@ -342,7 +342,6 @@ pub struct Leaves {
     pub track_direction: extern "C" fn(Handle, u8, u8) -> u64,
     pub train_list: extern "C" fn(Handle),
     pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub update_delta: extern "C" fn(Handle),
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
     pub wagon_override: extern "C" fn(Handle) -> u64,
@@ -1868,7 +1867,7 @@ impl Game<'_> {
                 return (0, false);
             }
         }
-        (self.leaves.update_delta)(id);
+        (self.vs().update_delta)(id.vehicle());
         (id).vehicle().write_x((x as u64) as i32);
         (id).vehicle().write_y((y as u64) as i32);
         self.update_occupancy(id);
@@ -3075,7 +3074,6 @@ crate::abi::layouts! {
         track_direction,
         train_list,
         truncate_cargo,
-        update_delta,
         veh_exit_dir,
         viewport,
         wagon_override,

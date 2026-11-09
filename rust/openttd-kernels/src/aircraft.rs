@@ -198,7 +198,6 @@ pub struct Leaves {
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
-    pub update_delta: unsafe extern "C" fn(Vehicle),
 
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
@@ -554,7 +553,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         first_arrival(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.first_arrival)(vehicle, station as u16) };
         begin_loading(self; vehicle: Vehicle) -> () => crate::vehicle::visits::begin_loading(vehicle.base(), self.vs.visits());
         dirty_details(self; vehicle: Vehicle) -> () => (self.maintenance().details_dirty)(vehicle.base());
-        update_delta(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_delta)(vehicle) };
+        update_delta(self; vehicle: Vehicle) -> () => (unsafe { &*self.leaves.vehicle }.update_delta)(vehicle.base());
 
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
         delete_range_news(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.delete_range_news)(vehicle) };
@@ -2500,7 +2499,6 @@ crate::abi::layouts! {
         landing_rating,
         dirty_depot,
         first_arrival,
-        update_delta,
 
         destination_too_far,
         delete_range_news,

@@ -1341,6 +1341,8 @@ pub(crate) mod tests {
             orders: unused(),
             ship_get: unused(),
             first_sprite: unused(),
+            update_delta: unused(),
+            can_allocate: unused(),
         }
     }
     extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {

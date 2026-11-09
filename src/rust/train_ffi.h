@@ -130,7 +130,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*track_direction)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(track_direction);
 	void (*train_list)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(train_list);
 	void (*truncate_cargo)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);
-	void (*update_delta)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	uint64_t (*veh_exit_dir)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(veh_exit_dir);
 	void (*viewport)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	uint64_t (*wagon_override)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);

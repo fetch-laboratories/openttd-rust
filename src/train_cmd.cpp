@@ -1064,7 +1064,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.truncate_cargo = TrainTruncateCargo,
 
 
-		.update_delta = RustVehicleUpdateDelta<OpenTTDTrainHandle>,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
 		.wagon_override = TrainVehicleRead<uint64_t, RustVehicleUsesWagonOverride>,

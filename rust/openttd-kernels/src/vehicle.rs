@@ -173,6 +173,10 @@ pub struct VehicleServices {
     /// Strict `Ship::Get`, never a nullable pool lookup.
     pub ship_get: extern "C" fn(u32) -> VehicleRef,
     pub first_sprite: extern "C" fn(VehicleRef) -> u32,
+    /// Virtual `UpdateDeltaXY()`.
+    pub update_delta: extern "C" fn(VehicleRef),
+    /// `Vehicle::CanAllocateItem(count)`.
+    pub can_allocate: extern "C" fn(usize) -> bool,
 }
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
@@ -323,6 +327,8 @@ crate::abi::layouts! {
         orders,
         ship_get,
         first_sprite,
+        update_delta,
+        can_allocate,
     };
 
 
