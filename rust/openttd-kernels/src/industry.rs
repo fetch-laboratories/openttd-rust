@@ -10,17 +10,7 @@
 //! it, so no reference survives a world service. Slot growth invalidates views exactly as the
 //! original vector does; history allocations stay stable until their slot is removed.
 // Original fixed-width conversion and variable names are retained for audit.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    clippy::many_single_char_names,
-    clippy::similar_names,
-    clippy::struct_field_names,
-    clippy::too_many_lines,
-    clippy::if_not_else
-)]
+#![allow(unsafe_code)]
 use crate::bitmath_func::{gb, has_bit, sb};
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::company_type::{CompanyID, Owner};
@@ -99,6 +89,10 @@ impl Default for Produced {
 }
 /// `Industry::AcceptedCargo`.
 #[repr(C)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "Industry::AcceptedCargo keeps the original's field names"
+)]
 pub struct Accepted {
     /// Cargo type
     pub cargo: u8,
@@ -663,6 +657,10 @@ pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> Owner {
 /// the slot, count it as accepted this month, and record the delivery date.
 ///
 /// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DeliverGoodsToIndustry keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) unsafe fn accept_delivery(
     owner: *mut Industry,
     slot: usize,
@@ -684,6 +682,10 @@ pub(crate) unsafe fn accept_delivery(
 impl Pair {
     /// `Industry::ProducedHistory::PctTransported`: percentage of cargo transported, as a
     /// fraction of 255.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Industry::ProducedHistory::PctTransported keeps the original's implicit C++ integer conversions"
+    )]
     fn pct_transported(self) -> u8 {
         let p = self;
         if p.first == 0 {
@@ -695,6 +697,10 @@ impl Pair {
 }
 /// Helper for `ProduceIndustryGoods` that scales and produces cargos.
 /// `scale` tells whether to scale production of this cargo directly.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ProduceIndustryGoodsHelper keeps the original's implicit C++ integer conversions"
+)]
 fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool) {
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
@@ -714,6 +720,14 @@ fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool
     }
 }
 /// `ProduceIndustryGoods`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ProduceIndustryGoods keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "ProduceIndustryGoods keeps the original's local variable names"
+)]
 fn produce_industry_goods(e: Entry, s: &Services, builder: *mut Builder) {
     let (i, owner) = (e.industry, e.owner);
     let f = fields(owner);
@@ -852,6 +866,10 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
 /// Industry, owner and services follow the tick contract; distribution can reenter
 /// industry access, so history/waiting writes occur before/after with raw fields.
 #[unsafe(no_mangle)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "TransportIndustryGoods keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     i: *mut c_void,
     owner: *mut Industry,
@@ -907,6 +925,10 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
 }
 /// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
 /// `prod_level`. This function is only valid when not using smooth economy.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Industry::RecomputeProductionMultipliers keeps the original's implicit C++ integer conversions"
+)]
 fn recompute_production_multipliers(owner: *mut Industry) {
     let f = fields(owner);
     // Rates are rounded up, so e.g. oilrig always produces some passengers
@@ -980,6 +1002,20 @@ const PERCENT_TRANSPORTED_80: u32 = 204;
 
 /// Change industry production or do closure. `monthly` is true for the monthly call and
 /// false for the random call.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "ChangeIndustryProduction keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "ChangeIndustryProduction keeps the original's local variable names"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "ChangeIndustryProduction is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
     let o = observe(owner);
     let f = fields(o.owner);
@@ -1277,6 +1313,10 @@ fn get_industry_type_data(f: *mut BuildFields, it: IndustryType, s: &Services) -
 }
 /// `GetIndustryGamePlayProbability`: the probability of `it` during gameplay, with its
 /// `min_number`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetIndustryGamePlayProbability keeps the original's implicit C++ integer conversions"
+)]
 fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u8) {
     if unsafe { (s.fund_only)() } {
         return (0, 0);
@@ -1472,6 +1512,10 @@ fn place_industry(
 }
 /// `IndustryBuildData::TryBuildNewIndustry`: try to create a random industry, during
 /// gameplay.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "IndustryBuildData::TryBuildNewIndustry keeps the original's implicit C++ integer conversions"
+)]
 fn try_build_new_industry(builder: *mut Builder, s: &Services) {
     setup_target_count(builder, s);
     let b = build_fields(builder);
@@ -1718,6 +1762,10 @@ fn is_suitable_for_farm_field(
 /// Build farm field fence. `tile` is the tile to position the fence on, `size` the size of
 /// the field being planted in tiles, `kind` the type of fence to set and `side` the side of
 /// the tile to attempt placement.
+#[allow(
+    clippy::similar_names,
+    reason = "SetupFarmFieldFence keeps the original's local variable names"
+)]
 fn setup_farm_field_fence(
     mut tile: TileIndex,
     mut size: u32,
@@ -1754,6 +1802,14 @@ fn setup_farm_field_fence(
 /// `_plantfarmfield_type`.
 const PLANTFARMFIELD_TYPE: [u8; 16] = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6];
 /// `PlantFarmField`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "PlantFarmField keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "PlantFarmField keeps the original's local variable names"
+)]
 fn plant_farm_field(
     tile: TileIndex,
     industry: IndustryID,
@@ -1836,6 +1892,10 @@ fn plant_farm_field(
     );
 }
 /// `PlantRandomFarmField`, with the landscape read at each original observation.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "PlantRandomFarmField keeps the original's implicit C++ integer conversions"
+)]
 fn plant_random_farm_field(
     i: *mut c_void,
     id: IndustryID,
@@ -1883,6 +1943,10 @@ pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: 
     plant_random_farm_field_with_settings(i, IndustryID(id), tick_map(s), s);
 }
 /// Perform a circular search around the Lumber Mill in order to find trees to cut.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ChopLumberMillTrees keeps the original's implicit C++ integer conversions"
+)]
 fn chop_lumber_mill_trees(
     i: *mut c_void,
     owner: *mut Industry,
@@ -1967,6 +2031,11 @@ pub struct DeliveryServices {
 /// `TriggerIndustryProduction`.
 ///
 /// SAFETY: Live serialized industry, immutable services and spec; callbacks retain no owner borrows.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "TriggerIndustryProduction keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) unsafe fn trigger_industry_production(
     shell: *mut ShellHandle,
     owner: *mut Industry,
@@ -2072,6 +2141,11 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
 /// `IndustryProductionCallback`: get the industry production callback and apply it to the
 /// industry. `reason` is the reason it is called (0 = incoming cargo, 1 = periodic tick
 /// callback).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "IndustryProductionCallback keeps the original's implicit C++ integer conversions"
+)]
 fn industry_production_callback(
     i: *mut c_void,
     owner: *mut Industry,
@@ -2294,6 +2368,10 @@ pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> TileIndex {
     TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "FindSubsidyIndustryCargoRoute counts the valid produced cargoes as uint"
+)]
 pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
     unsafe { &(*owner).produced }
         .iter()
@@ -2778,6 +2856,10 @@ impl IndustryControlFlags {
     pub const EMPTY: Self = Self(0);
     /// Native bit set containing one element.
     #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "EnumBitSet<IndustryControlFlag, uint8_t> stores the element bit in uint8_t"
+    )]
     pub const fn from_element(element: IndustryControlFlag) -> Self {
         Self((1_u64 << element.0) as u8)
     }
@@ -3016,6 +3098,11 @@ mod production_policy_tests {
         }
         pairs
     }
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "the test fixture narrows its IndustryProductionSpriteGroup values as the native result does"
+    )]
     fn resolve_result(
         out: &mut ProductionResult,
         version: u8,

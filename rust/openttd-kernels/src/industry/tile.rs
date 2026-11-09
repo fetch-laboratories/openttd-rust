@@ -191,6 +191,10 @@ fn animate_power_plant_sparks(tile: TileIndex, s: &Services, t: &TileServices) {
     mark_tile_dirty_by_tile(tile, s);
 }
 /// `AnimateToyFactory`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "AnimateToyFactory keeps the original's implicit C++ integer conversions"
+)]
 fn animate_toy_factory(tile: TileIndex, s: &Services, t: &TileServices) {
     let mut m = t.get_animation_frame(tile).wrapping_add(1);
     match m {
@@ -223,6 +227,10 @@ fn animate_plastic_fountain(tile: TileIndex, gfx: IndustryGfx, s: &Services, t: 
     mark_tile_dirty_by_tile(tile, s);
 }
 /// `AnimateOilWell`.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "AnimateOilWell keeps the original's local variable names"
+)]
 fn animate_oil_well(
     tile: TileIndex,
     mut gfx: IndustryGfx,
@@ -352,6 +360,10 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
     }
 }
 /// `CreateChimneySmoke`.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "CreateChimneySmoke keeps the original's implicit C++ integer conversions"
+)]
 fn create_chimney_smoke(tile: TileIndex, map: crate::services::Map, t: &TileServices) {
     let x = map.tile_x(tile.0).wrapping_mul(TILE_SIZE);
     let y = map.tile_y(tile.0).wrapping_mul(TILE_SIZE);
@@ -432,6 +444,12 @@ fn make_industry_tile_bigger(
     }
 }
 /// `TileLoopIndustry_BubbleGenerator`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "TileLoopIndustry_BubbleGenerator keeps the original's implicit C++ integer conversions"
+)]
 fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate::services::Map) {
     const BUBBLE_SPAWN_LOCATION: [[i8; 4]; 3] =
         [[11, 0, -4, -14], [-4, -10, -4, 1], [49, 59, 60, 65]];
@@ -457,6 +475,18 @@ fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate
 /// Live map tile. Water can destroy its industry, so no owner is resolved until
 /// the source's post-water type recheck. Later callbacks retain no Rust borrow.
 /// Any reached water command uses the caller's live, independent stack result context.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "TileLoop_Industry keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "TileLoop_Industry keeps the original's local variable names"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "TileLoop_Industry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 pub(crate) unsafe fn tile_loop(
     tile: TileIndex,
     map: crate::services::Map,
@@ -624,6 +654,11 @@ pub(crate) unsafe fn tile_loop(
 /// Immutable specs outlive the call. Resolver callbacks retain no owner borrow;
 /// each final membership test reads the current accepted list at its source point.
 #[unsafe(no_mangle)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "AddAcceptedCargo_Industry keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     tile: u32,
     acceptance: *mut u32,
@@ -732,6 +767,10 @@ pub struct TilePolicyServices {
 /// # Safety
 /// Live tile and native stack result. Event and destruction callbacks may reenter;
 /// immutable specs remain live after owner destruction, with no owner borrow held.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "ClearTile_Industry keeps the original's local variable names"
+)]
 pub(crate) unsafe fn clear_tile_industry(
     out: *mut IndustryCost,
     tile: TileIndex,

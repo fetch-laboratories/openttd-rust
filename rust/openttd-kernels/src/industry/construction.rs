@@ -126,6 +126,14 @@ fn populate(
 }
 /// The `CBID_INDUSTRY_INPUT_CARGO_TYPES` or `CBID_INDUSTRY_OUTPUT_CARGO_TYPES` branch of
 /// `DoCreateNewIndustry`; `output` selects the produced list.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoCreateNewIndustry's cargo-type callbacks keep the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::similar_names,
+    reason = "DoCreateNewIndustry's cargo-type callbacks keep the original's local variable names"
+)]
 fn cargo_callbacks(
     industry: *mut c_void,
     owner: *mut Industry,
@@ -244,6 +252,18 @@ fn cargo_callbacks(
 /// Live newly allocated shell/owner, builder and immutable request/spec/layout.
 /// Native town/station relationships remain native. Resolver and world callbacks
 /// may reenter; raw scalar/slot access ends before every such call. Panics abort.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoCreateNewIndustry keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "DoCreateNewIndustry keeps the original's local variable names"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "DoCreateNewIndustry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 pub(crate) unsafe fn do_create_new_industry(
     industry: *mut c_void,
     owner: *mut Industry,
