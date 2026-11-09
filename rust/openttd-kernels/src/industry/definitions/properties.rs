@@ -147,6 +147,11 @@ fn validate_industry_layout(layout: &[LayoutTile]) -> bool {
         .any(|tilelayout| IndustryGfx(tilelayout.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK)
 }
 /// Industry property 0x0A: set industry layout(s).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "IndustriesChangeInfo's layout property keeps the original's implicit C++ integer conversions"
+)]
 unsafe fn read_industry_layouts(
     id: u32,
     indsp: *mut IndustrySpec,
@@ -275,6 +280,16 @@ unsafe fn read_industry_layouts(
     Ok(ChangeInfoResult::CIR_SUCCESS)
 }
 /// Define properties for industry tiles, local IDs `first..last`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "IndustrytilesChangeInfo keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "IndustrytilesChangeInfo is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 unsafe fn industrytiles_change_info(
     ids: std::ops::Range<u32>,
     prop: i32,
@@ -440,6 +455,15 @@ unsafe fn industrytiles_change_info(
     Ok(ret)
 }
 /// Define properties for industries, local IDs `first..last`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "IndustriesChangeInfo keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "IndustriesChangeInfo is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 unsafe fn industries_change_info(
     ids: std::ops::Range<u32>,
     prop: i32,

@@ -8,10 +8,11 @@
 struct BaseStation;
 struct OpenTTDSharedServices;
 struct OpenTTDRoadStopResolverServices;
+struct OpenTTDStationResolverServices;
 struct OpenTTDStationSpecVacancy { const StationSpec *spec; uint32_t grfid; };
-struct OpenTTDStationSpecTriggers { uint16_t animation; uint64_t cargo; };
 struct OpenTTDStationAssociationServices {
-	OpenTTDStationSpecTriggers (*triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(triggers);
+	void (*rail_triggers)(BaseStation *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_triggers);
+	const OpenTTDStationResolverServices *resolver;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRoadStopResolverServices *roadstop;
 	size_t (*count)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(count);
@@ -23,6 +24,7 @@ struct OpenTTDStationAssociationServices {
 	void (*set_slot)(BaseStation *, uint8_t, const StationSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);
 	void (*rebind)(BaseStation *, size_t, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
 	void (*set_cached)(BaseStation *, uint16_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cached);
+	void (*set_cached_cargo)(BaseStation *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cached_cargo);
 };
 const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcept;
 extern "C" {

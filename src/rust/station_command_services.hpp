@@ -113,7 +113,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_boolean = RustStationConvert8bitBoolean,
 		.rail_callback_error = RustSpecCallbackError<StationSpec, StationSpec>,
 		.set_train_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { st->train_station = TileArea(TileIndex{area.tile}, area.w, area.h); },
-		.rail_triggers = RustStationRailTriggers,
 		.last_train = RustVehicleLast<Train>,
 		.train = &GetTrainServices(),
 		.reservation = &GetTrainReservationServices(),

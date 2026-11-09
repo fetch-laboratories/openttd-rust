@@ -254,7 +254,6 @@ pub struct CommandServicesTable {
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
-    pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
     pub train: *const crate::train::Leaves,
@@ -2287,7 +2286,7 @@ impl Ctx<'_> {
         if !statspec.is_null() {
             /* Include this station spec's animation trigger bitmask
              * in the station's cached copy. */
-            (self.s.rail_triggers)(st, statspec);
+            (unsafe { &*self.s.rail_association }.rail_triggers)(st, statspec);
         }
         let track = crate::track_func::axis_to_track(crate::services::Axis(axis.0), |ok| {
             crate::movement::native_assert(self.shared, ok);
@@ -5938,7 +5937,6 @@ crate::abi::layouts! {
         rail_boolean,
         rail_callback_error,
         set_train_area,
-        rail_triggers,
         last_train,
         train,
         reservation,

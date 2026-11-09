@@ -101,7 +101,8 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcept
 {
 	static const OpenTTDStationAssociationServices services{
-		.triggers = RustStationSpecTriggers,
+		.rail_triggers = RustStationRailTriggers,
+		.resolver = &GetStationResolverServices(),
 		.shared = &GetRustSharedServices(),
 		.roadstop = &GetRoadStopResolverServices(),
 		.count = RustStationSpecCount,
@@ -113,6 +114,7 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 		.set_slot = RustStationSetSpecSlot,
 		.rebind = RustStationRebindSpec,
 		.set_cached = RustStationSetCachedTriggers,
+		.set_cached_cargo = RustStationSetCachedCargoTriggers,
 	};
 	return services;
 }
