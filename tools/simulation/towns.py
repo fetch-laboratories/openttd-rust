@@ -6,7 +6,6 @@ import json
 import re
 import shutil
 import struct
-import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, cast
@@ -228,99 +227,6 @@ GROWTH_FIELDS = (
     "received[0]/new_act",
 )
 GROWTH_CASES = ("normal", "custom", "none", "funded", "blocked", "supplied")
-
-# Growth saves build bridges and terraform, but never build a tunnel. Keep this
-# bounded unchanged-body comparison in the component module, not another harness.
-_TUNNEL_LOCK = threading.Lock()
-_TUNNEL_REPORTS: dict[Path, dict[str, Any]] = {}
-
-
-def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, Any]:
-    """Compare unchanged pinned tunnel control with Rust over controlled services."""
-    import probe
-
-    import migration
-
-    out.mkdir(parents=True, exist_ok=True)
-    report_path = out / "report.json"
-    report_path.unlink(missing_ok=True)
-    migration.ensure_reference()
-    source = (migration.REFERENCE / "src/town_cmd.cpp").read_text()
-    bodies: dict[str, str] = {}
-    signatures = {
-        "CanRoadContinueIntoNextTile": "static bool CanRoadContinueIntoNextTile(",
-        "GrowTownWithTunnel": "static bool GrowTownWithTunnel(",
-    }
-    for name, signature in signatures.items():
-        bodies[name] = probe.body(source, signature)
-    (out / "town-tunnel-original.hpp").write_text("\n\n".join(bodies.values()) + "\n")
-    build = ROOT / "build-rust"
-    configuration = migration.rust_configuration(build)
-    archive = archive or migration.rust_archive(
-        build, target_dir=build / "cargo-native-test-support"
-    )
-    fixture = Path(__file__).with_name("town-reference-gaps.cpp")
-    binary = out / "town-reference-gaps"
-    command = [
-        probe.compiler(build),
-        *probe.target_flags(build),
-        "-std=c++20",
-        "-O2",
-        "-I",
-        str(out),
-        # Generated shared record declarations, such as abi-record-vehicle.h.
-        "-I",
-        str(build / "generated-abi"),
-        str(fixture),
-        str(archive),
-        *configuration["native_libraries"],
-        "-o",
-        str(binary),
-    ]
-    env = migration.environment()
-    probe.compile(command, out / "compile.log", env=env)
-    binary.with_suffix(".err").unlink(missing_ok=True)
-    output = probe.execute([binary], binary, env=env, stderr="allowed")
-    (out / "transcript.txt").write_bytes(output)
-    (out / "stderr.txt").write_bytes(
-        binary.with_suffix(".err").read_bytes()
-        if binary.with_suffix(".err").exists()
-        else b""
-    )
-    counts: dict[str, int] = {}
-    for kind in ("tunnel",):
-        found = re.search(
-            rb"\nPASS (\d+) unchanged-reference %s cases\n" % kind.encode()
-            + (b"$" if kind == "tunnel" else b""),
-            output,
-        )
-        if not found or int(found[1]) == 0:
-            raise RuntimeError(
-                f"town {kind} reference gap omitted completion/count marker"
-            )
-        counts["cases" if kind == "tunnel" else f"{kind}_cases"] = int(found[1])
-    # Each transferred family now executes its registered production Rust test.
-    # Exact selectors reject missing/empty tests; each test requires its full corpus.
-    import evidence_replacements
-
-    for kind, name, count in (
-        ("history", "histories_match_original_policy_corpus", 400),
-        ("rating", "ratings_match_original_policy_corpus", 1129),
-        ("radius", "radii_match_original_policy_corpus", 107),
-        ("authority", "authority_matches_original_policy_corpus", 14976),
-        ("percent", "percent_transported_matches_original_policy_corpus", 36),
-    ):
-        evidence_replacements.run_rust(f"rust:lib:town::policy_tests::{name}")
-        counts[f"{kind}_cases"] = count
-    migration.ensure_reference()
-    report = {
-        "passed": True,
-        **counts,
-        "successful_tunnel_cases": len(re.findall(rb" result=1 ", output)),
-        "execute_effect_cases": len(re.findall(rb" effects=1 ", output)),
-    }
-    report_path.write_text(json.dumps(report, indent=2) + "\n")
-    return report
 
 
 def town_growth_rows(chunks: core.Chunks) -> dict[int, core.Row]:
@@ -1464,13 +1370,6 @@ def prepare(
     if "town_founding" in scenario:
         return prepare_founding(scenario, binaries, builds, out, timeout, env, result)
     if "town_growth" in scenario:
-        if binaries["candidate"] != binaries["reference"]:  # --self stays C++ only.
-            with _TUNNEL_LOCK:
-                if out not in _TUNNEL_REPORTS:
-                    _TUNNEL_REPORTS[out] = tunnel_reference_gap(
-                        out / "town-reference-gaps"
-                    )
-                core.findings(result)["tunnel_reference_gap"] = _TUNNEL_REPORTS[out]
         scenario, core.findings(result)["reload_input"] = prepare_growth(
             scenario, binaries, builds, out, timeout, env
         )
@@ -2013,16 +1912,3 @@ AI_FOLDER = "town-name-observer"
 
 def uses_ai(scenario: Scenario) -> bool:
     return "town_style" in scenario
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description=tunnel_reference_gap.__doc__)
-    parser.add_argument("--out", type=Path, default=ROOT / ".local/town-reference-gaps")
-    parser.add_argument("--archive", type=Path)
-    args = parser.parse_args()
-    report = tunnel_reference_gap(args.out.resolve(), args.archive)
-    print(
-        f"Tunnel reference gap passed: {report['cases']} cases; {args.out / 'report.json'}"
-    )

@@ -2995,22 +2995,6 @@ pub unsafe extern "C" fn openttd_rust_town_road_type(
 ) -> u32 {
     u32::from(engine(leaves, services).get_town_road_type().0)
 }
-#[cfg(feature = "native-test-support")]
-pub(crate) unsafe fn tunnel(
-    leaves: *const Leaves,
-    services: *const Services,
-    road: *const crate::road_cmd::CommandContext,
-    town: u32,
-    tile: u32,
-    dir: u32,
-) -> bool {
-    let mut engine = engine(leaves, services);
-    engine.road = road;
-    let t = TownID(town as u16);
-    engine
-        .bind(t)
-        .grow_town_with_tunnel(t, TileIndex(tile), DiagDirection(dir as u8))
-}
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda
 // result narrows to int, then the final int sign-extends to the uint64 destination.
 pub(crate) fn sum_history(history: &[SuppliedHistory]) -> SuppliedHistory {
