@@ -9,13 +9,14 @@
 //! inspect partially initialized owners.
 use super::{
     Accepted, GenerationServices, Industry, LifecycleServices, Produced, Services, SpecHandle,
-    TransactionContext, accepted, fields, produced, valid,
+    TransactionContext, accepted, fields, produced,
 };
 use crate::bitmath_func::gb;
-use crate::cargo_type::CargoType;
+use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::Owner;
 use crate::economy_type::EconomyType;
+use crate::history::update_valid_history_year;
 use crate::history_type::LAST_MONTH;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
@@ -179,7 +180,7 @@ fn cargo_callbacks(
         // order/slots of cargo types. They need to be able to blank out specific slots
         // without aborting the callback sequence, and solve this by returning undefined
         // cargo indexes. Skip these.
-        if !valid(cargo.0) && !unlimited {
+        if !is_valid_cargo_type(cargo.0) && !unlimited {
             // As slots are allocated as needed now, this means we do need to add a slot
             // for the invalid cargo.
             unsafe {
@@ -272,7 +273,7 @@ pub(crate) unsafe fn do_create_new_industry(
     };
     let mut produced_count = 0;
     for (index, cargo) in lists.produced.iter().enumerate() {
-        if valid(*cargo) {
+        if is_valid_cargo_type(*cargo) {
             produced_count = index + 1;
         }
     }
@@ -287,7 +288,7 @@ pub(crate) unsafe fn do_create_new_industry(
     }
     let mut accepted_count = 0;
     for (index, cargo) in lists.accepted.iter().enumerate() {
-        if valid(*cargo) {
+        if is_valid_cargo_type(*cargo) {
             accepted_count = index + 1;
         }
     }
@@ -371,7 +372,7 @@ pub(crate) unsafe fn do_create_new_industry(
                 unsafe {
                     (*f).prod_level = res as u8;
                 }
-                super::recompute(owner);
+                super::recompute_production_multipliers(owner);
             }
         }
     }
@@ -382,7 +383,7 @@ pub(crate) unsafe fn do_create_new_industry(
             }
             for n in 0..super::produced_count(owner) {
                 let p = produced(owner, n);
-                if valid(unsafe { (*p).cargo }) {
+                if is_valid_cargo_type(unsafe { (*p).cargo }) {
                     let waiting = unsafe { u32::from((*p).waiting) };
                     let production = unsafe { (s.scale_cargo)(waiting.wrapping_mul(8)) };
                     unsafe {
@@ -397,7 +398,7 @@ pub(crate) unsafe fn do_create_new_industry(
         }
         for n in 0..super::produced_count(owner) {
             let p = produced(owner, n);
-            if valid(unsafe { (*p).cargo }) {
+            if is_valid_cargo_type(unsafe { (*p).cargo }) {
                 let rate = unsafe { u32::from((*p).rate) };
                 let production = unsafe { (s.scale_cargo)(rate.wrapping_mul(8)) };
                 let p = produced(owner, n);
@@ -411,7 +412,7 @@ pub(crate) unsafe fn do_create_new_industry(
         }
         let month = unsafe { (s.economy_month)() };
         unsafe {
-            super::update_history(&mut (*f).valid_history, u32::from(month));
+            (*f).valid_history = update_valid_history_year((*f).valid_history, u32::from(month));
         }
     }
     if callbacks.test(IndustryCallbackMask::DecideColour) {
@@ -497,7 +498,7 @@ pub(crate) unsafe fn do_create_new_industry(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::farm_with_landscape(industry, id.0, map, s, &|| unsafe { (s.landscape)() });
+            super::plant_random_farm_field(industry, id, map, s, &|| s.landscape_type());
         }
     }
     unsafe {

@@ -237,7 +237,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
 	/* The Rust-owned list holds one packet to unload; the vehicle has no order list. */
-	OpenTTDCargoListFields counts{.count = 1, .action_counts = {0, 1, 0, 0}};
+	OpenTTDCargoListFields counts{.cargo_periods_in_transit = 0, .feeder_share = 0, .count = 1, .reserved_count = 0, .action_counts = {0, 1, 0, 0}};
 	_station_loading_cargo = openttd_rust_cargo_list_new(true);
 	openttd_rust_cargo_list_import(_station_loading_cargo, &counts);
 	loading.cargo_capacity = [](OpenTTDVehicle *) noexcept { return OpenTTDCargoCapacity{_station_loading_cargo, 0}; };

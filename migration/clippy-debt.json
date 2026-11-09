@@ -269,14 +269,14 @@
     "rust/openttd-kernels/src/house_definition.rs | fn property | too_many_lines | 4a33eacd5fa65f2b2e28": [
       234
     ],
-    "rust/openttd-kernels/src/industry.rs | fn build_try | excessive_nesting | f01c9a3cf1909eb80ad8": [
-      7
-    ],
-    "rust/openttd-kernels/src/industry.rs | fn change | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/industry.rs | fn change_industry_production | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       40
     ],
-    "rust/openttd-kernels/src/industry.rs | fn change | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      239
+    "rust/openttd-kernels/src/industry.rs | fn change_industry_production | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      234
+    ],
+    "rust/openttd-kernels/src/industry.rs | fn try_build_new_industry | excessive_nesting | 6538360d32243ad1006d": [
+      7
     ],
     "rust/openttd-kernels/src/industry/construction.rs | fn do_create_new_industry | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       32

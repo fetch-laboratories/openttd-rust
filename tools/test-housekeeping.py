@@ -119,7 +119,7 @@ class HousekeepingTests(unittest.TestCase):
         origin, self.main = self.top / "origin.git", self.top / "main"
         git(self.top, "init", "--quiet", "--bare", str(origin))
         git(self.top, "init", "--quiet", "-b", "rust-migration", str(self.main))
-        write(self.main / ".git/info/exclude", ".local/\n")
+        write(self.main / ".git/info/exclude", ".local/\nbuild-rust/\n")
         git(self.main, "commit", "--quiet", "--allow-empty", "-m", "Add: base")
         git(self.main, "remote", "add", "origin", str(origin))
         git(self.main, "push", "--quiet", "-u", "origin", "rust-migration")
@@ -785,6 +785,165 @@ class HousekeepingTests(unittest.TestCase):
 
     def branches(self) -> set[str]:
         return set(git(self.main, "branch", "--format=%(refname:short)").split())
+
+    def build(self, tree: Path, seconds: float) -> Path:
+        """A git-ignored build-rust; the tree's marks and every build entry SECONDS old."""
+        build = tree / "build-rust"
+        write(build / "cargo/release/libopenttd_kernels.a")
+        write(build / "CMakeCache.txt")
+        self.age(tree, seconds)
+        when = time.time() - seconds
+        for folder, directories, files in os.walk(build):
+            for name in directories + files:
+                os.utime(os.path.join(folder, name), (when, when))
+        return build
+
+    def planned_builds(self, references: str = "") -> dict[Path, housekeeping.Item]:
+        items = housekeeping.plan_worktrees(
+            self.main,
+            housekeeping.list_worktrees(self.main)[1:],
+            pr_state,
+            references,
+        )
+        items = housekeeping.with_builds(
+            self.main, items, pr_state, references, housekeeping.IDLE_HOURS
+        )
+        return {item.path: item for item in items if item.path.name == "build-rust"}
+
+    def test_kept_worktree_builds_are_reclaimed_when_finished_or_idle(self) -> None:
+        """#824: finished or idle kept worktrees lose only build-rust."""
+        idle = housekeeping.IDLE_HOURS * 3600
+        dirty = self.top / "trees/merged-dirty"  # merged, kept because dirty
+        write(dirty / "staged.txt", "staged\n")
+        git(dirty, "add", "staged.txt")
+        finished = self.build(dirty, 60)  # recent, but its work is merged
+        over = self.build(self.t3_tree("t3-review-over"), idle + 60)  # open PR
+        under = self.build(self.t3_tree("t3-review-under"), idle - 60)  # active
+        live, locked, issue, linked = (
+            self.t3_tree(f"t3-{name}") for name in ("live", "locked", "issue", "linked")
+        )
+        for tree in (live, locked, issue):
+            self.build(tree, idle + 60)
+        git(self.main, "worktree", "lock", str(locked))
+        cwd = self.proc / "123/cwd"
+        cwd.parent.mkdir()
+        cwd.symlink_to(live / "build-rust")
+        target = write(self.top / "shared-build/CMakeCache.txt").parent
+        (linked / "build-rust").symlink_to(target)
+        self.age(linked, idle + 60)
+        # Listed by its resolved path, as main-local worktrees are on the HDD.
+        # An idle non-T3 checkout under an open PR keeps its build (ruling B).
+        plain = self.build(self.top / "trees/open", idle + 60)
+        profile = self.top / "storage/worktrees/root-profile-824"
+        git(self.main, "worktree", "add", "--quiet", "--detach", str(profile))
+        self.build(profile, idle + 60)
+        references = f"Retained: {issue.name}"
+        states = {"t3-review-over": "OPEN", "t3-review-under": "OPEN", "open": "OPEN"}
+        with patch.dict(PR_STATES, states):
+            builds = self.planned_builds(references)
+            listed = self.run_main(references=references)
+        self.assertIn("merged/closed", builds[finished].reason)
+        self.assertIn("idle 2h", builds[over].reason)
+        for build in (finished, over):
+            self.assertTrue(builds[build].remove, builds[build].reason)
+            self.assertIn(build, listed)
+        expected = {
+            under: "active within 2h",
+            live / "build-rust": "live process cwd",
+            locked / "build-rust": "locked",
+            issue / "build-rust": "referenced",
+            linked / "build-rust": "symlinked",
+            plain: "not a T3 task",
+            profile / "build-rust": "retained profile",
+        }
+        for build, reason in expected.items():
+            self.assertFalse(builds[build].remove, builds[build].reason)
+            self.assertIn(reason, builds[build].reason)
+            self.assertNotIn(build, listed)
+
+        # Activity after planning keeps an idle build; the next plan reclaims it.
+        os.utime(over / "CMakeCache.txt")
+        self.assertIn(
+            "activity", housekeeping.remove(self.main, builds[over], references) or ""
+        )
+        self.build(over.parent, idle + 60)
+        for build in (finished, over):
+            self.assertIsNone(housekeeping.remove(self.main, builds[build], references))
+            self.assertFalse(build.exists(), build)
+            self.assertTrue(build.parent.exists(), build.parent)
+        # The dirty checkout keeps its staged and untracked files.
+        self.assertEqual(git(dirty, "diff", "--cached", "--name-only"), "staged.txt\n")
+        self.assertTrue((dirty / "stray.txt").exists())
+        for build in expected:
+            self.assertTrue(build.exists(), build)
+        self.assertTrue((target / "CMakeCache.txt").exists())
+
+    def test_untracked_top_level_files_count_as_build_activity(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        tree = self.t3_tree("t3-scratch")
+        build = self.build(tree, idle + 60)
+        scratch = write(tree / "fresh-untracked.txt")
+        with patch.dict(PR_STATES, {tree.name: "OPEN"}):
+            self.assertIn("active within", self.planned_builds()[build].reason)
+            when = time.time() - idle - 60
+            os.utime(scratch, (when, when))
+            item = self.planned_builds()[build]
+            self.assertTrue(item.remove, item.reason)
+            os.utime(scratch)  # written between planning and removal
+            self.assertIn("activity", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(build.exists())
+
+    def test_tracked_or_staged_build_files_keep_the_build(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        staged_tree, late_tree = self.t3_tree("t3-staged"), self.t3_tree("t3-late")
+        staged = self.build(staged_tree, idle + 60)
+        late = self.build(late_tree, idle + 60)
+        git(staged_tree, "add", "-f", "build-rust/CMakeCache.txt")
+        self.age(staged_tree, idle + 60)
+        with patch.dict(PR_STATES, {"t3-staged": "OPEN", "t3-late": "OPEN"}):
+            builds = self.planned_builds()
+            self.assertFalse(builds[staged].remove, builds[staged].reason)
+            self.assertIn("tracked or staged", builds[staged].reason)
+            self.assertTrue(builds[late].remove, builds[late].reason)
+            # Staged after planning: the removal recheck keeps it.
+            git(late_tree, "add", "-f", "build-rust/CMakeCache.txt")
+            self.build(late_tree, idle + 60)
+            self.assertIn(
+                "tracked or staged", housekeeping.remove(self.main, builds[late]) or ""
+            )
+        for tree in (staged_tree, late_tree):
+            self.assertEqual(
+                git(tree, "diff", "--cached", "--name-only"),
+                "build-rust/CMakeCache.txt\n",
+            )
+            self.assertTrue((tree / "build-rust/CMakeCache.txt").exists())
+
+    def test_activity_during_output_inspection_keeps_the_build(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        tree = self.t3_tree("t3-inspected")
+        build = self.build(tree, idle + 60)
+        with patch.dict(PR_STATES, {tree.name: "OPEN"}):
+            item = self.planned_builds()[build]
+        self.assertTrue(item.remove, item.reason)
+        inspect = housekeeping.open_outputs
+
+        def touched_during_scan() -> tuple[list[housekeeping.OutputHandle], str | None]:
+            os.utime(build / "CMakeCache.txt")
+            return inspect()
+
+        with patch.object(housekeeping, "open_outputs", touched_during_scan):
+            self.assertIn("activity", housekeeping.remove(self.main, item) or "")
+        self.assertTrue((build / "CMakeCache.txt").exists())
+
+    def test_idle_boundary_uses_the_option(self) -> None:
+        tree = self.t3_tree("t3-boundary")
+        build = self.build(tree, 3 * 3600)
+        with patch.dict(PR_STATES, {tree.name: "OPEN"}):
+            self.assertNotIn(build, self.run_main("--idle-hours", "3.1"))
+            self.assertIn(build, self.run_main("--idle-hours", "2.9"))
+            self.assertIn(build, self.run_main("--apply", "--idle-hours", "2.9"))
+        self.assertFalse(build.exists())
+        self.assertTrue(tree.exists())
 
     def test_dry_run_lists_exactly_what_apply_removes(self) -> None:
         listed = self.run_main()

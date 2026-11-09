@@ -67,6 +67,7 @@ Ordinary PR pushes and protected-branch pushes run the four Cargo checks above i
 | --- | --- |
 | `python3 tools/lint-ratchet.py clippy --base-ref origin/rust-migration` | New item/sites, increased magnitude or multiplicity, stale rows, and baseline growth for five force-warn Clippy lints. |
 | `python3 tools/lint-ratchet.py ruff --base-ref origin/rust-migration` | The same ratchet for C901 and PLR0911/12/13/15 over `tools/`, with `--ignore-noqa`. |
+| `uvx --from ruff==0.16.8 ruff check tools/`, `uvx --from ruff==0.16.8 ruff format --check tools/`, `uvx ty@0.0.92 check`, then every `tools/test-*.py` | Quick's Python step 8, in that order. A PR that changes `tools/` runs all four locally before it is marked ready. CI stops at the first failure, so a `ty` error hides failures in the test scripts (#826). |
 | `python3 tools/lint-policy.py --base-ref origin/rust-migration` | Weaker selections, broader exclusions/per-file ignores, changed thresholds/tool versions, and new Rust allow/expect or Python noqa sites. Unclassified policy edits fail for review. |
 | `python3 tools/growth-ratchet.py --base-ref origin/rust-migration` | Independent growth in tools C++, fork-added src/tests C++, Rust exports and callback fields. Generated records and other outside-src C++ have separate counters so moves cannot exempt growth. |
 | `python3 tools/refactor-proof.py --base-ref origin/rust-migration` | Claimed release-archive equivalence fails on changed code, relocation targets/addends, read-only data, symbol offsets or section alignment. |

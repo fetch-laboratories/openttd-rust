@@ -86,6 +86,8 @@ mod network_config;
 mod newgrf;
 #[cfg(test)]
 mod oracle;
+#[cfg(test)]
+mod test_tables;
 /// Canonical native `NewGRF` feature identity.
 pub use newgrf::GrfSpecFeature;
 mod newgrf_act2;
