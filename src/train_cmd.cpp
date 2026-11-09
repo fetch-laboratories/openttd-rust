@@ -1128,8 +1128,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.vehicle = &GetRustVehicleServices(),
 		.shared = &GetRustSharedServices(),
 		.start_stop = TrainReservationStartStop,
-		.station_train = TrainReservationStationTrain,
-		.station_xy = TrainReservationStationXy,
 		.stuck = TrainReservationStuck,
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,

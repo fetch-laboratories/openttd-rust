@@ -117,8 +117,6 @@ pub struct Leaves {
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub shared: *const crate::services::Services,
     pub start_stop: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub station_train: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
-    pub station_xy: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub stuck: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
@@ -1033,11 +1031,11 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     if station == id.vehicle().last_station() {
         id.vehicle().write_last_station(u16::MAX);
     }
-    if (g.leaves.station_train)(g.context, id, station) == 0 {
+    if (g.shared().station_facilities)(station) & crate::station_type::FACILITY_TRAIN == 0 {
         (g.leaves.increment_order)(g.context, id);
         0
     } else {
-        (g.leaves.station_xy)(g.context, id, station) as u32
+        (g.shared().station_xy)(station)
     }
 }
 
@@ -1139,8 +1137,6 @@ crate::abi::layouts! {
         vehicle,
         shared,
         start_stop,
-        station_train,
-        station_xy,
         stuck,
         tile_offset,
         trackdir,
@@ -1249,8 +1245,6 @@ pub(crate) mod tests {
             vehicle: std::ptr::null(),
             shared: std::ptr::null(),
             start_stop: unused(),
-            station_train: unused(),
-            station_xy: unused(),
             stuck: unused(),
             tile_offset: unused(),
             trackdir: unused(),
