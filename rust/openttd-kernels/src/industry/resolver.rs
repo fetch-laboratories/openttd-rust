@@ -264,7 +264,7 @@ unsafe fn industries_of_type_at(
     kind: IndustryType,
     n: usize,
 ) -> IndustryID {
-    IndustryID(unsafe { (&(*builder).registry)[usize::from(kind.0)][n] })
+    unsafe { (&(*builder).registry)[usize::from(kind.0)][n] }
 }
 /// `GetClosestIndustry`.
 fn get_closest_industry(

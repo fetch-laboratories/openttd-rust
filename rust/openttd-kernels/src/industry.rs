@@ -62,20 +62,27 @@ pub(crate) mod policy;
 pub use policy::*;
 mod lifecycle;
 pub use lifecycle::*;
-const RECORDS: usize = 61;
-const TYPES: usize = crate::industry_type::NUM_INDUSTRYTYPES as usize;
+const RECORDS: usize = crate::history_type::HISTORY_RECORDS;
+const TYPES: usize = IndustryType::NUM_INDUSTRYTYPES.0 as usize;
+/// `Industry::ProducedHistory` (`first` is `production`, `second` is `transported`) and
+/// `Industry::AcceptedHistory` (`first` is `accepted`, `second` is the average `waiting`).
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct Pair {
     pub first: u16,
     pub second: u16,
 }
+/// `Industry::ProducedCargo`.
 #[repr(C)]
 #[derive(Clone)]
 pub struct Produced {
+    /// Cargo type
     pub cargo: u8,
+    /// Amount of cargo produced
     pub waiting: u16,
+    /// Production rate
     pub rate: u8,
+    /// History of cargo produced and transported for this month and 24 previous months
     pub history: [Pair; RECORDS],
 }
 impl Default for Produced {
@@ -88,12 +95,18 @@ impl Default for Produced {
         }
     }
 }
+/// `Industry::AcceptedCargo`.
 #[repr(C)]
 pub struct Accepted {
+    /// Cargo type
     pub cargo: u8,
+    /// Amount of cargo waiting to processed
     pub waiting: u16,
+    /// Accumulated waiting total over the last month, used to calculate average.
     pub accumulated_waiting: u32,
+    /// Last day cargo was accepted by this industry
     pub last_accepted: i32,
+    /// History of accepted and waiting cargo, created on first use.
     pub history: *mut [Pair; RECORDS],
 }
 impl Default for Accepted {
@@ -116,31 +129,53 @@ impl Drop for Accepted {
         }
     }
 }
+/// The production and statistics scalars of `Industry`.
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct Fields {
+    /// Mask of valid history records.
     pub valid_history: u64,
+    /// last economy year of production
     pub last_prod_year: i32,
+    /// used for animation and/or production (if available cargo)
     pub counter: u16,
+    /// general production level
     pub prod_level: u8,
+    /// flag that indicate this has been the closest industry chosen for cargo delivery by a
+    /// station. see `DeliverGoodsToIndustry`
     pub was_cargo_delivered: u8,
+    /// flags overriding standard behaviours
     pub ctlflags: u8,
 }
+/// The identity, location and construction scalars of `Industry`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Metadata {
+    /// `location.tile`: location of the industry
     pub tile: u32,
+    /// `location.w`
     pub width: u16,
+    /// `location.h`
     pub height: u16,
+    /// Date of the construction of the industry
     pub construction_date: i32,
+    /// Random value used for randomisation of all kinds of things
     pub random: u16,
+    /// type of industry.
     pub kind: u8,
+    /// owner of the industry.  Which SHOULD always be (imho) `OWNER_NONE`
     pub owner: u8,
+    /// randomized colour of the industry, for display purpose
     pub random_colour: u8,
+    /// Founder of the industry
     pub founder: u8,
+    /// Way the industry was constructed (@see `IndustryConstructionType`)
     pub construction_type: u8,
+    /// Which tile layout was used when creating the industry
     pub selected_layout: u8,
+    /// Which company has exclusive rights to deliver cargo (`INVALID_OWNER` = anyone)
     pub exclusive_supplier: u8,
+    /// Which company has exclusive rights to take cargo (`INVALID_OWNER` = anyone)
     pub exclusive_consumer: u8,
 }
 impl Default for Metadata {
@@ -195,34 +230,56 @@ pub(crate) fn is_cargo_accepted(owner: *mut Industry) -> bool {
     (0..accepted_count(owner))
         .any(|slot| is_valid_cargo_type(unsafe { (*accepted(owner, slot)).cargo }))
 }
-/// Visit each produced slot's cargo in slot order.
-pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMut(u8)) {
+/// `for (const auto &p : i->produced)`: visit each produced slot's cargo in slot order.
+pub(crate) fn for_each_cargo_produced(owner: *mut Industry, mut visit: impl FnMut(CargoType)) {
     for slot in 0..produced_count(owner) {
         // SAFETY: Live owner; immediate copy before the visit.
-        visit(unsafe { (*produced(owner, slot)).cargo });
+        visit(CargoType(unsafe { (*produced(owner, slot)).cargo }));
     }
 }
+/// Temporary raw adapter for [`for_each_cargo_produced`], used by `station.rs` and
+/// `station_lifecycle.rs`.
+pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMut(u8)) {
+    for_each_cargo_produced(owner, |cargo| visit(cargo.0));
+}
+/// `IndustryTypeBuildData`.
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct BuildFields {
+    /// Relative probability of building this industry.
     pub probability: u32,
+    /// Smallest number of industries that should exist (either 0 or 1).
     pub min_number: u8,
+    /// Desired number of industries of this type.
     pub target_count: u16,
+    /// Starting number of turns to wait (copied to `wait_count`).
     pub max_wait: u16,
+    /// Number of turns to wait before trying to build again.
     pub wait_count: u16,
 }
+/// `IndustryBuildData` (data for managing the number and type of industries in the game),
+/// with the industry fields of `_economy` and the lumber mill sound state.
 #[repr(C)]
 pub struct BuilderFields {
+    /// Industry build data for every industry type.
     pub builddata: [BuildFields; TYPES],
+    /// Number of wanted industries (bits 31-16), and a fraction (bits 15-0).
     pub wanted_inds: u32,
+    /// `_economy.industry_daily_change_counter`: bits 31-16 are number of industry to be
+    /// performed, 15-0 are fractional collected daily
     pub daily_counter: u32,
+    /// `_economy.industry_daily_increment`: the value which will increment
+    /// `industry_daily_change_counter`. Computed value. NOSAVE
     pub daily_increment: u32,
+    /// `_industry_sound_tile`
     pub sound_tile: u32,
+    /// `_industry_sound_ctr`
     pub sound_ctr: u8,
 }
 pub struct Builder {
     fields: BuilderFields,
-    registry: [Vec<u16>; TYPES],
+    /// `Industry::industries`: the industry IDs of each type, in ascending order.
+    registry: [Vec<IndustryID>; TYPES],
 }
 #[repr(C)]
 pub struct Slots {
@@ -336,16 +393,22 @@ pub unsafe extern "C" fn openttd_rust_industry_produced_shrink_to_fit(owner: *mu
 pub unsafe extern "C" fn openttd_rust_industry_accepted_shrink_to_fit(owner: *mut Industry) {
     unsafe { (*owner).accepted.shrink_to_fit() }
 }
-/// # Safety
-/// Live accepted slot with canonical layout. Existing history remains stable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_history(accepted: *mut Accepted) -> *mut c_void {
+/// `AcceptedCargo::GetOrCreateHistory`: get history data, creating it if necessary.
+///
+/// SAFETY: Live accepted slot with canonical layout. Existing history remains stable.
+unsafe fn get_or_create_history(accepted: *mut Accepted) -> *mut [Pair; RECORDS] {
     unsafe {
         if (*accepted).history.is_null() {
             (*accepted).history = Box::into_raw(Box::new([Pair::default(); RECORDS]));
         }
-        (*accepted).history.cast()
+        (*accepted).history
     }
+}
+/// # Safety
+/// Live accepted slot with canonical layout. Existing history remains stable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_history(accepted: *mut Accepted) -> *mut c_void {
+    unsafe { get_or_create_history(accepted).cast() }
 }
 /// Allocate the single builder owner for its C++ shell.
 #[unsafe(no_mangle)]
@@ -611,7 +674,7 @@ pub(crate) unsafe fn accept_delivery(
     let amount = pieces.min(u32::from(u16::MAX - unsafe { (*a).waiting }));
     unsafe {
         (*a).waiting = (*a).waiting.wrapping_add(amount as u16);
-        let history = openttd_rust_industry_history(a).cast::<[Pair; RECORDS]>();
+        let history = get_or_create_history(a);
         let count = &mut (*history)[usize::from(THIS_MONTH)].first;
         *count = count.wrapping_add(amount as u16);
     }
@@ -2205,6 +2268,7 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_insert(
     id: u16,
 ) {
     let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
+    let id = IndustryID(id);
     if let Err(index) = registry.binary_search(&id) {
         registry.insert(index, id);
     }
@@ -2218,7 +2282,7 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_erase(
     id: u16,
 ) {
     let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
-    if let Ok(index) = registry.binary_search(&id) {
+    if let Ok(index) = registry.binary_search(&IndustryID(id)) {
         registry.remove(index);
     }
 }
