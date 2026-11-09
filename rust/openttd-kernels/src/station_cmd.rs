@@ -39,6 +39,7 @@ use crate::tile_type::{
     MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER, TileIndex, TileType,
 };
 use crate::tilearea::TileArea;
+use crate::viewport_func::TILE_HEIGHT_STEP;
 mod waypoint;
 use crate::newgrf_roadstop::RoadStopAvailabilityType;
 use crate::newgrf_station::station_spec::{TileFlag, TileFlags};
@@ -708,10 +709,9 @@ impl<'a> Ctx<'a> {
             return;
         }
         if (self.shared.tile_max_z)(tile.0) + i32::from(height) > bridge_height {
-            // The original multiplies by `TILE_HEIGHT_STEP` (50); this port has
-            // used 8 since it was written. Reported to root; behaviour kept.
-            let height_diff =
-                ((self.shared.tile_max_z)(tile.0) + i32::from(height) - bridge_height) * 8;
+            let height_diff = ((self.shared.tile_max_z)(tile.0) + i32::from(height)
+                - bridge_height)
+                * TILE_HEIGHT_STEP;
             // `GetBridgeTooLowMessageForStationType`.
             (self.cost.error_param)(
                 out.0,
