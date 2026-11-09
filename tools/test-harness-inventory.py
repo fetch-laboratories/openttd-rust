@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise each harness inventory guard on the tree and on constructed losses."""
 
+import contextlib
 import copy
 import json
 import shutil
@@ -21,6 +22,14 @@ TREE, UNREAD = hi.tree_inventory()
 
 def open_issues(number: int) -> str:
     return "open" if number == 1 else "closed"
+
+
+def retired_files_absent() -> "contextlib.AbstractContextManager[object]":
+    """Check retirements against an empty root, as after the files are deleted."""
+    stack = contextlib.ExitStack()
+    directory = stack.enter_context(tempfile.TemporaryDirectory())
+    stack.enter_context(patch.object(er, "ROOT", Path(directory)))
+    return stack
 
 
 class InventoryTests(unittest.TestCase):
@@ -165,6 +174,7 @@ class ReplacementTests(unittest.TestCase):
         }
 
     def test_reference_names_require_registered_nonempty_replacements(self) -> None:
+        self.enterContext(retired_files_absent())
         record = self.record()
         reference = {"crypto vectors", "retained original"}
         candidate = {"retained original", er.ctest_name(self.RUST)}
@@ -206,6 +216,7 @@ class ReplacementTests(unittest.TestCase):
     def test_manifest_accounts_for_retirement_without_shared_inventory_edits(
         self,
     ) -> None:
+        self.enterContext(retired_files_absent())
         record = self.record()
         tree = copy.deepcopy(TREE)
         archived = copy.deepcopy(RECORDED)
@@ -293,13 +304,32 @@ class ReplacementTests(unittest.TestCase):
         }
         self.assertEqual(er.errors([record], TREE["default"]), [])
 
+    def test_retired_source_must_be_deleted(self) -> None:
+        # A partial transfer that names a kept file as source: would make CMake
+        # drop the file and silently stop building its remaining cases (#736).
+        record = self.record()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            kept = root / "src/tests/test_network_crypto.cpp"
+            kept.parent.mkdir(parents=True)
+            kept.touch()
+            self.assertIn(
+                "retired source still exists: source:src/tests/test_network_crypto.cpp",
+                er.errors([record], TREE["default"], root),
+            )
+            partial = self.record()
+            partial["retires"] = ["ctest:crypto vectors"]
+            self.assertEqual(er.errors([partial], TREE["default"], root), [])
+            kept.unlink()
+            self.assertEqual(er.errors([record], TREE["default"], root), [])
+
     def test_cmake_registers_rust_and_filters_only_retired_native_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "src/tests").mkdir(parents=True)
             # Use the actual common CMake helper and existing native fixture names.
-            for name in ("history_func.cpp", "test_network_crypto.cpp"):
-                (root / "src/tests" / name).touch()
+            # The retired file is deleted but still listed; only the filter drops it.
+            (root / "src/tests/history_func.cpp").touch()
             tools = root / "tools"
             tools.mkdir()
             shutil.copyfile(
