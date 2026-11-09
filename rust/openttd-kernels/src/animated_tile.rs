@@ -183,7 +183,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
     let s = a.shared();
     match (s.tile_type)(tile) {
         MP_HOUSE => unsafe {
-            crate::town::house::openttd_rust_house_animate(a.town, a.shared, tile);
+            crate::town::house::animate(a.town, a.shared, crate::tile_type::TileIndex(tile));
         },
         MP_INDUSTRY => unsafe {
             crate::industry::openttd_rust_industry_tile_animate(
