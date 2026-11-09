@@ -116,13 +116,8 @@ uint8_t openttd_rust_town_percent_transported(const OpenTTDTownSuppliedHistory *
 void openttd_rust_town_supplied_reserve(OpenTTDTownState *, size_t);
 OpenTTDTownSupplied *openttd_rust_town_supplied_insert(OpenTTDTownState *, size_t, uint8_t);
 OpenTTDTownSlots openttd_rust_town_id_counts(OpenTTDTownState *);
-void openttd_rust_town_id_counts_resize(OpenTTDTownState *, size_t);
 OpenTTDTownSlots openttd_rust_town_global_id_counts();
-void openttd_rust_town_global_id_counts_resize(size_t);
 OpenTTDTownSlots openttd_rust_town_class_counts(OpenTTDTownState *);
-void openttd_rust_town_class_counts_resize(OpenTTDTownState *, size_t);
-OpenTTDTownSlots openttd_rust_town_global_class_counts();
-void openttd_rust_town_global_class_counts_resize(size_t);
 OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppliedHistory *, size_t);
 void openttd_rust_town_rating_test(bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);

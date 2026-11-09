@@ -674,13 +674,6 @@ pub unsafe extern "C" fn openttd_rust_town_id_counts(state: *mut State) -> Slots
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_id_counts_resize(state: *mut State, count: usize) {
-    // SAFETY: No native view survives a structural vector mutation.
-    unsafe {
-        (*state).id_counts.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_class_counts(state: *mut State) -> Slots {
     // SAFETY: Canonical serialized vector. Native views end before resize.
     let counts = unsafe { &mut (*state).class_counts };
@@ -690,42 +683,12 @@ pub unsafe extern "C" fn openttd_rust_town_class_counts(state: *mut State) -> Sl
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_class_counts_resize(state: *mut State, count: usize) {
-    // SAFETY: No native view survives a structural vector mutation.
-    unsafe {
-        (*state).class_counts.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts() -> Slots {
     // SAFETY: Game-state-mutex serialized access; no service call or reentry.
     let counts = unsafe { &mut (*BUILDING_COUNTS.get()).ids };
     Slots {
         data: counts.as_mut_ptr().cast(),
         size: counts.len(),
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_id_counts_resize(count: usize) {
-    // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    unsafe {
-        (*BUILDING_COUNTS.get()).ids.resize(count, 0);
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_class_counts() -> Slots {
-    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).classes };
-    Slots {
-        data: counts.as_mut_ptr().cast(),
-        size: counts.len(),
-    }
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
-    // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    unsafe {
-        (*BUILDING_COUNTS.get()).classes.resize(count, 0);
     }
 }
 /// `IncreaseBuildingCount`: count one built house part in its town and the
@@ -3380,10 +3343,15 @@ mod tests {
         let _guard = GLOBAL_LOCK.lock().unwrap();
         // Spawn/join serializes each access like the native game-state mutex.
         // Size a NewGRF-range house ID on the command thread before ottd:game.
-        openttd_rust_town_global_id_counts_resize(4096);
-        openttd_rust_town_global_class_counts_resize(16);
+        // SAFETY: Serialized by the lock; no view of the counts is live.
+        unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            counts.ids.resize(4096, 0);
+            counts.classes.resize(16, 0);
+        }
         let ids = openttd_rust_town_global_id_counts();
-        let classes = openttd_rust_town_global_class_counts();
+        // SAFETY: Serialized by the lock; sized above and not resized until the end.
+        let classes = unsafe { (*BUILDING_COUNTS.get()).classes.as_mut_ptr() };
         let mut owner = State {
             id_counts: vec![0; 4096],
             class_counts: vec![0; 16],
@@ -3415,25 +3383,26 @@ mod tests {
             let rating = unsafe { openttd_rust_town_rating(owner, 42, 0) };
             (
                 openttd_rust_town_global_id_counts().data as usize,
-                openttd_rust_town_global_class_counts().data as usize,
+                // SAFETY: The parent does not touch the counts until this join.
+                unsafe { (*BUILDING_COUNTS.get()).classes.as_ptr() } as usize,
                 rating,
             )
         })
         .join()
         .unwrap();
         assert_eq!(ids.data as usize, id_pointer);
-        assert_eq!(classes.data as usize, class_pointer);
+        assert_eq!(classes as usize, class_pointer);
         assert_eq!(rating, -99);
         assert_eq!(take_house_candidate(0), (4095, 1));
         assert_eq!(openttd_rust_town_generating_exchange_abi(false), 0);
         // SAFETY: Child has joined; original pointers remain valid without resize.
         unsafe {
             assert_eq!(*ids.data.cast::<u32>().add(110), 1);
-            assert_eq!(*classes.data.cast::<u32>().add(15), 1);
+            assert_eq!(*classes.add(15), 1);
             assert_eq!(openttd_rust_town_rating(&raw const owner, 42, 0), -99);
             decrease_building(&raw mut owner, 110, 15);
             assert_eq!(*ids.data.cast::<u32>().add(110), 0);
-            assert_eq!(*classes.data.cast::<u32>().add(15), 0);
+            assert_eq!(*classes.add(15), 0);
         }
         assert_eq!(owner.id_counts[110], 0);
         openttd_rust_town_rating_test(false);
@@ -3442,8 +3411,12 @@ mod tests {
             unsafe { openttd_rust_town_rating(&raw const owner, 42, 0) },
             77
         );
-        openttd_rust_town_global_id_counts_resize(0);
-        openttd_rust_town_global_class_counts_resize(0);
+        // SAFETY: Serialized by the lock; the views above are no longer used.
+        unsafe {
+            let counts = &mut *BUILDING_COUNTS.get();
+            counts.ids.clear();
+            counts.classes.clear();
+        }
     }
 }
 
@@ -5156,7 +5129,7 @@ mod protocol_tests {
             }
             with(|w| (w.owner_reads, w.map_reads) = (0, 0));
             // SAFETY: Live fixture tables and owner.
-            unsafe { house::openttd_rust_house_tile_loop(leaves, services, 2080) };
+            unsafe { house::tile_loop(leaves, services, 2080) };
             assert_eq!(
                 with(|w| (w.owner_reads, w.map_reads)),
                 (1, 1),
@@ -5270,7 +5243,7 @@ mod protocol_tests {
         unsafe { (*services).tick_counter = second_tick };
         with(|w| (w.owner_reads, w.map_reads) = (0, 0));
         // SAFETY: Live fixture tables and owner.
-        unsafe { house::openttd_rust_house_animate(leaves, services, 2080) };
+        unsafe { house::animate(leaves, services, 2080) };
         assert_eq!(
             with(|w| (w.owner_reads, w.map_reads)),
             (0, 0),
