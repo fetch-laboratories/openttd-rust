@@ -2860,19 +2860,27 @@ mod control_tests {
     fn leak<T>(value: T) -> &'static T {
         Box::leak(Box::new(value))
     }
-    fn services() -> Services {
+    fn identity() -> crate::company_identity::Services {
         let mut identity = COMPANY_IDENTITY;
         identity.company = company;
         identity.company_id = company_id;
         identity.next_company = next_company;
         identity.is_ai = is_ai;
+        identity
+    }
+    fn finance() -> FinanceServices {
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        finance
+    }
+    fn services() -> Services {
+        let identity = identity();
         let mut movement = MOVEMENT;
         movement.native_assert = native_assert;
         let mut shared = SHARED;
         shared.company_valid = company_valid;
         shared.movement = leak(movement);
-        let mut finance = FINANCE;
-        finance.current_company = current_company;
+        let finance = finance();
         let mut costs = COMMAND_COSTS;
         costs.zero = zero;
         costs.error = error;
@@ -2900,6 +2908,64 @@ mod control_tests {
             TileIndex(tile),
         );
         ERRORS.with(|e| e.borrow().clone())
+    }
+
+    thread_local! {
+        static NETWORKING: Cell<bool> = const { Cell::new(false) };
+        static OFFERED: Cell<*mut Finances> = const { Cell::new(std::ptr::null_mut()) };
+    }
+    extern "C" fn networking() -> bool {
+        NETWORKING.get()
+    }
+    extern "C" fn offered_finances(id: u8) -> *mut Finances {
+        if id == 1 {
+            OFFERED.get()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn human(_: *mut OpenTTDCompany) -> bool {
+        false
+    }
+
+    /// "Company economy - special owners have no bankruptcy takeover offer": no current owner
+    /// at or above 16, which lies outside the 16-bit offer mask, can buy company 1, hostile or
+    /// not, whether no offer or every offer bit is set.
+    #[test]
+    fn special_owners_have_no_takeover_offer() {
+        let mut s = services();
+        let mut finance = finance();
+        finance.networking = networking;
+        finance.company_finances = offered_finances;
+        s.finance = leak(finance);
+        let mut identity = identity();
+        identity.is_ai = human;
+        s.identity = leak(identity);
+        NETWORKING.set(true);
+        // SAFETY: Plain integer record.
+        let mut offered: Box<Finances> = Box::new(unsafe { std::mem::zeroed() });
+        OFFERED.set(&raw mut *offered);
+        let ownership = crate::tile_owner::Context {
+            services: std::ptr::null(),
+            cost: std::ptr::null_mut(),
+            ret: std::ptr::null_mut(),
+            error: std::ptr::null_mut(),
+            road: std::ptr::null(),
+        };
+        for asked in [0, u16::MAX] {
+            offered.asked = asked;
+            for current in 16..=u8::MAX {
+                CURRENT.set(current);
+                for hostile in [false, true] {
+                    let result = buy(&s, &ownership, 1, hostile, false);
+                    assert_eq!(
+                        result.error, 1,
+                        "asked {asked:#x} current {current} hostile {hostile}"
+                    );
+                }
+            }
+        }
+        OFFERED.set(std::ptr::null_mut());
     }
 
     /// The first existing human company wins, then the first free slot, then the first ID.
