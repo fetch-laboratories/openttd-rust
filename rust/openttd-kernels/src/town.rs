@@ -4100,3 +4100,375 @@ mod policy_tests {
         check_rows('A', &rows, 14976);
     }
 }
+
+/// `GrowTownWithTunnel` and `CanRoadContinueIntoNextTile` over the retired
+/// `town-reference-gaps.cpp` fixture's controlled map (#736 W), frozen from the unchanged
+/// original only (`town/tunnel-oracle.txt`).
+#[cfg(test)]
+mod tunnel_tests {
+    use super::*;
+    use crate::oracle;
+    use crate::test_tables::{COMMAND_COSTS, RAIL_COMMANDS, ROAD_COMMANDS, SHARED, TOWN_LEAVES};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::fmt::Write as _;
+    use std::ptr;
+
+    const ORACLE: &str = include_str!("town/tunnel-oracle.txt");
+    const TOWN: u32 = 17;
+    const START: u32 = 512 * 1024 + 512;
+    const MP_ROAD: u32 = 2;
+    const MP_RAILWAY: u32 = 1;
+    const MP_STATION: u32 = 5;
+    const MP_TUNNELBRIDGE: u32 = 9;
+    const TRANSPORT_ROAD: u32 = 1;
+
+    /// One fixture tile; absent tiles read as the default.
+    #[derive(Clone, Copy)]
+    struct Tile {
+        kind: u32,
+        slope: u32,
+        z: u32,
+        roads: u32,
+        stop: u32,
+        facing: u32,
+        transport: u32,
+        valid: bool,
+    }
+    const DEFAULT_TILE: Tile = Tile {
+        kind: 0,
+        slope: 0,
+        z: 4,
+        roads: 0,
+        stop: 0,
+        facing: 0,
+        transport: TRANSPORT_ROAD,
+        valid: true,
+    };
+
+    /// The fixture's world: map, command outcomes, setting and the observed trace.
+    #[derive(Clone)]
+    struct World {
+        direction: u32,
+        population: u32,
+        tiles: HashMap<u32, Tile>,
+        /// The fixture's failing command: 0 road test, 1 tunnel test, 2 tunnel execute.
+        failure: Option<u32>,
+        allow_crossings: bool,
+        trace: Vec<[u32; 7]>,
+        effects: u32,
+        draws: u32,
+    }
+
+    thread_local! {
+        static WORLD: RefCell<Option<World>> = const { RefCell::new(None) };
+    }
+    fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
+        WORLD.with(|world| f(world.borrow_mut().as_mut().expect("fixture world")))
+    }
+    fn at(tile: u32) -> Tile {
+        if tile >= 1024 * 1024 || tile % 1024 == 1023 || tile / 1024 == 1023 {
+            return Tile {
+                valid: false,
+                ..DEFAULT_TILE
+            };
+        }
+        with(|w| w.tiles.get(&tile).copied().unwrap_or(DEFAULT_TILE))
+    }
+    fn offset(direction: u32) -> i32 {
+        [-1, 1024, 1, -1024][direction as usize]
+    }
+    fn along(w: &World, distance: i32) -> u32 {
+        START.wrapping_add_signed(distance * offset(w.direction))
+    }
+    fn tile(w: &mut World, distance: i32) -> &mut Tile {
+        let index = along(w, distance);
+        w.tiles.entry(index).or_insert(DEFAULT_TILE)
+    }
+    fn trace(entry: [u32; 7]) {
+        with(|w| w.trace.push(entry));
+    }
+
+    extern "C" fn map_log_x() -> u32 {
+        10
+    }
+    extern "C" fn road_info(id: u8) -> RoadChoice {
+        trace([24, u32::from(id), 0, 0, 0, 0, 0]);
+        RoadChoice {
+            introduction_date: 0,
+            max_speed: 50,
+            town_build: true,
+        }
+    }
+    thread_local! {
+        static OWNER: RefCell<State> = RefCell::new(State::default());
+    }
+    extern "C" fn resolve_owner(id: u32) -> *mut State {
+        assert_eq!(id, TOWN);
+        OWNER.with(RefCell::as_ptr)
+    }
+    extern "C" fn allow_crossings() -> bool {
+        with(|w| w.allow_crossings)
+    }
+    extern "C" fn build_tunnel(tile: u32, road_type: u32, execute: u32) -> bool {
+        trace([5, 0, tile, road_type, execute, 0, 0]);
+        with(|w| {
+            /* A failing execute can leave effects; the original ignores its return. */
+            if execute != 0 {
+                w.effects += 1;
+            }
+            w.failure != Some(if execute != 0 { 2 } else { 1 })
+        })
+    }
+    extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+        with(|w| w.draws += 1);
+        0
+    }
+    extern "C" fn town_by_id(id: u32) -> *mut crate::services::TownHandle {
+        assert_eq!(id, TOWN);
+        ptr::NonNull::dangling().as_ptr()
+    }
+    extern "C" fn tile_type(id: u32) -> u8 {
+        at(id).kind as u8
+    }
+    extern "C" fn tile_valid(id: u32) -> bool {
+        at(id).valid
+    }
+    extern "C" fn tile_slope(id: u32) -> u8 {
+        at(id).slope as u8
+    }
+    extern "C" fn tile_z(id: u32) -> i32 {
+        at(id).z as i32
+    }
+    extern "C" fn road_bits(id: u32, road_tram: u8, straight: bool) -> u8 {
+        assert!(road_tram == 0 && straight);
+        at(id).roads as u8
+    }
+    extern "C" fn tunnel_transport(id: u32) -> u8 {
+        at(id).transport as u8
+    }
+    extern "C" fn facing(id: u32) -> u8 {
+        at(id).facing as u8
+    }
+    extern "C" fn drive_through(id: u32) -> bool {
+        at(id).stop == 1
+    }
+    extern "C" fn bay(id: u32) -> bool {
+        at(id).stop == 2
+    }
+    extern "C" fn depot(id: u32) -> bool {
+        at(id).stop == 3
+    }
+    unsafe extern "C" fn do_build(
+        _: *const crate::road_cmd::RoadCommandServices,
+        _: *mut crate::road_cmd::CommandScratch,
+        out: *mut crate::services::CommandCost,
+        _: *mut crate::services::CommandCost,
+        flags: u16,
+        tile: u32,
+        bits: u8,
+        road_type: u8,
+        _: u8,
+        town: u16,
+    ) {
+        assert_eq!(flags, 10);
+        trace([
+            1,
+            u32::from(town),
+            tile,
+            u32::from(bits),
+            u32::from(road_type),
+            0,
+            0,
+        ]);
+        // SAFETY: The context's cost slot is this test's bool.
+        unsafe { *out.cast::<bool>() = with(|w| w.failure != Some(0)) };
+    }
+    extern "C" fn success(out: *const crate::services::CommandCost) -> bool {
+        // SAFETY: The context's cost slot is this test's bool.
+        unsafe { *out.cast::<bool>() }
+    }
+
+    /// Run `GrowTownWithTunnel` on one fixture; output `result effects draws | trace...`.
+    fn run(world: World) -> String {
+        let population = world.population;
+        let direction = world.direction;
+        WORLD.with(|slot| *slot.borrow_mut() = Some(world));
+        OWNER.with(|owner| {
+            *owner.borrow_mut() = State::default();
+            owner.borrow_mut().simulation.population = population;
+        });
+        let mut leaves = TOWN_LEAVES;
+        leaves.map_log_x = map_log_x;
+        leaves.road_info = road_info;
+        leaves.resolve_owner = resolve_owner;
+        leaves.allow_crossings = allow_crossings;
+        leaves.build_tunnel = build_tunnel;
+        let mut services = SHARED;
+        services.random = random;
+        services.town_by_id = town_by_id;
+        services.tile_type = tile_type;
+        services.tile_valid = tile_valid;
+        services.tile_slope = tile_slope;
+        services.tile_z = tile_z;
+        services.road_bits = road_bits;
+        services.tunnel_transport = tunnel_transport;
+        services.tunnel_bridge_direction = facing;
+        services.is_drive_through_stop = drive_through;
+        services.drive_through_axis = facing;
+        services.is_bay_stop = bay;
+        services.bay_stop_direction = facing;
+        services.is_road_depot = depot;
+        services.road_depot_direction = facing;
+        let mut costs = COMMAND_COSTS;
+        costs.success = success;
+        let mut rail = RAIL_COMMANDS;
+        rail.cost = &raw const costs;
+        let mut roads = ROAD_COMMANDS;
+        roads.do_build = do_build;
+        roads.rail_commands = &raw const rail;
+        let mut road_ok = false;
+        let context = crate::road_cmd::CommandContext {
+            services: &raw const roads,
+            scratch: ptr::null_mut(),
+            cost: (&raw mut road_ok).cast(),
+            ret: ptr::null_mut(),
+        };
+        let mut engine = engine(&raw const leaves, &raw const services);
+        engine.road = &raw const context;
+        let t = TownID(TOWN as u16);
+        let result = engine.bind(t).grow_town_with_tunnel(
+            t,
+            TileIndex(START),
+            DiagDirection(direction as u8),
+        );
+        let world = WORLD.with(|slot| slot.borrow_mut().take().expect("fixture world"));
+        let mut text = format!("{} {} {}", u8::from(result), world.effects, world.draws);
+        for entry in &world.trace {
+            text += " |";
+            for value in entry {
+                let _ = write!(text, " {value}");
+            }
+        }
+        text
+    }
+
+    /// The fixture's `Fixture(dir, length, mountain)`.
+    fn fixture(direction: u32, length: u32, mountain: bool) -> World {
+        let mut w = World {
+            direction,
+            population: 0,
+            tiles: HashMap::new(),
+            failure: None,
+            allow_crossings: true,
+            trace: Vec::new(),
+            effects: 0,
+            draws: 0,
+        };
+        tile(&mut w, -1).roads = 1 << (3 - direction);
+        for i in 0..=length {
+            let t = tile(&mut w, i as i32);
+            t.z = if i == 0 || i == length { 4 } else { 5 };
+            t.slope = [12, 6, 3, 9][direction as usize];
+        }
+        if !mountain {
+            tile(&mut w, 1).kind = MP_STATION;
+        }
+        w
+    }
+
+    /// Every case of the fixture's `Run()`, in order, with its inputs.
+    fn cases() -> Vec<(String, World)> {
+        let mut cases = Vec::new();
+        for dir in 0..4 {
+            let mut push = |label: &str, w: World| cases.push((format!("{label} dir={dir}"), w));
+            for mountain in [false, true] {
+                for length in [1, 2, 4, 5, 6, 7, 8, 9, 255, 256, 257] {
+                    for population in [0, 999, 1000, 249_000, 250_000] {
+                        let mut w = fixture(dir, length, mountain);
+                        w.population = population;
+                        push(
+                            &format!("length={length} population={population} mountain={mountain}"),
+                            w,
+                        );
+                    }
+                }
+            }
+            for slope in 0..32 {
+                let mut w = fixture(dir, 4, true);
+                tile(&mut w, 0).slope = slope;
+                push(&format!("entrance-slope={slope}"), w);
+                let mut w = fixture(dir, 4, true);
+                tile(&mut w, 2).slope = slope;
+                push(&format!("mountain-slope={slope}"), w);
+            }
+            let mut w = fixture(dir, 4, false);
+            tile(&mut w, -1).roads = 0;
+            push("disconnected", w);
+            for place in [1, 5] {
+                for kind in [0, MP_ROAD, MP_RAILWAY, MP_STATION, MP_TUNNELBRIDGE] {
+                    for stop in 0..4 {
+                        for facing in 0..4 {
+                            let mut w = fixture(dir, 4, true);
+                            let t = tile(&mut w, place);
+                            t.kind = kind;
+                            t.stop = stop;
+                            t.facing = facing;
+                            let label = format!(
+                                "continuation place={place} type={kind} stop={stop} facing={facing}"
+                            );
+                            push(&label, w.clone());
+                            if kind == MP_TUNNELBRIDGE {
+                                tile(&mut w, place).transport = 0;
+                                push(&format!("rail-tunnel {label}"), w);
+                            }
+                        }
+                    }
+                }
+                let mut w = fixture(dir, 4, true);
+                tile(&mut w, place).valid = false;
+                push(&format!("invalid-continuation place={place}"), w);
+            }
+            for place in 1..=4 {
+                let mut w = fixture(dir, 4, true);
+                tile(&mut w, place).valid = false;
+                push(&format!("invalid-mountain-end place={place}"), w);
+            }
+            let mut w = fixture(dir, 4, true);
+            tile(&mut w, 5).kind = MP_RAILWAY;
+            w.allow_crossings = false;
+            push("crossing-disabled", w);
+            for failure in 0..3 {
+                let mut w = fixture(dir, 4, true);
+                w.failure = Some(failure);
+                push(&format!("command-failure={failure}"), w);
+            }
+        }
+        cases
+    }
+
+    #[test]
+    fn tunnel_growth_matches_original_fixture_matrix() {
+        let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
+        // The fixture's road-type registry and clock: one road type, 1950-01-01 at date 0.
+        let mask = crate::type_registry::openttd_rust_road_mask();
+        // SAFETY: The registry mask is a process-wide scalar serialized by the lock.
+        let saved_mask = unsafe { mask.replace(1) };
+        let saved_date = crate::timer_game_common::calendar_date();
+        let saved_year = crate::timer_game_common::calendar_year();
+        crate::timer_game_common::write_calendar_date(crate::services::CalendarDate(0));
+        crate::timer_game_common::write_calendar_year(crate::timer_game_calendar::CalendarYear(
+            1950,
+        ));
+        let oracle = oracle::parse(ORACLE);
+        let actual: Vec<_> = cases()
+            .into_iter()
+            .map(|(inputs, world)| (inputs, run(world)))
+            .collect();
+        // SAFETY: Same serialized registry scalar.
+        unsafe { mask.write(saved_mask) };
+        crate::timer_game_common::write_calendar_date(saved_date);
+        crate::timer_game_common::write_calendar_year(saved_year);
+        assert_eq!(oracle::check(&oracle, "tunnel", actual), 1508);
+    }
+}
