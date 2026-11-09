@@ -712,7 +712,7 @@ impl<'a> Session<'a> {
             crate::trees::tick(s.trees, s.shared);
             crate::station_service::tick(s.station, s.links, s.visits);
             let world = self.world();
-            crate::industry::tick(s.industry_builder, world.industry);
+            crate::industry::on_tick_industry(s.industry_builder, world.industry);
         }
         (s.landscape_end)(self.frame);
         let mut company = crate::company::Tick::default();
