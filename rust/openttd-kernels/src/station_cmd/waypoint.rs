@@ -535,12 +535,7 @@ impl Ctx<'_> {
                 false,
             );
         }
-        if wp.is_null() {
-            /* Check if we can create a new waypoint. */
-            if !(self.s.waypoint_available)() {
-                return cost.error(self.s.strings.too_many_stations);
-            }
-        } else {
+        if !wp.is_null() {
             /* Reuse an existing waypoint. */
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
@@ -565,6 +560,9 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
+        } else if !(self.s.waypoint_available)() {
+            /* Check if we can create a new waypoint. */
+            return cost.error(self.s.strings.too_many_stations);
         }
         /* Check if we can allocate a custom spec to this waypoint. */
         let specindex = crate::station_association::allocate(self.s.rail_association, spec, wp);
@@ -739,12 +737,7 @@ impl Ctx<'_> {
                 true,
             );
         }
-        if wp.is_null() {
-            /* Check if we can create a new waypoint. */
-            if !(self.s.waypoint_available)() {
-                return cost.error(self.s.strings.too_many_stations);
-            }
-        } else {
+        if !wp.is_null() {
             /* Reuse an existing waypoint. */
             if !(self.s.road_waypoint)(wp) {
                 return cost.error(StringID::INVALID_STRING_ID.0);
@@ -756,6 +749,9 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
+        } else if !(self.s.waypoint_available)() {
+            /* Check if we can create a new waypoint. */
+            return cost.error(self.s.strings.too_many_stations);
         }
         /* Check if we can allocate a custom spec to this waypoint. */
         let index = unsafe {
