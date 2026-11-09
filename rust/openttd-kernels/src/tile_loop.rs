@@ -171,12 +171,15 @@ unsafe fn dispatch<const AMBIENT: bool>(
             );
         },
         8 => unsafe {
+            // A branch-local copy keeps the batch snapshot's address from escaping,
+            // so its hot fields stay in registers for the other arms.
+            let industry_services = s.industry;
             industry::tile_loop(
                 crate::tile_type::TileIndex(tile),
                 // Existing industry ABI stores legal map logarithms in a byte.
                 crate::map_func::Map::from_log_x(log_x),
                 g.call,
-                &s.industry,
+                &industry_services,
             );
         },
         9 => unsafe { ground::tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
