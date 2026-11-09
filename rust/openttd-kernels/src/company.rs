@@ -2424,7 +2424,7 @@ mod financial_command_tests {
     const VARIANTS: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255];
     // This is the only Rust unit test accessing ECONOMY.max_loan. Hold this
     // lock for its entire run and restore the prior process-wide value on drop.
-    static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
+    pub(super) static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
 
     struct Fixture {
         owners: [*mut Finances; 3],
@@ -3682,5 +3682,147 @@ mod startup_tests {
             }
             reset();
         });
+    }
+}
+
+/// The network-client mode of "Company economy - network deferred deletion and synchronous
+/// pool iteration" from `src/tests/company_economy.cpp` (#736 F), with the fixture's own
+/// values: a client never deletes a company bankrupt for a tenth month; it updates each one's
+/// admin state, keeps both companies and restores the current company. The offline and server
+/// modes post the deletion through the native command and network service tables and stay a
+/// C++ case.
+#[cfg(test)]
+mod bankruptcy_tests {
+    use super::*;
+    use crate::company_type::CompanyID;
+    use crate::test_tables::{COMPANY, COMPANY_IDENTITY, FINANCE, SHARED};
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static OWNERS: RefCell<Vec<*mut Finances>> = const { RefCell::new(Vec::new()) };
+        static CURRENT: Cell<u8> = const { Cell::new(18) };
+        static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn next(from: u32) -> CompanyRef {
+        OWNERS.with(|o| {
+            let o = o.borrow();
+            (from as usize..o.len()).find(|&i| !o[i].is_null()).map_or(
+                CompanyRef {
+                    finances: std::ptr::null_mut(),
+                    id: INVALID,
+                },
+                |i| CompanyRef {
+                    finances: o[i],
+                    id: i as u32,
+                },
+            )
+        })
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn local() -> u8 {
+        0
+    }
+    extern "C" fn current() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn set_current(id: u8) {
+        CURRENT.set(id);
+    }
+    extern "C" fn invalidate(_: u8) {}
+    extern "C" fn admin_update(id: CompanyID) {
+        TRACE.with(|t| t.borrow_mut().push(format!("admin {}", id.0)));
+    }
+    extern "C" fn month() -> Month {
+        Month {
+            month: 1,
+            infinite_money: false,
+            maintenance: false,
+            fluctuating: false,
+        }
+    }
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn owner(money: i64, loan: i64, months: u8) -> *mut Finances {
+        // SAFETY: Plain integer record; freed at the end of the test.
+        let mut p: Box<Finances> = Box::new(unsafe { std::mem::zeroed() });
+        p.money = money;
+        p.loan = loan;
+        p.bankruptcy = months;
+        p.max_loan = i64::MIN; // The native default: the economy's maximum loan.
+        Box::into_raw(p)
+    }
+
+    #[test]
+    fn network_client_never_deletes_bankrupt_companies() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
+        let economy = openttd_rust_economy_state();
+        // SAFETY: Process-wide economy, serialized by both locks and restored below.
+        let saved = unsafe { economy.read() };
+        // SAFETY: As above.
+        unsafe {
+            economy.write(std::mem::zeroed());
+            (*economy).max_loan = 300_000;
+            (*economy).fluct = 100;
+        }
+        OWNERS.with(|o| {
+            *o.borrow_mut() = vec![
+                owner(1_000_000, 0, 0),
+                owner(-500_000, 100_000, 9),
+                owner(-500_000, 100_000, 9),
+            ];
+        });
+        let mut identity = COMPANY_IDENTITY;
+        identity.admin_update = admin_update;
+        let mut finance = FINANCE;
+        finance.networking = yes;
+        finance.current_company = current;
+        finance.set_current_company = set_current;
+        finance.invalidate_company_windows = invalidate;
+        let mut s = COMPANY;
+        s.identity = leak(identity);
+        s.shared = &SHARED;
+        s.finance = leak(finance);
+        s.company_next = next;
+        s.local_company = local;
+        s.network_server = no;
+        let s = leak(s);
+        let clock = crate::timer_game_common::ClockCompany {
+            services: s,
+            settings: crate::test_tables::unreachable0,
+            month,
+            year: crate::test_tables::unreachable0,
+        };
+        CURRENT.set(18);
+        TRACE.with(|t| t.borrow_mut().clear());
+        // SAFETY: The clock context outlives the call; no exception slot is used.
+        let ok = unsafe {
+            crate::timer_game_common::openttd_rust_clock_economy_month_abi(
+                (&raw const clock).cast(),
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(ok, 1);
+        assert_eq!(CURRENT.get(), 18);
+        assert_eq!(TRACE.with(|t| t.borrow().clone()), ["admin 1", "admin 2"]);
+        OWNERS.with(|o| {
+            let o = o.borrow();
+            assert!(
+                o.iter().all(|p| !p.is_null()),
+                "a client keeps both companies"
+            );
+            for &p in o.iter() {
+                // SAFETY: Allocated by `owner`.
+                drop(unsafe { Box::from_raw(p) });
+            }
+        });
+        // SAFETY: As above.
+        unsafe { economy.write(saved) };
     }
 }
