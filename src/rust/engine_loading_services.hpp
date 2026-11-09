@@ -3,6 +3,7 @@
 #include "engine_loading_ffi.h"
 #include "company_identity_ffi.h"
 #include "engine_services.h"
+#include "type_availability_ffi.h"
 #include "settings_services.h"
 #include "services_newgrf.h"
 #include "services_cargo.h"
@@ -14,7 +15,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.identity = &GetRustCompanyIdentityServices(),
 		.shared = &GetRustSharedServices(),
 		.resolver = &GetRustVehicleResolverServices(),
-		.next = Engine_next,
+		.types = &GetRustTypeAvailabilityServices(),
 		.resolve = Engine_resolve_strict,
 		.dynamic = RustDynamicEngines,
 		.find_file = RustGRFFileByID,

@@ -14,11 +14,12 @@ struct OpenTTDEngineMappingView { const EngineIDMapping *data; size_t size; };
 /** Native leaves do not throw. Load/reset excludes resolution; native error frames
  * retain ByteReader and EIDS unwinding. All IDs returned across the ABI are scalars. */
 struct OpenTTDCompanyIdentityServices;
+struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDEngineLoadingServices {
 	const OpenTTDCompanyIdentityServices *identity;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDVehicleResolverServices *resolver;
-	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
+	const OpenTTDTypeAvailabilityServices *types;
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*dynamic)() noexcept OPENTTD_SERVICE_DEFAULT(dynamic);
 	GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);

@@ -21,8 +21,6 @@ forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRu
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
-rebound | Engine_next | src/rust/engine_adapter.hpp | next
-rebound | Engine_next | src/rust/engine_loading_services.hpp | next
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context

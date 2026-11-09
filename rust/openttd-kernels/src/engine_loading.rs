@@ -237,7 +237,7 @@ pub struct Services {
     identity: &'static crate::company_identity::Services,
     pub(crate) shared: *const Shared,
     pub(crate) resolver: *const crate::newgrf_vehicle::Services,
-    next: extern "C" fn(u32) -> EngineRef,
+    types: *const crate::type_availability::Services,
     resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
     pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
@@ -259,6 +259,11 @@ pub struct Services {
     default_counts: extern "C" fn() -> *const u8,
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
+}
+/// `Engine::Iterate(from)`, through the engine table's type-availability owner.
+fn next(s: &Services, from: u32) -> EngineRef {
+    // SAFETY: The immutable table names the process-lifetime type-availability table.
+    unsafe { ((*s.types).next)(from) }
 }
 /// `_settings_game.game_creation.landscape`, loaded in place from the shared catalog.
 fn climate(s: &Services) -> u8 {
@@ -406,7 +411,7 @@ pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let engine = (s.next)(from);
+        let engine = next(s, from);
         if engine.shell.is_null() {
             break;
         }
@@ -426,7 +431,7 @@ crate::abi::layouts! {
         identity,
         shared,
         resolver,
-        next,
+        types,
         resolve,
         dynamic,
         find_file,
@@ -566,7 +571,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -784,7 +789,7 @@ pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file
 pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -874,7 +879,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -916,7 +921,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
 pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -960,7 +965,7 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -1071,7 +1076,7 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
     let mut features = 0;
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
