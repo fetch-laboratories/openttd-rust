@@ -13,10 +13,8 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.shared = &GetRustSharedServices(),
 		.smoke = RustVehicleSmokeAmount,
 		.power_error = [](uint16_t engine) noexcept { RustVehicleShowNewGRFError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
-		.station = RustIsRailStation,
 		.depot = SharedIsDepotTile,
 		.tunnel = RustIsTunnelTile,
-		.tile_rail = RustTileRailType,
 		.powered = RustRailPoweredMask,
 	};
 	return services;

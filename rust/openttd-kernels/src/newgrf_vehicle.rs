@@ -93,7 +93,6 @@ pub struct Services {
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
-    valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
     cached_override: unsafe extern "C" fn(V) -> Group,
@@ -145,7 +144,6 @@ pub struct Services {
     pub(crate) roadtype: unsafe extern "C" fn(V) -> crate::services::RoadType,
     tile_roadtype:
         unsafe extern "C" fn(u32, crate::services::RoadTramType) -> crate::services::RoadType,
-    tile_railtype: unsafe extern "C" fn(u32) -> crate::services::RailType,
     rail_catenary: unsafe extern "C" fn(crate::services::RailType) -> bool,
     road_catenary: unsafe extern "C" fn(crate::services::RoadType) -> bool,
     compatible_rail:
@@ -176,6 +174,10 @@ fn engine(v: V) -> u16 {
 fn ground(v: V) -> bool {
     crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type())
 }
+/// `GetTileRailType`, read in place from the canonical map.
+fn tile_railtype(s: &Services, tile: u32) -> crate::services::RailType {
+    crate::services::RailType(crate::map_func::World::new(s.shared).tile_rail_type(tile))
+}
 // SAFETY throughout: the game-state mutex serializes shell/cache access. The
 // caller retains live shells and immutable services. Raw cache reads/writes are
 // short operations, ending before any native callback or evaluator entry.
@@ -183,7 +185,7 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
     unsafe {
         if v.is_null() {
             let company = (s.shared.current_company)();
-            if !(s.valid_company)(company) {
+            if !(s.shared.company_valid)(company) {
                 return null();
             }
             (s.livery)(id, company, crate::engine_type::INVALID_ENGINE, v)
@@ -1079,7 +1081,7 @@ unsafe fn variable(
                 let tile = (h).tile();
                 match kind() {
                     0 => {
-                        let rt = (s.tile_railtype)(tile);
+                        let rt = tile_railtype(s, tile);
                         let types = (s.vehicle.train_handle)(v).get_railtypes();
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
@@ -1216,7 +1218,7 @@ unsafe fn variable(
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
-                    let tile = (s.tile_railtype)((h).tile());
+                    let tile = tile_railtype(s, (h).tile());
                     if tile.0 == param.0 {
                         return 15;
                     }
@@ -1677,11 +1679,11 @@ crate::abi::layouts! {
     "OpenTTDVehicleCargoInfo" ["vehicle_resolver"] => CargoInfo { classes, weight };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, capabilities,
-        cargo_classes, cargo_bitnum, valid_company, livery, company_info,
+        cargo_classes, cargo_bitnum, livery, company_info,
         cached_override, write_override, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

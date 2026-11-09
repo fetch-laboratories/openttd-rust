@@ -57,7 +57,6 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.steepness = GroundSteepness,
 		.display_max_speed = RustVehicleDisplaySpeed,
 		.viewport = GroundViewport,
-		.details_dirty = RustVehicleDetailsDirty,
 		.base_crash = RustVehicleBaseCrash,
 		.depot_tile = GroundDepotTile,
 	};

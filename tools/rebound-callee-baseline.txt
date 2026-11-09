@@ -34,8 +34,6 @@ rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
 rebound | OpenTTDCargoSpecValid | src/subsidy.cpp | cargo_valid
-rebound | OpenTTDCompanyIsValid | src/rust/services.cpp | company_valid
-rebound | OpenTTDCompanyIsValid | src/rust/vehicle_services_newgrf.h | valid_company
 rebound | OpenTTDDistanceManhattan | src/newgrf_object.cpp | manhattan
 rebound | OpenTTDDistanceManhattan | src/rust/ship_control_services.h | dist_manhattan
 rebound | OpenTTDDistanceSquare | src/newgrf_object.cpp | square
@@ -245,8 +243,6 @@ rebound | RustStationWaitingTriggers | src/newgrf_station.cpp | waiting
 rebound | RustSubsidyServices | src/economy.cpp | subsidies
 rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
-rebound | RustTileRailType | src/rust/vehicle_effect_services.hpp | tile_rail
-rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
 rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
@@ -268,8 +264,6 @@ rebound | RustVehicleCanAllocate | src/rust/vehicle_build_services.hpp | pool_av
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
-rebound | RustVehicleDetailsDirty | src/rust/ground_vehicle_services.cpp | details_dirty
-rebound | RustVehicleDetailsDirty | src/rust/vehicle_services.cpp | details_dirty
 rebound | RustVehicleDisplaySpeed | src/rust/ground_vehicle_services.cpp | display_max_speed
 rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
