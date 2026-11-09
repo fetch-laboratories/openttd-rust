@@ -488,7 +488,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };
         airport_type(self; s: *const Station) => unsafe { (self.leaves.airport_type)(s) };
         station_owner(self; s: *const Station) => unsafe { (self.leaves.station_owner)(s) };
-        had_vehicle(self; s: *const Station) => unsafe { (self.leaves.had_vehicle)(s) };
         airport_elements(self; airport: *const c_void) => unsafe { (self.leaves.airport_elements)(airport) };
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
         airport_flags(self; airport: *const c_void) => unsafe { (self.leaves.airport_flags)(airport) };
@@ -1432,7 +1431,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         let station = u32::from(self.target(id));
         self.set_last_station(id, i64::from(station));
-        if self.had_vehicle(self.station(station)) & 16 == 0 {
+        let hvot_aircraft = crate::station_type::StationHadVehicleOfType::HVOT_AIRCRAFT.0;
+        if (self.ss.station_had_vehicle_of_type)(station as u16) & hvot_aircraft == 0 {
             self.first_arrival(id, i64::from(station));
         }
         self.begin_loading(id);
