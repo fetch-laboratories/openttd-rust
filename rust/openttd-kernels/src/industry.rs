@@ -10,17 +10,7 @@
 //! it, so no reference survives a world service. Slot growth invalidates views exactly as the
 //! original vector does; history allocations stay stable until their slot is removed.
 // Original fixed-width conversion and variable names are retained for audit.
-#![allow(
-    unsafe_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    clippy::many_single_char_names,
-    clippy::similar_names,
-    clippy::struct_field_names,
-    clippy::too_many_lines,
-    clippy::if_not_else
-)]
+#![allow(unsafe_code)]
 use crate::bitmath_func::{gb, has_bit, sb};
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::company_type::{CompanyID, Owner};
@@ -99,6 +89,10 @@ impl Default for Produced {
 }
 /// `Industry::AcceptedCargo`.
 #[repr(C)]
+#[allow(
+    clippy::struct_field_names,
+    reason = "Industry::AcceptedCargo keeps the original's field names"
+)]
 pub struct Accepted {
     /// Cargo type
     pub cargo: u8,
@@ -663,6 +657,10 @@ pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> Owner {
 /// the slot, count it as accepted this month, and record the delivery date.
 ///
 /// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DeliverGoodsToIndustry keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) unsafe fn accept_delivery(
     owner: *mut Industry,
     slot: usize,
@@ -684,6 +682,10 @@ pub(crate) unsafe fn accept_delivery(
 impl Pair {
     /// `Industry::ProducedHistory::PctTransported`: percentage of cargo transported, as a
     /// fraction of 255.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Industry::ProducedHistory::PctTransported keeps the original's implicit C++ integer conversions"
+    )]
     fn pct_transported(self) -> u8 {
         let p = self;
         if p.first == 0 {
@@ -695,6 +697,10 @@ impl Pair {
 }
 /// Helper for `ProduceIndustryGoods` that scales and produces cargos.
 /// `scale` tells whether to scale production of this cargo directly.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ProduceIndustryGoodsHelper keeps the original's implicit C++ integer conversions"
+)]
 fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool) {
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
@@ -714,54 +720,58 @@ fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool
     }
 }
 /// `ProduceIndustryGoods`.
-fn produce_industry_goods(e: Entry, s: &Services, builder: *mut Builder) {
-    let (i, owner) = (e.industry, e.owner);
-    let f = fields(owner);
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ProduceIndustryGoods keeps the original's implicit C++ integer conversions"
+)]
+fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
+    let (i, owner) = (entry.industry, entry.owner);
+    let state = fields(owner);
     // play a sound?
-    if gb(u32::from(unsafe { (*f).counter }), 0, 6) == 0 {
-        let r = random(s);
+    if gb(u32::from(unsafe { (*state).counter }), 0, 6) == 0 {
+        let r = random(svc);
         if chance16_i(1, 14, r) {
             let sounds = unsafe { (*spec_of(owner)).random_sounds.len() } as u16;
             if sounds != 0
-                && unsafe { s.shared().settings().ambient.read() }
-                && (0..produced_count(owner)).any(|n| unsafe {
-                    (*produced(owner, n)).history[usize::from(LAST_MONTH)].first > 0
+                && unsafe { svc.shared().settings().ambient.read() }
+                && (0..produced_count(owner)).any(|slot| unsafe {
+                    (*produced(owner, slot)).history[usize::from(LAST_MONTH)].first > 0
                 })
             {
                 // Play sound since last month had production
-                unsafe { (s.industry_sound)(i, ((r >> 16) * u32::from(sounds)) >> 16) };
+                unsafe { (svc.industry_sound)(i, ((r >> 16) * u32::from(sounds)) >> 16) };
             }
         }
     }
     unsafe {
-        (*f).counter = (*f).counter.wrapping_sub(1);
+        (*state).counter = (*state).counter.wrapping_sub(1);
     }
     let callbacks = spec_callback_mask(spec_of(owner));
     let callback = callbacks.test(IndustryCallbackMask::Production256Ticks);
     // If using an industry callback, scale the callback interval by cargo scale percentage.
     if callback
         && unsafe {
-            u32::from((*f).counter)
+            u32::from((*state).counter)
                 % crate::economy_func::scale_by_inverse_cargo_scale(
                     INDUSTRY_PRODUCE_TICKS,
-                    s.shared().settings().industry_cargo_scale.read(),
+                    svc.shared().settings().industry_cargo_scale.read(),
                 )
                 == 0
         }
     {
-        unsafe { (s.production_callback)(i, 1) };
-        produce_industry_goods_helper(owner, s, false);
+        unsafe { (svc.production_callback)(i, 1) };
+        produce_industry_goods_helper(owner, svc, false);
     }
     // All other production and special effects happen every 256 ticks, and cargo
     // production is just scaled by the cargo scale percentage. This keeps a slow trickle of
     // production to avoid confusion at low scale factors when the industry seems to be
     // doing nothing for a long period of time.
-    if unsafe { u32::from((*f).counter) % INDUSTRY_PRODUCE_TICKS != 0 } {
+    if unsafe { u32::from((*state).counter) % INDUSTRY_PRODUCE_TICKS != 0 } {
         return;
     }
     // Handle non-callback cargo production.
     if !callback {
-        produce_industry_goods_helper(owner, s, true);
+        produce_industry_goods_helper(owner, svc, true);
     }
     let indbehav = spec_behaviour(spec_of(owner));
     // The two special effects share one shape: CBID_INDUSTRY_SPECIAL_EFFECT with parameter
@@ -774,32 +784,32 @@ fn produce_industry_goods(e: Entry, s: &Services, builder: *mut Builder) {
             continue;
         }
         let cb_res = if callbacks.test(IndustryCallbackMask::SpecialEffect) {
-            let random = random(s);
-            unsafe { (s.special_effect)(i, random, parameter) }
+            let random = random(svc);
+            unsafe { (svc.special_effect)(i, random, parameter) }
         } else {
             CALLBACK_FAILED
         };
         let act = if cb_res != CALLBACK_FAILED {
-            (s.shared().grf_boolean_callback)(
+            (svc.shared().grf_boolean_callback)(
                 unsafe { (*spec_of(owner)).grf_prop.grffile },
                 CallbackID::CBID_INDUSTRY_SPECIAL_EFFECT.0,
                 cb_res,
             )
         } else if parameter == 0 {
-            chance16(s, 1, 8)
+            chance16(svc, 1, 8)
         } else {
-            unsafe { u32::from((*f).counter) % INDUSTRY_CUT_TREE_TICKS == 0 }
+            unsafe { u32::from((*state).counter) % INDUSTRY_CUT_TREE_TICKS == 0 }
         };
         if act {
             if parameter == 0 {
-                plant_random_farm_field_with_settings(i, IndustryID(e.id), tick_map(s), s);
+                plant_random_farm_field_with_settings(i, IndustryID(entry.id), tick_map(svc), svc);
             } else {
-                chop_lumber_mill_trees(i, owner, tick_map(s), s, builder);
+                chop_lumber_mill_trees(i, owner, tick_map(svc), svc, builder);
             }
         }
     }
     // TriggerIndustryRandomisation and TriggerIndustryAnimation for IndustryTick.
-    unsafe { (s.tick_trigger)(i) };
+    unsafe { (svc.tick_trigger)(i) };
 }
 /// `OnTick_Industry`.
 ///
@@ -852,6 +862,10 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
 /// Industry, owner and services follow the tick contract; distribution can reenter
 /// industry access, so history/waiting writes occur before/after with raw fields.
 #[unsafe(no_mangle)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "TransportIndustryGoods keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     i: *mut c_void,
     owner: *mut Industry,
@@ -907,6 +921,10 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
 }
 /// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
 /// `prod_level`. This function is only valid when not using smooth economy.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Industry::RecomputeProductionMultipliers keeps the original's implicit C++ integer conversions"
+)]
 fn recompute_production_multipliers(owner: *mut Industry) {
     let f = fields(owner);
     // Rates are rounded up, so e.g. oilrig always produces some passengers
@@ -980,9 +998,19 @@ const PERCENT_TRANSPORTED_80: u32 = 204;
 
 /// Change industry production or do closure. `monthly` is true for the monthly call and
 /// false for the random call.
-fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
-    let o = observe(owner);
-    let f = fields(o.owner);
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "ChangeIndustryProduction keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "ChangeIndustryProduction is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
+fn change_industry_production(i: *mut c_void, owner: *mut Industry, svc: &Services, monthly: bool) {
+    let obs = observe(owner);
+    let state = fields(obs.owner);
     let mut str = StringID::STR_NULL;
     let mut closeit = false;
     let mut standard = false;
@@ -991,18 +1019,18 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
     let mut recalculate_multipliers = false;
     // use original economy for industries using production related callbacks
     let original_economy =
-        uses_original_economy(o.callbacks, EconomyType(unsafe { (s.economy_type)() }));
+        uses_original_economy(obs.callbacks, EconomyType(unsafe { (svc.economy_type)() }));
     let mut div = 0u8;
     let mut mul = 0u8;
     let mut increment = 0i8;
-    let callback_enabled = o.callbacks.test(if monthly {
+    let callback_enabled = obs.callbacks.test(if monthly {
         IndustryCallbackMask::MonthlyProdChange
     } else {
         IndustryCallbackMask::ProductionChange
     });
     if callback_enabled {
-        let random = random(s);
-        let result = unsafe { (s.change_callback)(i, monthly, random) };
+        let random = random(svc);
+        let result = unsafe { (svc.change_callback)(i, monthly, random) };
         let mut res = u32::from(result.result);
         // failed callback means "do nothing"
         if res != u32::from(CALLBACK_FAILED) {
@@ -1012,7 +1040,7 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                 let grfid = unsafe { (*spec_of(owner)).grf_prop.grfid };
                 str = StringID(unsafe {
                     crate::newgrf_text::openttd_rust_grf_text_map(
-                        &*s.text,
+                        &*svc.text,
                         grfid,
                         gb(result.reg as u32, 0, 16),
                     )
@@ -1043,7 +1071,7 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                 // Set production to third byte of register 0x100
                 0xF => {
                     unsafe {
-                        (*f).prod_level = gb(result.reg as u32, 16, 8)
+                        (*state).prod_level = gb(result.reg as u32, 16, 8)
                             .clamp(u32::from(PRODLEVEL_MINIMUM), u32::from(PRODLEVEL_MAXIMUM))
                             as u8;
                     }
@@ -1054,30 +1082,30 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
         }
     } else if monthly == original_economy
         || (!original_economy
-            && EconomyType(unsafe { (s.economy_type)() }) == EconomyType::ET_FROZEN)
-        || o.life == INDUSTRYLIFE_BLACK_HOLE
+            && EconomyType(unsafe { (svc.economy_type)() }) == EconomyType::ET_FROZEN)
+        || obs.life == INDUSTRYLIFE_BLACK_HOLE
     {
         return;
     }
     if standard
         || (!callback_enabled
-            && o.life.any(
+            && obs.life.any(
                 IndustryLifeTypes::from_element(IndustryLifeType::Organic).with(
                     IndustryLifeTypes::from_element(IndustryLifeType::Extractive),
                 ),
             ))
     {
         // decrease or increase
-        let only_decrease = o.behaviour.test(IndustryBehaviour::DontIncrProd)
-            && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate;
+        let only_decrease = obs.behaviour.test(IndustryBehaviour::DontIncrProd)
+            && LandscapeType(unsafe { (svc.landscape)() }) == LandscapeType::Temperate;
         if original_economy {
-            if only_decrease || chance16(s, 1, 3) {
+            if only_decrease || chance16(svc, 1, 3) {
                 let pct = u32::from(unsafe {
-                    (*get_produced(o.owner, 0)).history[usize::from(LAST_MONTH)].pct_transported()
+                    (*get_produced(obs.owner, 0)).history[usize::from(LAST_MONTH)].pct_transported()
                 });
                 // If more than 60% transported, 66% chance of increase, else 33% chance of
                 // increase
-                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance16(s, 1, 3) {
+                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance16(svc, 1, 3) {
                     // Increase production
                     mul = 1;
                 } else {
@@ -1085,18 +1113,18 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                     div = 1;
                 }
             }
-        } else if EconomyType(unsafe { (s.economy_type)() }) == EconomyType::ET_SMOOTH {
-            closeit = !ctlflags(f).any(
+        } else if EconomyType(unsafe { (svc.economy_type)() }) == EconomyType::ET_SMOOTH {
+            closeit = !ctlflags(state).any(
                 IndustryControlFlags::from_element(IndustryControlFlag::NoClosure).with(
                     IndustryControlFlags::from_element(IndustryControlFlag::NoProductionDecrease),
                 ),
             );
-            for n in 0..produced_count(o.owner) {
-                let p = produced(o.owner, n);
+            for slot in 0..produced_count(obs.owner) {
+                let p = produced(obs.owner, slot);
                 if unsafe { !is_valid_cargo_type((*p).cargo) } {
                     continue;
                 }
-                let r = random(s);
+                let r = random(svc);
                 let pct =
                     u32::from(unsafe { (*p).history[usize::from(LAST_MONTH)] }.pct_transported());
                 // If over 60% is transported, mult is 1, else mult is -1.
@@ -1117,7 +1145,8 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                 // decreases.
                 if chance16_i(1, 22, r >> 16) {
                     new_prod = new_prod.wrapping_add(
-                        mult * (((random_range(s, 50) + 10) * old_prod as u32) >> 8).max(1) as i32,
+                        mult * (((random_range(svc, 50) + 10) * old_prod as u32) >> 8).max(1)
+                            as i32,
                     );
                 }
                 // Prevent production to overflow or Oil Rig passengers to be over-"produced"
@@ -1127,15 +1156,15 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                         == crate::cargo_registry::openttd_rust_cargo_by_label(
                             crate::cargo_type::CT_PASSENGERS,
                         )
-                } && !o.behaviour.test(IndustryBehaviour::NoPaxProdClamp)
+                } && !obs.behaviour.test(IndustryBehaviour::NoPaxProdClamp)
                 {
                     new_prod = new_prod.clamp(0, 16);
                 }
                 // If override flags are set, prevent actually changing production if any was
                 // decided on
-                if (ctlflags(f).test(IndustryControlFlag::NoProductionDecrease)
+                if (ctlflags(state).test(IndustryControlFlag::NoProductionDecrease)
                     && new_prod < old_prod)
-                    || (ctlflags(f).test(IndustryControlFlag::NoProductionIncrease)
+                    || (ctlflags(state).test(IndustryControlFlag::NoProductionIncrease)
                         && new_prod > old_prod)
                 {
                     continue;
@@ -1161,68 +1190,70 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
                 if percent.abs() >= 10 {
                     // ReportNewsProductionChangeIndustry
                     unsafe {
-                        (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s));
+                        (svc.production_news)(i, (*p).cargo, percent, servicing(i, obs.owner, svc));
                     };
                 }
             }
         }
     }
     // If override flags are set, prevent actually changing production if any was decided on
-    if (ctlflags(f).test(IndustryControlFlag::NoProductionDecrease) && (div > 0 || increment < 0))
-        || (ctlflags(f).test(IndustryControlFlag::NoProductionIncrease)
+    if (ctlflags(state).test(IndustryControlFlag::NoProductionDecrease)
+        && (div > 0 || increment < 0))
+        || (ctlflags(state).test(IndustryControlFlag::NoProductionIncrease)
             && (mul > 0 || increment > 0))
     {
         return;
     }
-    if ctlflags(f).test(IndustryControlFlag::ExternalProdLevel) {
+    if ctlflags(state).test(IndustryControlFlag::ExternalProdLevel) {
         div = 0;
         mul = 0;
         increment = 0;
     }
     if !callback_enabled
-        && o.life.test(IndustryLifeType::Processing)
+        && obs.life.test(IndustryLifeType::Processing)
         && unsafe {
-            (s.economy_year)().wrapping_sub((*f).last_prod_year)
+            (svc.economy_year)().wrapping_sub((*state).last_prod_year)
                 >= PROCESSING_INDUSTRY_ABANDONMENT_YEARS.0
         }
-        && chance16(s, 1, if original_economy { 2 } else { 180 })
+        && chance16(svc, 1, if original_economy { 2 } else { 180 })
     {
         closeit = true;
     }
     // Increase if needed
-    while mul != 0 && unsafe { (*f).prod_level < PRODLEVEL_MAXIMUM } {
+    while mul != 0 && unsafe { (*state).prod_level < PRODLEVEL_MAXIMUM } {
         mul = mul.wrapping_sub(1);
         unsafe {
-            (*f).prod_level =
-                (u16::from((*f).prod_level) * 2).min(u16::from(PRODLEVEL_MAXIMUM)) as u8;
+            (*state).prod_level =
+                (u16::from((*state).prod_level) * 2).min(u16::from(PRODLEVEL_MAXIMUM)) as u8;
         }
         recalculate_multipliers = true;
         if str == StringID::STR_NULL {
-            str = o.up_text;
+            str = obs.up_text;
         }
     }
     // Decrease if needed
     while div != 0 && !closeit {
         div = div.wrapping_sub(1);
-        if unsafe { (*f).prod_level == PRODLEVEL_MINIMUM } {
+        if unsafe { (*state).prod_level == PRODLEVEL_MINIMUM } {
             closeit = true;
             break;
         }
         unsafe {
-            (*f).prod_level = ((*f).prod_level / 2).max(PRODLEVEL_MINIMUM);
+            (*state).prod_level = ((*state).prod_level / 2).max(PRODLEVEL_MINIMUM);
         }
         recalculate_multipliers = true;
         if str == StringID::STR_NULL {
-            str = o.down_text;
+            str = obs.down_text;
         }
     }
     // Increase or Decreasing the production level if needed
     if increment != 0 {
-        if increment < 0 && unsafe { (*f).prod_level == PRODLEVEL_MINIMUM } {
+        if increment < 0 && unsafe { (*state).prod_level == PRODLEVEL_MINIMUM } {
             closeit = true;
         } else {
             unsafe {
-                (*f).prod_level = ((i32::from((*f).prod_level) + i32::from(increment)) as u32)
+                (*state).prod_level = ((i32::from((*state).prod_level) + i32::from(increment))
+                    as u32)
                     .clamp(u32::from(PRODLEVEL_MINIMUM), u32::from(PRODLEVEL_MAXIMUM))
                     as u8;
             }
@@ -1232,31 +1263,31 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services
     // Recalculate production_rate
     // For non-smooth economy these should always be synchronized with prod_level
     if recalculate_multipliers {
-        recompute_production_multipliers(o.owner);
+        recompute_production_multipliers(obs.owner);
     }
     // Close if needed and allowed
     if closeit
-        && !check_industry_close_down_protection(o, s)
-        && !ctlflags(f).test(IndustryControlFlag::NoClosure)
+        && !check_industry_close_down_protection(obs, svc)
+        && !ctlflags(state).test(IndustryControlFlag::NoClosure)
     {
         unsafe {
-            (*f).prod_level = PRODLEVEL_CLOSURE;
-            (s.set_dirty)(i);
+            (*state).prod_level = PRODLEVEL_CLOSURE;
+            (svc.set_dirty)(i);
         }
-        str = o.closure_text;
+        str = obs.closure_text;
     }
     if !suppress_message && str != StringID::STR_NULL {
         // Compute news category, set the parameters of the news string and report the news
         // to the user.
         unsafe {
-            (s.news)(
+            (svc.news)(
                 i,
                 str.0,
                 closeit,
                 if closeit {
                     Servicing::Nobody
                 } else {
-                    servicing(i, o.owner, s)
+                    servicing(i, obs.owner, svc)
                 },
             );
         };
@@ -1277,6 +1308,10 @@ fn get_industry_type_data(f: *mut BuildFields, it: IndustryType, s: &Services) -
 }
 /// `GetIndustryGamePlayProbability`: the probability of `it` during gameplay, with its
 /// `min_number`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetIndustryGamePlayProbability keeps the original's implicit C++ integer conversions"
+)]
 fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u8) {
     if unsafe { (s.fund_only)() } {
         return (0, 0);
@@ -1472,6 +1507,10 @@ fn place_industry(
 }
 /// `IndustryBuildData::TryBuildNewIndustry`: try to create a random industry, during
 /// gameplay.
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "IndustryBuildData::TryBuildNewIndustry keeps the original's implicit C++ integer conversions"
+)]
 fn try_build_new_industry(builder: *mut Builder, s: &Services) {
     setup_target_count(builder, s);
     let b = build_fields(builder);
@@ -1516,9 +1555,7 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
     if count >= 1 {
         // If not forced, pick a weighted random industry to build.
         // For the case that count == 1, there is no need to draw a random number.
-        let it = if forced_build != IndustryType::NUM_INDUSTRYTYPES {
-            forced_build
-        } else {
+        let it = if forced_build == IndustryType::NUM_INDUSTRYTYPES {
             // Non-forced, select an industry type to build (weighted random).
             let mut r = if count > 1 {
                 random_range(s, total_prob)
@@ -1541,6 +1578,8 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
                 }
                 it.0 += 1;
             }
+        } else {
+            forced_build
         };
         // Try to create the industry.
         let ind = place_industry(
@@ -1718,6 +1757,10 @@ fn is_suitable_for_farm_field(
 /// Build farm field fence. `tile` is the tile to position the fence on, `size` the size of
 /// the field being planted in tiles, `kind` the type of fence to set and `side` the side of
 /// the tile to attempt placement.
+#[allow(
+    clippy::similar_names,
+    reason = "SetupFarmFieldFence keeps the original's local variable names"
+)]
 fn setup_farm_field_fence(
     mut tile: TileIndex,
     mut size: u32,
@@ -1754,33 +1797,40 @@ fn setup_farm_field_fence(
 /// `_plantfarmfield_type`.
 const PLANTFARMFIELD_TYPE: [u8; 16] = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6];
 /// `PlantFarmField`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "PlantFarmField keeps the original's implicit C++ integer conversions"
+)]
 fn plant_farm_field(
     tile: TileIndex,
     industry: IndustryID,
     map: Map,
-    s: &Services,
+    svc: &Services,
     landscape: &impl Fn() -> LandscapeType,
 ) {
     if landscape() == LandscapeType::Arctic
-        && (s.shared().tile_z)(tile.0) + 2 >= i32::from(crate::snow_line::get(s.shared()))
+        && (svc.shared().tile_z)(tile.0) + 2 >= i32::from(crate::snow_line::get(svc.shared()))
     {
         return;
     }
     // determine field size
-    let mut r = (random(s) & 0x303) + 0x404;
+    let mut r = (random(svc) & 0x303) + 0x404;
     if landscape() == LandscapeType::Arctic {
         r += 0x404;
     }
     let size_x = gb(r, 0, 8);
     let size_y = gb(r, 8, 8);
     let tiles = map.coordinates();
-    let (x, y) = (tiles.tile_x(tile.0), tiles.tile_y(tile.0));
+    let (tile_x, tile_y) = (tiles.tile_x(tile.0), tiles.tile_y(tile.0));
     let mut ta = TileArea::new(
-        tiles.tile_xy(x - x.min(size_x / 2), y - y.min(size_y / 2)),
+        tiles.tile_xy(
+            tile_x - tile_x.min(size_x / 2),
+            tile_y - tile_y.min(size_y / 2),
+        ),
         size_x as u16,
         size_y as u16,
     );
-    let world = crate::map_func::World::new(s.shared());
+    let world = crate::map_func::World::new(svc.shared());
     ta.clamp_to_map(tiles, map.size_x.wrapping_mul(map.size_y), |ok| {
         world.check(ok);
     });
@@ -1794,48 +1844,52 @@ fn plant_farm_field(
             TileIndex(cur_tile),
             false,
             false,
-            s,
+            svc,
         ));
     }
     if count * 2 < u32::from(ta.w) * u32::from(ta.h) {
         return;
     }
     // determine type of field
-    r = random(s);
+    r = random(svc);
     let counter = gb(r, 5, 3) as u8;
     let field_type = ((gb(r, 8, 8) * 9) >> 8) as u8;
     // make field
     for cur_tile in ta.tiles(tiles) {
-        if is_suitable_for_farm_field(TileIndex(cur_tile), true, true, s) {
-            unsafe { (s.make_field)(cur_tile, field_type, counter, industry.0) };
+        if is_suitable_for_farm_field(TileIndex(cur_tile), true, true, svc) {
+            unsafe { (svc.make_field)(cur_tile, field_type, counter, industry.0) };
         }
     }
     let mut kind = 3;
     if landscape() != LandscapeType::Arctic && landscape() != LandscapeType::Tropic {
-        kind = PLANTFARMFIELD_TYPE[(random(s) & 0xF) as usize];
+        kind = PLANTFARMFIELD_TYPE[(random(svc) & 0xF) as usize];
     }
-    let (w, h) = (u32::from(ta.w), u32::from(ta.h));
+    let (width, height) = (u32::from(ta.w), u32::from(ta.h));
     let north = TileIndex(ta.tile);
-    setup_farm_field_fence(north, h, kind, DiagDirection::DIAGDIR_NE, map, s);
-    setup_farm_field_fence(north, w, kind, DiagDirection::DIAGDIR_NW, map, s);
+    setup_farm_field_fence(north, height, kind, DiagDirection::DIAGDIR_NE, map, svc);
+    setup_farm_field_fence(north, width, kind, DiagDirection::DIAGDIR_NW, map, svc);
     setup_farm_field_fence(
-        TileIndex(ta.tile.wrapping_add(w - 1)),
-        h,
+        TileIndex(ta.tile.wrapping_add(width - 1)),
+        height,
         kind,
         DiagDirection::DIAGDIR_SW,
         map,
-        s,
+        svc,
     );
     setup_farm_field_fence(
-        TileIndex(ta.tile.wrapping_add((h - 1).wrapping_mul(map.size_x))),
-        w,
+        TileIndex(ta.tile.wrapping_add((height - 1).wrapping_mul(map.size_x))),
+        width,
         kind,
         DiagDirection::DIAGDIR_SE,
         map,
-        s,
+        svc,
     );
 }
 /// `PlantRandomFarmField`, with the landscape read at each original observation.
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "PlantRandomFarmField keeps the original's implicit C++ integer conversions"
+)]
 fn plant_random_farm_field(
     i: *mut c_void,
     id: IndustryID,
@@ -1883,6 +1937,10 @@ pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: 
     plant_random_farm_field_with_settings(i, IndustryID(id), tick_map(s), s);
 }
 /// Perform a circular search around the Lumber Mill in order to find trees to cut.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ChopLumberMillTrees keeps the original's implicit C++ integer conversions"
+)]
 fn chop_lumber_mill_trees(
     i: *mut c_void,
     owner: *mut Industry,
@@ -1967,6 +2025,11 @@ pub struct DeliveryServices {
 /// `TriggerIndustryProduction`.
 ///
 /// SAFETY: Live serialized industry, immutable services and spec; callbacks retain no owner borrows.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "TriggerIndustryProduction keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) unsafe fn trigger_industry_production(
     shell: *mut ShellHandle,
     owner: *mut Industry,
@@ -2072,6 +2135,11 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
 /// `IndustryProductionCallback`: get the industry production callback and apply it to the
 /// industry. `reason` is the reason it is called (0 = incoming cargo, 1 = periodic tick
 /// callback).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "IndustryProductionCallback keeps the original's implicit C++ integer conversions"
+)]
 fn industry_production_callback(
     i: *mut c_void,
     owner: *mut Industry,
@@ -2294,6 +2362,10 @@ pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> TileIndex {
     TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "FindSubsidyIndustryCargoRoute counts the valid produced cargoes as uint"
+)]
 pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
     unsafe { &(*owner).produced }
         .iter()
@@ -2778,6 +2850,10 @@ impl IndustryControlFlags {
     pub const EMPTY: Self = Self(0);
     /// Native bit set containing one element.
     #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "EnumBitSet<IndustryControlFlag, uint8_t> stores the element bit in uint8_t"
+    )]
     pub const fn from_element(element: IndustryControlFlag) -> Self {
         Self((1_u64 << element.0) as u8)
     }
@@ -3016,6 +3092,11 @@ mod production_policy_tests {
         }
         pairs
     }
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "the test fixture narrows its IndustryProductionSpriteGroup values as the native result does"
+    )]
     fn resolve_result(
         out: &mut ProductionResult,
         version: u8,

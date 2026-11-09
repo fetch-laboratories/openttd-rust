@@ -273,7 +273,7 @@
       40
     ],
     "rust/openttd-kernels/src/industry.rs | fn change_industry_production | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      234
+      237
     ],
     "rust/openttd-kernels/src/industry.rs | fn try_build_new_industry | excessive_nesting | 6538360d32243ad1006d": [
       7
@@ -282,7 +282,7 @@
       32
     ],
     "rust/openttd-kernels/src/industry/construction.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      245
+      254
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       31

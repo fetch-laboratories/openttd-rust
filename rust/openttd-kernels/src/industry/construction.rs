@@ -126,6 +126,10 @@ fn populate(
 }
 /// The `CBID_INDUSTRY_INPUT_CARGO_TYPES` or `CBID_INDUSTRY_OUTPUT_CARGO_TYPES` branch of
 /// `DoCreateNewIndustry`; `output` selects the produced list.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoCreateNewIndustry's cargo-type callbacks keep the original's implicit C++ integer conversions"
+)]
 fn cargo_callbacks(
     industry: *mut c_void,
     owner: *mut Industry,
@@ -199,12 +203,12 @@ fn cargo_callbacks(
             continue;
         }
         // Verify valid cargo.
-        let in_spec = if output {
+        let is_listed = if output {
             lists.produced.contains(&cargo.0)
         } else {
             lists.accepted.contains(&cargo.0)
         };
-        if !in_spec {
+        if !is_listed {
             // Cargo not in spec, error in NewGRF.
             unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
@@ -244,19 +248,31 @@ fn cargo_callbacks(
 /// Live newly allocated shell/owner, builder and immutable request/spec/layout.
 /// Native town/station relationships remain native. Resolver and world callbacks
 /// may reenter; raw scalar/slot access ends before every such call. Panics abort.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "DoCreateNewIndustry keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "DoCreateNewIndustry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 pub(crate) unsafe fn do_create_new_industry(
     industry: *mut c_void,
     owner: *mut Industry,
     request: &ConstructionRequest,
     context: &TransactionContext,
 ) {
-    let r = *request;
-    let s = unsafe { &*context.production };
-    let g: &GenerationServices = unsafe { &*context.generation };
-    let l = unsafe { &*context.lifecycle };
-    let c = unsafe { &*context.construction };
-    let (tile, kind, id) = (TileIndex(r.tile), IndustryType(r.kind), IndustryID(r.id));
-    let map = crate::map_func::Map::from_log_x(r.size_x.ilog2());
+    let req = *request;
+    let prod = unsafe { &*context.production };
+    let generation: &GenerationServices = unsafe { &*context.generation };
+    let life = unsafe { &*context.lifecycle };
+    let cons = unsafe { &*context.construction };
+    let (tile, kind, id) = (
+        TileIndex(req.tile),
+        IndustryType(req.kind),
+        IndustryID(req.id),
+    );
+    let map = crate::map_func::Map::from_log_x(req.size_x.ilog2());
     let indspec = get_industry_spec(kind);
     unsafe {
         (*owner).metadata.tile = tile.0;
@@ -303,10 +319,10 @@ pub(crate) unsafe fn do_create_new_industry(
     let callbacks = IndustryCallbackMasks(unsafe { (*indspec).callback_mask });
     // Randomize initial production if non-original economy is used and there are no
     // production related callbacks.
-    if !super::uses_original_economy(callbacks, EconomyType(unsafe { (s.economy_type)() })) {
-        for n in 0..super::produced_count(owner) {
-            let random = s.shared().random_range(256);
-            let p = produced(owner, n);
+    if !super::uses_original_economy(callbacks, EconomyType(unsafe { (prod.economy_type)() })) {
+        for slot in 0..super::produced_count(owner) {
+            let random = prod.shared().random_range(256);
+            let p = produced(owner, slot);
             let rate = unsafe { u32::from((*p).rate) };
             unsafe {
                 (*p).rate = ((random.wrapping_add(128)).wrapping_mul(rate) >> 8)
@@ -315,28 +331,28 @@ pub(crate) unsafe fn do_create_new_industry(
         }
     }
     unsafe {
-        (c.set_town)(industry, r.town);
+        (cons.set_town)(industry, req.town);
         (*owner).metadata.owner = Owner::NONE.0;
     }
-    let random = s.shared().random() as u16;
-    let f = fields(owner);
+    let random = prod.shared().random() as u16;
+    let state = fields(owner);
     unsafe {
         (*owner).metadata.random_colour = gb(u32::from(random), 0, 4) as u8;
-        (*f).counter = gb(u32::from(random), 4, 12) as u16;
-        (*owner).metadata.random = r.random_bits;
-        (*f).was_cargo_delivered = 0;
+        (*state).counter = gb(u32::from(random), 4, 12) as u16;
+        (*owner).metadata.random = req.random_bits;
+        (*state).was_cargo_delivered = 0;
     }
-    let year = unsafe { (s.economy_year)() };
+    let year = unsafe { (prod.economy_year)() };
     unsafe {
-        (*f).last_prod_year = year;
-        (*owner).metadata.founder = r.founder;
-        (*f).ctlflags = 0;
+        (*state).last_prod_year = year;
+        (*owner).metadata.founder = req.founder;
+        (*state).ctlflags = 0;
     }
     let date = crate::timer_game_common::calendar_date().0;
     unsafe { (*owner).metadata.construction_date = date };
-    let construction_type = if (g.environment.editor)() {
+    let construction_type = if (generation.environment.editor)() {
         IndustryConstructionType::ICT_SCENARIO_EDITOR
-    } else if unsafe { (c.generating)() } {
+    } else if unsafe { (cons.generating)() } {
         IndustryConstructionType::ICT_MAP_GENERATION
     } else {
         IndustryConstructionType::ICT_NORMAL_GAMEPLAY
@@ -345,16 +361,16 @@ pub(crate) unsafe fn do_create_new_industry(
         (*owner).metadata.construction_type = construction_type.0;
         // Adding 1 here makes it conform to specs of var44 of varaction2 for industries:
         // 0 = created prior of newindustries, else chosen layout + 1.
-        (*owner).metadata.selected_layout = r.layout_index.wrapping_add(1) as u8;
+        (*owner).metadata.selected_layout = req.layout_index.wrapping_add(1) as u8;
         (*owner).metadata.exclusive_supplier = Owner::INVALID.0;
         (*owner).metadata.exclusive_consumer = Owner::INVALID.0;
-        (*f).prod_level = super::PRODLEVEL_DEFAULT;
+        (*state).prod_level = super::PRODLEVEL_DEFAULT;
     }
     // Call callbacks after the regular fields got initialised.
     if callbacks.test(IndustryCallbackMask::ProdChangeBuild) {
-        let random = s.shared().random();
+        let random = prod.shared().random();
         let res = unsafe {
-            (c.callback)(
+            (cons.callback)(
                 industry,
                 CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0,
                 0,
@@ -362,46 +378,50 @@ pub(crate) unsafe fn do_create_new_industry(
             )
         };
         if res != CALLBACK_FAILED {
-            if !(u16::from(super::PRODLEVEL_MINIMUM)..=u16::from(super::PRODLEVEL_MAXIMUM))
+            if (u16::from(super::PRODLEVEL_MINIMUM)..=u16::from(super::PRODLEVEL_MAXIMUM))
                 .contains(&res)
             {
                 unsafe {
-                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
-                };
-            } else {
-                unsafe {
-                    (*f).prod_level = res as u8;
+                    (*state).prod_level = res as u8;
                 }
                 super::recompute_production_multipliers(owner);
+            } else {
+                unsafe {
+                    (cons.callback_error)(
+                        indspec,
+                        CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0,
+                        res,
+                    );
+                };
             }
         }
     }
-    if unsafe { (c.generating)() } {
+    if unsafe { (cons.generating)() } {
         if callbacks.test(IndustryCallbackMask::Production256Ticks) {
             unsafe {
-                (s.production_callback)(industry, 1);
+                (prod.production_callback)(industry, 1);
             }
-            for n in 0..super::produced_count(owner) {
-                let p = produced(owner, n);
+            for slot in 0..super::produced_count(owner) {
+                let p = produced(owner, slot);
                 if is_valid_cargo_type(unsafe { (*p).cargo }) {
                     let waiting = unsafe { u32::from((*p).waiting) };
-                    let production = unsafe { (s.scale_cargo)(waiting.wrapping_mul(8)) };
+                    let production = unsafe { (prod.scale_cargo)(waiting.wrapping_mul(8)) };
                     unsafe {
-                        (*produced(owner, n)).history[usize::from(LAST_MONTH)].first =
+                        (*produced(owner, slot)).history[usize::from(LAST_MONTH)].first =
                             production as u16;
                     }
                 }
                 unsafe {
-                    (*produced(owner, n)).waiting = 0;
+                    (*produced(owner, slot)).waiting = 0;
                 }
             }
         }
-        for n in 0..super::produced_count(owner) {
-            let p = produced(owner, n);
+        for slot in 0..super::produced_count(owner) {
+            let p = produced(owner, slot);
             if is_valid_cargo_type(unsafe { (*p).cargo }) {
                 let rate = unsafe { u32::from((*p).rate) };
-                let production = unsafe { (s.scale_cargo)(rate.wrapping_mul(8)) };
-                let p = produced(owner, n);
+                let production = unsafe { (prod.scale_cargo)(rate.wrapping_mul(8)) };
+                let p = produced(owner, slot);
                 unsafe {
                     (*p).history[usize::from(LAST_MONTH)].first = (*p).history
                         [usize::from(LAST_MONTH)]
@@ -410,33 +430,34 @@ pub(crate) unsafe fn do_create_new_industry(
                 }
             }
         }
-        let month = unsafe { (s.economy_month)() };
+        let month = unsafe { (prod.economy_month)() };
         unsafe {
-            (*f).valid_history = update_valid_history_year((*f).valid_history, u32::from(month));
+            (*state).valid_history =
+                update_valid_history_year((*state).valid_history, u32::from(month));
         }
     }
     if callbacks.test(IndustryCallbackMask::DecideColour) {
         let res =
-            unsafe { (c.callback)(industry, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, 0, 0) };
+            unsafe { (cons.callback)(industry, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, 0, 0) };
         if res != CALLBACK_FAILED {
             if gb(u32::from(res), 4, 11) != 0 {
                 unsafe {
-                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, res);
+                    (cons.callback_error)(indspec, CallbackID::CBID_INDUSTRY_DECIDE_COLOUR.0, res);
                 }
             }
             unsafe { (*owner).metadata.random_colour = gb(u32::from(res), 0, 4) as u8 };
         }
     }
     if callbacks.test(IndustryCallbackMask::InputCargoTypes) {
-        cargo_callbacks(industry, owner, indspec, &lists, false, c, s.shared());
+        cargo_callbacks(industry, owner, indspec, &lists, false, cons, prod.shared());
     }
     if callbacks.test(IndustryCallbackMask::OutputCargoTypes) {
-        cargo_callbacks(industry, owner, indspec, &lists, true, c, s.shared());
+        cargo_callbacks(industry, owner, indspec, &lists, true, cons, prod.shared());
     }
     // Plant the tiles.
-    let count = unsafe { (*r.layout).len() };
-    for n in 0..count {
-        let it = layout_tile(r.layout, n);
+    let count = unsafe { (*req.layout).len() };
+    for slot in 0..count {
+        let it = layout_tile(req.layout, slot);
         let cur_tile = TileIndex(
             tile.0
                 .wrapping_add(map.diff(i32::from(it.x), i32::from(it.y))),
@@ -445,28 +466,28 @@ pub(crate) unsafe fn do_create_new_industry(
             let mut location = super::location(owner);
             location.add(cur_tile.0, map);
             set_location(owner, location);
-            let wc = unsafe { (c.water_class)(cur_tile.0) };
+            let wc = unsafe { (cons.water_class)(cur_tile.0) };
             unsafe {
-                (c.clear_tile)(
+                (cons.clear_tile)(
                     cur_tile.0,
                     DoCommandFlag::EXECUTE
                         | DoCommandFlag::NO_TEST_TOWN_RATING
                         | DoCommandFlag::NO_MODIFY_TOWN_RATING,
                 );
             }
-            let random = s.shared().random();
+            let random = prod.shared().random();
             unsafe {
-                (c.make_industry)(cur_tile.0, id.0, it.gfx, random, wc);
+                (cons.make_industry)(cur_tile.0, id.0, it.gfx, random, wc);
             }
-            if unsafe { (c.generating)() } {
+            if unsafe { (cons.generating)() } {
                 unsafe {
-                    (c.set_construction_counter)(cur_tile.0, 3);
-                    (c.set_construction_stage)(cur_tile.0, 2);
+                    (cons.set_construction_counter)(cur_tile.0, 3);
+                    (cons.set_construction_stage)(cur_tile.0, 2);
                 }
             }
             // `it.gfx` is stored in the map. But the translated ID `cur_gfx` is the
             // interesting one.
-            let cur_gfx = IndustryGfx(unsafe { (c.translated_gfx)(it.gfx) });
+            let cur_gfx = IndustryGfx(unsafe { (cons.translated_gfx)(it.gfx) });
             let its = get_industry_tile_spec(cur_gfx);
             if unsafe { (*its).animation.status != AnimationStatus::NoAnimation.0 } {
                 crate::animated_tile::openttd_rust_animation_add(cur_tile.0, true);
@@ -474,16 +495,16 @@ pub(crate) unsafe fn do_create_new_industry(
         }
     }
     // Call callbacks after all tiles have been created.
-    super::lifecycle::tiles(super::location(owner), r.size_x, |cur_tile| unsafe {
-        if (l.belongs)(cur_tile.0, id.0) {
+    super::lifecycle::tiles(super::location(owner), req.size_x, |cur_tile| unsafe {
+        if (life.belongs)(cur_tile.0, id.0) {
             // There are no shared random bits, consistent with "MakeIndustryTileBigger"
             // in tile loop. So, trigger tiles individually; `first_call` adds 0x100.
             super::openttd_rust_industry_animate_tile_abi(
                 cur_tile.0,
                 IndustryAnimationTrigger::ConstructionStageChanged.0,
                 0x100,
-                s,
-                l,
+                prod,
+                life,
             );
         }
     });
@@ -491,22 +512,22 @@ pub(crate) unsafe fn do_create_new_industry(
     let behaviour = IndustryBehaviours(unsafe { (*get_industry_spec(kind)).behaviour });
     if behaviour.test(IndustryBehaviour::PlantOnBuild) {
         let map = super::Map {
-            size_x: r.size_x,
-            size_y: r.size_y,
+            size_x: req.size_x,
+            size_y: req.size_y,
             landscape: 0,
         };
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::plant_random_farm_field(industry, id, map, s, &|| s.landscape_type());
+            super::plant_random_farm_field(industry, id, map, prod, &|| prod.landscape_type());
         }
     }
     unsafe {
-        (s.directory_dirty)(super::IndustryDirectoryInvalidateWindowData::IDIWD_FORCE_REBUILD.0);
-        (c.build_window_dirty)();
+        (prod.directory_dirty)(super::IndustryDirectoryInvalidateWindowData::IDIWD_FORCE_REBUILD.0);
+        (cons.build_window_dirty)();
     }
-    if !unsafe { (c.generating)() } {
-        populate(industry, id, owner, s, l, c);
+    if !unsafe { (cons.generating)() } {
+        populate(industry, id, owner, prod, life, cons);
     }
 }
 /// Write `location` back to `Industry::location`.
