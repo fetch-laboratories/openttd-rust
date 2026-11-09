@@ -1276,14 +1276,14 @@ pub unsafe extern "C" fn openttd_rust_station_catchment_radius(
 }
 /// Native `GetProductionAroundTiles`, writing the caller's `CargoArray`.
 /// # Safety
-/// `out` names 64 writable values; `c` is the live catchment table.
+/// `out` names `NUM_CARGO` writable values; `c` is the live catchment table.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_production_around(
     tile: u32,
     w: i32,
     h: i32,
     rad: i32,
-    out: *mut [u32; 64],
+    out: *mut [u32; NUM_CARGO as usize],
     c: *const CatchmentServices,
 ) {
     let produced = production_around_tiles(TileIndex(tile), w, h, rad, &unsafe { Ctx::new(c) });
@@ -1291,14 +1291,14 @@ pub unsafe extern "C" fn openttd_rust_station_production_around(
 }
 /// Native `GetAcceptanceAroundTiles`, writing the caller's `CargoArray`.
 /// # Safety
-/// `out` names 64 writable values, `always` is null or writable; `c` is the live table.
+/// `out` names `NUM_CARGO` writable values, `always` is null or writable; `c` is the live table.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_acceptance_around(
     tile: u32,
     w: i32,
     h: i32,
     rad: i32,
-    out: *mut [u32; 64],
+    out: *mut [u32; NUM_CARGO as usize],
     always: *mut u64,
     c: *const CatchmentServices,
 ) {
