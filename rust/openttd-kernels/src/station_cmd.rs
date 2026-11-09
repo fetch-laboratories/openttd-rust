@@ -3480,6 +3480,7 @@ impl Ctx<'_> {
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
+        /* Perform NewGRF checks */
         /* Check if the road stop is buildable */
         if !roadstopspec.is_null() && (self.s.road_spec_info)(roadstopspec).availability_callback {
             let cb_res = unsafe {
