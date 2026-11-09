@@ -3915,6 +3915,9 @@ impl Ctx<'_> {
     /// `RemoveGenericRoadStop`: remove a tile area of road stop or road
     /// waypoints.
     fn remove_generic_road_stop(&self, context: RoadStopRemoval<'_>) {
+        // `road_type[RTT_ROAD]`, `road_type[RTT_TRAM]` and the owner pair.
+        const RTT_ROAD: usize = RoadTramType::RTT_ROAD.0 as usize;
+        const RTT_TRAM: usize = RoadTramType::RTT_TRAM.0 as usize;
         let RoadStopRemoval {
             cost,
             ret,
@@ -3976,8 +3979,8 @@ impl Ctx<'_> {
             had_success = true;
             /* Restore roads. */
             if flags.test(DoCommandFlag::Execute)
-                && (road_type[0] != RoadType::INVALID_ROADTYPE
-                    || road_type[1] != RoadType::INVALID_ROADTYPE)
+                && (road_type[RTT_ROAD] != RoadType::INVALID_ROADTYPE
+                    || road_type[RTT_TRAM] != RoadType::INVALID_ROADTYPE)
             {
                 let town = crate::town::spatial::closest(self.shared, cur_tile.0, u32::MAX);
                 let authority = unsafe { &*self.s.authority };
@@ -3986,17 +3989,25 @@ impl Ctx<'_> {
                     cur_tile.0,
                     crate::rail_cmd::CrossingRoad {
                         bits: road_bits.0,
-                        road_type: road_type[0].0,
-                        tram_type: road_type[1].0,
+                        road_type: road_type[RTT_ROAD].0,
+                        tram_type: road_type[RTT_TRAM].0,
                         town,
-                        road_owner: road_owner[0].0,
-                        tram_owner: road_owner[1].0,
+                        road_owner: road_owner[RTT_ROAD].0,
+                        tram_owner: road_owner[RTT_TRAM].0,
                     },
                 );
                 /* Update company infrastructure counts. */
                 let count = road_bits.0.count_ones() as i32;
-                self.update_company_road_infrastructure(road_type[0], road_owner[0], count);
-                self.update_company_road_infrastructure(road_type[1], road_owner[1], count);
+                self.update_company_road_infrastructure(
+                    road_type[RTT_ROAD],
+                    road_owner[RTT_ROAD],
+                    count,
+                );
+                self.update_company_road_infrastructure(
+                    road_type[RTT_TRAM],
+                    road_owner[RTT_TRAM],
+                    count,
+                );
             }
         }
         if !had_success {
