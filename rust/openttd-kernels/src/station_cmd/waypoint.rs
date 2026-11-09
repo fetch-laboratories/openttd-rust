@@ -158,8 +158,9 @@ impl Ctx<'_> {
         }
     }
     /// `CmdRenameWaypoint`: rename a waypoint.
-    fn cmd_rename_waypoint(&self, out: Cost<'_>, flags: DoCommandFlags, args: CmdRenameWaypoint) {
+    fn cmd_rename_waypoint(&self, call: WaypointCall<'_>, args: CmdRenameWaypoint) {
         w::hit(w::WAYPOINT_RENAME);
+        let (out, flags) = (call.cost, call.flags);
         let wp = self.waypoint(args.waypoint_id.0);
         if wp.is_null() {
             return out.error(StringID::INVALID_STRING_ID.0);
@@ -197,11 +198,11 @@ impl Ctx<'_> {
     /// `CmdMoveWaypointName`: move a waypoint name; returns the waypoint ID.
     fn cmd_move_waypoint_name(
         &self,
-        out: Cost<'_>,
-        flags: DoCommandFlags,
+        call: WaypointCall<'_>,
         args: CmdMoveWaypointName,
     ) -> StationID {
         w::hit(w::WAYPOINT_MOVE_NAME);
+        let (out, flags) = (call.cost, call.flags);
         let tile = args.tile;
         let wp = self.waypoint(args.waypoint_id.0);
         if wp.is_null() {
@@ -274,9 +275,13 @@ pub unsafe extern "C" fn openttd_rust_waypoint_rename(
     length: usize,
 ) {
     let c = unsafe { Ctx::new(s) };
+    // Renaming needs no scratch result; `ret` aliases the output.
     c.cmd_rename_waypoint(
-        c.c(out),
-        DoCommandFlags(flags),
+        WaypointCall {
+            cost: c.c(out),
+            ret: c.c(out),
+            flags: DoCommandFlags(flags),
+        },
         CmdRenameWaypoint {
             waypoint_id: StationID(id),
             text,
@@ -295,9 +300,13 @@ pub unsafe extern "C" fn openttd_rust_waypoint_move_name(
     tile: u32,
 ) -> u16 {
     let c = unsafe { Ctx::new(s) };
+    // Moving the name needs no scratch result; `ret` aliases the output.
     c.cmd_move_waypoint_name(
-        c.c(out),
-        DoCommandFlags(flags),
+        WaypointCall {
+            cost: c.c(out),
+            ret: c.c(out),
+            flags: DoCommandFlags(flags),
+        },
         CmdMoveWaypointName {
             waypoint_id: StationID(id),
             tile: TileIndex(tile),
