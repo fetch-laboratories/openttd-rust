@@ -4366,9 +4366,8 @@ impl Ctx<'_> {
         spec: *const AirportSpec,
         layout: u8,
         tile: TileIndex,
+        (owner, index): (CompanyID, u16),
     ) {
-        let owner = CompanyID((self.world().station_owner)(st));
-        let index = (self.links().graphs.station_id)(st);
         for iter in self.airport_tiles(spec, layout, tile) {
             (self.s.make_airport)(
                 iter.tile,
@@ -4547,7 +4546,7 @@ impl Ctx<'_> {
         self.before_add_rect(ret, st, airport_area, StationRectMode::ADD_TRY);
         let owner = CompanyID((self.world().station_owner)(st));
         let index = (self.links().graphs.station_id)(st);
-        self.make_airport_tiles(st, spec, layout, tile);
+        self.make_airport_tiles(st, spec, layout, tile, (owner, index));
         // `UpdateAirplanesOnNewStation`.
         unsafe {
             crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index);
