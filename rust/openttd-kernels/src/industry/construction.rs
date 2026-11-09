@@ -16,6 +16,7 @@ use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::Owner;
 use crate::economy_type::EconomyType;
+use crate::history::update_valid_history_year;
 use crate::history_type::LAST_MONTH;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
@@ -411,8 +412,7 @@ pub(crate) unsafe fn do_create_new_industry(
         }
         let month = unsafe { (s.economy_month)() };
         unsafe {
-            (*f).valid_history =
-                crate::history::update_valid_history_year((*f).valid_history, u32::from(month));
+            (*f).valid_history = update_valid_history_year((*f).valid_history, u32::from(month));
         }
     }
     if callbacks.test(IndustryCallbackMask::DecideColour) {
@@ -498,9 +498,7 @@ pub(crate) unsafe fn do_create_new_industry(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::plant_random_farm_field_with_landscape(industry, id, map, s, &|| unsafe {
-                (s.landscape)()
-            });
+            super::plant_random_farm_field(industry, id, map, s, &|| unsafe { (s.landscape)() });
         }
     }
     unsafe {

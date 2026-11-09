@@ -793,7 +793,7 @@ fn produce_industry_goods(e: Entry, s: &Services, builder: *mut Builder) {
         };
         if act {
             if parameter == 0 {
-                plant_random_farm_field(i, IndustryID(e.id), tick_map(s), s);
+                plant_random_farm_field_with_settings(i, IndustryID(e.id), tick_map(s), s);
             } else {
                 chop_lumber_mill_trees(i, owner, tick_map(s), s, builder);
             }
@@ -1841,7 +1841,7 @@ fn plant_farm_field(
     );
 }
 /// `PlantRandomFarmField`, with the landscape read at each original observation.
-fn plant_random_farm_field_with_landscape(
+fn plant_random_farm_field(
     i: *mut c_void,
     id: IndustryID,
     map: Map,
@@ -1874,9 +1874,9 @@ fn tick_map(s: &Services) -> Map {
         landscape: unsafe { s.shared().settings().climate.read() },
     }
 }
-/// `PlantRandomFarmField`.
-fn plant_random_farm_field(i: *mut c_void, id: IndustryID, map: Map, s: &Services) {
-    plant_random_farm_field_with_landscape(i, id, map, s, &|| unsafe {
+/// `PlantRandomFarmField`, reading the landscape from the game settings.
+fn plant_random_farm_field_with_settings(i: *mut c_void, id: IndustryID, map: Map, s: &Services) {
+    plant_random_farm_field(i, id, map, s, &|| unsafe {
         s.shared().settings().climate.read()
     });
 }
@@ -1885,7 +1885,7 @@ fn plant_random_farm_field(i: *mut c_void, id: IndustryID, map: Map, s: &Service
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: *const Services) {
     let s = unsafe { &*s };
-    plant_random_farm_field(i, IndustryID(id), tick_map(s), s);
+    plant_random_farm_field_with_settings(i, IndustryID(id), tick_map(s), s);
 }
 /// Perform a circular search around the Lumber Mill in order to find trees to cut.
 fn chop_lumber_mill_trees(
