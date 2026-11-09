@@ -8,7 +8,8 @@ live worktree's own `.local` stays with that worktree.
 
 A worktree that is kept still gives up its git-ignored `build-rust` (#824) once its work is
 merged or closed, or, for a T3 task's checkout, once it has been idle for `--idle-hours`. Locked, referenced, evidence
-and profile worktrees, a live cwd inside, and a symlinked `build-rust` keep the build. Only
+and profile worktrees, a live cwd inside, a symlinked `build-rust` and one holding tracked
+or staged files keep the build. Only
 that directory is deleted, never the checkout or its staged or uncommitted files.
 """
 
@@ -326,8 +327,20 @@ def build_exclusion(main: Path, tree: Worktree, references: str) -> str | None:
     ]
     found = next((reason for check, reason in checks if check()), None)
     return (
-        found or retained_refusal(main, tree.path, references) or cwd_refusal(tree.path)
+        found
+        or indexed_refusal(tree.path)
+        or retained_refusal(main, tree.path, references)
+        or cwd_refusal(tree.path)
     )
+
+
+def indexed_refusal(tree: Path) -> str | None:
+    """Ignore rules do not protect files already tracked or staged under build-rust."""
+    try:
+        listed = git(tree, "ls-files", "--cached", "-z", "--", BUILD)
+    except subprocess.CalledProcessError as error:
+        return f"cannot inspect index: {error}"
+    return "tracked or staged files under build-rust" if listed.strip("\0") else None
 
 
 def work_done(main: Path, tree: Worktree, pr_state: PrState) -> bool:
@@ -791,7 +804,11 @@ def build_refusal(main: Path, item: Item, references: str) -> str | None:
         return "build-rust became a symlink"
     if any(tree.locked for tree in list_worktrees(main) if tree.path == owner):
         return "worktree became locked"
-    if refusal := retained_refusal(main, owner, references) or cwd_refusal(owner):
+    if refusal := (
+        indexed_refusal(owner)
+        or retained_refusal(main, owner, references)
+        or cwd_refusal(owner)
+    ):
         return refusal
     if item.idle_seconds is not None:
         newest = latest_activity(owner)

@@ -892,6 +892,31 @@ class HousekeepingTests(unittest.TestCase):
             self.assertIn("activity", housekeeping.remove(self.main, item) or "")
         self.assertTrue(build.exists())
 
+    def test_tracked_or_staged_build_files_keep_the_build(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        staged_tree, late_tree = self.t3_tree("t3-staged"), self.t3_tree("t3-late")
+        staged = self.build(staged_tree, idle + 60)
+        late = self.build(late_tree, idle + 60)
+        git(staged_tree, "add", "-f", "build-rust/CMakeCache.txt")
+        self.age(staged_tree, idle + 60)
+        with patch.dict(PR_STATES, {"t3-staged": "OPEN", "t3-late": "OPEN"}):
+            builds = self.planned_builds()
+            self.assertFalse(builds[staged].remove, builds[staged].reason)
+            self.assertIn("tracked or staged", builds[staged].reason)
+            self.assertTrue(builds[late].remove, builds[late].reason)
+            # Staged after planning: the removal recheck keeps it.
+            git(late_tree, "add", "-f", "build-rust/CMakeCache.txt")
+            self.build(late_tree, idle + 60)
+            self.assertIn(
+                "tracked or staged", housekeeping.remove(self.main, builds[late]) or ""
+            )
+        for tree in (staged_tree, late_tree):
+            self.assertEqual(
+                git(tree, "diff", "--cached", "--name-only"),
+                "build-rust/CMakeCache.txt\n",
+            )
+            self.assertTrue((tree / "build-rust/CMakeCache.txt").exists())
+
     def test_idle_boundary_uses_the_option(self) -> None:
         tree = self.t3_tree("t3-boundary")
         build = self.build(tree, 3 * 3600)
