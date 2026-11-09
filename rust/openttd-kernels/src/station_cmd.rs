@@ -1353,7 +1353,7 @@ impl Ctx<'_> {
         let mut search = SignSearch {
             c: self,
             station: st,
-            tile: tile.0,
+            tile,
             other: false,
         };
         /* Check if the tile is the base tile of another station */
@@ -1480,15 +1480,17 @@ impl Ctx<'_> {
         }
     }
 }
+/// `CmdMoveStationName` and `CmdMoveWaypointName`'s check for another
+/// station whose base tile is `tile`.
 struct SignSearch<'a> {
     c: &'a Ctx<'a>,
     station: *mut BaseStation,
-    tile: u32,
+    tile: TileIndex,
     other: bool,
 }
 unsafe extern "C" fn sign_visit(context: *mut std::ffi::c_void, st: *mut BaseStation) {
     let s = unsafe { &mut *context.cast::<SignSearch<'_>>() };
-    if !st.is_null() && st != s.station && (s.c.s.location)(st) == s.tile {
+    if !st.is_null() && st != s.station && TileIndex((s.c.s.location)(st)) == s.tile {
         s.other = true;
     }
 }

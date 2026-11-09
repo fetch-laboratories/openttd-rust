@@ -224,7 +224,7 @@ impl Ctx<'_> {
         let mut search = SignSearch {
             c: self,
             station: wp,
-            tile: tile.0,
+            tile,
             other: false,
         };
         crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| unsafe {
