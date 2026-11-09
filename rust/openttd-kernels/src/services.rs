@@ -896,6 +896,18 @@ crate::abi::layouts! {
     };
 }
 
+#[cfg(test)]
+extern "C" fn unexpected_station_visits(_: u16) -> u8 {
+    unreachable!()
+}
+#[cfg(test)]
+extern "C" fn unexpected_station_visit(_: u16, _: u8) {
+    unreachable!()
+}
+#[cfg(test)]
+extern "C" fn unexpected_station_field(_: u16) -> u32 {
+    unreachable!()
+}
 /// Standalone test table: map predicates return zero and writes do nothing.
 #[cfg(test)]
 #[must_use]
@@ -919,15 +931,6 @@ pub fn fixture(
     }
     extern "C" fn flag(_: u32) -> bool {
         false
-    }
-    extern "C" fn unexpected_station_visits(_: u16) -> u8 {
-        unreachable!()
-    }
-    extern "C" fn unexpected_station_visit(_: u16, _: u8) {
-        unreachable!()
-    }
-    extern "C" fn unexpected_station_field(_: u16) -> u32 {
-        unreachable!()
     }
     extern "C" fn short(_: u32) -> u16 {
         0

@@ -1341,7 +1341,7 @@
       6
     ],
     "rust/openttd-kernels/src/services.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      269
+      274
     ],
     "rust/openttd-kernels/src/session.rs | impl < ' a > Session < ' a >::fn switch_startup | too_many_lines | 4a33eacd5fa65f2b2e28": [
       134
@@ -1782,7 +1782,7 @@
       29
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn loco | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      159
+      158
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn loco::mod e | excessive_nesting | a68d8671dce465a48f57": [
       4
@@ -1828,7 +1828,7 @@
       9
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      295
+      291
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn reverse_command | excessive_nesting | b64c8c29fee1dec3b0a0": [
       5
@@ -1982,7 +1982,7 @@
       270
     ],
     "rust/openttd-kernels/src/vehicle_transactions/construct.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      158
+      156
     ],
     "rust/openttd-kernels/src/vehicle_transactions/rail.rs | fn check_train_attachment | excessive_nesting | 0ec849d39b23b951c7a8": [
       6

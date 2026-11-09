@@ -54,6 +54,7 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_orders(void *shell) n
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1
+src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept | 7734a2705170a665 | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
 src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
