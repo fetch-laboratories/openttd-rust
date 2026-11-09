@@ -749,3 +749,260 @@ mod income_tests {
         assert_eq!(oracle::check(&sections, "invalid", invalid), 1);
     }
 }
+
+/// `CargoPayment::~CargoPayment` settlement from the retired `src/tests/cargo_payment.cpp`
+/// (#736 F): the fixture's operation order, `Money` boundaries and cleanup, with its own
+/// expected values.
+#[cfg(test)]
+mod settlement_tests {
+    use super::*;
+    use crate::economy_type::ExpensesType;
+    use crate::test_tables::{CARGO, FINANCE, SHARED, VEHICLE};
+    use crate::vehicle::VehicleRef;
+    use std::cell::{Cell, RefCell};
+    use std::ptr;
+
+    /// The fixture's settlement log: (operation, first value, second value). Operations:
+    /// 0 detach, 1 current company, 2 select the owner, 3 invalidate its windows, 4 write the
+    /// profit, 5 local company, 6 vehicle sound, 7 cash-till sound, 8 feeder animation,
+    /// 9 cost animation, 10 restore the company.
+    type Settlement = Vec<(u8, i64, i64)>;
+    thread_local! {
+        static SETTLEMENT: RefCell<Settlement> = const { RefCell::new(Vec::new()) };
+        static FINANCES: Cell<*mut crate::company::Finances> = const { Cell::new(ptr::null_mut()) };
+        static LOCAL: Cell<bool> = const { Cell::new(false) };
+        static CUSTOM_SOUND: Cell<bool> = const { Cell::new(false) };
+        static VALID_COMPANY: Cell<bool> = const { Cell::new(false) };
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+    }
+    fn log(operation: u8, first: i64, second: i64) {
+        SETTLEMENT.with(|s| s.borrow_mut().push((operation, first, second)));
+    }
+    extern "C" fn current_company() -> u8 {
+        log(1, 0, 0);
+        CURRENT.get()
+    }
+    extern "C" fn set_current_company(id: u8) {
+        log(if id == 3 { 2 } else { 10 }, i64::from(id), 0);
+        CURRENT.set(id);
+    }
+    extern "C" fn company_finances(id: u8) -> *mut crate::company::Finances {
+        assert_eq!(id, 3);
+        if VALID_COMPANY.get() {
+            FINANCES.get()
+        } else {
+            ptr::null_mut()
+        }
+    }
+    extern "C" fn invalidate_company_windows(id: u8) {
+        log(3, i64::from(id), 0);
+    }
+    extern "C" fn write_profit(_: VehicleRef, value: i64) {
+        log(4, value, 0);
+    }
+    extern "C" fn play_vehicle_sound(
+        _: VehicleRef,
+        event: crate::newgrf_sound::VehicleSoundEvent,
+    ) -> bool {
+        assert_eq!(event.0, crate::newgrf_sound::VSE_LOAD_UNLOAD.0);
+        log(6, 0, 0);
+        CUSTOM_SOUND.get()
+    }
+    extern "C" fn play_sound(_: VehicleRef, sound: u16) {
+        assert_eq!(sound, crate::sound_type::SND_14_CASHTILL);
+        log(7, 0, 0);
+    }
+    extern "C" fn detach_payment(_: *mut OpenTTDVehicle) {
+        log(0, 0, 0);
+    }
+    extern "C" fn local_company() -> bool {
+        log(5, 0, 0);
+        LOCAL.get()
+    }
+    extern "C" fn expense(_: *mut OpenTTDVehicle, income: bool) -> ExpensesType {
+        assert!(income);
+        ExpensesType::EXPENSES_TRAIN_REVENUE
+    }
+    extern "C" fn profit(_: *mut OpenTTDVehicle) -> i64 {
+        1000
+    }
+    extern "C" fn cost_animation(x: i32, y: i32, z: i32, income: i64) {
+        assert_eq!((x, y, z), (11, 22, 33));
+        log(9, 0, income);
+    }
+    extern "C" fn feeder_animation(x: i32, y: i32, z: i32, transfer: i64, income: i64) {
+        assert_eq!((x, y, z), (11, 22, 33));
+        log(8, transfer, income);
+    }
+
+    /// One fixture case: cleanup or settlement, a maximal or no transfer, a local company,
+    /// a custom vehicle sound and a valid company.
+    /// The fixture's nested loop index: bit 4 cleaning, then transfer, local, custom and bit 0
+    /// valid, so counting up follows its loop order.
+    #[derive(Clone, Copy)]
+    struct Case(u8);
+    impl Case {
+        fn bit(self, n: u8) -> bool {
+            self.0 & (16 >> n) != 0
+        }
+        fn cleaning(self) -> bool {
+            self.bit(0)
+        }
+        fn transfer(self) -> bool {
+            self.bit(1)
+        }
+        fn local(self) -> bool {
+            self.bit(2)
+        }
+        fn custom(self) -> bool {
+            self.bit(3)
+        }
+        fn valid(self) -> bool {
+            self.bit(4)
+        }
+    }
+
+    /// The fixture's expected operation order for one settled payment.
+    fn expected_order(case: Case) -> Vec<u8> {
+        let mut order = vec![0, 1, 2];
+        if case.valid() {
+            order.push(3);
+        }
+        order.extend([4, 5]);
+        if case.local() {
+            order.push(6);
+            if !case.custom() {
+                order.push(7);
+            }
+        }
+        order.push(if case.transfer() { 8 } else { 9 });
+        order.push(10);
+        order
+    }
+
+    /// One fixture case: settle (or clean up) a payment whose route and visual profits are
+    /// `INT64_MIN`, with a maximal or no transfer.
+    fn settle(s: &Services, case: Case) {
+        let (cleaning, transfer, local, custom, valid) = (
+            case.cleaning(),
+            case.transfer(),
+            case.local(),
+            case.custom(),
+            case.valid(),
+        );
+        let inputs = format!(
+            "cleaning {cleaning} transfer {transfer} local {local} custom {custom} valid {valid}"
+        );
+        SETTLEMENT.with(|s| s.borrow_mut().clear());
+        // SAFETY: The case's zeroed finance record, owned by this thread.
+        unsafe { FINANCES.get().write(std::mem::zeroed()) };
+        CURRENT.set(17);
+        LOCAL.set(local);
+        CUSTOM_SOUND.set(custom);
+        VALID_COMPANY.set(valid);
+        let front = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            ptr::null_mut(),
+            crate::vehicle_type::VehicleType::TRAIN,
+        );
+        // SAFETY: The record allocated above, released at the end of the case.
+        unsafe {
+            (*front).owner = crate::company_type::CompanyID(3);
+            ((*front).x_pos, (*front).y_pos, (*front).z_pos) = (11, 22, 33);
+        }
+        let payment = openttd_rust_cargo_payment_new(front, StationID(42));
+        // SAFETY: The payment allocated above; destroy releases it.
+        unsafe {
+            (*payment).fields = Fields {
+                front,
+                route_profit: i64::MIN,
+                visual_profit: i64::MIN,
+                visual_transfer: if transfer { i64::MAX } else { 0 },
+            };
+            assert_eq!(
+                openttd_rust_cargo_payment_front(payment),
+                front,
+                "{inputs}: front"
+            );
+            openttd_rust_cargo_payment_destroy(payment, s, u8::from(cleaning));
+        }
+        let settlement = SETTLEMENT.with(|s| s.borrow().clone());
+        // SAFETY: The settlement has ended; nothing else holds the record or the finances.
+        let (money, revenue) = unsafe {
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(front);
+            let finances = FINANCES.get();
+            (
+                (*finances).money,
+                (*finances).expenses[0][usize::from(ExpensesType::EXPENSES_TRAIN_REVENUE.0)],
+            )
+        };
+        if cleaning {
+            assert!(settlement.is_empty(), "{inputs}: cleanup settles nothing");
+            return;
+        }
+        let order: Vec<u8> = settlement
+            .iter()
+            .map(|&(operation, ..)| operation)
+            .collect();
+        assert_eq!(order, expected_order(case), "{inputs}: order");
+        let expected = if valid { (-i64::MAX, i64::MAX) } else { (0, 0) };
+        assert_eq!((money, revenue), expected, "{inputs}: money, revenue");
+        assert_eq!(
+            settlement[if valid { 4 } else { 3 }].1,
+            if transfer { 744 } else { 1000 },
+            "{inputs}: written profit"
+        );
+        assert_eq!(
+            settlement[settlement.len() - 2].2,
+            i64::MAX,
+            "{inputs}: animated income"
+        );
+        assert_eq!(CURRENT.get(), 17, "{inputs}: restored company");
+    }
+
+    #[test]
+    fn settlement_order_money_boundaries_and_cleanup() {
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        finance.set_current_company = set_current_company;
+        finance.company_finances = company_finances;
+        finance.invalidate_company_windows = invalidate_company_windows;
+        let mut vehicles = VEHICLE;
+        vehicles.write_profit = write_profit;
+        vehicles.play_vehicle_sound = play_vehicle_sound;
+        vehicles.play_sound = play_sound;
+        let mut shared = SHARED;
+        shared.cost_animation = cost_animation;
+        let mut s = CARGO;
+        s.finance = &raw const finance;
+        s.vehicles = &raw const vehicles;
+        s.detach_payment = detach_payment;
+        s.local_company = local_company;
+        s.expense = expense;
+        s.profit = profit;
+        s.shared = &raw const shared;
+        s.feeder_animation = feeder_animation;
+        // SAFETY: Plain integer record; every case rewrites it before use.
+        let mut finances: Box<crate::company::Finances> = Box::new(unsafe { std::mem::zeroed() });
+        FINANCES.set(&raw mut *finances);
+
+        // The fixture's nested loops, outermost first.
+        for case in 0..32 {
+            settle(&s, Case(case));
+        }
+        // A payment with neither visual profit nor transfer only detaches.
+        SETTLEMENT.with(|s| s.borrow_mut().clear());
+        let payment = openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+        // SAFETY: The payment allocated above; destroy releases it.
+        unsafe {
+            (*payment).fields = Fields {
+                front: ptr::null_mut(),
+                route_profit: i64::MAX,
+                visual_profit: 0,
+                visual_transfer: 0,
+            };
+            openttd_rust_cargo_payment_destroy(payment, &raw const s, 0);
+        }
+        assert_eq!(SETTLEMENT.with(|s| s.borrow().clone()), [(0, 0, 0)]);
+        FINANCES.set(ptr::null_mut());
+    }
+}
