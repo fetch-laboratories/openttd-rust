@@ -38,8 +38,14 @@ pub struct SplitKey<T> {
 /// `Kdtree`: K-dimensional tree, specialised for 2-dimensional space. This is not intended
 /// as a primary storage of data, but as an index into existing data. Usually the type
 /// stored by this tree should be an index into an existing array. This implementation
-/// assumes Manhattan distances are used. The element type T must be less-than comparable
-/// for `FindNearest` to work.
+/// assumes Manhattan distances are used.
+///
+/// Be careful when using this in game code, depending on usage pattern, the tree shape may
+/// end up different for different clients in multiplayer, causing iteration order to differ
+/// and possibly having elements returned in different order. The using code should be
+/// designed to produce the same result regardless of iteration order.
+///
+/// The element type T must be less-than comparable for `FindNearest` to work.
 pub(crate) struct Kdtree<T> {
     nodes: Vec<Node<T>>,
     free: Vec<usize>,
@@ -140,13 +146,16 @@ impl<T: Copy + Ord> Kdtree<T> {
     }
     /// `FreeSubtree`: free all children of the given node
     fn free_subtree(&mut self, node: usize, keys: &mut Vec<SplitKey<T>>) {
+        // We'll be appending items to the free_list, get index of our first item
         let mut cursor = self.free.len();
+        // Prepare the descent with our children
         for child in self.nodes[node].children {
             if child != INVALID_NODE {
                 self.free.push(child);
             }
         }
         self.nodes[node].children = [INVALID_NODE; 2];
+        // Recursively free the nodes being collected
         while cursor < self.free.len() {
             let index = self.free[cursor];
             let node = self.nodes[index];
@@ -198,10 +207,15 @@ impl<T: Copy + Ord> Kdtree<T> {
         level: usize,
         xy: &impl Fn(T, usize) -> u16,
     ) {
+        // Dimension index of current level
         let dim = level % 2;
+        // Which side to insert on: the coordinate of the new element against the coordinate
+        // of the element splitting at this node
         let side = usize::from(xy(element, dim) >= xy(self.nodes[node].element, dim));
         let next = self.nodes[node].children[side];
         if next == INVALID_NODE {
+            // New leaf. The node vector may have been reallocated at this point, so the
+            // parent is addressed again by index.
             let index = self.add(element);
             self.nodes[node].children[side] = index;
         } else {
@@ -234,10 +248,13 @@ impl<T: Copy + Ord> Kdtree<T> {
         split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) -> usize {
         if self.nodes[node].element == element {
+            // Remove this one
             self.free.push(node);
             if self.nodes[node].children == [INVALID_NODE; 2] {
+                // Simple case, leaf, new child node for parent is "none"
                 return INVALID_NODE;
             }
+            // Complex case, rebuild the sub-tree
             let mut keys = std::mem::take(&mut self.keys);
             keys.clear();
             self.free_subtree(node, &mut keys);
@@ -245,11 +262,18 @@ impl<T: Copy + Ord> Kdtree<T> {
             self.keys = keys;
             branch
         } else {
+            // Search in a sub-tree
+            // Dimension index of current level
             let dim = level % 2;
+            // Which side to remove from: the coordinate of the element being removed against
+            // the coordinate of the element splitting at this node
             let side = usize::from(xy(element, dim) >= xy(self.nodes[node].element, dim));
             let next = self.nodes[node].children[side];
+            // Descend
             let branch = self.remove_recursive(element, next, level + 1, xy, split);
             if branch != next {
+                // The node vector may have been reallocated at this point, so the parent is
+                // addressed again by index.
                 self.nodes[node].children[side] = branch;
             }
             node
@@ -268,6 +292,7 @@ impl<T: Copy + Ord> Kdtree<T> {
             return;
         }
         if !self.is_unbalanced() || !self.rebuild(None, Some(element), xy, split) {
+            // If the removed element is the root node, this modifies the root
             self.root = self.remove_recursive(element, self.root, 0, xy, split);
             self.unbalanced = self.unbalanced.wrapping_add(1);
         }
@@ -281,19 +306,28 @@ impl<T: Copy + Ord> Kdtree<T> {
         mut limit: i32,
         xy: &impl Fn(T, usize) -> u16,
     ) -> (i32, T) {
+        // Node reference
         let n = self.nodes[node];
+        // Dimension index of current level
         let dim = level % 2;
+        // Coordinate of element splitting at this node
         let coordinate = xy(n.element, dim);
+        // This node's distance to target
         let distance = (i32::from(xy(n.element, 0)) - i32::from(target[0])).abs()
             + (i32::from(xy(n.element, 1)) - i32::from(target[1])).abs();
+        // Assume this node is the best choice for now
         let mut best = (distance, n.element);
+        // Next node to visit
         let side = usize::from(target[dim] >= coordinate);
         let next = n.children[side];
         if next != INVALID_NODE {
+            // Check if there is a better node down the tree
             // Native near-side recursion resets the limit to int's maximum.
             best = best.min(self.nearest_recursive(target, next, level + 1, i32::MAX, xy));
         }
         limit = limit.min(best.0);
+        // Check if the distance from current best is worse than distance from target to
+        // splitting line, if it is we also need to check the other side of the split.
         let opposite = n.children[1 - side];
         if opposite != INVALID_NODE
             && limit >= (i32::from(target[dim]) - i32::from(coordinate)).abs()
@@ -318,16 +352,23 @@ impl<T: Copy + Ord> Kdtree<T> {
         xy: &impl Fn(T, usize) -> u16,
         visit: &mut impl FnMut(T),
     ) {
+        // Node reference
         let n = self.nodes[node];
+        // Dimension index of current level
         let dim = level % 2;
+        // Coordinate of element splitting at this node
         let ec = xy(n.element, dim);
+        // Opposite coordinate of element
         let oc = xy(n.element, 1 - dim);
+        // Test if this element is within rectangle
         if ec >= p1[dim] && ec < p2[dim] && oc >= p1[1 - dim] && oc < p2[1 - dim] {
             visit(n.element);
         }
+        // Recurse left if part of rectangle is left of split
         if p1[dim] < ec && n.children[0] != INVALID_NODE {
             self.contained_recursive(p1, p2, n.children[0], level + 1, xy, visit);
         }
+        // Recurse right if part of rectangle is right of split
         if p2[dim] > ec && n.children[1] != INVALID_NODE {
             self.contained_recursive(p1, p2, n.children[1], level + 1, xy, visit);
         }

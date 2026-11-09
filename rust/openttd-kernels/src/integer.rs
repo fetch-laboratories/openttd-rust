@@ -96,6 +96,7 @@ pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
         return parse(src, 10, width, signed, clamp);
     }
 
+    // Base is 8, 10 or 16: we only support these bases when skipping.
     let negative = signed && src.starts_with(b"-");
     let start = usize::from(negative);
     let limit = if signed {

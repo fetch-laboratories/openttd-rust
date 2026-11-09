@@ -35,9 +35,18 @@ pub const fn has_exactly_one_bit(value: u8) -> bool {
     value != 0 && value & value.wrapping_sub(1) == 0
 }
 
-/// `SB`: set `length` bits in `value` starting at bit `start` to `data`. For uint32 fields:
-/// clear the destination window, then OR the entire shifted operand. The original
-/// deliberately does not mask the operand ("This is not a bug, its a feature.").
+/// `SB`: set `length` bits in `value` starting at bit `start` to `data`.
+///
+/// This function sets `length` bits from `value` which started as bit `start` to the value of
+/// `data`. The parameters `value`, `start` and `length` work the same as the parameters of
+/// `GB`. The result is saved in `value` again. Unused bits in the window provided by
+/// `length` are set to 0 if the value of `data` isn't "big" enough. This is not a bug, its a
+/// feature.
+///
+/// To avoid unexpected results the value of `data` should not use more space as the
+/// provided space of `length` bits (log2); the original does not mask it, so wider bits are
+/// OR-ed in above the window. Preconditions: `length < 32` and `start + length <= 32`.
+/// For uint32 fields.
 pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value &= !((1_u32.wrapping_shl(u32::from(length)) - 1).wrapping_shl(u32::from(start)));
     *value |= data.wrapping_shl(u32::from(start));
@@ -50,8 +59,15 @@ pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
     *value
 }
 
-/// `GB`: fetch `count` bits from `value`, started at bit `start`. For a 32-bit promoted
-/// input. Native defined inputs retain their result;
+/// `GB`: fetch `count` bits from `value`, started at bit `start`.
+///
+/// This function can be used to fetch `count` bits from the value `value`. The `start` value
+/// set the start position to read. The start position is count from the LSB and starts at
+/// 0. The result starts at a LSB, as this isn't just an and-bitmask but also some
+/// bit-shifting operations. `GB(0xFF, 2, 1)` will so return 0x01 (0000 0001) instead of
+/// 0x04 (0000 0100). Preconditions: `count < 32` and `start + count <= 32`.
+///
+/// For a 32-bit promoted input. Native defined inputs retain their result;
 /// wrapping shifts avoid introducing a panic for the native out-of-width domain.
 pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
     value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
