@@ -63,10 +63,10 @@ Done when the planner has ranked the work and placed or reconsidered issues.
 Apply new direction before stocktakes and planning.
 
 - Before each, `git fetch`. If AGENTS.md, guidance reached through its routing table, the roadmap's "Phases" or latest steering section changed on `origin/rust-migration`, update your checkout, reread the changed guidance and apply its actions first.
-- After every twelfth integration (user, 2026-11-08), update "Where the fork stands": retired code lines per phase, fork C++ (original, glue, generated, and C++ under `tools/` and `src/tests`) with its change per day since the previous stocktake, exports and callback slots, rebound-callee, shared-accessor and orphan-export baseline sizes, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count. During the cleanup stage, also update the roadmap's stream inventory table ([selection](../../planning.md#selection)).
+- After every twelfth integration (user, 2026-11-08), update "Where the fork stands": retired code lines per phase, fork C++ (original, glue, generated, and C++ under `tools/` and `src/tests`) with its change per day since the previous stocktake, exports and callback slots, rebound-callee, shared-accessor and orphan-export baseline sizes, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count. Also update the roadmap's stream inventory rows that root counts, during the cleanup stage and after it ([selection](../../planning.md#selection)).
 - Rerun `issues.py`. Place new issues and close those whose remaining scope is done.
 - Profile the merged branch in the background. Run a speed pass under [speed policy](../../speed.md#policy).
-- Change course when fork C++ stops falling (during the cleanup stage: when a stream with ready work shows no inventory fall between two stocktakes), a scenario nears its speed ceiling, or an item stalls across review rounds.
+- Change course when fork C++ stops falling (during the cleanup stage: when a stream with ready work shows no inventory fall between two stocktakes; after it: when a stream inventory rises above its end state), a scenario nears its speed ceiling, or an item stalls across review rounds.
 
 Done when the current direction and stocktake are reflected in the work order.
 

@@ -220,7 +220,7 @@ Slots: while ready worksets remain, #734/#735 file passes hold two of the four i
 
    Every #736 item follows the oracle rule on #736. Root re-checks source boundaries and live reservations before commissioning each item.
 5. **#738 rules**: one docs agent works #738's items; root reviews and commits each docs-only change between integrations.
-6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases.
+6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. Before the stage exits, #854 tracks the comment and type inventory analyzers in `tools/`, in the next tooling maintenance batch, so the end state and later stocktakes and steering measure with it.
 
 Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), still in force:
 
