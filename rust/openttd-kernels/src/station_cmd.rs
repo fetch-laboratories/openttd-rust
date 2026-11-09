@@ -17,21 +17,24 @@
     clippy::too_many_arguments
 )]
 use crate::base_station_base::StationRectMode;
+use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::NUM_CARGO;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, INVALID_OWNER, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::debug::debug;
 use crate::depot_func::can_build_depot_by_tileh;
-use crate::direction_type::{DiagDirection, DiagDirections, INVALID_DIAGDIR};
+use crate::direction_func::{axis_to_diag_dir, is_valid_axis, other_axis};
+use crate::direction_type::{Axis, DiagDirection, DiagDirections, INVALID_DIAGDIR};
 use crate::economy_type::Price;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
+use crate::newgrf_station::StationClassID;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
+use crate::rail_type::RailType;
 use crate::road_type::INVALID_ROADTYPE;
 use crate::slope_type::Slope;
 use crate::station_type::StationFacilities;
 use crate::station_type::{
-    FACILITY_AIRPORT, FACILITY_BUS, FACILITY_DOCK, FACILITY_TRAIN, FACILITY_TRUCK, StationID,
-    StationType,
+    FACILITY_AIRPORT, FACILITY_BUS, FACILITY_DOCK, FACILITY_TRUCK, StationID, StationType,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::strings_type::StringID;
@@ -39,6 +42,8 @@ use crate::tile_type::{
     MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER, TileIndex, TileType,
 };
 use crate::tilearea::TileArea;
+use crate::track_func::reverse_trackdir;
+use crate::track_type::{Track, TrackBits, Trackdir};
 use crate::viewport_func::TILE_HEIGHT_STEP;
 mod waypoint;
 use crate::newgrf_roadstop::RoadStopAvailabilityType;
@@ -246,12 +251,10 @@ pub struct CommandServicesTable {
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
     pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
-    pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
     pub train: *const crate::train::Leaves,
     pub reservation: *const crate::train_reservation::Leaves,
-    pub compatible_tiles: extern "C" fn(u32, u32) -> bool,
     pub custom_rail_index: extern "C" fn(u32) -> u32,
     pub make_rail_station: extern "C" fn(u32, u8, u16, u8, u8, u8),
     pub close_station_inspect: extern "C" fn(u32),
@@ -413,20 +416,52 @@ struct JoiningStation<'a> {
     error_message: StringID,
 }
 
+/// `CheckFlatLandRailStation`'s arguments.
 struct RailStationLandCheck<'a> {
     cost: Cost<'a>,
     ret: Cost<'a>,
-    tile: u32,
-    north: u32,
-    allowed: &'a mut i32,
-    flags: u16,
-    axis: u8,
-    est: &'a mut u16,
-    rt: u8,
-    affected: &'a mut Vec<*mut crate::services::Train>,
-    spec: *const RailSpec,
-    length: u8,
-    tracks: u8,
+    /// Tile to check.
+    tile_cur: TileIndex,
+    /// North tile of the area being checked.
+    north_tile: TileIndex,
+    /// Height allowed for the tile; set to this tile's height if negative.
+    allowed_z: &'a mut i32,
+    flags: DoCommandFlags,
+    /// Rail station axis.
+    axis: Axis,
+    /// `StationID` to be queried and returned if available.
+    station: &'a mut StationID,
+    /// The rail type to check for (overbuilding rail stations over rail).
+    rt: RailType,
+    /// List of trains with PBS reservations on the tiles.
+    affected_vehicles: &'a mut Vec<*mut crate::services::Train>,
+    statspec: *const RailSpec,
+    /// Platform length.
+    plat_len: u8,
+    /// Number of platforms.
+    numtracks: u8,
+}
+
+/// `CalculateRailStationCost`'s arguments.
+struct RailStationCost<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    /// Area to check.
+    tile_area: TileArea,
+    flags: DoCommandFlags,
+    /// Rail station axis.
+    axis: Axis,
+    /// `StationID` to be queried and returned if available.
+    station: &'a mut StationID,
+    /// The rail type to check for (overbuilding rail stations over rail).
+    rt: RailType,
+    /// List of trains with PBS reservations on the tiles.
+    affected_vehicles: &'a mut Vec<*mut crate::services::Train>,
+    statspec: *const RailSpec,
+    /// Platform length.
+    plat_len: u8,
+    /// Number of platforms.
+    numtracks: u8,
 }
 
 struct RoadStopLandCheck<'a> {
@@ -459,15 +494,20 @@ struct RoadStopCost<'a> {
     unit: i64,
 }
 
+/// `RemoveFromRailBaseStation`'s arguments.
 #[derive(Clone, Copy)]
 struct RailStationRemoval<'a> {
-    cost: Cost<'a>,
+    total_cost: Cost<'a>,
     ret: Cost<'a>,
     error: Cost<'a>,
-    area: TileArea,
-    flags: u16,
-    unit: i64,
-    keep: bool,
+    /// The area to clear station tile from.
+    ta: TileArea,
+    flags: DoCommandFlags,
+    /// The cost for removing the tile, including the rail.
+    removal_cost: i64,
+    /// Whether to keep the rail of the station.
+    keep_rail: bool,
+    /// Whether to remove from waypoints rather than stations.
     waypoint: bool,
 }
 
@@ -1459,6 +1499,29 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
     );
 }
 
+/// `CmdBuildRailStation`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdBuildRailStation {
+    /// Northern most position of station dragging/placement.
+    tile_org: TileIndex,
+    /// Railtype.
+    rt: RailType,
+    /// Orientation (Axis).
+    axis: Axis,
+    /// Number of tracks.
+    numtracks: u8,
+    /// Platform length.
+    plat_len: u8,
+    /// Custom station class.
+    spec_class: StationClassID,
+    /// Custom station id.
+    spec_index: u16,
+    /// Station ID to join (`NEW_STATION` if build new one).
+    station_to_join: StationID,
+    /// Allow stations directly adjacent to other stations.
+    adjacent: bool,
+}
+
 impl Ctx<'_> {
     fn rail(&self) -> &RailCommandServices {
         unsafe { &*self.s.rail }
@@ -1466,37 +1529,57 @@ impl Ctx<'_> {
     fn rail_map(&self) -> &crate::services::RailMapServices {
         unsafe { &*self.rail().rail }
     }
-    fn authority(&self, out: Cost<'_>, tile: u32, flags: u16) {
+    /// `CheckIfAuthorityAllowsNewStation`.
+    fn check_if_authority_allows_new_station(
+        &self,
+        out: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+    ) {
         unsafe {
             crate::town::openttd_rust_town_authority_station(
                 self.s.authority,
                 self.s.shared,
                 self.s.cost,
                 out.0,
-                tile,
-                flags & DoCommandFlag::NO_TEST_TOWN_RATING != 0,
+                tile.0,
+                flags.test(DoCommandFlag::NoTestTownRating),
             );
         }
     }
-    fn rail_station(&self, tile: u32) -> bool {
-        crate::map_func::World::new(self.shared).rail_station(tile)
+    /// `IsRailStationTile`.
+    fn is_rail_station_tile(&self, tile: TileIndex) -> bool {
+        crate::map_func::World::new(self.shared).is_rail_station_tile(tile)
     }
-    fn station_axis(&self, tile: u32) -> u8 {
-        crate::services::Track(crate::map_func::World::new(self.shared).station_track(tile)).0
+    /// `GetRailStationAxis`.
+    fn get_rail_station_axis(&self, tile: TileIndex) -> Axis {
+        crate::map_func::World::new(self.shared).get_rail_station_axis(tile)
     }
-    fn buildable_area(&self, tile: u32, w: u16, h: u16) -> bool {
-        (self.shared.tile_valid)(tile)
+    /// `HasStationReservation`.
+    fn has_station_reservation(&self, tile: TileIndex) -> bool {
+        crate::map_func::World::new(self.shared).has_station_reservation(tile)
+    }
+    /// `IsStationTileBlocked`.
+    fn is_station_tile_blocked(&self, tile: TileIndex) -> bool {
+        crate::map_func::World::new(self.shared).is_station_tile_blocked(tile)
+    }
+    /// `!IsValidTile(tile) || TileAddWrap(tile, w - 1, h - 1) == INVALID_TILE`
+    /// negated: whether the first tile and the last tile are valid.
+    fn first_and_last_tile_valid(&self, tile: TileIndex, w: u16, h: u16) -> bool {
+        (self.shared.tile_valid)(tile.0)
             && self.map().tile_add_wrap(
-                tile,
+                tile.0,
                 i32::from(w) - 1,
                 i32::from(h) - 1,
                 (self.shared.map_max_y)() + 1,
                 (self.world().environment.freeform_edges)(),
-            ) != crate::tile_type::INVALID_TILE
+            ) != TileIndex::INVALID.0
     }
-    fn free_reservation(&self, train: *mut crate::services::Train) {
+    /// `FreeTrainReservation`: clear platform reservation during station
+    /// building/removing.
+    fn free_train_reservation(&self, v: *mut crate::services::Train) {
         unsafe {
-            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
                 handle.vehicle(),
@@ -1504,14 +1587,16 @@ impl Ctx<'_> {
                 std::ptr::null_mut(),
             );
         }
-        self.platform_end(train, false, false);
-        let last = unsafe { (self.s.last_train)(train) };
-        self.platform_end(last, true, false);
+        self.set_platform_reservation_at(v, false, false);
+        let v = unsafe { (self.s.last_train)(v) };
+        self.set_platform_reservation_at(v, true, false);
     }
-    fn restore_reservation(&self, train: *mut crate::services::Train) {
-        self.platform_end(train, false, true);
+    /// `RestoreTrainReservation`: restore platform reservation during station
+    /// building/removing.
+    fn restore_train_reservation(&self, v: *mut crate::services::Train) {
+        self.set_platform_reservation_at(v, false, true);
         unsafe {
-            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
                 handle.vehicle(),
@@ -1521,114 +1606,146 @@ impl Ctx<'_> {
                 std::ptr::null_mut(),
             );
         }
-        let last = unsafe { (self.s.last_train)(train) };
-        self.platform_end(last, true, true);
+        let v = unsafe { (self.s.last_train)(v) };
+        self.set_platform_reservation_at(v, true, true);
     }
-    fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
-        let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
+    /// `if (IsRailStationTile(v->tile)) SetRailStationPlatformReservation(v->tile,
+    /// TrackdirToExitdir(td), b)`, with `td` the vehicle trackdir, reversed when
+    /// `reverse`.
+    fn set_platform_reservation_at(&self, v: *mut crate::services::Train, reverse: bool, b: bool) {
+        let handle = crate::pbs::Pbs::acquire(self.shared).handle(v);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = handle.vehicle();
-        let tile = (vehicle).tile();
-        if self.rail_station(tile) {
+        let tile = TileIndex(vehicle.tile());
+        if self.is_rail_station_tile(tile) {
             // SAFETY: The shell and canonical immutable tables remain live for this call.
-            let trackdir = unsafe {
+            let td = Trackdir(unsafe {
                 crate::train::openttd_rust_train_trackdir(handle, self.s.train, self.s.shared)
+            });
+            let td = if reverse {
+                Trackdir(reverse_trackdir(td.0))
+            } else {
+                td
             };
-            let td = trackdir ^ if reverse { 8 } else { 0 };
             crate::pbs::Pbs::acquire(self.shared).platform(
-                tile,
-                crate::track_func::trackdir_to_exitdir(td),
-                reserved,
+                tile.0,
+                crate::track_func::trackdir_to_exitdir(td.0),
+                b,
             );
         }
     }
-    fn flat_rail(&self, context: RailStationLandCheck<'_>) {
+    /// `CheckFlatLandRailStation`: checks if a rail station can be built at the
+    /// given tile.
+    fn check_flat_land_rail_station(&self, context: RailStationLandCheck<'_>) {
         let RailStationLandCheck {
             cost,
             ret,
-            tile,
-            north,
-            allowed,
+            tile_cur,
+            north_tile,
+            allowed_z,
             flags,
             axis,
-            est,
+            station,
             rt,
-            affected,
-            spec,
-            length,
-            tracks,
+            affected_vehicles,
+            statspec,
+            plat_len,
+            numtracks,
         } = context;
-        let invalid = if axis == 0 { 5 } else { 10 };
-        let slope_callback = !spec.is_null() && (self.s.rail_spec_info)(spec).slope_callback;
-        self.check_buildable(
-            ret,
-            TileIndex(tile),
-            DiagDirections(invalid),
-            allowed,
-            false,
-            false,
-        );
+        let invalid_dirs = if axis == Axis::AXIS_X {
+            DiagDirections::from_element(DiagDirection::DIAGDIR_NE)
+                | DiagDirections::from_element(DiagDirection::DIAGDIR_SW)
+        } else {
+            DiagDirections::from_element(DiagDirection::DIAGDIR_SE)
+                | DiagDirections::from_element(DiagDirection::DIAGDIR_NW)
+        };
+        let slope_cb = !statspec.is_null() && (self.s.rail_spec_info)(statspec).slope_callback;
+        self.check_buildable(ret, tile_cur, invalid_dirs, allowed_z, false, false);
         if !ret.ok() {
             return cost.take(ret);
         }
         cost.set(0);
         cost.add_money(ret.money());
-        if slope_callback {
+        if slope_cb {
+            /* Do slope check if requested. */
             unsafe {
                 crate::newgrf_station::openttd_rust_station_slope_check(
-                    ret.0, north, tile, spec, axis, length, tracks,
+                    ret.0,
+                    north_tile.0,
+                    tile_cur.0,
+                    statspec,
+                    axis.0,
+                    plat_len,
+                    numtracks,
                 );
             }
             if !ret.ok() {
                 return cost.take(ret);
             }
         }
-        if (self.shared.tile_type)(tile) == MP_STATION {
-            if !self.rail_station(tile) {
-                return self.auto_clear(cost, tile);
+        /* if station is set, then we have special handling to allow building on top of already existing stations.
+         * so station points to StationID::Invalid() if we can build on any station.
+         * Or it points to a station if we're only allowed to build on exactly that station. */
+        if TileType((self.shared.tile_type)(tile_cur.0)) == TileType::MP_STATION {
+            if !crate::map_func::World::new(self.shared).is_rail_station(tile_cur) {
+                return self.auto_clear(cost, tile_cur.0); // get error message
             }
-            let id = (self.shared.station_index)(tile);
-            if *est == StationID::INVALID.0 {
-                *est = id;
-            } else if *est != id {
+            let st = StationID((self.shared.station_index)(tile_cur.0));
+            if *station == StationID::INVALID {
+                *station = st;
+            } else if *station != st {
                 cost.error(self.s.strings.adjoins_multiple);
             }
         } else {
-            if rt != (self.rail_map().invalid_rail_type)().0 && (self.shared.is_plain_rail)(tile) {
-                if crate::map_func::World::new(self.shared).has_signals(tile) {
+            /* If we are building a station with a valid railtype, we may be able to overbuild an existing rail tile. */
+            if rt != RailType((self.rail_map().invalid_rail_type)().0)
+                && (self.shared.is_plain_rail)(tile_cur.0)
+            {
+                /* Don't overbuild signals. */
+                if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
                     return cost.error(self.s.strings.remove_signals);
                 }
+                /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
                 if (self.rail().powered_rail)(
-                    crate::services::RailType(
-                        crate::map_func::World::new(self.shared).rail_type(tile),
-                    )
-                    .0,
-                    rt,
+                    crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
+                    rt.0,
                 ) {
-                    let bits = (self.rail_map().traversal)(tile).tracks.0;
-                    let track = bits.trailing_zeros() as u8;
-                    if bits & bits.wrapping_sub(1) == 0 && track == axis {
-                        if crate::pbs::Pbs::acquire(self.shared).reserved(tile) & (1 << track) != 0
-                        {
-                            let train = crate::pbs::Pbs::acquire(self.shared)
-                                .train_for(tile, track)
+                    let tracks = (self.rail_map().traversal)(tile_cur.0).tracks.0;
+                    // `RemoveFirstTrack(&tracks)`: `track` is the lowest bit,
+                    // `tracks` keeps the rest.
+                    let track = Track(tracks.trailing_zeros() as u8);
+                    let tracks = tracks & tracks.wrapping_sub(1);
+                    let expected_track = if invalid_dirs.test(DiagDirection::DIAGDIR_NE) {
+                        Track::TRACK_X
+                    } else {
+                        Track::TRACK_Y
+                    };
+                    /* The existing track must align with the desired station axis. */
+                    if tracks == TrackBits::TRACK_BIT_NONE.0 && track == expected_track {
+                        /* Check for trains having a reservation for this tile. */
+                        if has_bit(
+                            crate::pbs::Pbs::acquire(self.shared).reserved(tile_cur.0),
+                            track.0,
+                        ) {
+                            let v = crate::pbs::Pbs::acquire(self.shared)
+                                .train_for(tile_cur.0, track.0)
                                 .shell()
                                 .cast::<crate::services::Train>();
-                            if !train.is_null() {
-                                affected.push(train);
+                            if !v.is_null() {
+                                affected_vehicles.push(v);
                             }
                         }
                         // Reuse the two native slots across the nested command;
                         // the accumulated station cost is scalar and already successful.
                         let saved = cost.money();
-                        self.nested(ret, tile, flags, |flags| unsafe {
+                        self.nested(ret, tile_cur.0, flags.0, |flags| unsafe {
                             crate::rail_cmd::openttd_rust_rail_remove_single(
                                 self.s.rail,
                                 ret.0,
                                 cost.0,
                                 flags,
-                                tile,
-                                track,
+                                tile_cur.0,
+                                track.0,
                             );
                         });
                         cost.set(saved);
@@ -1636,195 +1753,272 @@ impl Ctx<'_> {
                             return cost.take(ret);
                         }
                         cost.add_money(ret.money());
+                        /* With DoCommandFlags{flags}.Reset(DoCommandFlag::Execute) CmdLandscapeClear would fail since the rail still exists */
                         return;
                     }
                 }
             }
-            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
             if !ret.ok() {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
         }
     }
-    fn set_rail_flags(&self, tile: u32, spec: *const RailSpec) {
-        let gfx = (self.shared.station_gfx)(tile);
-        let flags = if spec.is_null() || usize::from(gfx) >= (self.s.tile_flag_count)(spec) {
-            u8::from(gfx < 4)
-        } else {
-            (self.s.tile_flags)(spec, gfx)
-        };
+    /// `CalculateRailStationCost`: calculates cost of new rail stations within
+    /// the area; `context.cost` is the accumulated cost.
+    fn calculate_rail_station_cost(&self, context: RailStationCost<'_>) {
+        let RailStationCost {
+            cost,
+            ret,
+            tile_area,
+            flags,
+            axis,
+            station,
+            rt,
+            affected_vehicles,
+            statspec,
+            plat_len,
+            numtracks,
+        } = context;
+        cost.set(0);
+        let mut length_price_ready = true;
+        let mut tracknum = 0_u8;
+        let mut allowed_z = -1;
+        for cur_tile in tile_area.tiles(self.map()) {
+            let cur_tile = TileIndex(cur_tile);
+            /* Clear the land below the station. */
+            // CheckFlatLandRailStation uses both native slots; its result is
+            // left in `cost`, and the accumulated amount is restored after.
+            let saved = cost.money();
+            self.check_flat_land_rail_station(RailStationLandCheck {
+                cost,
+                ret,
+                tile_cur: cur_tile,
+                north_tile: TileIndex(tile_area.tile),
+                allowed_z: &mut allowed_z,
+                flags,
+                axis,
+                station: &mut *station,
+                rt,
+                affected_vehicles: &mut *affected_vehicles,
+                statspec,
+                plat_len,
+                numtracks,
+            });
+            if !cost.ok() {
+                return;
+            }
+            let ret_cost = cost.money();
+            cost.set(saved);
+            /* Only add _price[PR_BUILD_STATION_RAIL_LENGTH] once for each valid plat_len. */
+            if tracknum == numtracks {
+                length_price_ready = true;
+                tracknum = 0;
+            } else {
+                tracknum = tracknum.wrapping_add(1);
+            }
+            /* AddCost for new or rotated rail stations. */
+            if !self.is_rail_station_tile(cur_tile) || self.get_rail_station_axis(cur_tile) != axis
+            {
+                cost.add_money(ret_cost);
+                cost.add_money(crate::company::price(usize::from(
+                    Price::PR_BUILD_STATION_RAIL.0,
+                )));
+                cost.add_money((self.rail().rail_build_cost)(rt.0));
+                if length_price_ready {
+                    cost.add_money(crate::company::price(usize::from(
+                        Price::PR_BUILD_STATION_RAIL_LENGTH.0,
+                    )));
+                    length_price_ready = false;
+                }
+            }
+        }
+    }
+    /// `GetStationTileFlags`: get station tile flags for the given `StationGfx`.
+    fn get_station_tile_flags(&self, gfx: StationGfx, statspec: *const RailSpec) -> TileFlags {
+        /* Default stations do not draw pylons under roofs (gfx >= 4) */
+        if statspec.is_null() || usize::from(gfx.0) >= (self.s.tile_flag_count)(statspec) {
+            return if gfx.0 < 4 {
+                TileFlags(1 << TileFlag::Pylons.0)
+            } else {
+                TileFlags(0)
+            };
+        }
+        TileFlags((self.s.tile_flags)(statspec, gfx.0))
+    }
+    /// `SetRailStationTileFlags`: set rail station tile flags for the given tile.
+    fn set_rail_station_tile_flags(&self, tile: TileIndex, statspec: *const RailSpec) {
+        let flags =
+            self.get_station_tile_flags(StationGfx((self.shared.station_gfx)(tile.0)), statspec);
         (self.s.set_tile_flags)(
-            tile,
-            TileFlags(flags).test(TileFlag::Blocked),
-            TileFlags(flags).test(TileFlag::Pylons),
-            !TileFlags(flags).test(TileFlag::NoWires),
+            tile.0,
+            flags.test(TileFlag::Blocked),
+            flags.test(TileFlag::Pylons),
+            !flags.test(TileFlag::NoWires),
         );
     }
-    fn layout_gfx(custom: crate::services::ByteSpan, index: u32, tracks: u8, length: u8) -> u8 {
-        if custom.size != 0 {
-            return unsafe { custom.data.add(index as usize).read() } & !1;
+    /// `RailStationTileLayout::Iterator::operator*`: the layout piece at
+    /// `position` of a station `platforms` tracks by `length` tiles.
+    fn rail_station_tile_layout_gfx(
+        layout: crate::services::ByteSpan,
+        position: u32,
+        platforms: u8,
+        length: u8,
+    ) -> StationGfx {
+        /* Use predefined layout if it exists. Mask bit zero which will indicate axis. */
+        if layout.size != 0 {
+            return StationGfx(unsafe { layout.data.add(position as usize).read() } & !1);
         }
         let length = u32::from(length);
-        let tracks = u32::from(tracks);
+        let platforms = u32::from(platforms);
         if length == 1 {
-            return if index == (tracks - 1) / 2 { 2 } else { 0 };
+            /* Special case for 1-long platforms, all bare platforms except one small building. */
+            return StationGfx(if position == (platforms - 1) / 2 {
+                2
+            } else {
+                0
+            });
         }
-        if index < length && tracks % 2 == 1 {
-            return if index == (length - 1) / 2 { 2 } else { 0 };
+        if position < length && platforms % 2 == 1 {
+            /* Number of tracks is odd, make the first platform bare with a small building. */
+            return StationGfx(if position == (length - 1) / 2 { 2 } else { 0 });
         }
-        if length > 4 && (index.is_multiple_of(length) || index % length == length - 1) {
-            return 0;
+        if length > 4 && (position.is_multiple_of(length) || position % length == length - 1) {
+            /* Station is longer than 4 tiles, place bare platforms at either end. */
+            return StationGfx(0);
         }
-        if (index / length) % 2 == tracks % 2 {
+        /* None of the above so must be north or south part of larger station. */
+        StationGfx(if (position / length) % 2 == platforms % 2 {
             4
         } else {
             6
-        }
+        })
     }
-    fn rail_bridge(
+    /// `IsRailStationBridgeAboveOk`: test if a rail station can be built below
+    /// a bridge.
+    fn is_rail_station_bridge_above_ok(
         &self,
         out: Cost<'_>,
-        tile: u32,
+        tile: TileIndex,
         spec: *const RailSpec,
-        kind: u8,
-        gfx: StationGfx,
+        station_type: StationType,
+        layout: StationGfx,
     ) {
-        if !crate::map_func::World::new(self.shared).bridge_above(tile) {
+        if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
             return out.zero();
         }
-        let south = (self.s.southern_bridge_end)(tile);
-        let info = if spec.is_null() {
-            (self.s.default_bridge_info)(kind)
+        let rampsouth = TileIndex((self.s.southern_bridge_end)(tile.0));
+        let bridgeable_info = if spec.is_null() {
+            (self.s.default_bridge_info)(station_type.0)
         } else {
             unsafe { (self.s.rail_bridge_info)(spec) }
         };
         self.is_station_bridge_above_ok(StationBridgeCheck {
             out,
-            tile: TileIndex(tile),
-            bridgeable_info: info,
-            station_type: StationType(kind),
-            layout: gfx,
-            bridge_height: self.bridge_height(TileIndex(south)),
+            tile,
+            bridgeable_info,
+            station_type,
+            layout,
+            bridge_height: self.bridge_height(rampsouth),
             disallowed_msg: StringID(self.s.strings.demolish_bridge),
         });
     }
-    fn build_rail(
+    /// `CmdBuildRailStation`: build rail station.
+    fn cmd_build_rail_station(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        rt: u8,
-        axis: u8,
-        tracks: u8,
-        length: u8,
-        class: u16,
-        index: u16,
-        mut target: u16,
-        adjacent: bool,
+        flags: DoCommandFlags,
+        args: CmdBuildRailStation,
     ) {
+        let CmdBuildRailStation {
+            tile_org,
+            rt,
+            axis,
+            numtracks,
+            plat_len,
+            spec_class,
+            spec_index,
+            mut station_to_join,
+            adjacent,
+        } = args;
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_RAIL);
-        self.authority(cost, tile, flags);
+        /* Does the authority allow this? */
+        self.check_if_authority_allows_new_station(cost, tile_org, flags);
         if !cost.ok() {
             return;
         }
-        if !crate::rail::val_param_rail_type(self.shared, rt) || axis >= 2 {
-            return cost.error(INVALID_STRING_ID);
+        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis.0) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        if u32::from(class) >= crate::newgrf_class::station::count()
-            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(class))
-            || u32::from(index) >= crate::newgrf_class::station::spec_count(class)
-            || length == 0
-            || tracks == 0
+        /* Check if the given station class is valid */
+        if u32::from(spec_class.0) >= crate::newgrf_class::station::count()
+            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(
+                spec_class.0,
+            ))
+            || u32::from(spec_index) >= crate::newgrf_class::station::spec_count(spec_class.0)
+            || plat_len == 0
+            || numtracks == 0
         {
-            return cost.error(INVALID_STRING_ID);
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let (w, h) = if axis == 0 {
-            (length, tracks)
+        let (w_org, h_org) = if axis == Axis::AXIS_X {
+            (plat_len, numtracks)
         } else {
-            (tracks, length)
+            (numtracks, plat_len)
         };
-        if !self.buildable_area(tile, u16::from(w), u16::from(h)) {
-            return cost.error(INVALID_STRING_ID);
+        /* Check if the first tile and the last tile are valid */
+        if !self.first_and_last_tile_valid(tile_org, u16::from(w_org), u16::from(h_org)) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let reuse = target != StationID::NEW.0;
+        let reuse = station_to_join != StationID::NEW;
         if !reuse {
-            target = StationID::INVALID.0;
+            station_to_join = StationID::INVALID;
         }
-        if target != StationID::INVALID.0
-            && (!(self.s.distant_join)() || self.full_station(StationID(target)).is_null())
+        let distant_join = station_to_join != StationID::INVALID;
+        if distant_join
+            && (!(self.s.distant_join)() || self.full_station(station_to_join).is_null())
         {
-            return cost.error(INVALID_STRING_ID);
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let spread = (self.s.spread)();
-        if h > spread || w > spread {
-            return cost.error(INVALID_STRING_ID);
+        let station_spread = (self.s.spread)();
+        if h_org > station_spread || w_org > station_spread {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let mut area = TileArea {
-            tile,
-            w: u16::from(w),
-            h: u16::from(h),
+        /* these values are those that will be stored in train_tile and station_platforms */
+        let mut new_location = TileArea {
+            tile: tile_org.0,
+            w: u16::from(w_org),
+            h: u16::from(h_org),
         };
-        let mut est = StationID::INVALID.0;
-        // Clearing may affect reservations on existing station tiles.
-        let mut affected = Vec::new();
-        let spec = crate::newgrf_class::station::spec(class, u32::from(index));
-        let mut allowed = -1;
-        let mut length_ready = true;
-        let mut tracknum = 0_u8;
-        // Temporary native slots are reused; ret becomes each tile's result.
-        cost.set(0);
-        for t in area.tiles(self.map()) {
-            // flat_rail needs two command slots; preserve the accumulated amount
-            // through the independent native result slot used by this helper.
-            let saved = cost.money();
-            self.flat_rail(RailStationLandCheck {
-                cost,
-                ret,
-                tile: t,
-                north: tile,
-                allowed: &mut allowed,
-                flags,
-                axis,
-                est: &mut est,
-                rt,
-                affected: &mut affected,
-                spec,
-                length,
-                tracks,
-            });
-            if !cost.ok() {
-                return;
-            }
-            let tile_cost = cost.money();
-            cost.set(saved);
-            if tracknum == tracks {
-                length_ready = true;
-                tracknum = 0;
-            } else {
-                tracknum = tracknum.wrapping_add(1);
-            }
-            if !self.rail_station(t) || self.station_axis(t) != axis {
-                cost.add_money(tile_cost);
-                cost.add_money(crate::company::price(usize::from(
-                    Price::PR_BUILD_STATION_RAIL.0,
-                )));
-                cost.add_money((self.rail().rail_build_cost)(rt));
-                if length_ready {
-                    cost.add_money(crate::company::price(usize::from(
-                        Price::PR_BUILD_STATION_RAIL_LENGTH.0,
-                    )));
-                    length_ready = false;
-                }
-            }
+        /* Make sure the area below consists of clear tiles. (OR tiles belonging to a certain rail station) */
+        let mut est = StationID::INVALID;
+        let mut affected_vehicles = Vec::new();
+        /* Add construction and clearing expenses. */
+        let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
+        self.calculate_rail_station_cost(RailStationCost {
+            cost,
+            ret,
+            tile_area: new_location,
+            flags,
+            axis,
+            station: &mut est,
+            rt,
+            affected_vehicles: &mut affected_vehicles,
+            statspec,
+            plat_len,
+            numtracks,
+        });
+        if !cost.ok() {
+            return;
         }
         let st = self.find_joining_base_station(JoiningStation {
             out: ret,
-            existing_station: StationID(est),
-            station_to_join: StationID(target),
+            existing_station: est,
+            station_to_join,
             adjacent,
-            ta: area,
+            ta: new_location,
             waypoint: false,
             road: false,
             error_message: StringID(self.s.strings.remove_station),
@@ -1835,254 +2029,283 @@ impl Ctx<'_> {
         let st = self.build_station_part(
             ret,
             st,
-            DoCommandFlags(flags),
+            flags,
             reuse,
-            area,
+            new_location,
             StationNaming::STATIONNAMING_RAIL,
         );
         if !ret.ok() {
             return cost.take(ret);
         }
-        if !st.is_null() && self.s.rail_area(st).tile != u32::MAX {
-            area = self.expand_rail(ret, st, area);
+        if !st.is_null() && self.s.rail_area(st).tile != TileIndex::INVALID.0 {
+            new_location = self.can_expand_rail_station(ret, st, new_location);
             if !ret.ok() {
                 return cost.take(ret);
             }
         }
-        let spec = crate::newgrf_class::station::spec(class, u32::from(index));
-        let delta = if axis == 0 { 1 } else { self.map().size_x() };
-        let track_delta = if axis == 0 { self.map().size_x() } else { 1 };
+        let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
+        let tile_delta = self.map().offs_by_axis(axis.0); // offset to go to the next platform tile
+        let track_delta = self.map().offs_by_axis(other_axis(axis.0, |_| {})); // offset to go to the next track
         let layout = (self.s.rail_layout)(
-            spec,
-            crate::newgrf_station::get_station_layout_key(tracks, length),
+            statspec,
+            crate::newgrf_station::get_station_layout_key(numtracks, plat_len),
         );
-        for i in 0..tracks {
-            for j in 0..length {
-                let t = tile
-                    .wrapping_add(u32::from(i).wrapping_mul(track_delta))
-                    .wrapping_add(u32::from(j).wrapping_mul(delta));
-                // There is no need to check the layout without a bridge above.
-                if !crate::map_func::World::new(self.shared).bridge_above(t) {
-                    continue;
-                }
-                let mut gfx = Self::layout_gfx(
-                    layout,
-                    u32::from(i) * u32::from(length) + u32::from(j),
-                    tracks,
-                    length,
-                )
-                .wrapping_add(axis);
-                if !spec.is_null() {
-                    let info = crate::newgrf_station::platform_info(gfx, length, tracks, j, i);
-                    // The station is not completely built yet, so no station
-                    // instance exists for this layout callback.
-                    let cb = crate::newgrf_station::callback(
-                        CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
-                        info,
-                        0,
-                        spec,
-                        std::ptr::null_mut(),
-                        u32::MAX,
+        let mut tile_track = tile_org;
+        for i in 0..numtracks {
+            let mut tile = tile_track;
+            for j in 0..plat_len {
+                let position = u32::from(i) * u32::from(plat_len) + u32::from(j);
+                /* Don't check the layout if there's no bridge above anyway. */
+                if crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+                    let mut gfx = StationGfx(
+                        Self::rail_station_tile_layout_gfx(layout, position, numtracks, plat_len)
+                            .0
+                            .wrapping_add(axis.0),
                     );
-                    if cb != CALLBACK_FAILED && cb <= 255 {
-                        gfx = (cb as u8 & !1).wrapping_add(axis);
+                    if !statspec.is_null() {
+                        let platinfo =
+                            crate::newgrf_station::platform_info(gfx.0, plat_len, numtracks, j, i);
+                        /* As the station is not yet completely finished, the station does not yet exist. */
+                        let callback = crate::newgrf_station::callback(
+                            CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
+                            platinfo,
+                            0,
+                            statspec,
+                            std::ptr::null_mut(),
+                            TileIndex::INVALID.0,
+                        );
+                        if callback != CALLBACK_FAILED && u8::try_from(callback).is_ok() {
+                            gfx = StationGfx((callback as u8 & !1).wrapping_add(axis.0));
+                        }
+                    }
+                    self.is_rail_station_bridge_above_ok(
+                        ret,
+                        tile,
+                        statspec,
+                        StationType::Rail,
+                        gfx,
+                    );
+                    if !ret.ok() {
+                        return cost.take(ret);
                     }
                 }
-                self.rail_bridge(ret, t, spec, StationType::Rail.0, StationGfx(gfx));
-                if !ret.ok() {
-                    return cost.take(ret);
-                }
+                tile = TileIndex(tile.0.wrapping_add(tile_delta));
             }
+            tile_track = TileIndex(tile_track.0.wrapping_add(track_delta));
         }
-        // Check whether a custom station spec can be allocated.
-        let specindex = crate::station_association::allocate(self.s.rail_association, spec, st);
+        /* Check if we can allocate a custom stationspec to this station */
+        let specindex = crate::station_association::allocate(self.s.rail_association, statspec, st);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
-        if !spec.is_null() {
-            let info = (self.s.rail_spec_info)(spec);
-            if info.platforms & (1 << (tracks - 1).min(7)) != 0 {
+        if !statspec.is_null() {
+            /* Perform NewStation checks */
+            let info = (self.s.rail_spec_info)(statspec);
+            /* Check if the station size is permitted */
+            if has_bit(info.platforms, (numtracks - 1).min(7)) {
                 return cost.error(self.s.strings.disallowed_tracks);
             }
-            if info.lengths & (1 << (length - 1).min(7)) != 0 {
+            if has_bit(info.lengths, (plat_len - 1).min(7)) {
                 return cost.error(self.s.strings.disallowed_length);
             }
+            /* Check if the station is buildable */
             if info.availability_callback {
-                let cb = crate::newgrf_station::callback(
+                let cb_res = crate::newgrf_station::callback(
                     CallbackID::CBID_STATION_AVAILABILITY.0,
                     0,
                     0,
-                    spec,
+                    statspec,
                     std::ptr::null_mut(),
-                    u32::MAX,
+                    TileIndex::INVALID.0,
                 );
-                if cb != CALLBACK_FAILED
-                    && !(self.s.rail_boolean)(spec, CallbackID::CBID_STATION_AVAILABILITY.0, cb)
+                if cb_res != CALLBACK_FAILED
+                    && !(self.s.rail_boolean)(
+                        statspec,
+                        CallbackID::CBID_STATION_AVAILABILITY.0,
+                        cb_res,
+                    )
                 {
-                    return cost.error(INVALID_STRING_ID);
+                    return cost.error(StringID::INVALID_STRING_ID.0);
                 }
             }
         }
-        if flags & DoCommandFlag::EXECUTE == 0 {
+        if !flags.test(DoCommandFlag::Execute) {
             return;
         }
-        (self.s.set_train_area)(st, area);
-        crate::station_lifecycle::add_facility_raw(st, StationFacility::Train, area.tile, unsafe {
-            &*self.s.lifecycle
-        });
+        (self.s.set_train_area)(st, new_location);
+        crate::station_lifecycle::add_facility_raw(
+            st,
+            StationFacility::Train,
+            new_location.tile,
+            unsafe { &*self.s.lifecycle },
+        );
         self.before_add_rect(
             ret,
             st,
             TileArea {
-                tile,
-                w: u16::from(w),
-                h: u16::from(h),
+                tile: tile_org.0,
+                w: u16::from(w_org),
+                h: u16::from(h_org),
             },
             StationRectMode::ADD_TRY,
         );
-        crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
-        if !spec.is_null() {
-            // Include this spec in the cached animation trigger mask.
-            (self.s.rail_triggers)(st, spec);
+        crate::station_association::assign(self.s.rail_association, statspec, st, specindex.value);
+        if !statspec.is_null() {
+            /* Include this station spec's animation trigger bitmask
+             * in the station's cached copy. */
+            (self.s.rail_triggers)(st, statspec);
         }
-        let owner = (self.world().station_owner)(st);
-        let id = (self.links().graphs.station_id)(st);
-        for i in 0..tracks {
-            let track_tile = tile.wrapping_add(u32::from(i).wrapping_mul(track_delta));
-            for j in 0..length {
-                let t = track_tile.wrapping_add(u32::from(j).wrapping_mul(delta));
-                if self.rail_station(t) && (self.s.reserved)(t) {
-                    let train = crate::pbs::Pbs::acquire(self.shared)
-                        .train_for(t, self.station_axis(t))
+        let track = crate::track_func::axis_to_track(crate::services::Axis(axis.0), |_| {});
+        let owner = CompanyID((self.world().station_owner)(st));
+        let index = (self.links().graphs.station_id)(st);
+        let mut tile_track = tile_org;
+        for i in 0..numtracks {
+            let mut tile = tile_track;
+            for j in 0..plat_len {
+                let position = u32::from(i) * u32::from(plat_len) + u32::from(j);
+                if self.is_rail_station_tile(tile) && self.has_station_reservation(tile) {
+                    /* Check for trains having a reservation for this tile. */
+                    let v = crate::pbs::Pbs::acquire(self.shared)
+                        .train_for(tile.0, self.get_rail_station_axis(tile).0)
                         .shell()
                         .cast::<crate::services::Train>();
-                    if !train.is_null() {
-                        affected.push(train);
-                        self.free_reservation(train);
+                    if !v.is_null() {
+                        affected_vehicles.push(v);
+                        self.free_train_reservation(v);
                     }
                 }
-                if self.rail_station(t) {
-                    if !crate::map_func::World::new(self.shared).station_blocked(t) {
+                /* Railtype can change when overbuilding. */
+                if self.is_rail_station_tile(tile) {
+                    if !self.is_station_tile_blocked(tile) {
                         (self.rail().rail_infrastructure)(
-                            owner,
-                            crate::services::RailType(
-                                crate::map_func::World::new(self.shared).rail_type(t),
-                            )
-                            .0,
+                            owner.0,
+                            crate::map_func::World::new(self.shared).rail_type(tile.0),
                             u32::MAX,
                         );
                     }
-                    (self.s.station_infrastructure)(owner, u32::MAX);
+                    (self.s.station_infrastructure)(owner.0, u32::MAX);
                 }
-                crate::animated_tile::openttd_rust_animation_delete(t, false);
-                let old = if (self.shared.tile_type)(t) == MP_STATION
-                    && crate::map_func::World::new(self.shared).station_has_rail(t)
+                /* Remove animation if overbuilding */
+                crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
+                let old_specindex = if TileType((self.shared.tile_type)(tile.0))
+                    == TileType::MP_STATION
+                    && crate::map_func::World::new(self.shared).has_station_rail(tile)
                 {
-                    (self.s.custom_rail_index)(t) as u8
+                    (self.s.custom_rail_index)(tile.0) as u8
                 } else {
                     0
                 };
-                let gfx = Self::layout_gfx(
-                    layout,
-                    u32::from(i) * u32::from(length) + u32::from(j),
-                    tracks,
-                    length,
-                );
-                (self.s.make_rail_station)(t, owner, id, axis, gfx, rt);
-                crate::station_association::deallocate(self.s.rail_association, st, old);
-                if spec.is_null() {
-                    (self.s.close_station_inspect)(t);
+                let gfx = Self::rail_station_tile_layout_gfx(layout, position, numtracks, plat_len);
+                (self.s.make_rail_station)(tile.0, owner.0, index, axis.0, gfx.0, rt.0);
+                /* Free the spec if we overbuild something */
+                crate::station_association::deallocate(self.s.rail_association, st, old_specindex);
+                if statspec.is_null() {
+                    (self.s.close_station_inspect)(tile.0);
                 }
-                (self.s.set_custom_rail_index)(t, specindex.value);
-                (self.s.set_random_bits)(t, ((self.shared.random)(self.shared.context) & 15) as u8);
-                (self.shared.tile_animation_set_frame)(t, 0);
-                if !spec.is_null() {
-                    let info = crate::newgrf_station::platform_info(
-                        (self.shared.station_gfx)(t),
-                        length,
-                        tracks,
+                (self.s.set_custom_rail_index)(tile.0, specindex.value);
+                (self.s.set_random_bits)(
+                    tile.0,
+                    gb((self.shared.random)(self.shared.context), 0, 4) as u8,
+                );
+                (self.shared.tile_animation_set_frame)(tile.0, 0);
+                if !statspec.is_null() {
+                    /* Use a fixed axis for GetPlatformInfo as our platforms / numtracks are always the right way around */
+                    let platinfo = crate::newgrf_station::platform_info(
+                        (self.shared.station_gfx)(tile.0),
+                        plat_len,
+                        numtracks,
                         j,
                         i,
                     );
-                    let cb = crate::newgrf_station::callback(
+                    /* As the station is not yet completely finished, the station does not yet exist. */
+                    let callback = crate::newgrf_station::callback(
                         CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
-                        info,
+                        platinfo,
                         0,
-                        spec,
+                        statspec,
                         std::ptr::null_mut(),
-                        t,
+                        tile.0,
                     );
-                    if cb != CALLBACK_FAILED {
-                        if cb <= 255 {
-                            (self.s.set_gfx)(t, (cb as u8 & !1).wrapping_add(axis));
+                    if callback != CALLBACK_FAILED {
+                        if u8::try_from(callback).is_ok() {
+                            (self.s.set_gfx)(tile.0, (callback as u8 & !1).wrapping_add(axis.0));
                         } else {
-                            (self.s.rail_callback_error)(spec, 0x24, cb);
+                            (self.s.rail_callback_error)(
+                                statspec,
+                                CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
+                                callback,
+                            );
                         }
                     }
+                    /* Trigger station animation -- after building? */
                     crate::animated_tile::openttd_rust_trigger_station(
                         st,
-                        t,
+                        tile.0,
                         crate::station_type::SAT_BUILT,
                         crate::cargo_type::INVALID_CARGO,
                     );
                 }
-                self.set_rail_flags(t, spec);
-                if !crate::map_func::World::new(self.shared).station_blocked(t) {
-                    (self.rail().rail_infrastructure)(owner, rt, 1);
+                self.set_rail_station_tile_flags(tile, statspec);
+                if !self.is_station_tile_blocked(tile) {
+                    (self.rail().rail_infrastructure)(owner.0, rt.0, 1);
                 }
-                (self.s.station_infrastructure)(owner, 1);
+                (self.s.station_infrastructure)(owner.0, 1);
+                tile = TileIndex(tile.0.wrapping_add(tile_delta));
             }
-            let signals = crate::signal::Context {
-                shared: self.s.shared,
-                rail: self.rail().rail,
-                native: self.rail().signal,
-                log_x: u32::from(self.map().log_x),
-            };
-            signals.add_track(track_tile, axis, (self.shared.current_company)());
-            (self.rail().layout_changed)(track_tile, axis);
+            self.signals()
+                .add_track(tile_track.0, track.0, (self.shared.current_company)());
+            (self.rail().layout_changed)(tile_track.0, track.0);
+            tile_track = TileIndex(tile_track.0.wrapping_add(track_delta));
         }
-        for train in affected {
-            self.restore_reservation(train);
+        for v in affected_vehicles {
+            /* Restore reservations of trains. */
+            self.restore_train_reservation(v);
         }
-        let update = if axis == 0 {
+        /* Check whether we need to expand the reservation of trains already on the station. */
+        let update_reservation_area = if axis == Axis::AXIS_X {
             TileArea {
-                tile,
+                tile: tile_org.0,
                 w: 1,
-                h: u16::from(tracks),
+                h: u16::from(numtracks),
             }
         } else {
             TileArea {
-                tile,
-                w: u16::from(tracks),
+                tile: tile_org.0,
+                w: u16::from(numtracks),
                 h: 1,
             }
         };
-        for t in update.tiles(self.map()) {
-            if crate::map_func::World::new(self.shared).station_blocked(t) {
+        let world = crate::map_func::World::new(self.shared);
+        for tile in update_reservation_area.tiles(self.map()) {
+            let tile = TileIndex(tile);
+            /* Don't even try to make eye candy parts reserved. */
+            if self.is_station_tile_blocked(tile) {
                 continue;
             }
-            let dir = 2 - axis;
-            let offset = if dir == 2 { 1 } else { self.map().size_x() };
-            let mut begin = t;
-            let mut end = t;
-            let mut next = begin.wrapping_sub(offset);
-            while (self.s.compatible_tiles)(next, begin) {
-                begin = next;
-                next = next.wrapping_sub(offset);
+            let dir = DiagDirection(axis_to_diag_dir(axis.0, |_| {}));
+            let tile_offset = self.map().offs_by_diag_dir(dir.0);
+            let mut platform_begin = tile;
+            let mut platform_end = tile;
+            /* We can only account for tiles that are reachable from this tile, so ignore primarily blocked tiles while finding the platform begin and end. */
+            let mut next_tile = TileIndex(platform_begin.0.wrapping_sub(tile_offset));
+            while world.is_compatible_train_station_tile(next_tile, platform_begin) {
+                platform_begin = next_tile;
+                next_tile = TileIndex(next_tile.0.wrapping_sub(tile_offset));
             }
-            next = end.wrapping_add(offset);
-            while (self.s.compatible_tiles)(next, end) {
-                end = next;
-                next = next.wrapping_add(offset);
+            let mut next_tile = TileIndex(platform_end.0.wrapping_add(tile_offset));
+            while world.is_compatible_train_station_tile(next_tile, platform_end) {
+                platform_end = next_tile;
+                next_tile = TileIndex(next_tile.0.wrapping_add(tile_offset));
             }
+            /* If there is at least on reservation on the platform, we reserve the whole platform. */
             let mut reservation = false;
-            let mut cur = begin;
-            while !reservation && cur <= end {
-                reservation = (self.s.reserved)(cur);
-                cur = cur.wrapping_add(offset);
+            let mut t = platform_begin;
+            while !reservation && t.0 <= platform_end.0 {
+                reservation = self.has_station_reservation(t);
+                t = TileIndex(t.0.wrapping_add(tile_offset));
             }
             if reservation {
-                crate::pbs::Pbs::acquire(self.shared).platform(begin, dir, true);
+                crate::pbs::Pbs::acquire(self.shared).platform(platform_begin.0, dir.0, true);
             }
         }
         (self.s.mark_tiles)(st, false);
@@ -2108,19 +2331,21 @@ pub unsafe extern "C" fn openttd_rust_station_build_rail(
     adjacent: bool,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.build_rail(
+    c.cmd_build_rail_station(
         c.c(cost),
         c.c(ret),
-        flags,
-        tile,
-        rt,
-        axis,
-        tracks,
-        length,
-        class,
-        index,
-        target,
-        adjacent,
+        DoCommandFlags(flags),
+        CmdBuildRailStation {
+            tile_org: TileIndex(tile),
+            rt: RailType(rt),
+            axis: Axis(axis),
+            numtracks: tracks,
+            plat_len: length,
+            spec_class: StationClassID(class),
+            spec_index: index,
+            station_to_join: StationID(target),
+            adjacent,
+        },
     );
 }
 /// # Safety
@@ -2131,7 +2356,20 @@ pub unsafe extern "C" fn openttd_rust_station_set_rail_flags(
     tile: u32,
     spec: *const RailSpec,
 ) {
-    unsafe { Ctx::new(s) }.set_rail_flags(tile, spec);
+    unsafe { Ctx::new(s) }.set_rail_station_tile_flags(TileIndex(tile), spec);
+}
+
+/// `CmdRemoveFromRailStation` and `CmdRemoveFromRailWaypoint`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdRemoveFromRailBaseStation {
+    /// Tile of station piece to remove.
+    start: TileIndex,
+    /// Other edge of the rect to remove.
+    end: TileIndex,
+    /// If set keep the rail.
+    keep_rail: bool,
+    /// Whether this is `CmdRemoveFromRailWaypoint`.
+    waypoint: bool,
 }
 
 impl Ctx<'_> {
@@ -2146,46 +2384,70 @@ impl Ctx<'_> {
     fn nested(&self, out: Cost<'_>, tile: u32, flags: u16, body: impl FnMut(u16)) {
         crate::command::nested(self.command, self.shared, out, tile, flags, body);
     }
-
-    fn remove_rail_area(&self, context: RailStationRemoval<'_>) -> Vec<*mut BaseStation> {
+    /// `PR_CLEAR_WAYPOINT_RAIL` or `PR_CLEAR_STATION_RAIL`.
+    fn rail_removal_cost(waypoint: bool) -> i64 {
+        crate::company::price(usize::from(
+            (if waypoint {
+                Price::PR_CLEAR_WAYPOINT_RAIL
+            } else {
+                Price::PR_CLEAR_STATION_RAIL
+            })
+            .0,
+        ))
+    }
+    /// `RemoveFromRailBaseStation`: remove a number of tiles from any rail
+    /// station within the area; returns the stations affected.
+    fn remove_from_rail_base_station(
+        &self,
+        context: RailStationRemoval<'_>,
+    ) -> Vec<*mut BaseStation> {
         let RailStationRemoval {
-            cost,
+            total_cost,
             ret,
             error,
-            area,
+            ta,
             flags,
-            unit,
-            keep,
+            removal_cost,
+            keep_rail,
             waypoint,
         } = context;
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_RAIL_AREA);
+        /* Count of the number of tiles removed */
         let mut quantity = 0_i32;
-        let mut affected = Vec::new();
-        cost.set(0);
+        let mut affected_stations = Vec::new();
+        total_cost.set(0);
+        /* Accumulator for the errors seen during clearing. If no errors happen,
+         * and the quantity is 0 there is no station. Otherwise it will be one
+         * of the other error that got accumulated. */
         error.zero();
-        for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != MP_STATION
-                || !crate::map_func::World::new(self.shared).station_has_rail(tile)
+        /* Do the action for every tile into the area */
+        for tile in ta.tiles(self.map()) {
+            let tile = TileIndex(tile);
+            /* Make sure the specified tile is a rail station */
+            if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_STATION
+                || !crate::map_func::World::new(self.shared).has_station_rail(tile)
             {
                 continue;
             }
+            /* If there is a vehicle on ground, do not allow to remove (flood) the tile */
             unsafe {
-                self.command.no_vehicle(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile.0);
             }
             error.add(ret);
             if !error.ok() {
                 continue;
             }
-            let id = (self.shared.station_index)(tile);
+            /* Check ownership of station */
+            let id = StationID((self.shared.station_index)(tile.0));
             let st = if waypoint {
-                self.waypoint(StationID(id))
+                self.waypoint(id)
             } else {
-                self.full_station(StationID(id))
+                self.full_station(id)
             };
             if st.is_null() {
                 continue;
             }
-            if (self.shared.current_company)() != OWNER_WATER {
+            if CompanyID((self.shared.current_company)()) != CompanyID::WATER {
                 unsafe {
                     self.command
                         .ownership(ret.0, (self.world().station_owner)(st), 0);
@@ -2195,138 +2457,156 @@ impl Ctx<'_> {
                     continue;
                 }
             }
+            /* If we reached here, the tile is valid so increase the quantity of tiles we will remove */
             quantity += 1;
-            if keep || crate::map_func::World::new(self.shared).station_blocked(tile) {
-                cost.add_money(
+            if keep_rail || self.is_station_tile_blocked(tile) {
+                /* Don't refund the 'steel' of the track when we keep the
+                 *  rail, or when the tile didn't have any rail at all. */
+                total_cost.add_money(
                     crate::company::price(usize::from(Price::PR_CLEAR_RAIL.0)).saturating_neg(),
                 );
             }
-            if flags & DoCommandFlag::EXECUTE == 0 {
+            if !flags.test(DoCommandFlag::Execute) {
                 continue;
             }
-            let index = (self.s.custom_rail_index)(tile);
-            let track = self.station_axis(tile);
-            let owner = (self.shared.tile_owner)(tile);
-            let rt =
-                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile))
-                    .0;
-            let mut train = std::ptr::null_mut();
-            if (self.s.reserved)(tile) {
-                train = crate::pbs::Pbs::acquire(self.shared)
-                    .train_for(tile, track)
+            /* read variables before the station tile is removed */
+            let specindex = (self.s.custom_rail_index)(tile.0);
+            let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
+            let owner = CompanyID((self.shared.tile_owner)(tile.0));
+            let rt = RailType(crate::map_func::World::new(self.shared).rail_type(tile.0));
+            let mut v = std::ptr::null_mut();
+            if self.has_station_reservation(tile) {
+                v = crate::pbs::Pbs::acquire(self.shared)
+                    .train_for(tile.0, track.0)
                     .shell()
                     .cast::<crate::services::Train>();
-                if !train.is_null() {
-                    self.free_reservation(train);
+                if !v.is_null() {
+                    self.free_train_reservation(v);
                 }
             }
-            let build_rail =
-                keep && !crate::map_func::World::new(self.shared).station_blocked(tile);
-            if !build_rail && !crate::map_func::World::new(self.shared).station_blocked(tile) {
-                (self.rail().rail_infrastructure)(owner, rt, u32::MAX);
+            let build_rail = keep_rail && !self.is_station_tile_blocked(tile);
+            if !build_rail && !self.is_station_tile_blocked(tile) {
+                (self.rail().rail_infrastructure)(owner.0, rt.0, u32::MAX);
             }
-            crate::ground::clear_square(tile, self.shared);
-            (self.s.close_station_inspect)(tile);
+            crate::ground::clear_square(tile.0, self.shared);
+            (self.s.close_station_inspect)(tile.0);
             if build_rail {
-                (self.rail_map().make_rail_normal)(tile, owner, 1 << track, rt);
+                (self.rail_map().make_rail_normal)(
+                    tile.0,
+                    owner.0,
+                    crate::track_func::track_to_track_bits(track.0, |_| {}),
+                    rt.0,
+                );
             }
-            (self.s.station_infrastructure)(owner, u32::MAX);
-            (self.command.infrastructure_dirty)(owner);
-            self.after_remove_tile(st, TileIndex(tile));
-            self.signals().add_track(tile, track, owner);
-            (self.rail().layout_changed)(tile, track);
-            crate::station_association::deallocate(self.s.rail_association, st, index as u8);
-            if !affected.contains(&st) {
-                affected.push(st);
+            (self.s.station_infrastructure)(owner.0, u32::MAX);
+            (self.command.infrastructure_dirty)(owner.0);
+            self.after_remove_tile(st, tile);
+            self.signals().add_track(tile.0, track.0, owner.0);
+            (self.rail().layout_changed)(tile.0, track.0);
+            crate::station_association::deallocate(self.s.rail_association, st, specindex as u8);
+            if !affected_stations.contains(&st) {
+                affected_stations.push(st);
             }
-            if !train.is_null() {
-                self.restore_reservation(train);
+            if !v.is_null() {
+                self.restore_train_reservation(v);
             }
         }
         if quantity == 0 {
             if error.ok() {
-                cost.error(self.s.strings.no_station);
+                total_cost.error(self.s.strings.no_station);
             } else {
-                cost.take(error);
+                total_cost.take(error);
             }
-            return affected;
+            return affected_stations;
         }
         if !error.ok() {
             crate::witness::hit(crate::witness::STATION_CMD_PARTIAL_RAIL);
         }
-        for &st in &affected {
-            let area = self.make_station_area_smaller(st, self.s.rail_area(st), StationType::Rail);
-            (self.s.set_train_area)(st, area);
+        for &st in &affected_stations {
+            /* now we need to make the "spanned" area of the railway station smaller
+             * if we deleted something at the edges.
+             * we also need to adjust train_tile. */
+            // `MakeRailStationAreaSmaller`.
+            let train_station =
+                self.make_station_area_smaller(st, self.s.rail_area(st), StationType::Rail);
+            (self.s.set_train_area)(st, train_station);
             self.update_station_sign_coord(st);
-            if area.tile == u32::MAX {
-                (self.s.reset_facilities)(st, FACILITY_TRAIN);
+            /* if we deleted the whole station, delete the train facility. */
+            if train_station.tile == TileIndex::INVALID.0 {
+                (self.s.reset_facilities)(
+                    st,
+                    StationFacilities::from_element(StationFacility::Train).0,
+                );
                 (self.s.orders_dirty)();
-                (self.s.facility_widget)(st, 0);
+                (self.s.facility_widget)(st, StationType::Rail.0);
                 (self.s.catchment_dirty)();
                 (self.s.virtual_coord)(st);
                 self.delete_station_if_empty(st);
             }
         }
-        cost.add_money(unit.saturating_mul(i64::from(quantity)));
-        affected
+        total_cost.add_money(removal_cost.saturating_mul(i64::from(quantity)));
+        affected_stations
     }
-    fn remove_rail_command(
+    /// `CmdRemoveFromRailStation` and `CmdRemoveFromRailWaypoint`: remove a
+    /// single tile from a rail station or waypoint. This allows for
+    /// custom-built stations with holes and weird layouts.
+    fn cmd_remove_from_rail_base_station(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
-        flags: u16,
-        start: u32,
-        mut end: u32,
-        keep: bool,
-        waypoint: bool,
+        flags: DoCommandFlags,
+        args: CmdRemoveFromRailBaseStation,
     ) {
-        if end == 0 {
+        let CmdRemoveFromRailBaseStation {
+            start,
+            mut end,
+            keep_rail,
+            waypoint,
+        } = args;
+        if end.0 == 0 {
             end = start;
         }
-        let size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
-        if start >= size || end >= size {
-            return cost.error(INVALID_STRING_ID);
+        let map_size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
+        if start.0 >= map_size || end.0 >= map_size {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let affected = self.remove_rail_area(RailStationRemoval {
-            cost,
+        let affected_stations = self.remove_from_rail_base_station(RailStationRemoval {
+            total_cost: cost,
             ret,
             error,
-            area: TileArea::between(self.map(), start, end),
+            ta: TileArea::between(self.map(), start.0, end.0),
             flags,
-            unit: crate::company::price(usize::from(
-                (if waypoint {
-                    Price::PR_CLEAR_WAYPOINT_RAIL
-                } else {
-                    Price::PR_CLEAR_STATION_RAIL
-                })
-                .0,
-            )),
-            keep,
+            removal_cost: Self::rail_removal_cost(waypoint),
+            keep_rail,
             waypoint,
         });
         if !cost.ok() || waypoint {
             return;
         }
-        for st in affected {
-            if self.s.rail_area(st).tile == u32::MAX {
-                (self.s.facility_widget)(st, 0);
+        /* Do all station specific functions here. */
+        for st in affected_stations {
+            if self.s.rail_area(st).tile == TileIndex::INVALID.0 {
+                (self.s.facility_widget)(st, StationType::Rail.0);
             }
             (self.s.mark_tiles)(st, false);
             (self.s.catchment_dirty)();
             self.recompute_catchment(st, false);
         }
+        /* Now apply the rail cost to the number that we deleted */
     }
-    fn remove_rail_all_inner(
+    /// `RemoveRailStation(T *st, ...)`: remove a rail station/waypoint.
+    fn remove_rail_station_of(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
-        flags: u16,
+        flags: DoCommandFlags,
         st: *mut BaseStation,
         waypoint: bool,
     ) {
-        if (self.shared.current_company)() != OWNER_WATER {
+        /* Current company owns the station? */
+        if CompanyID((self.shared.current_company)()) != CompanyID::WATER {
             unsafe {
                 self.command
                     .ownership(cost.0, (self.world().station_owner)(st), 0);
@@ -2335,37 +2615,34 @@ impl Ctx<'_> {
                 return;
             }
         }
-        let area = self.s.rail_area(st);
+        /* determine width and height of platforms */
+        let ta = self.s.rail_area(st);
         cost.set(0);
         let id = (self.links().graphs.station_id)(st);
-        let kind = if waypoint {
-            StationType::RailWaypoint.0
+        let station_type = if waypoint {
+            StationType::RailWaypoint
         } else {
-            StationType::Rail.0
+            StationType::Rail
         };
-        for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != MP_STATION
-                || (self.shared.station_type)(tile).0 != kind
+        /* clear all areas of the station */
+        for tile in ta.tiles(self.map()) {
+            /* only remove tiles that are actually train station tiles */
+            // `TileBelongsToRailStation`.
+            if TileType((self.shared.tile_type)(tile)) != TileType::MP_STATION
+                || StationType((self.shared.station_type)(tile).0) != station_type
                 || (self.shared.station_index)(tile) != id
             {
                 continue;
             }
             let total = cost.money();
-            self.remove_rail_area(RailStationRemoval {
-                cost,
+            self.remove_from_rail_base_station(RailStationRemoval {
+                total_cost: cost,
                 ret,
                 error,
-                area: TileArea { tile, w: 1, h: 1 },
+                ta: TileArea { tile, w: 1, h: 1 },
                 flags,
-                unit: crate::company::price(usize::from(
-                    (if waypoint {
-                        Price::PR_CLEAR_WAYPOINT_RAIL
-                    } else {
-                        Price::PR_CLEAR_STATION_RAIL
-                    })
-                    .0,
-                )),
-                keep: false,
+                removal_cost: Self::rail_removal_cost(waypoint),
+                keep_rail: false,
                 waypoint,
             });
             if !cost.ok() {
@@ -2376,28 +2653,46 @@ impl Ctx<'_> {
             cost.add_money(amount);
         }
     }
-    fn remove_rail_all(
+    /// `RemoveRailStation(TileIndex, ...)` and `RemoveRailWaypoint`.
+    fn remove_rail_station(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
-        flags: u16,
-        tile: u32,
+        flags: DoCommandFlags,
+        tile: TileIndex,
         waypoint: bool,
     ) {
-        if (self.shared.current_company)() == OWNER_WATER {
-            return self.nested(cost, tile, DoCommandFlag::EXECUTE, |flags| {
-                self.remove_rail_command(cost, ret, error, flags, tile, 0, false, waypoint);
-            });
+        /* if there is flooding, remove platforms tile by tile */
+        if CompanyID((self.shared.current_company)()) == CompanyID::WATER {
+            return self.nested(
+                cost,
+                tile.0,
+                DoCommandFlags::from_element(DoCommandFlag::Execute).0,
+                |flags| {
+                    self.cmd_remove_from_rail_base_station(
+                        cost,
+                        ret,
+                        error,
+                        DoCommandFlags(flags),
+                        CmdRemoveFromRailBaseStation {
+                            start: tile,
+                            end: TileIndex(0),
+                            keep_rail: false,
+                            waypoint,
+                        },
+                    );
+                },
+            );
         }
-        let id = (self.shared.station_index)(tile);
+        let id = StationID((self.shared.station_index)(tile.0));
         let st = if waypoint {
-            self.waypoint(StationID(id))
+            self.waypoint(id)
         } else {
-            self.full_station(StationID(id))
+            self.full_station(id)
         };
-        self.remove_rail_all_inner(cost, ret, error, flags, st, waypoint);
-        if !waypoint && flags & DoCommandFlag::EXECUTE != 0 {
+        self.remove_rail_station_of(cost, ret, error, flags, st, waypoint);
+        if !waypoint && flags.test(DoCommandFlag::Execute) {
             self.recompute_catchment(st, false);
         }
     }
@@ -2417,15 +2712,17 @@ pub unsafe extern "C" fn openttd_rust_station_remove_rail_area(
     waypoint: bool,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.remove_rail_command(
+    c.cmd_remove_from_rail_base_station(
         c.c(cost),
         c.c(ret),
         c.c(error),
-        flags,
-        start,
-        end,
-        keep,
-        waypoint,
+        DoCommandFlags(flags),
+        CmdRemoveFromRailBaseStation {
+            start: TileIndex(start),
+            end: TileIndex(end),
+            keep_rail: keep,
+            waypoint,
+        },
     );
 }
 
@@ -2766,7 +3063,7 @@ impl Ctx<'_> {
         }
         if width == 0
             || length == 0
-            || !self.buildable_area(tile, u16::from(width), u16::from(length))
+            || !self.first_and_last_tile_valid(TileIndex(tile), u16::from(width), u16::from(length))
         {
             return cost.error(INVALID_STRING_ID);
         }
@@ -2783,7 +3080,7 @@ impl Ctx<'_> {
             return cost.error(INVALID_STRING_ID);
         }
         let axis = dir & 1;
-        self.authority(cost, tile, flags);
+        self.check_if_authority_allows_new_station(cost, TileIndex(tile), DoCommandFlags(flags));
         if !cost.ok() {
             return;
         }
@@ -3335,7 +3632,11 @@ impl Ctx<'_> {
             if stop_type >= 2
                 || width == 0
                 || height == 0
-                || !self.buildable_area(start, u16::from(width), u16::from(height))
+                || !self.first_and_last_tile_valid(
+                    TileIndex(start),
+                    u16::from(width),
+                    u16::from(height),
+                )
                 || (remove_road && flags & DoCommandFlag::BANKRUPT != 0)
             {
                 return cost.error(INVALID_STRING_ID);
@@ -3535,7 +3836,7 @@ impl Ctx<'_> {
         if airport >= 128 {
             return cost.error(INVALID_STRING_ID);
         }
-        self.authority(cost, tile, flags);
+        self.check_if_authority_allows_new_station(cost, TileIndex(tile), DoCommandFlags(flags));
         if !cost.ok() {
             return;
         }
@@ -4006,7 +4307,7 @@ impl Ctx<'_> {
         if (self.shared.has_water_ground)(tile) {
             return cost.error(self.s.strings.unsuitable);
         }
-        self.authority(cost, tile, flags);
+        self.check_if_authority_allows_new_station(cost, TileIndex(tile), DoCommandFlags(flags));
         if !cost.ok() {
             return;
         }
@@ -4548,8 +4849,22 @@ impl Ctx<'_> {
             return self.auto_clear(cost, tile);
         }
         match (self.shared.station_type)(tile).0 {
-            0 => self.remove_rail_all(cost, ret, error, flags, tile, false),
-            7 => self.remove_rail_all(cost, ret, error, flags, tile, true),
+            0 => self.remove_rail_station(
+                cost,
+                ret,
+                error,
+                DoCommandFlags(flags),
+                TileIndex(tile),
+                false,
+            ),
+            7 => self.remove_rail_station(
+                cost,
+                ret,
+                error,
+                DoCommandFlags(flags),
+                TileIndex(tile),
+                true,
+            ),
             1 => self.remove_airport(cost, ret, tile, flags),
             2 | 3 => {
                 if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
@@ -4578,7 +4893,12 @@ impl Ctx<'_> {
             && (self.shared.tile_max_z)(tile) == z.wrapping_add(get_slope_max_z(slope))
         {
             let allowed = match (self.shared.station_type)(tile).0 {
-                0 | 7 => (self.s.autoslope_axis)(tile, z, slope, self.station_axis(tile)),
+                0 | 7 => (self.s.autoslope_axis)(
+                    tile,
+                    z,
+                    slope,
+                    self.get_rail_station_axis(TileIndex(tile)).0,
+                ),
                 1 => true,
                 2 | 3 | 8 => {
                     if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile) {
@@ -4755,46 +5075,40 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
 }
 
 impl Ctx<'_> {
-    fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: TileArea) -> TileArea {
-        let old = self.s.rail_area(st);
-        let x = self
-            .map()
-            .tile_x(old.tile)
-            .min(self.map().tile_x(new_area.tile));
-        let y = self
-            .map()
-            .tile_y(old.tile)
-            .min(self.map().tile_y(new_area.tile));
-        let area = TileArea {
-            tile: (y << self.map().log_x) + x,
-            w: (self
-                .map()
-                .tile_x(old.tile)
-                .wrapping_add(u32::from(old.w))
-                .max(
-                    self.map()
-                        .tile_x(new_area.tile)
-                        .wrapping_add(u32::from(new_area.w)),
-                )
+    /// `CanExpandRailStation`: check whether we can expand the rail part of
+    /// the given station; returns the expanded `new_ta`.
+    fn can_expand_rail_station(
+        &self,
+        out: Cost<'_>,
+        st: *const BaseStation,
+        new_ta: TileArea,
+    ) -> TileArea {
+        let cur_ta = self.s.rail_area(st);
+        let map = self.map();
+        /* determine new size of train station region.. */
+        let x = map.tile_x(cur_ta.tile).min(map.tile_x(new_ta.tile));
+        let y = map.tile_y(cur_ta.tile).min(map.tile_y(new_ta.tile));
+        let new_ta = TileArea {
+            tile: map.tile_xy(x, y),
+            w: (map
+                .tile_x(cur_ta.tile)
+                .wrapping_add(u32::from(cur_ta.w))
+                .max(map.tile_x(new_ta.tile).wrapping_add(u32::from(new_ta.w)))
                 .wrapping_sub(x)) as u16,
-            h: (self
-                .map()
-                .tile_y(old.tile)
-                .wrapping_add(u32::from(old.h))
-                .max(
-                    self.map()
-                        .tile_y(new_area.tile)
-                        .wrapping_add(u32::from(new_area.h)),
-                )
+            h: (map
+                .tile_y(cur_ta.tile)
+                .wrapping_add(u32::from(cur_ta.h))
+                .max(map.tile_y(new_ta.tile).wrapping_add(u32::from(new_ta.h)))
                 .wrapping_sub(y)) as u16,
         };
-        let spread = (self.s.spread)();
-        if area.w > u16::from(spread) || area.h > u16::from(spread) {
+        /* make sure the final size is not too big. */
+        let station_spread = (self.s.spread)();
+        if new_ta.w > u16::from(station_spread) || new_ta.h > u16::from(station_spread) {
             out.error(self.s.strings.spread);
         } else {
             out.zero();
         }
-        area
+        new_ta
     }
 }
 
@@ -4841,11 +5155,9 @@ crate::abi::layouts! {
         rail_callback_error,
         set_train_area,
         rail_triggers,
-        reserved,
         last_train,
         train,
         reservation,
-        compatible_tiles,
         custom_rail_index,
         make_rail_station,
         close_station_inspect,

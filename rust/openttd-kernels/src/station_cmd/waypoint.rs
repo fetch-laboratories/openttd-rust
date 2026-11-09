@@ -505,11 +505,11 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-            self.rail_bridge(
+            self.is_rail_station_bridge_above_ok(
                 ret,
-                tile.0,
+                tile,
                 spec,
-                StationType::RailWaypoint.0,
+                StationType::RailWaypoint,
                 StationGfx(gfx.wrapping_add(axis.0)),
             );
             if !ret.ok() {
@@ -551,7 +551,7 @@ impl Ctx<'_> {
             }
             /* Check if we want to expand an already existing waypoint. */
             if TileIndex(self.s.rail_area(wp).tile) != TileIndex::INVALID {
-                new_location = self.expand_rail(ret, wp, new_location);
+                new_location = self.can_expand_rail_station(ret, wp, new_location);
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -643,7 +643,7 @@ impl Ctx<'_> {
                 crate::services::RailType(world().rail_type(tile.0)),
             );
             (self.s.set_custom_rail_index)(tile.0, specindex.value);
-            self.set_rail_flags(tile.0, spec);
+            self.set_rail_station_tile_flags(tile, spec);
             (self.s.set_rail_station_reservation)(tile.0, reserved);
             (self.shared.mark_dirty)(tile.0);
             crate::station_association::deallocate(self.s.rail_association, wp, old_specindex);

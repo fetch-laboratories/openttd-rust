@@ -114,12 +114,10 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_callback_error = RustSpecCallbackError<StationSpec, StationSpec>,
 		.set_train_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { st->train_station = TileArea(TileIndex{area.tile}, area.w, area.h); },
 		.rail_triggers = RustStationRailTriggers,
-		.reserved = RustStationReserved,
 		.last_train = RustVehicleLast<Train>,
 		.train = &GetTrainServices(),
 		.reservation = &GetTrainReservationServices(),
 
-		.compatible_tiles = RustCompatibleStationTiles,
 		.custom_rail_index = RustCustomStationIndex,
 		.make_rail_station = [](uint32_t tile, uint8_t owner, uint16_t id, uint8_t axis, uint8_t gfx, uint8_t rt) noexcept { MakeRailStation(TileIndex{tile}, Owner(owner), StationID(id), static_cast<Axis>(axis), gfx, static_cast<RailType>(rt)); },
 		.close_station_inspect = RustStationCloseInspect,
