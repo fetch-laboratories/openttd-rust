@@ -487,12 +487,12 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 144, `1b8b85c524` (#833). Stocktake 143 and profile 143 are in "Where the fork stands". Profile 143's attribution is done, and its slot is released. Unintegrated branches: #825, #832, #834, #837, #838, #839, #840, #841 and #842.
+Code main is integration 145, `cf6ea49111` (#842, the Emscripten apt mirror; `CI_ON_DEMAND` restored to `true` after its bootstrap Full). Stocktake 143 and profile 143 are in "Where the fork stands". Profile 143's attribution is done, and its slot is released. Unintegrated branches: #825, #832, #834, #835's tools PR, #837, #838, #839, #840, #843 and the F cargo PR.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| Integration queue | Root for 145; `/root/integrator` from 146 | 145 is #842, root's Emscripten apt-mirror fix (Canonical's archive timed out three times on 11-09), on bootstrap Full with `CI_ON_DEMAND` unset; root restores the variable after the merge. 146 is #841 (#832 and #834), after a base update and a new Full; the platform cadence runs alongside it. Then #838, and #825 once its re-check passes. |
-| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary`; re-check by `/root/review_825_recheck` | The stub-table fix is pushed at `cb2b8b77b4`. The re-check verifies the merge and the stubs, then re-posts both acceptances at that head. |
+| Integration queue | `/root/integrator` | 146 combines #832, #834, #838 and #840 (`root/integrate-146`): base update onto 145, then root posts one re-acceptance for #838's records at the combined head, then Full alongside the platform cadence due after 145. 147 is #825 alone, after its comparisons fix. Then #843. |
+| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary` | Accepted at `cb2b8b77b4`, but CI's comparisons job fails there (`train-edge-comparison.cpp` no longer compiles after the merge of 144). Fix in progress; after it, a fresh reviewer verifies and re-accepts. Integration 147. |
 | #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Resuming with a merge of 144. |
 | #838, #734 entry 10 (#830 allows) | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_838_industry_allows` | Accepted at `00519a0107`: eight naming findings fixed by renames, nine suppressions and two lint-growth rows accepted, lint-policy at 0 errors. Queued after 146. |
 | #734 entry 6b-1 | same | Starts after the speed fix, once 146 and #840 merge. |
