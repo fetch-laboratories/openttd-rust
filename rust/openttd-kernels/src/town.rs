@@ -4707,7 +4707,11 @@ mod expansion_tests {
     extern "C" fn landscape_tile_type(tile: u32) -> u8 {
         // SAFETY: The test's shared table outlives every landscape command.
         let kind = unsafe { ((*SHARED_TABLE.get()).tile_type)(tile) };
-        if kind == 0 { 9 } else { kind }
+        if kind == crate::tile_type::MP_CLEAR {
+            crate::tile_type::MP_TUNNELBRIDGE
+        } else {
+            kind
+        }
     }
 
     fn leaves() -> Leaves {
