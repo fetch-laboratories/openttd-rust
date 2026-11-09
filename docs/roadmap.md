@@ -119,7 +119,7 @@ Slots: while ready worksets remain, #734/#735 file passes hold two of the four i
    - (c) 09 (59), 08 (58), 07 (52), 06 (45), 04 (38), 05 (27). The proposal put 04 before 06, but the calls between those two worksets run both ways (06 to 04 in 2 files, 04 to 06 in 1), so strict fan-in governs.
    - (d) The rest by fan-in: 16 (67), 21 (62), 15 (42), 18 (37), 10 (33), 11 (28), 14 (27), 17 (26), 12 (25), and 23's remainder. The leaf worksets 22 (17), 20 (6) and 19 (1) go last. F's closure stays last.
 
-   Large files are not left for later. A file over about 1,500 lines gets its own single-file pass, scheduled immediately after the workset pass that skipped it. Twenty-four workset files exceed that size; the largest are `station_cmd.rs` (4,868), `orders.rs` (4,841), `town.rs` (3,373), `train.rs` (3,121), `industry.rs` (2,874) and `company.rs` (2,698). A single file cannot split at a file boundary, so a single-file pass above 2,000 changed lines stays one PR with one reviewer per function group, as #819 did. The 03 remainder therefore becomes three passes: `station_cmd.rs`, `station_service.rs` (2,285), and `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs` and `station_lifecycle.rs` together. #734 reports progress in lines finished as well as files: 18,297 of 173,403 lines (10.6%) and 33 of 319 files at integration 138.
+   Large files are not left for later. A file over about 1,500 lines gets its own single-file pass, placed by fan-in like everything else: before its workset's other files when they call it, and otherwise immediately after the workset pass that skipped it (root, 2026-11-09, after the planner showed that `station_cmd.rs` calls the station group and that nearly every 09 file calls `movement.rs`). Twenty-four workset files exceed that size; the largest are `station_cmd.rs` (4,868), `orders.rs` (4,841), `town.rs` (3,373), `train.rs` (3,121), `industry.rs` (2,874) and `company.rs` (2,698). A single file cannot split at a file boundary, so a single-file pass above 2,000 changed lines stays one PR with one reviewer per function group, as #819 did. The 03 remainder therefore becomes three passes: `station_cmd.rs`, `station_service.rs` (2,285), and `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs` and `station_lifecycle.rs` together. #734 reports progress in lines finished as well as files: 18,297 of 173,403 lines (10.6%) and 33 of 319 files at integration 138.
 
    Worksets 02 and 03 are checked off, but their files keep raw internal signatures and literals; for example `station_cmd.rs:815` still has `0xffff` for `INVALID_STRING_ID` and `:4135` still has `9` for `AT_OILRIG`. A pass's reviewer applies the checklist's code standards to every line left in its files, not only to changed lines. A remaining literal for a named value, a raw internal signature or a hand-written copy of a shared helper is a finding. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
 2. **#806**: carries for renamed lint keys and fidelity suppressions, as one tools PR. File passes in flight adopt it when they update from base.
@@ -332,14 +332,15 @@ Dispatched:
 | ---: | --- | --- | --- |
 | 1 | #824: housekeeping reclaims `build-rust` from finished kept worktrees (`tools/housekeeping.py` and its test) | `/root/cleanup_736_p_packet` | – |
 | 2 | #734 02 `industry.rs` single-file pass (2,874 lines) | `/root/cleanup_734_pass_02c_industry_resolver` | #823 |
-| 3 | #734 03 `station_cmd.rs` single-file pass (4,868 lines) | `/root/cleanup_734_pass_01c_town_rs` | #823 |
+| 3 | #734 03 station group, entry 4's details below (`station_cmd.rs` follows as entry 4a) | `/root/cleanup_734_pass_01c_town_rs` | #823 |
 
 Undispatched, work order item 1:
 
-4. **#734 03 station group, with #815's `station_map.rs` items.**
+4. **#734 03 station group, with #815's `station_map.rs` items. Dispatched as entry 3.**
    - Files: `station.rs` (1,365), `station_map.rs` (503), `station_cmd/waypoint.rs` (897) and `station_lifecycle.rs` (609). Together they hold 3,374 lines, 201 integer sites and 63 missing comment lines, an estimated 1,700 to 3,100 changed lines.
    - #815 items: the `HasStationRail` assertions of `is_station_tile_blocked`, `get_rail_station_axis` and `has_station_reservation`, and the single reads in `get_road_stop_type` and `has_station_rail`. Each gets a reachability check against the original; a confirmed difference gets its own `Fix:` commit with `Found-by: review`. #815's `road_stop.rs`, `station_association.rs` and `industry/construction.rs` items are not part of this entry.
-   - Waits on #823 (`station_lifecycle.rs`). `waypoint.rs` is a submodule of `station_cmd.rs`, so confirm that entry 3's draft leaves it untouched; otherwise wait on entry 3. `station.rs` is also in #737 W's manifest (entry 10).
+   - Waits on #823 (`station_lifecycle.rs`). `station.rs` is also in #737 W's manifest (entry 10).
+4a. **#734 03 `station_cmd.rs` single-file pass** (4,868 lines). It calls the station group, so it starts after entry 4 integrates. It keeps raw calls into `station_service.rs` until entry 5. Its owner drafted five reviewer groups: services and shared checks, rail stations, road stops, airports and docks, and tile procs with caller edits.
 5. **#734 03 `station_service.rs` single-file pass.**
    - 2,285 lines, 61 integer sites and 30 missing comment lines; an estimated 520 to 950 changed lines.
    - Waits on #825. The V remainder reservation on #737 includes this file, and its family 2 (economy loading services) edits the `load_vehicle` service table at lines 1287 to 1299 (`load_unload_ticks`, `cargo_multiplier`, `passenger_cargo`, `station_length_penalty`, `subtract_profit`). Starts when #825 integrates or its owner releases the file on #737.
@@ -352,7 +353,7 @@ Undispatched, work order item 1:
 8. **#734 13 `trees.rs` single-file pass.**
    - 2,062 lines, 137 integer sites and 53 missing comment lines; an estimated 1,200 to 2,100 changed lines. It is over 1,500 lines, so it follows entry 7 under the large-file rule.
    - It calls eight files from entries 6 and 7, so it starts after entry 7 integrates. `trees.rs` is also in #737 W's manifest.
-9. **#734 09 Pathfinding/signals.** The workset holds 12 files, 7,580 lines and 606 integer sites. `movement.rs` (1,554) and `rail_yapf.rs` (1,901) each get their own single-file pass after the workset passes. The other ten files hold 5,125 lines and 346 integer sites, an estimated 3,000 to 5,400 changed lines, so they split with callees first:
+9. **#734 09 Pathfinding/signals.** The workset holds 12 files, 7,580 lines and 606 integer sites. `movement.rs` (1,554), which nearly every 09 file calls, gets its own single-file pass first. `rail_yapf.rs` (1,901) gets its own pass after 9a and 9b. The other ten files hold 5,125 lines and 346 integer sites, an estimated 3,000 to 5,400 changed lines, so they split with callees first:
    - 9a: `signal_func.rs` (33), `node_hash.rs` (75), `yapf_node.rs` (30), `pathfinder_func.rs` (61), `follow_track.rs` (563), `pbs.rs` (750) and `water_regions.rs` (503). Together they hold 2,015 lines and 127 integer sites. `follow_track.rs` and `pbs.rs` call each other.
    - 9b: `signal.rs` (1,171), `road_yapf.rs` (907) and `ship_yapf.rs` (1,032). Together they hold 3,110 lines and 219 integer sites. Split again at a file boundary if needed.
    - Sequence: after entries 6 to 8. 9b waits on #825, whose reservation includes `ship_yapf.rs`. `pbs.rs` and `signal.rs` are in #737 W's manifest.
@@ -385,7 +386,7 @@ Code main is integration 138, `8e967f83c5`. Two branches are unintegrated: #823 
 | --- | --- | --- |
 | #823, integrating #819 (`town.rs` pass), #821 (industry resolver pass) and #820 (#736 P packet probe) | Integrator | Exact-head Full is requested at `d6cf15acd7`. Merge as integration 139, post the note, close the components and clean up. All reviews carried; fixes spot-checked or verified. |
 | #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | Family 5 is committed (`4b449ceb27`). Next it pushes a draft PR, then the station visit-type and position families. |
-| Ready queue | Implementers of #819, #820, #821 (pipelining) | Entry 1 (#824) can start now; entries 2 to 6 wait for #823. |
+| Ready queue | Planner `/root/planner_ready_queue`; root dispatches | Entry 1 (#824) is in progress. Entries 2 (`industry.rs`) and 3 (station group) are dispatched and start when #823 lands. Entries 4a onward are undispatched. |
 | D1 from #819 | #736 W | Retire the test-only `openttd_rust_town_expand` after moving its fixture observations to Rust tests. |
 | #737 W | Unassigned | Waits behind the `station_cmd.rs` pass and the industry passes, whose files it overlaps. |
 | Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 143; platform cadence after 140. |
