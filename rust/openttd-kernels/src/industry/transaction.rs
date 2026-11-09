@@ -866,13 +866,13 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let callback_res =
         unsafe { (e.x.resolve_shape)(shell, call.ind_tile.0, call.gfx.0, parameter) };
     if callback_res.callback == CALLBACK_FAILED {
-        if !is_slope_refused(
+        if is_slope_refused(
             e.tile_slope(call.ind_tile),
             Slope(unsafe { (*call.its).slopes_refused }),
         ) {
-            e.success();
-        } else {
             e.fail(StringID(e.e.site));
+        } else {
+            e.success();
         }
     } else if (e.s.shared().grf_file_version)(unsafe { (*call.its).grf_prop.grffile }) < 7 {
         if callback_res.callback != 0 {

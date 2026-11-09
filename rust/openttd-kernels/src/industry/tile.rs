@@ -279,10 +279,10 @@ fn animate_mine_tower(tile: TileIndex, s: &Services, t: &TileServices) {
         t.set_animation_frame(tile, m);
         mark_tile_dirty_by_tile(tile, s);
     } else if (0x200..0x3a0).contains(&state) {
-        let i = if !(0x220..0x380).contains(&state) {
-            7
-        } else {
+        let i = if (0x220..0x380).contains(&state) {
             3
+        } else {
+            7
         };
         if state & i != 0 {
             return;

@@ -362,17 +362,17 @@ pub(crate) unsafe fn do_create_new_industry(
             )
         };
         if res != CALLBACK_FAILED {
-            if !(u16::from(super::PRODLEVEL_MINIMUM)..=u16::from(super::PRODLEVEL_MAXIMUM))
+            if (u16::from(super::PRODLEVEL_MINIMUM)..=u16::from(super::PRODLEVEL_MAXIMUM))
                 .contains(&res)
             {
-                unsafe {
-                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
-                };
-            } else {
                 unsafe {
                     (*f).prod_level = res as u8;
                 }
                 super::recompute_production_multipliers(owner);
+            } else {
+                unsafe {
+                    (c.callback_error)(indspec, CallbackID::CBID_INDUSTRY_PROD_CHANGE_BUILD.0, res);
+                };
             }
         }
     }

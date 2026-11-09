@@ -1516,9 +1516,7 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
     if count >= 1 {
         // If not forced, pick a weighted random industry to build.
         // For the case that count == 1, there is no need to draw a random number.
-        let it = if forced_build != IndustryType::NUM_INDUSTRYTYPES {
-            forced_build
-        } else {
+        let it = if forced_build == IndustryType::NUM_INDUSTRYTYPES {
             // Non-forced, select an industry type to build (weighted random).
             let mut r = if count > 1 {
                 random_range(s, total_prob)
@@ -1541,6 +1539,8 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
                 }
                 it.0 += 1;
             }
+        } else {
+            forced_build
         };
         // Try to create the industry.
         let ind = place_industry(
