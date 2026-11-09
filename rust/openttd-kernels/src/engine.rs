@@ -192,7 +192,6 @@ pub struct Services {
     pub finance: *const crate::company::FinanceServices,
     pub rng: *const RandomServices,
     pub types: *const crate::type_availability::Services,
-    pub next: unsafe extern "C" fn(u32) -> EngineRef,
     pub resolve: unsafe extern "C" fn(u16) -> EngineRef,
     pub display_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     pub engine_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
@@ -212,9 +211,6 @@ pub struct Services {
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
-    pub company_valid: unsafe extern "C" fn(u8) -> bool,
-    pub company_railtypes: unsafe extern "C" fn(u8) -> u64,
-    pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
     pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
@@ -225,7 +221,6 @@ pub struct Services {
     pub available_event: unsafe extern "C" fn(u16),
     pub available_news: unsafe extern "C" fn(u16),
     pub no_engines: unsafe extern "C" fn(i32),
-    pub utf8_length: unsafe extern "C" fn(*const u8, usize) -> usize,
 }
 
 const AVAILABLE: u8 = 1;
@@ -458,7 +453,7 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
     let mut year = 2050;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -487,7 +482,7 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     let seed = call!(shared, random, shared.context);
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -498,7 +493,7 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     }
     from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -619,7 +614,7 @@ unsafe fn accept(s: &Services, e: EngineRef, company: u8, depth: i32) {
     }
     let mut from = 0;
     loop {
-        let ve = unsafe { call!(s, next, from) };
+        let ve = unsafe { call!((*s.types), next, from) };
         if ve.shell.is_null() {
             break;
         }
@@ -708,7 +703,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::rail::openttd_rust_add_date_rail_types(
                     types,
-                    call!(s, company_railtypes, c.id),
+                    call!((*s.types), company_railtypes, c.id),
                     date,
                 ),
             );
@@ -716,7 +711,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::road::openttd_rust_add_date_road_types(
                     types,
-                    call!(s, company_roadtypes, c.id),
+                    call!((*s.types), company_roadtypes, c.id),
                     date,
                 ),
             );
@@ -728,7 +723,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
     }
     from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -811,7 +806,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!(s, company_railtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), company_railtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_railtypes)(
                     c.id,
@@ -833,7 +828,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!(s, company_roadtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), company_roadtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_roadtypes)(
                     c.id,
@@ -869,7 +864,7 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
     let mut refresh = false;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -914,7 +909,7 @@ pub unsafe extern "C" fn openttd_rust_engine_clear_hidden(s: *const Services, co
     let s = unsafe { &*s };
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -948,7 +943,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::TRAIN
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).compatible_railtypes(&*s.shared)
-                    & call!(s, company_railtypes, company)
+                    & call!((*s.types), company_railtypes, company)
             } == 0
         {
             return false;
@@ -956,7 +951,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::ROAD
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).powered_roadtypes(&*s.shared)
-                    & call!(s, company_roadtypes, company)
+                    & call!((*s.types), company_roadtypes, company)
             } == 0
         {
             return false;
@@ -1069,7 +1064,7 @@ pub unsafe extern "C" fn openttd_rust_engine_control(
     let s = unsafe { &*s };
     if unsafe { call!(&*s.shared, current_company) } != OWNER_DEITY
         || e.shell.is_null()
-        || !unsafe { call!(s, company_valid, company) }
+        || !unsafe { call!((*s.shared), company_valid, company) }
     {
         return 1;
     }
@@ -1100,13 +1095,13 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
     }
     let s = unsafe { &*s };
     if name.size != 0 {
-        if unsafe { call!(s, utf8_length, name.data, name.size) } >= 32 {
+        if unsafe { call!((*s.shared), utf8_length, name.data, name.size) } >= 32 {
             return 1;
         }
         let bytes = unsafe { std::slice::from_raw_parts(name.data, name.size) };
         let mut from = 0;
         loop {
-            let other = unsafe { call!(s, next, from) };
+            let other = unsafe { call!((*s.types), next, from) };
             if other.shell.is_null() {
                 break;
             }
@@ -1133,7 +1128,7 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
     let mut min = i32::MAX;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -1188,7 +1183,6 @@ crate::abi::layouts! {
         finance,
         rng,
         types,
-        next,
         resolve,
         display_variant,
         engine_id,
@@ -1208,9 +1202,6 @@ crate::abi::layouts! {
         vehicle_next,
         vehicle_cargo,
         capabilities,
-        company_valid,
-        company_railtypes,
-        company_roadtypes,
         company_engine_count,
         local_company,
         toolbar_enable,
@@ -1221,7 +1212,6 @@ crate::abi::layouts! {
         available_event,
         available_news,
         no_engines,
-        utf8_length,
     };
 }
 

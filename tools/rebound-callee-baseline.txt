@@ -14,8 +14,6 @@ forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngin
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
 forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
 forwarded | src/rust/company_identity_adapter.cpp | vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo
-forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices().company_valid
-forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
 forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicleServices().newgrf
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
@@ -24,7 +22,6 @@ forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
 rebound | Engine_next | src/rust/engine_adapter.hpp | next
-rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
 rebound | Engine_next | src/rust/engine_loading_services.hpp | next
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
@@ -107,10 +104,6 @@ rebound | RustClosestWaterDistance | src/town_cmd.cpp | water_distance
 rebound | RustCompanyInfo | src/newgrf_roadstop.cpp | company
 rebound | RustCompanyInfo | src/newgrf_station.cpp | company
 rebound | RustCompanyInfo | src/rust/vehicle_services_newgrf.h | company_info
-rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
-rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes | 2
-rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
-rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
