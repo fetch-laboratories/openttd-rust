@@ -227,19 +227,15 @@ fn animate_plastic_fountain(tile: TileIndex, gfx: IndustryGfx, s: &Services, t: 
     mark_tile_dirty_by_tile(tile, s);
 }
 /// `AnimateOilWell`.
-#[allow(
-    clippy::many_single_char_names,
-    reason = "AnimateOilWell keeps the original's local variable names"
-)]
 fn animate_oil_well(
     tile: TileIndex,
     mut gfx: IndustryGfx,
-    s: &Services,
-    c: &ConstructionServices,
-    t: &TileServices,
+    svc: &Services,
+    cons: &ConstructionServices,
+    tiles: &TileServices,
 ) {
-    let b = chance16(s, 1, 7);
-    let mut m = t.get_animation_frame(tile).wrapping_add(1);
+    let b = chance16(svc, 1, 7);
+    let mut m = tiles.get_animation_frame(tile).wrapping_add(1);
     // `m == 4 && (m = 0, ++gfx) == GFX_OILWELL_ANIMATED_3 + 1 && (gfx = GFX_OILWELL_ANIMATED_1, b)`
     let last = m == 4
         && {
@@ -252,14 +248,14 @@ fn animate_oil_well(
             b
         };
     if last {
-        t.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_NOT_ANIMATED);
-        unsafe { (c.set_construction_stage)(tile.0, 3) };
+        tiles.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_NOT_ANIMATED);
+        unsafe { (cons.set_construction_stage)(tile.0, 3) };
         delete_animated_tile(tile);
     } else {
-        t.set_animation_frame(tile, m);
-        t.set_industry_gfx(tile, gfx);
+        tiles.set_animation_frame(tile, m);
+        tiles.set_industry_gfx(tile, gfx);
     }
-    mark_tile_dirty_by_tile(tile, s);
+    mark_tile_dirty_by_tile(tile, svc);
 }
 /// `AnimateMineTower`.
 fn animate_mine_tower(tile: TileIndex, s: &Services, t: &TileServices) {
@@ -480,10 +476,6 @@ fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate
     reason = "TileLoop_Industry keeps the original's implicit C++ integer conversions"
 )]
 #[allow(
-    clippy::many_single_char_names,
-    reason = "TileLoop_Industry keeps the original's local variable names"
-)]
-#[allow(
     clippy::too_many_lines,
     reason = "TileLoop_Industry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
 )]
@@ -493,57 +485,57 @@ pub(crate) unsafe fn tile_loop(
     call: *mut crate::ground::Call,
     services: &crate::tile_loop::IndustryServices,
 ) {
-    let (s, c) = unsafe { (&*services.production, &*services.construction) };
-    let (l, t) = unsafe { (&*services.lifecycle, &*services.tiles) };
-    let g = unsafe { &*services.generation };
-    if unsafe { (t.on_water)(tile.0) } {
-        unsafe { crate::water::tree_industry_water_loop(tile.0, call, s.shared()) };
+    let (prod, cons) = unsafe { (&*services.production, &*services.construction) };
+    let (life, tiles) = unsafe { (&*services.lifecycle, &*services.tiles) };
+    let generation = unsafe { &*services.generation };
+    if unsafe { (tiles.on_water)(tile.0) } {
+        unsafe { crate::water::tree_industry_water_loop(tile.0, call, prod.shared()) };
     }
     // Normally this doesn't happen, but if an industry NewGRF is removed an industry that
     // was previously build on water can now be flooded. If this happens the tile is no
     // longer an industry tile after returning from TileLoop_Water.
-    if TileType((s.shared().tile_type)(tile.0)) != TileType::MP_INDUSTRY {
+    if TileType((prod.shared().tile_type)(tile.0)) != TileType::MP_INDUSTRY {
         return;
     }
-    let industry = unsafe { (t.industry)(tile.0) };
+    let industry = unsafe { (tiles.industry)(tile.0) };
     unsafe {
         super::openttd_rust_industry_randomise_tile(
             tile.0,
             IndustryRandomTrigger::TileLoop.0,
             industry.shell.cast::<c_void>(),
             industry.owner,
-            s,
-            l,
+            prod,
+            life,
         );
     };
-    if !unsafe { (t.completed)(tile.0) } {
-        make_industry_tile_bigger(tile, map, s, c, l, t);
+    if !unsafe { (tiles.completed)(tile.0) } {
+        make_industry_tile_bigger(tile, map, prod, cons, life, tiles);
         return;
     }
-    if (g.environment.editor)() {
+    if (generation.environment.editor)() {
         return;
     }
-    if unsafe { (t.transport)(tile.0) } {
-        let industry = unsafe { (t.industry)(tile.0) };
+    if unsafe { (tiles.transport)(tile.0) } {
+        let industry = unsafe { (tiles.industry)(tile.0) };
         if !unsafe {
             super::openttd_rust_industry_animate_abi(
                 industry.owner,
-                (t.industry_index)(tile.0),
+                (tiles.industry_index)(tile.0),
                 IndustryAnimationTrigger::CargoDistributed.0,
                 map.size_x(),
-                s,
-                l,
+                prod,
+                life,
             ) != 0
         } {
-            let gfx = t.get_industry_gfx(tile);
+            let gfx = tiles.get_industry_gfx(tile);
             let newgfx = IndustryGfx(u16::from(unsafe {
                 (*get_industry_tile_spec(gfx)).anim_production
             }));
             if newgfx != IndustryGfx::INDUSTRYTILE_NOANIM {
-                t.reset_industry_construction_stage(tile);
-                t.set_industry_completed(tile);
-                t.set_industry_gfx(tile, newgfx);
-                mark_tile_dirty_by_tile(tile, s);
+                tiles.reset_industry_construction_stage(tile);
+                tiles.set_industry_completed(tile);
+                tiles.set_industry_gfx(tile, newgfx);
+                mark_tile_dirty_by_tile(tile, prod);
                 return;
             }
         }
@@ -553,28 +545,28 @@ pub(crate) unsafe fn tile_loop(
             tile.0,
             IndustryAnimationTrigger::TileLoop.0,
             0,
-            s,
-            l,
+            prod,
+            life,
         ) != 0
     } {
         return;
     }
-    let gfx = t.get_industry_gfx(tile);
+    let gfx = tiles.get_industry_gfx(tile);
     let newgfx = IndustryGfx(u16::from(unsafe {
         (*get_industry_tile_spec(gfx)).anim_next
     }));
     if newgfx != IndustryGfx::INDUSTRYTILE_NOANIM {
-        t.reset_industry_construction_stage(tile);
-        t.set_industry_gfx(tile, newgfx);
-        mark_tile_dirty_by_tile(tile, s);
+        tiles.reset_industry_construction_stage(tile);
+        tiles.set_industry_gfx(tile, newgfx);
+        mark_tile_dirty_by_tile(tile, prod);
         return;
     }
-    let mut gfx = t.get_industry_gfx(tile);
+    let mut gfx = tiles.get_industry_gfx(tile);
     match gfx {
         IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_COPPER_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_GOLD_MINE_TOWER_NOT_ANIMATED => {
-            if tick_counter(s) & 0x400 == 0 && chance16(s, 1, 2) {
+            if tick_counter(prod) & 0x400 == 0 && chance16(prod, 1, 2) {
                 gfx = match gfx {
                     IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED => {
                         IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED
@@ -584,22 +576,22 @@ pub(crate) unsafe fn tile_loop(
                     }
                     _ => IndustryGfx::GFX_GOLD_MINE_TOWER_ANIMATED,
                 };
-                t.set_industry_gfx(tile, gfx);
-                t.set_animation_frame(tile, 0x80);
+                tiles.set_industry_gfx(tile, gfx);
+                tiles.set_animation_frame(tile, 0x80);
                 add_animated_tile(tile);
             }
         }
         IndustryGfx::GFX_OILWELL_NOT_ANIMATED => {
-            if chance16(s, 1, 6) {
-                t.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_ANIMATED_1);
-                t.set_animation_frame(tile, 0);
+            if chance16(prod, 1, 6) {
+                tiles.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_ANIMATED_1);
+                tiles.set_animation_frame(tile, 0);
                 add_animated_tile(tile);
             }
         }
         IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED
         | IndustryGfx::GFX_COPPER_MINE_TOWER_ANIMATED
         | IndustryGfx::GFX_GOLD_MINE_TOWER_ANIMATED => {
-            if tick_counter(s) & 0x400 == 0 {
+            if tick_counter(prod) & 0x400 == 0 {
                 gfx = match gfx {
                     IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED => {
                         IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED
@@ -609,16 +601,16 @@ pub(crate) unsafe fn tile_loop(
                     }
                     _ => IndustryGfx::GFX_GOLD_MINE_TOWER_NOT_ANIMATED,
                 };
-                t.set_industry_gfx(tile, gfx);
-                t.set_industry_completed(tile);
-                unsafe { (c.set_construction_stage)(tile.0, 3) };
+                tiles.set_industry_gfx(tile, gfx);
+                tiles.set_industry_completed(tile);
+                unsafe { (cons.set_construction_stage)(tile.0, 3) };
                 delete_animated_tile(tile);
-                mark_tile_dirty_by_tile(tile, s);
+                mark_tile_dirty_by_tile(tile, prod);
             }
         }
         IndustryGfx::GFX_POWERPLANT_SPARKS => {
-            if chance16(s, 1, 3) {
-                ambient_sound(tile, SoundFx::SND_0C_POWER_STATION, s);
+            if chance16(prod, 1, 3) {
+                ambient_sound(tile, SoundFx::SND_0C_POWER_STATION, prod);
                 add_animated_tile(tile);
             }
         }
@@ -631,18 +623,18 @@ pub(crate) unsafe fn tile_loop(
             );
         }
         IndustryGfx::GFX_TOY_FACTORY => {
-            let i = unsafe { (t.industry)(tile.0) };
+            let i = unsafe { (tiles.industry)(tile.0) };
             let delivered =
                 unsafe { ptr::read(ptr::addr_of!((*i.owner).fields.was_cargo_delivered)) };
             if delivered != 0 {
                 unsafe { (*i.owner).fields.was_cargo_delivered = 0 };
-                t.set_industry_animation_loop(tile, 0);
+                tiles.set_industry_animation_loop(tile, 0);
                 add_animated_tile(tile);
             }
         }
-        IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, s, map),
+        IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, prod, map),
         IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile),
-        IndustryGfx::GFX_SUGAR_MINE_SIEVE if chance16(s, 1, 3) => add_animated_tile(tile),
+        IndustryGfx::GFX_SUGAR_MINE_SIEVE if chance16(prod, 1, 3) => add_animated_tile(tile),
         _ => {}
     }
 }
@@ -767,10 +759,6 @@ pub struct TilePolicyServices {
 /// # Safety
 /// Live tile and native stack result. Event and destruction callbacks may reenter;
 /// immutable specs remain live after owner destruction, with no owner borrow held.
-#[allow(
-    clippy::many_single_char_names,
-    reason = "ClearTile_Industry keeps the original's local variable names"
-)]
 pub(crate) unsafe fn clear_tile_industry(
     out: *mut IndustryCost,
     tile: TileIndex,
@@ -780,43 +768,45 @@ pub(crate) unsafe fn clear_tile_industry(
     costs: *const IndustryCostServices,
     generation: *const super::GenerationServices,
 ) {
-    let (t, p, c, g) = unsafe { (&*tiles, &*policy, &*costs, &*generation) };
-    let i = unsafe { (t.industry)(tile.0) };
+    let (tiles, policy, costs, generation) = unsafe { (&*tiles, &*policy, &*costs, &*generation) };
+    let i = unsafe { (tiles.industry)(tile.0) };
     let indspec = get_industry_spec(crate::industry_type::IndustryType(unsafe {
         (*i.owner).metadata.kind
     }));
-    let current_company = || CompanyID(unsafe { (p.current_company)() });
+    let current_company = || CompanyID(unsafe { (policy.current_company)() });
     // Water can destroy industries, in editor you can bulldoze industries, with
     // magic_bulldozer cheat you can destroy industries (area around OILRIG is water, so
     // water shouldn't flood it).
     if (current_company() != Owner::WATER
-        && !(g.environment.editor)()
-        && !unsafe { (p.magic_bulldozer)() })
+        && !(generation.environment.editor)()
+        && !unsafe { (policy.magic_bulldozer)() })
         || flags.test(DoCommandFlag::Auto)
         || (current_company() == Owner::WATER
             && (IndustryBehaviours(unsafe { (*indspec).behaviour })
                 .test(IndustryBehaviour::BuiltOnWater)
                 || has_bit(
-                    unsafe { (*get_industry_tile_spec(t.get_industry_gfx(tile))).slopes_refused },
+                    unsafe {
+                        (*get_industry_tile_spec(tiles.get_industry_gfx(tile))).slopes_refused
+                    },
                     5,
                 )))
     {
         if flags.test(DoCommandFlag::Auto) {
-            unsafe { (p.object_in_way)(out, indspec) };
+            unsafe { (policy.object_in_way)(out, indspec) };
         } else {
-            unsafe { (c.error)(out, StringID::INVALID_STRING_ID.0) };
+            unsafe { (costs.error)(out, StringID::INVALID_STRING_ID.0) };
         }
         return;
     }
     if flags.test(DoCommandFlag::Execute) {
         unsafe {
-            (p.close_ai)(i.shell);
-            (p.close_game)(i.shell);
-            (p.destroy)(i.shell);
+            (policy.close_ai)(i.shell);
+            (policy.close_game)(i.shell);
+            (policy.destroy)(i.shell);
         }
     }
     let removal = unsafe { super::removal_cost((*indspec).removal_cost_multiplier) };
-    unsafe { (c.expense_money)(out, ExpensesType::EXPENSES_CONSTRUCTION.0, removal) };
+    unsafe { (costs.expense_money)(out, ExpensesType::EXPENSES_CONSTRUCTION.0, removal) };
 }
 /// The tables `TerraformTile_Industry` reaches.
 pub(crate) struct TerraformServices<'a> {
