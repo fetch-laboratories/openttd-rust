@@ -25,7 +25,7 @@ constexpr uint VEHICLE_LENGTH = 8;
 constexpr uint8_t TRACK_BIT_DEPOT = 0x80, TRACK_BIT_WORMHOLE = 0x40;
 constexpr int GVF_GOINGUP_BIT = 0, GVF_GOINGDOWN_BIT = 1, MP_TUNNELBRIDGE = 9;
 constexpr int AM_ORIGINAL = 0;
-struct { struct { int train_acceleration_model; } vehicle; } _settings_game;
+struct { struct { uint8_t train_acceleration_model; } vehicle; } _settings_game;
 struct RailTypeInfo { uint8_t curve_speed; } rail;
 static uint8_t GetRailType(TileIndex) { return 0; }
 static const RailTypeInfo *GetRailTypeInfo(uint8_t) { return &rail; }
