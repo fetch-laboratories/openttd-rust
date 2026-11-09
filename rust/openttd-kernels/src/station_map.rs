@@ -203,10 +203,6 @@ pub(crate) fn is_road_waypoint_on_snow_or_desert(
     require_road_waypoint(m, tile)?;
     Some(has_bit(m.m8(tile.0)?, 15))
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
-    is_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
-}
 /// `ToggleRoadWaypointOnSnowOrDesert`: toggle the snow/desert state of a road
 /// waypoint tile.
 #[allow(
@@ -222,13 +218,6 @@ pub(crate) fn toggle_road_waypoint_on_snow_or_desert(
     toggle_bit(&mut value, 15);
     m.set_m8(tile.0, value as u16)
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn toggle_road_waypoint_snow(
-    m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-) -> Option<()> {
-    toggle_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
-}
 /// `GetRoadWaypointRoadside`: get the decorations of a road waypoint.
 #[allow(
     clippy::cast_possible_truncation,
@@ -243,25 +232,20 @@ pub(crate) fn get_road_waypoint_roadside(
         gb(u32::from(m.m3(tile.0)?), 2, 2) as u8,
     ))
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn road_waypoint_roadside(
-    m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-) -> Option<crate::services::Roadside> {
-    get_road_waypoint_roadside(m, TileIndex(tile))
-}
-/// `SetRoadWaypointRoadside`: set the decorations of a road waypoint. Keeps
-/// its raw tile until `station_lifecycle.rs` adopts it.
-#[allow(clippy::cast_possible_truncation)] // SB stores back into the source byte.
+/// `SetRoadWaypointRoadside`: set the decorations of a road waypoint.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB stores back into the original uint8_t m3"
+)]
 pub(crate) fn set_road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-    value: crate::services::Roadside,
+    tile: TileIndex,
+    rs: crate::services::Roadside,
 ) -> Option<()> {
-    require_road_waypoint(m, TileIndex(tile))?;
-    let mut bits = u32::from(m.m3(tile)?);
-    sb(&mut bits, 2, 2, u32::from(value.0));
-    m.set_m3(tile, bits as u8)
+    require_road_waypoint(m, tile)?;
+    let mut bits = u32::from(m.m3(tile.0)?);
+    sb(&mut bits, 2, 2, u32::from(rs.0));
+    m.set_m3(tile.0, bits as u8)
 }
 
 impl crate::map_func::World<'_> {
