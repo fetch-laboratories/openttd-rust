@@ -3182,3 +3182,505 @@ mod competitor_tests {
         set_mode(saved_mode);
     }
 }
+
+/// Company startup and control continuations from the retired part of
+/// `src/tests/company_economy.cpp` (#736 F), with the fixture's own traces: "Company economy -
+/// AI startup continuation and abandoned frames" and "Company control - network local switch
+/// precedes native settings continuation". Company 2 is the slot every allocation takes.
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+    use crate::company_type::{COMPANY_SPECTATOR, CompanyID, CompanyManagerFace, OpenTTDCompany};
+    use crate::livery::{Livery, LiveryScheme};
+    use crate::test_tables::{
+        COMMAND_COSTS, COMMAND_POST, COMPANY, COMPANY_IDENTITY, FACES, FINANCE, FLEET_GROUPS,
+        MOVEMENT, NETWORK_COMMAND, NETWORK_FRAME, OBJECTIVES, SHARED,
+    };
+    use std::cell::{Cell, RefCell};
+
+    const ID: u8 = 2;
+    /// Company 2's native record: colour, liveries, face bits and president.
+    struct Record {
+        colour: u8,
+        liveries: [Livery; LiveryScheme::LS_END.0 as usize],
+        face_bits: u32,
+        president: (u32, u32),
+    }
+    thread_local! {
+        static TRACE: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+        static RECORD: RefCell<Record> = RefCell::new(Record {
+            colour: 0,
+            liveries: [Livery::default(); LiveryScheme::LS_END.0 as usize],
+            face_bits: 0,
+            president: (0, 0),
+        });
+        static FINANCES: Cell<*mut Finances> = const { Cell::new(std::ptr::null_mut()) };
+        static NETWORKING: Cell<bool> = const { Cell::new(false) };
+        static SERVER: Cell<bool> = const { Cell::new(false) };
+        static CURRENT: Cell<u8> = const { Cell::new(18) };
+        static LOCAL: Cell<u8> = const { Cell::new(0) };
+        static OWN: Cell<bool> = const { Cell::new(false) };
+        static POST: Cell<*const crate::command_post::Services> = const { Cell::new(std::ptr::null()) };
+        static NETWORK: Cell<*const crate::network_command::Services> = const { Cell::new(std::ptr::null()) };
+        static FRAME: Cell<*const crate::network_frame::Services> = const { Cell::new(std::ptr::null()) };
+        static WINDOWS: Cell<*const crate::objectives::Services> = const { Cell::new(std::ptr::null()) };
+    }
+    fn trace(entry: &'static str) {
+        TRACE.with(|t| t.borrow_mut().push(entry));
+    }
+    fn traced() -> Vec<&'static str> {
+        TRACE.with(|t| t.borrow().clone())
+    }
+    fn handle() -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(ID) + 1)
+    }
+    extern "C" fn company(_: CompanyID) -> *mut OpenTTDCompany {
+        handle()
+    }
+    extern "C" fn company_id(_: *mut OpenTTDCompany) -> CompanyID {
+        CompanyID(ID)
+    }
+    extern "C" fn no_company(_: u32) -> *mut OpenTTDCompany {
+        std::ptr::null_mut()
+    }
+    extern "C" fn colour(_: *mut OpenTTDCompany) -> u8 {
+        RECORD.with(|r| r.borrow().colour)
+    }
+    extern "C" fn set_colour(_: *mut OpenTTDCompany, value: u8) {
+        RECORD.with(|r| r.borrow_mut().colour = value);
+    }
+    extern "C" fn livery(_: *mut OpenTTDCompany, scheme: u8) -> *mut Livery {
+        RECORD.with(|r| &raw mut r.borrow_mut().liveries[usize::from(scheme)])
+    }
+    extern "C" fn face(_: *mut OpenTTDCompany) -> *mut CompanyManagerFace {
+        std::ptr::without_provenance_mut(1)
+    }
+    extern "C" fn face_bits(_: *mut CompanyManagerFace) -> *mut u32 {
+        RECORD.with(|r| &raw mut r.borrow_mut().face_bits)
+    }
+    extern "C" fn set_president_id(_: *mut OpenTTDCompany, value: u32) {
+        RECORD.with(|r| r.borrow_mut().president.0 = value);
+    }
+    extern "C" fn set_president_parts(_: *mut OpenTTDCompany, value: u32) {
+        RECORD.with(|r| r.borrow_mut().president.1 = value);
+    }
+    extern "C" fn not_ai(_: *mut OpenTTDCompany) -> bool {
+        false
+    }
+    extern "C" fn name_frame(_: *mut crate::company_identity::NameStorage) {}
+    extern "C" fn render(
+        _: *mut crate::company_identity::NameStorage,
+        _: u32,
+        _: u32,
+    ) -> crate::services::ByteSpan {
+        crate::services::ByteSpan {
+            data: b"President".as_ptr(),
+            size: 9,
+        }
+    }
+    extern "C" fn utf8_length(_: *const u8, size: usize) -> usize {
+        size
+    }
+    extern "C" fn no_draw(_: *mut std::ffi::c_void) -> u32 {
+        0
+    }
+    extern "C" fn one_style() -> u32 {
+        1
+    }
+    extern "C" fn face_random(_: *mut crate::town::names::Randomizer) -> u32 {
+        0
+    }
+    extern "C" fn no_vars(_: u32) -> crate::company_manager_face::FaceVars {
+        crate::company_manager_face::FaceVars {
+            data: std::ptr::null(),
+            size: 0,
+        }
+    }
+    extern "C" fn face_spec(_: u32) -> *const crate::company_manager_face::FaceSpec {
+        std::ptr::without_provenance(1)
+    }
+    extern "C" fn set_style(_: *mut CompanyManagerFace, _: u32) {}
+    extern "C" fn set_label(
+        _: *mut CompanyManagerFace,
+        _: *const crate::company_manager_face::FaceSpec,
+    ) {
+    }
+    extern "C" fn style(_: *mut CompanyManagerFace) -> u32 {
+        0
+    }
+    extern "C" fn no_group(_: u32) -> u32 {
+        u32::MAX
+    }
+    extern "C" fn admin_update(_: CompanyID) {
+        trace("admin");
+    }
+    extern "C" fn reset_colourmap() {
+        trace("colourmap");
+    }
+    extern "C" fn screen_dirty() {
+        trace("screen");
+    }
+    extern "C" fn company_valid(id: u8) -> bool {
+        id == ID && !FINANCES.get().is_null()
+    }
+    extern "C" fn holds(condition: bool) {
+        assert!(condition);
+    }
+    extern "C" fn command_post() -> &'static crate::command_post::Services {
+        // SAFETY: Leaked by `services` for the test process.
+        unsafe { &*POST.get() }
+    }
+    extern "C" fn network_command() -> &'static crate::network_command::Services {
+        // SAFETY: As above.
+        unsafe { &*NETWORK.get() }
+    }
+    extern "C" fn network_frame() -> &'static crate::network_frame::Services {
+        // SAFETY: As above.
+        unsafe { &*FRAME.get() }
+    }
+    extern "C" fn objectives() -> &'static crate::objectives::Services {
+        // SAFETY: As above.
+        unsafe { &*WINDOWS.get() }
+    }
+    extern "C" fn no_client(_: u32) -> *mut std::ffi::c_void {
+        std::ptr::null_mut()
+    }
+
+    extern "C" fn networking() -> bool {
+        NETWORKING.get()
+    }
+    extern "C" fn server() -> bool {
+        SERVER.get()
+    }
+    extern "C" fn not_server() -> bool {
+        false
+    }
+    extern "C" fn current() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn set_current(id: u8) {
+        CURRENT.set(id);
+    }
+    extern "C" fn local() -> u8 {
+        LOCAL.get()
+    }
+    extern "C" fn finances(id: u8) -> *mut Finances {
+        if id == ID {
+            FINANCES.get()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn allocate(_: u8, _: bool) -> CompanyRef {
+        // SAFETY: Plain integer record, freed by `reset`.
+        let finances = Box::into_raw(Box::new(unsafe { std::mem::zeroed::<Finances>() }));
+        FINANCES.set(finances);
+        trace("allocate 2");
+        CompanyRef {
+            finances,
+            id: u32::from(ID),
+        }
+    }
+    extern "C" fn prepare(_: u8, _: bool) -> bool {
+        trace("setup 2");
+        true
+    }
+    extern "C" fn events(_: u8) {
+        trace("events 2");
+    }
+    extern "C" fn network_new(_: u8) {
+        trace("network 2");
+    }
+    extern "C" fn ignore(_: u8) {}
+    extern "C" fn nothing() {}
+    extern "C" fn own_company(_: u8, client: u32) -> *mut OpenTTDCompany {
+        assert_eq!(client, 7);
+        trace("request");
+        if OWN.get() {
+            handle()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn own_settings(_: *mut OpenTTDCompany) {
+        assert_eq!((LOCAL.get(), CURRENT.get()), (ID, ID));
+        trace("settings");
+    }
+    extern "C" fn window_data(class: u16, number: u32, data: i32) {
+        assert_eq!(
+            (class, number, data),
+            (
+                crate::window_type::WC_SEND_NETWORK_MSG,
+                crate::network_type::DESTTYPE_TEAM,
+                i32::from(COMPANY_SPECTATOR)
+            )
+        );
+        assert_eq!(
+            (LOCAL.get(), CURRENT.get()),
+            (COMPANY_SPECTATOR, COMPANY_SPECTATOR)
+        );
+        trace("chat");
+    }
+    extern "C" fn window_classes(_: u16, _: i32) {
+        trace("classes");
+    }
+    extern "C" fn assign(company: CompanyID) {
+        LOCAL.set(company.0);
+        CURRENT.set(company.0);
+        trace("assign");
+    }
+    extern "C" fn close_construction() {
+        trace("construction");
+    }
+
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn shared() -> &'static crate::services::Services {
+        let mut movement = MOVEMENT;
+        movement.native_assert = holds;
+        let mut shared = SHARED;
+        shared.random = no_draw;
+        shared.utf8_length = utf8_length;
+        shared.screen_dirty = screen_dirty;
+        shared.company_valid = company_valid;
+        shared.current_company = current;
+        shared.command_post = command_post;
+        shared.network_client_info = no_client;
+        shared.movement = leak(movement);
+        leak(shared)
+    }
+    fn identity(
+        shared: &'static crate::services::Services,
+    ) -> &'static crate::company_identity::Services {
+        let mut faces = FACES;
+        faces.count = one_style;
+        faces.random = face_random;
+        faces.vars = no_vars;
+        faces.spec = face_spec;
+        faces.set_style = set_style;
+        faces.set_label = set_label;
+        faces.style = style;
+        faces.bits = face_bits;
+        let mut groups = FLEET_GROUPS;
+        groups.next_group = no_group;
+        let mut identity = COMPANY_IDENTITY;
+        identity.shared = shared;
+        identity.faces = leak(faces);
+        identity.groups = leak(groups);
+        identity.company = company;
+        identity.next_company = no_company;
+        identity.company_id = company_id;
+        identity.colour = colour;
+        identity.set_colour = set_colour;
+        identity.livery = livery;
+        identity.face = face;
+        identity.set_president_id = set_president_id;
+        identity.set_president_parts = set_president_parts;
+        identity.is_ai = not_ai;
+        identity.name_frame_init = name_frame;
+        identity.name_frame_drop = name_frame;
+        identity.render = render;
+        identity.admin_update = admin_update;
+        identity.reset_colourmap = reset_colourmap;
+        leak(identity)
+    }
+    /// The fixture's `FixtureReset`: company services over company 2's record, with the
+    /// network leg (`network_new`) seeing a non-server company table.
+    fn services(network: bool, is_server: bool) -> &'static Services {
+        reset();
+        NETWORKING.set(network);
+        SERVER.set(is_server);
+        let shared = shared();
+        let mut finance = FINANCE;
+        finance.networking = networking;
+        finance.current_company = current;
+        finance.set_current_company = set_current;
+        finance.company_finances = finances;
+        let mut windows = OBJECTIVES;
+        windows.window_data = window_data;
+        windows.window_classes = window_classes;
+        WINDOWS.set(leak(windows));
+        let mut s = COMPANY;
+        s.identity = identity(shared);
+        s.shared = shared;
+        s.finance = leak(finance);
+        s.cost = &COMMAND_COSTS;
+        s.objectives = objectives;
+        s.local_company = local;
+        s.network_server = server;
+        s.can_allocate_company = yes;
+        s.allocate_company = allocate;
+        s.prepare_new_company = prepare;
+        s.company_defaults = ignore;
+        s.startup_windows = nothing;
+        s.new_company_events = events;
+        s.company_league_dirty = nothing;
+        s.company_ctrl_windows = nothing;
+        s.assert_new_ai_slot = ignore;
+        s.admin_company_new = network_new;
+        s.close_network_status = nothing;
+        s.network_own_company = own_company;
+        s.network_own_company_settings = own_settings;
+        s.assign_company_context = assign;
+        s.close_construction_windows = close_construction;
+        let s = leak(s);
+        // `network_new` reads the network command's own company table, which is no server.
+        let mut network_company = COMPANY;
+        network_company.shared = shared;
+        network_company.identity = s.identity;
+        network_company.network_server = not_server;
+        let mut command = NETWORK_COMMAND;
+        command.company = leak(network_company);
+        command.network = network_frame;
+        let command = leak(command);
+        NETWORK.set(command);
+        let mut frame = NETWORK_FRAME;
+        frame.command = command;
+        FRAME.set(leak(frame));
+        let mut post = COMMAND_POST;
+        post.network = network_command;
+        POST.set(leak(post));
+        s
+    }
+    fn reset() {
+        TRACE.with(|t| t.borrow_mut().clear());
+        CURRENT.set(18);
+        LOCAL.set(0);
+        let finances = FINANCES.replace(std::ptr::null_mut());
+        if !finances.is_null() {
+            // SAFETY: Allocated by `allocate`.
+            drop(unsafe { Box::from_raw(finances) });
+        }
+    }
+    fn ownership() -> crate::tile_owner::Context {
+        crate::tile_owner::Context {
+            services: std::ptr::null(),
+            cost: std::ptr::null_mut(),
+            ret: std::ptr::null_mut(),
+            error: std::ptr::null_mut(),
+            road: std::ptr::null(),
+        }
+    }
+    fn control_frame(action: u8, client: u32) -> Control {
+        Control {
+            result: Cost {
+                cost: 0,
+                param: 0,
+                error: 0,
+                expense: 0,
+            },
+            startup: Startup {
+                company: 0,
+                requested: 0,
+                is_ai: false,
+                stage: 0,
+            },
+            client,
+            action,
+            target: INVALID_OWNER,
+            reason: 0,
+            execute: true,
+            stage: 0,
+        }
+    }
+    fn colour_scope<R>(f: impl FnOnce() -> R) -> R {
+        // SAFETY: The process-wide colour cache, serialized by the game-state test lock.
+        let slot =
+            unsafe { crate::company_identity::openttd_rust_company_colours().add(usize::from(ID)) };
+        // SAFETY: As above.
+        let saved = unsafe { slot.read() };
+        let result = f();
+        // SAFETY: As above.
+        unsafe { slot.write(saved) };
+        result
+    }
+
+    /// Rust returns before `AI::StartNew`; an abandoned frame keeps the allocated company
+    /// without new-company events or a network announcement, a resumed one completes once,
+    /// and a network client starts no AI.
+    #[test]
+    fn ai_startup_continuation_and_abandoned_frames() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        colour_scope(|| {
+            let ownership = ownership();
+            let s = services(false, false);
+            let mut abandoned = control_frame(1, 0);
+            assert!(control(s, &ownership, &mut abandoned));
+            assert_eq!(abandoned.startup.company, u32::from(ID));
+            assert_eq!(traced(), ["allocate 2", "setup 2"]);
+            // SAFETY: Company 2's live finances.
+            let (money, loan) = unsafe { ((*FINANCES.get()).money, (*FINANCES.get()).loan) };
+            assert_eq!(money, loan);
+
+            let s = services(false, false);
+            let mut resumed = control_frame(1, 0);
+            let mut starts = 0;
+            while control(s, &ownership, &mut resumed) {
+                starts += 1;
+            }
+            assert_eq!(starts, 1);
+            assert_eq!(traced(), ["allocate 2", "setup 2", "events 2", "network 2"]);
+            assert_eq!(resumed.result.error, 0);
+
+            let s = services(true, false);
+            let mut client = Startup {
+                company: u32::MAX,
+                requested: INVALID_OWNER,
+                is_ai: true,
+                stage: 0,
+            };
+            assert!(!startup(s, &mut client));
+            assert_eq!(traced(), ["allocate 2", "setup 2", "events 2"]);
+            reset();
+        });
+    }
+
+    /// A network client's new company switches the local company before the native settings
+    /// continuation, and only when the client owns it.
+    #[test]
+    fn network_local_switch_precedes_settings_continuation() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        colour_scope(|| {
+            let ownership = ownership();
+            for matching_client in [false, true] {
+                let s = services(true, false);
+                LOCAL.set(COMPANY_SPECTATOR);
+                CURRENT.set(COMPANY_SPECTATOR);
+                OWN.set(matching_client);
+                let mut call = control_frame(0, 7);
+                assert!(!control(s, &ownership, &mut call));
+                let mut expected =
+                    vec!["allocate 2", "setup 2", "events 2", "network 2", "request"];
+                if matching_client {
+                    expected.extend([
+                        "chat",
+                        "assign",
+                        "classes",
+                        "construction",
+                        "screen",
+                        "classes",
+                        "classes",
+                        "classes",
+                        "colourmap",
+                        "settings",
+                    ]);
+                }
+                assert_eq!(traced(), expected, "matching client {matching_client}");
+                assert_eq!(call.result.error, 0);
+                assert_eq!(
+                    LOCAL.get(),
+                    if matching_client {
+                        ID
+                    } else {
+                        COMPANY_SPECTATOR
+                    }
+                );
+            }
+            reset();
+        });
+    }
+}
