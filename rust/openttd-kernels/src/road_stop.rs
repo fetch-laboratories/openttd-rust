@@ -491,20 +491,24 @@ fn entry_direction(east: bool, axis: Axis) -> DiagDirection {
 }
 
 /// `RoadStop::Entry::Rebuild`: rebuild, from scratch, the vehicles and other
-/// metadata on this stop, from the base stop at `xy`; returns the entry.
-fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool) -> Entry {
+/// metadata on this stop, from the base stop at `xy`, into `this`. As the
+/// original, the length is written per tile and the occupied space is summed
+/// from the vehicles' cached lengths after the traversal.
+fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, this: *mut Entry) {
     debug_assert!(status(state).test(StatusFlag::BaseEntry));
     let t = table(s);
     // SAFETY: The shared vehicle table is static.
     let vehicle = unsafe { &*t.vehicle };
     let axis = crate::map_func::World::new(s).get_drive_through_stop_axis(xy);
     let entry_dir = entry_direction(east, axis);
-    let mut vehicles: Vec<(VehicleRef, u16)> = Vec::new();
-    let mut length: u16 = 0;
+    let mut vehicles: Vec<VehicleRef> = Vec::new();
+    // SAFETY: `this` is the caller's live entry; no service runs during the write.
+    unsafe { (*this).length = 0 };
     let offset = map(s).offs_by_axis(axis.0);
     let mut tile = xy;
     while is_drive_through_road_stop_continuation(s, xy, tile) {
-        length = length.wrapping_add(TILE_UNITS);
+        // SAFETY: As above; the read and write end before the vehicle traversal.
+        unsafe { (*this).length = (*this).length.wrapping_add(TILE_UNITS) };
         vehicle.for_each_on_tile(tile.0, |v| {
             // Not a RV or not in the right direction or crashed :(
             if v.vehicle_type() != VehicleType::ROAD.0
@@ -524,24 +528,24 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool) -> 
             }
             crate::witness::hit(crate::witness::ROAD_STOP_REBUILD_VEHICLE);
             // `include(vehicles, rv)`.
-            if !vehicles.iter().any(|&(u, _)| u == v) {
-                vehicles.push((v, total_length(v)));
+            if !vehicles.contains(&v) {
+                vehicles.push(v);
             }
         });
         tile = TileIndex(tile.0.wrapping_add(offset));
     }
-    let mut occupied: u16 = 0;
-    for &(_, total_length) in &vehicles {
-        occupied = occupied.wrapping_add(total_length);
+    // SAFETY: As above; each write ends before the next vehicle read.
+    unsafe { (*this).occupied = 0 };
+    for &v in &vehicles {
+        let cached_total_length = total_length(v);
+        unsafe { (*this).occupied = (*this).occupied.wrapping_add(cached_total_length) };
     }
-    Entry { length, occupied }
 }
 /// `entries->east.Rebuild(rs)` or `entries->west.Rebuild(rs)`.
 fn rebuild(s: &Services, xy: TileIndex, state: *mut State, east: bool) {
     crate::witness::hit(crate::witness::ROAD_STOP_REBUILD);
-    let built = rebuild_entry(s, xy, state, east);
-    // SAFETY: Live shared entries of this base stop; no service runs here.
-    unsafe { *side(entries(state), east) = built };
+    // Live shared entries of this base stop.
+    rebuild_entry(s, xy, state, east, side(entries(state), east));
 }
 
 /// `RoadStop::MakeDriveThrough`: join this road stop at `xy` to another
@@ -740,7 +744,8 @@ fn check_integrity(s: &Services, xy: TileIndex, state: *mut State, dir: DiagDire
         )
     ));
     let east = dir < DiagDirection::DIAGDIR_SW;
-    let temp = rebuild_entry(s, xy, state, east);
+    let mut temp = Entry::default();
+    rebuild_entry(s, xy, state, east, &raw mut temp);
     // SAFETY: Live shared entries; the copy ends the load.
     let current = unsafe { *side(entries(state), east) };
     if temp != current {

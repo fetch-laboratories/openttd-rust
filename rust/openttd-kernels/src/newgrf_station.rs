@@ -126,8 +126,8 @@ pub struct Services {
     waiting: extern "C" fn(*mut BaseStation) -> u8,
     set_waiting: extern "C" fn(*mut BaseStation, u8),
     set_random: extern "C" fn(*mut BaseStation, u16),
-    cached_cargo: extern "C" fn(*mut BaseStation) -> u64,
-    spec_cargo: extern "C" fn(*const RailSpec) -> u64,
+    pub(crate) cached_cargo: extern "C" fn(*mut BaseStation) -> u64,
+    pub(crate) spec_cargo: extern "C" fn(*const RailSpec) -> u64,
     resolve_random: extern "C" fn(*const RailSpec, *mut BaseStation, u32, u8) -> Reseed,
     resolve_callback: extern "C" fn(
         u16,
