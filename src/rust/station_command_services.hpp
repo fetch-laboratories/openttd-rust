@@ -217,7 +217,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.make_buoy = RustMakeBuoy,
 		.make_rail_waypoint = RustMakeRailWaypoint,
 		.new_waypoint = [](uint32_t tile) noexcept -> BaseStation * { return new Waypoint(TileIndex{tile}); },
-		.rail_axis = RustRailStationAxis,
 		.road_ground = &GetRustRoadGroundServices(),
 		.road_waypoint_tile_area = RustWaypointRoadArea,
 		.set_facility_bits = RustStationSetFacilityBits,

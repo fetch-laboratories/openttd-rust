@@ -522,7 +522,8 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     if !unsafe { crate::station::rect_is_empty(state) } {
         let c = crate::station::Ctx::from_shared(unsafe { &*w.shared });
         let always = unsafe { &raw mut (*state).fields.always_accepted };
-        acceptance = unsafe { crate::station::acceptance_around_station(state, always, &c) };
+        acceptance =
+            unsafe { crate::station::get_acceptance_around_station_raw(state, always, &c) };
     }
     let facilities = u32::from((w.facilities)(st));
     for cargo in 0..64 {
@@ -586,7 +587,7 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
     let c = crate::station::Ctx::from_shared(shared);
     // SAFETY: Live owner; house animation triggers cannot reset its catchment.
     unsafe {
-        crate::station::for_each_catchment_tile(state, &c, |tile| {
+        crate::station::for_each_catchment_tile_raw(state, &c, |tile| {
             if (shared.tile_type)(tile) == crate::tile_type::MP_HOUSE {
                 crate::town::house::trigger_house_animation_watched_cargo_accepted(
                     c.c.town,
