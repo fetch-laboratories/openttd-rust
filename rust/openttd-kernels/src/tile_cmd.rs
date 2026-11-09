@@ -7,6 +7,7 @@
 
 //! `tile_cmd.h`: vehicle tile-admission results and the tile-type cargo procedures.
 #![allow(unsafe_code)]
+use crate::cargo_type::{CargoArray, CargoTypes};
 use crate::tile_type::{TileIndex, TileType};
 
 /// Native `VehicleEnterTileState`, retaining every underlying `u8` value.
@@ -53,8 +54,8 @@ pub const CANNOT_ENTER: u8 =
 /// have one.
 pub(crate) fn add_accepted_cargo(
     tile: TileIndex,
-    acceptance: &mut [u32; 64],
-    always_accepted: *mut u64,
+    acceptance: &mut CargoArray,
+    always_accepted: *mut CargoTypes,
     c: &crate::station::Ctx<'_>,
 ) {
     let kind = TileType((c.s.tile_type)(tile.0));
@@ -64,12 +65,14 @@ pub(crate) fn add_accepted_cargo(
     ) {
         return;
     }
-    let mut dummy = 0_u64;
+    let mut dummy = CargoTypes(0);
     let always = if always_accepted.is_null() {
         &raw mut dummy
     } else {
         always_accepted
-    };
+    }
+    // The unfinished per-type procedures take the raw `CargoTypes` base.
+    .cast::<u64>();
     let cargoes = acceptance.as_mut_ptr();
     // SAFETY: Live immutable tables; both outputs outlive the synchronous procs.
     unsafe {
@@ -96,7 +99,7 @@ pub(crate) fn add_accepted_cargo(
 /// and objects have one.
 pub(crate) fn add_produced_cargo(
     tile: TileIndex,
-    produced: &mut [u32; 64],
+    produced: &mut CargoArray,
     c: &crate::station::Ctx<'_>,
 ) {
     let cargoes = produced.as_mut_ptr();
@@ -119,16 +122,16 @@ pub(crate) fn add_produced_cargo(
 /// Temporary raw adapter for [`add_accepted_cargo`], used by `station.rs` until its pass.
 pub(crate) fn add_accepted_cargo_raw(
     tile: u32,
-    acceptance: &mut [u32; 64],
+    acceptance: &mut CargoArray,
     always_accepted: *mut u64,
     c: &crate::station::Ctx<'_>,
 ) {
-    add_accepted_cargo(TileIndex(tile), acceptance, always_accepted, c);
+    add_accepted_cargo(TileIndex(tile), acceptance, always_accepted.cast(), c);
 }
 /// Temporary raw adapter for [`add_produced_cargo`], used by `station.rs` until its pass.
 pub(crate) fn add_produced_cargo_raw(
     tile: u32,
-    produced: &mut [u32; 64],
+    produced: &mut CargoArray,
     c: &crate::station::Ctx<'_>,
 ) {
     add_produced_cargo(TileIndex(tile), produced, c);
