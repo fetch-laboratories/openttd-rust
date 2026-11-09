@@ -1745,12 +1745,12 @@ impl Ctx<'_> {
         // Reuse the two native slots across the nested command;
         // the accumulated station cost is scalar and already successful.
         let saved = cost.money();
-        self.nested(ret, tile_cur.0, flags.0, |flags| unsafe {
+        self.nested(ret, tile_cur, flags, |flags| unsafe {
             crate::rail_cmd::openttd_rust_rail_remove_single(
                 self.s.rail,
                 ret.0,
                 cost.0,
-                flags,
+                flags.0,
                 tile_cur.0,
                 track.0,
             );
@@ -2470,8 +2470,18 @@ impl Ctx<'_> {
             log_x: u32::from(self.map().log_x),
         }
     }
-    fn nested(&self, out: Cost<'_>, tile: u32, flags: u16, body: impl FnMut(u16)) {
-        crate::command::nested(self.command, self.shared, out, tile, flags, body);
+    /// A nested `Command<...>::Do(flags, tile, ...)` running `body` with the
+    /// nested command's flags.
+    fn nested(
+        &self,
+        out: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+        mut body: impl FnMut(DoCommandFlags),
+    ) {
+        crate::command::nested(self.command, self.shared, out, tile.0, flags.0, |flags| {
+            body(DoCommandFlags(flags));
+        });
     }
     /// `PR_CLEAR_WAYPOINT_RAIL` or `PR_CLEAR_STATION_RAIL`.
     fn rail_removal_cost(waypoint: bool) -> i64 {
@@ -2769,14 +2779,14 @@ impl Ctx<'_> {
         if CompanyID((self.shared.current_company)()) == CompanyID::WATER {
             return self.nested(
                 cost,
-                tile.0,
-                DoCommandFlags::from_element(DoCommandFlag::Execute).0,
+                tile,
+                DoCommandFlags::from_element(DoCommandFlag::Execute),
                 |flags| {
                     self.cmd_remove_from_rail_base_station(
                         cost,
                         ret,
                         error,
-                        DoCommandFlags(flags),
+                        flags,
                         CmdRemoveFromRailBaseStation {
                             start: tile,
                             end: TileIndex(0),
@@ -5649,17 +5659,16 @@ impl Ctx<'_> {
         let station_type = StationType((self.shared.station_type)(tile.0).0);
         self.nested(
             cost,
-            tile.0,
-            (DoCommandFlags::from_element(DoCommandFlag::Execute)
-                | DoCommandFlags::from_element(DoCommandFlag::Bankrupt))
-            .0,
+            tile,
+            DoCommandFlags::from_element(DoCommandFlag::Execute)
+                | DoCommandFlags::from_element(DoCommandFlag::Bankrupt),
             |flags| {
                 if station_type == StationType::RoadWaypoint {
                     self.cmd_remove_from_road_waypoint(
                         cost,
                         ret,
                         error,
-                        DoCommandFlags(flags),
+                        flags,
                         CmdRemoveFromRoadWaypoint {
                             start: tile,
                             end: tile,
@@ -5670,7 +5679,7 @@ impl Ctx<'_> {
                         cost,
                         ret,
                         error,
-                        DoCommandFlags(flags),
+                        flags,
                         CmdRemoveRoadStop {
                             tile,
                             width: 1,
