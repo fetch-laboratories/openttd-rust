@@ -1534,17 +1534,11 @@
     "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn shrink | excessive_nesting | da62516b87a18eebda92": [
       6
     ],
-    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn build_rail_waypoint | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      13
+    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn cmd_build_rail_waypoint | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      186
     ],
-    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn build_rail_waypoint | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      187
-    ],
-    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn build_road_waypoint | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      12
-    ],
-    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn build_road_waypoint | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      223
+    "rust/openttd-kernels/src/station_cmd/waypoint.rs | impl Ctx < ' _ >::fn cmd_build_road_waypoint | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      219
     ],
     "rust/openttd-kernels/src/station_definitions.rs | fn station_change_info | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       33
@@ -1552,15 +1546,12 @@
     "rust/openttd-kernels/src/station_definitions.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       265
     ],
-    "rust/openttd-kernels/src/station_lifecycle.rs | fn generate_name | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
-      26
-    ],
-    "rust/openttd-kernels/src/station_lifecycle.rs | fn generate_name | excessive_nesting | bfdba2d6b1960a323bdf": [
+    "rust/openttd-kernels/src/station_lifecycle.rs | fn station_name_information | excessive_nesting | 8a4ac9e1d9076b08dcdd": [
       6
     ],
     "rust/openttd-kernels/src/station_lifecycle.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       131,
-      146
+      120
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       48
@@ -1574,9 +1565,6 @@
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 32a0d0af8f9c42c0edd9": [
       6
     ],
-    "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | a8cd0e2478fd5a9a1743": [
-      6
-    ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 44cab5e48328b2ef422d": [
       6
     ],
@@ -1585,6 +1573,9 @@
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | 80cee5f5ddf9b010cf03": [
       7
+    ],
+    "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | a8cd0e2478fd5a9a1743": [
+      6
     ],
     "rust/openttd-kernels/src/station_service.rs | fn load_vehicle | excessive_nesting | b36d2ad652042c203622": [
       7
@@ -1790,9 +1781,6 @@
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       42
     ],
-    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | aeff2c146b91182cb6da": [
-      5
-    ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 40f56c67ef8fefcbca08": [
       5
     ],
@@ -1815,6 +1803,9 @@
       6
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | 9a6d49ee3f863e4f64db": [
+      5
+    ],
+    "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | aeff2c146b91182cb6da": [
       5
     ],
     "rust/openttd-kernels/src/train.rs | impl Game < ' _ >::fn move_vehicle | excessive_nesting | c9e59917b991051c05e1": [
@@ -1842,10 +1833,10 @@
     "rust/openttd-kernels/src/train_reservation.rs | fn choose | too_many_lines | 4a33eacd5fa65f2b2e28": [
       183
     ],
-    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | a7148d6828eb165aac33": [
+    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | 57e151827030b79ecd44": [
       6
     ],
-    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | 57e151827030b79ecd44": [
+    "rust/openttd-kernels/src/train_reservation.rs | fn clear | excessive_nesting | a7148d6828eb165aac33": [
       6
     ],
     "rust/openttd-kernels/src/train_reservation.rs | fn extend_from | too_many_lines | 4a33eacd5fa65f2b2e28": [
@@ -1966,13 +1957,13 @@
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       32
     ],
-    "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ba367b9edf519908fef2": [
-      7
-    ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ae6a3ac5b6cb1c142c5e": [
       6
     ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | b6015ee97b1acb0bd2d3": [
+      7
+    ],
+    "rust/openttd-kernels/src/vehicle_transactions/clone.rs | fn clone | excessive_nesting | ba367b9edf519908fef2": [
       7
     ],
     "rust/openttd-kernels/src/vehicle_transactions/clone.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
