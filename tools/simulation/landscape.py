@@ -556,58 +556,6 @@ def check(
             raise RuntimeError("flood victim explosions missing")
 
 
-def scheduler_gap() -> None:
-    """Compare unreachable map phases and commit-after-batch with unchanged C++."""
-    import probe
-
-    import migration
-
-    root = migration.ROOT
-    out = migration.LOCAL / "landscape-loop-gap"
-    out.mkdir(parents=True, exist_ok=True)
-    source = (migration.REFERENCE / "src/landscape.cpp").read_text()
-    start = source.index("void RunTileLoop()")
-    end = source.index("\nvoid InitializeLandscape()", start)
-    (out / "landscape-loop-reference.inc").write_text(source[start:end])
-
-    # Independent frozen observations of the same pinned-original corpus now
-    # exercise production Rust directly; keep this default comparison nonempty.
-    import evidence_replacements
-
-    evidence_replacements.run_rust(
-        "rust:lib:movement::evidence_tests::foundations_match_original"
-    )
-    evidence_replacements.run_rust(
-        "rust:lib:movement::evidence_tests::extreme_coordinates_match_original"
-    )
-    print(
-        "movement foundation/extreme-coordinate gap: 19608 unchanged-body cases passed"
-    )
-
-    binary = out / "landscape-loop-gap"
-    probe.compile(
-        [
-            probe.compiler(root / "build-rust"),
-            "-std=c++20",
-            *probe.target_flags(root / "build-rust"),
-            "-O2",
-            "-I" + str(root / "src"),
-            "-I" + str(root / "build-rust/generated-abi"),
-            "-I" + str(out),
-            str(root / "tools/simulation/landscape-loop-reference.cpp"),
-            *probe.rust(root / "build-rust", define=False),
-            "-o",
-            str(binary),
-        ],
-        out / "compile.log",
-        cwd=root,
-        env=migration.environment(),
-    )
-    print(
-        probe.execute([binary], binary, cwd=root, stderr="inherited").decode(), end=""
-    )
-
-
 def png_chunk(kind: bytes, data: bytes) -> bytes:
     body = kind + data
     return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
