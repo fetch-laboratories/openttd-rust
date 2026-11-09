@@ -855,19 +855,18 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
 }
 
 /// Raw adapter for `industry/construction.rs` and `town.rs`, which open PRs
-/// hold; delegates to `for_all_stations_around_tiles_typed`.
-pub(crate) fn for_all_stations_around_tiles(
+/// hold; delegates to `for_all_stations_around_tiles`.
+pub(crate) fn for_all_stations_around_tiles_raw(
     ta: TileArea,
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, u32) -> bool,
 ) {
-    for_all_stations_around_tiles_typed(ta, c, |st, tile| func(st, tile.0));
+    for_all_stations_around_tiles(ta, c, |st, tile| func(st, tile.0));
 }
 /// `ForAllStationsAroundTiles`: visit stations, in ID order, whose catchment
 /// covers part of `ta`; `func` (a `Station*, TileIndex` callback) returning
-/// `false` keeps testing the area's remaining tiles for that station. Takes the
-/// plain name once its held callers adopt it.
-pub(crate) fn for_all_stations_around_tiles_typed(
+/// `false` keeps testing the area's remaining tiles for that station.
+pub(crate) fn for_all_stations_around_tiles(
     ta: TileArea,
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, TileIndex) -> bool,
@@ -942,7 +941,7 @@ impl StationFinder {
                 add_nearby_stations_by_catchment(tile, &mut self.stations, nearby, c);
             } else {
                 let stations = &mut self.stations;
-                for_all_stations_around_tiles_typed(self.area, c, |st, _| {
+                for_all_stations_around_tiles(self.area, c, |st, _| {
                     stations.insert(st.station, st.id);
                     true
                 });
@@ -1047,22 +1046,21 @@ pub(crate) fn acceptance_around_tiles(
     }
     acceptance
 }
-/// Raw adapter for `station_service.rs`, reserved by the #737 V remainder;
-/// delegates to `acceptance_around_station_typed`.
+/// Raw adapter for `station_service.rs`, outside this pass; delegates to
+/// `get_acceptance_around_station`.
 /// # Safety
-/// As `acceptance_around_station_typed`.
-pub(crate) unsafe fn acceptance_around_station(
+/// As `get_acceptance_around_station`.
+pub(crate) unsafe fn get_acceptance_around_station_raw(
     state: *mut Service,
     always_accepted: *mut u64,
     c: &Ctx<'_>,
 ) -> [u32; NUM_CARGO as usize] {
-    unsafe { acceptance_around_station_typed(state, always_accepted.cast(), c) }
+    unsafe { get_acceptance_around_station(state, always_accepted.cast(), c) }
 }
-/// `GetAcceptanceAroundStation`: explicit bitmap iteration of the catchment. Takes
-/// the plain name once `station_service.rs` adopts it.
+/// `GetAcceptanceAroundStation`: explicit bitmap iteration of the catchment.
 /// # Safety
 /// `state` is a live station owner whose catchment is not reset by the tile procs.
-pub(crate) unsafe fn acceptance_around_station_typed(
+pub(crate) unsafe fn get_acceptance_around_station(
     state: *mut Service,
     always_accepted: *mut CargoTypes,
     c: &Ctx<'_>,
@@ -1084,7 +1082,7 @@ pub(crate) unsafe fn acceptance_around_station_typed(
 /// Visit each tile of a live catchment by explicit bitmap iteration.
 /// # Safety
 /// `state` is a live station owner whose catchment the visits do not reset.
-pub(crate) unsafe fn iterate_catchment_tiles(
+pub(crate) unsafe fn for_each_catchment_tile(
     state: *mut Service,
     c: &Ctx<'_>,
     mut visit: impl FnMut(TileIndex),
@@ -1098,15 +1096,15 @@ pub(crate) unsafe fn iterate_catchment_tiles(
     }
 }
 /// Raw adapter for `subsidy.rs` and `station_service.rs`, outside this pass;
-/// delegates to `iterate_catchment_tiles`.
+/// delegates to `for_each_catchment_tile`.
 /// # Safety
-/// As `iterate_catchment_tiles`.
-pub(crate) unsafe fn for_each_catchment_tile(
+/// As `for_each_catchment_tile`.
+pub(crate) unsafe fn for_each_catchment_tile_raw(
     state: *mut Service,
     c: &Ctx<'_>,
     mut visit: impl FnMut(u32),
 ) {
-    unsafe { iterate_catchment_tiles(state, c, |tile| visit(tile.0)) }
+    unsafe { for_each_catchment_tile(state, c, |tile| visit(tile.0)) }
 }
 
 /// `MoveGoodsToStation` with this entry's station and visit services.

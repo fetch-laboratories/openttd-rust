@@ -599,16 +599,22 @@ impl Services {
                 let shared = self.shared();
                 // SAFETY: The live station owner; the visits read only the map and caches.
                 unsafe {
-                    crate::station::for_each_catchment_tile(station_state, &catchment, |tile| {
-                        if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
-                            return;
-                        }
-                        let town = TownID((shared.town_index)(tile));
-                        if (self.has_source_flag)(Source::town(town.0), PartOfSubsidy::Destination)
-                        {
-                            towns_near[town_word(town)] |= town_bit(town);
-                        }
-                    });
+                    crate::station::for_each_catchment_tile_raw(
+                        station_state,
+                        &catchment,
+                        |tile| {
+                            if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
+                                return;
+                            }
+                            let town = TownID((shared.town_index)(tile));
+                            if (self.has_source_flag)(
+                                Source::town(town.0),
+                                PartOfSubsidy::Destination,
+                            ) {
+                                towns_near[town_word(town)] |= town_bit(town);
+                            }
+                        },
+                    );
                 }
             }
         }

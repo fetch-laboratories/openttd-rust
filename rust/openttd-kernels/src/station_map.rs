@@ -171,16 +171,16 @@ pub(crate) fn is_hangar_raw(tile: u32, s: &crate::newgrf_airport::Services) -> b
     is_hangar(TileIndex(tile), s)
 }
 /// Original `IsHangarTile`: is tile `t` a hangar tile? Includes its
-/// non-station early return. Takes the plain name once `orders.rs` adopts it.
+/// non-station early return.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_hangar_tile_typed(t: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
+pub(crate) fn is_hangar_tile(t: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
     (s.shared().tile_type)(t.0) == MP_STATION && is_hangar(t, s)
 }
-/// Raw adapter for `orders.rs`, which #825 holds; delegates to `is_hangar_tile_typed`.
+/// Raw adapter for `orders.rs`, which #825 holds; delegates to `is_hangar_tile`.
 #[inline]
-pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
-    is_hangar_tile_typed(TileIndex(tile), s)
+pub(crate) fn is_hangar_tile_raw(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
+    is_hangar_tile(TileIndex(tile), s)
 }
 
 /// The `assert(IsRoadWaypointTile(t))` precondition of the road waypoint
