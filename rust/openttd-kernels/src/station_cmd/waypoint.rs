@@ -411,6 +411,36 @@ impl Ctx<'_> {
                 crate::movement::native_assert(self.shared, ok);
             }))
     }
+    /// The common checks of `CmdBuildRailWaypoint` and `CmdBuildRoadWaypoint` after
+    /// their class checks: the number of parts to build, whether a deleted
+    /// waypoint may be reused, and the station to join. `None` is `CMD_ERROR`.
+    fn waypoint_parts_and_join(
+        &self,
+        axis: Axis,
+        width: u8,
+        height: u8,
+        station_to_join: StationID,
+    ) -> Option<(u8, bool, StationID)> {
+        /* The number of parts to build */
+        let count = if axis == Axis::AXIS_X { height } else { width };
+        if (if axis == Axis::AXIS_X { width } else { height }) != 1
+            || count == 0
+            || count > (self.s.spread)()
+        {
+            return None;
+        }
+        let reuse = station_to_join != StationID::NEW;
+        let mut station_to_join = station_to_join;
+        if !reuse {
+            station_to_join = StationID::INVALID;
+        }
+        let distant_join = station_to_join != StationID::INVALID;
+        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
+        {
+            return None;
+        }
+        Some((count, reuse, station_to_join))
+    }
     /// `CmdBuildRailWaypoint`: convert existing rail to a waypoint, e.g. build a
     /// waypoint station over a piece of rail.
     fn cmd_build_rail_waypoint(
@@ -436,24 +466,11 @@ impl Ctx<'_> {
         {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        /* The number of parts to build */
-        let count = if axis == Axis::AXIS_X { height } else { width };
-        if (if axis == Axis::AXIS_X { width } else { height }) != 1
-            || count == 0
-            || count > (self.s.spread)()
-        {
+        let Some((count, reuse, station_to_join)) =
+            self.waypoint_parts_and_join(axis, width, height, args.station_to_join)
+        else {
             return cost.error(StringID::INVALID_STRING_ID.0);
-        }
-        let reuse = args.station_to_join != StationID::NEW;
-        let mut station_to_join = args.station_to_join;
-        if !reuse {
-            station_to_join = StationID::INVALID;
-        }
-        let distant_join = station_to_join != StationID::INVALID;
-        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
-        {
-            return cost.error(StringID::INVALID_STRING_ID.0);
-        }
+        };
         let mut new_location = TileArea {
             tile: start_tile.0,
             w: u16::from(width),
@@ -652,24 +669,11 @@ impl Ctx<'_> {
         }
         let roadstopspec =
             crate::newgrf_class::roadstop::spec(spec_class.0, u32::from(args.spec_index));
-        /* The number of parts to build */
-        let count = if axis == Axis::AXIS_X { height } else { width };
-        if (if axis == Axis::AXIS_X { width } else { height }) != 1
-            || count == 0
-            || count > (self.s.spread)()
-        {
+        let Some((count, reuse, station_to_join)) =
+            self.waypoint_parts_and_join(axis, width, height, args.station_to_join)
+        else {
             return cost.error(StringID::INVALID_STRING_ID.0);
-        }
-        let reuse = args.station_to_join != StationID::NEW;
-        let mut station_to_join = args.station_to_join;
-        if !reuse {
-            station_to_join = StationID::INVALID;
-        }
-        let distant_join = station_to_join != StationID::INVALID;
-        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
-        {
-            return cost.error(StringID::INVALID_STRING_ID.0);
-        }
+        };
         let roadstop_area = TileArea {
             tile: start_tile.0,
             w: u16::from(width),
