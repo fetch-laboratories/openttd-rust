@@ -10,7 +10,7 @@
 //! fields, pools, specs, sprite resolvers and `AnimationBase` stay native.
 use super::{
     AuthorityServices, Leaves, State, TownCouncilAttitudes, TownFlag, TownFlags, TownRef,
-    change_population, engine, update_radius,
+    change_population, engine, update_town_radius,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
@@ -286,7 +286,7 @@ fn house<'a>(leaves: *const Leaves, services: *const Services) -> House<'a> {
     }
 }
 /// `HouseSpec::Get(house)->building_flags`.
-fn building_flags(leaves: &Leaves, house: HouseID) -> BuildingFlags {
+pub(super) fn building_flags(leaves: &Leaves, house: HouseID) -> BuildingFlags {
     BuildingFlags((leaves.house_flags)(house))
 }
 /// Determines if a given `HouseID` is part of a multitile house (`GetHouseNorthPart`).
@@ -475,7 +475,7 @@ impl<'a> House<'a> {
                 change_population(
                     self.l,
                     town.state,
-                    u32::from(town.id.0),
+                    town.id,
                     -i32::from((self.l.house_population)(house)),
                 );
             }
@@ -510,7 +510,7 @@ impl<'a> House<'a> {
         }
         self.remove_nearby_stations(town, tile, flags);
         // SAFETY: Pure immediate owner mutation, without native callbacks.
-        unsafe { update_radius(town.state) };
+        unsafe { update_town_radius(town.state) };
     }
     /// `TriggerHouseAnimation_TileLoop`: call the tile loop animation trigger for
     /// houses, if enabled; `random_bits` are the shared bits of the synchronized trigger.
@@ -681,12 +681,7 @@ impl<'a> House<'a> {
             let population = (self.l.house_population)(rec.house);
             // SAFETY: Live owner; presentation callbacks follow the write.
             unsafe {
-                change_population(
-                    self.l,
-                    town.state,
-                    u32::from(town.id.0),
-                    i32::from(population),
-                );
+                change_population(self.l, town.state, town.id, i32::from(population));
             }
             (self.h.reset_age)(tile.0);
         }
@@ -734,7 +729,7 @@ impl<'a> House<'a> {
         // Actually generate cargo and update town statistics.
         // SAFETY: Live owner. Like the source reference, the row pointer spans
         // only the station delivery, which never touches town supplied rows.
-        let supplied = unsafe { super::supplied_entry(town.state, cargo.0) }.entry;
+        let supplied = unsafe { super::supplied_entry(town.state, cargo) }.entry;
         unsafe {
             (*supplied).history[usize::from(THIS_MONTH)].production = (*supplied).history
                 [usize::from(THIS_MONTH)]
@@ -934,12 +929,9 @@ impl<'a> House<'a> {
                     // SAFETY: Immediate copied owner read.
                     let xy = unsafe { super::position(t.state) };
                     // `TileIndexToTileIndexDiffC(t->xy, tile)`, clamped to 0..=1.
-                    let x = i32::from(
-                        (map.tile_x(xy).wrapping_sub(map.tile_x(tile.0)) as i16).clamp(0, 1),
-                    );
-                    let y = i32::from(
-                        (map.tile_y(xy).wrapping_sub(map.tile_y(tile.0)) as i16).clamp(0, 1),
-                    );
+                    let grid_pos = map.tile_index_to_tile_index_diff_c(xy, tile);
+                    let x = i32::from(grid_pos.x.clamp(0, 1));
+                    let y = i32::from(grid_pos.y.clamp(0, 1));
                     if flags.test(BuildingFlag::Size2x2) {
                         tile = self.tile_add_xy(tile, x, y);
                     } else if flags.test(BuildingFlag::Size1x2) {
@@ -952,8 +944,7 @@ impl<'a> House<'a> {
                 if unsafe { self.s.settings().allow_town_roads.read() } {
                     modes = modes.with(TownExpandModes::from_element(TownExpandMode::Roads));
                 }
-                let id = u32::from(t.id.0);
-                self.engine(t).try_house(id, tile.0, u32::from(modes.0));
+                self.engine(t).try_build_town_house(t.id, tile, modes);
             }
         }
         (self.l.exchange_company)(cur_company);
@@ -1227,17 +1218,17 @@ impl<'a> House<'a> {
             let house_completed =
                 PlaceHouses((self.h.place_houses)()) == PlaceHouses::PH_ALLOWED_CONSTRUCTED;
             // `BuildTownHouse` takes `uint8_t random_bits`.
-            let random = gb(self.s.random(), 0, 8);
+            let random_bits = gb(self.s.random(), 0, 8) as u8;
             let t = TownRef {
                 shell: town.cast_mut(),
                 state: (self.s.town_owner)(town),
                 id,
             };
-            self.engine(t).build_house(
-                u32::from(id.0),
-                tile.0,
-                u32::from(house),
-                random,
+            self.engine(t).build_town_house(
+                id,
+                tile,
+                house,
+                random_bits,
                 house_completed,
                 args.is_protected,
             );
@@ -1414,8 +1405,8 @@ impl<'a> House<'a> {
         // `DoTriggerHouseAnimation_WatchedCargoAccepted`: run the callback for a single
         // house tile, with `TileIndexToTileIndexDiffC(origin, tile)`.
         let trigger = |part: TileIndex| {
-            let x = map.tile_x(tile.0).wrapping_sub(map.tile_x(part.0)) as u8;
-            let y = map.tile_y(tile.0).wrapping_sub(map.tile_y(part.0)) as u8;
+            let diff = map.tile_index_to_tile_index_diff_c(tile, part);
+            let (x, y) = (diff.x as u8, diff.y as u8);
             let cb_info = u32::from(r) << 16 | u32::from(y) << 8 | u32::from(x);
             // SAFETY: The entry resolved this live town shell; no owner borrow
             // spans the synchronous animation callback.
@@ -1507,7 +1498,7 @@ impl<'a> House<'a> {
         }
         // Update the population and num_house dependent values.
         // SAFETY: Pure owner mutation per live town.
-        self.towns(|town| unsafe { update_radius(town) });
+        self.towns(|town| unsafe { update_town_radius(town) });
     }
     /// The yearly economy timer: increment house ages in `Map::Iterate` order.
     fn increment_house_ages(&self) {

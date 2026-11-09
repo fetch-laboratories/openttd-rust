@@ -113,7 +113,15 @@ Slots: while ready worksets remain, #734/#735 file passes hold two of the four i
 
    A typed accessor replaces its raw form. Callers outside the pass use a temporary raw adapter that delegates to the typed accessor, and each adopts the typed form in its own file's pass. The adapter retires with its last caller, or at #734 closure. Split a workset only at a file boundary, and only when its diff would exceed about 2,000 changed lines. That size is provisional: the 33 vocabulary PRs averaged about 150 lines. Above about 1,000 changed lines, assign one reviewer per function group ([review](workflow.md#review)). Later PRs touch a finished file only for a mechanical shared-file edit or for a caller adopting a changed signature.
 
-   Order: closing passes for worksets 01 to 09, then the untouched worksets, largest integer-site count first. Worksets 02 and 03 are checked off, but their files keep raw internal signatures and literals; for example `station_cmd.rs:815` still has `0xffff` for `INVALID_STRING_ID` and `:4135` still has `9` for `AT_OILRIG`. A pass's reviewer applies the checklist's code standards to every line left in its files, not only to changed lines. A remaining literal for a named value, a raw internal signature or a hand-written copy of a shared helper is a finding. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
+   Order (adopted 2026-11-08 from the overhaul thread's proposal, made at the user's request; it replaces closing passes for 01 to 09 and then the largest integer-site count first): pass a workset before its callers. A file passed after its callees adopts their typed forms in its one pass; one passed before them keeps raw calls and is touched again. Fan-in is the number of files outside the workset that reference it through `crate::` (measured at `5af17025a3`).
+   - (a) Finish the 01 to 03 remainders: `town.rs` (#819), `industry.rs`, and the 03 station remainder.
+   - (b) 13 Map/terrain (fan-in 90; `map_func` alone 85), with 23's type-bearing files: `bitmath_func` (39), `random_func` (21), `pool`, `math`, `kdtree`, `binaryheap`, `integer` and `container_func`. 23's fan-in of 137 is mostly `game_state`, `debug` and `witness` (45 to 46 each), which gain nothing from types; they and `raw_field` stay in 23's remainder.
+   - (c) 09 (59), 08 (58), 07 (52), 06 (45), 04 (38), 05 (27). The proposal put 04 before 06, but the calls between those two worksets run both ways (06 to 04 in 2 files, 04 to 06 in 1), so strict fan-in governs.
+   - (d) The rest by fan-in: 16 (67), 21 (62), 15 (42), 18 (37), 10 (33), 11 (28), 14 (27), 17 (26), 12 (25), and 23's remainder. The leaf worksets 22 (17), 20 (6) and 19 (1) go last. F's closure stays last.
+
+   Large files are not left for later. A file over about 1,500 lines gets its own single-file pass, placed by fan-in like everything else: before its workset's other files when they call it, and otherwise immediately after the workset pass that skipped it (root, 2026-11-09, after the planner showed that `station_cmd.rs` calls the station group and that nearly every 09 file calls `movement.rs`). Twenty-four workset files exceed that size; the largest are `station_cmd.rs` (4,868), `orders.rs` (4,841), `town.rs` (3,373), `train.rs` (3,121), `industry.rs` (2,874) and `company.rs` (2,698). A single file cannot split at a file boundary, so a single-file pass above 2,000 changed lines stays one PR with one reviewer per function group, as #819 did. The 03 remainder therefore becomes three passes: `station_cmd.rs`, `station_service.rs` (2,285), and `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs` and `station_lifecycle.rs` together. #734 reports progress in lines finished as well as files: 18,297 of 173,403 lines (10.6%) and 33 of 319 files at integration 138.
+
+   Worksets 02 and 03 are checked off, but their files keep raw internal signatures and literals; for example `station_cmd.rs:815` still has `0xffff` for `INVALID_STRING_ID` and `:4135` still has `9` for `AT_OILRIG`. A pass's reviewer applies the checklist's code standards to every line left in its files, not only to changed lines. A remaining literal for a named value, a raw internal signature or a hand-written copy of a shared helper is a finding. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
 2. **#806**: carries for renamed lint keys and fidelity suppressions, as one tools PR. File passes in flight adopt it when they update from base.
 3. **#726**: the steering-31 maintenance batch, including the inherited CargoPacket assertion fix. Its #741 dependency integrated in 104.
 4. **#736 test evidence and #737 boundary debt**, ranked by C++ removed per PR, one PR per batch where the batch fits the review bound above. Fold any item under about 150 counted C++ lines into another item of its batch; the after-128 queue's items were 40 to 90 lines each. Order:
@@ -312,23 +320,78 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
+## Ready queue
+
+Work orders ready to dispatch, which root selects when a slot frees ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two entries are ready. File sets are checked against open PRs and reservations.
+
+Checked on 2026-11-09 against open PRs #819, #820, #821, #823 and #825 (the #737 V remainder draft) and the reservations on #736 and #737. Line counts are at `418ba29e01`. A file pass covers every line of its files with all four parts of work order item 1: wrapper types in internal signatures, return types and accessors; named constants; the original's comments; and #735's argument and context structs. Callers outside a pass keep temporary raw adapters. Changed-line estimates apply the 8.6 to 15.5 changed lines per inventoried integer site that #807 and #819 measured. A pass whose diff exceeds about 2,000 changed lines splits at a file boundary.
+
+Dispatched:
+
+| # | Work order | Owner | Waits on |
+| ---: | --- | --- | --- |
+| 1 | #824: housekeeping reclaims `build-rust` from finished kept worktrees (`tools/housekeeping.py` and its test) | `/root/cleanup_736_p_packet` | – |
+| 2 | #734 02 `industry.rs` single-file pass (2,874 lines) | `/root/cleanup_734_pass_02c_industry_resolver` | #823 |
+| 3 | #734 03 station group, entry 4's details below (`station_cmd.rs` follows as entry 4a) | `/root/cleanup_734_pass_01c_town_rs` | #823 |
+
+Undispatched, work order item 1:
+
+4. **#734 03 station group, with #815's `station_map.rs` items. Dispatched as entry 3.**
+   - Files: `station.rs` (1,365), `station_map.rs` (503), `station_cmd/waypoint.rs` (897) and `station_lifecycle.rs` (609). Together they hold 3,374 lines, 201 integer sites and 63 missing comment lines, an estimated 1,700 to 3,100 changed lines.
+   - #815 items: the `HasStationRail` assertions of `is_station_tile_blocked`, `get_rail_station_axis` and `has_station_reservation`, and the single reads in `get_road_stop_type` and `has_station_rail`. Each gets a reachability check against the original; a confirmed difference gets its own `Fix:` commit with `Found-by: review`. #815's `road_stop.rs`, `station_association.rs` and `industry/construction.rs` items are not part of this entry.
+   - Waits on #823 (`station_lifecycle.rs`). `station.rs` is also in #737 W's manifest (entry 10).
+4a. **#734 03 `station_cmd.rs` single-file pass** (4,868 lines). It calls the station group, so it starts after entry 4 integrates. It keeps raw calls into `station_service.rs` until entry 5. Its owner drafted five reviewer groups: services and shared checks, rail stations, road stops, airports and docks, and tile procs with caller edits.
+5. **#734 03 `station_service.rs` single-file pass.**
+   - 2,285 lines, 61 integer sites and 30 missing comment lines; an estimated 520 to 950 changed lines.
+   - Waits on #825. The V remainder reservation on #737 includes this file, and its family 2 (economy loading services) edits the `load_vehicle` service table at lines 1287 to 1299 (`load_unload_ticks`, `cargo_multiplier`, `passenger_cargo`, `station_length_penalty`, `subtract_profit`). Starts when #825 integrates or its owner releases the file on #737.
+6. **#734 13 and 23, part a: leaf files.** The 13 and 23 group holds 391 integer sites in 4,583 lines, an estimated 3,400 to 6,100 changed lines, so it splits at file boundaries with callees first.
+   - Files: 23's eight type-bearing files, which are `bitmath_func.rs` (89), `random_func.rs` (11), `pool.rs` (490), `math.rs` (171), `kdtree.rs` (414), `binaryheap.rs` (74), `integer.rs` (265) and `container_func.rs` (54). Also 13's files that call no other 13 file: `direction_func.rs` (118), `slope_func.rs` (183), `spiral.rs` (157), `tile_cmd.rs` (80) and `tile_owner.rs` (114). Together they hold 2,220 lines and 164 integer sites, an estimated 1,400 to 2,500 changed lines. `pool/tests.rs` changes only as a caller.
+   - Waits on #823 (`math.rs`, `slope_func.rs`, `direction_func.rs`).
+7. **#734 13, part b: map core.**
+   - Files: `map_func.rs` (632), `tile_map.rs` (593), `clear_map.rs` (120), `tile_loop.rs` (283), `tilearea.rs` (648), `void_map.rs` (25), and the tree callees `tree_map.rs` (58) and `tree_cmd.rs` (4). Together they hold 2,363 lines and 227 integer sites, an estimated 1,950 to 3,500 changed lines. `map_func.rs` and `tile_map.rs` call each other, so a further split keeps them together.
+   - Waits on #823 (`map_func.rs`). It starts after entry 6 integrates, so that `tile_map.rs` adopts the typed `slope_func` and `bitmath_func` forms.
+8. **#734 13 `trees.rs` single-file pass.**
+   - 2,062 lines, 137 integer sites and 53 missing comment lines; an estimated 1,200 to 2,100 changed lines. It is over 1,500 lines, so it follows entry 7 under the large-file rule.
+   - It calls eight files from entries 6 and 7, so it starts after entry 7 integrates. `trees.rs` is also in #737 W's manifest.
+9. **#734 09 Pathfinding/signals.** The workset holds 12 files, 7,580 lines and 606 integer sites. `movement.rs` (1,554), which nearly every 09 file calls, gets its own single-file pass first. `rail_yapf.rs` (1,901) gets its own pass after 9a and 9b. The other ten files hold 5,125 lines and 346 integer sites, an estimated 3,000 to 5,400 changed lines, so they split with callees first:
+   - 9a: `signal_func.rs` (33), `node_hash.rs` (75), `yapf_node.rs` (30), `pathfinder_func.rs` (61), `follow_track.rs` (563), `pbs.rs` (750) and `water_regions.rs` (503). Together they hold 2,015 lines and 127 integer sites. `follow_track.rs` and `pbs.rs` call each other.
+   - 9b: `signal.rs` (1,171), `road_yapf.rs` (907) and `ship_yapf.rs` (1,032). Together they hold 3,110 lines and 219 integer sites. Split again at a file boundary if needed.
+   - Sequence: after entries 6 to 8. 9b waits on #825, whose reservation includes `ship_yapf.rs`. `pbs.rs` and `signal.rs` are in #737 W's manifest.
+
+Undispatched, work order item 4:
+
+10. **#737 W World and stations.**
+    - The manifest counts 180 gross C++ lines in 85 files at the overhaul snapshot. Root re-checks source boundaries before commissioning. Its Rust files include `industry.rs`, `industry/tile.rs`, `industry/transaction.rs`, `station.rs`, `station_cmd.rs`, `subsidy.rs`, `town.rs`, `town/house.rs`, `town/resolver.rs`, `trees.rs`, `pbs.rs`, `signal.rs`, `services.rs`, `session.rs`, `objects.rs`, `landscape.rs` and `genworld.rs`. Its C++ files include `src/rust/services.cpp`, `services_ffi.h`, `town_ffi.h`, `industry_ffi.h` and the `station_command` glue.
+    - Waits on entries 2 and 3 (`industry.rs`, `station_cmd.rs`) and on #825, whose V remainder reservation covers `services.rs` and `src/rust/services*`. It also waits on whichever of entries 4, 8, 9 and 11 is dispatched first, because they share `station.rs`, `trees.rs`, `pbs.rs`, `signal.rs`, `town.rs` and `town_ffi.h`.
+11. **#736 W town observations, folding #819's D1.** Ready when #823 integrates.
+    - Retire `tools/simulation/town-reference-gaps.cpp` (257 lines: tunnels, history, rating, radius and authority callbacks). Move the behavioural observations of `src/tests/town_protocol.hpp` (374), `src/tests/town_growth.cpp` (94) and `src/tests/townname.cpp` (62) into Rust tests of production town code under #736's oracle rule. Calling-boundary checks stay. That is 787 raw C++ lines in scope.
+    - D1: the four expansion observations (`town_protocol.hpp` lines 301, 303, 308 and 362) move to Rust tests over `Engine::expand_town`. Then `openttd_rust_town_expand`, its `src/rust/town_ffi.h:134` declaration and orphan-baseline row 33 retire.
+    - Files: those four C++ files and their registration entries, test modules in `town.rs`, `town/*.rs` and `townname.rs`, the `town_expand` export in `town.rs`, and `src/rust/town_ffi.h`.
+    - Waits on #823 (`town.rs`, `town/*.rs`). No #736 reservation overlaps these files. It shares `town.rs` and `town_ffi.h` with entry 10.
+
 ## Resume checkpoint
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. Under this Claude Code root, `gpt-6.1-sol` reviewers report findings and Opus implementers fix them ([team](team.md#claude-code-root)). Code main is integration 137, `0459951f36`. Integrations 133 to 137 are recorded on #809, #811, #810, #817 and #818. Five branches are unintegrated.
+Active with the four-implementer cap restored (user, 2026-11-08, after an earlier two-implementer limit the same day). Two slots run #734/#735 file passes, and two run work order items 2 to 4 in order, as the work order sets. A running profile takes a slot. [Delegation](team.md#delegation-user-2026-11-08) applies (user, 2026-11-08):
+- an Opus xhigh integrator owns integration;
+- each finding's reviewer verifies its fixes;
+- reviewers start from the [review brief](review-brief.md);
+- a planner keeps the [ready queue](#ready-queue) filled;
+- implementers pipeline onto the next ready entry while their PR waits.
+
+Code main is integration 138, `8e967f83c5`. Two branches are unintegrated: #823 and the batch V remainder.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #734 workset 02 Industry construction/transaction/tile pass, PR #816 | `/root/cleanup_734_pass_02b_industry`; reviewed by `/root/review_816_{construction,transaction,tile}` | Three reviews done and fixes spot-checked. Base updated to `11e29bc379`, with no file overlap with 137. Exact-head Full is running; merge when it passes. |
-| #737 batch V, PR #814 | `/root/cleanup_737_v_vehicle_boundary`; reviewed by `/root/review_814_{orders_fleet,tick_station}` | Opus remediation `bd2b7b6398`/`6218e756ea` is spot-checked. `/root/review_814_evidence_fix` is reviewing it (report only). Then root updates from base, requests Full and merges. The V remainder (about 325 lines, 11 families) waits for #814. |
-| #734 workset 01 `town.rs` pass, PR #819 | `/root/cleanup_734_pass_01c_town_rs` | Implementer is finishing its reload scenarios. When it is ready, root spawns about five report-only reviewers, one per function group in the PR body. |
-| #736 P packet comparison, draft PR #820 | `/root/cleanup_736_p_packet` | In progress; then review. |
-| #734 workset 02c industry resolver/property reader, draft PR #821 | `/root/cleanup_734_pass_02c_industry_resolver` | In progress; then review. |
-| Next file passes | Unassigned | Start each when its files are free and fewer than six branches are open. Candidates: the station remainder (`station.rs`, `station_map.rs`, `station_cmd.rs`, `station_cmd/waypoint.rs`, `station_lifecycle.rs`, `station_service.rs`, `is_hangar_tile`; these take #815's inherited items after reachability checks), `industry.rs`, and worksets 04 to 09. |
-| Next stocktake/profile and cadence | Root | Stocktake/profile after 143; platform cadence after 140. |
+| #823, integrating #819 (`town.rs` pass), #821 (industry resolver pass) and #820 (#736 P packet probe) | Integrator | Exact-head Full is requested at `d6cf15acd7`. Merge as integration 139, post the note, close the components and clean up. All reviews carried; fixes spot-checked or verified. |
+| #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | Family 5 is committed (`4b449ceb27`). Next it pushes a draft PR, then the station visit-type and position families. |
+| Ready queue | Planner `/root/planner_ready_queue`; root dispatches | Entry 1 (#824) is in progress. Entries 2 (`industry.rs`) and 3 (station group) are dispatched and start when #823 lands. Entries 4a onward are undispatched. |
+| D1 from #819 | #736 W | Retire the test-only `openttd_rust_town_expand` after moving its fixture observations to Rust tests. |
+| #737 W | Unassigned | Waits behind the `station_cmd.rs` pass and the industry passes, whose files it overlaps. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 143; platform cadence after 140. |
 
-Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08.
+Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 
 The [cleanup work order](#cleanup-work-order) replaces the private after-128 static queue; its three items lead item 4.
 

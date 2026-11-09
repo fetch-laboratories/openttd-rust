@@ -24,7 +24,7 @@ use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AI
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
-use crate::tile_type::INVALID_TILE;
+use crate::tile_type::{INVALID_TILE, TileIndex};
 use crate::{
     animated_tile::AirportSpec as TileSpec, station::BaseStation, station_cmd::AirportSpec,
 };
@@ -450,9 +450,9 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             let owner = (s.shared().town_owner)(town);
             u32::from(unsafe { crate::town::get_radius_group(owner, c.tile, s.map()) })
         }
-        0x43 => crate::industry::resolver::relative_position(
-            c.tile,
-            (s.commands().airport_tile)(c.station),
+        0x43 => crate::industry::resolver::get_relative_position(
+            TileIndex(c.tile),
+            TileIndex((s.commands().airport_tile)(c.station)),
             s.map(),
         ),
         0x44 => u32::from((s.frame)(c.tile)),

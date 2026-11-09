@@ -1129,3 +1129,871 @@ pub(crate) fn test_services() -> &'static Services {
     };
     &SERVICES
 }
+
+/// Observations of the retired `packet-comparison.cpp` probe (#736 P), frozen from the unchanged
+/// original only (`packet/comparison-oracle.txt`) and replayed on the production packet exports.
+///
+/// The `transfer`, `crypto`, `strict-mac` and `type` sections mirror the fork's C++ glue around
+/// those exports (packet.h's transfer templates and packet.cpp's native encryption-handler path)
+/// with `Err` standing for a C++ exception. The real C++ frames, exceptions, move operations and
+/// the base `MarkClosed` dispatch stay in `tools/migration/core-boundary-comparison.cpp`
+/// (`CORE_BOUNDARY_PACKET`).
+#[cfg(test)]
+mod comparison_tests {
+    use super::*;
+    use crate::oracle;
+    use crate::string_type::{StringValidationSetting, StringValidationSettings};
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::fmt::Write as _;
+    use std::mem::MaybeUninit;
+
+    const ORACLE: &str = include_str!("packet/comparison-oracle.txt");
+
+    /// The native socket's base state: `has_quit`, set only by the base `MarkClosed`.
+    #[derive(Default)]
+    struct Socket {
+        quit: Cell<bool>,
+    }
+
+    impl Socket {
+        fn handle(&self) -> *mut NetworkSocketHandler {
+            ptr::from_ref(self).cast_mut().cast()
+        }
+    }
+
+    unsafe extern "C" fn has_quit(socket: *const NetworkSocketHandler) -> bool {
+        unsafe { (*socket.cast::<Socket>()).quit.get() }
+    }
+    unsafe extern "C" fn mark_closed(socket: *mut NetworkSocketHandler) {
+        unsafe { (*socket.cast::<Socket>()).quit.set(true) }
+    }
+    /// The C++ glue reaches native handlers directly; Rust services never see them.
+    unsafe extern "C" fn no_handler(
+        _: *const NetworkSocketHandler,
+    ) -> *mut NetworkEncryptionHandler {
+        ptr::null_mut()
+    }
+    unsafe extern "C" fn unused<A, R>(_: A) -> R {
+        panic!("unexpected packet service")
+    }
+    static SERVICES: Services = Services {
+        has_quit,
+        mac_size: unused,
+        mark_closed,
+        receive_handler: no_handler,
+        send_handler: no_handler,
+        stream: unused,
+    };
+    fn services() -> *const Services {
+        &raw const SERVICES
+    }
+
+    thread_local! {
+        static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
+    }
+    /// Assertions enabled (the O0 stream): no common probe case fails one.
+    extern "C" fn asserts(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.with(|failed| failed.set(failed.get() + 1));
+        }
+    }
+    /// NDEBUG (the O2 stream's asserts-off cases): the original evaluates no assertion.
+    extern "C" fn ndebug(_: bool) {}
+
+    /// A C++ exception leaving a native callback or handler.
+    #[derive(Clone, Copy)]
+    struct Thrown;
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().fold(String::new(), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
+    }
+
+    unsafe fn span<'a>(data: *const u8, length: usize) -> &'a [u8] {
+        if length == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(data, length) }
+        }
+    }
+
+    fn outgoing(
+        socket: &Socket,
+        packet_type: u8,
+        limit: usize,
+        check: extern "C" fn(bool),
+    ) -> State {
+        let mut state = MaybeUninit::uninit();
+        unsafe {
+            openttd_rust_packet_init_outgoing(
+                state.as_mut_ptr(),
+                socket.handle(),
+                services(),
+                check,
+                packet_type,
+                limit,
+            );
+            state.assume_init()
+        }
+    }
+
+    fn receive(
+        socket: *mut NetworkSocketHandler,
+        limit: usize,
+        initial: usize,
+        check: extern "C" fn(bool),
+    ) -> State {
+        let mut state = MaybeUninit::uninit();
+        unsafe {
+            openttd_rust_packet_init_receive(state.as_mut_ptr(), check, socket, limit, initial);
+            state.assume_init()
+        }
+    }
+
+    /// packet.h's `TransferIn`/`TransferOutWithLimit`: plan, call, then commit a normal return to
+    /// the live cursor, which a reentrant callback may have moved.
+    unsafe fn transfer(
+        packet: *mut State,
+        limit: usize,
+        callback: impl FnOnce(*mut u8, usize) -> Result<isize, Thrown>,
+    ) -> Result<isize, Thrown> {
+        unsafe {
+            let amount = openttd_rust_packet_transfer_amount(packet, limit);
+            if amount == 0 {
+                return Ok(0);
+            }
+            let bytes = callback((*packet).data.add(usize::from((*packet).position)), amount)?;
+            openttd_rust_packet_transfer_commit(packet, bytes);
+            Ok(bytes)
+        }
+    }
+
+    /// The probe's `State`: size, remaining, has-size, quit, then the bytes one `TransferOut` of a
+    /// copy passes to its callback (absent when no byte remains).
+    unsafe fn observe(packet: *mut State, socket: &Socket) -> String {
+        unsafe {
+            let mut text = format!(
+                "{} {} {} {}",
+                (*packet).size,
+                (*packet).remaining(),
+                u8::from((*packet).position >= 2),
+                u8::from(socket.quit.get())
+            );
+            let mut copy = MaybeUninit::uninit();
+            openttd_rust_packet_clone(copy.as_mut_ptr(), packet);
+            let mut copy = copy.assume_init();
+            let _ = transfer(&raw mut copy, usize::MAX, |data, length| {
+                text.push(' ');
+                text += &hex(span(data, length));
+                text.push('/');
+                Ok(length.cast_signed())
+            });
+            text
+        }
+    }
+
+    /// The probe's `Read`: storage sized to the wire bytes, one `TransferIn`, then `PrepareToRead`.
+    fn read(socket: &Socket, wire: &[u8], check: extern "C" fn(bool)) -> State {
+        let mut packet = receive(socket.handle(), 70000, wire.len(), check);
+        unsafe {
+            let p = &raw mut packet;
+            let _ = transfer(p, usize::MAX, |data, _| {
+                ptr::copy_nonoverlapping(wire.as_ptr(), data, wire.len());
+                Ok(wire.len().cast_signed())
+            });
+            openttd_rust_packet_prepare_to_read_abi(p, services());
+        }
+        packet
+    }
+
+    /// `Packet::Recv_buffer`'s C++ result allocation around the two Rust exports.
+    unsafe fn recv_buffer(packet: *mut State) -> Vec<u8> {
+        unsafe {
+            let mut result = vec![0; openttd_rust_packet_recv_buffer_size(packet, services())];
+            openttd_rust_packet_recv_buffer_data(packet, result.as_mut_ptr(), result.len());
+            result
+        }
+    }
+
+    unsafe extern "C" fn append(output: *mut c_void, bytes: *const u8, length: usize) {
+        unsafe { (*output.cast::<Vec<u8>>()).extend_from_slice(span(bytes, length)) }
+    }
+
+    unsafe fn recv_string(
+        packet: *mut State,
+        check: extern "C" fn(bool),
+        length: usize,
+        settings: u8,
+    ) -> Vec<u8> {
+        let mut result = Vec::<u8>::new();
+        unsafe {
+            openttd_rust_packet_recv_string(
+                packet,
+                services(),
+                check,
+                length,
+                settings,
+                (&raw mut result).cast(),
+                append,
+            );
+        }
+        result
+    }
+
+    fn setting(element: StringValidationSetting) -> u8 {
+        StringValidationSettings::from_element(element).0
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the probe's static_cast<uint8_t/uint16_t/uint32_t>(value)"
+    )]
+    fn binary_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for value in [0, 1, 0xFEDC_BA98_7654_3210, u64::MAX] {
+            let socket = Socket::default();
+            let mut packet = outgoing(&socket, 7, 100, asserts);
+            let mut assigned = outgoing(&socket, 0, 100, asserts);
+            let mut copy = MaybeUninit::uninit();
+            let (p, a) = (&raw mut packet, &raw mut assigned);
+            let output = unsafe {
+                openttd_rust_packet_send_bool(p, asserts, false);
+                openttd_rust_packet_send_bool(p, asserts, true);
+                openttd_rust_packet_send_uint8(p, asserts, 128);
+                openttd_rust_packet_send_uint8(p, asserts, value as u8);
+                openttd_rust_packet_send_uint16(p, asserts, value as u16);
+                openttd_rust_packet_send_uint32(p, asserts, value as u32);
+                openttd_rust_packet_send_uint64(p, asserts, value);
+                openttd_rust_packet_prepare_to_send(p, services(), asserts);
+                let wire = observe(p, &socket);
+                openttd_rust_packet_clone(copy.as_mut_ptr(), p);
+                let mut copy = copy.assume_init();
+                let c = &raw mut copy;
+                openttd_rust_packet_assign(a, p);
+                openttd_rust_packet_prepare_to_read_abi(c, services());
+                openttd_rust_packet_prepare_to_read_abi(a, services());
+                let values = format!(
+                    "{} {} {} {} {} {} {} {}",
+                    openttd_rust_packet_recv_uint8(c, services()),
+                    openttd_rust_packet_recv_bool_abi(c, services()),
+                    openttd_rust_packet_recv_bool_abi(c, services()),
+                    openttd_rust_packet_recv_bool_abi(c, services()),
+                    openttd_rust_packet_recv_uint8(c, services()),
+                    openttd_rust_packet_recv_uint16(c, services()),
+                    openttd_rust_packet_recv_uint32(c, services()),
+                    openttd_rust_packet_recv_uint64(c, services())
+                );
+                [
+                    wire,
+                    values,
+                    observe(p, &socket),
+                    observe(c, &socket),
+                    observe(a, &socket),
+                ]
+                .join(" | ")
+            };
+            cases.push((format!("value={value:#x}"), output));
+        }
+        cases
+    }
+
+    fn buffer_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for length in [0, 1, 8, 257] {
+            let socket = Socket::default();
+            let bytes = vec![0xA5; length];
+            let mut packet = outgoing(&socket, 3, 1000, asserts);
+            let p = &raw mut packet;
+            let output = unsafe {
+                openttd_rust_packet_send_buffer(p, asserts, bytes.as_ptr(), bytes.len());
+                openttd_rust_packet_prepare_to_send(p, services(), asserts);
+                openttd_rust_packet_prepare_to_read_abi(p, services());
+                openttd_rust_packet_recv_uint8(p, services());
+                let result = recv_buffer(p);
+                format!("{}/ | {}", hex(&result), observe(p, &socket))
+            };
+            cases.push((format!("length={length}"), output));
+        }
+        cases
+    }
+
+    fn truncated_cases() -> Vec<(String, String)> {
+        let bytes = [6, 0, 3, 2, 0, 0xAB];
+        let mut cases = Vec::new();
+        for size in [3, 4, 5, 6] {
+            let socket = Socket::default();
+            let mut packet = read(&socket, &bytes[..size], asserts);
+            let p = &raw mut packet;
+            let output = unsafe {
+                openttd_rust_packet_recv_uint8(p, services());
+                let result = recv_buffer(p);
+                format!("{}/ | {}", hex(&result), observe(p, &socket))
+            };
+            cases.push((format!("size={size}"), output));
+        }
+        cases
+    }
+
+    fn send_bytes_cases() -> Vec<(String, String)> {
+        let bytes = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut cases = Vec::new();
+        for limit in [3, 4, 8] {
+            let socket = Socket::default();
+            let mut packet = outgoing(&socket, 0, limit, asserts);
+            let p = &raw mut packet;
+            let output = unsafe {
+                let written = openttd_rust_packet_send_bytes(p, bytes.as_ptr(), bytes.len());
+                let state = observe(p, &socket);
+                format!("{} {written} | {state}", bytes.len() - written)
+            };
+            cases.push((format!("limit={limit}"), output));
+        }
+        cases
+    }
+
+    fn string_cases() -> Vec<(String, String)> {
+        let long = vec![b'q'; 80];
+        let inputs: [&[u8]; 4] = [b"a\xC3\xA9z", b"a\xFFz", b"a\nb\r\nc\t", &long];
+        let settings = [
+            StringValidationSetting::ReplaceWithQuestionMark,
+            StringValidationSetting::AllowNewline,
+            StringValidationSetting::ReplaceTabCrNlWithSpace,
+        ];
+        let mut cases = Vec::new();
+        for (index, input) in inputs.iter().enumerate() {
+            for length in [2, 3, 4, 20, 65, 66, 100] {
+                for element in settings {
+                    let socket = Socket::default();
+                    let mut packet = outgoing(&socket, 1, 100, asserts);
+                    let p = &raw mut packet;
+                    let output = unsafe {
+                        openttd_rust_packet_send_string(p, asserts, input.as_ptr(), input.len());
+                        openttd_rust_packet_send_uint8(p, asserts, 0xED);
+                        openttd_rust_packet_prepare_to_send(p, services(), asserts);
+                        openttd_rust_packet_prepare_to_read_abi(p, services());
+                        openttd_rust_packet_recv_uint8(p, services());
+                        let text = recv_string(p, asserts, length, setting(element));
+                        let next = openttd_rust_packet_recv_uint8(p, services());
+                        format!(
+                            "{}/{next} {} {}",
+                            hex(&text),
+                            u8::from(socket.quit.get()),
+                            (*p).remaining()
+                        )
+                    };
+                    cases.push((
+                        format!("input={index} length={length} setting={}", element.0),
+                        output,
+                    ));
+                }
+            }
+        }
+        let socket = Socket::default();
+        let mut packet = read(&socket, &[4, 0, b'x', b'y'], asserts);
+        let p = &raw mut packet;
+        let unterminated = unsafe {
+            let text = recv_string(
+                p,
+                asserts,
+                20,
+                setting(StringValidationSetting::ReplaceWithQuestionMark),
+            );
+            format!(
+                "{}/{} {}",
+                hex(&text),
+                u8::from(socket.quit.get()),
+                (*p).remaining()
+            )
+        };
+        cases.push((String::from("unterminated"), unterminated));
+        cases
+    }
+
+    fn parse_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for initial in [2, 8] {
+            for size in [0_u16, 2, 3, 8, 9] {
+                let socket = Socket::default();
+                let mut packet = receive(socket.handle(), 8, initial, asserts);
+                let p = &raw mut packet;
+                let output = unsafe {
+                    let _ = transfer(p, usize::MAX, |data, length| {
+                        ptr::write_bytes(data, 0xAB, length);
+                        ptr::copy_nonoverlapping(size.to_le_bytes().as_ptr(), data, 2);
+                        Ok(2)
+                    });
+                    let parsed = openttd_rust_packet_parse_size_abi(p);
+                    if parsed != 0 {
+                        let _ = transfer(p, usize::MAX, |data, length| {
+                            ptr::write_bytes(data, 0xCC, length);
+                            Ok(length.cast_signed())
+                        });
+                    }
+                    format!("{parsed} | {}", observe(p, &socket))
+                };
+                cases.push((format!("initial={initial} size={size}"), output));
+            }
+        }
+        cases
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the probe's static_cast<uint8_t>(i) fill"
+    )]
+    fn wrap_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for width in [1, 2, 4, 8] {
+            let socket = Socket::default();
+            let mut packet = receive(socket.handle(), 70000, 65543, asserts);
+            let p = &raw mut packet;
+            let output = unsafe {
+                let _ = transfer(p, usize::MAX, |data, length| {
+                    for index in 0..length {
+                        *data.add(index) = index as u8;
+                    }
+                    Ok(65535)
+                });
+                let value = match width {
+                    1 => u64::from(openttd_rust_packet_recv_uint8(p, services())),
+                    2 => u64::from(openttd_rust_packet_recv_uint16(p, services())),
+                    4 => u64::from(openttd_rust_packet_recv_uint32(p, services())),
+                    _ => openttd_rust_packet_recv_uint64(p, services()),
+                };
+                format!("{value} {}", (*p).remaining())
+            };
+            cases.push((format!("width={width}"), output));
+        }
+        cases
+    }
+
+    fn bounds_cases() -> Vec<(String, String)> {
+        let socket = Socket::default();
+        let mut packet = receive(socket.handle(), 10, 3, asserts);
+        let p = &raw mut packet;
+        let output = unsafe {
+            openttd_rust_packet_prepare_to_read_abi(p, services());
+            let wrapped = openttd_rust_packet_can_read_abi(p, services(), usize::MAX, false);
+            let first = openttd_rust_packet_can_read_abi(p, services(), 2, false);
+            let first_closed = u8::from(socket.quit.get());
+            let second = openttd_rust_packet_can_read_abi(p, services(), 2, true);
+            let second_closed = u8::from(socket.quit.get());
+            let third = openttd_rust_packet_can_read_abi(p, services(), 0, false);
+            let state = observe(p, &socket);
+            format!("{wrapped} {first} {first_closed} {second} {second_closed} {third} | {state}")
+        };
+        vec![(String::from("bounds"), output)]
+    }
+
+    fn recv_bytes_cases() -> Vec<(String, String)> {
+        let wire = [5, 0, 0xA1, 0xA2, 0xA3];
+        let mut cases = Vec::new();
+        for length in [0, 1, 3] {
+            let socket = Socket::default();
+            let mut packet = read(&socket, &wire, asserts);
+            let p = &raw mut packet;
+            let mut result = [0; 3];
+            let output = unsafe {
+                let count = openttd_rust_packet_recv_bytes(p, result.as_mut_ptr(), length);
+                format!("{count} {}/ | {}", hex(&result), observe(p, &socket))
+            };
+            cases.push((format!("length={length}"), output));
+        }
+        cases
+    }
+
+    fn narrow_cases() -> Vec<(String, String)> {
+        let socket = Socket::default();
+        let bytes = vec![0xA5; 65537];
+        let mut packet = outgoing(&socket, 1, 70000, asserts);
+        let p = &raw mut packet;
+        let prefix = unsafe {
+            openttd_rust_packet_send_buffer(p, asserts, bytes.as_ptr(), bytes.len());
+            openttd_rust_packet_prepare_to_read_abi(p, services());
+            openttd_rust_packet_recv_uint8(p, services());
+            let result = recv_buffer(p);
+            format!("{} {} {}", (*p).size, result.len(), (*p).remaining())
+        };
+        let mut empty = receive(socket.handle(), 10, 0, asserts);
+        let mut destination = [0; 1];
+        let count = unsafe {
+            openttd_rust_packet_recv_bytes(
+                &raw mut empty,
+                destination.as_mut_ptr(),
+                destination.len(),
+            )
+        };
+        vec![
+            (String::from("narrow-prefix"), prefix),
+            (
+                String::from("empty-source"),
+                format!("{count} {}", destination[0]),
+            ),
+        ]
+    }
+
+    /// The asserts-off cases, compiled only under NDEBUG in the probe.
+    fn asserts_off_cases() -> Vec<(String, String)> {
+        let null = receive(ptr::null_mut(), 10, 2, ndebug);
+        let mut cases = vec![(String::from("null-socket"), null.size.to_string())];
+        let socket = Socket::default();
+        let mut packet = outgoing(&socket, 7, 1, ndebug);
+        let p = &raw mut packet;
+        let writes = unsafe {
+            openttd_rust_packet_send_bool(p, ndebug, true);
+            openttd_rust_packet_send_uint8(p, ndebug, 0xAB);
+            openttd_rust_packet_send_uint16(p, ndebug, 0x1234);
+            openttd_rust_packet_send_uint32(p, ndebug, 0x5678_9ABC);
+            openttd_rust_packet_send_uint64(p, ndebug, 0xFEDC_BA98_7654_3210);
+            openttd_rust_packet_send_string(p, ndebug, b"release".as_ptr(), 7);
+            openttd_rust_packet_send_buffer(p, ndebug, [1, 2, 3].as_ptr(), 3);
+            openttd_rust_packet_prepare_to_send(p, services(), ndebug);
+            openttd_rust_packet_prepare_to_send(p, services(), ndebug);
+            observe(p, &socket)
+        };
+        cases.push((String::from("writes"), writes));
+        for length in [0, 1] {
+            let socket = Socket::default();
+            let mut packet = read(&socket, &[6, 0, b'a', b'b', 0, b'c'], ndebug);
+            let p = &raw mut packet;
+            let output = unsafe {
+                let settings = setting(StringValidationSetting::ReplaceWithQuestionMark);
+                let text = recv_string(p, ndebug, length, settings);
+                format!(
+                    "{} | {}",
+                    String::from_utf8_lossy(&text),
+                    observe(p, &socket)
+                )
+            };
+            cases.push((format!("string length={length}"), output));
+        }
+        cases
+    }
+
+    /// The probe's native `Encryption` handler: call log, mode, MAC size and reentry target.
+    struct Handler {
+        mode: u32,
+        mac: usize,
+        packet: *mut State,
+        log: Vec<String>,
+    }
+
+    impl Handler {
+        fn new(mac: usize) -> Self {
+            Self {
+                mode: 0,
+                mac,
+                packet: ptr::null_mut(),
+                log: Vec::new(),
+            }
+        }
+
+        unsafe fn mac_size(&mut self) -> Result<usize, Thrown> {
+            self.log.push(format!("mac {}", self.mode));
+            if self.mode == 4 {
+                return Err(Thrown);
+            }
+            if self.mode == 5 {
+                unsafe { openttd_rust_packet_recv_uint8(self.packet, services()) };
+            }
+            Ok(self.mac)
+        }
+
+        /// `Encrypt`/`Decrypt`: log, mark both spans, optionally reenter, optionally throw.
+        unsafe fn crypt(
+            &mut self,
+            name: &str,
+            mac: (*mut u8, usize),
+            message: (*mut u8, usize),
+            marks: (u8, u8),
+        ) -> Result<(), Thrown> {
+            unsafe {
+                self.log.push(format!(
+                    "{name} {} {} {}/",
+                    mac.1,
+                    message.1,
+                    hex(span(message.0, message.1))
+                ));
+                if mac.1 != 0 {
+                    *mac.0 = marks.0;
+                }
+                if message.1 != 0 {
+                    *message.0 = marks.1;
+                }
+                if self.mode == 2 || self.mode == 3 {
+                    openttd_rust_packet_recv_uint8(self.packet, services());
+                }
+            }
+            if self.mode == 1 || self.mode == 3 {
+                return Err(Thrown);
+            }
+            Ok(())
+        }
+    }
+
+    /// packet.cpp's `Packet(cs, type, limit)` with a native send handler.
+    unsafe fn native_outgoing(socket: &Socket, handler: &mut Handler, packet_type: u8) -> State {
+        let Ok(mac) = (unsafe { handler.mac_size() }) else {
+            panic!("the probe constructs in mode 0");
+        };
+        let mut state = MaybeUninit::uninit();
+        unsafe {
+            openttd_rust_packet_init_send(
+                state.as_mut_ptr(),
+                asserts,
+                socket.handle(),
+                packet_type,
+                100,
+                mac,
+            );
+            state.assume_init()
+        }
+    }
+
+    /// packet.cpp's `PrepareToSend` with a native send handler.
+    unsafe fn native_prepare_to_send(
+        packet: *mut State,
+        handler: &mut Handler,
+    ) -> Result<(), Thrown> {
+        unsafe {
+            openttd_rust_packet_begin_send(packet, asserts);
+            let mac = handler.mac_size()?;
+            let mut frame = MaybeUninit::uninit();
+            openttd_rust_packet_frame_abi(2, (*packet).size, mac, frame.as_mut_ptr());
+            let frame = frame.assume_init();
+            let data = (*packet).data;
+            handler.crypt(
+                "encrypt",
+                (data.add(2), mac),
+                (data.add(frame.message), frame.payload),
+                (0xA1, 0xB2),
+            )?;
+            openttd_rust_packet_finish_send(packet);
+            Ok(())
+        }
+    }
+
+    /// packet.cpp's `PrepareToRead` with a native receive handler.
+    unsafe fn native_prepare_to_read(
+        packet: *mut State,
+        handler: &mut Handler,
+    ) -> Result<bool, Thrown> {
+        unsafe {
+            openttd_rust_packet_begin_read(packet);
+            let mac = handler.mac_size()?;
+            let mut frame = MaybeUninit::uninit();
+            if openttd_rust_packet_frame_abi(
+                (*packet).position,
+                (*packet).size,
+                mac,
+                frame.as_mut_ptr(),
+            ) == 0
+            {
+                return Ok(false);
+            }
+            let frame = frame.assume_init();
+            let data = (*packet).data;
+            let position = usize::from((*packet).position);
+            handler.crypt(
+                "decrypt",
+                (data.add(position), mac),
+                (data.add(frame.message), frame.payload),
+                (0xC3, 0xD4),
+            )?;
+            openttd_rust_packet_finish_read(packet, mac);
+            Ok(handler.mode != 0)
+        }
+    }
+
+    /// packet.cpp's `GetPacketType` with a native send handler.
+    unsafe fn native_packet_type(packet: *mut State, handler: &mut Handler) -> Result<u8, Thrown> {
+        unsafe {
+            asserts((*packet).size >= 3);
+            let mac = handler.mac_size()?;
+            Ok(openttd_rust_packet_packet_type(packet, mac))
+        }
+    }
+
+    fn outcome(result: Result<bool, Thrown>) -> String {
+        match result {
+            Ok(valid) => format!("{} 0", u8::from(valid)),
+            Err(Thrown) => String::from("0 1"),
+        }
+    }
+
+    fn transfer_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for mode in 0..7 {
+            for incoming in [false, true] {
+                let socket = Socket::default();
+                let mut packet = receive(socket.handle(), 20, 10, asserts);
+                let p = &raw mut packet;
+                let mut events = Vec::new();
+                let mut calls = 0;
+                let callback = |data: *mut u8, length: usize| unsafe {
+                    calls += 1;
+                    events.push(length.to_string());
+                    if incoming {
+                        *data = 0xEE;
+                    }
+                    if mode == 3 {
+                        return Err(Thrown);
+                    }
+                    if mode == 4 || mode == 5 {
+                        openttd_rust_packet_prepare_to_read_abi(p, services());
+                        openttd_rust_packet_recv_uint8(p, services());
+                    }
+                    if mode == 5 {
+                        let mut other = receive(socket.handle(), 20, 4, asserts);
+                        let _ = transfer(&raw mut other, usize::MAX, |_, _| Ok(1));
+                    }
+                    Ok(match mode {
+                        0 => 0,
+                        1 => -1,
+                        _ => 2,
+                    })
+                };
+                let limit = if incoming {
+                    usize::MAX
+                } else if mode == 6 {
+                    0
+                } else {
+                    4
+                };
+                let (result, threw) = match unsafe { transfer(p, limit, callback) } {
+                    Ok(result) => (result, 0),
+                    Err(Thrown) => (99, 1),
+                };
+                events.push(format!("{result} {calls} {threw}"));
+                events.push(unsafe { observe(p, &socket) });
+                cases.push((
+                    format!("mode={mode} incoming={incoming}"),
+                    events.join(" | "),
+                ));
+            }
+        }
+        cases
+    }
+
+    fn crypto_cases() -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for mode in 0..6 {
+            for sending in [false, true] {
+                let socket = Socket::default();
+                let mut handler = Handler::new(2);
+                let mut packet = if sending {
+                    unsafe { native_outgoing(&socket, &mut handler, 7) }
+                } else {
+                    outgoing(&socket, 7, 100, asserts)
+                };
+                let p = &raw mut packet;
+                let result = unsafe {
+                    for byte in [9, 10, 11] {
+                        openttd_rust_packet_send_uint8(p, asserts, byte);
+                    }
+                    handler.packet = p;
+                    handler.mode = mode;
+                    if sending {
+                        native_prepare_to_send(p, &mut handler).map(|()| false)
+                    } else {
+                        native_prepare_to_read(p, &mut handler)
+                    }
+                };
+                handler.log.push(outcome(result));
+                handler.log.push(unsafe { observe(p, &socket) });
+                cases.push((
+                    format!("mode={mode} sending={sending}"),
+                    handler.log.join(" | "),
+                ));
+            }
+        }
+        for mac in [0, 3, 4] {
+            let socket = Socket::default();
+            let mut handler = Handler::new(mac);
+            let mut packet = outgoing(&socket, 1, 100, asserts);
+            let p = &raw mut packet;
+            let result = unsafe {
+                openttd_rust_packet_send_uint8(p, asserts, 2);
+                openttd_rust_packet_send_uint8(p, asserts, 3);
+                handler.packet = p;
+                native_prepare_to_read(p, &mut handler)
+            };
+            let Ok(valid) = result else {
+                panic!("mode 0 never throws")
+            };
+            handler.log.push(u8::from(valid).to_string());
+            handler.log.push(unsafe { observe(p, &socket) });
+            cases.push((format!("strict mac={mac}"), handler.log.join(" | ")));
+        }
+        cases
+    }
+
+    fn type_cases() -> Vec<(String, String)> {
+        let socket = Socket::default();
+        let mut packet = read(&socket, &[6, 0, 0xAA, 0xBB, 0xCC, 0xDD], asserts);
+        let mut handler = Handler::new(1);
+        handler.packet = &raw mut packet;
+        let packet_type = unsafe { native_packet_type(handler.packet, &mut handler) };
+        let Ok(packet_type) = packet_type else {
+            panic!("mode 0 never throws")
+        };
+        handler.log.push(packet_type.to_string());
+        handler.mode = 4;
+        let threw = unsafe { native_packet_type(handler.packet, &mut handler) }.is_err();
+        handler.log.push(u8::from(threw).to_string());
+        vec![(String::from("send-handler type"), handler.log.join(" | "))]
+    }
+
+    #[test]
+    fn packet_bytes_cursors_and_strings_match_original() {
+        let oracle = oracle::parse(ORACLE);
+        FAILED_ASSERTIONS.with(|failed| failed.set(0));
+        assert_eq!(oracle::check(&oracle, "binary", binary_cases()), 4);
+        assert_eq!(oracle::check(&oracle, "buffer", buffer_cases()), 4);
+        assert_eq!(oracle::check(&oracle, "truncated", truncated_cases()), 4);
+        assert_eq!(oracle::check(&oracle, "send-bytes", send_bytes_cases()), 3);
+        let mut strings = string_cases();
+        let unterminated = strings.pop().into_iter();
+        assert_eq!(oracle::check(&oracle, "string", strings), 84);
+        assert_eq!(oracle::check(&oracle, "unterminated", unterminated), 1);
+        assert_eq!(oracle::check(&oracle, "parse", parse_cases()), 10);
+        assert_eq!(oracle::check(&oracle, "wrap", wrap_cases()), 4);
+        assert_eq!(oracle::check(&oracle, "bounds", bounds_cases()), 1);
+        assert_eq!(oracle::check(&oracle, "recv-bytes", recv_bytes_cases()), 3);
+        assert_eq!(oracle::check(&oracle, "narrow", narrow_cases()), 2);
+        assert_eq!(
+            FAILED_ASSERTIONS.with(Cell::get),
+            0,
+            "the original O0 stream fails no assertion"
+        );
+    }
+
+    #[test]
+    fn packet_transfer_and_native_handler_glue_match_original() {
+        let oracle = oracle::parse(ORACLE);
+        FAILED_ASSERTIONS.with(|failed| failed.set(0));
+        assert_eq!(oracle::check(&oracle, "transfer", transfer_cases()), 14);
+        let mut crypto = crypto_cases();
+        let strict = crypto.split_off(12);
+        assert_eq!(oracle::check(&oracle, "crypto", crypto), 12);
+        assert_eq!(oracle::check(&oracle, "strict-mac", strict), 3);
+        assert_eq!(oracle::check(&oracle, "type", type_cases()), 1);
+        assert_eq!(
+            FAILED_ASSERTIONS.with(Cell::get),
+            0,
+            "the original O0 stream fails no assertion"
+        );
+    }
+
+    #[test]
+    fn packet_release_assertion_paths_match_original() {
+        let oracle = oracle::parse(ORACLE);
+        assert_eq!(
+            oracle::check(&oracle, "asserts-off", asserts_off_cases()),
+            4
+        );
+    }
+}

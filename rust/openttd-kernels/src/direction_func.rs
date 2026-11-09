@@ -60,6 +60,11 @@ pub const fn change_diag_dir(direction: u8, difference: u8) -> u8 {
     direction.wrapping_add(difference) & 3
 }
 
+/// `IsValidDiagDirection`.
+pub const fn is_valid_diag_direction(d: crate::direction_type::DiagDirection) -> bool {
+    d.0 < crate::direction_type::DIAGDIR_END
+}
+
 /// `IsValidAxis`.
 pub const fn is_valid_axis(axis: u8) -> bool {
     axis < AXIS_END

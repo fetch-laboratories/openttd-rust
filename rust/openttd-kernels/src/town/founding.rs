@@ -9,7 +9,7 @@
 //! across native callbacks. Cancellation returns to its native exception frame.
 use super::{
     Engine, Leaves, State, TOWN_GROWTH_DESERT, TOWN_GROWTH_WINTER, TownId, TownRef, names,
-    town_ticks_to_game_ticks, update_radius,
+    town_ticks_to_game_ticks, update_town_radius,
 };
 use crate::cargotype::TownAcceptanceEffect;
 use crate::clear_map::ClearGround;
@@ -307,7 +307,7 @@ impl<'a> Founding<'a> {
             (*town.state).simulation.xy = args.tile.0;
             (*town.state).simulation.num_houses = 0;
             (*town.state).simulation.time_until_rebuild = 10;
-            update_radius(town.state);
+            update_town_radius(town.state);
             (*town.state).growth.flags = 0;
             (*town.state).simulation.population = 0;
         }
@@ -386,17 +386,14 @@ impl<'a> Founding<'a> {
             x = x.wrapping_mul(i32::from(observed!((self.s.initial_city_size)())));
         }
         let engine = self.engine(town);
-        engine.change_house_count(x as u32);
+        engine.set_num_houses(engine.num_houses().wrapping_add(x as u32));
         unsafe {
-            update_radius(town.state);
+            update_town_radius(town.state);
         }
         let mut i = x.wrapping_mul(4);
         loop {
             w::hit(w::TOWN_GROWTH);
-            engine.grow(
-                u32::from(town.id.0),
-                u32::from((TownExpandMode::Buildings | TownExpandMode::Roads).0),
-            );
+            engine.grow_town(town.id, TownExpandMode::Buildings | TownExpandMode::Roads);
             i = i.wrapping_sub(1);
             if i == 0 {
                 break;
@@ -404,11 +401,11 @@ impl<'a> Founding<'a> {
         }
         observed!((self.s.update_virt)(town.shell));
         observed!((self.s.directory_rebuild)());
-        engine.change_house_count((x as u32).wrapping_neg());
+        engine.set_num_houses(engine.num_houses().wrapping_sub(x as u32));
         unsafe {
-            update_radius(town.state);
+            update_town_radius(town.state);
         }
-        engine.update_rate(u32::from(town.id.0));
+        engine.update_town_growth_rate(town.id);
         super::policy::update_town_max_pass(self.leaves, town.state);
         observed!((self.s.update_noise)());
         super::openttd_rust_town_generating_exchange_abi(previous);
@@ -515,7 +512,7 @@ impl<'a> Founding<'a> {
 unsafe fn initialize_layout(state: *mut State, layout: TownLayout, map: crate::services::Map) {
     let result = if layout == TownLayout::TL_RANDOM {
         let xy = unsafe { super::position(state) };
-        let hash = crate::tile_map::tile_hash(map.tile_x(xy), map.tile_y(xy));
+        let hash = crate::tile_map::tile_hash(map.tile_x(xy.0), map.tile_y(xy.0));
         TownLayout((hash % u32::from(TownLayout::NUM_TLS.0 - 1)) as u8)
     } else {
         layout

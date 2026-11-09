@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Run the batch-U C++ calling-boundary sections against the original and the candidate.
+"""Run the #736 C++ calling-boundary sections against the original and the candidate.
 
 tools/migration/core-boundary-comparison.cpp keeps only fork C++ glue observations
-that Rust tests cannot make (#736 U). Each section builds once per label and must
+that Rust tests cannot make (#736 U and P). Each section builds once per label and must
 pass its pinned-original literals in both; the encoded assertion modes compare
-exit, stdout and normalized stderr between labels. Linux only (GNU ld --wrap).
+exit, stdout and normalized stderr between labels, and the packet section requires
+the candidate's stdout to equal the original's at -O0 and -O2 -DNDEBUG.
+Linux only (GNU ld --wrap).
 """
 
 import re
@@ -56,6 +58,15 @@ ENCODED_MODES = {
     "ndebug": ["-DNDEBUG"],
     "ndebug-with-assert": ["-DNDEBUG", "-DWITH_ASSERT"],
 }
+PACKET_SOURCES = [
+    "network/core/packet.cpp",
+    "string.cpp",
+    "core/string_builder.cpp",
+    "core/string_consumer.cpp",
+    "core/string_inplace.cpp",
+    "core/utf8.cpp",
+]
+PACKET_MODES = {"O0": ["-O0"], "O2": ["-O2", "-DNDEBUG"]}
 SANITIZE = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-no-pie"]
 
 
@@ -153,6 +164,26 @@ def encoded(out: Path) -> int:
     return builds + 1
 
 
+def packet(out: Path) -> int:
+    """Native Packet glue: the candidate's stream must equal the original's in each mode."""
+    for mode, flags in PACKET_MODES.items():
+        outputs = {}
+        for label, source in probe.LABELS:
+            sources = [source / "src" / name for name in PACKET_SOURCES]
+            binary = build(
+                out,
+                f"packet-{mode}",
+                label,
+                "PACKET",
+                [*flags, "-DUNIX", "-Werror=mismatched-tags", *sources],
+            )
+            outputs[label] = probe.execute([binary], binary)
+        if not outputs["reference"].endswith(b"packet boundary passed\n"):
+            raise RuntimeError(f"Packet boundary stream incomplete in {mode}")
+        probe.same(outputs["reference"], outputs["candidate"], f"packet-{mode}", out)
+    return len(PACKET_MODES) * len(probe.LABELS)
+
+
 def main() -> None:
     out = probe.output("core-boundary-comparison")
     builds = 0
@@ -167,7 +198,8 @@ def main() -> None:
             probe.execute([binary], binary, stderr="merged")
             builds += 1
     builds += encoded(out)
-    probe.passed("Core boundary comparison", sections=len(SECTIONS) + 1, builds=builds)
+    builds += packet(out)
+    probe.passed("Core boundary comparison", sections=len(SECTIONS) + 2, builds=builds)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,18 @@ pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
+/// Original `RoundDivSU`: integer division of a signed numerator by an unsigned
+/// denominator, rounded to nearest.
+pub(crate) const fn round_div_su(a: i32, b: u32) -> i32 {
+    if a > 0 {
+        /* 0.5 is rounded to 1 */
+        (a + b.cast_signed() / 2) / b.cast_signed()
+    } else {
+        /* -0.5 is rounded to 0 */
+        (a - (b.cast_signed() - 1) / 2) / b.cast_signed()
+    }
+}
+
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));
     u64::MAX >> (64 - width)

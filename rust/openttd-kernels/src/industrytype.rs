@@ -440,10 +440,6 @@ pub(crate) fn get_industry_tile_spec(gfx: IndustryGfx) -> *mut IndustryTileSpec 
 pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
     get_industry_spec(IndustryType(id as u8))
 }
-/// Temporary raw adapter for [`get_industry_tile_spec`].
-pub(crate) fn tile(gfx: u16) -> *mut IndustryTileSpec {
-    get_industry_tile_spec(IndustryGfx(gfx))
-}
 /// The per-file specs of `file`, created empty on first use.
 ///
 /// # Safety
@@ -828,13 +824,6 @@ impl IndustryTileSpecialFlags {
 
 /// Industries like power plants and banks.
 pub const INDUSTRYLIFE_BLACK_HOLE: IndustryLifeTypes = IndustryLifeTypes::EMPTY;
-
-/// Raw compatibility mask for `IndustryBehaviour::BuiltOnWater`.
-pub const BUILT_ON_WATER: u32 = IndustryBehaviours::from_element(IndustryBehaviour::BuiltOnWater).0;
-
-/// Raw compatibility mask for `IndustryBehaviour::ProdMultiHandling`.
-pub const PROD_MULTI_HANDLING: u32 =
-    IndustryBehaviours::from_element(IndustryBehaviour::ProdMultiHandling).0;
 
 /// Raw compatibility mask for `IndustryBehaviour::AirplaneAttacks`.
 pub const AIRPLANE_ATTACKS: u32 =
