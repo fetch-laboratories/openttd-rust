@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
+import cleanup_contract
 from baseline_ratchet import debt_errors
 from cleanup_contract import associated_pull, reviewed, source_reviews
 from rust_syntax import boundary_ids
@@ -589,6 +590,61 @@ class GrowthTests(unittest.TestCase):
         merged = {"head": {"sha": "tested"}, "state": "closed", "merged_at": "date"}
         self.assertEqual(associated_pull([wrong, merged], "tested"), merged)
         self.assertIsNone(associated_pull([wrong], "tested"))
+
+    def pr_context(self, pulls: Mapping[str, list[dict[str, object]]]) -> str:
+        """Run `context` on a two-parent HEAD with no event payload."""
+        shas = {"HEAD": "merge", "HEAD^2": "second"}
+
+        def fake_git(*args: str) -> str:
+            if args[:2] == ("rev-list", "--parents"):
+                return "merge first second\n"
+            assert args[0] == "rev-parse", args
+            return shas[args[1]] + "\n"
+
+        def fake_gh(*args: str) -> str:
+            route = args[1].removeprefix("repos/fork/")
+            if route.startswith("commits/"):
+                return json.dumps(pulls.get(route.split("/")[1], []))
+            number = int(route.removeprefix("pulls/"))
+            head = next(
+                pull["head"]
+                for found in pulls.values()
+                for pull in found
+                if pull["number"] == number
+            )
+            return json.dumps({"head": head, "body": f"PR {number}"})
+
+        with (
+            patch.dict("os.environ", {"GITHUB_REPOSITORY": "fork"}) as environment,
+            patch.object(cleanup_contract, "git", fake_git),
+            patch.object(cleanup_contract, "gh", fake_gh),
+            patch.object(cleanup_contract, "discussion", return_value=[]),
+            patch.object(cleanup_contract, "source_reviews", return_value=[]),
+            patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
+        ):
+            environment.pop("GITHUB_EVENT_PATH", None)
+            _, bodies, _, head = cleanup_contract.context()
+        return f"{bodies[0] if bodies else None} at {head}"
+
+    def test_local_merge_head_reads_its_own_pr(self) -> None:
+        # A local `Update: Merge integration N` merge is the PR head; its second
+        # parent is the base branch, which has no associated PR head.
+        own: dict[str, object] = {
+            "number": 7,
+            "head": {"sha": "merge"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"merge": [own]}), "PR 7 at merge")
+
+    def test_ci_merge_checkout_reads_second_parent_pr(self) -> None:
+        # CI's synthetic merge commit has no PR; its second parent is the PR head.
+        pr: dict[str, object] = {
+            "number": 9,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"second": [pr]}), "PR 9 at second")
+        self.assertEqual(self.pr_context({}), "None at second")
 
     def test_review_requires_head_payload_and_different_agent(self) -> None:
         delta = {"counter": "exports", "old": 1, "new": 2, "added": {"x": 1}}

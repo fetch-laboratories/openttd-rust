@@ -129,10 +129,15 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         else {}
     )
     pull = event.get("pull_request", {})
+    # Without an event payload, HEAD is the PR head itself, including a local
+    # base-update merge. Only when HEAD has no associated PR is a two-parent HEAD
+    # taken to be CI's synthetic merge checkout, whose second parent is the PR head.
+    candidates = [head]
     if pull:
         head = pull["head"]["sha"]
     elif len(git("rev-list", "--parents", "-n", "1", "HEAD").split()) == 3:
-        head = git("rev-parse", "HEAD^2").strip()
+        candidates.append(git("rev-parse", "HEAD^2").strip())
+        head = candidates[-1]
     repository = os.getenv("GITHUB_REPOSITORY")
     if not repository:
         repository = json.loads(gh("repo", "view", "--json", "nameWithOwner"))[
@@ -140,11 +145,13 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         ]
     number = pull.get("number")
     if not number:
-        pulls = json.loads(gh("api", f"repos/{repository}/commits/{head}/pulls"))
-        candidate = associated_pull(pulls, head)
-        number = candidate["number"] if candidate else None
-        if candidate:
-            head = candidate["head"]["sha"]
+        for sha in candidates:
+            pulls = json.loads(gh("api", f"repos/{repository}/commits/{sha}/pulls"))
+            candidate = associated_pull(pulls, sha)
+            if candidate:
+                number = candidate["number"]
+                head = candidate["head"]["sha"]
+                break
     if number is None:
         return "", [], [], head
     prefix = f"repos/{repository}"
