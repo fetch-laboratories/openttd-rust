@@ -88,13 +88,6 @@ pub(crate) fn is_airport_raw(tile: u32, s: &Services) -> bool {
     is_airport(TileIndex(tile), s)
 }
 
-/// `IsRailWaypoint`: is this station tile a rail waypoint? The station type
-/// leaf keeps its native assertion.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) fn is_rail_waypoint(tile: TileIndex, s: &Services) -> bool {
-    (s.station_type)(tile.0) == StationType::RailWaypoint
-}
 /// `IsRailWaypointTile`: is this tile a station tile and a rail waypoint?
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -178,11 +171,16 @@ pub(crate) fn is_hangar_raw(tile: u32, s: &crate::newgrf_airport::Services) -> b
     is_hangar(TileIndex(tile), s)
 }
 /// Original `IsHangarTile`: is tile `t` a hangar tile? Includes its
-/// non-station early return. Keeps its raw tile until `orders.rs` adopts it.
+/// non-station early return.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
-    (s.shared().tile_type)(tile) == MP_STATION && is_hangar(TileIndex(tile), s)
+pub(crate) fn is_hangar_tile(t: TileIndex, s: &crate::newgrf_airport::Services) -> bool {
+    (s.shared().tile_type)(t.0) == MP_STATION && is_hangar(t, s)
+}
+/// Raw adapter for `orders.rs`, which #825 holds; delegates to `is_hangar_tile`.
+#[inline]
+pub(crate) fn is_hangar_tile_raw(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
+    is_hangar_tile(TileIndex(tile), s)
 }
 
 /// The `assert(IsRoadWaypointTile(t))` precondition of the road waypoint
@@ -203,10 +201,6 @@ pub(crate) fn is_road_waypoint_on_snow_or_desert(
     require_road_waypoint(m, tile)?;
     Some(has_bit(m.m8(tile.0)?, 15))
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
-    is_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
-}
 /// `ToggleRoadWaypointOnSnowOrDesert`: toggle the snow/desert state of a road
 /// waypoint tile.
 #[allow(
@@ -222,13 +216,6 @@ pub(crate) fn toggle_road_waypoint_on_snow_or_desert(
     toggle_bit(&mut value, 15);
     m.set_m8(tile.0, value as u16)
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn toggle_road_waypoint_snow(
-    m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-) -> Option<()> {
-    toggle_road_waypoint_on_snow_or_desert(m, TileIndex(tile))
-}
 /// `GetRoadWaypointRoadside`: get the decorations of a road waypoint.
 #[allow(
     clippy::cast_possible_truncation,
@@ -243,25 +230,20 @@ pub(crate) fn get_road_waypoint_roadside(
         gb(u32::from(m.m3(tile.0)?), 2, 2) as u8,
     ))
 }
-/// Temporary raw adapter for `station_lifecycle.rs`.
-pub(crate) fn road_waypoint_roadside(
-    m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-) -> Option<crate::services::Roadside> {
-    get_road_waypoint_roadside(m, TileIndex(tile))
-}
-/// `SetRoadWaypointRoadside`: set the decorations of a road waypoint. Keeps
-/// its raw tile until `station_lifecycle.rs` adopts it.
-#[allow(clippy::cast_possible_truncation)] // SB stores back into the source byte.
+/// `SetRoadWaypointRoadside`: set the decorations of a road waypoint.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "SB stores back into the original uint8_t m3"
+)]
 pub(crate) fn set_road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
-    tile: u32,
-    value: crate::services::Roadside,
+    tile: TileIndex,
+    rs: crate::services::Roadside,
 ) -> Option<()> {
-    require_road_waypoint(m, TileIndex(tile))?;
-    let mut bits = u32::from(m.m3(tile)?);
-    sb(&mut bits, 2, 2, u32::from(value.0));
-    m.set_m3(tile, bits as u8)
+    require_road_waypoint(m, tile)?;
+    let mut bits = u32::from(m.m3(tile.0)?);
+    sb(&mut bits, 2, 2, u32::from(rs.0));
+    m.set_m3(tile.0, bits as u8)
 }
 
 impl crate::map_func::World<'_> {
@@ -277,14 +259,16 @@ impl crate::map_func::World<'_> {
     pub(crate) fn is_rail_station(&self, t: TileIndex) -> bool {
         self.asserted(|m| get_station_type(m, t)) == StationType::Rail
     }
+    /// `IsRailWaypoint`: is this station tile a rail waypoint? Keeps
+    /// `GetStationType`'s tile-type assertion.
+    pub(crate) fn is_rail_waypoint(&self, t: TileIndex) -> bool {
+        self.asserted(|m| get_station_type(m, t)) == StationType::RailWaypoint
+    }
     /// `HasStationRail`: has this station tile a rail? In other words, is this
-    /// station tile a rail station or rail waypoint? Keeps `GetStationType`'s
-    /// tile-type assertion.
+    /// station tile a rail station or rail waypoint? Each test keeps
+    /// `GetStationType`'s tile-type assertion.
     pub(crate) fn has_station_rail(&self, t: TileIndex) -> bool {
-        matches!(
-            self.asserted(|m| get_station_type(m, t)),
-            StationType::Rail | StationType::RailWaypoint
-        )
+        self.is_rail_station(t) || self.is_rail_waypoint(t)
     }
     /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
     pub(crate) fn is_buoy(&self, t: TileIndex) -> bool {
@@ -317,9 +301,9 @@ impl crate::map_func::World<'_> {
     }
     /// `GetRoadStopType`: get the road stop type of this tile.
     pub(crate) fn get_road_stop_type(&self, t: TileIndex) -> RoadStopType {
-        let kind = get_station_type(&self.types, t).expect("station tile");
-        self.check(kind == StationType::Truck || kind == StationType::Bus);
-        if kind == StationType::Truck {
+        let station_type = || self.asserted(|m| get_station_type(m, t));
+        self.check(station_type() == StationType::Truck || station_type() == StationType::Bus);
+        if station_type() == StationType::Truck {
             RoadStopType::Truck
         } else {
             RoadStopType::Bus
@@ -385,14 +369,14 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn is_station_tile_blocked(&self, t: TileIndex) -> bool {
-        self.check(self.has_station_tile_rail(t));
+        self.check(self.has_station_rail(t));
         has_bit(Self::byte(self.types.m3(t.0)), 0)
     }
     /// `GetRailStationAxis`: get the rail direction of a rail station.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn get_rail_station_axis(&self, t: TileIndex) -> Axis {
-        self.check(self.has_station_tile_rail(t));
+        self.check(self.has_station_rail(t));
         if has_bit(self.get_station_gfx(t).0, 0) {
             Axis::AXIS_Y
         } else {
@@ -403,7 +387,7 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn has_station_reservation(&self, t: TileIndex) -> bool {
-        self.check(self.has_station_tile_rail(t));
+        self.check(self.has_station_rail(t));
         has_bit(Self::byte(self.types.m6(t.0)), 2)
     }
     /// `IsCompatibleTrainStationTile`: check if `test_tile` is a valid

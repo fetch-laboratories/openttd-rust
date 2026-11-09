@@ -8,7 +8,7 @@
 //! Initial industry probability, forced placement and weighted traversal, with scratch arrays
 //! on the invocation stack. Only progress cancellation returns early, to a native stack
 //! exception frame.
-use super::{Builder, Services, TYPES, place};
+use super::{Builder, Services, TYPES, place_industry};
 use crate::industry_type::{IndustryID, IndustryType};
 use crate::industrytype::{self, CheckProc, IndustryBehaviour, IndustryBehaviours};
 use crate::newgrf_industries::IndustryAvailabilityCallType;
@@ -174,7 +174,7 @@ fn place_initial_industry(
         unsafe { (s.restore_company)(cur_company) };
         return false;
     }
-    place(
+    place_industry(
         r#type,
         IndustryAvailabilityCallType::IACT_MAPGENERATION,
         try_hard,

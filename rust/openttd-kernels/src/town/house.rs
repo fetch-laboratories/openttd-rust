@@ -438,17 +438,17 @@ impl<'a> House<'a> {
         unsafe {
             crate::station::for_each_station(list, |near| {
                 let st = (c.c.owner)(near.station);
-                let mut covers_area = crate::station::tile_is_in_catchment(st, tile.0, &c);
+                let mut covers_area = crate::station::tile_is_in_catchment(st, tile, &c);
                 if flags.any(BuildingFlags::BUILDING_2_TILES_Y) {
-                    covers_area |= crate::station::tile_is_in_catchment(st, below.0, &c);
+                    covers_area |= crate::station::tile_is_in_catchment(st, below, &c);
                 }
                 if flags.any(BuildingFlags::BUILDING_2_TILES_X) {
-                    covers_area |= crate::station::tile_is_in_catchment(st, right.0, &c);
+                    covers_area |= crate::station::tile_is_in_catchment(st, right, &c);
                 }
                 if flags.any(BuildingFlags::BUILDING_HAS_4_TILES) {
-                    covers_area |= crate::station::tile_is_in_catchment(st, diagonal.0, &c);
+                    covers_area |= crate::station::tile_is_in_catchment(st, diagonal, &c);
                 }
-                if covers_area && !crate::station::catchment_covers_town(st, town.id.0, &c) {
+                if covers_area && !crate::station::catchment_covers_town(st, town.id, &c) {
                     witness::hit(W_STATION_REMOVED);
                     (*list).erase(near.id);
                 }
@@ -749,11 +749,11 @@ impl<'a> House<'a> {
         // service can reach it.
         let moved = unsafe {
             crate::station::move_goods_to_station(
-                cargo.0,
+                cargo,
                 amount,
                 source,
                 list,
-                CompanyID::INVALID.0,
+                CompanyID::INVALID,
                 c,
             )
         };

@@ -293,10 +293,10 @@ impl Engine<'_> {
         }
         self.success()
     }
-    fn registry(&self, kind: IndustryType) -> *const Vec<u16> {
+    fn registry(&self, kind: IndustryType) -> *const Vec<IndustryID> {
         unsafe {
             ptr::addr_of!((*self.context.builder).registry)
-                .cast::<Vec<u16>>()
+                .cast::<Vec<IndustryID>>()
                 .add(usize::from(kind.0))
         }
     }
@@ -304,7 +304,7 @@ impl Engine<'_> {
         unsafe { (&*self.registry(kind)).len() }
     }
     fn registry_id(&self, kind: IndustryType, n: usize) -> IndustryID {
-        IndustryID(unsafe { ptr::read((&*self.registry(kind)).as_ptr().add(n)) })
+        unsafe { ptr::read((&*self.registry(kind)).as_ptr().add(n)) }
     }
     /// `CheckIfFarEnoughFromConflictingIndustry`: check that the new industry is far enough
     /// from conflicting industries.

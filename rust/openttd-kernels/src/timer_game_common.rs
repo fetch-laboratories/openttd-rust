@@ -439,10 +439,10 @@ macro_rules! owner_callback {
     };
 }
 owner_callback!(openttd_rust_clock_industry_daily_abi, ClockIndustry, c, {
-    crate::industry::openttd_rust_industry_daily(c.builder, c.services);
+    crate::industry::economy_industries_daily(c.builder, c.services);
 });
 owner_callback!(openttd_rust_clock_industry_monthly_abi, ClockIndustry, c, {
-    crate::industry::openttd_rust_industry_monthly(c.builder, c.services);
+    crate::industry::economy_industries_monthly(c.builder, c.services);
 });
 owner_callback!(
     openttd_rust_clock_engine_daily_abi,
