@@ -831,7 +831,8 @@ class HousekeepingTests(unittest.TestCase):
         target = write(self.top / "shared-build/CMakeCache.txt").parent
         (linked / "build-rust").symlink_to(target)
         self.age(linked, idle + 60)
-        profile = self.main / ".local/worktrees/root-profile-824"
+        # Listed by its resolved path, as main-local worktrees are on the HDD.
+        profile = self.top / "storage/worktrees/root-profile-824"
         git(self.main, "worktree", "add", "--quiet", "--detach", str(profile))
         self.build(profile, idle + 60)
         references = f"Retained: {issue.name}"

@@ -54,8 +54,9 @@ RUNNING_SECONDS = 12 * 3600
 # A kept worktree's build-rust is reclaimed once its activity is this old (#824).
 IDLE_HOURS = 2.0
 BUILD = "build-rust"
-# Retained profile checkouts live here; their builds are evidence, not cache.
-PROFILES = ".local/worktrees/root-profile-"
+# Retained profile checkouts; their builds are evidence, not cache. Under the main
+# checkout's .local/worktrees, git lists them by their resolved HDD path.
+PROFILES = "root-profile-"
 # Session managers hide their cwd from their own user and never run agent work.
 SESSION_MANAGERS = {"systemd", "(sd-pam)"}
 REFERENCE = re.compile(r"\.local/(" + "|".join(OUTPUT) + r")/([^/\"\s]+)")
@@ -316,7 +317,7 @@ def build_exclusion(main: Path, tree: Worktree, references: str) -> str | None:
             lambda: tree.path.is_relative_to(main / ".local/reference"),
             "pinned reference",
         ),
-        (lambda: PROFILES in tree.path.as_posix(), "retained profile"),
+        (lambda: tree.path.name.startswith(PROFILES), "retained profile"),
         (lambda: tree.locked, "locked"),
     ]
     found = next((reason for check, reason in checks if check()), None)
