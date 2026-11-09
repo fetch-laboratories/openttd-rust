@@ -16,36 +16,35 @@
     clippy::too_many_lines,
     clippy::too_many_arguments
 )]
+use crate::airport::{AT_OILRIG, FLYING, NUM_AIRPORTS};
 use crate::base_station_base::StationRectMode;
 use crate::bitmath_func::find_first_bit;
 use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::NUM_CARGO;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
-use crate::company_type::{CompanyID, OWNER_NONE, OWNER_WATER};
+use crate::company_type::CompanyID;
 use crate::debug::debug;
 use crate::depot_func::can_build_depot_by_tileh;
 use crate::direction_func::{axis_to_diag_dir, is_valid_axis, other_axis};
 use crate::direction_func::{diag_dir_to_axis, is_valid_diag_direction, reverse_diag_dir};
-use crate::direction_type::{Axis, DiagDirection, DiagDirections, INVALID_DIAGDIR};
+use crate::direction_type::Direction;
+use crate::direction_type::{Axis, DiagDirection, DiagDirections};
 use crate::economy_type::Price;
 use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CallbackID};
 use crate::newgrf_roadstop::RoadStopClassID;
 use crate::newgrf_station::StationClassID;
 use crate::order_type::OrderType;
-use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::rail_type::RailType;
 use crate::road::{road_type_is_road, road_type_is_tram};
 use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadTramType, RoadType};
 use crate::slope_type::Slope;
 use crate::station_type::StationFacilities;
-use crate::station_type::{FACILITY_AIRPORT, FACILITY_DOCK, StationID, StationType};
-use crate::strings_type::INVALID_STRING_ID;
+use crate::station_type::{StationID, StationType};
 use crate::strings_type::StringID;
-use crate::tile_type::{
-    MP_INDUSTRY, MP_RAILWAY, MP_STATION, MP_TUNNELBRIDGE, MP_WATER, TileIndex, TileType,
-};
+use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
+use crate::town::TownCouncilAttitudes;
 use crate::track_func::reverse_trackdir;
 use crate::track_type::{Track, TrackBits, Trackdir};
 use crate::vehicle_type::VehicleType;
@@ -4057,147 +4056,184 @@ pub unsafe extern "C" fn openttd_rust_station_remove_road_area(
     }
 }
 
+/// `CmdBuildAirport`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdBuildAirport {
+    /// Tile where airport will be built.
+    tile: TileIndex,
+    /// Airport type, @see airport.h.
+    airport_type: u8,
+    /// Airport layout.
+    layout: u8,
+    /// Station ID to join (`NEW_STATION` if build new one).
+    station_to_join: StationID,
+    /// Allow airports directly adjacent to other airports.
+    allow_adjacent: bool,
+}
+
 impl Ctx<'_> {
+    /// `AirportTileTableIterator` over a layout's tiles from `tile`.
     fn airport_tiles(
         &self,
         spec: *const AirportSpec,
         layout: u8,
-        origin: u32,
+        tile: TileIndex,
     ) -> impl Iterator<Item = AirportTile> + '_ {
         let count = (self.s.airport_layout)(spec, layout).size;
-        (0..count).map(move |index| (self.s.airport_layout_tile)(spec, layout, origin, index))
+        (0..count).map(move |index| (self.s.airport_layout_tile)(spec, layout, tile.0, index))
     }
-    fn nearest_town(
+    /// `AirportGetNearestTown`: finds the town nearest to given airport. Based
+    /// on minimal manhattan distance to any airport's tile. If two towns have
+    /// the same distance, town with lower index is returned. Returns the town
+    /// and `mindist`.
+    fn airport_get_nearest_town(
         &self,
         spec: *const AirportSpec,
-        rotation: u8,
-        origin: u32,
-        tiles: impl Iterator<Item = u32>,
+        rotation: Direction,
+        tile: TileIndex,
+        it: impl Iterator<Item = u32>,
     ) -> (*const crate::services::TownHandle, u32) {
+        let map = self.map();
+        let mut nearest = std::ptr::null();
         let size = (self.s.airport_size)(spec);
-        let (width, height) = if rotation == 2 || rotation == 6 {
+        let (width, height) = if rotation == Direction::DIR_E || rotation == Direction::DIR_W {
             (size.h, size.w)
         } else {
             (size.w, size.h)
         };
-        let min_x = self.map().tile_x(origin);
-        let min_y = self.map().tile_y(origin);
-        let max_x = min_x + u32::from(width) - 1;
-        let max_y = min_y + u32::from(height) - 1;
-        let mut nearest = std::ptr::null();
-        let mut distance = u32::MAX - 1;
+        let perimeter_min_x = map.tile_x(tile.0);
+        let perimeter_min_y = map.tile_y(tile.0);
+        let perimeter_max_x = perimeter_min_x + u32::from(width) - 1;
+        let perimeter_max_y = perimeter_min_y + u32::from(height) - 1;
+        let mut mindist = u32::MAX - 1; // prevent overflow
         let authority = unsafe { &*self.s.authority };
-        for tile in tiles {
-            let x = self.map().tile_x(tile);
-            let y = self.map().tile_y(tile);
-            if x != min_x && x != max_x && y != min_y && y != max_y {
+        for cur_tile in it {
+            let (x, y) = (map.tile_x(cur_tile), map.tile_y(cur_tile));
+            if x != perimeter_min_x
+                && x != perimeter_max_x
+                && y != perimeter_min_y
+                && y != perimeter_max_y
+            {
                 continue;
             }
-            let town =
-                crate::town::spatial::calc_closest(self.shared, tile, distance.wrapping_add(1));
-            if town.is_null() {
+            let t =
+                crate::town::spatial::calc_closest(self.shared, cur_tile, mindist.wrapping_add(1));
+            if t.is_null() {
                 continue;
             }
-            let owner = (self.shared.town_owner)(town);
-            let xy = unsafe { crate::town::position_raw(owner) };
-            let dist = self.map().tile_x(xy).abs_diff(x) + self.map().tile_y(xy).abs_diff(y);
-            if dist == distance && (authority.town_index)(town) < (authority.town_index)(nearest) {
-                nearest = town;
+            let xy = unsafe { crate::town::position_raw((self.shared.town_owner)(t)) };
+            let dist = map.distance_manhattan(xy, cur_tile);
+            if dist == mindist && (authority.town_index)(t) < (authority.town_index)(nearest) {
+                nearest = t;
             }
-            if dist < distance {
-                nearest = town;
-                distance = dist;
+            if dist < mindist {
+                nearest = t;
+                mindist = dist;
             }
         }
-        (nearest, distance)
+        (nearest, mindist)
     }
-    fn nearest_existing_airport(
+    /// `AirportGetNearestTown(const Station *st, uint &mindist)`: finds the
+    /// town nearest to given existing airport.
+    fn airport_get_nearest_town_of(
         &self,
         st: *mut BaseStation,
     ) -> (*const crate::services::TownHandle, u32) {
-        let area = Self::area((self.s.airport_area)(st));
-        let rotation = (self.s.airport_rotation)(st);
+        let airport = Self::area((self.s.airport_area)(st));
+        let rotation = Direction((self.s.airport_rotation)(st));
         let id = (self.links().graphs.station_id)(st);
-        self.nearest_town(
+        // `AirportTileIterator(st)`: the airport area's tiles that belong to it.
+        self.airport_get_nearest_town(
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
             rotation,
-            area.tile,
-            area.tiles(self.map()).filter(|&t| {
-                (self.shared.tile_type)(t) == MP_STATION
-                    && (self.shared.station_type)(t) == StationType::Airport
+            TileIndex(airport.tile),
+            airport.tiles(self.map()).filter(|&t| {
+                TileType((self.shared.tile_type)(t)) == TileType::MP_STATION
+                    && StationType((self.shared.station_type)(t).0) == StationType::Airport
                     && (self.shared.station_index)(t) == id
             }),
         )
     }
-    fn noise(&self, spec: *const AirportSpec, distance: u32) -> u8 {
+    /// `GetAirportNoiseLevelForDistance`.
+    fn get_airport_noise_level_for_distance(&self, spec: *const AirportSpec, distance: u32) -> u8 {
         unsafe {
             openttd_rust_station_airport_noise(self.s, (self.s.airport_noise)(spec), distance)
         }
     }
-    fn noise_pointer(&self, town: *const crate::services::TownHandle) -> *mut u16 {
-        let owner = (self.shared.town_owner)(town);
+    /// `t->noise_reached`, for immediate access only.
+    fn noise_reached(&self, t: *const crate::services::TownHandle) -> *mut u16 {
+        let owner = (self.shared.town_owner)(t);
         let fields = unsafe { crate::town::openttd_rust_town_simulation(owner) };
         unsafe { &raw mut (*fields).noise_reached }
     }
-    fn build_airport(
+    /// `CmdBuildAirport`: place an Airport.
+    fn cmd_build_airport(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        airport: u8,
-        layout: u8,
-        mut target: u16,
-        adjacent: bool,
+        flags: DoCommandFlags,
+        args: CmdBuildAirport,
     ) {
+        let CmdBuildAirport {
+            tile,
+            airport_type,
+            layout,
+            mut station_to_join,
+            allow_adjacent,
+        } = args;
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_AIRPORT);
-        let reuse = target != StationID::NEW.0;
+        let reuse = station_to_join != StationID::NEW;
         if !reuse {
-            target = StationID::INVALID.0;
+            station_to_join = StationID::INVALID;
         }
-        let distant = target != StationID::INVALID.0;
-        if distant && (!(self.s.distant_join)() || self.full_station(StationID(target)).is_null()) {
-            return cost.error(INVALID_STRING_ID);
+        let distant_join = station_to_join != StationID::INVALID;
+        if distant_join
+            && (!(self.s.distant_join)() || self.full_station(station_to_join).is_null())
+        {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        if airport >= 128 {
-            return cost.error(INVALID_STRING_ID);
+        if u16::from(airport_type) >= NUM_AIRPORTS {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        self.check_if_authority_allows_new_station(cost, TileIndex(tile), DoCommandFlags(flags));
+        self.check_if_authority_allows_new_station(cost, tile, flags);
         if !cost.ok() {
             return;
         }
+        /* Check if a valid, buildable airport was chosen for construction */
         let runtime = unsafe { &*self.s.airport_runtime };
-        let spec = crate::newgrf_airport::get(airport, runtime);
+        let spec = crate::newgrf_airport::get(airport_type, runtime);
         if !crate::newgrf_airport::available(spec, runtime)
             || usize::from(layout) >= (self.s.airport_layout_count)(spec)
-            || !crate::newgrf_airport::in_bounds(spec, layout, tile, runtime)
+            || !crate::newgrf_airport::in_bounds(spec, layout, tile.0, runtime)
         {
-            return cost.error(INVALID_STRING_ID);
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let rotation = (self.s.airport_layout)(spec, layout).rotation;
+        let rotation = Direction((self.s.airport_layout)(spec, layout).rotation);
         let size = (self.s.airport_size)(spec);
-        let (w, h) = if rotation == 2 || rotation == 6 {
+        let (w, h) = if rotation == Direction::DIR_E || rotation == Direction::DIR_W {
             (size.h, size.w)
         } else {
             (size.w, size.h)
         };
-        let area = TileArea {
-            tile,
+        let airport_area = TileArea {
+            tile: tile.0,
             w: u16::from(w),
             h: u16::from(h),
         };
-        let spread = (self.s.spread)();
-        if w > spread || h > spread {
+        let station_spread = (self.s.spread)();
+        if w > station_spread || h > station_spread {
             return cost.error(self.s.strings.spread);
         }
-        let mut allowed = -1;
+        // `CheckFlatLandAirport`: checks if an airport can be built at the
+        // given location and clear the area.
+        let mut allowed_z = -1;
         cost.set(0);
-        for t in self.airport_tiles(spec, layout, tile) {
+        for tile_iter in self.airport_tiles(spec, layout, tile) {
             self.check_buildable(
                 ret,
-                TileIndex(t.tile),
+                TileIndex(tile_iter.tile),
                 DiagDirections::EMPTY,
-                &mut allowed,
+                &mut allowed_z,
                 true,
                 true,
             );
@@ -4205,60 +4241,70 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            crate::landscape_cmd::clear_command(self.command, ret.0, t.tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile_iter.tile, flags.0);
             if !ret.ok() {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
         }
-        let (nearest, distance) = self.nearest_town(
+        /* The noise level is the noise from the airport and reduce it to account for the distance to the town center. */
+        let (nearest, dist) = self.airport_get_nearest_town(
             spec,
             rotation,
             tile,
             self.airport_tiles(spec, layout, tile).map(|t| t.tile),
         );
-        let noise = u32::from(self.noise(spec, distance));
-        let noise_ptr = self.noise_pointer(nearest);
+        let newnoise_level = u32::from(self.get_airport_noise_level_for_distance(spec, dist));
+        let noise_reached = self.noise_reached(nearest);
         let authority = unsafe { &*self.s.authority };
-        let mut refused = std::ptr::null();
-        let mut message = 0;
+        /* Check if local auth would allow a new airport */
+        let mut authority_refuse_message = StringID::STR_NULL;
+        let mut authority_refuse_town = std::ptr::null();
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
-            if u32::from(unsafe { noise_ptr.read() }) + noise
+            /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
+            if u32::from(unsafe { noise_reached.read() }) + newnoise_level
                 > u32::from((self.s.town_max_noise)(nearest))
             {
-                message = self.s.strings.refuse_noise;
-                refused = nearest;
+                authority_refuse_message = StringID(self.s.strings.refuse_noise);
+                authority_refuse_town = nearest;
             }
-        } else if (authority.council_tolerance)() != 3 {
-            let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
-            let mut count = 0_u32;
+        } else if TownCouncilAttitudes((authority.council_tolerance)())
+            != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
+        {
+            let t = crate::town::spatial::closest(self.shared, tile.0, u32::MAX);
+            let mut num = 0_u32;
             for id in 0..(self.world().pool_size)() {
                 let st = self.full_station(StationID(id as u16));
                 if st.is_null() {
                     continue;
                 }
-                if (self.s.station_town)(st) == town
-                    && (self.world().facilities)(st) & FACILITY_AIRPORT != 0
-                    && (self.s.airport_type)(st) != 9
+                if (self.s.station_town)(st) == t
+                    && StationFacilities((self.world().facilities)(st))
+                        .test(StationFacility::Airport)
+                    && (self.s.airport_type)(st) != AT_OILRIG
                 {
-                    count += 1;
+                    num += 1;
                 }
             }
-            if count >= 2 {
-                message = self.s.strings.refuse_airport;
-                refused = town;
+            if num >= 2 {
+                authority_refuse_message = StringID(self.s.strings.refuse_airport);
+                authority_refuse_town = t;
             }
         }
-        if message != 0 {
-            (self.cost.error_param)(cost.0, message, u64::from((authority.town_index)(refused)));
+        if authority_refuse_message != StringID::STR_NULL {
+            (self.cost.error_param)(
+                cost.0,
+                authority_refuse_message.0,
+                u64::from((authority.town_index)(authority_refuse_town)),
+            );
             return;
         }
         let mut st = self.find_joining_base_station(JoiningStation {
             out: ret,
             existing_station: StationID::INVALID,
-            station_to_join: StationID(target),
-            adjacent,
-            ta: area,
+            station_to_join,
+            adjacent: allow_adjacent,
+            ta: airport_area,
             waypoint: false,
             road: false,
             error_message: StringID(self.s.strings.remove_station),
@@ -4266,21 +4312,23 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if st.is_null() && distant {
-            st = self.full_station(StationID(target));
+        /* Distant join */
+        if st.is_null() && distant_join {
+            st = self.full_station(station_to_join);
         }
-        let name = if (self.s.airport_airplanes)(crate::airport::get_airport(airport, unsafe {
-            &*self.s.airport_runtime
-        })) {
-            StationNaming::STATIONNAMING_AIRPORT
-        } else {
-            StationNaming::STATIONNAMING_HELIPORT
-        };
-        st = self.build_station_part(ret, st, DoCommandFlags(flags), reuse, area, name);
+        let name_class =
+            if (self.s.airport_airplanes)(crate::airport::get_airport(airport_type, unsafe {
+                &*self.s.airport_runtime
+            })) {
+                StationNaming::STATIONNAMING_AIRPORT
+            } else {
+                StationNaming::STATIONNAMING_HELIPORT
+            };
+        st = self.build_station_part(ret, st, flags, reuse, airport_area, name_class);
         if !ret.ok() {
             return cost.take(ret);
         }
-        if !st.is_null() && (self.s.airport_tile)(st) != u32::MAX {
+        if !st.is_null() && (self.s.airport_tile)(st) != TileIndex::INVALID.0 {
             return cost.error(self.s.strings.close_airport);
         }
         for _ in self.airport_tiles(spec, layout, tile) {
@@ -4288,49 +4336,66 @@ impl Ctx<'_> {
                 Price::PR_BUILD_STATION_AIRPORT.0,
             )));
         }
-        if flags & DoCommandFlag::EXECUTE == 0 {
+        if !flags.test(DoCommandFlag::Execute) {
             return;
         }
+        /* Always add the noise, so there will be no need to recalculate when option toggles */
         unsafe {
-            noise_ptr.write(noise_ptr.read().wrapping_add(noise as u16));
+            noise_reached.write(noise_reached.read().wrapping_add(newnoise_level as u16));
         }
-        crate::station_lifecycle::add_facility_raw(st, StationFacility::Airport, tile, unsafe {
+        crate::station_lifecycle::add_facility_raw(st, StationFacility::Airport, tile.0, unsafe {
             &*self.s.lifecycle
         });
-        (self.s.set_airport_details)(st, airport, layout, rotation);
-        self.before_add_rect(ret, st, area, StationRectMode::ADD_TRY);
-        let owner = (self.world().station_owner)(st);
-        let id = (self.links().graphs.station_id)(st);
-        for t in self.airport_tiles(spec, layout, tile) {
-            (self.s.make_airport)(t.tile, owner, id, t.gfx, 3);
-            (self.s.set_random_bits)(
-                t.tile,
-                ((self.shared.random)(self.shared.context) & 15) as u8,
+        (self.s.set_airport_details)(st, airport_type, layout, rotation.0);
+        self.before_add_rect(ret, st, airport_area, StationRectMode::ADD_TRY);
+        let owner = CompanyID((self.world().station_owner)(st));
+        let index = (self.links().graphs.station_id)(st);
+        for iter in self.airport_tiles(spec, layout, tile) {
+            (self.s.make_airport)(
+                iter.tile,
+                owner.0,
+                index,
+                iter.gfx,
+                crate::water_map::WaterClass::Invalid.0,
             );
-            self.area_add((self.s.airport_area)(st), TileIndex(t.tile));
-            if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(t.gfx, unsafe {
-                &*self.s.airport_runtime
-            })) {
-                crate::animated_tile::openttd_rust_animation_add(t.tile, true);
+            (self.s.set_random_bits)(
+                iter.tile,
+                gb((self.shared.random)(self.shared.context), 0, 4) as u8,
+            );
+            self.area_add((self.s.airport_area)(st), TileIndex(iter.tile));
+            if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(
+                iter.gfx,
+                unsafe { &*self.s.airport_runtime },
+            )) {
+                crate::animated_tile::openttd_rust_animation_add(iter.tile, true);
             }
         }
-        for t in self.airport_tiles(spec, layout, tile) {
-            crate::animated_tile::airport_built(st, t.tile);
+        /* Only call the animation trigger after all tiles have been built */
+        for iter in self.airport_tiles(spec, layout, tile) {
+            crate::animated_tile::airport_built(st, iter.tile);
         }
+        // `UpdateAirplanesOnNewStation`.
         unsafe {
-            crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, id);
+            crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index);
         }
-        (self.s.airport_infrastructure)(owner, 1);
+        (self.s.airport_infrastructure)(owner.0, 1);
         self.after_station_tile_set_change(st, true, StationType::Airport);
         (self.s.station_view_invalidate)(st, -1);
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             (self.s.town_view_dirty)(nearest);
         }
     }
-    fn remove_airport(&self, cost: Cost<'_>, ret: Cost<'_>, tile: u32, flags: u16) {
+    /// `RemoveAirport`: remove an airport.
+    fn remove_airport(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        tile: TileIndex,
+        flags: DoCommandFlags,
+    ) {
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_AIRPORT);
-        let st = self.full_station(StationID((self.shared.station_index)(tile)));
-        if (self.shared.current_company)() != OWNER_WATER {
+        let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+        if CompanyID((self.shared.current_company)()) != CompanyID::WATER {
             unsafe {
                 self.command
                     .ownership(cost.0, (self.world().station_owner)(st), 0);
@@ -4340,54 +4405,54 @@ impl Ctx<'_> {
             }
         }
         cost.set(0);
-        let id = (self.links().graphs.station_id)(st);
+        let index = (self.links().graphs.station_id)(st);
         let mut from = 0;
         while let Some(v) = (self.shared.vehicle_next)(from) {
-            let identity = (self.s.aircraft_vehicle)(v);
-            from = identity.id + 1;
-            if v.vehicle_type() != 3 || v.subtype() > 2 {
+            let a = (self.s.aircraft_vehicle)(v);
+            from = a.id + 1;
+            // `Aircraft::Iterate()` and `IsNormalAircraft`.
+            if VehicleType(v.vehicle_type()) != VehicleType::VEH_AIRCRAFT
+                || v.subtype() > crate::aircraft::AIR_AIRCRAFT
+            {
                 continue;
             }
-            let target = unsafe { (&raw const (*identity.state).targetairport).read() };
-            let state = unsafe { (&raw const (*identity.state).state).read() };
-            if target == id && state != 14 {
+            let targetairport = unsafe { (&raw const (*a.state).targetairport).read() };
+            let state = unsafe { (&raw const (*a.state).state).read() };
+            if targetairport == index && state != FLYING {
                 return cost.error(self.s.strings.aircraft_in_way);
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            for index in 0..(self.s.hangar_count)(
-                st,
-                crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
-            ) {
-                (self.s.close_hangar)((self.s.hangar_tile)(
-                    st,
-                    index,
-                    crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
-                ));
+        if flags.test(DoCommandFlag::Execute) {
+            let spec =
+                || crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime });
+            for i in 0..(self.s.hangar_count)(st, spec()) {
+                let tile_cur = (self.s.hangar_tile)(st, i, spec());
+                (self.s.close_hangar)(tile_cur);
             }
-            let (nearest, distance) = self.nearest_existing_airport(st);
-            let noise = self.noise(
-                crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
-                distance,
-            );
-            let ptr = self.noise_pointer(nearest);
+            /* The noise level is the noise from the airport and reduce it to account for the distance to the town center.
+             * And as for construction, always remove it, even if the setting is not set, in order to avoid the
+             * need of recalculation */
+            let (nearest, dist) = self.airport_get_nearest_town_of(st);
+            let noise = self.get_airport_noise_level_for_distance(spec(), dist);
+            let noise_reached = self.noise_reached(nearest);
             unsafe {
-                ptr.write(ptr.read().wrapping_sub(u16::from(noise)));
+                noise_reached.write(noise_reached.read().wrapping_sub(u16::from(noise)));
             }
             if unsafe { (*self.s.shared).settings().station_noise.read() } {
                 (self.s.town_view_dirty)(nearest);
             }
         }
-        let area = Self::area((self.s.airport_area)(st));
-        for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != MP_STATION
-                || (self.shared.station_type)(tile) != StationType::Airport
-                || (self.shared.station_index)(tile) != id
+        let airport = Self::area((self.s.airport_area)(st));
+        for tile_cur in airport.tiles(self.map()) {
+            // `TileBelongsToAirport`.
+            if TileType((self.shared.tile_type)(tile_cur)) != TileType::MP_STATION
+                || StationType((self.shared.station_type)(tile_cur).0) != StationType::Airport
+                || (self.shared.station_index)(tile_cur) != index
             {
                 continue;
             }
             unsafe {
-                self.command.no_vehicle(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile_cur);
             }
             if !ret.ok() {
                 return cost.take(ret);
@@ -4395,16 +4460,20 @@ impl Ctx<'_> {
             cost.add_money(crate::company::price(usize::from(
                 Price::PR_CLEAR_STATION_AIRPORT.0,
             )));
-            if flags & DoCommandFlag::EXECUTE != 0 {
-                crate::ground::clear_square(tile, self.shared);
-                (self.s.close_airport_tile_inspect)(tile);
+            if flags.test(DoCommandFlag::Execute) {
+                crate::ground::clear_square(tile_cur, self.shared);
+                (self.s.close_airport_tile_inspect)(tile_cur);
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
+        if flags.test(DoCommandFlag::Execute) {
+            /* Clear the persistent storage. */
             (self.s.delete_airport_storage)(st);
-            self.after_remove_rect(st, area);
+            self.after_remove_rect(st, airport);
             (self.s.clear_airport)(st);
-            (self.s.reset_facilities)(st, FACILITY_AIRPORT);
+            (self.s.reset_facilities)(
+                st,
+                StationFacilities::from_element(StationFacility::Airport).0,
+            );
             (self.s.orders_dirty)();
             (self.s.station_view_invalidate)(st, -1);
             (self.s.airport_infrastructure)((self.world().station_owner)(st), u32::MAX);
@@ -4426,20 +4495,27 @@ pub unsafe extern "C" fn openttd_rust_station_airport_nearest(
 ) -> *const crate::services::TownHandle {
     let c = unsafe { Ctx::new(s) };
     let mut started = false;
-    let tiles = std::iter::from_fn(|| {
+    let it = std::iter::from_fn(|| {
         if started {
             (c.s.iterator_next)(iterator);
         }
         started = true;
         let tile = (c.s.iterator_tile)(iterator);
-        if tile == u32::MAX { None } else { Some(tile) }
+        if tile == TileIndex::INVALID.0 {
+            None
+        } else {
+            Some(tile)
+        }
     });
-    let (town, dist) = c.nearest_town(spec, rotation, origin, tiles);
+    let (town, mindist) =
+        c.airport_get_nearest_town(spec, Direction(rotation), TileIndex(origin), it);
     unsafe {
-        distance.write(dist);
+        distance.write(mindist);
     }
     town
 }
+/// `UpdateAirportsNoise`: recalculate the noise generated by the airports of
+/// each town.
 /// # Safety
 /// Tables and serialized station/town pools remain live throughout this entry.
 #[unsafe(no_mangle)]
@@ -4463,13 +4539,13 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
         if st.is_null() {
             continue;
         }
-        if (c.s.airport_tile)(st) != u32::MAX && (c.s.airport_type)(st) != 9 {
-            let (nearest, distance) = c.nearest_existing_airport(st);
+        if (c.s.airport_tile)(st) != TileIndex::INVALID.0 && (c.s.airport_type)(st) != AT_OILRIG {
+            let (nearest, dist) = c.airport_get_nearest_town_of(st);
             let spec = crate::newgrf_airport::station_spec(st, unsafe { &*c.s.airport_runtime });
-            let noise = c.noise(spec, distance);
-            let ptr = c.noise_pointer(nearest);
+            let noise = c.get_airport_noise_level_for_distance(spec, dist);
+            let noise_reached = c.noise_reached(nearest);
             unsafe {
-                ptr.write(ptr.read().wrapping_add(u16::from(noise)));
+                noise_reached.write(noise_reached.read().wrapping_add(u16::from(noise)));
             }
         }
     }
@@ -4489,212 +4565,267 @@ pub unsafe extern "C" fn openttd_rust_station_build_airport(
     adjacent: bool,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.build_airport(
+    c.cmd_build_airport(
         c.c(cost),
         c.c(ret),
-        flags,
-        tile,
-        airport,
-        layout,
-        target,
-        adjacent,
+        DoCommandFlags(flags),
+        CmdBuildAirport {
+            tile: TileIndex(tile),
+            airport_type: airport,
+            layout,
+            station_to_join: StationID(target),
+            allow_adjacent: adjacent,
+        },
     );
 }
 
+/// `_dock_tileoffs_chkaround`.
+const DOCK_TILEOFFS_CHKAROUND: [(i32, i32); 4] = [(-1, 0), (0, 0), (0, 0), (0, -1)];
+/// `_dock_w_chk`.
+const DOCK_W_CHK: [u16; 4] = [2, 1, 2, 1];
+/// `_dock_h_chk`.
+const DOCK_H_CHK: [u16; 4] = [1, 2, 1, 2];
+
+/// `CmdBuildDock`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdBuildDock {
+    /// Tile where dock will be built.
+    tile: TileIndex,
+    /// Station ID to join (`NEW_STATION` if build new one).
+    station_to_join: StationID,
+    /// Allow docks directly adjacent to other docks.
+    adjacent: bool,
+}
+
 impl Ctx<'_> {
-    fn dock(&self, tile: u32) -> bool {
-        (self.shared.tile_type)(tile) == MP_STATION
-            && (self.shared.station_type)(tile) == StationType::Dock
+    /// `IsDockTile`.
+    fn is_dock_tile(&self, t: TileIndex) -> bool {
+        TileType((self.shared.tile_type)(t.0)) == TileType::MP_STATION
+            && StationType((self.shared.station_type)(t.0).0) == StationType::Dock
     }
-    fn possible_docking(&self, tile: u32) -> bool {
-        match (self.shared.tile_type)(tile) {
-            MP_WATER => {
-                if (self.shared.water_middle_lock)(tile) {
+    /// `t + TileOffsByDiagDir(d)`.
+    fn tile_add_by_diag_dir(&self, t: TileIndex, d: DiagDirection) -> TileIndex {
+        TileIndex(self.map().add_diag(t.0, d.0))
+    }
+    /// `IsPossibleDockingTile`.
+    fn is_possible_docking_tile(&self, t: TileIndex) -> bool {
+        match TileType((self.shared.tile_type)(t.0)) {
+            TileType::MP_WATER => {
+                // `IsLock(t) && GetLockPart(t) == LockPart::Middle`.
+                if (self.shared.water_middle_lock)(t.0) {
                     return false;
                 }
             }
-            MP_RAILWAY | MP_STATION | MP_TUNNELBRIDGE => (),
+            TileType::MP_RAILWAY | TileType::MP_STATION | TileType::MP_TUNNELBRIDGE => (),
             _ => return false,
         }
-        crate::movement::water_tracks(self.shared, tile, 255) != 0
+        crate::movement::water_tracks(self.shared, t.0, 255)
+            != u32::from(TrackBits::TRACK_BIT_NONE.0)
     }
-    fn check_docking(&self, tile: u32) {
+    /// `CheckForDockingTile`.
+    fn check_for_docking_tile(&self, t: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
-        for dir in 0..4 {
-            let next = self.map().add_diag(tile, dir);
-            if !(self.shared.tile_valid)(next) {
+        for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
-            if self.dock(next) && (self.shared.station_gfx)(next) >= GFX_DOCK_BASE_WATER_PART {
-                let st = self.full_station(StationID((self.shared.station_index)(next)));
-                self.area_add((self.s.docking_area)(st), TileIndex(tile));
-                (self.s.set_docking)(tile, true);
+            // `IsDockWaterPart`.
+            if self.is_dock_tile(tile)
+                && (self.shared.station_gfx)(tile.0) >= GFX_DOCK_BASE_WATER_PART
+            {
+                let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+                self.area_add((self.s.docking_area)(st), t);
+                (self.s.set_docking)(t.0, true);
             }
-            if (self.shared.tile_type)(next) == MP_INDUSTRY {
-                let st = (self.s.neutral_for_tile)(next);
+            if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_INDUSTRY {
+                let st = (self.s.neutral_for_tile)(tile.0);
                 if !st.is_null() {
-                    self.area_add((self.s.docking_area)(st), TileIndex(tile));
-                    (self.s.set_docking)(tile, true);
+                    self.area_add((self.s.docking_area)(st), t);
+                    (self.s.set_docking)(t.0, true);
                 }
             }
-            if (self.shared.tile_type)(next) == MP_STATION
-                && (self.shared.station_type)(next) == StationType::Oilrig
+            if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_STATION
+                && StationType((self.shared.station_type)(tile.0).0) == StationType::Oilrig
             {
-                let st = self.full_station(StationID((self.shared.station_index)(next)));
-                self.area_add((self.s.docking_area)(st), TileIndex(tile));
-                (self.s.set_docking)(tile, true);
+                let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+                self.area_add((self.s.docking_area)(st), t);
+                (self.s.set_docking)(t.0, true);
             }
         }
     }
-    fn update_docking(&self, st: *mut BaseStation) {
+    /// `UpdateStationDockingTiles`.
+    fn update_station_docking_tiles(&self, st: *mut BaseStation) {
         (self.s.docking_clear)(st);
+        /* For neutral stations, start with the industry area instead of dock area */
         let industry = (self.s.associated_industry)(st);
         let area = if industry.is_null() {
             Self::area((self.s.ship_station_area)(st))
         } else {
             (self.s.industry_area)(industry)
         };
-        if area.tile == u32::MAX {
+        if area.tile == TileIndex::INVALID.0 {
             return;
         }
-        let x = self.map().tile_x(area.tile);
-        let y = self.map().tile_y(area.tile);
+        let map = self.map();
+        let x = map.tile_x(area.tile);
+        let y = map.tile_y(area.tile);
+        /* Expand the area by a tile on each side while
+         * making sure that we remain inside the map. */
+        let x2 = (x + u32::from(area.w) + 1).min(map.size_x());
         let x1 = x.saturating_sub(1);
-        let y1 = y.saturating_sub(1);
-        let x2 = (x + u32::from(area.w) + 1).min(self.map().size_x());
         let y2 = (y + u32::from(area.h) + 1).min((self.shared.map_max_y)() + 1);
-        let area = TileArea {
-            tile: (y1 << self.map().log_x) + x1,
-            w: (x2 - x1) as u16,
-            h: (y2 - y1) as u16,
-        };
-        for tile in area.tiles(self.map()) {
-            if (self.shared.tile_valid)(tile) && self.possible_docking(tile) {
-                self.check_docking(tile);
+        let y1 = y.saturating_sub(1);
+        let ta = TileArea::between(map, map.tile_xy(x1, y1), map.tile_xy(x2 - 1, y2 - 1));
+        for tile in ta.tiles(map) {
+            let tile = TileIndex(tile);
+            if (self.shared.tile_valid)(tile.0) && self.is_possible_docking_tile(tile) {
+                self.check_for_docking_tile(tile);
             }
         }
     }
-    fn remove_docking_tile(&self, tile: u32) {
-        for dir in 0..4 {
-            let next = self.map().add_diag(tile, dir);
-            if !(self.shared.tile_valid)(next) {
+    /// `RemoveDockingTile`.
+    fn remove_docking_tile(&self, t: TileIndex) {
+        for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
-            if (self.shared.tile_type)(next) == MP_STATION {
-                let st = self.full_station(StationID((self.shared.station_index)(next)));
-                if !st.is_null() {
-                    self.update_docking(st);
+            match TileType((self.shared.tile_type)(tile.0)) {
+                TileType::MP_STATION => {
+                    let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+                    if !st.is_null() {
+                        self.update_station_docking_tiles(st);
+                    }
                 }
-            } else if (self.shared.tile_type)(next) == MP_INDUSTRY {
-                let st = (self.s.neutral_for_tile)(next);
-                if !st.is_null() {
-                    self.update_docking(st);
+                TileType::MP_INDUSTRY => {
+                    let neutral = (self.s.neutral_for_tile)(tile.0);
+                    if !neutral.is_null() {
+                        self.update_station_docking_tiles(neutral);
+                    }
                 }
+                _ => (),
             }
         }
     }
-    fn clear_docking_neighbours(&self, tile: u32) {
-        for dir in 0..4 {
-            let next = self.map().add_diag(tile, dir);
-            if !(self.shared.tile_valid)(next) {
+    /// `ClearDockingTilesCheckingNeighbours`: clear docking tile status from
+    /// tiles around a removed dock, if the tile has no neighbours which would
+    /// keep it as a docking tile.
+    fn clear_docking_tiles_checking_neighbours(&self, tile: TileIndex) {
+        /* Clear and maybe re-set docking tile */
+        for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+            let docking_tile = self.tile_add_by_diag_dir(tile, DiagDirection(d));
+            if !(self.shared.tile_valid)(docking_tile.0) {
                 continue;
             }
-            if self.possible_docking(next) {
-                (self.s.set_docking)(next, false);
-                self.check_docking(next);
+            if self.is_possible_docking_tile(docking_tile) {
+                (self.s.set_docking)(docking_tile.0, false);
+                self.check_for_docking_tile(docking_tile);
             }
         }
     }
-    fn build_dock(
+    /// `CmdBuildDock`: build a dock/haven.
+    fn cmd_build_dock(
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        mut target: u16,
-        adjacent: bool,
+        flags: DoCommandFlags,
+        args: CmdBuildDock,
     ) {
+        let CmdBuildDock {
+            tile,
+            mut station_to_join,
+            adjacent,
+        } = args;
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_DOCK);
-        let reuse = target != StationID::NEW.0;
+        let world = crate::map_func::World::new(self.shared);
+        let reuse = station_to_join != StationID::NEW;
         if !reuse {
-            target = StationID::INVALID.0;
+            station_to_join = StationID::INVALID;
         }
-        let distant = target != StationID::INVALID.0;
-        if distant && (!(self.s.distant_join)() || self.full_station(StationID(target)).is_null()) {
-            return cost.error(INVALID_STRING_ID);
+        let distant_join = station_to_join != StationID::INVALID;
+        if distant_join
+            && (!(self.s.distant_join)() || self.full_station(station_to_join).is_null())
+        {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
-        let dir = get_inclined_slope_direction(slope);
-        if dir == INVALID_DIAGDIR {
+        let direction = DiagDirection(get_inclined_slope_direction(world.tile_slope(tile.0)));
+        if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }
-        // ReverseDiagDir.
-        let dir = dir ^ 2;
-        if (self.shared.has_water_ground)(tile) {
+        let direction = DiagDirection(reverse_diag_dir(direction.0, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        }));
+        /* Docks cannot be placed on rapids */
+        if (self.shared.has_water_ground)(tile.0) {
             return cost.error(self.s.strings.unsuitable);
         }
-        self.check_if_authority_allows_new_station(cost, TileIndex(tile), DoCommandFlags(flags));
+        self.check_if_authority_allows_new_station(cost, tile, flags);
         if !cost.ok() {
             return;
         }
-        self.default_bridge_above_ok(cost, TileIndex(tile), StationType::Dock, StationGfx(dir));
+        // `IsDockBridgeAboveOk`.
+        self.default_bridge_above_ok(cost, tile, StationType::Dock, StationGfx(direction.0));
         if !cost.ok() {
             return;
         }
         cost.set(crate::company::price(usize::from(
             Price::PR_BUILD_STATION_DOCK.0,
         )));
-        crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile.0, flags.0);
         if !ret.ok() {
             return cost.take(ret);
         }
         cost.add_money(ret.money());
-        let flat = self.map().add_diag(tile, dir);
-        if !(self.shared.has_water_ground)(flat)
-            || crate::map_func::World::new(self.shared).tile_slope(flat) != 0
+        let tile_cur = self.tile_add_by_diag_dir(tile, direction);
+        if !(self.shared.has_water_ground)(tile_cur.0)
+            || Slope(world.tile_slope(tile_cur.0)) != Slope::SLOPE_FLAT
         {
             return cost.error(self.s.strings.unsuitable);
         }
         self.default_bridge_above_ok(
             ret,
-            TileIndex(flat),
+            tile_cur,
             StationType::Dock,
-            StationGfx(GFX_DOCK_BASE_WATER_PART + (dir & 1)),
+            StationGfx(
+                GFX_DOCK_BASE_WATER_PART
+                    + diag_dir_to_axis(direction.0, |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    }),
+            ),
         );
         if !ret.ok() {
             return cost.take(ret);
         }
-        let water = crate::map_func::World::new(self.shared).water_class(flat);
-        let add_cost = !(self.shared.is_water_tile)(flat);
-        crate::landscape_cmd::clear_command(self.command, ret.0, flat, flags);
+        /* Get the water class of the water tile before it is cleared.*/
+        let wc = world.water_class(tile_cur.0);
+        let add_cost = !(self.shared.is_water_tile)(tile_cur.0);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
         if !ret.ok() {
             return cost.take(ret);
         }
         if add_cost {
             cost.add_money(ret.money());
         }
-        let beyond = self.map().add_diag(flat, dir);
-        if (self.shared.tile_type)(beyond) != MP_WATER
-            || crate::map_func::World::new(self.shared).tile_slope(beyond) != 0
+        let tile_cur = self.tile_add_by_diag_dir(tile_cur, direction);
+        if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
+            || Slope(world.tile_slope(tile_cur.0)) != Slope::SLOPE_FLAT
         {
             return cost.error(self.s.strings.unsuitable);
         }
-        let (dx, dy) = match dir {
-            0 => (-1, 0),
-            3 => (0, -1),
-            _ => (0, 0),
+        let (dx, dy) = DOCK_TILEOFFS_CHKAROUND[usize::from(direction.0)];
+        let dock_area = TileArea {
+            tile: tile.0.wrapping_add(self.map().diff(dx, dy)),
+            w: DOCK_W_CHK[usize::from(direction.0)],
+            h: DOCK_H_CHK[usize::from(direction.0)],
         };
-        let area = TileArea {
-            tile: tile.wrapping_add(self.map().diff(dx, dy)),
-            w: if dir & 1 == 0 { 2 } else { 1 },
-            h: if dir & 1 == 0 { 1 } else { 2 },
-        };
+        /* middle */
         let mut st = self.find_joining_base_station(JoiningStation {
             out: ret,
             existing_station: StationID::INVALID,
-            station_to_join: StationID(target),
+            station_to_join,
             adjacent,
-            ta: area,
+            ta: dock_area,
             waypoint: false,
             road: false,
             error_message: StringID(self.s.strings.remove_station),
@@ -4702,161 +4833,190 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if st.is_null() && distant {
-            st = self.full_station(StationID(target));
+        /* Distant join */
+        if st.is_null() && distant_join {
+            st = self.full_station(station_to_join);
         }
         st = self.build_station_part(
             ret,
             st,
-            DoCommandFlags(flags),
+            flags,
             reuse,
-            area,
+            dock_area,
             StationNaming::STATIONNAMING_DOCK,
         );
         if !ret.ok() {
             return cost.take(ret);
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            self.area_add((self.s.ship_station_area)(st), TileIndex(tile));
-            self.area_add((self.s.ship_station_area)(st), TileIndex(flat));
-            crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile, unsafe {
-                &*self.s.lifecycle
-            });
-            self.before_add_rect(ret, st, area, StationRectMode::ADD_TRY);
-            let owner = (self.world().station_owner)(st);
-            if water == 1
-                && !((self.shared.has_water_class)(flat)
-                    && crate::map_func::World::new(self.shared).water_class(flat) == 1
-                    && (self.shared.tile_owner)(flat) == (self.shared.current_company)())
-            {
-                (self.s.water_infrastructure)(owner, 1);
-            }
-            (self.s.station_infrastructure)(owner, 2);
-            (self.s.make_dock)(
-                tile,
-                owner,
-                (self.links().graphs.station_id)(st),
-                dir,
-                water,
-            );
-            self.update_docking(st);
-            self.after_station_tile_set_change(st, true, StationType::Dock);
+        if !flags.test(DoCommandFlag::Execute) {
+            return;
         }
+        self.area_add((self.s.ship_station_area)(st), tile);
+        let flat_tile = self.tile_add_by_diag_dir(tile, direction);
+        self.area_add((self.s.ship_station_area)(st), flat_tile);
+        crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile.0, unsafe {
+            &*self.s.lifecycle
+        });
+        self.before_add_rect(ret, st, dock_area, StationRectMode::ADD_TRY);
+        let owner = CompanyID((self.world().station_owner)(st));
+        /* If the water part of the dock is on a canal, update infrastructure counts.
+         * This is needed as we've cleared that tile before.
+         * Clearing object tiles may result in water tiles which are already accounted for in the water infrastructure total.
+         * See: MakeWaterKeepingClass() */
+        let canal = crate::water_map::WaterClass::Canal.0;
+        if wc == canal
+            && !((self.shared.has_water_class)(flat_tile.0)
+                && world.water_class(flat_tile.0) == canal
+                && (self.shared.tile_owner)(flat_tile.0) == (self.shared.current_company)())
+        {
+            (self.s.water_infrastructure)(owner.0, 1);
+        }
+        (self.s.station_infrastructure)(owner.0, 2);
+        (self.s.make_dock)(
+            tile.0,
+            owner.0,
+            (self.links().graphs.station_id)(st),
+            direction.0,
+            wc,
+        );
+        self.update_station_docking_tiles(st);
+        self.after_station_tile_set_change(st, true, StationType::Dock);
     }
-    fn dock_land(&self, tile: u32) -> u32 {
-        if (self.shared.station_gfx)(tile) < GFX_DOCK_BASE_WATER_PART {
-            return tile;
+    /// `FindDockLandPart`: find the part of a dock that is land-based.
+    fn find_dock_land_part(&self, t: TileIndex) -> TileIndex {
+        let gfx = (self.shared.station_gfx)(t.0);
+        if gfx < GFX_DOCK_BASE_WATER_PART {
+            return t;
         }
-        for dir in 0..4 {
-            let next = self.map().add_diag(tile, dir);
-            if !(self.shared.tile_valid)(next) || !self.dock(next) {
+        for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
+            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            if !(self.shared.tile_valid)(tile.0) || !self.is_dock_tile(tile) {
                 continue;
             }
-            let gfx = (self.shared.station_gfx)(next);
-            if gfx < 4 && self.map().add_diag(next, gfx) == tile {
-                return next;
+            // `GetDockDirection(tile)` is the land part's gfx.
+            let gfx = (self.shared.station_gfx)(tile.0);
+            if gfx < GFX_DOCK_BASE_WATER_PART
+                && self.tile_add_by_diag_dir(tile, DiagDirection(gfx)) == t
+            {
+                return tile;
             }
         }
-        u32::MAX
+        TileIndex::INVALID
     }
-    fn remove_dock(&self, cost: Cost<'_>, ret: Cost<'_>, tile: u32, flags: u16) {
+    /// `RemoveDock`: remove a dock.
+    fn remove_dock(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_DOCK);
-        let st = self.full_station(StationID((self.shared.station_index)(tile)));
-        let owner = (self.world().station_owner)(st);
+        let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+        let owner = CompanyID((self.world().station_owner)(st));
         unsafe {
-            self.command.ownership(cost.0, owner, 0);
+            self.command.ownership(cost.0, owner.0, 0);
         }
         if !cost.ok() {
             return;
         }
-        if !self.dock(tile) {
-            return cost.error(INVALID_STRING_ID);
+        if !self.is_dock_tile(tile) {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let land = self.dock_land(tile);
-        if land == u32::MAX {
-            return cost.error(INVALID_STRING_ID);
+        let tile1 = self.find_dock_land_part(tile);
+        if tile1 == TileIndex::INVALID {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let water = self.map().add_diag(land, (self.shared.station_gfx)(land));
+        let tile2 =
+            self.tile_add_by_diag_dir(tile1, DiagDirection((self.shared.station_gfx)(tile1.0)));
         unsafe {
-            self.command.no_vehicle(cost.0, land);
+            self.command.no_vehicle(cost.0, tile1.0);
         }
         if cost.ok() {
             unsafe {
-                self.command.no_vehicle(cost.0, water);
+                self.command.no_vehicle(cost.0, tile2.0);
             }
         }
         if !cost.ok() {
             return;
         }
-        if flags & DoCommandFlag::EXECUTE != 0 {
-            crate::ground::clear_square(land, self.shared);
-            (self.shared.mark_dirty)(land);
+        if flags.test(DoCommandFlag::Execute) {
+            crate::ground::clear_square(tile1.0, self.shared);
+            (self.shared.mark_dirty)(tile1.0);
+            // `MakeWaterKeepingClass`.
             unsafe {
                 crate::water::restore(
-                    water,
-                    owner,
+                    tile2.0,
+                    owner.0,
                     self.shared,
                     &*(self.shared.water_services)(),
                     &*self.s.restoration,
                 );
             }
-            self.after_remove_tile(st, TileIndex(land));
-            self.after_remove_tile(st, TileIndex(water));
-            let area = self.make_station_area_smaller(
+            self.after_remove_tile(st, tile1);
+            self.after_remove_tile(st, tile2);
+            // `MakeShipStationAreaSmaller`.
+            let ship_station = self.make_station_area_smaller(
                 st,
                 Self::area((self.s.ship_station_area)(st)),
                 StationType::Dock,
             );
-            (self.s.set_ship_area)(st, area);
-            self.update_docking(st);
-            if area.tile == u32::MAX {
+            (self.s.set_ship_area)(st, ship_station);
+            self.update_station_docking_tiles(st);
+            if ship_station.tile == TileIndex::INVALID.0 {
                 (self.s.set_ship_area)(
                     st,
                     TileArea {
-                        tile: u32::MAX,
+                        tile: TileIndex::INVALID.0,
                         w: 0,
                         h: 0,
                     },
                 );
                 (self.s.docking_clear)(st);
-                (self.s.reset_facilities)(st, FACILITY_DOCK);
+                (self.s.reset_facilities)(
+                    st,
+                    StationFacilities::from_element(StationFacility::Dock).0,
+                );
                 (self.s.orders_dirty)();
             }
-            (self.s.station_infrastructure)(owner, u32::MAX - 1);
+            (self.s.station_infrastructure)(owner.0, 2_u32.wrapping_neg());
             self.after_station_tile_set_change(st, false, StationType::Dock);
-            self.clear_docking_neighbours(land);
-            self.clear_docking_neighbours(water);
-            let id = (self.links().graphs.station_id)(st);
+            self.clear_docking_tiles_checking_neighbours(tile1);
+            self.clear_docking_tiles_checking_neighbours(tile2);
+            let index = (self.links().graphs.station_id)(st);
             let mut from = 0;
-            while let Some(v) = (self.shared.vehicle_next)(from) {
-                let identity = (self.s.aircraft_vehicle)(v);
+            while let Some(s) = (self.shared.vehicle_next)(from) {
+                let identity = (self.s.aircraft_vehicle)(s);
                 from = identity.id + 1;
-                if v.vehicle_type() != 2 || (self.vehicle().order_destination)(v) != id {
+                /* Find all ships going to our dock. */
+                if VehicleType(s.vehicle_type()) != VehicleType::VEH_SHIP
+                    || (self.vehicle().order_destination)(s) != index
+                {
                     continue;
                 }
-                if (self.vehicle().order_type)(v) == 3 {
-                    let tile = (v).tile();
+                /* Find ships that are marked as "loading" but are no longer on a
+                 * docking tile. Force them to leave the station (as they were loading
+                 * on the removed dock). */
+                if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_LOADING {
+                    let tile = s.tile();
                     if !((self.shared.docking_tile)(tile)
                         && unsafe {
                             crate::ship_control::openttd_rust_ship_is_destination_abi(
                                 tile,
-                                u32::from(id),
+                                u32::from(index),
                                 self.s.ship,
                                 self.s.shared,
                             ) != 0
                         })
                     {
-                        crate::vehicle::visits::leave_station(v, self.vehicle().visits());
+                        crate::vehicle::visits::leave_station(s, self.vehicle().visits());
                     }
                 }
-                if (self.vehicle().order_type)(v) == 1
-                    && (self.world().facilities)(st) & FACILITY_DOCK == 0
+                /* If we no longer have a dock, mark the order as invalid and send
+                 * the ship to the next order (or, if there is none, make it
+                 * wander the world). */
+                if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_GOTO_STATION
+                    && !StationFacilities((self.world().facilities)(st)).test(StationFacility::Dock)
                 {
                     let dest = unsafe {
                         crate::ship_control::openttd_rust_ship_station_destination(
                             identity.id,
-                            u32::from(id),
-                            v.0.as_ptr(),
+                            u32::from(index),
+                            s.0.as_ptr(),
                             self.s.ship,
                             self.s.shared,
                         )
@@ -4875,51 +5035,57 @@ impl Ctx<'_> {
         cost.set(crate::company::price(usize::from(
             Price::PR_CLEAR_STATION_DOCK.0,
         )));
-        let _ = ret;
     }
-    fn build_oilrig(&self, ret: Cost<'_>, tile: u32) {
+    /// `BuildOilRig`.
+    fn build_oil_rig(&self, ret: Cost<'_>, tile: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_OILRIG);
         if !(self.s.station_available)() {
             debug!(
                 misc,
-                0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile
+                0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile.0
             );
             return;
         }
-        let st = (self.s.new_station)(tile);
+        let st = (self.s.new_station)(tile.0);
         crate::station::spatial::insert(self.shared, st);
         (self.s.set_town)(
             st,
-            crate::town::spatial::closest(self.shared, tile, u32::MAX),
+            crate::town::spatial::closest(self.shared, tile.0, u32::MAX),
         );
         (self.s.set_string_id)(
             st,
             crate::station_lifecycle::generate_name(
                 st,
-                tile,
+                tile.0,
                 StationNaming::STATIONNAMING_OILRIG,
                 unsafe { &*self.s.lifecycle },
             ),
         );
-        (self.s.associate_industry)(st, tile);
-        crate::animated_tile::openttd_rust_animation_delete(tile, false);
+        /* Mark industry as associated both ways */
+        (self.s.associate_industry)(st, tile.0);
+        crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
         (self.s.make_oilrig)(
-            tile,
+            tile.0,
             (self.links().graphs.station_id)(st),
-            crate::map_func::World::new(self.shared).water_class(tile),
+            crate::map_func::World::new(self.shared).water_class(tile.0),
         );
-        (self.s.set_station_owner)(st, OWNER_NONE);
-        (self.s.set_airport_kind_rotation)(st, 9, 0);
-        self.area_add((self.s.airport_area)(st), TileIndex(tile));
-        self.area_add((self.s.ship_station_area)(st), TileIndex(tile));
-        (self.s.set_facilities)(st, FACILITY_AIRPORT | FACILITY_DOCK);
+        (self.s.set_station_owner)(st, CompanyID::NONE.0);
+        (self.s.set_airport_kind_rotation)(st, AT_OILRIG, Direction::DIR_N.0);
+        self.area_add((self.s.airport_area)(st), tile);
+        self.area_add((self.s.ship_station_area)(st), tile);
+        (self.s.set_facilities)(
+            st,
+            (StationFacilities::from_element(StationFacility::Airport)
+                | StationFacilities::from_element(StationFacility::Dock))
+            .0,
+        );
         (self.s.set_build_date)(st, crate::timer_game_common::calendar_date().0);
-        self.update_docking(st);
-        self.before_add_tile(ret, st, TileIndex(tile), StationRectMode::ADD_FORCE);
+        self.update_station_docking_tiles(st);
+        self.before_add_tile(ret, st, tile, StationRectMode::ADD_FORCE);
         (self.s.virtual_coord)(st);
-        // The industry tile became a station tile, which may change neighbouring
-        // catchments. RecomputeCatchment cannot remove nearby industries here,
-        // so the industry's set is moved out first.
+        /* An industry tile has now been replaced with a station tile, this may change the overlap between station catchments and industry tiles.
+         * Recalculate the station catchment for all stations currently in the industry's nearby list.
+         * Clear the industry's station nearby list first because Station::RecomputeCatchment cannot remove nearby industries in this case. */
         if (self.shared.station_serve_neutral)() {
             let c = self.catchment();
             let industry = (c.c.associated_industry)(st);
@@ -4943,42 +5109,57 @@ impl Ctx<'_> {
             crate::station_service::openttd_rust_station_acceptance(st, self.s.station, 0);
         }
     }
-    fn delete_oilrig(&self, tile: u32) {
+    /// `DeleteOilRig`.
+    fn delete_oil_rig(&self, tile: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_DELETE_OILRIG);
-        let st = self.full_station(StationID((self.shared.station_index)(tile)));
+        let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
+        // `MakeWaterKeepingClass(tile, OWNER_NONE)`.
         unsafe {
             crate::water::restore(
-                tile,
-                0x10,
+                tile.0,
+                CompanyID::NONE.0,
                 self.shared,
                 &*(self.shared.water_services)(),
                 &*self.s.restoration,
             );
         }
+        /* The oil rig station is not supposed to be shared with anything else */
+        let expected_facility = StationFacilities::from_element(StationFacility::Airport)
+            | StationFacilities::from_element(StationFacility::Dock);
         assert!(
-            (self.world().facilities)(st) == (FACILITY_AIRPORT | FACILITY_DOCK)
-                && (self.s.airport_type)(st) == 9
+            StationFacilities((self.world().facilities)(st)) == expected_facility
+                && (self.s.airport_type)(st) == AT_OILRIG
         );
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
+            /* Don't leave dangling neutral station pointer */
             (self.s.clear_industry_neutral)(industry);
         }
         (self.world().delete_station)(st);
     }
-    fn in_orders(&self, station: u16, include_company: bool, company: u8) -> bool {
+    /// `HasStationInUse`: tests whether the company's vehicles have this
+    /// station in orders. If `include_company`, only check vehicles of
+    /// `company`, otherwise only check vehicles of other companies.
+    fn has_station_in_use(
+        &self,
+        station: StationID,
+        include_company: bool,
+        company: CompanyID,
+    ) -> bool {
         for id in 0..(self.links().order_pool_size)() {
-            let list = (self.links().order_list)(id as u16);
-            if list.is_null() {
+            let orderlist = (self.links().order_list)(id as u16);
+            if orderlist.is_null() {
                 continue;
             }
-            let v = unsafe { (self.links().order_vehicle)(list).unwrap_unchecked() };
-            if (v.owner() == company) != include_company {
+            let v = unsafe { (self.links().order_vehicle)(orderlist).unwrap_unchecked() };
+            if (CompanyID(v.owner()) == company) != include_company {
                 continue;
             }
-            for index in 0..(self.links().order_count)(list) {
-                let order = (self.links().order_destination)(list, index);
-                if order.destination == station
-                    && matches!(order.kind.0, OT_GOTO_STATION | OT_GOTO_WAYPOINT)
+            for index in 0..(self.links().order_count)(orderlist) {
+                let order = (self.links().order_destination)(orderlist, index);
+                if order.destination == station.0
+                    && (order.kind == OrderType::OT_GOTO_STATION
+                        || order.kind == OrderType::OT_GOTO_WAYPOINT)
                 {
                     return true;
                 }
@@ -5000,7 +5181,16 @@ pub unsafe extern "C" fn openttd_rust_station_build_dock(
     adjacent: bool,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.build_dock(c.c(cost), c.c(ret), flags, tile, target, adjacent);
+    c.cmd_build_dock(
+        c.c(cost),
+        c.c(ret),
+        DoCommandFlags(flags),
+        CmdBuildDock {
+            tile: TileIndex(tile),
+            station_to_join: StationID(target),
+            adjacent,
+        },
+    );
 }
 
 /// # Safety
@@ -5010,7 +5200,7 @@ pub unsafe extern "C" fn openttd_rust_station_update_docking(
     s: *const CommandServicesTable,
     st: *mut BaseStation,
 ) {
-    unsafe { Ctx::new(s) }.update_docking(st);
+    unsafe { Ctx::new(s) }.update_station_docking_tiles(st);
 }
 /// # Safety
 /// Tables and serialized map/pools remain live for this call.
@@ -5019,7 +5209,7 @@ pub unsafe extern "C" fn openttd_rust_station_remove_docking_tile(
     s: *const CommandServicesTable,
     tile: u32,
 ) {
-    unsafe { Ctx::new(s) }.remove_docking_tile(tile);
+    unsafe { Ctx::new(s) }.remove_docking_tile(TileIndex(tile));
 }
 /// # Safety
 /// Tables and the original valid tile remain live for this call.
@@ -5028,7 +5218,7 @@ pub unsafe extern "C" fn openttd_rust_station_clear_docking_neighbours(
     s: *const CommandServicesTable,
     tile: u32,
 ) {
-    unsafe { Ctx::new(s) }.clear_docking_neighbours(tile);
+    unsafe { Ctx::new(s) }.clear_docking_tiles_checking_neighbours(TileIndex(tile));
 }
 /// Shared direct Rust entry for the original guarded docking registration.
 /// # Safety
@@ -5036,8 +5226,9 @@ pub unsafe extern "C" fn openttd_rust_station_clear_docking_neighbours(
 pub(crate) unsafe fn check_possible_docking(s: *const CommandServicesTable, tile: u32) {
     // SAFETY: the caller supplies the process-lifetime tables under the game-state mutex.
     let c = unsafe { Ctx::new(s) };
-    if c.possible_docking(tile) {
-        c.check_docking(tile);
+    let tile = TileIndex(tile);
+    if c.is_possible_docking_tile(tile) {
+        c.check_for_docking_tile(tile);
     }
 }
 /// # Safety
@@ -5047,7 +5238,7 @@ pub unsafe extern "C" fn openttd_rust_station_possible_docking_abi(
     s: *const CommandServicesTable,
     tile: u32,
 ) -> u8 {
-    u8::from(unsafe { Ctx::new(s) }.possible_docking(tile))
+    u8::from(unsafe { Ctx::new(s) }.is_possible_docking_tile(TileIndex(tile)))
 }
 /// # Safety
 /// Tables and serialized map/pools remain live for this call.
@@ -5056,7 +5247,7 @@ pub unsafe extern "C" fn openttd_rust_station_check_docking(
     s: *const CommandServicesTable,
     tile: u32,
 ) {
-    unsafe { Ctx::new(s) }.check_docking(tile);
+    unsafe { Ctx::new(s) }.check_for_docking_tile(TileIndex(tile));
 }
 /// # Safety
 /// Tables and caller-owned ignored result slot remain live for this entry.
@@ -5067,7 +5258,7 @@ pub unsafe extern "C" fn openttd_rust_station_build_oilrig(
     tile: u32,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.build_oilrig(c.c(ret), tile);
+    c.build_oil_rig(c.c(ret), TileIndex(tile));
 }
 /// # Safety
 /// Tables remain live; the canonical oilrig shell is destroyed during this call.
@@ -5076,7 +5267,7 @@ pub unsafe extern "C" fn openttd_rust_station_delete_oilrig(
     s: *const CommandServicesTable,
     tile: u32,
 ) {
-    unsafe { Ctx::new(s) }.delete_oilrig(tile);
+    unsafe { Ctx::new(s) }.delete_oil_rig(TileIndex(tile));
 }
 /// # Safety
 /// Tables and order/vehicle pools remain live under the game-state mutex.
@@ -5087,7 +5278,11 @@ pub unsafe extern "C" fn openttd_rust_station_in_orders_abi(
     include_company: bool,
     company: u8,
 ) -> u8 {
-    u8::from(unsafe { Ctx::new(s) }.in_orders(station, include_company, company))
+    u8::from(unsafe { Ctx::new(s) }.has_station_in_use(
+        StationID(station),
+        include_company,
+        CompanyID(company),
+    ))
 }
 
 impl Ctx<'_> {
@@ -5197,7 +5392,7 @@ impl Ctx<'_> {
             StationType::RailWaypoint => {
                 self.remove_rail_station(cost, ret, error, flags, tile, true);
             }
-            StationType::Airport => self.remove_airport(cost, ret, tile.0, flags.0),
+            StationType::Airport => self.remove_airport(cost, ret, tile, flags),
             StationType::Truck | StationType::Bus => {
                 if crate::map_func::World::new(self.shared).drive_through_stop_tile(tile.0) {
                     self.can_remove_road_with_stop(cost, tile, flags);
@@ -5214,7 +5409,7 @@ impl Ctx<'_> {
                 }
             }
             StationType::Buoy => self.remove_buoy(cost, tile, flags),
-            StationType::Dock => self.remove_dock(cost, ret, tile.0, flags.0),
+            StationType::Dock => self.remove_dock(cost, tile, flags),
             _ => cost.error(StringID::INVALID_STRING_ID.0),
         }
     }

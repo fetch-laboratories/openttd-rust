@@ -965,7 +965,7 @@ impl Ctx<'_> {
                 crate::map_func::World::new(self.shared).water_class(tile.0),
             ),
         );
-        self.check_docking(tile.0);
+        self.check_for_docking_tile(tile);
         (self.shared.mark_dirty)(tile.0);
         unsafe {
             crate::water::openttd_rust_clear_neighbour_flooding(
@@ -989,10 +989,10 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let wp = (self.world().get)((self.shared.station_index)(tile.0));
-        if self.in_orders(
-            (self.links().graphs.station_id)(wp),
+        if self.has_station_in_use(
+            StationID((self.links().graphs.station_id)(wp)),
             false,
-            (self.shared.current_company)(),
+            CompanyID((self.shared.current_company)()),
         ) {
             return cost.error(self.s.strings.buoy_in_use);
         }
