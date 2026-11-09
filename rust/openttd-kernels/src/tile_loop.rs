@@ -11,7 +11,7 @@
 //! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
-use crate::tile_type::TileIndex;
+use crate::tile_type::{TileIndex, TileType};
 use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
 
@@ -97,10 +97,10 @@ unsafe fn dispatch<const AMBIENT: bool>(
 ) {
     // SAFETY: Reached tables are immutable and live for the synchronous batch. Owner
     // entries end their accesses before callbacks; only scalar cursor is local.
-    let tile_type = types.read(tile.0);
+    let tile_type = TileType(types.read(tile.0));
     let g = &s.ground;
     match tile_type {
-        0 => unsafe {
+        TileType::MP_CLEAR => unsafe {
             ground::clear_tile_loop(
                 tile.0,
                 g.climate,
@@ -112,7 +112,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 types,
             );
         },
-        1 => unsafe {
+        TileType::MP_RAILWAY => unsafe {
             ground::rail_tile_loop(
                 tile.0,
                 g.climate,
@@ -125,7 +125,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 types,
             );
         },
-        2 => unsafe {
+        TileType::MP_ROAD => unsafe {
             ground::road_tile_loop(
                 tile.0,
                 g.climate,
@@ -139,15 +139,17 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 s.shared,
             );
         },
-        3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile.0) },
-        4 => unsafe {
+        TileType::MP_HOUSE => unsafe {
+            town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile.0);
+        },
+        TileType::MP_TREES => unsafe {
             let settings = trees::LoopSettings {
                 ambient_callback: AMBIENT,
                 ..settings
             };
             trees::tile_loop(tile.0, settings, g.call, s.trees, s.shared, types);
         },
-        5 => unsafe {
+        TileType::MP_STATION => unsafe {
             crate::station_lifecycle::tile_loop(
                 tile.0,
                 g.call,
@@ -158,10 +160,10 @@ unsafe fn dispatch<const AMBIENT: bool>(
             );
         },
         // `TileLoop_Void` is exactly `TileLoop_Water(tile)`.
-        6 | 7 => unsafe {
+        TileType::MP_WATER | TileType::MP_VOID => unsafe {
             water::water_tile_loop(
                 tile.0,
-                tile_type,
+                tile_type.0,
                 AMBIENT,
                 settings.size_x,
                 size_y,
@@ -171,7 +173,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 types,
             );
         },
-        8 => unsafe {
+        TileType::MP_INDUSTRY => unsafe {
             // A branch-local copy keeps the batch snapshot's address from escaping,
             // so its hot fields stay in registers for the other arms.
             let industry_services = s.industry;
@@ -183,8 +185,10 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 &industry_services,
             );
         },
-        9 => unsafe { ground::tunnel_tile_loop(tile.0, g.climate, g.tunnel, s.shared) },
-        10 => unsafe {
+        TileType::MP_TUNNELBRIDGE => unsafe {
+            ground::tunnel_tile_loop(tile.0, g.climate, g.tunnel, s.shared);
+        },
+        TileType::MP_OBJECT => unsafe {
             crate::objects::openttd_rust_object_tile_loop(s.objects, g.call, tile.0);
         },
         // The source dispatch table has handlers only for original live tile types.
