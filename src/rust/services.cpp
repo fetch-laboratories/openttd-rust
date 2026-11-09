@@ -498,6 +498,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 
 	.snow_line_support = { .height = &_settings_game.game_creation.snow_line_height, .destroy = DestroySnowLine },
 	.station_index = MapSvcStationIndex,
+	.station_had_vehicle_of_type = [](uint16_t station) noexcept -> uint8_t { return Station::Get(StationID(station))->had_vehicle_of_type; },
+	.station_add_vehicle_of_type = [](uint16_t station, uint8_t type) noexcept { Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(type); },
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.kdtree_partition = RustKdtreePartition,
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },

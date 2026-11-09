@@ -30,6 +30,8 @@ use crate::order_type::{
 use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
 use crate::settings_type::SettingAddresses;
+use crate::station_type::StationHadVehicleOfType;
+const HVOT_TRAIN: StationHadVehicleOfType = StationHadVehicleOfType::HVOT_TRAIN;
 use crate::station_type::StationID;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE, TILE_SIZE, TileIndex};
@@ -339,17 +341,14 @@ pub struct Leaves {
     pub track_crosses: extern "C" fn(Handle, u8) -> u64,
     pub track_direction: extern "C" fn(Handle, u8, u8) -> u64,
     pub train_list: extern "C" fn(Handle),
-    pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
     pub update_delta: extern "C" fn(Handle),
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
-    pub visit_type: extern "C" fn(Handle, u16) -> u64,
     pub wagon_override: extern "C" fn(Handle) -> u64,
     pub wagon_speed_limits: extern "C" fn(Handle) -> u64,
     pub wait_unbunch: extern "C" fn(Handle) -> u64,
     pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
-    pub write_visit_type: extern "C" fn(Handle, u16),
 
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
@@ -1553,8 +1552,8 @@ impl Game<'_> {
     fn enter_station(&self, id: Handle, station: u16) {
         (id).vehicle()
             .write_last_station((u64::from(station)) as u16);
-        if (self.leaves.visit_type)(id, station) & (self.leaves.train_visit)(id) == 0 {
-            (self.leaves.write_visit_type)(id, station);
+        if (self.services.station_had_vehicle_of_type)(station) & HVOT_TRAIN.0 == 0 {
+            (self.services.station_add_vehicle_of_type)(station, HVOT_TRAIN.0);
             (self.leaves.arrival_news)(id, station);
         }
         id.set_force_proceed(0);
@@ -3075,17 +3074,14 @@ crate::abi::layouts! {
         track_crosses,
         track_direction,
         train_list,
-        train_visit,
         truncate_cargo,
         update_delta,
         veh_exit_dir,
         viewport,
-        visit_type,
         wagon_override,
         wagon_speed_limits,
         wait_unbunch,
         write_crossing_bar,
-        write_visit_type,
         vehicle,
         physics,
     };

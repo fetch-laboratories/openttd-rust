@@ -349,10 +349,6 @@ static void TrainTrainList(OpenTTDTrainHandle) noexcept
 {
 	SetWindowClassesDirty(WC_TRAINS_LIST);
 }
-static uint64_t TrainTrainVisit(OpenTTDTrainHandle) noexcept
-{
-	return HVOT_TRAIN;
-}
 static void TrainTruncateCargo(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -369,10 +365,6 @@ static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	RustVehicleUpdateViewport(v, a != 0, b != 0);
 }
-static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	return Station::Get(StationID(a))->had_vehicle_of_type;
-}
 
 static uint64_t TrainWaitUnbunch(OpenTTDTrainHandle id) noexcept
 {
@@ -382,8 +374,4 @@ static uint64_t TrainWaitUnbunch(OpenTTDTrainHandle id) noexcept
 static void TrainWriteCrossingBar(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetCrossingBarred(TileIndex(a), b != 0);
-}
-static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	Station::Get(StationID(a))->had_vehicle_of_type |= HVOT_TRAIN;
 }

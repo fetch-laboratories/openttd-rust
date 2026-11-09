@@ -379,6 +379,10 @@ pub struct Services {
     pub snow_line_support: crate::snow_line::Support,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
+    /// `Station::Get(station)->had_vehicle_of_type`, as its base byte.
+    pub station_had_vehicle_of_type: extern "C" fn(u16) -> u8,
+    /// `Station::Get(station)->had_vehicle_of_type |= type`.
+    pub station_add_vehicle_of_type: extern "C" fn(u16, u8),
     /// Canonical shared `docking_tile` service.
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Stateless native STL median selection and strict partition over split keys.
@@ -798,6 +802,8 @@ crate::abi::layouts! {
         set_tropic_zone,
         snow_line_support,
         station_index,
+        station_had_vehicle_of_type,
+        station_add_vehicle_of_type,
         road_commands,
         kdtree_partition,
         station_commands,
@@ -904,6 +910,12 @@ pub fn fixture(
     }
     extern "C" fn flag(_: u32) -> bool {
         false
+    }
+    extern "C" fn unexpected_station_visits(_: u16) -> u8 {
+        unreachable!()
+    }
+    extern "C" fn unexpected_station_visit(_: u16, _: u8) {
+        unreachable!()
     }
     extern "C" fn short(_: u32) -> u16 {
         0
@@ -1113,6 +1125,8 @@ pub fn fixture(
             destroy: unused_snow_line_destroy,
         },
         station_index: short,
+        station_had_vehicle_of_type: unexpected_station_visits,
+        station_add_vehicle_of_type: unexpected_station_visit,
         road_commands: fixture_road_commands,
         kdtree_partition: fixture_kdtree_partition,
         station_commands: fixture_station_commands,

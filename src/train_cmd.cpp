@@ -1061,19 +1061,16 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.track_direction = TrainTrackDirection,
 
 		.train_list = TrainTrainList,
-		.train_visit = TrainTrainVisit,
 		.truncate_cargo = TrainTruncateCargo,
 
 
 		.update_delta = RustVehicleUpdateDelta<OpenTTDTrainHandle>,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
-		.visit_type = TrainVisitType,
 		.wagon_override = TrainVehicleRead<uint64_t, RustVehicleUsesWagonOverride>,
 		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
-		.write_visit_type = TrainWriteVisitType,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;
