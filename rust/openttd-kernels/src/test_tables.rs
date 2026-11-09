@@ -225,6 +225,8 @@ pub(crate) const VEHICLE: crate::vehicle::VehicleServices = crate::vehicle::Vehi
     orders: unreachable0,
     ship_get: unreachable1,
     first_sprite: unreachable1,
+    update_delta: unreachable1,
+    can_allocate: unreachable1,
 };
 
 /// `crate::road::Leaves` with every entry unreachable.
@@ -320,6 +322,11 @@ pub(crate) const SHARED: crate::services::Services = crate::services::Services {
         destroy: unreachable1,
     },
     station_index: unreachable1,
+    station_had_vehicle_of_type: unreachable1,
+    station_add_vehicle_of_type: unreachable2,
+    station_xy: unreachable1,
+    base_station_xy: unreachable1,
+    station_facilities: unreachable1,
     road_commands: unreachable0,
     kdtree_partition: unreachable2,
     station_commands: unreachable0,

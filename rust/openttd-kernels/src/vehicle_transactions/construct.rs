@@ -235,10 +235,8 @@ pub(crate) unsafe fn aircraft(
             .0
             .as_ptr(),
     );
-    unsafe {
-        (r.aircraft.update_delta)(hv);
-        (r.aircraft.update_delta)(hu);
-    }
+    (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hv.handle));
+    (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hu.handle));
     let pos = crate::airport::get_vehicle_pos_on_build(tile, crate::newgrf_airport::runtime());
     let target = (b.shared.station_index)(tile);
     // SAFETY: The new aircraft's sole private owner; no callback runs meanwhile.
@@ -301,7 +299,7 @@ pub(crate) unsafe fn aircraft(
         // SAFETY: As above, for the new rotor's private owner.
         unsafe {
             (*hw.state).state = HRS_ROTOR_STOPPED;
-            (r.aircraft.update_delta)(hw);
+            (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hw.handle));
         }
         unsafe {
             a.position(w);

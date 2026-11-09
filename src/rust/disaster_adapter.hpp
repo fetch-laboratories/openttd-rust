@@ -144,7 +144,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.write_sprite = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
 		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
 		.owner = DisasterOwner,
-		.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
 		.toward = RustVehicleDirectionTowards,
 		.create = DisasterCreate,
 		.resolve = DisasterResolve,
@@ -179,7 +178,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.clear = DisasterClear,
 		.update_signals = RustUpdateSignals,
 		.disasters_enabled = RustDisastersEnabled,
-		.can_allocate = RustVehicleCanAllocate,
 		.town_index = RustTownAuthorityIndex,
 	};
 	return services;
