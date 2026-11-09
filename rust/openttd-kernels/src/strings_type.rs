@@ -44,6 +44,8 @@ pub struct StringIndexInTab(pub u32);
 impl StringID {
     /// Invalid string ID.
     pub const INVALID_STRING_ID: Self = Self(0xFFFF);
+    /// `STR_NULL`, the first generated string of `table/strings.h`.
+    pub const STR_NULL: Self = Self(0);
 }
 
 /// Native `TextDirection`, retaining every underlying `u8` value.

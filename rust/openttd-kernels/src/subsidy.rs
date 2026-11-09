@@ -157,13 +157,15 @@ impl Services {
     /// The `Town::xy` or `Industry::location.tile` of a source, as `CheckSubsidyDistance`
     /// reads it.
     fn source_tile(&self, source: Source) -> TileIndex {
-        TileIndex(unsafe {
+        unsafe {
             if source.kind == Source::TOWN {
-                town::position_raw((self.shared().town_owner_by_id)(u32::from(source.id)))
+                TileIndex(town::position_raw((self.shared().town_owner_by_id)(
+                    u32::from(source.id),
+                )))
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
-        })
+        }
     }
     /// Sets a flag indicating that given town/industry is part of subsidised route.
     fn set_part_of_subsidy_flag(&self, source: Source, flag: PartOfSubsidy) {
@@ -399,7 +401,6 @@ impl Services {
         }
         let cargo_num = self.shared().random_range(num_cargos);
         let (cargo_type, total, trans) = unsafe { industry::subsidy_produced(state, cargo_num) };
-        let cargo_type = CargoType(cargo_type);
         // Quit if no production in this industry
         // or if the pct transported is already large enough
         // or if the cargo is automatically distributed
@@ -441,7 +442,7 @@ impl Services {
                 return false;
             }
             // The industry must accept the cargo
-            if !unsafe { industry::subsidy_accepts((self.industry_owner)(dst_ind), cargo_type.0) } {
+            if !unsafe { industry::subsidy_accepts((self.industry_owner)(dst_ind), cargo_type) } {
                 return false;
             }
             Source::industry((self.industry_id)(dst_ind))
@@ -599,16 +600,22 @@ impl Services {
                 let shared = self.shared();
                 // SAFETY: The live station owner; the visits read only the map and caches.
                 unsafe {
-                    crate::station::for_each_catchment_tile(station_state, &catchment, |tile| {
-                        if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
-                            return;
-                        }
-                        let town = TownID((shared.town_index)(tile));
-                        if (self.has_source_flag)(Source::town(town.0), PartOfSubsidy::Destination)
-                        {
-                            towns_near[town_word(town)] |= town_bit(town);
-                        }
-                    });
+                    crate::station::for_each_catchment_tile_raw(
+                        station_state,
+                        &catchment,
+                        |tile| {
+                            if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
+                                return;
+                            }
+                            let town = TownID((shared.town_index)(tile));
+                            if (self.has_source_flag)(
+                                Source::town(town.0),
+                                PartOfSubsidy::Destination,
+                            ) {
+                                towns_near[town_word(town)] |= town_bit(town);
+                            }
+                        },
+                    );
                 }
             }
         }
