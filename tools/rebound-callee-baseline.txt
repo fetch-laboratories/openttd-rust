@@ -161,8 +161,6 @@ rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_end
 rebound | RustRailPoweredMask | src/rust/ground_vehicle_services.cpp | powered
 rebound | RustRailPoweredMask | src/rust/vehicle_effect_services.hpp | powered
 rebound | RustRailPoweredMask | src/rust/vehicle_services_newgrf.h | powered_rail
-rebound | RustRailStationAxis | src/newgrf_station.cpp | axis
-rebound | RustRailStationAxis | src/rust/station_command_services.hpp | rail_axis
 rebound | RustRealLoaded | src/newgrf_station.cpp | loaded
 rebound | RustRealLoaded | src/rust/newgrf_spritegroup_services.cpp | loaded
 rebound | RustRealLoadedCount | src/newgrf_station.cpp | loaded_count

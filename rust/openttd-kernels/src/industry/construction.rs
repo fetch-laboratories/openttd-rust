@@ -108,7 +108,7 @@ fn populate(
         }
         return;
     }
-    crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
+    crate::station::for_all_stations_around_tiles_raw(super::location(owner), &cc, |st, tile| {
         if !unsafe { (l.belongs)(tile, id.0) } {
             return false;
         }
@@ -118,7 +118,7 @@ fn populate(
             st.station,
             (cc.c.owner)(st.station),
             shell,
-            tile,
+            TileIndex(tile),
             &cc,
         );
         false
