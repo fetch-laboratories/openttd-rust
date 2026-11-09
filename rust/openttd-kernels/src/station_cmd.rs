@@ -3292,7 +3292,7 @@ impl Ctx<'_> {
                 continue;
             }
             let owner = (self.shared.town_owner)(town);
-            let xy = unsafe { crate::town::position(owner) };
+            let xy = unsafe { crate::town::position_raw(owner) };
             let dist = self.map().tile_x(xy).abs_diff(x) + self.map().tile_y(xy).abs_diff(y);
             if dist == distance && (authority.town_index)(town) < (authority.town_index)(nearest) {
                 nearest = town;

@@ -210,7 +210,12 @@ fn deliver_goods(
         };
         // Check if the industry temporarily refuses acceptance.
         if unsafe {
-            crate::industry::resolver::refuses(ind.cast(), owner, cargo_type.0, &*s.resolver)
+            crate::industry::resolver::industry_temporarily_refuses_cargo(
+                ind.cast(),
+                owner,
+                cargo_type,
+                &*s.resolver,
+            )
         } {
             return true;
         }

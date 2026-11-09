@@ -7,6 +7,11 @@
 
 //! Shared history indices from `misc/history_type.hpp`.
 
+/// Native `HISTORY_PERIODS`: the number of periods each history range reports.
+pub const HISTORY_PERIODS: u8 = 24;
+/// Native `HISTORY_RECORDS`: `HISTORY_YEAR.last`, the length of `HistoryData`.
+pub const HISTORY_RECORDS: usize = 61;
+
 /// Native `THIS_MONTH`: the history record being accumulated.
 pub const THIS_MONTH: u8 = 0;
 /// Native `LAST_MONTH`: the most recently completed month.

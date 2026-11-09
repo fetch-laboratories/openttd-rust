@@ -10,7 +10,7 @@ static TREE: GameState<Kdtree<TownId>> = GameState::new(Kdtree::new());
 /// Kd-tree coordinate of a town: `TileX` or `TileY` of its `xy`.
 fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -> u16 {
     let owner = (s.town_owner_by_id)(u32::from(id.0));
-    let tile = TileIndex(unsafe { super::position(owner) });
+    let tile = unsafe { super::position(owner) };
     if dim == 0 {
         map.tile_x(tile.0) as u16
     } else {
@@ -72,7 +72,7 @@ pub(crate) fn is_close_to_town(s: &Services, tile: TileIndex, dist: u32) -> bool
     }
     let t = find_nearest(s, tile);
     let xy = unsafe { super::position((s.town_owner_by_id)(u32::from(t.0))) };
-    s.map().distance_manhattan(tile.0, xy) < dist
+    s.map().distance_manhattan(tile.0, xy.0) < dist
 }
 /// Return the town closest to the given tile within `threshold`
 /// (`CalcClosestTownFromTile`), or null if there is no such town.
@@ -88,7 +88,7 @@ pub(crate) fn calc_closest_town_from_tile(
     }
     let tid = find_nearest(s, tile);
     let xy = unsafe { super::position((s.town_owner_by_id)(u32::from(tid.0))) };
-    if s.map().distance_manhattan(tile.0, xy) < threshold {
+    if s.map().distance_manhattan(tile.0, xy.0) < threshold {
         (s.town_by_id)(u32::from(tid.0))
     } else {
         ptr::null()
@@ -130,7 +130,7 @@ pub(crate) fn closest_town_from_tile(
                 world.check((s.town_next_id)(u32::from(tid.0)) == u32::from(tid.0));
                 let town = (s.town_by_id)(u32::from(tid.0));
                 let xy = unsafe { super::position((s.town_owner)(town)) };
-                if world.dimensions.distance_manhattan(tile.0, xy) >= threshold {
+                if world.dimensions.distance_manhattan(tile.0, xy.0) >= threshold {
                     return ptr::null();
                 }
                 return town;

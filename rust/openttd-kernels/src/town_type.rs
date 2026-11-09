@@ -27,6 +27,35 @@ pub const RATING_BRIBE_MAXIMUM: i32 = 800;
 /// Rating after a failed bribe.
 pub const RATING_BRIBE_DOWN_TO: i32 = -50;
 
+/// Rating `VERYPOOR`.
+pub const RATING_VERYPOOR: i32 = -200;
+/// Rating `MEDIOCRE`.
+pub const RATING_MEDIOCRE: i32 = 200;
+/// When a town grows, all companies have rating increased a bit ...
+pub const RATING_GROWTH_UP_STEP: i32 = 5;
+/// ... up to `RATING_MEDIOCRE`.
+pub const RATING_GROWTH_MAXIMUM: i32 = RATING_MEDIOCRE;
+/// When a town grows, company gains reputation for all well serviced stations ...
+pub const RATING_STATION_UP_STEP: i32 = 12;
+/// ... but loses for badly serviced stations.
+pub const RATING_STATION_DOWN_STEP: i32 = -15;
+/// Rating needed to remove a town tunnel or bridge, "Lenient" difficulty settings.
+pub const RATING_TUNNEL_BRIDGE_NEEDED_LENIENT: i32 = 144;
+/// "Neutral".
+pub const RATING_TUNNEL_BRIDGE_NEEDED_NEUTRAL: i32 = 208;
+/// "Hostile".
+pub const RATING_TUNNEL_BRIDGE_NEEDED_HOSTILE: i32 = 400;
+/// "Permissive" (local authority disabled).
+pub const RATING_TUNNEL_BRIDGE_NEEDED_PERMISSIVE: i32 = RATING_MINIMUM;
+/// Rating needed to remove town road, "Lenient" difficulty settings.
+pub const RATING_ROAD_NEEDED_LENIENT: i32 = 16;
+/// "Neutral".
+pub const RATING_ROAD_NEEDED_NEUTRAL: i32 = 64;
+/// "Hostile".
+pub const RATING_ROAD_NEEDED_HOSTILE: i32 = 112;
+/// "Permissive" (local authority disabled).
+pub const RATING_ROAD_NEEDED_PERMISSIVE: i32 = RATING_MINIMUM;
+
 /// Native `TownID`; all uint16 values remain representable.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

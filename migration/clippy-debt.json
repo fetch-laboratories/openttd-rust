@@ -284,30 +284,30 @@
     "rust/openttd-kernels/src/industry/construction.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       245
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
       31
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 3f9ff36d9d9a9d6687a4": [
-      7
-    ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 73a2e0a0f1b09f9235e5": [
-      7
-    ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 8a4be6a52a329e992805": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 4dc53fad5b4141c988a1": [
       8
     ],
-    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries | excessive_nesting | 8a8fc2996d47c9d45560": [
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 57924066d2c8a4338247": [
       8
+    ],
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | 73a2e0a0f1b09f9235e5": [
+      7
+    ],
+    "rust/openttd-kernels/src/industry/definitions/properties.rs | fn industries_change_info | excessive_nesting | a3e5012f0081905a1557": [
+      7
     ],
     "rust/openttd-kernels/src/industry/definitions/properties.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      139,
-      274
+      133,
+      266
     ],
     "rust/openttd-kernels/src/industry/policy.rs | fn servicing | excessive_nesting | 06c9c88537fe6a8e70d5": [
       6
     ],
-    "rust/openttd-kernels/src/industry/resolver.rs | fn variable | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      290
+    "rust/openttd-kernels/src/industry/resolver.rs | fn industries_get_variable | too_many_lines | 4a33eacd5fa65f2b2e28": [
+      283
     ],
     "rust/openttd-kernels/src/industry/tile.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
       149
@@ -1663,56 +1663,41 @@
     "rust/openttd-kernels/src/tilearea.rs | impl DiagonalTileCursor::fn advance | excessive_nesting | f7c5f77a89a6af947c73": [
       5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn at_road | excessive_nesting | 11e95505f2cfba6aee2c": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn expand_town::mod es ) | excessive_nesting | 4bcbfe1de16ae68a3637": [
+      1
+    ],
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_at_road | excessive_nesting | 0a3d6ed2c3061dc9750c": [
       6
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn at_road | excessive_nesting | 13f2a762be11b6b18500": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_at_road | excessive_nesting | 13f2a762be11b6b18500": [
       5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn at_road::mod es ) | excessive_nesting | 4bcbfe1de16ae68a3637": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_at_road::mod es ) | excessive_nesting | 4bcbfe1de16ae68a3637": [
       1
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn build_house | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      120
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_in_tile | excessive_nesting | 0a3d6ed2c3061dc9750c": [
+      5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn expand::mod es ) | excessive_nesting | 4bcbfe1de16ae68a3637": [
-      1
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_in_tile | excessive_nesting | 3a0821a18e0890dcc52c": [
+      5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow::mod es | excessive_nesting | b324ac938005834f54c7": [
-      4
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | cognitive_complexity | 4a33eacd5fa65f2b2e28": [
-      27
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | excessive_nesting | 11e95505f2cfba6aee2c": [
-      6
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | excessive_nesting | 2449c139f1d30fbf1cb0": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_in_tile | excessive_nesting | 782a1c20573e2e538b79": [
       5,
       5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | excessive_nesting | af06c354c7e4179516bd": [
-      5
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile | too_many_lines | 4a33eacd5fa65f2b2e28": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_in_tile | too_many_lines | 4a33eacd5fa65f2b2e28": [
       137
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile::mod es ) | excessive_nesting | bbd8ff095c5d635e465e": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn grow_town_in_tile::mod es ) | excessive_nesting | 65a7b4605b9fe8df3381": [
       1
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn in_tile::mod es::mod es ) | excessive_nesting | bbd8ff095c5d635e465e": [
-      1
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn make_house_tile | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
-    ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn road_allowed | excessive_nesting | 20e47ccfa6716175b720": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn is_road_allowed_here | excessive_nesting | 76704552315915856a80": [
       5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn road_allowed | excessive_nesting | cde02a5dca4385428656": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn is_road_allowed_here | excessive_nesting | fc4d8a29e79a7d7adc05": [
       5
     ],
-    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn update_growth | excessive_nesting | 7676330a0cad399f4454": [
+    "rust/openttd-kernels/src/town.rs | impl Engine < ' _ >::fn update_town_growth | excessive_nesting | 7676330a0cad399f4454": [
       6,
       6,
       6
@@ -1733,7 +1718,7 @@
       41
     ],
     "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a > | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      111
+      108
     ],
     "rust/openttd-kernels/src/town/founding.rs | impl < ' a > Founding < ' a >::fn find_nearest_good_coastal_town_spot | excessive_nesting | ed1429caee8dab660b2c": [
       6
@@ -1760,11 +1745,11 @@
       5
     ],
     "rust/openttd-kernels/src/town/house.rs | impl < ' a > House < ' a >::fn tile_loop_town | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      107
+      103
     ],
     "rust/openttd-kernels/src/town/resolver.rs | module | too_many_lines | 4a33eacd5fa65f2b2e28": [
-      108,
-      167
+      162,
+      108
     ],
     "rust/openttd-kernels/src/townname.rs | fn czech | too_many_lines | 4a33eacd5fa65f2b2e28": [
       107

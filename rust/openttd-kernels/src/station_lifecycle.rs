@@ -248,7 +248,7 @@ pub(crate) fn generate_name(
     {
         return n.mines;
     }
-    let town_tile = unsafe { crate::town::position((s.shared.town_owner)(town)) };
+    let town_tile = unsafe { crate::town::position_raw((s.shared.town_owner)(town)) };
     if map.distance_max(tile, town_tile) < 8 {
         if info.available(n.base, s) {
             return n.base;
