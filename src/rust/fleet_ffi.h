@@ -104,7 +104,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
 	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	bool (*engine_buildable)(uint16_t id, uint8_t type, uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(engine_buildable);
-	void * (*orders)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(orders);
 	size_t (*order_count)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 	uint8_t (*order_count_id)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count_id);
 	void * (*order_at)(void *orders, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(order_at);

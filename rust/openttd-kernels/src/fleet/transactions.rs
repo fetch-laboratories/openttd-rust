@@ -55,7 +55,6 @@ pub struct Services {
     pub(crate) engine_valid: unsafe extern "C" fn(u16) -> bool,
     pub(crate) company_valid: unsafe extern "C" fn(u8) -> bool,
     pub(crate) engine_buildable: unsafe extern "C" fn(u16, u8, u8) -> bool,
-    pub(crate) orders: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) order_count: unsafe extern "C" fn(*mut ()) -> usize,
     pub(crate) order_count_id: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) order_at: unsafe extern "C" fn(*mut (), usize) -> *mut (),
@@ -420,7 +419,7 @@ unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u1
         )
     };
     let u = unsafe { order_vehicle(w, gw, v) };
-    let orders = unsafe { (w.orders)(u) };
+    let orders = order_list(crate::fleet::record(gw, u));
     if orders.is_null() {
         return true;
     }
@@ -442,6 +441,11 @@ unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u1
     }
     true
 }
+/// `v->orders`: the native `OrderList` shell named by the canonical order state.
+fn order_list(v: crate::vehicle::VehicleRef) -> *mut () {
+    let state = crate::raw_field::read_field!(v.0.as_ptr(), orders);
+    crate::raw_field::read_field!(state, orders).cast()
+}
 unsafe fn incompatible_refit(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> i32 {
     let mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_union(
@@ -451,7 +455,7 @@ unsafe fn incompatible_refit(w: &Services, gw: &GroupServices, v: *mut (), engin
         )
     };
     let u = unsafe { order_vehicle(w, gw, v) };
-    let orders = unsafe { (w.orders)(u) };
+    let orders = order_list(crate::fleet::record(gw, u));
     if orders.is_null() {
         return -1;
     }
@@ -1301,7 +1305,6 @@ crate::abi::layouts! {
         engine_valid,
         company_valid,
         engine_buildable,
-        orders,
         order_count,
         order_count_id,
         order_at,

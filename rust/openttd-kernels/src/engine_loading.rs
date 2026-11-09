@@ -251,7 +251,6 @@ pub struct Services {
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_list_size: extern "C" fn(File) -> usize,
     pub(crate) unknown_refit: extern "C" fn(u32, u16, u16),
-    climate: extern "C" fn() -> u8,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
     override_log: extern "C" fn(u32, u32),
@@ -260,6 +259,11 @@ pub struct Services {
     default_counts: extern "C" fn() -> *const u8,
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
+}
+/// `_settings_game.game_creation.landscape`, loaded in place from the shared catalog.
+fn climate(s: &Services) -> u8 {
+    // SAFETY: The immutable shared table names the process-wide settings catalog.
+    unsafe { (*s.shared).settings().climate.read() }
 }
 fn default_count(s: &Services, kind: u8) -> u8 {
     unsafe { *(s.default_counts)().add(usize::from(kind)) }
@@ -436,7 +440,6 @@ crate::abi::layouts! {
         cargo_next,
         cargo_list_size,
         unknown_refit,
-        climate,
         use_livery,
         variant_flags,
         override_log,
@@ -494,7 +497,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
         match label {
             CT_PASSENGERS => (PASSENGERS, 0),
             CT_OIL => (CC_LIQUID, 0),
-            _ if (s.climate)() == crate::services::LandscapeType::TOYLAND.0 => (
+            _ if climate(s) == crate::services::LandscapeType::TOYLAND.0 => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
                 PASSENGERS,
             ),
@@ -541,7 +544,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 CC_LIQUID | PASSENGERS,
             ),
         ];
-        let climate = (s.climate)();
+        let climate = climate(s);
         DEFAULTS
             .iter()
             .find(|&&(climates, cargo, _, _)| climates & (1 << climate) != 0 && cargo == label)
@@ -817,7 +820,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                 crate::engine_type::EngineID(id)
             );
         }
-        if !crate::vehicle::EngineRef::of(e.shell).climate((s.climate)()) {
+        if !crate::vehicle::EngineRef::of(e.shell).climate(climate(s)) {
             continue;
         }
         match e.kind.0 {
