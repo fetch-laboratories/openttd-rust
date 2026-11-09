@@ -62,7 +62,7 @@ Rows marked † are root's, updated at each stocktake ([selection](planning.md#s
 | #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 15,821 / 5,615 | 15,642 / 5,279 ([Phases](#phases)) |
 | #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 104 / 304 / 39 | – |
 | #738 | Rule corpus lines † | 3,312 | 3,362 | 3,229 | 3,231 before this review |
-| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 438 / 105 / 47; 287 | – |
+| None | Ruff rows | 296 | unchanged | 287 | – |
 
 Counting commands:
 - **#734:** from its issue's Worksets table and file lists. Lines are `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head. The comment, integer and wrapper rows come from the overhaul's `scratch-comments-signatures/inventory.py` and `scratch-types-literals/inventory.py`, rescanned at the head rather than read from their cached function lists (#854).
@@ -70,7 +70,6 @@ Counting commands:
 - **#736 and #737:** from `python3 tools/port-metrics.py --whole-fork` and the baselines.
 - **#738:** `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`.
 
-No stream owns the structural rows: refactoring waits for the user.
 
 ### Speed
 
@@ -198,7 +197,7 @@ Slots: while ready worksets remain, #734/#735 file passes hold two of the four i
 
    A pass's reviewer applies the review brief's every-line list to every line left in its files. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
 2. **Tools maintenance, in this order.**
-   - #855 Clippy ratchet: merge-base comparison, automatic one-to-one carries for re-keys whose magnitude does not grow, nesting rows keyed by item, and module acceptances bound to their accepted magnitude. One PR. With it, if one reviewer can cover both, go #856 (fork-only CTest name ratchet and instantiation-only orphan exports, deleting the `Reassign` chain) and #847.
+   - #855 Clippy ratchet (in flight as its own PR): drops the length, nesting and complexity families, fails only on growth against the merge base, and pairs unambiguous renames itself. Then, in one tools PR if one reviewer can cover both, #856 (fork-only CTest name ratchet and instantiation-only orphan exports, deleting the `Reassign` chain) and #847.
    - #854, the comment and type inventory analyzer in `tools/`. Each later pass then reports its files' residue from it.
 
    Fold any later small tools item into the next tools PR.
@@ -217,7 +216,7 @@ Slots: while ready worksets remain, #734/#735 file passes hold two of the four i
 Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), still in force:
 
 - #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order, plus exact-head Full when compiled code differs. Per-PR Callgrind profiles and disassembly accounting are not required.
-- #747 is integrated through #751/#752: the Clippy ratchet retains complexity, parameter count, nesting and safety documentation. Remove unnecessary existing cast suppressions on later base updates.
+- #747 is integrated through #751/#752, and #855 narrows it further: the Clippy ratchet keeps parameter count and safety documentation only. Remove unnecessary existing cast suppressions on later base updates.
 - #734 permits the original's integer uses through wrapper accessors and measures wrapper adoption rather than Rust enum counts. The implementer brief places helpers by their original file, including `.cpp`-only helpers (#738).
 
 ## After cleanup
@@ -357,7 +356,7 @@ Actions:
      - a pass converts finished files' calls to the callees it types, and `_raw` adapters serve only unfinished files.
    - The [review brief](review-brief.md) adds those findings, the boundary design faults, and code standards on every changed line of every PR. The [implementer brief](implementer-brief.md) carries the code rules.
    - One residue PR fixes the audit lists for worksets 01 to 03, right after the 03 remainder.
-2. **#855 is the next tools PR.** It removes the ratchet's false failures and adds no exemption. Then #856 (fork-only CTest names and instantiation-only orphans), #847 and #854. At stocktake 155, root reports ratchet failures per integrated component PR beside today's 1.8. Below 0.5 is a provisional target for steering 34; a miss gets a second tools round from the failure classes, not a deferral.
+2. **#855 corrects the ratchet** (user, 11-09: a wrong decision gets corrected, not deferred). It drops function length, nesting and cognitive complexity, which measure the original's own structure, and with them the 11-06 approval of those families. It keeps parameter count and safety documentation, fails only on growth against the merge base, and pairs unambiguous renames itself. Then #856 (fork-only CTest names and instantiation-only orphans), #847 and #854. At stocktake 155, root reports ratchet failures per integrated component PR beside today's 1.8. Below 0.5 is a provisional target for steering 34; a miss gets a second tools round from the failure classes, not a deferral.
 3. **#857**, one fidelity PR, runs next in work order item 3.
 4. **#736 and #737 follow-ups.**
    - #853 restores its three observations before integration ([PR comment](https://github.com/fetch-laboratories/openttd-rust/pull/853#issuecomment-6747520518)).
@@ -369,9 +368,7 @@ Actions:
    - The [ready queue](#ready-queue) holds at most three undispatched entries. A dispatched entry leaves the queue, and its state lives on its PR.
    - The planner's analysis of later entries lives on the stream issue; the earlier one moved to [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
    - Root commits the roadmap only at stocktakes, course changes and wind-down; the planner's queue refresh is the one exception ([team](team.md#ready-queue-and-pipelining)).
-6. **No user direction is reversed.** The delegation model, the four-implementer cap, report-only reviewers and the twelfth-integration stocktake stand as set. Two questions are the user's (steering report, 11-09):
-   - May a pass grow a `too_many_lines` row by a bounded amount when the growth comes from the original's types, constants or argument structs?
-   - Should the delegation model also apply when root runs in Codex?
+6. **One user decision is corrected.** The 11-06 approval to keep the length, nesting and complexity Clippy families is reversed by #855, on the measured cost above. The delegation model, the four-implementer cap, report-only reviewers and the twelfth-integration stocktake stand. One question remains the user's: should the delegation model also apply when root runs in Codex?
 
 ## Earlier steering, still in force
 
