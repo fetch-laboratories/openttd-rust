@@ -1391,27 +1391,34 @@ impl Ctx<'_> {
         }
         out.zero();
     }
-    /// `MakeStationAreaSmaller`, with `TileBelongsToRailStation`,
-    /// `TileBelongsToShipStation` or `TileBelongsToRoadWaypointStation` as the
-    /// tile test for `station_type`.
+    /// `BaseStation::TileBelongsToRailStation` for a station or waypoint shell.
+    fn tile_belongs_to_rail_station(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
+        crate::station_base::tile_belongs_to_rail_station(
+            self.shared,
+            !(self.world().is_station)(st),
+            StationID((self.links().graphs.station_id)(st)),
+            tile,
+        )
+    }
+    /// `TileBelongsToShipStation`.
+    fn tile_belongs_to_ship_station(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
+        self.is_dock_tile(tile)
+            && StationID((self.shared.station_index)(tile.0))
+                == StationID((self.links().graphs.station_id)(st))
+    }
+    /// `TileBelongsToRoadWaypointStation`.
+    fn tile_belongs_to_road_waypoint_station(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
+        crate::station_map::is_road_waypoint_tile(tile, self.shared)
+            && StationID((self.shared.station_index)(tile.0))
+                == StationID((self.links().graphs.station_id)(st))
+    }
+    /// `MakeStationAreaSmaller`: shrink `ta` while one of its edges has no
+    /// tile for which `func` holds.
     fn make_station_area_smaller(
         &self,
-        st: *mut BaseStation,
         mut ta: TileArea,
-        station_type: StationType,
+        func: impl Fn(TileIndex) -> bool,
     ) -> TileArea {
-        let id = (self.links().graphs.station_id)(st);
-        // A waypoint's rail tiles are `RailWaypoint` tiles.
-        let station_type = if station_type == StationType::Rail && !(self.world().is_station)(st) {
-            StationType::RailWaypoint
-        } else {
-            station_type
-        };
-        let func = |tile| {
-            TileType((self.shared.tile_type)(tile)) == TileType::MP_STATION
-                && StationType((self.shared.station_type)(tile).0) == station_type
-                && (self.shared.station_index)(tile) == id
-        };
         'restart: loop {
             /* too small? */
             if ta.w == 0 || ta.h == 0 {
@@ -1439,7 +1446,7 @@ impl Ctx<'_> {
                     } else {
                         ta.tile.wrapping_add(self.map().diff(i32::from(i), x))
                     };
-                    if func(tile) {
+                    if func(TileIndex(tile)) {
                         found = true;
                         break;
                     }
@@ -1698,18 +1705,17 @@ impl Ctx<'_> {
                 crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
                 rt.0,
             ) {
-                let tracks = (self.rail_map().traversal)(tile_cur.0).tracks.0;
-                // `RemoveFirstTrack(&tracks)`: `track` is the lowest bit,
-                // `tracks` keeps the rest.
-                let track = Track(tracks.trailing_zeros() as u8);
-                let tracks = tracks & tracks.wrapping_sub(1);
+                let mut tracks = TrackBits((self.rail_map().traversal)(tile_cur.0).tracks.0);
+                let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                });
                 let expected_track = if invalid_dirs.test(DiagDirection::DIAGDIR_NE) {
                     Track::TRACK_X
                 } else {
                     Track::TRACK_Y
                 };
                 /* The existing track must align with the desired station axis. */
-                if tracks == TrackBits::TRACK_BIT_NONE.0 && track == expected_track {
+                if tracks == TrackBits::TRACK_BIT_NONE && track == expected_track {
                     self.overbuild_rail_track(cost, ret, tile_cur, track, flags, affected_vehicles);
                     /* With DoCommandFlags{flags}.Reset(DoCommandFlag::Execute) CmdLandscapeClear would fail since the rail still exists */
                     return true;
@@ -1779,13 +1785,9 @@ impl Ctx<'_> {
             plat_len,
             numtracks,
         } = context;
-        let invalid_dirs = if axis == Axis::AXIS_X {
-            DiagDirections::from_element(DiagDirection::DIAGDIR_NE)
-                | DiagDirections::from_element(DiagDirection::DIAGDIR_SW)
-        } else {
-            DiagDirections::from_element(DiagDirection::DIAGDIR_SE)
-                | DiagDirections::from_element(DiagDirection::DIAGDIR_NW)
-        };
+        let invalid_dirs = crate::direction_func::axis_to_diag_dirs(axis, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         let slope_cb = !statspec.is_null() && (self.s.rail_spec_info)(statspec).slope_callback;
         self.check_buildable(ret, tile_cur, invalid_dirs, allowed_z, false, false);
         if !ret.ok() {
@@ -2301,7 +2303,14 @@ impl Ctx<'_> {
                 if self.is_rail_station_tile(tile) && self.has_station_reservation(tile) {
                     /* Check for trains having a reservation for this tile. */
                     let v = crate::pbs::Pbs::acquire(self.shared)
-                        .train_for(tile.0, self.get_rail_station_axis(tile).0)
+                        .train_for(
+                            tile.0,
+                            crate::track_func::axis_to_track(
+                                crate::services::Axis(self.get_rail_station_axis(tile).0),
+                                |ok| crate::movement::native_assert(self.shared, ok),
+                            )
+                            .0,
+                        )
                         .shell()
                         .cast::<crate::services::Train>();
                     if !v.is_null() {
@@ -2639,8 +2648,9 @@ impl Ctx<'_> {
              * if we deleted something at the edges.
              * we also need to adjust train_tile. */
             // `MakeRailStationAreaSmaller`.
-            let train_station =
-                self.make_station_area_smaller(st, self.s.rail_area(st), StationType::Rail);
+            let train_station = self.make_station_area_smaller(self.s.rail_area(st), |tile| {
+                self.tile_belongs_to_rail_station(st, tile)
+            });
             (self.s.set_train_area)(st, train_station);
             self.update_station_sign_coord(st);
             /* if we deleted the whole station, delete the train facility. */
@@ -2730,20 +2740,10 @@ impl Ctx<'_> {
         /* determine width and height of platforms */
         let ta = self.s.rail_area(st);
         cost.set(0);
-        let id = (self.links().graphs.station_id)(st);
-        let station_type = if waypoint {
-            StationType::RailWaypoint
-        } else {
-            StationType::Rail
-        };
         /* clear all areas of the station */
         for tile in ta.tiles(self.map()) {
             /* only remove tiles that are actually train station tiles */
-            // `TileBelongsToRailStation`.
-            if TileType((self.shared.tile_type)(tile)) != TileType::MP_STATION
-                || StationType((self.shared.station_type)(tile).0) != station_type
-                || (self.shared.station_index)(tile) != id
-            {
+            if !self.tile_belongs_to_rail_station(st, TileIndex(tile)) {
                 continue;
             }
             let total = cost.money();
@@ -3892,9 +3892,8 @@ impl Ctx<'_> {
             if replacement_spec_index < 0 {
                 // `MakeRoadWaypointStationAreaSmaller`.
                 let road_waypoint_area = self.make_station_area_smaller(
-                    wp,
                     Self::area((self.s.road_waypoint_tile_area)(wp)),
-                    StationType::RoadWaypoint,
+                    |tile| self.tile_belongs_to_road_waypoint_station(wp, tile),
                 );
                 (self.s.set_road_waypoint_area)(wp, road_waypoint_area);
                 self.update_station_sign_coord(wp);
@@ -4284,9 +4283,11 @@ impl Ctx<'_> {
             rotation,
             TileIndex(airport.tile),
             airport.tiles(self.map()).filter(|&t| {
-                TileType((self.shared.tile_type)(t)) == TileType::MP_STATION
-                    && StationType((self.shared.station_type)(t).0) == StationType::Airport
-                    && (self.shared.station_index)(t) == id
+                crate::station_base::tile_belongs_to_airport(
+                    self.shared,
+                    StationID(id),
+                    TileIndex(t),
+                )
             }),
         )
     }
@@ -4607,11 +4608,11 @@ impl Ctx<'_> {
         }
         let airport = Self::area((self.s.airport_area)(st));
         for tile_cur in airport.tiles(self.map()) {
-            // `TileBelongsToAirport`.
-            if TileType((self.shared.tile_type)(tile_cur)) != TileType::MP_STATION
-                || StationType((self.shared.station_type)(tile_cur).0) != StationType::Airport
-                || (self.shared.station_index)(tile_cur) != index
-            {
+            if !crate::station_base::tile_belongs_to_airport(
+                self.shared,
+                StationID(index),
+                TileIndex(tile_cur),
+            ) {
                 continue;
             }
             unsafe {
@@ -5185,11 +5186,10 @@ impl Ctx<'_> {
             self.after_remove_tile(st, tile1);
             self.after_remove_tile(st, tile2);
             // `MakeShipStationAreaSmaller`.
-            let ship_station = self.make_station_area_smaller(
-                st,
-                Self::area((self.s.ship_station_area)(st)),
-                StationType::Dock,
-            );
+            let ship_station = self
+                .make_station_area_smaller(Self::area((self.s.ship_station_area)(st)), |tile| {
+                    self.tile_belongs_to_ship_station(st, tile)
+                });
             (self.s.set_ship_area)(st, ship_station);
             self.update_station_docking_tiles(st);
             if ship_station.tile == TileIndex::INVALID.0 {

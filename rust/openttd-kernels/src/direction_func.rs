@@ -69,6 +69,23 @@ pub const fn is_valid_diag_direction(d: crate::direction_type::DiagDirection) ->
 pub const fn is_valid_axis(axis: u8) -> bool {
     axis < AXIS_END
 }
+/// `AxisToDiagDirs`: the two diagonal directions along an axis.
+pub fn axis_to_diag_dirs(
+    a: crate::direction_type::Axis,
+    check: impl Fn(bool) + Copy,
+) -> crate::direction_type::DiagDirections {
+    use crate::direction_type::{Axis, DiagDirection, DiagDirections};
+    if !is_valid_axis(a.0) {
+        check(false);
+    }
+    if a == Axis::AXIS_X {
+        DiagDirections::from_element(DiagDirection::DIAGDIR_NE)
+            | DiagDirections::from_element(DiagDirection::DIAGDIR_SW)
+    } else {
+        DiagDirections::from_element(DiagDirection::DIAGDIR_SE)
+            | DiagDirections::from_element(DiagDirection::DIAGDIR_NW)
+    }
+}
 /// `OtherAxis`.
 pub fn other_axis(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
     if !is_valid_axis(axis) {

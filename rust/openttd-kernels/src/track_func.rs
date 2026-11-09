@@ -9,6 +9,23 @@
 use crate::track_type::{TRACK_BIT_LEFT, TRACK_BIT_LOWER, TRACK_BIT_RIGHT, TRACK_BIT_UPPER};
 use crate::track_type::{TRACKDIR_X_NE, TRACKDIR_X_SW, TRACKDIR_Y_NW, TRACKDIR_Y_SE};
 
+/// `RemoveFirstTrack`: removes the lowest track from `tracks` and returns it,
+/// or `INVALID_TRACK` when `tracks` is empty.
+pub fn remove_first_track(
+    tracks: &mut crate::track_type::TrackBits,
+    check: impl Fn(bool) + Copy,
+) -> crate::track_type::Track {
+    use crate::track_type::{Track, TrackBits};
+    if *tracks != TrackBits::TRACK_BIT_NONE {
+        if tracks.0 & !TrackBits::TRACK_BIT_MASK.0 != TrackBits::TRACK_BIT_NONE.0 {
+            check(false);
+        }
+        let first = Track(crate::bitmath_func::find_first_bit(u64::from(tracks.0)));
+        tracks.0 &= !(1 << first.0);
+        return first;
+    }
+    Track::INVALID_TRACK
+}
 /// `AxisToTrack`.
 pub fn axis_to_track(
     axis: crate::services::Axis,
