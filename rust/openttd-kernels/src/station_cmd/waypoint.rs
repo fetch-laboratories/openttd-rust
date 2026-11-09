@@ -16,7 +16,7 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
 use crate::direction_type::Axis;
 use crate::economy_type::{
-    PR_BUILD_STATION_TRUCK, PR_BUILD_WAYPOINT_BUOY, PR_BUILD_WAYPOINT_RAIL, PR_CLEAR_WAYPOINT_BUOY,
+    PR_BUILD_WAYPOINT_BUOY, PR_BUILD_WAYPOINT_RAIL, PR_CLEAR_WAYPOINT_BUOY,
     ROAD_STOP_TRACKBIT_FACTOR,
 };
 use crate::newgrf_roadstop::RoadStopClassID;
@@ -687,17 +687,14 @@ impl Ctx<'_> {
             h: u16::from(height),
         };
         /* Total road stop cost. */
-        let unit_cost = if roadstopspec.is_null() {
-            crate::company::price(PR_BUILD_STATION_TRUCK)
-        } else {
-            let factor = (self.s.road_spec_build_cost)(roadstopspec, PR_BUILD_STATION_TRUCK as u8);
-            crate::economy_func::get_price(
-                PR_BUILD_STATION_TRUCK as u32,
-                u32::from(factor.multiplier),
-                factor.shift,
-                -4,
-            )
-        };
+        let unit_cost = self.road_stop_build_cost(
+            roadstopspec,
+            crate::economy_type::Price::PR_BUILD_STATION_TRUCK,
+        );
+        let ddir = crate::direction_type::DiagDirection(crate::direction_func::axis_to_diag_dir(
+            axis.0,
+            |ok| crate::movement::native_assert(self.shared, ok),
+        ));
         let mut est = StationID::INVALID;
         self.calculate_road_stop_cost(RoadStopCost {
             cost,
@@ -708,12 +705,7 @@ impl Ctx<'_> {
             station_type: StationType::RoadWaypoint,
             roadstopspec,
             axis,
-            ddir: crate::direction_type::DiagDirection(crate::direction_func::axis_to_diag_dir(
-                axis.0,
-                |ok| {
-                    crate::movement::native_assert(self.shared, ok);
-                },
-            )),
+            ddir,
             est: &mut est,
             rt: RoadType::INVALID_ROADTYPE,
             unit_cost,
@@ -821,38 +813,30 @@ impl Ctx<'_> {
         let replacement_spec_index = i32::from(specindex.value);
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
+            let tile = TileIndex(cur_tile);
             /* Get existing road types and owners before any tile clearing */
-            let road_rt = if self.may_have_road(TileIndex(cur_tile)) {
-                self.get_road_type(TileIndex(cur_tile), RoadTramType::RTT_ROAD)
-                    .0
+            let road_rt = if self.may_have_road(tile) {
+                self.get_road_type(tile, RoadTramType::RTT_ROAD).0
             } else {
                 RoadType::INVALID_ROADTYPE.0
             };
-            let tram_rt = if self.may_have_road(TileIndex(cur_tile)) {
-                self.get_road_type(TileIndex(cur_tile), RoadTramType::RTT_TRAM)
-                    .0
+            let tram_rt = if self.may_have_road(tile) {
+                self.get_road_type(tile, RoadTramType::RTT_TRAM).0
             } else {
                 RoadType::INVALID_ROADTYPE.0
             };
             let road_owner = if road_rt == RoadType::INVALID_ROADTYPE.0 {
                 owner
             } else {
-                self.get_road_owner(TileIndex(cur_tile), RoadTramType::RTT_ROAD)
-                    .0
+                self.get_road_owner(tile, RoadTramType::RTT_ROAD).0
             };
             let tram_owner = if tram_rt == RoadType::INVALID_ROADTYPE.0 {
                 owner
             } else {
-                self.get_road_owner(TileIndex(cur_tile), RoadTramType::RTT_TRAM)
-                    .0
+                self.get_road_owner(tile, RoadTramType::RTT_TRAM).0
             };
-            if crate::station_map::is_road_waypoint_tile(TileIndex(cur_tile), self.shared) {
-                self.remove_road_waypoint_stop(
-                    ret,
-                    TileIndex(cur_tile),
-                    flags,
-                    replacement_spec_index,
-                );
+            if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
+                self.remove_road_waypoint_stop(ret, tile, flags, replacement_spec_index);
             }
             self.area_add((self.s.road_waypoint_tile_area)(wp), TileIndex(cur_tile));
             self.before_add_tile(ret, wp, TileIndex(cur_tile), StationRectMode::ADD_TRY);

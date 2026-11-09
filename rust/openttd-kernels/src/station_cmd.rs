@@ -446,6 +446,17 @@ struct RailStationLandCheck<'a> {
     numtracks: u8,
 }
 
+/// `CheckFlatLandRailStation`'s inputs for overbuilding a plain rail tile.
+struct RailOverbuild<'a> {
+    cost: Cost<'a>,
+    ret: Cost<'a>,
+    tile_cur: TileIndex,
+    rt: RailType,
+    invalid_dirs: DiagDirections,
+    flags: DoCommandFlags,
+    affected_vehicles: &'a mut Vec<*mut crate::services::Train>,
+}
+
 /// `CalculateRailStationCost`'s arguments.
 struct RailStationCost<'a> {
     cost: Cost<'a>,
@@ -1663,6 +1674,94 @@ impl Ctx<'_> {
             );
         }
     }
+    /// `CheckFlatLandRailStation`'s overbuilding of an existing plain rail
+    /// tile with a valid railtype; true when the check is complete.
+    fn overbuild_rail_tile(&self, context: RailOverbuild<'_>) -> bool {
+        let RailOverbuild {
+            cost,
+            ret,
+            tile_cur,
+            rt,
+            invalid_dirs,
+            flags,
+            affected_vehicles,
+        } = context;
+        if rt != RailType((self.rail_map().invalid_rail_type)().0)
+            && (self.shared.is_plain_rail)(tile_cur.0)
+        {
+            /* Don't overbuild signals. */
+            if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
+                cost.error(self.s.strings.remove_signals);
+                return true;
+            }
+            /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
+            if (self.rail().powered_rail)(
+                crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
+                rt.0,
+            ) {
+                let tracks = (self.rail_map().traversal)(tile_cur.0).tracks.0;
+                // `RemoveFirstTrack(&tracks)`: `track` is the lowest bit,
+                // `tracks` keeps the rest.
+                let track = Track(tracks.trailing_zeros() as u8);
+                let tracks = tracks & tracks.wrapping_sub(1);
+                let expected_track = if invalid_dirs.test(DiagDirection::DIAGDIR_NE) {
+                    Track::TRACK_X
+                } else {
+                    Track::TRACK_Y
+                };
+                /* The existing track must align with the desired station axis. */
+                if tracks == TrackBits::TRACK_BIT_NONE.0 && track == expected_track {
+                    self.overbuild_rail_track(cost, ret, tile_cur, track, flags, affected_vehicles);
+                    /* With DoCommandFlags{flags}.Reset(DoCommandFlag::Execute) CmdLandscapeClear would fail since the rail still exists */
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    /// `CheckFlatLandRailStation`'s overbuilding of the one aligned track:
+    /// note a train reserving it, then `CMD_REMOVE_SINGLE_RAIL` and add its cost.
+    fn overbuild_rail_track(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        tile_cur: TileIndex,
+        track: Track,
+        flags: DoCommandFlags,
+        affected_vehicles: &mut Vec<*mut crate::services::Train>,
+    ) {
+        /* Check for trains having a reservation for this tile. */
+        if has_bit(
+            crate::pbs::Pbs::acquire(self.shared).reserved(tile_cur.0),
+            track.0,
+        ) {
+            let v = crate::pbs::Pbs::acquire(self.shared)
+                .train_for(tile_cur.0, track.0)
+                .shell()
+                .cast::<crate::services::Train>();
+            if !v.is_null() {
+                affected_vehicles.push(v);
+            }
+        }
+        // Reuse the two native slots across the nested command;
+        // the accumulated station cost is scalar and already successful.
+        let saved = cost.money();
+        self.nested(ret, tile_cur.0, flags.0, |flags| unsafe {
+            crate::rail_cmd::openttd_rust_rail_remove_single(
+                self.s.rail,
+                ret.0,
+                cost.0,
+                flags,
+                tile_cur.0,
+                track.0,
+            );
+        });
+        cost.set(saved);
+        if !ret.ok() {
+            return cost.take(ret);
+        }
+        cost.add_money(ret.money());
+    }
     /// `CheckFlatLandRailStation`: checks if a rail station can be built at the
     /// given tile.
     fn check_flat_land_rail_station(&self, context: RailStationLandCheck<'_>) {
@@ -1727,65 +1826,16 @@ impl Ctx<'_> {
             }
         } else {
             /* If we are building a station with a valid railtype, we may be able to overbuild an existing rail tile. */
-            if rt != RailType((self.rail_map().invalid_rail_type)().0)
-                && (self.shared.is_plain_rail)(tile_cur.0)
-            {
-                /* Don't overbuild signals. */
-                if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
-                    return cost.error(self.s.strings.remove_signals);
-                }
-                /* The current rail type must have power on the to-be-built type (e.g. convert normal rail to electrified rail). */
-                if (self.rail().powered_rail)(
-                    crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
-                    rt.0,
-                ) {
-                    let tracks = (self.rail_map().traversal)(tile_cur.0).tracks.0;
-                    // `RemoveFirstTrack(&tracks)`: `track` is the lowest bit,
-                    // `tracks` keeps the rest.
-                    let track = Track(tracks.trailing_zeros() as u8);
-                    let tracks = tracks & tracks.wrapping_sub(1);
-                    let expected_track = if invalid_dirs.test(DiagDirection::DIAGDIR_NE) {
-                        Track::TRACK_X
-                    } else {
-                        Track::TRACK_Y
-                    };
-                    /* The existing track must align with the desired station axis. */
-                    if tracks == TrackBits::TRACK_BIT_NONE.0 && track == expected_track {
-                        /* Check for trains having a reservation for this tile. */
-                        if has_bit(
-                            crate::pbs::Pbs::acquire(self.shared).reserved(tile_cur.0),
-                            track.0,
-                        ) {
-                            let v = crate::pbs::Pbs::acquire(self.shared)
-                                .train_for(tile_cur.0, track.0)
-                                .shell()
-                                .cast::<crate::services::Train>();
-                            if !v.is_null() {
-                                affected_vehicles.push(v);
-                            }
-                        }
-                        // Reuse the two native slots across the nested command;
-                        // the accumulated station cost is scalar and already successful.
-                        let saved = cost.money();
-                        self.nested(ret, tile_cur.0, flags.0, |flags| unsafe {
-                            crate::rail_cmd::openttd_rust_rail_remove_single(
-                                self.s.rail,
-                                ret.0,
-                                cost.0,
-                                flags,
-                                tile_cur.0,
-                                track.0,
-                            );
-                        });
-                        cost.set(saved);
-                        if !ret.ok() {
-                            return cost.take(ret);
-                        }
-                        cost.add_money(ret.money());
-                        /* With DoCommandFlags{flags}.Reset(DoCommandFlag::Execute) CmdLandscapeClear would fail since the rail still exists */
-                        return;
-                    }
-                }
+            if self.overbuild_rail_tile(RailOverbuild {
+                cost,
+                ret,
+                tile_cur,
+                rt,
+                invalid_dirs,
+                flags,
+                affected_vehicles,
+            }) {
+                return;
             }
             crate::landscape_cmd::clear_command(self.command, ret.0, tile_cur.0, flags.0);
             if !ret.ok() {
@@ -1953,6 +2003,58 @@ impl Ctx<'_> {
             disallowed_msg: StringID(self.s.strings.demolish_bridge),
         });
     }
+    /// `CmdBuildRailStation`'s final step: check whether we need to expand the
+    /// reservation of trains already on the station.
+    fn expand_platform_reservations(&self, tile_org: TileIndex, axis: Axis, numtracks: u8) {
+        let update_reservation_area = if axis == Axis::AXIS_X {
+            TileArea {
+                tile: tile_org.0,
+                w: 1,
+                h: u16::from(numtracks),
+            }
+        } else {
+            TileArea {
+                tile: tile_org.0,
+                w: u16::from(numtracks),
+                h: 1,
+            }
+        };
+        let world = crate::map_func::World::new(self.shared);
+        for tile in update_reservation_area.tiles(self.map()) {
+            let tile = TileIndex(tile);
+            /* Don't even try to make eye candy parts reserved. */
+            if self.is_station_tile_blocked(tile) {
+                continue;
+            }
+            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            }));
+            let tile_offset = self.map().offs_by_diag_dir(dir.0);
+            let mut platform_begin = tile;
+            let mut platform_end = tile;
+            /* We can only account for tiles that are reachable from this tile, so ignore primarily blocked tiles while finding the platform begin and end. */
+            let mut next_tile = TileIndex(platform_begin.0.wrapping_sub(tile_offset));
+            while world.is_compatible_train_station_tile(next_tile, platform_begin) {
+                platform_begin = next_tile;
+                next_tile = TileIndex(next_tile.0.wrapping_sub(tile_offset));
+            }
+            let mut next_tile = TileIndex(platform_end.0.wrapping_add(tile_offset));
+            while world.is_compatible_train_station_tile(next_tile, platform_end) {
+                platform_end = next_tile;
+                next_tile = TileIndex(next_tile.0.wrapping_add(tile_offset));
+            }
+            /* If there is at least on reservation on the platform, we reserve the whole platform. */
+            let mut reservation = false;
+            let mut t = platform_begin;
+            while !reservation && t.0 <= platform_end.0 {
+                reservation = self.has_station_reservation(t);
+                t = TileIndex(t.0.wrapping_add(tile_offset));
+            }
+            if reservation {
+                crate::pbs::Pbs::acquire(self.shared).platform(platform_begin.0, dir.0, true);
+            }
+        }
+    }
     /// `CmdBuildRailStation`: build rail station.
     fn cmd_build_rail_station(
         &self,
@@ -2081,48 +2183,49 @@ impl Ctx<'_> {
             statspec,
             crate::newgrf_station::get_station_layout_key(numtracks, plat_len),
         );
-        let mut tile_track = tile_org;
         for i in 0..numtracks {
-            let mut tile = tile_track;
+            let tile_track = TileIndex(
+                tile_org
+                    .0
+                    .wrapping_add(u32::from(i).wrapping_mul(track_delta)),
+            );
             for j in 0..plat_len {
-                let position = u32::from(i) * u32::from(plat_len) + u32::from(j);
+                let tile = TileIndex(
+                    tile_track
+                        .0
+                        .wrapping_add(u32::from(j).wrapping_mul(tile_delta)),
+                );
                 /* Don't check the layout if there's no bridge above anyway. */
-                if crate::map_func::World::new(self.shared).bridge_above(tile.0) {
-                    let mut gfx = StationGfx(
-                        Self::rail_station_tile_layout_gfx(layout, position, numtracks, plat_len)
-                            .0
-                            .wrapping_add(axis.0),
-                    );
-                    if !statspec.is_null() {
-                        let platinfo =
-                            crate::newgrf_station::platform_info(gfx.0, plat_len, numtracks, j, i);
-                        /* As the station is not yet completely finished, the station does not yet exist. */
-                        let callback = crate::newgrf_station::callback(
-                            CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
-                            platinfo,
-                            0,
-                            statspec,
-                            std::ptr::null_mut(),
-                            TileIndex::INVALID.0,
-                        );
-                        if callback != CALLBACK_FAILED && u8::try_from(callback).is_ok() {
-                            gfx = StationGfx((callback as u8 & !1).wrapping_add(axis.0));
-                        }
-                    }
-                    self.is_rail_station_bridge_above_ok(
-                        ret,
-                        tile,
+                if !crate::map_func::World::new(self.shared).bridge_above(tile.0) {
+                    continue;
+                }
+                let position = u32::from(i) * u32::from(plat_len) + u32::from(j);
+                let mut gfx = StationGfx(
+                    Self::rail_station_tile_layout_gfx(layout, position, numtracks, plat_len)
+                        .0
+                        .wrapping_add(axis.0),
+                );
+                if !statspec.is_null() {
+                    let platinfo =
+                        crate::newgrf_station::platform_info(gfx.0, plat_len, numtracks, j, i);
+                    /* As the station is not yet completely finished, the station does not yet exist. */
+                    let callback = crate::newgrf_station::callback(
+                        CallbackID::CBID_STATION_BUILD_TILE_LAYOUT.0,
+                        platinfo,
+                        0,
                         statspec,
-                        StationType::Rail,
-                        gfx,
+                        std::ptr::null_mut(),
+                        TileIndex::INVALID.0,
                     );
-                    if !ret.ok() {
-                        return cost.take(ret);
+                    if callback != CALLBACK_FAILED && u8::try_from(callback).is_ok() {
+                        gfx = StationGfx((callback as u8 & !1).wrapping_add(axis.0));
                     }
                 }
-                tile = TileIndex(tile.0.wrapping_add(tile_delta));
+                self.is_rail_station_bridge_above_ok(ret, tile, statspec, StationType::Rail, gfx);
+                if !ret.ok() {
+                    return cost.take(ret);
+                }
             }
-            tile_track = TileIndex(tile_track.0.wrapping_add(track_delta));
         }
         /* Check if we can allocate a custom stationspec to this station */
         let specindex = crate::station_association::allocate(self.s.rail_association, statspec, st);
@@ -2294,55 +2397,7 @@ impl Ctx<'_> {
             /* Restore reservations of trains. */
             self.restore_train_reservation(v);
         }
-        /* Check whether we need to expand the reservation of trains already on the station. */
-        let update_reservation_area = if axis == Axis::AXIS_X {
-            TileArea {
-                tile: tile_org.0,
-                w: 1,
-                h: u16::from(numtracks),
-            }
-        } else {
-            TileArea {
-                tile: tile_org.0,
-                w: u16::from(numtracks),
-                h: 1,
-            }
-        };
-        let world = crate::map_func::World::new(self.shared);
-        for tile in update_reservation_area.tiles(self.map()) {
-            let tile = TileIndex(tile);
-            /* Don't even try to make eye candy parts reserved. */
-            if self.is_station_tile_blocked(tile) {
-                continue;
-            }
-            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            }));
-            let tile_offset = self.map().offs_by_diag_dir(dir.0);
-            let mut platform_begin = tile;
-            let mut platform_end = tile;
-            /* We can only account for tiles that are reachable from this tile, so ignore primarily blocked tiles while finding the platform begin and end. */
-            let mut next_tile = TileIndex(platform_begin.0.wrapping_sub(tile_offset));
-            while world.is_compatible_train_station_tile(next_tile, platform_begin) {
-                platform_begin = next_tile;
-                next_tile = TileIndex(next_tile.0.wrapping_sub(tile_offset));
-            }
-            let mut next_tile = TileIndex(platform_end.0.wrapping_add(tile_offset));
-            while world.is_compatible_train_station_tile(next_tile, platform_end) {
-                platform_end = next_tile;
-                next_tile = TileIndex(next_tile.0.wrapping_add(tile_offset));
-            }
-            /* If there is at least on reservation on the platform, we reserve the whole platform. */
-            let mut reservation = false;
-            let mut t = platform_begin;
-            while !reservation && t.0 <= platform_end.0 {
-                reservation = self.has_station_reservation(t);
-                t = TileIndex(t.0.wrapping_add(tile_offset));
-            }
-            if reservation {
-                crate::pbs::Pbs::acquire(self.shared).platform(platform_begin.0, dir.0, true);
-            }
-        }
+        self.expand_platform_reservations(tile_org, axis, numtracks);
         (self.s.mark_tiles)(st, false);
         self.after_station_tile_set_change(st, true, StationType::Rail);
     }
@@ -2430,6 +2485,53 @@ impl Ctx<'_> {
             .0,
         ))
     }
+    /// `RemoveFromRailBaseStation`'s execution for one rail station tile.
+    /// Returns the train whose reservation was freed, for the caller to restore.
+    fn remove_rail_station_tile(
+        &self,
+        st: *mut BaseStation,
+        tile: TileIndex,
+        keep_rail: bool,
+    ) -> *mut crate::services::Train {
+        /* read variables before the station tile is removed */
+        let specindex = (self.s.custom_rail_index)(tile.0);
+        let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
+        let owner = CompanyID((self.shared.tile_owner)(tile.0));
+        let rt = RailType(crate::map_func::World::new(self.shared).rail_type(tile.0));
+        let mut v = std::ptr::null_mut();
+        if self.has_station_reservation(tile) {
+            v = crate::pbs::Pbs::acquire(self.shared)
+                .train_for(tile.0, track.0)
+                .shell()
+                .cast::<crate::services::Train>();
+            if !v.is_null() {
+                self.free_train_reservation(v);
+            }
+        }
+        let build_rail = keep_rail && !self.is_station_tile_blocked(tile);
+        if !build_rail && !self.is_station_tile_blocked(tile) {
+            (self.rail().rail_infrastructure)(owner.0, rt.0, u32::MAX);
+        }
+        crate::ground::clear_square(tile.0, self.shared);
+        (self.s.close_station_inspect)(tile.0);
+        if build_rail {
+            (self.rail_map().make_rail_normal)(
+                tile.0,
+                owner.0,
+                crate::track_func::track_to_track_bits(track.0, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                }),
+                rt.0,
+            );
+        }
+        (self.s.station_infrastructure)(owner.0, u32::MAX);
+        (self.command.infrastructure_dirty)(owner.0);
+        self.after_remove_tile(st, tile);
+        self.signals().add_track(tile.0, track.0, owner.0);
+        (self.rail().layout_changed)(tile.0, track.0);
+        crate::station_association::deallocate(self.s.rail_association, st, specindex as u8);
+        v
+    }
     /// `RemoveFromRailBaseStation`: remove a number of tiles from any rail
     /// station within the area; returns the stations affected.
     fn remove_from_rail_base_station(
@@ -2504,43 +2606,7 @@ impl Ctx<'_> {
             if !flags.test(DoCommandFlag::Execute) {
                 continue;
             }
-            /* read variables before the station tile is removed */
-            let specindex = (self.s.custom_rail_index)(tile.0);
-            let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
-            let owner = CompanyID((self.shared.tile_owner)(tile.0));
-            let rt = RailType(crate::map_func::World::new(self.shared).rail_type(tile.0));
-            let mut v = std::ptr::null_mut();
-            if self.has_station_reservation(tile) {
-                v = crate::pbs::Pbs::acquire(self.shared)
-                    .train_for(tile.0, track.0)
-                    .shell()
-                    .cast::<crate::services::Train>();
-                if !v.is_null() {
-                    self.free_train_reservation(v);
-                }
-            }
-            let build_rail = keep_rail && !self.is_station_tile_blocked(tile);
-            if !build_rail && !self.is_station_tile_blocked(tile) {
-                (self.rail().rail_infrastructure)(owner.0, rt.0, u32::MAX);
-            }
-            crate::ground::clear_square(tile.0, self.shared);
-            (self.s.close_station_inspect)(tile.0);
-            if build_rail {
-                (self.rail_map().make_rail_normal)(
-                    tile.0,
-                    owner.0,
-                    crate::track_func::track_to_track_bits(track.0, |ok| {
-                        crate::movement::native_assert(self.shared, ok);
-                    }),
-                    rt.0,
-                );
-            }
-            (self.s.station_infrastructure)(owner.0, u32::MAX);
-            (self.command.infrastructure_dirty)(owner.0);
-            self.after_remove_tile(st, tile);
-            self.signals().add_track(tile.0, track.0, owner.0);
-            (self.rail().layout_changed)(tile.0, track.0);
-            crate::station_association::deallocate(self.s.rail_association, st, specindex as u8);
+            let v = self.remove_rail_station_tile(st, tile, keep_rail);
             if !affected_stations.contains(&st) {
                 affected_stations.push(st);
             }
@@ -2827,11 +2893,15 @@ impl Ctx<'_> {
     }
     /// `UpdateCompanyRoadInfrastructure`.
     fn update_company_road_infrastructure(&self, rt: RoadType, o: CompanyID, count: i32) {
-        if rt == RoadType::INVALID_ROADTYPE || !(self.shared.company_valid)(o.0) {
-            return;
+        // SAFETY: The shared road command tables are process-lifetime.
+        unsafe {
+            crate::road_cmd::update_company_road_infrastructure(
+                (self.shared.road_commands)(),
+                rt.0,
+                o.0,
+                count,
+            );
         }
-        (self.rail().road_infrastructure)(o.0, rt.0, count as u32);
-        (self.command.infrastructure_dirty)(o.0);
     }
     /// `IsRoadStationBridgeAboveOk`: test if a road station can be built below
     /// a bridge.
@@ -2861,6 +2931,98 @@ impl Ctx<'_> {
             bridge_height: self.bridge_height(rampsouth),
             disallowed_msg: StringID(self.s.strings.demolish_bridge),
         });
+    }
+    /// `CheckFlatLandRoadStop`'s check of building a road+tram stop over an
+    /// existing normal road tile.
+    fn check_build_over_road(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        cur_tile: TileIndex,
+        rt: RoadType,
+    ) {
+        /* There is a road, check if we can build road+tram stop over it. */
+        let road_rt = self.get_road_type(cur_tile, RoadTramType::RTT_ROAD);
+        if road_rt != RoadType::INVALID_ROADTYPE {
+            let road_owner = self.get_road_owner(cur_tile, RoadTramType::RTT_ROAD);
+            if road_owner == CompanyID::TOWN {
+                if !(self.s.stop_on_town_road)() {
+                    return cost.error(self.s.strings.drive_town);
+                }
+            } else if !(self.s.stop_on_competitor_road)() && road_owner != CompanyID::NONE {
+                unsafe {
+                    self.command.ownership(ret.0, road_owner.0, 0);
+                }
+                if !ret.ok() {
+                    return cost.take(ret);
+                }
+            }
+            let num_pieces = self
+                .get_road_bits(cur_tile, RoadTramType::RTT_ROAD)
+                .0
+                .count_ones();
+            if rt != RoadType::INVALID_ROADTYPE
+                && road_type_is_road(rt.0)
+                && !(self.shared.road_powered)(rt.0, road_rt.0)
+            {
+                return cost.error(self.s.strings.unsuitable_road);
+            }
+            if crate::map_func::World::new(self.shared).disallowed_road_directions(cur_tile.0)
+                != DisallowedRoadDirections::DRD_NONE.0
+                && road_owner != CompanyID::TOWN
+                && road_owner != CompanyID::NONE
+            {
+                unsafe {
+                    self.command.ownership(ret.0, road_owner.0, 0);
+                }
+                if !ret.ok() {
+                    return cost.take(ret);
+                }
+            }
+            cost.add_money(
+                crate::road_cost::build_cost(self.shared, road_rt.0)
+                    .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
+            );
+        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
+            cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
+        }
+        /* There is a tram, check if we can build road+tram stop over it. */
+        let tram_rt = self.get_road_type(cur_tile, RoadTramType::RTT_TRAM);
+        if tram_rt != RoadType::INVALID_ROADTYPE {
+            let tram_owner = self.get_road_owner(cur_tile, RoadTramType::RTT_TRAM);
+            if (self.shared.company_valid)(tram_owner.0)
+                && (!(self.s.stop_on_competitor_road)()
+                    /* Disallow breaking end-of-line of someone else
+                     * so trams can still reverse on this tile. */
+                    || self
+                        .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
+                        .0
+                        .is_power_of_two())
+            {
+                unsafe {
+                    self.command.ownership(ret.0, tram_owner.0, 0);
+                }
+                if !ret.ok() {
+                    return cost.take(ret);
+                }
+            }
+            let num_pieces = self
+                .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
+                .0
+                .count_ones();
+            if rt != RoadType::INVALID_ROADTYPE
+                && road_type_is_tram(rt.0)
+                && !(self.shared.road_powered)(rt.0, tram_rt.0)
+            {
+                return cost.error(self.s.strings.unsuitable_road);
+            }
+            cost.add_money(
+                crate::road_cost::build_cost(self.shared, tram_rt.0)
+                    .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
+            );
+        } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_tram(rt.0) {
+            cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
+        }
     }
     /// `CheckFlatLandRoadStop`: checks if a road stop can be built at the given
     /// tile.
@@ -2959,88 +3121,7 @@ impl Ctx<'_> {
             });
         }
         if build_over_road {
-            /* There is a road, check if we can build road+tram stop over it. */
-            let road_rt = self.get_road_type(cur_tile, RoadTramType::RTT_ROAD);
-            if road_rt != RoadType::INVALID_ROADTYPE {
-                let road_owner = self.get_road_owner(cur_tile, RoadTramType::RTT_ROAD);
-                if road_owner == CompanyID::TOWN {
-                    if !(self.s.stop_on_town_road)() {
-                        return cost.error(self.s.strings.drive_town);
-                    }
-                } else if !(self.s.stop_on_competitor_road)() && road_owner != CompanyID::NONE {
-                    unsafe {
-                        self.command.ownership(ret.0, road_owner.0, 0);
-                    }
-                    if !ret.ok() {
-                        return cost.take(ret);
-                    }
-                }
-                let num_pieces = self
-                    .get_road_bits(cur_tile, RoadTramType::RTT_ROAD)
-                    .0
-                    .count_ones();
-                if rt != RoadType::INVALID_ROADTYPE
-                    && road_type_is_road(rt.0)
-                    && !(self.shared.road_powered)(rt.0, road_rt.0)
-                {
-                    return cost.error(self.s.strings.unsuitable_road);
-                }
-                if world.disallowed_road_directions(cur_tile.0)
-                    != DisallowedRoadDirections::DRD_NONE.0
-                    && road_owner != CompanyID::TOWN
-                    && road_owner != CompanyID::NONE
-                {
-                    unsafe {
-                        self.command.ownership(ret.0, road_owner.0, 0);
-                    }
-                    if !ret.ok() {
-                        return cost.take(ret);
-                    }
-                }
-                cost.add_money(
-                    crate::road_cost::build_cost(self.shared, road_rt.0)
-                        .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
-                );
-            } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
-                cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
-            }
-            /* There is a tram, check if we can build road+tram stop over it. */
-            let tram_rt = self.get_road_type(cur_tile, RoadTramType::RTT_TRAM);
-            if tram_rt != RoadType::INVALID_ROADTYPE {
-                let tram_owner = self.get_road_owner(cur_tile, RoadTramType::RTT_TRAM);
-                if (self.shared.company_valid)(tram_owner.0)
-                    && (!(self.s.stop_on_competitor_road)()
-                        /* Disallow breaking end-of-line of someone else
-                         * so trams can still reverse on this tile. */
-                        || self
-                            .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
-                            .0
-                            .is_power_of_two())
-                {
-                    unsafe {
-                        self.command.ownership(ret.0, tram_owner.0, 0);
-                    }
-                    if !ret.ok() {
-                        return cost.take(ret);
-                    }
-                }
-                let num_pieces = self
-                    .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
-                    .0
-                    .count_ones();
-                if rt != RoadType::INVALID_ROADTYPE
-                    && road_type_is_tram(rt.0)
-                    && !(self.shared.road_powered)(rt.0, tram_rt.0)
-                {
-                    return cost.error(self.s.strings.unsuitable_road);
-                }
-                cost.add_money(
-                    crate::road_cost::build_cost(self.shared, tram_rt.0)
-                        .saturating_mul(i64::from(2_u32.wrapping_sub(num_pieces))),
-                );
-            } else if rt != RoadType::INVALID_ROADTYPE && road_type_is_tram(rt.0) {
-                cost.add_money(crate::road_cost::build_cost(self.shared, rt.0).saturating_mul(2));
-            }
+            self.check_build_over_road(cost, ret, cur_tile, rt);
         } else if rt == RoadType::INVALID_ROADTYPE {
             cost.error(self.s.strings.no_road);
         } else {
@@ -3117,6 +3198,120 @@ impl Ctx<'_> {
             }
         }
     }
+    /// `CmdBuildRoadStop`'s existing road types and owners of a tile, before any
+    /// tile clearing: `INVALID_ROADTYPE` and `_current_company` where absent.
+    fn existing_road_types_and_owners(
+        &self,
+        cur_tile: TileIndex,
+    ) -> (RoadType, RoadType, CompanyID, CompanyID) {
+        let road_rt = if self.may_have_road(cur_tile) {
+            self.get_road_type(cur_tile, RoadTramType::RTT_ROAD)
+        } else {
+            RoadType::INVALID_ROADTYPE
+        };
+        let tram_rt = if self.may_have_road(cur_tile) {
+            self.get_road_type(cur_tile, RoadTramType::RTT_TRAM)
+        } else {
+            RoadType::INVALID_ROADTYPE
+        };
+        let road_owner = if road_rt != RoadType::INVALID_ROADTYPE {
+            self.get_road_owner(cur_tile, RoadTramType::RTT_ROAD)
+        } else {
+            CompanyID((self.shared.current_company)())
+        };
+        let tram_owner = if tram_rt != RoadType::INVALID_ROADTYPE {
+            self.get_road_owner(cur_tile, RoadTramType::RTT_TRAM)
+        } else {
+            CompanyID((self.shared.current_company)())
+        };
+        (road_rt, tram_rt, road_owner, tram_owner)
+    }
+    /// `FindRoadStopSpot` and `*currstop = road_stop`: append `road_stop` to the
+    /// station's truck or bus stop list.
+    fn find_road_stop_spot_insert(
+        &self,
+        st: *mut BaseStation,
+        truck_station: bool,
+        road_stop: *mut Stop,
+    ) {
+        let primary_stop = (self.stops().head)(st, truck_station);
+        if primary_stop.is_null() {
+            /* we have no roadstop of the type yet, so write a "primary stop" */
+            (self.s.set_stop_head)(st, truck_station, road_stop);
+        } else {
+            /* there are stops already, so append to the end of the list */
+            let mut stop = primary_stop;
+            while !(self.stops().next)(stop).is_null() {
+                stop = (self.stops().next)(stop);
+            }
+            (self.s.set_stop_next)(stop, road_stop);
+        }
+    }
+    /// `CmdBuildRoadStop`'s company infrastructure update on a normal road tile:
+    /// remove the old bits first.
+    fn remove_normal_road_infrastructure(
+        &self,
+        cur_tile: TileIndex,
+        road_rt: RoadType,
+        road_owner: CompanyID,
+        tram_rt: RoadType,
+        tram_owner: CompanyID,
+    ) {
+        self.update_company_road_infrastructure(
+            road_rt,
+            road_owner,
+            -(self
+                .get_road_bits(cur_tile, RoadTramType::RTT_ROAD)
+                .0
+                .count_ones() as i32),
+        );
+        self.update_company_road_infrastructure(
+            tram_rt,
+            tram_owner,
+            -(self
+                .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
+                .0
+                .count_ones() as i32),
+        );
+    }
+    /// `RoadStopSpec::GetBuildCost(category)`, or `_price[category]` without a
+    /// spec.
+    fn road_stop_build_cost(&self, spec: *const RoadSpec, category: Price) -> i64 {
+        if spec.is_null() {
+            return crate::company::price(usize::from(category.0));
+        }
+        let factor = (self.s.road_spec_build_cost)(spec, category.0);
+        crate::economy_func::get_price(
+            u32::from(category.0),
+            u32::from(factor.multiplier),
+            factor.shift,
+            -4,
+        )
+    }
+    /// `CmdBuildRoadStop`'s checks of a custom road stop spec against the stop
+    /// type and drive-through flag.
+    fn road_stop_spec_allows(
+        &self,
+        roadstopspec: *const RoadSpec,
+        stop_type: RoadStopType,
+        is_drive_through: bool,
+    ) -> bool {
+        let info = (self.s.road_spec_info)(roadstopspec);
+        let spec_type = RoadStopAvailabilityType(info.stop_type);
+        if stop_type == RoadStopType::Truck
+            && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_FREIGHT
+            && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_ALL
+        {
+            return false;
+        }
+        if stop_type == RoadStopType::Bus
+            && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_PASSENGER
+            && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_ALL
+        {
+            return false;
+        }
+        !(!is_drive_through && info.drive_only)
+    }
     /// `CmdBuildRoadStop`: build a bus or truck stop.
     fn cmd_build_road_stop(
         &self,
@@ -3160,24 +3355,10 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let roadstopspec = crate::newgrf_class::roadstop::spec(spec_class.0, u32::from(spec_index));
-        if !roadstopspec.is_null() {
-            let info = (self.s.road_spec_info)(roadstopspec);
-            let spec_type = RoadStopAvailabilityType(info.stop_type);
-            if stop_type == RoadStopType::Truck
-                && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_FREIGHT
-                && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_ALL
-            {
-                return cost.error(StringID::INVALID_STRING_ID.0);
-            }
-            if stop_type == RoadStopType::Bus
-                && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_PASSENGER
-                && spec_type != RoadStopAvailabilityType::ROADSTOPTYPE_ALL
-            {
-                return cost.error(StringID::INVALID_STRING_ID.0);
-            }
-            if !is_drive_through && info.drive_only {
-                return cost.error(StringID::INVALID_STRING_ID.0);
-            }
+        if !roadstopspec.is_null()
+            && !self.road_stop_spec_allows(roadstopspec, stop_type, is_drive_through)
+        {
+            return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the requested road stop is too big */
         let station_spread = (self.s.spread)();
@@ -3225,18 +3406,7 @@ impl Ctx<'_> {
             Price::PR_BUILD_STATION_BUS
         };
         /* Total road stop cost. */
-        let unit_cost = if roadstopspec.is_null() {
-            crate::company::price(usize::from(price.0))
-        } else {
-            // `RoadStopSpec::GetBuildCost`.
-            let factor = (self.s.road_spec_build_cost)(roadstopspec, price.0);
-            crate::economy_func::get_price(
-                u32::from(price.0),
-                u32::from(factor.multiplier),
-                factor.shift,
-                -4,
-            )
-        };
+        let unit_cost = self.road_stop_build_cost(roadstopspec, price);
         let mut est = StationID::INVALID;
         self.calculate_road_stop_cost(RoadStopCost {
             cost,
@@ -3340,26 +3510,8 @@ impl Ctx<'_> {
         for cur_tile in roadstop_area.tiles(self.map()) {
             let cur_tile = TileIndex(cur_tile);
             /* Get existing road types and owners before any tile clearing */
-            let mut road_rt = if self.may_have_road(cur_tile) {
-                self.get_road_type(cur_tile, RoadTramType::RTT_ROAD)
-            } else {
-                RoadType::INVALID_ROADTYPE
-            };
-            let mut tram_rt = if self.may_have_road(cur_tile) {
-                self.get_road_type(cur_tile, RoadTramType::RTT_TRAM)
-            } else {
-                RoadType::INVALID_ROADTYPE
-            };
-            let road_owner = if road_rt != RoadType::INVALID_ROADTYPE {
-                self.get_road_owner(cur_tile, RoadTramType::RTT_ROAD)
-            } else {
-                CompanyID((self.shared.current_company)())
-            };
-            let tram_owner = if tram_rt != RoadType::INVALID_ROADTYPE {
-                self.get_road_owner(cur_tile, RoadTramType::RTT_TRAM)
-            } else {
-                CompanyID((self.shared.current_company)())
-            };
+            let (mut road_rt, mut tram_rt, road_owner, tram_owner) =
+                self.existing_road_types_and_owners(cur_tile);
             if TileType((self.shared.tile_type)(cur_tile.0)) == TileType::MP_STATION
                 && matches!(
                     StationType((self.shared.station_type)(cur_tile.0).0),
@@ -3375,19 +3527,7 @@ impl Ctx<'_> {
             }
             let road_stop = (self.s.new_stop)(cur_tile.0);
             /* Insert into linked list of RoadStops. */
-            // `FindRoadStopSpot`.
-            let primary_stop = (self.stops().head)(st, is_truck_stop);
-            if primary_stop.is_null() {
-                /* we have no roadstop of the type yet, so write a "primary stop" */
-                (self.s.set_stop_head)(st, is_truck_stop, road_stop);
-            } else {
-                /* there are stops already, so append to the end of the list */
-                let mut stop = primary_stop;
-                while !(self.stops().next)(stop).is_null() {
-                    stop = (self.stops().next)(stop);
-                }
-                (self.s.set_stop_next)(stop, road_stop);
-            }
+            self.find_road_stop_spot_insert(st, is_truck_stop, road_stop);
             self.area_add((self.s.stop_area)(st, is_truck_stop), cur_tile);
             /* Initialize an empty station. */
             crate::station_lifecycle::add_facility_raw(
@@ -3407,21 +3547,8 @@ impl Ctx<'_> {
                 /* Update company infrastructure counts. If the current tile is a normal road tile, remove the old
                  * bits first. */
                 if crate::map_func::World::new(self.shared).is_normal_road_tile(cur_tile.0) {
-                    self.update_company_road_infrastructure(
-                        road_rt,
-                        road_owner,
-                        -(self
-                            .get_road_bits(cur_tile, RoadTramType::RTT_ROAD)
-                            .0
-                            .count_ones() as i32),
-                    );
-                    self.update_company_road_infrastructure(
-                        tram_rt,
-                        tram_owner,
-                        -(self
-                            .get_road_bits(cur_tile, RoadTramType::RTT_TRAM)
-                            .0
-                            .count_ones() as i32),
+                    self.remove_normal_road_infrastructure(
+                        cur_tile, road_rt, road_owner, tram_rt, tram_owner,
                     );
                 }
                 if road_rt == RoadType::INVALID_ROADTYPE && road_type_is_road(rt.0) {
@@ -4166,6 +4293,87 @@ impl Ctx<'_> {
         let fields = unsafe { crate::town::openttd_rust_town_simulation(owner) };
         unsafe { &raw mut (*fields).noise_reached }
     }
+    /// `CmdBuildAirport`'s check whether the local authority would allow a new
+    /// airport; `STR_NULL` when it would, otherwise the refusal and its town.
+    fn check_local_authority_allows_airport(
+        &self,
+        tile: TileIndex,
+        nearest: *const crate::services::TownHandle,
+        noise_reached: *mut u16,
+        newnoise_level: u32,
+    ) -> (StringID, *const crate::services::TownHandle) {
+        let mut authority_refuse_message = StringID::STR_NULL;
+        let authority = unsafe { &*self.s.authority };
+        let mut authority_refuse_town = std::ptr::null();
+        if unsafe { (*self.s.shared).settings().station_noise.read() } {
+            /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
+            if u32::from(unsafe { noise_reached.read() }) + newnoise_level
+                > u32::from((self.s.town_max_noise)(nearest))
+            {
+                authority_refuse_message = StringID(self.s.strings.refuse_noise);
+                authority_refuse_town = nearest;
+            }
+        } else if TownCouncilAttitudes((authority.council_tolerance)())
+            != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
+        {
+            let t = crate::town::spatial::closest(self.shared, tile.0, u32::MAX);
+            let mut num = 0_u32;
+            for id in 0..(self.world().pool_size)() {
+                let st = self.full_station(StationID(id as u16));
+                if st.is_null() {
+                    continue;
+                }
+                if (self.s.station_town)(st) == t
+                    && StationFacilities((self.world().facilities)(st))
+                        .test(StationFacility::Airport)
+                    && (self.s.airport_type)(st) != AT_OILRIG
+                {
+                    num += 1;
+                }
+            }
+            if num >= 2 {
+                authority_refuse_message = StringID(self.s.strings.refuse_airport);
+                authority_refuse_town = t;
+            }
+        }
+        (authority_refuse_message, authority_refuse_town)
+    }
+    /// `CmdBuildAirport`'s execution over the layout's tiles: make each
+    /// airport tile, then trigger the built animation.
+    fn make_airport_tiles(
+        &self,
+        st: *mut BaseStation,
+        spec: *const AirportSpec,
+        layout: u8,
+        tile: TileIndex,
+    ) {
+        let owner = CompanyID((self.world().station_owner)(st));
+        let index = (self.links().graphs.station_id)(st);
+        for iter in self.airport_tiles(spec, layout, tile) {
+            (self.s.make_airport)(
+                iter.tile,
+                owner.0,
+                index,
+                iter.gfx,
+                crate::water_map::WaterClass::Invalid.0,
+            );
+            (self.s.set_random_bits)(
+                iter.tile,
+                gb((self.shared.random)(self.shared.context), 0, 4) as u8,
+            );
+            self.area_add((self.s.airport_area)(st), TileIndex(iter.tile));
+            if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(
+                iter.gfx,
+                unsafe { &*self.s.airport_runtime },
+            )) {
+                crate::animated_tile::openttd_rust_animation_add(iter.tile, true);
+            }
+        }
+        /* Only call the animation trigger after all tiles have been built */
+        for iter in self.airport_tiles(spec, layout, tile) {
+            crate::animated_tile::airport_built(st, iter.tile);
+        }
+    }
     /// `CmdBuildAirport`: place an Airport.
     fn cmd_build_airport(
         &self,
@@ -4258,39 +4466,8 @@ impl Ctx<'_> {
         let noise_reached = self.noise_reached(nearest);
         let authority = unsafe { &*self.s.authority };
         /* Check if local auth would allow a new airport */
-        let mut authority_refuse_message = StringID::STR_NULL;
-        let mut authority_refuse_town = std::ptr::null();
-        if unsafe { (*self.s.shared).settings().station_noise.read() } {
-            /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
-            if u32::from(unsafe { noise_reached.read() }) + newnoise_level
-                > u32::from((self.s.town_max_noise)(nearest))
-            {
-                authority_refuse_message = StringID(self.s.strings.refuse_noise);
-                authority_refuse_town = nearest;
-            }
-        } else if TownCouncilAttitudes((authority.council_tolerance)())
-            != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
-        {
-            let t = crate::town::spatial::closest(self.shared, tile.0, u32::MAX);
-            let mut num = 0_u32;
-            for id in 0..(self.world().pool_size)() {
-                let st = self.full_station(StationID(id as u16));
-                if st.is_null() {
-                    continue;
-                }
-                if (self.s.station_town)(st) == t
-                    && StationFacilities((self.world().facilities)(st))
-                        .test(StationFacility::Airport)
-                    && (self.s.airport_type)(st) != AT_OILRIG
-                {
-                    num += 1;
-                }
-            }
-            if num >= 2 {
-                authority_refuse_message = StringID(self.s.strings.refuse_airport);
-                authority_refuse_town = t;
-            }
-        }
+        let (authority_refuse_message, authority_refuse_town) =
+            self.check_local_authority_allows_airport(tile, nearest, noise_reached, newnoise_level);
         if authority_refuse_message != StringID::STR_NULL {
             (self.cost.error_param)(
                 cost.0,
@@ -4350,30 +4527,7 @@ impl Ctx<'_> {
         self.before_add_rect(ret, st, airport_area, StationRectMode::ADD_TRY);
         let owner = CompanyID((self.world().station_owner)(st));
         let index = (self.links().graphs.station_id)(st);
-        for iter in self.airport_tiles(spec, layout, tile) {
-            (self.s.make_airport)(
-                iter.tile,
-                owner.0,
-                index,
-                iter.gfx,
-                crate::water_map::WaterClass::Invalid.0,
-            );
-            (self.s.set_random_bits)(
-                iter.tile,
-                gb((self.shared.random)(self.shared.context), 0, 4) as u8,
-            );
-            self.area_add((self.s.airport_area)(st), TileIndex(iter.tile));
-            if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(
-                iter.gfx,
-                unsafe { &*self.s.airport_runtime },
-            )) {
-                crate::animated_tile::openttd_rust_animation_add(iter.tile, true);
-            }
-        }
-        /* Only call the animation trigger after all tiles have been built */
-        for iter in self.airport_tiles(spec, layout, tile) {
-            crate::animated_tile::airport_built(st, iter.tile);
-        }
+        self.make_airport_tiles(st, spec, layout, tile);
         // `UpdateAirplanesOnNewStation`.
         unsafe {
             crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index);
@@ -4724,6 +4878,49 @@ impl Ctx<'_> {
             }
         }
     }
+    /// `CmdBuildDock`'s execution: add the dock to the station and make the
+    /// dock tiles.
+    fn make_dock_station(
+        &self,
+        ret: Cost<'_>,
+        st: *mut BaseStation,
+        tile: TileIndex,
+        direction: DiagDirection,
+        wc: u8,
+        dock_area: TileArea,
+    ) {
+        let world = crate::map_func::World::new(self.shared);
+        self.area_add((self.s.ship_station_area)(st), tile);
+        let flat_tile = self.tile_add_by_diag_dir(tile, direction);
+        self.area_add((self.s.ship_station_area)(st), flat_tile);
+        crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile.0, unsafe {
+            &*self.s.lifecycle
+        });
+        self.before_add_rect(ret, st, dock_area, StationRectMode::ADD_TRY);
+        let owner = CompanyID((self.world().station_owner)(st));
+        /* If the water part of the dock is on a canal, update infrastructure counts.
+         * This is needed as we've cleared that tile before.
+         * Clearing object tiles may result in water tiles which are already accounted for in the water infrastructure total.
+         * See: MakeWaterKeepingClass() */
+        let canal = crate::water_map::WaterClass::Canal.0;
+        if wc == canal
+            && !((self.shared.has_water_class)(flat_tile.0)
+                && world.water_class(flat_tile.0) == canal
+                && (self.shared.tile_owner)(flat_tile.0) == (self.shared.current_company)())
+        {
+            (self.s.water_infrastructure)(owner.0, 1);
+        }
+        (self.s.station_infrastructure)(owner.0, 2);
+        (self.s.make_dock)(
+            tile.0,
+            owner.0,
+            (self.links().graphs.station_id)(st),
+            direction.0,
+            wc,
+        );
+        self.update_station_docking_tiles(st);
+        self.after_station_tile_set_change(st, true, StationType::Dock);
+    }
     /// `CmdBuildDock`: build a dock/haven.
     fn cmd_build_dock(
         &self,
@@ -4851,35 +5048,7 @@ impl Ctx<'_> {
         if !flags.test(DoCommandFlag::Execute) {
             return;
         }
-        self.area_add((self.s.ship_station_area)(st), tile);
-        let flat_tile = self.tile_add_by_diag_dir(tile, direction);
-        self.area_add((self.s.ship_station_area)(st), flat_tile);
-        crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile.0, unsafe {
-            &*self.s.lifecycle
-        });
-        self.before_add_rect(ret, st, dock_area, StationRectMode::ADD_TRY);
-        let owner = CompanyID((self.world().station_owner)(st));
-        /* If the water part of the dock is on a canal, update infrastructure counts.
-         * This is needed as we've cleared that tile before.
-         * Clearing object tiles may result in water tiles which are already accounted for in the water infrastructure total.
-         * See: MakeWaterKeepingClass() */
-        let canal = crate::water_map::WaterClass::Canal.0;
-        if wc == canal
-            && !((self.shared.has_water_class)(flat_tile.0)
-                && world.water_class(flat_tile.0) == canal
-                && (self.shared.tile_owner)(flat_tile.0) == (self.shared.current_company)())
-        {
-            (self.s.water_infrastructure)(owner.0, 1);
-        }
-        (self.s.station_infrastructure)(owner.0, 2);
-        (self.s.make_dock)(
-            tile.0,
-            owner.0,
-            (self.links().graphs.station_id)(st),
-            direction.0,
-            wc,
-        );
-        self.update_station_docking_tiles(st);
+        self.make_dock_station(ret, st, tile, direction, wc, dock_area);
         self.after_station_tile_set_change(st, true, StationType::Dock);
     }
     /// `FindDockLandPart`: find the part of a dock that is land-based.
@@ -4902,6 +5071,63 @@ impl Ctx<'_> {
             }
         }
         TileIndex::INVALID
+    }
+    /// `RemoveDock`'s update of all ships going to the station's removed dock.
+    fn update_ships_for_removed_dock(&self, st: *mut BaseStation) {
+        let index = (self.links().graphs.station_id)(st);
+        let mut from = 0;
+        while let Some(s) = (self.shared.vehicle_next)(from) {
+            let identity = (self.s.aircraft_vehicle)(s);
+            from = identity.id + 1;
+            /* Find all ships going to our dock. */
+            if VehicleType(s.vehicle_type()) != VehicleType::VEH_SHIP
+                || (self.vehicle().order_destination)(s) != index
+            {
+                continue;
+            }
+            /* Find ships that are marked as "loading" but are no longer on a
+             * docking tile. Force them to leave the station (as they were loading
+             * on the removed dock). */
+            if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_LOADING {
+                let tile = s.tile();
+                if !((self.shared.docking_tile)(tile)
+                    && unsafe {
+                        crate::ship_control::openttd_rust_ship_is_destination_abi(
+                            tile,
+                            u32::from(index),
+                            self.s.ship,
+                            self.s.shared,
+                        ) != 0
+                    })
+                {
+                    crate::vehicle::visits::leave_station(s, self.vehicle().visits());
+                }
+            }
+            /* If we no longer have a dock, mark the order as invalid and send
+             * the ship to the next order (or, if there is none, make it
+             * wander the world). */
+            if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_GOTO_STATION
+                && !StationFacilities((self.world().facilities)(st)).test(StationFacility::Dock)
+            {
+                let dest = unsafe {
+                    crate::ship_control::openttd_rust_ship_station_destination(
+                        identity.id,
+                        u32::from(index),
+                        s.0.as_ptr(),
+                        self.s.ship,
+                        self.s.shared,
+                    )
+                };
+                unsafe {
+                    crate::ship_control::openttd_rust_ship_destination(
+                        identity.id,
+                        dest,
+                        self.s.ship,
+                        self.s.shared,
+                    );
+                }
+            }
+        }
     }
     /// `RemoveDock`: remove a dock.
     fn remove_dock(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
@@ -4977,60 +5203,7 @@ impl Ctx<'_> {
             self.after_station_tile_set_change(st, false, StationType::Dock);
             self.clear_docking_tiles_checking_neighbours(tile1);
             self.clear_docking_tiles_checking_neighbours(tile2);
-            let index = (self.links().graphs.station_id)(st);
-            let mut from = 0;
-            while let Some(s) = (self.shared.vehicle_next)(from) {
-                let identity = (self.s.aircraft_vehicle)(s);
-                from = identity.id + 1;
-                /* Find all ships going to our dock. */
-                if VehicleType(s.vehicle_type()) != VehicleType::VEH_SHIP
-                    || (self.vehicle().order_destination)(s) != index
-                {
-                    continue;
-                }
-                /* Find ships that are marked as "loading" but are no longer on a
-                 * docking tile. Force them to leave the station (as they were loading
-                 * on the removed dock). */
-                if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_LOADING {
-                    let tile = s.tile();
-                    if !((self.shared.docking_tile)(tile)
-                        && unsafe {
-                            crate::ship_control::openttd_rust_ship_is_destination_abi(
-                                tile,
-                                u32::from(index),
-                                self.s.ship,
-                                self.s.shared,
-                            ) != 0
-                        })
-                    {
-                        crate::vehicle::visits::leave_station(s, self.vehicle().visits());
-                    }
-                }
-                /* If we no longer have a dock, mark the order as invalid and send
-                 * the ship to the next order (or, if there is none, make it
-                 * wander the world). */
-                if OrderType((self.vehicle().order_type)(s)) == OrderType::OT_GOTO_STATION
-                    && !StationFacilities((self.world().facilities)(st)).test(StationFacility::Dock)
-                {
-                    let dest = unsafe {
-                        crate::ship_control::openttd_rust_ship_station_destination(
-                            identity.id,
-                            u32::from(index),
-                            s.0.as_ptr(),
-                            self.s.ship,
-                            self.s.shared,
-                        )
-                    };
-                    unsafe {
-                        crate::ship_control::openttd_rust_ship_destination(
-                            identity.id,
-                            dest,
-                            self.s.ship,
-                            self.s.shared,
-                        );
-                    }
-                }
-            }
+            self.update_ships_for_removed_dock(st);
         }
         cost.set(crate::company::price(usize::from(
             Price::PR_CLEAR_STATION_DOCK.0,
@@ -5465,6 +5638,56 @@ impl Ctx<'_> {
         }
         crate::landscape_cmd::clear_command(self.command, cost.0, tile.0, flags.0);
     }
+    /// `ChangeTileOwner_Station`'s removal of a drive-through road stop for a
+    /// bankrupt owner: `CMD_REMOVE_FROM_ROAD_WAYPOINT` or `CMD_REMOVE_ROAD_STOP`.
+    fn remove_drive_through_stop_for_bankrupt(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        error: Cost<'_>,
+        tile: TileIndex,
+    ) {
+        let station_type = StationType((self.shared.station_type)(tile.0).0);
+        self.nested(
+            cost,
+            tile.0,
+            (DoCommandFlags::from_element(DoCommandFlag::Execute)
+                | DoCommandFlags::from_element(DoCommandFlag::Bankrupt))
+            .0,
+            |flags| {
+                if station_type == StationType::RoadWaypoint {
+                    self.cmd_remove_from_road_waypoint(
+                        cost,
+                        ret,
+                        error,
+                        DoCommandFlags(flags),
+                        CmdRemoveFromRoadWaypoint {
+                            start: tile,
+                            end: tile,
+                        },
+                    );
+                } else {
+                    self.cmd_remove_road_stop(
+                        cost,
+                        ret,
+                        error,
+                        DoCommandFlags(flags),
+                        CmdRemoveRoadStop {
+                            tile,
+                            width: 1,
+                            height: 1,
+                            stop_type: if station_type == StationType::Truck {
+                                RoadStopType::Truck
+                            } else {
+                                RoadStopType::Bus
+                            },
+                            remove_road: false,
+                        },
+                    );
+                }
+            },
+        );
+    }
     /// `ChangeTileOwner_Station`.
     fn change_tile_owner_station(&self, context: StationOwnerChange<'_>) {
         let StationOwnerChange {
@@ -5539,46 +5762,7 @@ impl Ctx<'_> {
             (self.s.station_list_classes_invalidate)();
         } else if world.drive_through_stop_tile(tile.0) {
             /* Remove the drive-through road stop */
-            let station_type = StationType((self.shared.station_type)(tile.0).0);
-            self.nested(
-                cost,
-                tile.0,
-                (DoCommandFlags::from_element(DoCommandFlag::Execute)
-                    | DoCommandFlags::from_element(DoCommandFlag::Bankrupt))
-                .0,
-                |flags| {
-                    if station_type == StationType::RoadWaypoint {
-                        self.cmd_remove_from_road_waypoint(
-                            cost,
-                            ret,
-                            error,
-                            DoCommandFlags(flags),
-                            CmdRemoveFromRoadWaypoint {
-                                start: tile,
-                                end: tile,
-                            },
-                        );
-                    } else {
-                        self.cmd_remove_road_stop(
-                            cost,
-                            ret,
-                            error,
-                            DoCommandFlags(flags),
-                            CmdRemoveRoadStop {
-                                tile,
-                                width: 1,
-                                height: 1,
-                                stop_type: if station_type == StationType::Truck {
-                                    RoadStopType::Truck
-                                } else {
-                                    RoadStopType::Bus
-                                },
-                                remove_road: false,
-                            },
-                        );
-                    }
-                },
-            );
+            self.remove_drive_through_stop_for_bankrupt(cost, ret, error, tile);
             assert_eq!(TileType((self.shared.tile_type)(tile.0)), TileType::MP_ROAD);
             /* Change owner of tile and all roadtypes */
             // SAFETY: Nested removal has returned; the native slots can be reused.
