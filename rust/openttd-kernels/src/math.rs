@@ -26,6 +26,13 @@ pub(crate) const fn round_div_su(a: i32, b: u32) -> i32 {
     }
 }
 
+/// `Align`: return the smallest multiple of `n` equal or greater than `x`. `n` must be a
+/// power of 2; the addition wraps as the original's `size_t` arithmetic does.
+pub(crate) const fn align(x: usize, n: usize) -> usize {
+    let n = n - 1;
+    x.wrapping_add(n) & !n
+}
+
 /// The value mask of a `width`-bit integer, for the template's integer types.
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));

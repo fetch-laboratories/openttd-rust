@@ -12,7 +12,9 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_safety_doc)] // Raw entry points share the module's access contract.
 
+use crate::bitmath_func::{clr_bit_size, find_first_bit, set_bit_size};
 use crate::industrytype::NativeVec;
+use crate::math::align;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::null_mut;
@@ -164,7 +166,7 @@ impl PoolCore {
             Self::check(pool, index >= old_size);
             Self::check(pool, index < (*pool).config.max_size);
             let step = (*pool).config.growth_step;
-            let new_size = (index + 1).wrapping_add(step - 1) & !(step - 1);
+            let new_size = align(index + 1, step);
             let new_size = new_size.min((*pool).config.max_size);
             (*pool).view.slots.resize(
                 new_size,
@@ -176,7 +178,7 @@ impl PoolCore {
             (*pool)
                 .view
                 .used_bitmap
-                .resize(new_size.div_ceil(BITMAP_SIZE), 0);
+                .resize(align(new_size, BITMAP_SIZE) / BITMAP_SIZE, 0);
             let bitmap = (*pool).view.used_bitmap.as_mut_ptr();
             if !old_size.is_multiple_of(BITMAP_SIZE) {
                 // Already-allocated bits above old size are now unused.
@@ -197,7 +199,7 @@ impl PoolCore {
             for word in ((*pool).view.first_free / bits)..(*pool).view.used_bitmap.len() {
                 let available = !*(*pool).view.used_bitmap.as_mut_ptr().add(word);
                 if available != 0 {
-                    return word * bits + available.trailing_zeros() as usize;
+                    return word * bits + usize::from(find_first_bit(available as u64));
                 }
             }
             Self::check(pool, (*pool).view.first_unused == (*pool).view.slots.len());
@@ -257,6 +259,10 @@ impl PoolCore {
 
     /// `AllocateItem`: makes given index valid. Preconditions: `index < size` and the slot
     /// is empty.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "SetBit takes the bit position as uint8_t; index % BITMAP_SIZE narrows to it"
+    )]
     unsafe fn allocate_item(pool: *mut Self, size: usize, index: usize) -> *mut c_void {
         unsafe {
             Self::check(
@@ -277,11 +283,14 @@ impl PoolCore {
                 (ops.allocate)(ops.context, size)
             };
             (*(*pool).view.slots.as_mut_ptr().add(index)).shell = shell;
-            *(*pool)
-                .view
-                .used_bitmap
-                .as_mut_ptr()
-                .add(index / BITMAP_SIZE) |= 1 << (index % BITMAP_SIZE);
+            set_bit_size(
+                &mut *(*pool)
+                    .view
+                    .used_bitmap
+                    .as_mut_ptr()
+                    .add(index / BITMAP_SIZE),
+                (index % BITMAP_SIZE) as u8,
+            );
             (ops.set_index)(ops.context, shell, index);
             shell
         }
@@ -302,6 +311,10 @@ impl PoolCore {
     }
 
     /// Sized delete calls this after the destructor chain, while shell is still published.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "ClrBit takes the bit position as uint8_t; index % BITMAP_SIZE narrows to it"
+    )]
     pub unsafe fn free_item(pool: *mut Self, size: usize, index: usize) {
         unsafe {
             Self::check(pool, index < (*pool).view.slots.len());
@@ -319,11 +332,14 @@ impl PoolCore {
             (*pool).view.first_free = (*pool).view.first_free.min(index);
             (*pool).view.items -= 1;
             if !(*pool).view.cleaning {
-                *(*pool)
-                    .view
-                    .used_bitmap
-                    .as_mut_ptr()
-                    .add(index / BITMAP_SIZE) &= !(1 << (index % BITMAP_SIZE));
+                clr_bit_size(
+                    &mut *(*pool)
+                        .view
+                        .used_bitmap
+                        .as_mut_ptr()
+                        .add(index / BITMAP_SIZE),
+                    (index % BITMAP_SIZE) as u8,
+                );
                 (ops.post_destructor)(ops.context, index);
             }
         }
