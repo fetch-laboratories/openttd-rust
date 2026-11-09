@@ -127,14 +127,6 @@ impl ResolverServices {
     fn resolver_callback(&self, ro: *const c_void) -> CallbackID {
         CallbackID(unsafe { (self.callback_id)(ro) })
     }
-    /// Temporary raw adapter for [`get_industry_spec`], used by `industry.rs`.
-    pub(crate) fn spec(kind: u8) -> *const SpecHandle {
-        get_industry_spec(IndustryType(kind))
-    }
-    /// Temporary raw adapter for `IndustrySpec::behaviour`, used by `industry.rs`.
-    pub(crate) fn behaviour(spec: *const SpecHandle) -> u32 {
-        behaviour(spec).0
-    }
 }
 /// `IndustrySpec::behaviour`.
 fn behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
@@ -587,7 +579,7 @@ fn industries_get_variable(
         0x69..=0x6D | 0x70 | 0x71 => {
             let cargo: CargoType =
                 get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
-            let Some(it) = (unsafe { super::get_cargo_produced(i, cargo.0) }) else {
+            let Some(it) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0; // invalid cargo
             };
             let it = unsafe { &*super::produced(i, it) };
@@ -604,7 +596,7 @@ fn industries_get_variable(
         0x6E | 0x6F => {
             let cargo: CargoType =
                 get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
-            let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo.0) }) else {
+            let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0; // invalid cargo
             };
             let it = unsafe { &*super::accepted(i, it) };

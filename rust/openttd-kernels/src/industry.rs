@@ -21,20 +21,29 @@
     clippy::too_many_lines,
     clippy::if_not_else
 )]
+use crate::bitmath_func::{gb, has_bit, sb};
+use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::company_type::{CompanyID, Owner};
+use crate::economy_type::EconomyType;
+use crate::history::{rotate_history_year, update_valid_history_year};
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
-use crate::industry_type::{IndustryID, IndustryType};
+use crate::industry_type::{
+    IndustryAnimationTrigger, IndustryID, IndustryRandomTrigger, IndustryType,
+};
 use crate::industrytype::{
     INDUSTRYLIFE_BLACK_HOLE, IndustryBehaviour, IndustryBehaviours, IndustryLifeType,
-    IndustryLifeTypes,
+    IndustryLifeTypes, IndustrySpec, get_industry_spec,
 };
-use crate::newgrf_callbacks::{CALLBACK_FAILED, IndustryCallbackMask, IndustryCallbackMasks};
+use crate::newgrf_callbacks::{
+    CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
+};
 use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::random_func::chance16_i;
 use crate::sound_type::SoundFx;
-use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
+use crate::strings_type::StringID;
+use crate::tile_type::{TileIndex, TileType};
 use crate::tilearea::TileArea;
-use crate::timer_game_tick::DAY_TICKS;
+use crate::timer_game_tick::{DAY_TICKS, INDUSTRY_CUT_TREE_TICKS, INDUSTRY_PRODUCE_TICKS};
 use std::ffi::c_void;
 use std::ptr;
 pub(crate) mod definitions;
@@ -183,7 +192,8 @@ pub(crate) fn location(owner: *mut Industry) -> TileArea {
 }
 /// `Industry::IsCargoAccepted()`: any slot holds a valid cargo.
 pub(crate) fn is_cargo_accepted(owner: *mut Industry) -> bool {
-    (0..accepted_count(owner)).any(|slot| valid(unsafe { (*accepted(owner, slot)).cargo }))
+    (0..accepted_count(owner))
+        .any(|slot| is_valid_cargo_type(unsafe { (*accepted(owner, slot)).cargo }))
 }
 /// Visit each produced slot's cargo in slot order.
 pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMut(u8)) {
@@ -373,13 +383,13 @@ pub unsafe extern "C" fn openttd_rust_industry_builder_fields(
 #[derive(Clone, Copy)]
 pub struct Observation {
     pub owner: *mut Industry,
-    pub behaviour: u32,
-    pub callbacks: u16,
-    pub life: u8,
-    pub kind: u8,
-    pub up_text: u32,
-    pub down_text: u32,
-    pub closure_text: u32,
+    pub behaviour: IndustryBehaviours,
+    pub callbacks: IndustryCallbackMasks,
+    pub life: IndustryLifeTypes,
+    pub kind: IndustryType,
+    pub up_text: StringID,
+    pub down_text: StringID,
+    pub closure_text: StringID,
 }
 /// Map facts constant for one entry.
 #[repr(C)]
@@ -469,35 +479,54 @@ impl Map {
 }
 use crate::clear_map::ClearGround;
 use crate::direction_type::DiagDirection;
-use crate::landscape_type::{ARCTIC, LandscapeType, TROPIC};
+use crate::landscape_type::LandscapeType;
 use crate::tree_map::TreeGround;
+/// `Industry::type`.
+fn industry_type(owner: *const Industry) -> IndustryType {
+    IndustryType(unsafe { (*owner).metadata.kind })
+}
 /// `GetIndustrySpec(i->type)` through the owner's type.
-fn spec_of(owner: *mut Industry) -> *const crate::industrytype::IndustrySpec {
-    crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }))
+fn spec_of(owner: *mut Industry) -> *const IndustrySpec {
+    get_industry_spec(industry_type(owner))
+}
+/// `IndustrySpec::behaviour`.
+fn spec_behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
+    IndustryBehaviours(unsafe { (*spec).behaviour })
+}
+/// `IndustrySpec::callback_mask`.
+fn spec_callback_mask(spec: *const IndustrySpec) -> IndustryCallbackMasks {
+    IndustryCallbackMasks(unsafe { (*spec).callback_mask })
+}
+/// `Industry::ctlflags`.
+fn ctlflags(f: *const Fields) -> IndustryControlFlags {
+    IndustryControlFlags(unsafe { (*f).ctlflags })
 }
 fn observe(owner: *mut Industry) -> Observation {
     let spec = spec_of(owner);
     unsafe {
         Observation {
             owner,
-            behaviour: (*spec).behaviour,
-            callbacks: (*spec).callback_mask,
-            life: (*spec).life_type,
-            kind: (*owner).metadata.kind,
-            up_text: (*spec).production_up_text,
-            down_text: (*spec).production_down_text,
-            closure_text: (*spec).closure_text,
+            behaviour: IndustryBehaviours((*spec).behaviour),
+            callbacks: IndustryCallbackMasks((*spec).callback_mask),
+            life: IndustryLifeTypes((*spec).life_type),
+            kind: industry_type(owner),
+            up_text: StringID((*spec).production_up_text),
+            down_text: StringID((*spec).production_down_text),
+            closure_text: StringID((*spec).closure_text),
         }
     }
 }
-fn rand(s: &Services) -> u32 {
+/// `Random()`.
+fn random(s: &Services) -> u32 {
     s.shared().random()
 }
-fn range(s: &Services, n: u32) -> u32 {
-    s.shared().random_range(n)
+/// `RandomRange(limit)`.
+fn random_range(s: &Services, limit: u32) -> u32 {
+    s.shared().random_range(limit)
 }
-fn chance(s: &Services, a: u32, b: u32) -> bool {
-    chance16_i(a, b, rand(s))
+/// `Chance16(a, b)`.
+fn chance16(s: &Services, a: u32, b: u32) -> bool {
+    chance16_i(a, b, random(s))
 }
 fn fields(owner: *mut Industry) -> *mut Fields {
     unsafe { ptr::addr_of_mut!((*owner).fields) }
@@ -513,9 +542,6 @@ fn produced_count(owner: *mut Industry) -> usize {
 }
 fn accepted_count(owner: *mut Industry) -> usize {
     unsafe { (*owner).accepted.len() }
-}
-fn valid(cargo: u8) -> bool {
-    crate::cargo_type::is_valid_cargo_type(cargo)
 }
 /// `Industry::GetProduced`, including its invalid-cargo empty slot.
 unsafe fn get_produced(owner: *const Industry, slot: usize) -> *const Produced {
@@ -548,27 +574,32 @@ unsafe fn get_accepted(owner: *const Industry, slot: usize) -> *const Accepted {
 }
 
 /// `Industry::GetCargoProduced`: invalid cargo never matches, then first slot wins.
-unsafe fn get_cargo_produced(owner: *const Industry, cargo: u8) -> Option<usize> {
-    if !valid(cargo) {
+unsafe fn get_cargo_produced(owner: *const Industry, cargo: CargoType) -> Option<usize> {
+    if !is_valid_cargo_type(cargo.0) {
         return None;
     }
     unsafe { &(*owner).produced }
         .iter()
-        .position(|p| p.cargo == cargo)
+        .position(|p| p.cargo == cargo.0)
 }
 /// `Industry::GetCargoAccepted`, with the same validity and ordering contract.
-pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Option<usize> {
-    if !valid(cargo) {
+pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: CargoType) -> Option<usize> {
+    if !is_valid_cargo_type(cargo.0) {
         return None;
     }
     unsafe { &(*owner).accepted }
         .iter()
-        .position(|a| a.cargo == cargo)
+        .position(|a| a.cargo == cargo.0)
 }
+/// `Industry::exclusive_supplier`.
+///
 /// SAFETY: Live serialized industry owner; observe after the refusal callback.
-pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> crate::company_type::CompanyID {
-    unsafe { crate::company_type::CompanyID((*owner).metadata.exclusive_supplier) }
+pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> Owner {
+    unsafe { CompanyID((*owner).metadata.exclusive_supplier) }
 }
+/// The accepted-cargo bookkeeping of `DeliverGoodsToIndustry`: add up to the room left in
+/// the slot, count it as accepted this month, and record the delivery date.
+///
 /// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
 pub(crate) unsafe fn accept_delivery(
     owner: *mut Industry,
@@ -588,55 +619,54 @@ pub(crate) unsafe fn accept_delivery(
     unsafe { (*a).last_accepted = now };
     amount
 }
-fn transported(p: Pair) -> u32 {
-    u32::from(p.pct_transported())
-}
 impl Pair {
-    /// `Industry::ProducedHistory::PctTransported`, shared by production and resolution.
+    /// `Industry::ProducedHistory::PctTransported`: percentage of cargo transported, as a
+    /// fraction of 255.
     fn pct_transported(self) -> u8 {
         let p = self;
         if p.first == 0 {
             0
         } else {
-            (u32::from(p.second) * 256 / u32::from(p.first)).min(255) as u8
+            (u32::from(p.second) * 256 / u32::from(p.first)).min(u32::from(u8::MAX)) as u8
         }
     }
 }
-fn helper(owner: *mut Industry, s: &Services, scale: bool) {
+/// Helper for `ProduceIndustryGoods` that scales and produces cargos.
+/// `scale` tells whether to scale production of this cargo directly.
+fn produce_industry_goods_helper(owner: *mut Industry, s: &Services, scale: bool) {
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
         unsafe {
-            if !valid((*p).cargo) {
+            if !is_valid_cargo_type((*p).cargo) {
                 continue;
             }
         }
-        let mut amount = unsafe { u32::from((*p).rate) };
+        let mut amount = unsafe { u16::from((*p).rate) };
         if scale {
-            amount = u32::from(unsafe { (s.scale_cargo)(amount) } as u16);
+            amount = unsafe { (s.scale_cargo)(u32::from(amount)) } as u16;
         }
         unsafe {
-            (*p).waiting = (u32::from((*p).waiting) + amount).min(65535) as u16;
+            (*p).waiting =
+                (u32::from((*p).waiting) + u32::from(amount)).min(u32::from(u16::MAX)) as u16;
         }
     }
 }
-fn produce(e: Entry, s: &Services, builder: *mut Builder) {
+/// `ProduceIndustryGoods`.
+fn produce_industry_goods(e: Entry, s: &Services, builder: *mut Builder) {
     let (i, owner) = (e.industry, e.owner);
     let f = fields(owner);
-    if unsafe { (*f).counter.is_multiple_of(64) } {
-        let r = rand(s);
+    // play a sound?
+    if gb(u32::from(unsafe { (*f).counter }), 0, 6) == 0 {
+        let r = random(s);
         if chance16_i(1, 14, r) {
-            let kind = unsafe { (*owner).metadata.kind };
-            let sounds = unsafe {
-                (*crate::industrytype::industry(u16::from(kind)))
-                    .random_sounds
-                    .len()
-            } as u16;
+            let sounds = unsafe { (*spec_of(owner)).random_sounds.len() } as u16;
             if sounds != 0
                 && unsafe { s.shared().settings().ambient.read() }
                 && (0..produced_count(owner)).any(|n| unsafe {
                     (*produced(owner, n)).history[usize::from(LAST_MONTH)].first > 0
                 })
             {
+                // Play sound since last month had production
                 unsafe { (s.industry_sound)(i, ((r >> 16) * u32::from(sounds)) >> 16) };
             }
         }
@@ -644,73 +674,78 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     unsafe {
         (*f).counter = (*f).counter.wrapping_sub(1);
     }
-    let callbacks = unsafe { (*spec_of(owner)).callback_mask };
-    let callback = IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::Production256Ticks);
-    // Scale the callback interval by the cargo scale percentage.
+    let callbacks = spec_callback_mask(spec_of(owner));
+    let callback = callbacks.test(IndustryCallbackMask::Production256Ticks);
+    // If using an industry callback, scale the callback interval by cargo scale percentage.
     if callback
         && unsafe {
             u32::from((*f).counter)
                 % crate::economy_func::scale_by_inverse_cargo_scale(
-                    crate::timer_game_tick::INDUSTRY_PRODUCE_TICKS,
+                    INDUSTRY_PRODUCE_TICKS,
                     s.shared().settings().industry_cargo_scale.read(),
                 )
                 == 0
         }
     {
         unsafe { (s.production_callback)(i, 1) };
-        helper(owner, s, false);
+        produce_industry_goods_helper(owner, s, false);
     }
-    // Other production and special effects run every 256 ticks. Scaling their
-    // cargo amount preserves a trickle of production at low scale factors.
-    if unsafe { !(*f).counter.is_multiple_of(256) } {
+    // All other production and special effects happen every 256 ticks, and cargo
+    // production is just scaled by the cargo scale percentage. This keeps a slow trickle of
+    // production to avoid confusion at low scale factors when the industry seems to be
+    // doing nothing for a long period of time.
+    if unsafe { u32::from((*f).counter) % INDUSTRY_PRODUCE_TICKS != 0 } {
         return;
     }
+    // Handle non-callback cargo production.
     if !callback {
-        helper(owner, s, true);
+        produce_industry_goods_helper(owner, s, true);
     }
-    let behaviour = unsafe { (*spec_of(owner)).behaviour };
+    let indbehav = spec_behaviour(spec_of(owner));
+    // The two special effects share one shape: CBID_INDUSTRY_SPECIAL_EFFECT with parameter
+    // 0 for planting fields and 1 for cutting trees.
     for (flag, parameter) in [
         (IndustryBehaviour::PlantFields, 0),
         (IndustryBehaviour::CutTrees, 1),
     ] {
-        if !IndustryBehaviours(behaviour).test(flag) {
+        if !indbehav.test(flag) {
             continue;
         }
-        let cb = if IndustryCallbackMasks(callbacks).test(IndustryCallbackMask::SpecialEffect) {
-            let random = rand(s);
+        let cb_res = if callbacks.test(IndustryCallbackMask::SpecialEffect) {
+            let random = random(s);
             unsafe { (s.special_effect)(i, random, parameter) }
         } else {
             CALLBACK_FAILED
         };
-        let act = if cb != CALLBACK_FAILED {
+        let act = if cb_res != CALLBACK_FAILED {
             (s.shared().grf_boolean_callback)(
                 unsafe { (*spec_of(owner)).grf_prop.grffile },
-                crate::newgrf_callbacks::CBID_INDUSTRY_SPECIAL_EFFECT,
-                cb,
+                CallbackID::CBID_INDUSTRY_SPECIAL_EFFECT.0,
+                cb_res,
             )
         } else if parameter == 0 {
-            chance(s, 1, 8)
+            chance16(s, 1, 8)
         } else {
-            unsafe {
-                (*f).counter
-                    .is_multiple_of(crate::timer_game_tick::INDUSTRY_CUT_TREE_TICKS as u16)
-            }
+            unsafe { u32::from((*f).counter) % INDUSTRY_CUT_TREE_TICKS == 0 }
         };
         if act {
             if parameter == 0 {
-                farm(i, e.id, tick_map(s), s);
+                plant_random_farm_field(i, IndustryID(e.id), tick_map(s), s);
             } else {
-                chop(i, owner, tick_map(s), s, builder);
+                chop_lumber_mill_trees(i, owner, tick_map(s), s, builder);
             }
         }
     }
+    // TriggerIndustryRandomisation and TriggerIndustryAnimation for IndustryTick.
     unsafe { (s.tick_trigger)(i) };
 }
+/// `OnTick_Industry`.
+///
 /// # Safety
 /// Live builder and synchronous services; C++ supplies serial world
 /// access and terminating noexcept environmental failures. No borrowed owner
 /// reference survives a service, including recursive production on construction.
-pub(crate) unsafe fn tick(builder: *mut Builder, services: *const Services) {
+pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Services) {
     let s = unsafe { &*services };
     let b = build_fields(builder);
     unsafe {
@@ -738,7 +773,7 @@ pub(crate) unsafe fn tick(builder: *mut Builder, services: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        produce(e, s, builder);
+        produce_industry_goods(e, s, builder);
         if (s.shared().tick_counter)().wrapping_add(u64::from(e.id)) % DAY_TICKS as u64 == 0 {
             for n in 0..accepted_count(e.owner) {
                 let a = accepted(e.owner, n);
@@ -763,17 +798,18 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     services: *const Services,
 ) -> u8 {
     let s = unsafe { &*services };
-    let mut moved = false;
+    let mut moved_cargo = false;
     let mut catchment = None;
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
-        let mut cw = unsafe { u32::from((*p).waiting).min(255) };
-        if cw <= u32::from(minimal_cargo) || unsafe { !valid((*p).cargo) } {
+        let mut cw = unsafe { u32::from((*p).waiting).min(u32::from(u8::MAX)) };
+        if cw <= u32::from(minimal_cargo) || unsafe { !is_valid_cargo_type((*p).cargo) } {
             continue;
         }
         unsafe {
             (*p).waiting = (*p).waiting.wrapping_sub(cw as u16);
         }
+        // fluctuating economy?
         if recession {
             cw = cw.div_ceil(2);
         }
@@ -803,20 +839,23 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
                 .second
                 .wrapping_add(am as u16);
         }
-        moved |= am != 0;
+        moved_cargo |= am != 0;
     }
-    u8::from(moved)
+    u8::from(moved_cargo)
 }
-fn recompute(owner: *mut Industry) {
-    // Round rates up so an oilrig always produces some passengers.
+/// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
+/// `prod_level`. This function is only valid when not using smooth economy.
+fn recompute_production_multipliers(owner: *mut Industry) {
     let f = fields(owner);
+    // Rates are rounded up, so e.g. oilrig always produces some passengers
     for n in 0..produced_count(owner) {
-        let spec = crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }));
-        let rate = u32::from(unsafe { (*spec).production_rate[n] });
+        let indspec = spec_of(owner);
+        let rate = u32::from(unsafe { (*indspec).production_rate[n] });
         let value = rate * unsafe { u32::from((*f).prod_level) };
         unsafe {
-            (*produced(owner, n)).rate =
-                value.div_ceil(u32::from(PRODLEVEL_DEFAULT)).min(255) as u8;
+            (*produced(owner, n)).rate = value
+                .div_ceil(u32::from(PRODLEVEL_DEFAULT))
+                .min(u32::from(u8::MAX)) as u8;
         }
     }
 }
@@ -824,237 +863,242 @@ fn recompute(owner: *mut Industry) {
 /// Live industry and its owner; the original `UsesOriginalEconomy` precondition applies.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_recompute(owner: *mut Industry) {
-    recompute(owner);
+    recompute_production_multipliers(owner);
 }
-fn update_history(mask: &mut u64, month: u32) {
-    for (first, last, division, total) in [(1, 25, 1, 1), (25, 42, 3, 3), (42, 61, 4, 12)] {
-        if *mask & (1 << (last - 1)) != 0
-            || !month.is_multiple_of(total)
-            || (division != 1 && *mask & (1 << (first - division)) == 0)
-        {
-            continue;
-        }
-        let bits = ((1u64 << (last - first)) - 1) << first;
-        *mask = (*mask & !bits) | (((*mask & bits) << 1 | (1 << first)) & bits);
-    }
-}
-fn rotate(history: &mut [Pair; RECORDS], mask: u64, month: u32) {
-    for (first, last, division, total) in [(1, 25, 1, 1), (25, 42, 3, 3), (42, 61, 4, 12)] {
-        if !month.is_multiple_of(total) {
-            continue;
-        }
-        history.copy_within(first..last - 1, first + 1);
-        if total == 1 {
-            history[first] = history[0];
-            history[0] = Pair::default();
-        } else if mask & (1 << (first - division)) != 0 {
-            history[first] = policy::sum_history(&history[first - division..first]);
-        }
-    }
-}
-fn statistics(owner: *mut Industry, s: &Services) {
+/// `UpdateIndustryStatistics`.
+fn update_industry_statistics(owner: *mut Industry, s: &Services) {
     let f = fields(owner);
     let month = u32::from(unsafe { (s.economy_month)() });
     unsafe {
-        update_history(&mut (*f).valid_history, month);
+        (*f).valid_history = update_valid_history_year((*f).valid_history, month);
     }
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
         unsafe {
-            if !valid((*p).cargo) {
+            if !is_valid_cargo_type((*p).cargo) {
                 continue;
             }
             if (*p).history[usize::from(THIS_MONTH)].first != 0 {
                 (*f).last_prod_year = (s.economy_year)();
             }
-            rotate(&mut (*p).history, (*f).valid_history, month);
+            rotate_history_year(&mut (*p).history, (*f).valid_history, month);
         }
     }
     for n in 0..accepted_count(owner) {
         let a = accepted(owner, n);
         unsafe {
-            if !valid((*a).cargo) || (*a).history.is_null() {
+            if !is_valid_cargo_type((*a).cargo) || (*a).history.is_null() {
                 continue;
             }
             let history = (*a).history;
-            (*history)[0].second =
-                ((*a).accumulated_waiting / (s.days_since_last_month)().max(1)).min(65535) as u16;
+            // GetAndResetAccumulatedAverage<uint16_t>(a.accumulated_waiting)
+            (*history)[usize::from(THIS_MONTH)].second =
+                ((*a).accumulated_waiting / (s.days_since_last_month)().max(1))
+                    .min(u32::from(u16::MAX)) as u16;
             (*a).accumulated_waiting = 0;
-            rotate(&mut *history, (*f).valid_history, month);
+            rotate_history_year(&mut *history, (*f).valid_history, month);
         }
     }
 }
-fn protected(o: Observation, s: &Services) -> bool {
-    if IndustryBehaviours(o.behaviour).test(IndustryBehaviour::DontIncrProd)
+/// Protects an industry from closure if the appropriate flags and conditions are met.
+/// `CanCloseLastInstance` must be set (which, by default, it is not) and the count of
+/// industries of this type must one (or lower) in order to be protected against closure.
+/// Returns true if protection is on, false otherwise (except for oil wells).
+fn check_industry_close_down_protection(o: Observation, s: &Services) -> bool {
+    // oil wells (or the industries with that flag set) are always allowed to closedown
+    if o.behaviour.test(IndustryBehaviour::DontIncrProd)
         && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate
     {
         return false;
     }
-    !IndustryBehaviours(o.behaviour).test(IndustryBehaviour::CanCloseLastInstance)
-        && unsafe { (s.type_count)(o.kind) } <= 1
+    !o.behaviour.test(IndustryBehaviour::CanCloseLastInstance)
+        && unsafe { (s.type_count)(o.kind.0) } <= 1
 }
 const PERCENT_TRANSPORTED_60: u32 = 153;
 const PERCENT_TRANSPORTED_80: u32 = 204;
 
-fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
+/// Change industry production or do closure. `monthly` is true for the monthly call and
+/// false for the random call.
+fn change_industry_production(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
     let o = observe(owner);
     let f = fields(o.owner);
-    let mut str = 0;
-    let mut close = false;
+    let mut str = StringID::STR_NULL;
+    let mut closeit = false;
     let mut standard = false;
-    let mut suppress = false;
-    let mut recalc = false;
-    // Industries with production callbacks use the original economy.
-    let original = original_economy(o.callbacks, unsafe { (s.economy_type)() });
+    let mut suppress_message = false;
+    // reinitialize production_rate to match prod_level
+    let mut recalculate_multipliers = false;
+    // use original economy for industries using production related callbacks
+    let original_economy =
+        uses_original_economy(o.callbacks, EconomyType(unsafe { (s.economy_type)() }));
     let mut div = 0u8;
     let mut mul = 0u8;
     let mut increment = 0i8;
-    let callback = o.callbacks
-        & (1 << if monthly {
-            IndustryCallbackMask::MonthlyProdChange.0
-        } else {
-            IndustryCallbackMask::ProductionChange.0
-        })
-        != 0;
-    if callback {
-        let random = rand(s);
+    let callback_enabled = o.callbacks.test(if monthly {
+        IndustryCallbackMask::MonthlyProdChange
+    } else {
+        IndustryCallbackMask::ProductionChange
+    });
+    if callback_enabled {
+        let random = random(s);
         let result = unsafe { (s.change_callback)(i, monthly, random) };
-        let mut res = result.result;
-        if res != CALLBACK_FAILED {
-            // A failed callback does nothing; a successful one may supply a custom message.
-            suppress = res & 128 != 0;
-            if res & 256 != 0 {
+        let mut res = u32::from(result.result);
+        // failed callback means "do nothing"
+        if res != u32::from(CALLBACK_FAILED) {
+            suppress_message = has_bit(res, 7);
+            // Get the custom message if any
+            if has_bit(res, 8) {
                 let grfid = unsafe { (*spec_of(owner)).grf_prop.grfid };
-                str = unsafe {
+                str = StringID(unsafe {
                     crate::newgrf_text::openttd_rust_grf_text_map(
                         &*s.text,
                         grfid,
-                        u32::from(result.reg as u16),
+                        gb(result.reg as u32, 0, 16),
                     )
-                };
+                });
             }
-            res &= 15;
+            res = gb(res, 0, 4);
             match res {
-                0 => {}
-                1 => div = 1,
-                2 => mul = 1,
-                // Announce closure now; physical removal happens next month.
-                3 => close = true,
-                // Apply the standard random change as for a primary industry.
-                4 => standard = true,
-                5..=8 => div = (res - 3) as u8,
-                9..=12 => mul = (res - 7) as u8,
-                13 => increment = -1,
-                14 => increment = 1,
-                // Set the level from the third byte of register 0x100.
-                15 => {
+                // Do nothing, but show the custom message if any
+                0x0 => {}
+                // Halve industry production. If production reaches the quarter of the
+                // default, the industry is closed instead.
+                0x1 => div = 1,
+                // Double industry production if it hasn't reached eight times of the
+                // original yet.
+                0x2 => mul = 1,
+                // The industry announces imminent closure, and is physically removed from
+                // the map next month.
+                0x3 => closeit = true,
+                // Do the standard random production change as if this industry was a
+                // primary one.
+                0x4 => standard = true,
+                // Divide production by 4, 8, 16, or 32 for 0x8
+                0x5..=0x8 => div = (res - 0x3) as u8,
+                // Multiply production by 4, 8, 16, or 32 for 0xC
+                0x9..=0xC => mul = (res - 0x7) as u8,
+                // decrement production; increment production
+                0xD | 0xE => increment = if res == 0x0D { -1 } else { 1 },
+                // Set production to third byte of register 0x100
+                0xF => {
                     unsafe {
-                        (*f).prod_level = ((result.reg as u32 >> 16) & 255)
+                        (*f).prod_level = gb(result.reg as u32, 16, 8)
                             .clamp(u32::from(PRODLEVEL_MINIMUM), u32::from(PRODLEVEL_MAXIMUM))
                             as u8;
                     }
-                    recalc = true;
+                    recalculate_multipliers = true;
                 }
                 _ => unreachable!(),
             }
         }
-    } else if monthly == original
-        || (!original && unsafe { (s.economy_type)() } == 2)
-        || o.life == INDUSTRYLIFE_BLACK_HOLE.0
+    } else if monthly == original_economy
+        || (!original_economy
+            && EconomyType(unsafe { (s.economy_type)() }) == EconomyType::ET_FROZEN)
+        || o.life == INDUSTRYLIFE_BLACK_HOLE
     {
         return;
     }
     if standard
-        || (!callback
-            && o.life
-                & (IndustryLifeTypes::from_element(IndustryLifeType::Extractive).0
-                    | IndustryLifeTypes::from_element(IndustryLifeType::Organic).0)
-                != 0)
+        || (!callback_enabled
+            && o.life.any(
+                IndustryLifeTypes::from_element(IndustryLifeType::Organic).with(
+                    IndustryLifeTypes::from_element(IndustryLifeType::Extractive),
+                ),
+            ))
     {
-        let only_decrease = IndustryBehaviours(o.behaviour).test(IndustryBehaviour::DontIncrProd)
+        // decrease or increase
+        let only_decrease = o.behaviour.test(IndustryBehaviour::DontIncrProd)
             && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate;
-        if original {
-            if only_decrease || chance(s, 1, 3) {
-                let pct = if produced_count(o.owner) > 0 {
-                    unsafe { transported((*produced(o.owner, 0)).history[usize::from(LAST_MONTH)]) }
-                } else {
-                    0
-                };
-                // Above 60% transported, increase with 66% probability; otherwise 33%.
-                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance(s, 1, 3) {
+        if original_economy {
+            if only_decrease || chance16(s, 1, 3) {
+                let pct = u32::from(unsafe {
+                    (*get_produced(o.owner, 0)).history[usize::from(LAST_MONTH)].pct_transported()
+                });
+                // If more than 60% transported, 66% chance of increase, else 33% chance of
+                // increase
+                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance16(s, 1, 3) {
+                    // Increase production
                     mul = 1;
                 } else {
+                    // Decrease production
                     div = 1;
                 }
             }
-        } else if unsafe { (s.economy_type)() } == 1 {
-            close = unsafe {
-                (*f).ctlflags
-                    & (IndustryControlFlags::from_element(
-                        IndustryControlFlag::NoProductionDecrease,
-                    )
-                    .0 | IndustryControlFlags::from_element(IndustryControlFlag::NoClosure).0)
-                    == 0
-            };
+        } else if EconomyType(unsafe { (s.economy_type)() }) == EconomyType::ET_SMOOTH {
+            closeit = !ctlflags(f).any(
+                IndustryControlFlags::from_element(IndustryControlFlag::NoClosure).with(
+                    IndustryControlFlags::from_element(IndustryControlFlag::NoProductionDecrease),
+                ),
+            );
             for n in 0..produced_count(o.owner) {
                 let p = produced(o.owner, n);
-                if unsafe { !valid((*p).cargo) } {
+                if unsafe { !is_valid_cargo_type((*p).cargo) } {
                     continue;
                 }
-                let random = rand(s);
-                let old = unsafe { i32::from((*p).rate) };
-                let pct = unsafe { transported((*p).history[usize::from(LAST_MONTH)]) };
-                // Above 60% transported, the multiplier is 1; otherwise it is -1.
+                let r = random(s);
+                let pct =
+                    u32::from(unsafe { (*p).history[usize::from(LAST_MONTH)] }.pct_transported());
+                // If over 60% is transported, mult is 1, else mult is -1.
                 let mut mult = if pct > PERCENT_TRANSPORTED_60 { 1 } else { -1 };
-                // Temperate oil wells always decrease. Other industries have a 33%
-                // decrease chance, reduced to 16% above 80% transported.
+                let old_prod = unsafe { i32::from((*p).rate) };
+                let mut new_prod = old_prod;
+                // For industries with only_decrease flags (temperate terrain Oil Wells),
+                // the multiplier will always be -1 so they will only decrease.
                 if only_decrease {
                     mult = -1;
-                } else if chance16_i(1, if pct > PERCENT_TRANSPORTED_80 { 6 } else { 3 }, random) {
+                // For normal industries, if over 60% is transported, 33% chance for decrease.
+                // Bonus for very high station ratings (over 80%): 16% chance for decrease.
+                } else if chance16_i(1, if pct > PERCENT_TRANSPORTED_80 { 6 } else { 3 }, r) {
                     mult *= -1;
                 }
-                let mut new = old;
-                // A 4.5% chance changes production by 3-23%, or at least one unit.
-                if chance16_i(1, 22, random >> 16) {
-                    new = new.wrapping_add(
-                        mult * (((range(s, 50) + 10) * old as u32) >> 8).max(1) as i32,
+                // 4.5% chance for 3-23% (or 1 unit for very low productions) production
+                // change, determined by mult value. If mult = 1 prod. increases, else (-1) it
+                // decreases.
+                if chance16_i(1, 22, r >> 16) {
+                    new_prod = new_prod.wrapping_add(
+                        mult * (((random_range(s, 50) + 10) * old_prod as u32) >> 8).max(1) as i32,
                     );
                 }
-                // Prevent overflow and excessive oil-rig passenger production.
-                new = new.clamp(1, 255);
+                // Prevent production to overflow or Oil Rig passengers to be over-"produced"
+                new_prod = new_prod.clamp(1, i32::from(u8::MAX));
                 if unsafe {
                     (*p).cargo
                         == crate::cargo_registry::openttd_rust_cargo_by_label(
                             crate::cargo_type::CT_PASSENGERS,
                         )
-                } && !IndustryBehaviours(o.behaviour).test(IndustryBehaviour::NoPaxProdClamp)
+                } && !o.behaviour.test(IndustryBehaviour::NoPaxProdClamp)
                 {
-                    new = new.clamp(0, 16);
+                    new_prod = new_prod.clamp(0, 16);
                 }
-                // Overrides prevent applying a change in the forbidden direction.
-                if unsafe {
-                    (IndustryControlFlags((*f).ctlflags)
-                        .test(IndustryControlFlag::NoProductionDecrease)
-                        && new < old)
-                        || (IndustryControlFlags((*f).ctlflags)
-                            .test(IndustryControlFlag::NoProductionIncrease)
-                            && new > old)
-                } {
+                // If override flags are set, prevent actually changing production if any was
+                // decided on
+                if (ctlflags(f).test(IndustryControlFlag::NoProductionDecrease)
+                    && new_prod < old_prod)
+                    || (ctlflags(f).test(IndustryControlFlag::NoProductionIncrease)
+                        && new_prod > old_prod)
+                {
                     continue;
                 }
-                // The lowest production rate must not cancel a pending closure.
-                if new == old && old > 1 {
-                    close = false;
+                // Do not stop closing the industry when it has the lowest possible production
+                // rate
+                if new_prod == old_prod && old_prod > 1 {
+                    closeit = false;
                     continue;
                 }
-                let percent = if old == 0 { 100 } else { new * 100 / old - 100 };
+                let percent = if old_prod == 0 {
+                    100
+                } else {
+                    new_prod * 100 / old_prod - 100
+                };
                 unsafe {
-                    (*p).rate = new as u8;
+                    (*p).rate = new_prod as u8;
                 }
-                if new > 1 {
-                    close = false;
+                // Close the industry when it has the lowest possible production rate
+                if new_prod > 1 {
+                    closeit = false;
                 }
                 if percent.abs() >= 10 {
+                    // ReportNewsProductionChangeIndustry
                     unsafe {
                         (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s));
                     };
@@ -1062,73 +1106,77 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
             }
         }
     }
-    if unsafe {
-        (IndustryControlFlags((*f).ctlflags).test(IndustryControlFlag::NoProductionDecrease)
-            && (div > 0 || increment < 0))
-            || (IndustryControlFlags((*f).ctlflags).test(IndustryControlFlag::NoProductionIncrease)
-                && (mul > 0 || increment > 0))
-    } {
+    // If override flags are set, prevent actually changing production if any was decided on
+    if (ctlflags(f).test(IndustryControlFlag::NoProductionDecrease) && (div > 0 || increment < 0))
+        || (ctlflags(f).test(IndustryControlFlag::NoProductionIncrease)
+            && (mul > 0 || increment > 0))
+    {
         return;
     }
-    if unsafe { IndustryControlFlags((*f).ctlflags).test(IndustryControlFlag::ExternalProdLevel) } {
+    if ctlflags(f).test(IndustryControlFlag::ExternalProdLevel) {
         div = 0;
         mul = 0;
         increment = 0;
     }
-    if !callback
-        && IndustryLifeTypes(o.life).test(IndustryLifeType::Processing)
+    if !callback_enabled
+        && o.life.test(IndustryLifeType::Processing)
         && unsafe {
             (s.economy_year)().wrapping_sub((*f).last_prod_year)
                 >= PROCESSING_INDUSTRY_ABANDONMENT_YEARS.0
         }
-        && chance(s, 1, if original { 2 } else { 180 })
+        && chance16(s, 1, if original_economy { 2 } else { 180 })
     {
-        close = true;
+        closeit = true;
     }
+    // Increase if needed
     while mul != 0 && unsafe { (*f).prod_level < PRODLEVEL_MAXIMUM } {
         mul = mul.wrapping_sub(1);
         unsafe {
             (*f).prod_level =
                 (u16::from((*f).prod_level) * 2).min(u16::from(PRODLEVEL_MAXIMUM)) as u8;
         }
-        recalc = true;
-        if str == 0 {
+        recalculate_multipliers = true;
+        if str == StringID::STR_NULL {
             str = o.up_text;
         }
     }
-    while div != 0 && !close {
+    // Decrease if needed
+    while div != 0 && !closeit {
         div = div.wrapping_sub(1);
         if unsafe { (*f).prod_level == PRODLEVEL_MINIMUM } {
-            close = true;
+            closeit = true;
             break;
         }
         unsafe {
             (*f).prod_level = ((*f).prod_level / 2).max(PRODLEVEL_MINIMUM);
         }
-        recalc = true;
-        if str == 0 {
+        recalculate_multipliers = true;
+        if str == StringID::STR_NULL {
             str = o.down_text;
         }
     }
+    // Increase or Decreasing the production level if needed
     if increment != 0 {
         if increment < 0 && unsafe { (*f).prod_level == PRODLEVEL_MINIMUM } {
-            close = true;
+            closeit = true;
         } else {
             unsafe {
                 (*f).prod_level = ((i32::from((*f).prod_level) + i32::from(increment)) as u32)
                     .clamp(u32::from(PRODLEVEL_MINIMUM), u32::from(PRODLEVEL_MAXIMUM))
                     as u8;
             }
-            recalc = true;
+            recalculate_multipliers = true;
         }
     }
-    // Outside the smooth economy, production rates must match the production level.
-    if recalc {
-        recompute(o.owner);
+    // Recalculate production_rate
+    // For non-smooth economy these should always be synchronized with prod_level
+    if recalculate_multipliers {
+        recompute_production_multipliers(o.owner);
     }
-    if close
-        && !protected(o, s)
-        && unsafe { !IndustryControlFlags((*f).ctlflags).test(IndustryControlFlag::NoClosure) }
+    // Close if needed and allowed
+    if closeit
+        && !check_industry_close_down_protection(o, s)
+        && !ctlflags(f).test(IndustryControlFlag::NoClosure)
     {
         unsafe {
             (*f).prod_level = PRODLEVEL_CLOSURE;
@@ -1136,13 +1184,15 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
         }
         str = o.closure_text;
     }
-    if !suppress && str != 0 {
+    if !suppress_message && str != StringID::STR_NULL {
+        // Compute news category, set the parameters of the news string and report the news
+        // to the user.
         unsafe {
             (s.news)(
                 i,
-                str,
-                close,
-                if close {
+                str.0,
+                closeit,
+                if closeit {
                     Servicing::Nobody
                 } else {
                     servicing(i, o.owner, s)
@@ -1151,53 +1201,56 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
         };
     }
 }
-fn type_data(f: *mut BuildFields, kind: IndustryType, s: &Services) -> bool {
-    let probability = game_probability(kind, s);
-    let p = probability as u32;
-    let min = (probability >> 32) as u8;
+/// `IndustryTypeBuildData::GetIndustryTypeData`: set the `probability` and `min_number`
+/// fields for the industry type `it` for a running game. Returns whether at least one of
+/// the fields has changed value.
+fn get_industry_type_data(f: *mut BuildFields, it: IndustryType, s: &Services) -> bool {
+    let (probability, min_number) = get_industry_game_play_probability(it, s);
+    let probability = u32::from(probability);
     unsafe {
-        let changed = (*f).probability != p || (*f).min_number != min;
-        (*f).probability = p;
-        (*f).min_number = min;
+        let changed = min_number != (*f).min_number || probability != (*f).probability;
+        (*f).min_number = min_number;
+        (*f).probability = probability;
         changed
     }
 }
-fn game_probability(kind: IndustryType, s: &Services) -> u64 {
+/// `GetIndustryGamePlayProbability`: the probability of `it` during gameplay, with its
+/// `min_number`.
+fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u8) {
     if unsafe { (s.fund_only)() } {
-        return 0;
+        return (0, 0);
     }
-    let spec = crate::industrytype::industry(u16::from(kind.0));
+    let ind_spc = get_industry_spec(it);
     let climate = unsafe { s.shared().settings().climate.read() };
-    let (behavior, enabled, layouts, appear) = unsafe {
+    let (behaviour, enabled, layouts, chance) = unsafe {
         (
-            (*spec).behaviour,
-            (*spec).enabled,
-            !(*spec).layouts.is_empty(),
-            (*spec).appear_ingame[usize::from(climate)],
+            IndustryBehaviours((*ind_spc).behaviour),
+            (*ind_spc).enabled,
+            !(*ind_spc).layouts.is_empty(),
+            (*ind_spc).appear_ingame[usize::from(climate)],
         )
     };
     let year = crate::timer_game_common::calendar_year().0;
     if !enabled
         || !layouts
-        || (IndustryBehaviours(behavior).test(IndustryBehaviour::Before1950) && year > 1950)
-        || (IndustryBehaviours(behavior).test(IndustryBehaviour::After1960) && year < 1960)
+        || (behaviour.test(IndustryBehaviour::Before1950) && year > 1950)
+        || (behaviour.test(IndustryBehaviour::After1960) && year < 1960)
     {
-        return 0;
+        return (0, 0);
     }
-    let probability = unsafe {
-        resolver::openttd_rust_industry_probability(
-            kind.0,
-            IndustryAvailabilityCallType::IACT_RANDOMCREATION.0,
-            u32::from(appear),
-            s.resolver,
-        )
-    } as u8;
-    if probability == 0 {
-        return 0;
+    let chance = resolver::get_industry_probability_callback(
+        it,
+        IndustryAvailabilityCallType::IACT_RANDOMCREATION,
+        u32::from(chance),
+        unsafe { &*s.resolver },
+    ) as u8;
+    if chance == 0 {
+        return (0, 0);
     }
-    u64::from(probability)
-        | ((u64::from(IndustryBehaviours(behavior).test(IndustryBehaviour::CanCloseLastInstance)))
-            << 32)
+    (
+        u16::from(chance),
+        u8::from(behaviour.test(IndustryBehaviour::CanCloseLastInstance)),
+    )
 }
 /// # Safety
 /// Live build record; no reference is retained across the resolver service.
@@ -1207,44 +1260,63 @@ pub unsafe extern "C" fn openttd_rust_industry_build_type(
     kind: u8,
     s: *const Services,
 ) -> u8 {
-    u8::from(type_data(f, IndustryType(kind), unsafe { &*s }))
+    u8::from(get_industry_type_data(f, IndustryType(kind), unsafe {
+        &*s
+    }))
 }
 fn build_fields(builder: *mut Builder) -> *mut BuilderFields {
     unsafe { ptr::addr_of_mut!((*builder).fields) }
 }
-fn build_type(b: *mut BuilderFields, n: usize) -> *mut BuildFields {
-    unsafe { ptr::addr_of_mut!((*b).builddata[n]) }
+/// `IndustryBuildData::builddata[it]`.
+fn builddata(b: *mut BuilderFields, it: IndustryType) -> *mut BuildFields {
+    unsafe { ptr::addr_of_mut!((*b).builddata[usize::from(it.0)]) }
 }
-fn build_reset(builder: *mut Builder, _s: &Services) {
+/// Every industry type, `0..NUM_INDUSTRYTYPES`.
+fn industry_types() -> impl Iterator<Item = IndustryType> {
+    (0..IndustryType::NUM_INDUSTRYTYPES.0).map(IndustryType)
+}
+impl BuildFields {
+    /// `IndustryTypeBuildData::Reset`: reset the entry.
+    fn reset(&mut self) {
+        self.probability = 0;
+        self.min_number = 0;
+        self.target_count = 0;
+        self.max_wait = 1;
+        self.wait_count = 0;
+    }
+}
+/// `IndustryBuildData::Reset`: completely reset the industry build data.
+fn industry_build_data_reset(builder: *mut Builder) {
     let b = build_fields(builder);
     unsafe {
         (*b).wanted_inds = total(builder).wrapping_shl(16);
-        for n in 0..TYPES {
-            *build_type(b, n) = BuildFields {
-                max_wait: 1,
-                ..BuildFields::default()
-            };
+        for it in industry_types() {
+            (*builddata(b, it)).reset();
         }
     }
 }
 /// # Safety
 /// Live exclusive builder operation, with source total-count service.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_reset(b: *mut Builder, s: *const Services) {
-    build_reset(b, unsafe { &*s });
+pub unsafe extern "C" fn openttd_rust_industry_build_reset(b: *mut Builder, _s: *const Services) {
+    industry_build_data_reset(b);
 }
-fn build_monthly(builder: *mut Builder, s: &Services) {
+/// lower 16 bits is a float fraction, 3.5 industries per decade, divided by 10 * 12 months.
+const NEWINDS_PER_MONTH: u32 = 0x38000 / (10 * 12);
+/// `IndustryBuildData::EconomyMonthlyLoop`: monthly update of industry build data.
+fn industry_build_data_economy_monthly_loop(builder: *mut Builder, s: &Services) {
+    // 'no industries' setting.
     if unsafe { (s.fund_only)() } {
         return;
     }
     let b = build_fields(builder);
-    // Avoid running out of unconnected industries by adding a fraction each
-    // month, but only if the builder can keep up. At most two industries behind
-    // on small maps and 100 on the largest (about six months of attempts).
-    let max = 1 + unsafe { (s.scale_by_map_size)(3) }.min(99);
-    if total(builder).wrapping_add(max) >= unsafe { (*b).wanted_inds >> 16 } {
-        // Lower 16 bits are fractional: 3.5 industries per decade / (10 * 12 months).
-        let increment = unsafe { (s.scale_by_map_size)(0x38000 / (10 * 12)) };
+    // To prevent running out of unused industries for the player to connect,
+    // add a fraction of new industries each month, but only if the manager can keep up.
+    // At most 2 industries for small maps, and 100 at the biggest map (about 6 months
+    // industry build attempts).
+    let max_behind = 1 + unsafe { (s.scale_by_map_size)(3) }.min(99);
+    if total(builder).wrapping_add(max_behind) >= unsafe { (*b).wanted_inds >> 16 } {
+        let increment = unsafe { (s.scale_by_map_size)(NEWINDS_PER_MONTH) };
         unsafe {
             (*b).wanted_inds = (*b).wanted_inds.wrapping_add(increment);
         }
@@ -1254,155 +1326,186 @@ fn build_monthly(builder: *mut Builder, s: &Services) {
 /// Live builder; direct total/map observations preserve the original order.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_build_monthly(b: *mut Builder, s: *const Services) {
-    build_monthly(b, unsafe { &*s });
+    industry_build_data_economy_monthly_loop(b, unsafe { &*s });
 }
-fn targets(builder: *mut Builder, s: &Services) {
+/// `IndustryBuildData::SetupTargetCount`: decide how many industries of each type are needed.
+fn setup_target_count(builder: *mut Builder, s: &Services) {
     let b = build_fields(builder);
     let mut changed = false;
-    let mut planned = 0u32; // Number of industries planned in the build data.
-    for n in 0..TYPES {
-        let f = build_type(b, n);
-        changed |= type_data(f, IndustryType(n as u8), s);
-        planned += unsafe { u32::from((*f).target_count) };
+    // Number of industries planned in the industry build data.
+    let mut num_planned = 0u32;
+    for it in industry_types() {
+        let f = builddata(b, it);
+        changed |= get_industry_type_data(f, it, s);
+        num_planned += unsafe { u32::from((*f).target_count) };
     }
-    let mut amount = unsafe { (*b).wanted_inds >> 16 }; // Desired total number.
-    changed |= planned != amount;
+    // Desired total number of industries.
+    let mut total_amount = unsafe { (*b).wanted_inds >> 16 };
+    changed |= num_planned != total_amount;
+    // All industries are still the same, no need to re-randomize.
     if !changed {
-        return; // Nothing changed; do not re-randomize the target counts.
-    }
-    // Initialize target counts, including industries that should always exist.
-    let mut forced = 0;
-    let mut probability = 0u32;
-    for n in 0..TYPES {
-        let f = build_type(b, n);
-        unsafe {
-            forced += u32::from((*f).min_number);
-            (*f).target_count = u16::from((*f).min_number);
-            probability = probability.wrapping_add((*f).probability);
-        }
-    }
-    if probability == 0 {
         return;
     }
-    // Subtract forced industries from the number available for construction.
-    amount = amount.saturating_sub(forced);
-    // Assign remaining target counts using probabilities as weights.
-    while amount > 0 {
-        let mut random = range(s, probability);
-        let mut n = 0;
-        while random >= unsafe { (*build_type(b, n)).probability } {
-            random -= unsafe { (*build_type(b, n)).probability };
-            n += 1;
+    // Initialize the target counts.
+    // Number of industries that should always be available.
+    let mut force_build = 0;
+    // Sum of probabilities.
+    let mut total_prob = 0u32;
+    for it in industry_types() {
+        let ibd = builddata(b, it);
+        unsafe {
+            force_build += u32::from((*ibd).min_number);
+            (*ibd).target_count = u16::from((*ibd).min_number);
+            total_prob = total_prob.wrapping_add((*ibd).probability);
+        }
+    }
+    // No buildable industries.
+    if total_prob == 0 {
+        return;
+    }
+    // Subtract forced industries from the number of industries available for construction.
+    total_amount = total_amount.saturating_sub(force_build);
+    // Assign number of industries that should be aimed for, by using the probability as a
+    // weight.
+    while total_amount > 0 {
+        let mut r = random_range(s, total_prob);
+        let mut it = IndustryType(0);
+        while r >= unsafe { (*builddata(b, it)).probability } {
+            r -= unsafe { (*builddata(b, it)).probability };
+            it.0 += 1;
         }
         unsafe {
-            (*build_type(b, n)).target_count = (*build_type(b, n)).target_count.wrapping_add(1);
+            (*builddata(b, it)).target_count = (*builddata(b, it)).target_count.wrapping_add(1);
         }
-        amount -= 1;
+        total_amount -= 1;
     }
 }
 /// # Safety
 /// Live builder; slot fields are read/written only between source services.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_build_targets(b: *mut Builder, s: *const Services) {
-    targets(b, unsafe { &*s });
+    setup_target_count(b, unsafe { &*s });
 }
-fn count(s: &Services, n: usize) -> i32 {
-    i32::from(unsafe { (s.type_count)(n as u8) })
+/// `Industry::GetIndustryTypeCount`.
+fn get_industry_type_count(s: &Services, it: IndustryType) -> i32 {
+    i32::from(unsafe { (s.type_count)(it.0) })
 }
-fn place(
+/// Try to place the industry in the game. Since there is no feedback why placement fails,
+/// there is no other option than to try a few times before concluding it does not work.
+/// `try_hard` tries very hard to find a place (used to place at least one industry per
+/// type). Returns the created industry, or null if creation failed.
+fn place_industry(
     kind: IndustryType,
-    creation: IndustryAvailabilityCallType,
-    hard: bool,
+    creation_type: IndustryAvailabilityCallType,
+    try_hard: bool,
     s: &Services,
 ) -> *mut c_void {
-    for _ in 0..if hard { 10000 } else { 2000 } {
-        let i = unsafe { (s.create)(kind.0, creation.0) };
-        if !i.is_null() {
-            return i;
+    for _ in 0..if try_hard { 10000 } else { 2000 } {
+        // CreateNewIndustry(RandomTile(), type, creation_type)
+        let ind = unsafe { (s.create)(kind.0, creation_type.0) };
+        if !ind.is_null() {
+            return ind;
         }
     }
     ptr::null_mut()
 }
-fn build_try(builder: *mut Builder, s: &Services) {
-    targets(builder, s);
+/// `IndustryBuildData::TryBuildNewIndustry`: try to create a random industry, during
+/// gameplay.
+fn try_build_new_industry(builder: *mut Builder, s: &Services) {
+    setup_target_count(builder, s);
     let b = build_fields(builder);
-    let mut missing = 0i32; // Number of industries still needed.
-    let mut eligible = 0; // Number of industry types eligible for construction.
-    let mut probability = 0u32;
-    let mut forced = TYPES; // Type to build forcibly, or no forced type.
-    for n in 0..TYPES {
-        let f = build_type(b, n);
-        let difference = unsafe { i32::from((*f).target_count) } - count(s, n);
+    // Number of industries that need to be build.
+    let mut missing = 0i32;
+    // Number of industry types eligible for build.
+    let mut count = 0;
+    // Sum of probabilities.
+    let mut total_prob = 0u32;
+    // Industry type that should be forcibly build.
+    let mut forced_build = IndustryType::NUM_INDUSTRYTYPES;
+    for it in industry_types() {
+        let f = builddata(b, it);
+        let difference = unsafe { i32::from((*f).target_count) } - get_industry_type_count(s, it);
         missing = missing.wrapping_add(difference);
+        // This type may not be built now.
         if unsafe { (*f).wait_count > 0 } {
             continue;
         }
         if difference > 0 {
-            // Force a missing type that must exist, trying the most-needed first.
-            if count(s, n) == 0
+            if get_industry_type_count(s, it) == 0
                 && unsafe { (*f).min_number > 0 }
-                && (forced == TYPES
+                // An industry that should exist at least once, is not available. Force it,
+                // trying the most needed one first.
+                && (forced_build == IndustryType::NUM_INDUSTRYTYPES
                     || difference
-                        > unsafe { i32::from((*build_type(b, forced)).target_count) }
-                            - count(s, forced))
+                        > unsafe { i32::from((*builddata(b, forced_build)).target_count) }
+                            - get_industry_type_count(s, forced_build))
             {
-                forced = n;
+                forced_build = it;
             }
-            probability = probability.wrapping_add(difference as u32);
-            eligible += 1;
+            total_prob = total_prob.wrapping_add(difference as u32);
+            count += 1;
         }
     }
-    if (s.shared().recession)() || (forced == TYPES && (missing <= 0 || probability == 0)) {
-        eligible = 0;
+    // Skip creation of an industry.
+    if (s.shared().recession)()
+        || (forced_build == IndustryType::NUM_INDUSTRYTYPES && (missing <= 0 || total_prob == 0))
+    {
+        count = 0;
     }
-    if eligible >= 1 {
-        // Unless forced, select by weight. With one eligible type, do not draw RNG.
-        let n = if forced != TYPES {
-            forced
+    if count >= 1 {
+        // If not forced, pick a weighted random industry to build.
+        // For the case that count == 1, there is no need to draw a random number.
+        let it = if forced_build != IndustryType::NUM_INDUSTRYTYPES {
+            forced_build
         } else {
-            let mut random = if eligible > 1 {
-                range(s, probability)
+            // Non-forced, select an industry type to build (weighted random).
+            let mut r = if count > 1 {
+                random_range(s, total_prob)
             } else {
                 0
             };
-            let mut n = 0;
+            let mut it = IndustryType(0);
             loop {
-                let f = build_type(b, n);
+                let f = builddata(b, it);
+                // Type may not be built now; too many of this kind.
                 if unsafe { (*f).wait_count == 0 } {
-                    let difference = unsafe { i32::from((*f).target_count) } - count(s, n);
+                    let difference =
+                        unsafe { i32::from((*f).target_count) } - get_industry_type_count(s, it);
                     if difference > 0 {
-                        if eligible == 1 || random < difference as u32 {
-                            break n;
+                        if count == 1 || r < difference as u32 {
+                            break it;
                         }
-                        random -= difference as u32;
+                        r -= difference as u32;
                     }
                 }
-                n += 1;
+                it.0 += 1;
             }
         };
-        let i = place(
-            IndustryType(n as u8),
+        // Try to create the industry.
+        let ind = place_industry(
+            it,
             IndustryAvailabilityCallType::IACT_RANDOMCREATION,
             false,
             s,
         );
-        let f = build_type(b, n);
-        if i.is_null() {
+        let f = builddata(b, it);
+        if ind.is_null() {
             unsafe {
-                // Compensate for the decrement below.
+                // Compensate for decrementing below.
                 (*f).wait_count = (*f).max_wait.wrapping_add(1);
                 (*f).max_wait = (u32::from((*f).max_wait) + 2).min(1000) as u16;
             }
         } else {
-            advertise(i, s);
+            advertise(ind, s);
             unsafe {
-                // Reduce the waiting time after a successful construction.
+                // Reduce waiting time of the industry type.
                 (*f).max_wait = ((*f).max_wait / 2).max(1);
             }
         }
     }
-    for n in 0..TYPES {
-        let f = build_type(b, n);
+    // Decrement wait counters.
+    for it in industry_types() {
+        let f = builddata(b, it);
         unsafe {
             if (*f).wait_count > 0 {
                 (*f).wait_count -= 1;
@@ -1415,239 +1518,289 @@ fn build_try(builder: *mut Builder, s: &Services) {
 /// recursive industry calls cannot alias a borrowed Rust owner or vector.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_build_try(b: *mut Builder, s: *const Services) {
-    build_try(b, unsafe { &*s });
+    try_build_new_industry(b, unsafe { &*s });
 }
+/// Every economy day handler for the industry changes (`_economy_industries_daily`).
+/// Taking the original map size of 256*256, the number of random changes was always of just
+/// one unit. But it cannot be the same on smaller or bigger maps. That number has to be
+/// scaled up or down. For small maps, it implies that less than one change per month is
+/// required, while on bigger maps, it would be way more. The daily loop handles those
+/// changes.
+///
 /// # Safety
 /// Live builder and original ordered daily timer invocation. The company services
 /// temporarily change and restore the original current company.
-pub(crate) unsafe fn openttd_rust_industry_daily(builder: *mut Builder, services: *const Services) {
+pub(crate) unsafe fn economy_industries_daily(builder: *mut Builder, services: *const Services) {
     let s = unsafe { &*services };
     let b = build_fields(builder);
     unsafe {
         (*b).daily_counter = (*b).daily_counter.wrapping_add((*b).daily_increment);
     }
-    let loops = unsafe { ((*b).daily_counter >> 16) as u16 };
+    // Bits 16-31 of industry_construction_counter contain the number of industries to
+    // change/create today, the lower 16 bit are a fractional part that might accumulate
+    // over several days until it is sufficient for an industry.
+    let change_loop = unsafe { ((*b).daily_counter >> 16) as u16 };
+    // Reset the active part of the counter, just keeping the "fractional part"
     unsafe {
-        (*b).daily_counter &= 65535;
+        (*b).daily_counter &= 0xFFFF;
     }
-    if loops == 0 {
+    // Nothing to do? get out
+    if change_loop == 0 {
         return;
     }
-    let company = unsafe { (s.company_none)() };
-    let mut percentage = 3;
+    let cur_company = unsafe { (s.company_none)() };
+    // perform the required industry changes for the day
+    // Between 3% and 9% chance of creating a new industry.
+    let mut perc = 3;
     let wanted = unsafe { (*b).wanted_inds >> 16 };
     if wanted > total(builder) {
-        percentage = (percentage + wanted - total(builder)).min(9);
+        perc = (perc + wanted - total(builder)).min(9);
     }
-    for _ in 0..loops {
-        if chance(s, percentage, 100) {
-            build_try(builder, s);
+    for _ in 0..change_loop {
+        if chance16(s, perc, 100) {
+            try_build_new_industry(builder, s);
         } else {
             let e = random_entry(s);
             if !e.industry.is_null() {
-                change(e.industry, e.owner, s, false);
+                change_industry_production(e.industry, e.owner, s, false);
                 unsafe { (s.set_dirty)(e.industry) };
             }
         }
     }
     unsafe {
-        (s.restore_company)(company);
-        (s.directory_dirty)(1);
+        (s.restore_company)(cur_company);
+        // production-change
+        (s.directory_dirty)(IndustryDirectoryInvalidateWindowData::IDIWD_PRODUCTION_CHANGE.0);
     }
 }
+/// Every economy month handler for the industries (`_economy_industries_monthly`).
+///
 /// # Safety
 /// Live builder and original ordered monthly invocation. Destruction happens only
 /// after statistics and with all Rust owner borrows ended; next ID matches pool order.
-pub(crate) unsafe fn openttd_rust_industry_monthly(
-    builder: *mut Builder,
-    services: *const Services,
-) {
+pub(crate) unsafe fn economy_industries_monthly(builder: *mut Builder, services: *const Services) {
     let s = unsafe { &*services };
-    let company = unsafe { (s.company_none)() };
-    build_monthly(builder, s);
-    let mut from = 0;
+    let cur_company = unsafe { (s.company_none)() };
+    industry_build_data_economy_monthly_loop(builder, s);
+    let mut from = u32::from(IndustryID::BEGIN.0);
     loop {
         let e = unsafe { (s.next_tick)(from) };
         if e.industry.is_null() {
             break;
         }
         from = u32::from(e.id) + 1;
-        statistics(e.owner, s);
-        if unsafe { (*fields(e.owner)).prod_level == 0 } {
+        update_industry_statistics(e.owner, s);
+        if unsafe { (*fields(e.owner)).prod_level == PRODLEVEL_CLOSURE } {
             unsafe { (s.destroy)(e.industry) };
         } else {
-            change(e.industry, e.owner, s, true);
+            change_industry_production(e.industry, e.owner, s, true);
             unsafe { (s.set_dirty)(e.industry) };
         }
     }
     unsafe {
-        (s.restore_company)(company);
-        (s.directory_dirty)(1);
+        (s.restore_company)(cur_company);
+        // production-change
+        (s.directory_dirty)(IndustryDirectoryInvalidateWindowData::IDIWD_PRODUCTION_CHANGE.0);
     }
 }
+/// `TrimIndustryAcceptedProduced`.
+///
 /// # Safety
 /// Live industry with no outstanding iterators. Rust owns removal/history freeing.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
     unsafe {
         let a = &mut (*i).accepted;
-        let n = a.iter().rposition(|a| valid(a.cargo)).map_or(0, |n| n + 1);
+        let n = a
+            .iter()
+            .rposition(|a| is_valid_cargo_type(a.cargo))
+            .map_or(0, |n| n + 1);
         a.truncate(n);
         a.shrink_to_fit();
         let p = &mut (*i).produced;
-        let n = p.iter().rposition(|p| valid(p.cargo)).map_or(0, |n| n + 1);
+        let n = p
+            .iter()
+            .rposition(|p| is_valid_cargo_type(p.cargo))
+            .map_or(0, |n| n + 1);
         p.truncate(n);
         p.shrink_to_fit();
     }
 }
 
-fn suitable(tile: u32, fields: bool, rough: bool, s: &Services) -> bool {
-    let info = unsafe { (s.farm_tile)(tile) };
-    match info.kind {
-        MP_CLEAR => {
+/// `IsSuitableForFarmField`.
+fn is_suitable_for_farm_field(
+    tile: TileIndex,
+    allow_fields: bool,
+    allow_rough: bool,
+    s: &Services,
+) -> bool {
+    let info = unsafe { (s.farm_tile)(tile.0) };
+    match TileType(info.kind) {
+        TileType::MP_CLEAR => {
             if info.snow != 0 {
                 return false;
             }
             match ClearGround(info.ground) {
                 ClearGround::CLEAR_DESERT => false,
-                ClearGround::CLEAR_ROUGH => rough,
-                ClearGround::CLEAR_FIELDS => fields,
+                ClearGround::CLEAR_ROUGH => allow_rough,
+                ClearGround::CLEAR_FIELDS => allow_fields,
                 _ => true,
             }
         }
-        MP_TREES => {
+        TileType::MP_TREES => {
             TreeGround(info.ground) != TreeGround::TREE_GROUND_SHORE
-                && (rough || TreeGround(info.ground) != TreeGround::TREE_GROUND_ROUGH)
+                && (allow_rough || TreeGround(info.ground) != TreeGround::TREE_GROUND_ROUGH)
         }
         _ => false,
     }
 }
-fn fence(mut tile: u32, mut size: u32, kind: u8, side: DiagDirection, map: Map, s: &Services) {
-    let stride = if side == DiagDirection::DIAGDIR_NE || side == DiagDirection::DIAGDIR_SW {
+/// Build farm field fence. `tile` is the tile to position the fence on, `size` the size of
+/// the field being planted in tiles, `kind` the type of fence to set and `side` the side of
+/// the tile to attempt placement.
+fn setup_farm_field_fence(
+    mut tile: TileIndex,
+    mut size: u32,
+    kind: u8,
+    side: DiagDirection,
+    map: Map,
+    s: &Services,
+) {
+    // TileOffsByAxis(OtherAxis(DiagDirToAxis(side)))
+    let diff = if side == DiagDirection::DIAGDIR_NE || side == DiagDirection::DIAGDIR_SW {
         map.size_x
     } else {
         1
     };
-    let mask = map.size_x.wrapping_mul(map.size_y).wrapping_sub(1);
     loop {
-        tile &= mask;
-        if unsafe { (s.fence_wanted)(tile, side.0) } {
-            let mut kind = kind;
-            if kind == 1 && chance(s, 1, 7) {
-                kind = 2;
+        tile = TileIndex(map.coordinates().wrap_to_map(tile.0, map.size_y));
+        // The tile is a field whose neighbour in `side` is not a field with a fence in the
+        // same position.
+        if unsafe { (s.fence_wanted)(tile.0, side.0) } {
+            // Add fence as long as neighbouring tile does not already have a fence in the
+            // same position.
+            let mut or = kind;
+            if or == 1 && chance16(s, 1, 7) {
+                or = 2;
             }
-            (s.shared().set_fence)(tile, side, u32::from(kind));
+            (s.shared().set_fence)(tile.0, side, u32::from(or));
         }
-        tile = tile.wrapping_add(stride);
+        tile = TileIndex(tile.0.wrapping_add(diff));
         size -= 1;
         if size == 0 {
             break;
         }
     }
 }
-fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn() -> u8) {
-    if landscape() == ARCTIC
-        && (s.shared().tile_z)(tile) + 2 >= i32::from(crate::snow_line::get(s.shared()))
+/// `_plantfarmfield_type`.
+const PLANTFARMFIELD_TYPE: [u8; 16] = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6];
+/// `PlantFarmField`.
+fn plant_farm_field(
+    tile: TileIndex,
+    industry: IndustryID,
+    map: Map,
+    s: &Services,
+    landscape: &impl Fn() -> u8,
+) {
+    if LandscapeType(landscape()) == LandscapeType::Arctic
+        && (s.shared().tile_z)(tile.0) + 2 >= i32::from(crate::snow_line::get(s.shared()))
     {
         return;
     }
-    let mut r = (rand(s) & 0x303) + 0x404;
-    if landscape() == ARCTIC {
+    // determine field size
+    let mut r = (random(s) & 0x303) + 0x404;
+    if LandscapeType(landscape()) == LandscapeType::Arctic {
         r += 0x404;
     }
-    let (width, height) = (map.size_x, map.size_y);
-    let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
-    let sx = r & 255;
-    let sy = (r >> 8) & 255;
-    let x = tile % width;
-    let y = tile / width;
-    let x = x - x.min(sx / 2);
-    let y = y - y.min(sy / 2);
-    let sx = sx.min(width - x);
-    let sy = sy.min(height - y);
-    if sx == 0 || sy == 0 {
+    let size_x = gb(r, 0, 8);
+    let size_y = gb(r, 8, 8);
+    let tiles = map.coordinates();
+    let (x, y) = (tiles.tile_x(tile.0), tiles.tile_y(tile.0));
+    let mut ta = TileArea::new(
+        tiles.tile_xy(x - x.min(size_x / 2), y - y.min(size_y / 2)),
+        size_x as u16,
+        size_y as u16,
+    );
+    let world = crate::map_func::World::new(s.shared());
+    ta.clamp_to_map(tiles, map.size_x.wrapping_mul(map.size_y), |ok| {
+        world.check(ok);
+    });
+    if ta.w == 0 || ta.h == 0 {
         return;
     }
+    // check the amount of bad tiles
     let mut count = 0;
-    for yy in y..y + sy {
-        for xx in x..x + sx {
-            count += u32::from(suitable(tiles.tile_xy(xx, yy), false, false, s));
-        }
+    for cur_tile in ta.tiles(tiles) {
+        count += u32::from(is_suitable_for_farm_field(
+            TileIndex(cur_tile),
+            false,
+            false,
+            s,
+        ));
     }
-    if count * 2 < sx * sy {
+    if count * 2 < u32::from(ta.w) * u32::from(ta.h) {
         return;
     }
-    r = rand(s);
-    let counter = ((r >> 5) & 7) as u8;
-    let field = ((((r >> 8) & 255) * 9) >> 8) as u8;
-    for yy in y..y + sy {
-        for xx in x..x + sx {
-            let tile = tiles.tile_xy(xx, yy);
-            if suitable(tile, true, true, s) {
-                unsafe { (s.make_field)(tile, field, counter, industry) };
-            }
+    // determine type of field
+    r = random(s);
+    let counter = gb(r, 5, 3) as u8;
+    let field_type = ((gb(r, 8, 8) * 9) >> 8) as u8;
+    // make field
+    for cur_tile in ta.tiles(tiles) {
+        if is_suitable_for_farm_field(TileIndex(cur_tile), true, true, s) {
+            unsafe { (s.make_field)(cur_tile, field_type, counter, industry.0) };
         }
     }
     let mut kind = 3;
-    if landscape() != ARCTIC && landscape() != TROPIC {
-        kind = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6][(rand(s) & 15) as usize];
+    if LandscapeType(landscape()) != LandscapeType::Arctic
+        && LandscapeType(landscape()) != LandscapeType::Tropic
+    {
+        kind = PLANTFARMFIELD_TYPE[(random(s) & 0xF) as usize];
     }
-    fence(
-        tiles.tile_xy(x, y),
-        sy,
-        kind,
-        DiagDirection::DIAGDIR_NE,
-        map,
-        s,
-    );
-    fence(
-        tiles.tile_xy(x, y),
-        sx,
-        kind,
-        DiagDirection::DIAGDIR_NW,
-        map,
-        s,
-    );
-    fence(
-        tiles.tile_xy(x + sx - 1, y),
-        sy,
+    let (w, h) = (u32::from(ta.w), u32::from(ta.h));
+    let north = TileIndex(ta.tile);
+    setup_farm_field_fence(north, h, kind, DiagDirection::DIAGDIR_NE, map, s);
+    setup_farm_field_fence(north, w, kind, DiagDirection::DIAGDIR_NW, map, s);
+    setup_farm_field_fence(
+        TileIndex(ta.tile.wrapping_add(w - 1)),
+        h,
         kind,
         DiagDirection::DIAGDIR_SW,
         map,
         s,
     );
-    fence(
-        tiles.tile_xy(x, y + sy - 1),
-        sx,
+    setup_farm_field_fence(
+        TileIndex(ta.tile.wrapping_add((h - 1).wrapping_mul(map.size_x))),
+        w,
         kind,
         DiagDirection::DIAGDIR_SE,
         map,
         s,
     );
 }
-fn farm_with_landscape(
+/// `PlantRandomFarmField`, with the landscape read at each original observation.
+fn plant_random_farm_field_with_landscape(
     i: *mut c_void,
-    id: u16,
+    id: IndustryID,
     map: Map,
     s: &Services,
     landscape: &impl Fn() -> u8,
 ) {
-    let l = unsafe { (s.location)(i) };
-    let x = (u32::from(l.w) / 2)
-        .wrapping_add(rand(s) % 31)
+    let location = unsafe { (s.location)(i) };
+    let x = (u32::from(location.w) / 2)
+        .wrapping_add(random(s) % 31)
         .wrapping_sub(16) as i32;
-    let y = (u32::from(l.h) / 2)
-        .wrapping_add(rand(s) % 31)
+    let y = (u32::from(location.h) / 2)
+        .wrapping_add(random(s) % 31)
         .wrapping_sub(16) as i32;
-    let tile = map.coordinates().tile_add_wrap(
-        l.tile,
+    let tile = TileIndex(map.coordinates().tile_add_wrap(
+        location.tile,
         x,
         y,
         map.size_y,
         (unsafe { &*s.environment }.freeform_edges)(),
-    );
-    if tile != INVALID_TILE {
-        plant(tile, id, map, s, landscape);
+    ));
+    if tile != TileIndex::INVALID {
+        plant_farm_field(tile, id, map, s, landscape);
     }
 }
 fn tick_map(s: &Services) -> Map {
@@ -1658,8 +1811,9 @@ fn tick_map(s: &Services) -> Map {
         landscape: unsafe { s.shared().settings().climate.read() },
     }
 }
-fn farm(i: *mut c_void, id: u16, map: Map, s: &Services) {
-    farm_with_landscape(i, id, map, s, &|| unsafe {
+/// `PlantRandomFarmField`.
+fn plant_random_farm_field(i: *mut c_void, id: IndustryID, map: Map, s: &Services) {
+    plant_random_farm_field_with_landscape(i, id, map, s, &|| unsafe {
         s.shared().settings().climate.read()
     });
 }
@@ -1668,37 +1822,55 @@ fn farm(i: *mut c_void, id: u16, map: Map, s: &Services) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: *const Services) {
     let s = unsafe { &*s };
-    farm(i, id, tick_map(s), s);
+    plant_random_farm_field(i, IndustryID(id), tick_map(s), s);
 }
-fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *mut Builder) {
-    if produced_count(owner) == 0 || unsafe { !valid((*produced(owner, 0)).cargo) } {
+/// Perform a circular search around the Lumber Mill in order to find trees to cut.
+fn chop_lumber_mill_trees(
+    i: *mut c_void,
+    owner: *mut Industry,
+    map: Map,
+    s: &Services,
+    builder: *mut Builder,
+) {
+    // Don't process lumber mill if cargo is not set up correctly.
+    if produced_count(owner) == 0 || unsafe { !is_valid_cargo_type((*produced(owner, 0)).cargo) } {
         return;
     }
-    let l = unsafe { (s.location)(i) };
-    let width = map.size_x;
-    let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
-    for y in l.tile / width..l.tile / width + u32::from(l.h) {
-        for x in l.tile % width..l.tile % width + u32::from(l.w) {
-            if unsafe { !(s.tile_completed)(i, tiles.tile_xy(x, y)) } {
-                return;
-            }
+    let location = unsafe { (s.location)(i) };
+    let tiles = map.coordinates();
+    // We only want to cut trees if all tiles are completed.
+    for tile_cur in location.tiles(tiles) {
+        // TileBelongsToIndustry(tile_cur) && !IsIndustryCompleted(tile_cur)
+        if unsafe { !(s.tile_completed)(i, tile_cur) } {
+            return;
         }
     }
-    let mut spiral = crate::spiral::square(l.tile % width, l.tile / width, 40, width, map.size_y);
+    let width = map.size_x;
+    // 40x40 tiles to search.
+    let mut spiral = crate::spiral::square(
+        tiles.tile_x(location.tile),
+        tiles.tile_y(location.tile),
+        40,
+        width,
+        map.size_y,
+    );
     while !spiral.is_end() {
         let tile = tiles.tile_xy(spiral.x, spiral.y);
         let info = unsafe { (s.farm_tile)(tile) };
-        if info.kind == MP_TREES && info.grown != 0 {
+        if TileType(info.kind) == TileType::MP_TREES && info.grown != 0 {
+            // found a tree
             let b = build_fields(builder);
             unsafe {
                 (*b).sound_ctr = 1;
                 (*b).sound_tile = tile;
+                // SND_38_LUMBER_MILL_1 and the CMD_LANDSCAPE_CLEAR as OWNER_NONE.
                 (s.harvest)(tile);
             }
+            // Add according value to waiting cargo.
             let amount = unsafe { (s.scale_cargo)(45) };
             unsafe {
                 let p = produced(owner, 0);
-                (*p).waiting = (u32::from((*p).waiting) + amount).min(65535) as u16;
+                (*p).waiting = (u32::from((*p).waiting) + amount).min(u32::from(u16::MAX)) as u16;
             }
             break;
         }
@@ -1734,30 +1906,31 @@ pub struct DeliveryServices {
     pub destroy: unsafe extern "C" fn(*mut ProductionContext),
     pub resolve: unsafe extern "C" fn(*mut ProductionContext, u32, u32, *mut ProductionResult),
 }
+/// `TriggerIndustryProduction`.
+///
 /// SAFETY: Live serialized industry, immutable services and spec; callbacks retain no owner borrows.
-pub(crate) unsafe fn trigger_delivery(
+pub(crate) unsafe fn trigger_industry_production(
     shell: *mut ShellHandle,
     owner: *mut Industry,
-    id: crate::industry_type::IndustryID,
+    id: IndustryID,
     resolver: &resolver::ResolverServices,
     services: &Services,
     delivery: &DeliveryServices,
 ) {
-    use crate::newgrf_callbacks::{
-        INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
-    };
-    let spec = resolver::ResolverServices::spec(unsafe { (*owner).metadata.kind });
-    let mask = unsafe { (*spec).callback_mask };
+    let indspec = spec_of(owner);
+    let cbm = spec_callback_mask(indspec);
     unsafe { (*owner).fields.was_cargo_delivered = 1 };
-    if mask & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) != 0 {
-        if mask & INDUSTRY_PRODUCTION_CARGO_ARRIVAL != 0 {
+    if cbm.test(IndustryCallbackMask::ProductionCargoArrival)
+        || cbm.test(IndustryCallbackMask::Production256Ticks)
+    {
+        if cbm.test(IndustryCallbackMask::ProductionCargoArrival) {
+            // IndustryProductionCallback(i, 0)
             let mut storage = std::mem::MaybeUninit::<ProductionStorage>::uninit();
             let context = unsafe { (delivery.construct)(storage.as_mut_ptr(), shell) };
-            let behaviour = resolver::ResolverServices::behaviour(spec);
-            production_callback(
+            industry_production_callback(
                 shell.cast(),
                 owner,
-                behaviour,
+                spec_behaviour(indspec),
                 0,
                 services,
                 |random, parameter, result| unsafe {
@@ -1769,23 +1942,24 @@ pub(crate) unsafe fn trigger_delivery(
             unsafe { (services.set_dirty)(shell.cast()) };
         }
     } else {
-        for input in 0..accepted_count(owner) {
-            let a = accepted(owner, input);
+        for ita in 0..accepted_count(owner) {
+            let a = accepted(owner, ita);
             let waiting = unsafe { (*a).waiting };
-            if waiting == 0 || !valid(unsafe { (*a).cargo }) {
+            if waiting == 0 || !is_valid_cargo_type(unsafe { (*a).cargo }) {
                 continue;
             }
-            for output in 0..produced_count(owner) {
-                let p = produced(owner, output);
-                if !valid(unsafe { (*p).cargo }) {
+            for itp in 0..produced_count(owner) {
+                let p = produced(owner, itp);
+                if !is_valid_cargo_type(unsafe { (*p).cargo }) {
                     continue;
                 }
                 let old = unsafe { (*p).waiting };
-                let multiplier = unsafe { (*spec).input_cargo_multiplier[input][output] };
+                let multiplier = unsafe { (*indspec).input_cargo_multiplier[ita][itp] };
                 let product = i32::from(waiting).wrapping_mul(i32::from(multiplier));
                 unsafe {
-                    (*p).waiting =
-                        i32::from(old).wrapping_add(product / 256).clamp(0, 65535) as u16;
+                    (*p).waiting = i32::from(old)
+                        .wrapping_add(product / 256)
+                        .clamp(0, i32::from(u16::MAX)) as u16;
                 };
             }
             unsafe { (*a).waiting = 0 };
@@ -1796,7 +1970,7 @@ pub(crate) unsafe fn trigger_delivery(
             shell.cast(),
             owner,
             id.0,
-            crate::industry_type::RANDOM_TRIGGER_CARGO_RECEIVED,
+            IndustryRandomTrigger::CargoReceived.0,
             services.shared().map().size_x(),
             services,
             resolver.lifecycle(),
@@ -1804,7 +1978,7 @@ pub(crate) unsafe fn trigger_delivery(
         openttd_rust_industry_animate_abi(
             owner,
             id.0,
-            crate::industry_type::ANIMATION_TRIGGER_CARGO_RECEIVED,
+            IndustryAnimationTrigger::CargoReceived.0,
             services.shared().map().size_x(),
             services,
             resolver.lifecycle(),
@@ -1826,10 +2000,10 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
     resolve: Resolve,
     services: *const Services,
 ) {
-    production_callback(
+    industry_production_callback(
         i,
         owner,
-        behaviour,
+        IndustryBehaviours(behaviour),
         reason,
         unsafe { &*services },
         |random, parameter, result| unsafe {
@@ -1837,32 +2011,38 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
         },
     );
 }
-fn production_callback(
+/// `IndustryProductionCallback`: get the industry production callback and apply it to the
+/// industry. `reason` is the reason it is called (0 = incoming cargo, 1 = periodic tick
+/// callback).
+fn industry_production_callback(
     i: *mut c_void,
     owner: *mut Industry,
-    behaviour: u32,
+    behaviour: IndustryBehaviours,
     reason: u8,
     s: &Services,
     mut resolve: impl FnMut(u32, u32, *mut ProductionResult),
 ) {
-    let random = if IndustryBehaviours(behaviour).test(IndustryBehaviour::ProdCallbackRandom) {
-        rand(s)
+    let callback_param1 = if behaviour.test(IndustryBehaviour::ProdCallbackRandom) {
+        random(s)
     } else {
         0
     };
-    let multiplier = if IndustryBehaviours(behaviour).test(IndustryBehaviour::ProdMultiHandling) {
+    let multiplier = if behaviour.test(IndustryBehaviour::ProdMultiHandling) {
         unsafe { i32::from((*fields(owner)).prod_level) }
     } else {
         1
     };
-    let mut parameter = u32::from(reason);
-    // The loop number occupies 16 NewGRF bits. Limit calls to break infinite loops.
-    for n in 0..=65536 {
-        if n == 65536 {
+    let mut callback_param2 = u32::from(reason);
+    for loop_ in 0..=0x10000 {
+        // limit the number of calls to break infinite loops.
+        // 'loop' is provided as 16 bits to the newgrf, so abort when those are exceeded.
+        if loop_ >= 0x10000 {
+            // display error message; abort the function early, this error isn't critical and
+            // will allow the game to continue to run
             unsafe { (s.callback_error)(i, false) };
             break;
         }
-        parameter = (parameter & !0x00ff_ff00) | (n << 8);
+        sb(&mut callback_param2, 8, 16, loop_);
         let mut result = ProductionResult {
             subtract: [0; 256],
             add: [0; 256],
@@ -1874,68 +2054,67 @@ fn production_callback(
             num_output: 0,
             present: 0,
         };
-        resolve(random, parameter, &raw mut result);
+        resolve(callback_param1, callback_param2, &raw mut result);
         if result.present == 0 {
             break;
         }
-        // An invalid-on-load result is noncritical: report it and keep the game running.
-        if result.version == 255 {
+        if result.version == 0xFF {
+            // Result was marked invalid on load, display error message; abort the function
+            // early, this error isn't critical and will allow the game to continue to run
             unsafe { (s.callback_error)(i, true) };
             break;
         }
+        // Version < 2: callback parameters map directly to industry cargo slot indices.
+        // Otherwise the callback receives a list of cargos to apply for, which need to have
+        // their cargo slots in industry looked up.
         for n in 0..usize::from(result.num_input) {
-            // Old callback parameters are slot indices; newer versions list cargoes
-            // whose industry slots must be looked up.
             let slot = if result.version < 2 {
                 if n >= accepted_count(owner) {
                     break;
                 }
                 Some(n)
             } else {
-                let cargo = result.cargo_input[n];
-                unsafe { get_cargo_accepted(owner, cargo) }
+                unsafe { get_cargo_accepted(owner, CargoType(result.cargo_input[n])) }
             };
             if let Some(nslot) = slot {
                 let a = accepted(owner, nslot);
                 unsafe {
-                    if result.version < 2 && !valid((*a).cargo) {
+                    if result.version < 2 && !is_valid_cargo_type((*a).cargo) {
                         continue;
                     }
                     (*a).waiting = i32::from((*a).waiting)
                         .wrapping_sub(result.subtract[n].wrapping_mul(multiplier))
-                        .clamp(0, 65535) as u16;
+                        .clamp(0, i32::from(u16::MAX)) as u16;
                 }
             }
         }
         for n in 0..usize::from(result.num_output) {
-            // Old callback parameters are slot indices; newer versions list cargoes
-            // whose industry slots must be looked up.
             let slot = if result.version < 2 {
                 if n >= produced_count(owner) {
                     break;
                 }
                 Some(n)
             } else {
-                let cargo = result.cargo_output[n];
-                unsafe { get_cargo_produced(owner, cargo) }
+                unsafe { get_cargo_produced(owner, CargoType(result.cargo_output[n])) }
             };
             if let Some(nslot) = slot {
                 let p = produced(owner, nslot);
                 unsafe {
-                    if result.version < 2 && !valid((*p).cargo) {
+                    if result.version < 2 && !is_valid_cargo_type((*p).cargo) {
                         continue;
                     }
                     (*p).waiting = i32::from((*p).waiting)
                         .wrapping_add(result.add[n].max(0).wrapping_mul(multiplier))
-                        .clamp(0, 65535) as u16;
+                        .clamp(0, i32::from(u16::MAX)) as u16;
                 }
             }
         }
         if result.again == 0 {
             break;
         }
-        parameter = (parameter & 0x00ff_ffff) | ((result.again as u32 & 255) << 24);
+        sb(&mut callback_param2, 24, 8, result.again as u32);
     }
+    // SetWindowDirty(WC_INDUSTRY_VIEW, ind->index)
     unsafe { (s.set_dirty)(i) };
 }
 
@@ -1943,13 +2122,12 @@ fn production_callback(
 /// Live builder record; resetting has no callback or allocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_build_type_reset(fields: *mut BuildFields) {
-    unsafe {
-        *fields = BuildFields {
-            max_wait: 1,
-            ..BuildFields::default()
-        };
-    }
+    unsafe { (*fields).reset() };
 }
+/// `StartupIndustryDailyChanges`: initialize the variables that will maintain the daily
+/// industry change system. `init_counter` specifies if the counter is required to be
+/// initialized.
+///
 /// # Safety
 /// Live builder; native map-size preconditions constrain the original shift.
 #[unsafe(no_mangle)]
@@ -1960,10 +2138,15 @@ pub unsafe extern "C" fn openttd_rust_industry_daily_start(
 ) {
     let fields = build_fields(builder);
     unsafe {
-        // Divide the scaled map size by 31 days. Fractional parts make the leftover
-        // days negligible, so a reset for the actual month length is unnecessary.
+        // After getting map size, it needs to be scaled appropriately and divided by 31,
+        // which stands for the days in a month.
+        // Using just 31 will make it so that a monthly reset (based on the real number of
+        // days of that month) would not be needed.
+        // Since it is based on "fractional parts", the leftover days will not make much of
+        // a difference on the overall total number of changes performed
         (*fields).daily_increment = (1u32 << map_bits) / 31;
-        // New games and saves from older versions need the counter initialized.
+        // A new game or a savegame from an older version will require the counter to be
+        // initialized
         if init_counter != 0 {
             (*fields).daily_counter = 0;
         }
@@ -2046,34 +2229,39 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builde
     unsafe { (*owner).registry[usize::from(kind)].clear() };
 }
 
-/// Subsidy search reads only the original industry location.
+/// `Industry::location.tile`, the only industry location the subsidy search reads.
 /// SAFETY: Live serialized industry owner, immediate read with no callbacks.
-pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> u32 {
-    unsafe { (*owner).metadata.tile }
+pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> TileIndex {
+    TileIndex(unsafe { (*owner).metadata.tile })
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
 pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
     unsafe { &(*owner).produced }
         .iter()
-        .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
+        .filter(|p| is_valid_cargo_type(p.cargo))
         .count() as u32
 }
 /// SAFETY: Original random cargo ordinal is less than the valid cargo count.
-pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (u8, u16, u8) {
+/// The cargo, last-month production and transported fraction of the valid produced slot
+/// with ordinal `number`.
+///
+/// SAFETY: Original random cargo ordinal is less than the valid cargo count.
+pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (CargoType, u16, u8) {
     let p = unsafe { &(*owner).produced }
         .iter()
-        .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
+        .filter(|p| is_valid_cargo_type(p.cargo))
         .nth(number as usize)
         .unwrap();
     let history = p.history[usize::from(LAST_MONTH)];
-    let percent = transported(history) as u8;
-    (p.cargo, history.first, percent)
+    (CargoType(p.cargo), history.first, history.pct_transported())
 }
+/// `Industry::IsCargoAccepted(cargo)`.
+///
 /// SAFETY: Live serialized owner; same accepted-slot predicate as `IsCargoAccepted`.
-pub(crate) unsafe fn subsidy_accepts(owner: *const Industry, cargo: u8) -> bool {
+pub(crate) unsafe fn subsidy_accepts(owner: *const Industry, cargo: CargoType) -> bool {
     unsafe { &(*owner).accepted }
         .iter()
-        .any(|a| a.cargo == cargo)
+        .any(|a| a.cargo == cargo.0)
 }
 
 crate::abi::layouts! {
@@ -2464,9 +2652,9 @@ mod delivery_tests {
         };
         let owner = &raw mut industry;
         unsafe {
-            assert_eq!(get_cargo_accepted(owner, 7), Some(0));
-            assert_eq!(get_cargo_accepted(owner, 255), None);
-            assert_eq!(get_cargo_accepted(owner, 8), None);
+            assert_eq!(get_cargo_accepted(owner, CargoType(7)), Some(0));
+            assert_eq!(get_cargo_accepted(owner, CargoType::INVALID_CARGO), None);
+            assert_eq!(get_cargo_accepted(owner, CargoType(8)), None);
             // Saturated stockpiles still create history and update last_accepted.
             for (pieces, amount, waiting, date) in [(20, 5, 65535, -12), (20, 0, 65535, 73)] {
                 assert_eq!(accept_delivery(owner, 0, pieces, || date), amount);
@@ -2533,6 +2721,16 @@ impl IndustryControlFlags {
     #[must_use]
     pub const fn is_valid(self) -> bool {
         self.0 & !Self::MASK == 0
+    }
+    /// Native `BaseBitSet::Any`: whether any of the given values are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+    /// Native bit-set union.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 }
 
@@ -2834,10 +3032,10 @@ mod production_policy_tests {
             ERRORS.set(0);
             DIRTY.set(0);
             let mut calls = 0;
-            production_callback(
+            industry_production_callback(
                 ptr::null_mut(),
                 &raw mut industry,
-                behaviour,
+                IndustryBehaviours(behaviour),
                 reason,
                 &services,
                 |random, parameter, out| {

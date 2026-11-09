@@ -75,7 +75,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
                 IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
             (*owner).fields.prod_level = level;
         }
-        super::recompute(owner);
+        super::recompute_production_multipliers(owner);
         // Show news message if requested: `prod_level != ind->prod_level` is false after the
         // assignment above, so the original adds no news item.
     }
