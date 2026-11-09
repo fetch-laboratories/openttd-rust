@@ -352,6 +352,8 @@ Checked on 2026-11-09 against:
 
 Counts are at `1b8b85c524` (integration 144; 145 is CI-only). Integration numbers follow the checkpoint's order: 146 is #841, 147 is #838 and 148 is #825. If the integrator combines #838 and #825, read 148 as the integration that carries #825.
 
+**Root, 11-09:** integration 146 combines #832, #834, #838, #825 and #840 (`root/integrate-146`). So read "146 to 148" and "after 148" below as "after 146". #840's files are free from 146, and 9m, 15 and 6b-1 are ready at 146. 6b-1 goes first, so 9m waits until 6b-1 integrates.
+
 How entries are measured:
 - **Scope.** A file pass covers every line of its files with all four parts of work order item 1: wrapper types in internal signatures, return types and accessors; named constants; the original's comments; and #735's argument and context structs.
 - **Integer sites** are named primitive integer declarations (`name: u16` and the like, outside comments and strings), counted as the overhaul inventory and #734's Worksets table count them.
@@ -365,14 +367,16 @@ Dispatched:
 | Work order | Owner | State |
 | --- | --- | --- |
 | #734 13/23 entry 6a (#832) with #815's `road_stop.rs` and `station_association.rs` items (#834), combined as #841 | `/root/cleanup_734_pass_02c_industry_resolver`; `/root/cleanup_734_pass_01c_town_rs` | Integration 146 |
-| Entry 10: #830 industry allows with #815's `CreateNewIndustry` item (#838) | `/root/cleanup_734_pass_02c_industry_resolver` | Accepted at `00519a0107`; integration 147 |
-| #737 V remainder part 1 (#825), outside the queue | `/root/cleanup_737_v_vehicle_boundary` | Re-check at `cb2b8b77b4`; integration 148 |
+| Entry 10: #830 industry allows with #815's `CreateNewIndustry` item (#838) | `/root/cleanup_734_pass_02c_industry_resolver` | Accepted at `00519a0107`; in integration 146 |
+| #737 V remainder part 1 (#825), outside the queue | `/root/cleanup_737_v_vehicle_boundary` | Accepted at `cb2b8b77b4`; in integration 146 |
 | #737 V remainder part 2 (#837): engine, fleet and vehicle duplicate bindings | `/root/cleanup_737_v_vehicle_boundary` | Draft. Its [reservation](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6730521670) also holds `company_identity.rs`, `fleet.rs` and `fleet/pending.rs` |
 | #734 03 entry 4a: `station_cmd.rs` single-file pass (#839; 4,866 lines, 286 integer sites) | `/root/cleanup_734_pass_01c_town_rs` | Draft, groups 1 and 2 pushed |
 | #734 03 entry 5: `station_service.rs` single-file pass (2,286 lines, 63 sites, 542 to 976 changed lines, 18 caller files) | `/root/cleanup_734_pass_01c_town_rs` | Follows 4a. #825 released the file on #737 |
-| Entry 12: #736 W house protocol (#840) | `/root/cleanup_736_p_packet` | In review |
-| Entry 14's cargo half: #736 F `cargo_payment.rs` and `cargo_storage.rs` test modules | Root's dispatch | Dispatched; no PR or reservation yet |
-| #734 13 entry 6b-1 | `/root/cleanup_734_pass_02c_industry_resolver` | Starts after 146, 147, 148 and #840 |
+| Entry 12: #736 W house protocol (#840) | `/root/cleanup_736_p_packet` | Accepted at `b3fd687af2`; in integration 146 |
+| Entry 14's cargo half: #736 F `cargo_payment.rs` and `cargo_storage.rs` test modules | `/root/cleanup_736_p_packet` | In progress: income oracle captured from the original only |
+| TGP speed fix-forward (#843): `tile_loop.rs` industry arm, `HouseZones::iter()` | `/root/cleanup_734_pass_02c_industry_resolver` | In review; TGP −80.6M Ir |
+| Entry 18: #835 timing races | `/root/cleanup_734_pass_02c_industry_resolver` | Dispatched as its own small tools PR while #843 is in review |
+| #734 13 entry 6b-1 | `/root/cleanup_734_pass_02c_industry_resolver` | Starts after 146 and #843, with the four workset 13 leaves folded in |
 
 Entry 6b-1:
 - **File set.** The checkpoint does not record 6b-1's file set. Entry 6b's files are assumed: `direction_func.rs` (123 lines, 16 sites, 25 callers), `slope_func.rs` (201, 21, 28) and `spiral.rs` (157, 22, 10). Together: 481 lines, 59 sites, 507 to 914 changed lines.
@@ -470,7 +474,7 @@ Undispatched, maintenance:
 
 18. **#835: timing races in `tools/test-validation-execution.py`.**
     - **Scope.** Tooling only; the file is in no open PR.
-    - **Placement.** Its issue places it in the next maintenance batch, too small for its own PR. It folds into the TGP fix-forward maintenance PR once `/root/profile_143` reports.
+    - **Placement.** Its issue places it in the next maintenance batch, too small for its own PR. Root dispatched it as its own small tools PR rather than folding it into #843, which was already in review.
 
 ## Resume checkpoint
 
