@@ -4361,74 +4361,101 @@ mod tunnel_tests {
         w
     }
 
-    /// Every case of the fixture's `Run()`, in order, with its inputs.
-    fn cases() -> Vec<(String, World)> {
+    type Case = (String, World);
+
+    /// The obstruction and mountain length matrix.
+    fn length_cases(dir: u32) -> Vec<Case> {
+        let lengths = [1, 2, 4, 5, 6, 7, 8, 9, 255, 256, 257];
+        let populations = [0, 999, 1000, 249_000, 250_000];
         let mut cases = Vec::new();
-        for dir in 0..4 {
-            let mut push = |label: &str, w: World| cases.push((format!("{label} dir={dir}"), w));
-            for mountain in [false, true] {
-                for length in [1, 2, 4, 5, 6, 7, 8, 9, 255, 256, 257] {
-                    for population in [0, 999, 1000, 249_000, 250_000] {
-                        let mut w = fixture(dir, length, mountain);
-                        w.population = population;
-                        push(
-                            &format!("length={length} population={population} mountain={mountain}"),
-                            w,
-                        );
-                    }
-                }
-            }
-            for slope in 0..32 {
-                let mut w = fixture(dir, 4, true);
-                tile(&mut w, 0).slope = slope;
-                push(&format!("entrance-slope={slope}"), w);
-                let mut w = fixture(dir, 4, true);
-                tile(&mut w, 2).slope = slope;
-                push(&format!("mountain-slope={slope}"), w);
-            }
-            let mut w = fixture(dir, 4, false);
-            tile(&mut w, -1).roads = 0;
-            push("disconnected", w);
-            for place in [1, 5] {
-                for kind in [0, MP_ROAD, MP_RAILWAY, MP_STATION, MP_TUNNELBRIDGE] {
-                    for stop in 0..4 {
-                        for facing in 0..4 {
-                            let mut w = fixture(dir, 4, true);
-                            let t = tile(&mut w, place);
-                            t.kind = kind;
-                            t.stop = stop;
-                            t.facing = facing;
-                            let label = format!(
-                                "continuation place={place} type={kind} stop={stop} facing={facing}"
-                            );
-                            push(&label, w.clone());
-                            if kind == MP_TUNNELBRIDGE {
-                                tile(&mut w, place).transport = 0;
-                                push(&format!("rail-tunnel {label}"), w);
-                            }
-                        }
-                    }
-                }
-                let mut w = fixture(dir, 4, true);
-                tile(&mut w, place).valid = false;
-                push(&format!("invalid-continuation place={place}"), w);
-            }
-            for place in 1..=4 {
-                let mut w = fixture(dir, 4, true);
-                tile(&mut w, place).valid = false;
-                push(&format!("invalid-mountain-end place={place}"), w);
-            }
-            let mut w = fixture(dir, 4, true);
-            tile(&mut w, 5).kind = MP_RAILWAY;
-            w.allow_crossings = false;
-            push("crossing-disabled", w);
-            for failure in 0..3 {
-                let mut w = fixture(dir, 4, true);
-                w.failure = Some(failure);
-                push(&format!("command-failure={failure}"), w);
+        for (mountain, length) in [false, true]
+            .into_iter()
+            .flat_map(|m| lengths.into_iter().map(move |l| (m, l)))
+        {
+            for population in populations {
+                let mut w = fixture(dir, length, mountain);
+                w.population = population;
+                let label = format!("length={length} population={population} mountain={mountain}");
+                cases.push((label, w));
             }
         }
         cases
+    }
+
+    /// Entrance and mountain slopes, interleaved per slope.
+    fn slope_cases(dir: u32) -> Vec<Case> {
+        let mut cases = Vec::new();
+        for slope in 0..32 {
+            for (place, kind) in [(0, "entrance"), (2, "mountain")] {
+                let mut w = fixture(dir, 4, true);
+                tile(&mut w, place).slope = slope;
+                cases.push((format!("{kind}-slope={slope}"), w));
+            }
+        }
+        cases
+    }
+
+    /// Continuation tiles at one end: every type, stop and facing, rail tunnels, then invalid.
+    fn continuation_cases(dir: u32, place: i32) -> Vec<Case> {
+        let kinds = [0, MP_ROAD, MP_RAILWAY, MP_STATION, MP_TUNNELBRIDGE];
+        let mut cases = Vec::new();
+        for (kind, stop, facing) in kinds.into_iter().flat_map(|kind| {
+            (0..4).flat_map(move |stop| (0..4).map(move |facing| (kind, stop, facing)))
+        }) {
+            let mut w = fixture(dir, 4, true);
+            let t = tile(&mut w, place);
+            t.kind = kind;
+            t.stop = stop;
+            t.facing = facing;
+            let label =
+                format!("continuation place={place} type={kind} stop={stop} facing={facing}");
+            cases.push((label.clone(), w.clone()));
+            if kind == MP_TUNNELBRIDGE {
+                tile(&mut w, place).transport = 0;
+                cases.push((format!("rail-tunnel {label}"), w));
+            }
+        }
+        let mut w = fixture(dir, 4, true);
+        tile(&mut w, place).valid = false;
+        cases.push((format!("invalid-continuation place={place}"), w));
+        cases
+    }
+
+    /// One direction of the fixture's `Run()`, in order.
+    fn direction_cases(dir: u32) -> Vec<Case> {
+        let mut cases = length_cases(dir);
+        cases.extend(slope_cases(dir));
+        let mut w = fixture(dir, 4, false);
+        tile(&mut w, -1).roads = 0;
+        cases.push(("disconnected".to_owned(), w));
+        cases.extend(continuation_cases(dir, 1));
+        cases.extend(continuation_cases(dir, 5));
+        for place in 1..=4 {
+            let mut w = fixture(dir, 4, true);
+            tile(&mut w, place).valid = false;
+            cases.push((format!("invalid-mountain-end place={place}"), w));
+        }
+        let mut w = fixture(dir, 4, true);
+        tile(&mut w, 5).kind = MP_RAILWAY;
+        w.allow_crossings = false;
+        cases.push(("crossing-disabled".to_owned(), w));
+        for failure in 0..3 {
+            let mut w = fixture(dir, 4, true);
+            w.failure = Some(failure);
+            cases.push((format!("command-failure={failure}"), w));
+        }
+        cases
+    }
+
+    /// Every case of the fixture's `Run()`, in order, with its inputs.
+    fn cases() -> Vec<Case> {
+        (0..4)
+            .flat_map(|dir| {
+                direction_cases(dir)
+                    .into_iter()
+                    .map(move |(label, w)| (format!("{label} dir={dir}"), w))
+            })
+            .collect()
     }
 
     #[test]
@@ -4717,19 +4744,11 @@ mod expansion_tests {
         leaves
     }
 
-    #[test]
-    fn expansion_matches_fixture_checks() {
-        let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
-        let mask = crate::type_registry::openttd_rust_road_mask();
-        // SAFETY: Process-wide registry scalar serialized by the lock.
-        let saved_mask = unsafe { mask.replace(0) };
-        let saved_year = crate::timer_game_common::calendar_year();
-        let saved_date = crate::timer_game_common::calendar_date();
-        crate::timer_game_common::write_calendar_year(crate::timer_game_calendar::CalendarYear(
-            1950,
-        ));
-        crate::timer_game_common::write_calendar_date(crate::services::CalendarDate(0));
-        // The fixture's 64x64 map: flat, empty clear ground.
+    /// The fixture's 64x64 map: flat, empty clear ground, installed for this thread.
+    fn fixture_map() -> (
+        Vec<crate::map_func::BaseTileLayout>,
+        Vec<crate::map_func::ExtendedTileLayout>,
+    ) {
         let base: Vec<_> = (0..4096)
             .map(|_| crate::map_func::BaseTileLayout {
                 kind: 0,
@@ -4758,6 +4777,11 @@ mod expansion_tests {
             6,
         );
 
+        (base, extended)
+    }
+
+    /// The fixture's town: 5 house IDs, 2 classes, centred on tile 2080 with radii of 100.
+    fn fixture_owner() -> Box<State> {
         let mut owner = Box::new(State::default());
         owner.id_counts = vec![0; 5];
         owner.class_counts = vec![0; 2];
@@ -4772,6 +4796,48 @@ mod expansion_tests {
             }
         });
 
+        owner
+    }
+
+    /// The fixture's checks after each expansion (`town_protocol.hpp` lines 301, 303 and 308).
+    fn check_expansions(owner: &mut State, expand: impl Fn(u8)) {
+        let counts = || with(|w| (w.roads, w.draws, w.company));
+
+        // town_protocol.hpp:301: buildings only.
+        expand(1);
+        assert_eq!(counts(), (0, 0, 7), "buildings: roads, draws, company");
+        // town_protocol.hpp:303: roads; the first road's execute failure still succeeds.
+        expand(2);
+        assert_eq!(counts(), (1, 1, 7), "roads: roads, draws, company");
+        // town_protocol.hpp:308: expansion updates radii; restore the isolated setup. A failing
+        // clear makes each of the 25 growth attempts clear 13 tiles, with no further draw.
+        owner.simulation.radius = [100; 5];
+        with(|w| {
+            w.clears = 0;
+            w.clear_fails = true;
+        });
+        expand(2);
+        assert_eq!(
+            with(|w| (w.clears, w.company, w.draws)),
+            (25 * 13, 7, 1),
+            "failing clears: clears, company, draws"
+        );
+    }
+
+    #[test]
+    fn expansion_matches_fixture_checks() {
+        let _guard = super::tests::GLOBAL_LOCK.lock().unwrap();
+        let mask = crate::type_registry::openttd_rust_road_mask();
+        // SAFETY: Process-wide registry scalar serialized by the lock.
+        let saved_mask = unsafe { mask.replace(0) };
+        let saved_year = crate::timer_game_common::calendar_year();
+        let saved_date = crate::timer_game_common::calendar_date();
+        crate::timer_game_common::write_calendar_year(crate::timer_game_calendar::CalendarYear(
+            1950,
+        ));
+        crate::timer_game_common::write_calendar_date(crate::services::CalendarDate(0));
+        let (base, extended) = fixture_map();
+        let mut owner = fixture_owner();
         let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
         services.map = crate::map_func::fixture::statics();
         SHARED_TABLE.set(&raw const services);
@@ -4846,27 +4912,7 @@ mod expansion_tests {
             let t = TownID(0);
             engine.bind(t).expand_town(t, 1, TownExpandModes(modes));
         };
-        let counts = || with(|w| (w.roads, w.draws, w.company));
-
-        // town_protocol.hpp:301: buildings only.
-        expand(&services, 1);
-        assert_eq!(counts(), (0, 0, 7), "buildings: roads, draws, company");
-        // town_protocol.hpp:303: roads; the first road's execute failure still succeeds.
-        expand(&services, 2);
-        assert_eq!(counts(), (1, 1, 7), "roads: roads, draws, company");
-        // town_protocol.hpp:308: expansion updates radii; restore the isolated setup. A failing
-        // clear makes each of the 25 growth attempts clear 13 tiles, with no further draw.
-        owner.simulation.radius = [100; 5];
-        with(|w| {
-            w.clears = 0;
-            w.clear_fails = true;
-        });
-        expand(&services, 2);
-        assert_eq!(
-            with(|w| (w.clears, w.company, w.draws)),
-            (25 * 13, 7, 1),
-            "failing clears: clears, company, draws"
-        );
+        check_expansions(&mut owner, |modes| expand(&services, modes));
 
         // SAFETY: Process-wide registry scalar serialized by the lock.
         unsafe { mask.write(saved_mask) };
