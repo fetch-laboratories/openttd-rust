@@ -53,24 +53,22 @@ def main(
 def debt_errors(
     current: dict[str, list[int]],
     baseline: dict[str, list[int]],
-    previous: dict[str, list[int]],
+    allowed: dict[str, list[int]],
 ) -> list[str]:
-    """Compare stable sites, including multiplicity and measured magnitude.
+    """Report growth only: measured or recorded debt above what base allows.
 
     Values are sorted magnitudes, one per distinct compiler site (deduplicated
     across Cargo targets). Removing a site cannot pay for another site's growth.
+    A recorded row above the measured one is an unrecorded improvement, not an
+    error.
     """
     errors = []
-    for label, left, right in (
-        ("new site", current, baseline),
-        ("stale row", baseline, current),
-        ("baseline growth", baseline, previous),
-    ):
-        for key in sorted(left):
-            values = sorted(left[key], reverse=True)
-            allowed = sorted(right.get(key, []), reverse=True)
-            if exceeds(values, allowed):
-                errors.append(f"{label}: {key}: {values} exceeds {allowed}")
+    for label, measured in (("debt growth", current), ("baseline growth", baseline)):
+        for key in sorted(measured):
+            values = sorted(measured[key], reverse=True)
+            limit = sorted(allowed.get(key, []), reverse=True)
+            if exceeds(values, limit):
+                errors.append(f"{label}: {key}: {values} exceeds {limit}")
     return errors
 
 
