@@ -892,3 +892,16 @@ pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::S
     subsidy_multiplier: unreachable0,
     feeder_payment_share: unreachable0,
 };
+
+/// `crate::cargo_storage::Services` with every entry unreachable.
+pub(crate) const CARGO_STORAGE: crate::cargo_storage::Services = crate::cargo_storage::Services {
+    can_allocate: unreachable0,
+    create: unreachable1,
+    packet: unreachable1,
+    destroy: unreachable1,
+    pay: unreachable6,
+    origin: unreachable4,
+    flow_map: unreachable1,
+    shared: ptr::null(),
+    packet_next: unreachable1,
+};
