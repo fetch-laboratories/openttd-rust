@@ -48,7 +48,6 @@ add_test_files(
     test_script_admin.cpp
     test_window_desc.cpp
     town_growth.cpp
-    town_protocol.hpp
     townname.cpp
     train.cpp
     ship_yapf.cpp

@@ -16,7 +16,6 @@
 #include "command_cost_ffi.h"
 #include <cstddef>
 struct OpenTTDTownState;
-struct OpenTTDRoadCommandContext;
 struct Town;
 /** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
@@ -117,13 +116,8 @@ uint8_t openttd_rust_town_percent_transported(const OpenTTDTownSuppliedHistory *
 void openttd_rust_town_supplied_reserve(OpenTTDTownState *, size_t);
 OpenTTDTownSupplied *openttd_rust_town_supplied_insert(OpenTTDTownState *, size_t, uint8_t);
 OpenTTDTownSlots openttd_rust_town_id_counts(OpenTTDTownState *);
-void openttd_rust_town_id_counts_resize(OpenTTDTownState *, size_t);
 OpenTTDTownSlots openttd_rust_town_global_id_counts();
-void openttd_rust_town_global_id_counts_resize(size_t);
 OpenTTDTownSlots openttd_rust_town_class_counts(OpenTTDTownState *);
-void openttd_rust_town_class_counts_resize(OpenTTDTownState *, size_t);
-OpenTTDTownSlots openttd_rust_town_global_class_counts();
-void openttd_rust_town_global_class_counts_resize(size_t);
 OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppliedHistory *, size_t);
 void openttd_rust_town_rating_test(bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
@@ -131,7 +125,6 @@ void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSha
 OpenTTDTownState *openttd_rust_town_new();
 void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
-void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 }
 const OpenTTDTownLeaves &GetRustTownServices() noexcept;

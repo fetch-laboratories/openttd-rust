@@ -21,13 +21,11 @@ pub struct Vacancy {
     grfid: u32,
 }
 #[repr(C)]
-pub struct Triggers {
-    animation: u16,
-    cargo: u64,
-}
-#[repr(C)]
 pub struct Services {
-    triggers: unsafe extern "C" fn(*const RailSpec) -> Triggers,
+    /// `st->cached_anim_triggers.Set(spec->animation.triggers)`.
+    pub(crate) rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
+    /// The rail resolver services, for the cached and spec cargo triggers.
+    resolver: *const crate::newgrf_station::Services,
     shared: *const crate::services::Services,
     roadstop: *const crate::newgrf_roadstop::Services,
     count: unsafe extern "C" fn(*const BaseStation) -> usize,
@@ -39,6 +37,7 @@ pub struct Services {
     set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RailSpec, u32, u16),
     rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RailSpec),
     set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64),
+    set_cached_cargo: unsafe extern "C" fn(*mut BaseStation, u64),
 }
 /// `AllocateSpecToStation`: allocate a `StationSpec` to a station. `valid ==
 /// false` is `std::nullopt`, no free slot; the index is in `value` otherwise.
@@ -99,21 +98,25 @@ pub(crate) fn allocate(
 pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     let s = unsafe { &*native };
     // `cached_anim_triggers = {}` and `cached_cargo_triggers = 0`.
-    let mut anim = StationAnimationTriggers::EMPTY;
-    let mut cargo = CargoTypes(0);
-    // Combine animation trigger bitmask for all station specs
-    // of this station.
+    unsafe {
+        (s.set_cached)(st, StationAnimationTriggers::EMPTY.0, CargoTypes(0).0);
+    }
+    /* Combine animation trigger bitmask for all station specs
+     * of this station. */
     for i in 0..unsafe { (s.count)(st) } {
         let spec = unsafe { (s.spec)(st, i) };
         if spec.is_null() {
             continue;
         }
-        let triggers = unsafe { (s.triggers)(spec) };
-        anim |= StationAnimationTriggers(triggers.animation);
-        cargo.0 |= triggers.cargo;
-    }
-    unsafe {
-        (s.set_cached)(st, anim.0, cargo.0);
+        (s.rail_triggers)(st, spec);
+        // `cached_cargo_triggers |= spec->cargo_triggers`: the right operand
+        // is read before the cached field.
+        let resolver = unsafe { &*s.resolver };
+        let cargo = CargoTypes((resolver.spec_cargo)(spec));
+        let cached = CargoTypes((resolver.cached_cargo)(st));
+        unsafe {
+            (s.set_cached_cargo)(st, cached.0 | cargo.0);
+        }
     }
 }
 /// `AssignSpecToStation`: assign a previously allocated `StationSpec` spec
@@ -246,7 +249,6 @@ pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationSpecTriggers" ["station_service"] => Triggers { animation, cargo };
     "OpenTTDStationSpecVacancy" ["station_service"] => Vacancy { spec, grfid };
-    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, set_cached };
+    "OpenTTDStationAssociationServices" ["station_service"] => Services { rail_triggers, resolver, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, set_cached, set_cached_cargo };
 }

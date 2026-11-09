@@ -4,81 +4,99 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-08, stocktake 131)
+## Where the fork stands (2026-11-09, stocktake 143)
 
-Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
+Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
 
-Development resumed on 2026-11-08 in the cleanup stage; the session ran two implementers until the user restored the four-implementer cap the same evening (user, 2026-11-08). Code main was integration 132, `5661d54e0a` (#807), when this section was written; the [resume checkpoint](#resume-checkpoint) gives the current tip. The table measures stocktake 131 (`305ac20c28`, #808); 130 and 131 change tooling only, and 132 is the first #734 file pass (Rust only, fork C++ and boundary unchanged). Integrations 104 to 132 each passed review and exact-head Full with matching tested and merged trees; none was rolled back. [Profile 131](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6726331131) is accepted on clean `305ac20c28`, with profiles 113/119/125 retained. Platform cadence [130 passed](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42511544906). Stocktakes and profiles now run every twelfth integration (user, 2026-11-08), so 137 is skipped and the next is 143. Platform cadence 135 failed and was fixed in 137; the next follows 140.
+Integrations 132 to 143 merged between 19:23 UTC on 11-08 and 02:31 UTC on 11-09 with the four-implementer cap (user, 2026-11-08), a delegated integrator and a planner-filled ready queue. The table measures stocktake 143 (`da020b52c7`, #827) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full; none was rolled back. Integration 141's Full needed one authorized rerun of a simulation shard that hung on `network-protocol-loopback` (#693). Platform cadence 135 failed on Windows x86 oracle tests and 137 (#818) fixed it; cadence 140 failed on a `-Wmissing-field-initializers` warning from #814 and 141 (#831) fixed it, with the rerun green. The next cadence follows 145, and the next stocktake and profile follow 155. Profile 143 ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) has all seven scenarios equal and all six policy records below band and ceiling. TGP's projection rose 5.32%, which triggers attribution (see [Speed](#speed)).
 
-Fork C++ change since stocktake 125 (2026-11-07): −467 counted lines, all on 11-07 (127 and 129); 0 on 11-08. Tooling since 129: +33 (130) and +563 (131) code lines.
+Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 138) −1,067: −759 by 137, almost all #810's #736 U vector transfer (135, tools C++ −746), and −308 at 138 (#814 #737 V, compiled −263). On 11-09 (139 to 143) −326: −77 at 139 (#820 #736 P), −246 at 142 (#829 #736 W) and −3 at 143 (#827). Original C++ retired fell by 9 lines in simulation logic at 138 (#814's glue edits in `src/economy.cpp`, `src/order_cmd.cpp`, `src/train_cmd.cpp` and `src/vehicle.cpp`; 137 still measures 62,710). Root checked every line #814 added to those four files against the pinned original, and none is original code. The −9 is a classification shift in the metric, not restored original C++ (root, 2026-11-09). Tooling since 131: −1,692 code lines, mostly #810's Python fixture retirement at 135; 140 (#826) added 287.
 
-| Measured quantity | Integration 131 |
-| --- | ---: |
-| Original C++ remaining | 221,645 |
-| Fork source glue, including generated records | 34,923 |
-| Compiled source and generated records C++ | 256,568 |
-| Tracked tools C++ evidence | 16,869 |
-| ABI-generated non-record C++ evidence | 5,522 |
-| Measured fork C++ series (scope below) | 278,959 |
-| Original C++ retired | 62,710 of 284,355 (22.05%) |
-| Simulation C++ retired | 41,550 of 61,148 (67.95%) |
-| Expanded Rust exports / callback fields | 1,709 / 3,418 |
-| Historical regex exports / callback slots | 1,553 / 3,376 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 |
-| Retained Clippy keys / diagnostics | 664 / 757 |
-| Ruff keys / diagnostics | 296 / 296 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 |
+| Measured quantity | Integration 131 | Integration 143 |
+| --- | ---: | ---: |
+| Original C++ remaining | 221,645 | 221,654 |
+| Fork source glue, including generated records | 34,923 | 34,616 |
+| Compiled source and generated records C++ | 256,568 | 256,270 |
+| Tracked tools C++ evidence | 16,869 | 15,821 |
+| ABI-generated non-record C++ evidence | 5,522 | 5,475 |
+| Measured fork C++ series (scope below) | 278,959 | 277,566 |
+| Original C++ retired | 62,710 of 284,355 (22.05%) | 62,701 of 284,355 (22.05%) |
+| Simulation C++ retired | 41,550 of 61,148 (67.95%) | 41,541 of 61,148 (67.94%) |
+| Expanded Rust exports / callback fields | 1,709 / 3,418 | 1,708 / 3,374 |
+| Historical regex exports / callback slots | 1,553 / 3,376 | 1,552 / 3,332 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 | 104 / 304 / 39 |
+| Retained Clippy keys / diagnostics | 664 / 757 | 649 / 739 |
+| Ruff keys / diagnostics | 296 / 296 | 287 / 287 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 | 190,613 / 62,128 |
+| Play-save speed ratio | profile 131 (below) | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
 
-Fork-added C++ under `src/tests` (5,684 lines) is within source glue. The 6,137 ABI-generated lines are 615 record declarations within source glue plus the 5,522 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support. Clippy retains five approved families.
+Fork-added C++ under `src/tests` (5,615 lines) is within source glue. The 6,090 ABI-generated lines are 615 record declarations within source glue plus the 5,475 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust includes oracle text and native support; most of its +14,954 is #734 file passes and #736 oracle tests and data. Clippy retains five approved families.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,338 | 9,086 | 6,556 |
-| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,388 |
+| Simulation logic (phase 1) | 47,424 | 38,329 | 9,095 | 6,456 |
+| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,387 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,067 | 38,727 | 3,360 |
 | Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 551 |
 | GUI and platform (phase 5) | 64,120 | 415 | 63,705 | 465 |
 | Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
 | Data tables | 17,295 | 4,367 | 12,928 | 14 |
-| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,684 |
-| Boundary layer | 0 | 0 | 0 | 16,905 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,615 |
+| Boundary layer | 0 | 0 | 0 | 16,768 |
 
-These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. The inherited missing CargoPacket precondition assertions remain a fidelity difference (#726). #503 deep checks remain user-requested.
+These are source-area subtotals, not ownership or phase-exit claims. Since 131, simulation logic glue fell by 100, storage glue by 1, test glue by 69 and boundary glue by 137; phases 3 to 6 are unchanged. Null-driver games, bounded NewGRF/historical-save corpora and retained native fixtures leave the recorded limits on #156; entry witnesses are not branch coverage. Since 131, #156 records two further limits, neither a demonstrated defect: #810's encoded corpus, history and fatal-check reach, and the industry property branches that #821's cited scenarios do not supply. The inherited missing CargoPacket precondition assertions remain a fidelity difference (#726). #503 deep checks remain user-requested.
+
+Unintegrated branches at 143: five component PRs, #825 (#737 V remainder part 1), #832 (#734 13/23 part a), #834 (#815 station items), #837 (#737 V remainder part 2) and #833 (#736 W landscape loop, accepted and queued). Draft #838 (#830) opened after 143.
 
 ### Cleanup stream inventories
 
-Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)), here at integration 132; steering re-measures the others.
+Measured by the overhaul evaluation's analyzers on the overhaul snapshot `6fd364ffdb` and on integration 129. Root's stocktake updates the rows marked † ([selection](planning.md#selection)), here at integration 143; steering re-measures the others.
 
-| Stream | Inventory | Overhaul | Integration 129 | Integration 132 † |
-| --- | --- | ---: | ---: | ---: |
-| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched | 12 of 319 (#807) |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – |
-| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – |
-| #735 | Functions over seven parameters | 150 | 141 | – |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 62 / 19 |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 16,869 / 5,684 |
-| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 117 / 314 / 40 |
-| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,120 |
-| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 440 / 106 / 49; 296 |
+| Stream | Inventory | Overhaul | Integration 129 | Integration 132 | Integration 143 † |
+| --- | --- | ---: | ---: | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319; 132 touched | 12 of 319 (#807) | 41 of 319 |
+| #734 | Workset lines in finished files † | – | – | – | 32,080 of 176,930 (18.1%) |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – | – |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – | – |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – | – |
+| #735 | Functions over seven parameters | 150 | 141 | – | – |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 62 / 19 | 53 / 11 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 16,869 / 5,684 | 15,821 / 5,615 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 117 / 314 / 40 | 104 / 304 / 39 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,120 | 3,229 |
+| None | Clippy nesting / length / complexity rows; Ruff rows | 440 / 106 / 49; 296 | unchanged | 440 / 106 / 49; 296 | 438 / 105 / 47; 287 |
 
-Since integration 103, raw fork C++ fell by 923 lines: `tools/` −649, `src/tests` −192, other `src/` −82. Original C++ retired held at 22.05%. #734 added about 4,900 Rust lines in 33 PRs. Rust comments rose by 3,524 lines, but only 438 of those sit inside bodies. Counting commands: #734 from its issue's per-workset counts; #735 from `migration/clippy-debt.json` and `grep -rn 'allow(clippy::too_many_arguments' rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user. Between 129 and 132, #734 finished 12 files, #735 retired one parameter-count row (`DoCreateTown`), #738 cut 243 corpus lines, and #736/#737 held while their first items (#736 U, #809) are in progress.
+Counting commands: #734 from its issue's Worksets table and file lists, with lines as `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head (the issue's 18,297 of 173,403 lines at integration 138 reproduces this way); #735 from `migration/clippy-debt.json` and `git grep 'allow(clippy::too_many_arguments' -- rust/`; #736 and #737 from `python3 tools/port-metrics.py --whole-fork` and the baselines; #738 from `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`. No stream owns the structural rows: refactoring waits for the user.
+
+Between 132 and 143:
+- **#734** finished 29 more files: workset 01 completes with #812 (`town/house.rs`, 136) and #819 (`town.rs`, 139); workset 02 completes with #811 (9 files, 134), #816 (3, 138), #821 (2, 139) and #828 (`industry.rs`, 142); workset 03 reaches 12 of 14 with #813 (8, 136) and #827 (the station group, 143). `station_cmd.rs` and `station_service.rs` remain; #832 (13/23 part a) is open. Finished lines rose from 18,297 at 138 to 32,080; the workset total grew from 173,403 to 176,930 lines as passes restored comments.
+- **#735** retired nine `too_many_arguments` rows and eight `allow` sites inside #734 passes: one at 136, five rows and eight sites at 138, one at 139 and two at 143 (#827's waypoint builders).
+- **#736** retired 1,048 tools C++ lines and 69 `src/tests` lines: U at 135 (#810, −746), P at 139 (#820, −77) and the W town observations at 142 (#829, −223). #833 (W landscape loop) is queued.
+- **#737** V (#814, 138) cut 13 shared-accessor, 8 rebound-callee and 1 orphan-export rows; #827 removed two more rebound-callee rows at 143. The V remainder is open as #825 and #837; W waits behind the `station_cmd.rs` and industry passes.
+- **#738** grew by 109 lines (3,120 to 3,229) with no cut: the new `docs/review-brief.md` (+70) and Claude Code delegation in `docs/team.md` (+36).
+- **Lint baselines** fell: Clippy keys 664 to 649, Ruff 296 to 287 (#826 split `worktree_refusal` and `remove`).
 
 ### Speed
 
-The instruction counts below measure profile 131 on clean `305ac20c28` (integration 131), with Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
+Profile 143 on clean `da020b52c7` (integration 143, [#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) used the same tools as profile 131: Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0.
 
-| Scenario | Original Ir | Candidate Ir (131) | Projection (131) | Change since 125 |
+| Scenario | Original Ir | Candidate Ir (143) | Projection (143) | Ir change since 131 |
 | --- | ---: | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,783,264,555 | 1.168178x | +0.0007% |
-| Opus | 21,773,343,583 | 27,864,805,576 | 1.345115x | +0.0002% |
-| Grok | 20,969,727,163 | 26,586,023,846 | 1.346652x | −0.0004% |
-| P1996 | 3,600,502,896 | 4,589,688,730 | 1.352193x | −0.0260% |
-| P2000 | 6,049,922,238 | 7,576,521,293 | 1.444531x | +0.2550% |
-| P2016 | 11,343,424,651 | 13,924,870,889 | 1.382593x | −0.0102% |
-| Drawing | 2,149,015,961 | 2,154,257,138 | 1.004635x | −0.0045% |
+| TGP | 2,265,528,237 | 2,857,546,676 | 1.230318x | +2.6689% |
+| Opus | 21,773,343,583 | 27,569,546,889 | 1.345115x | −1.0596% |
+| Grok | 20,969,727,163 | 26,309,996,893 | 1.346652x | −1.0382% |
+| P1996 | 3,600,502,896 | 4,564,266,895 | 1.352193x | −0.5539% |
+| P2000 | 6,049,922,238 | 7,497,361,602 | 1.444531x | −1.0448% |
+| P2016 | 11,343,424,651 | 13,744,477,974 | 1.382593x | −1.2955% |
+| Drawing | 2,149,015,961 | 2,154,326,198 | 1.004635x | +0.0032% |
 
-All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. No loop Ir rose by 3% since 125, so there is no attribution trigger. Five play counts remain below anchor Ir, so their projections stay at the anchor floors. No anchor or history was reset. The five play scenarios now report nonempty stderr, the original's own script debug lines (a saved AI is unavailable, so the dummy AI loads), identical between reference and candidate apart from timestamps.
+All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. The five play loops fell, consistent with #737 batch V moving vehicle reads and station loading into Rust; their projections stay at the anchor floors.
+
+TGP's projection rose 5.32% (1.168178x to 1.230318x), over the 3% projection-rise row, so root ruled that the row applies. TGP is 0.0047x under its 1.235x band start. [Attribution](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731594943) traces it to two causes:
+- +57.0M in `tile_loop::run`: #816 passes `&s.industry`, which spills the services copy (integration 138).
+- +27.4M in `town::get_town_radius_group`: #819's `HZ_ZONE_ALL` loop runs through a 16-step filtered `HouseZones::iter()` (integration 139).
+
+#814 offsets 10.3M. The fix-forward PR (`/root/cleanup_734_pass_02c_industry_resolver`) recovers an estimated 85M, back to the anchor floor. Ownership PRs proceed meanwhile. If TGP reaches its band first, a speed pass follows. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
@@ -324,61 +342,139 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-07; ne
 
 Work orders ready to dispatch, which root selects when a slot frees ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two entries are ready. File sets are checked against open PRs and reservations.
 
-Checked on 2026-11-09 against open PRs #825, #827, #828 and #829 and against the reservations on #734, #736 and #737. Line counts are at `36b30abb1c`. A file pass covers every line of its files with all four parts of work order item 1: wrapper types in internal signatures, return types and accessors; named constants; the original's comments; and #735's argument and context structs. Changed-line estimates apply the 8.6 to 15.5 changed lines per inventoried integer site that #807 and #819 measured. A pass whose diff exceeds about 2,000 changed lines splits at a file boundary. Under the [#734 naming decision](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6729665785), every caller of a typed helper changes, so a pass of a high fan-in file waits until the PRs holding its callers' files integrate. Caller counts below are Rust files that name the module.
+Agent: /root/planner_ready_queue_146 | Model: claude-opus-5-5 | Reasoning effort: high
+
+Checked on 2026-11-09 against:
+- open PRs #825, #837, #838, #839, #840, #841 (#832 with #834) and #842;
+- the dispatched #736 F cargo work, which has no PR or reservation yet and is taken to hold `cargo_payment.rs` and `cargo_storage.rs`;
+- entry 5's hold on `station_service.rs`;
+- the reservations on #734, #735, #736 and #737.
+
+Counts are at `1b8b85c524` (integration 144; 145 is CI-only). Integration numbers follow the checkpoint's order: 146 is #841, 147 is #838 and 148 is #825. If the integrator combines #838 and #825, read 148 as the integration that carries #825.
+
+**Root, 11-09:** integration 146 combines #832, #834, #838 and #840 (`root/integrate-146`). #825 follows alone as 147, after a fix for its comparisons-job compile failure. So read "146 to 148" and "after 148" below as "after 147". #840's files are free from 146, and 9m, 15 and 6b-1 are ready at 147. 6b-1 goes first, so 9m waits until 6b-1 integrates.
+
+How entries are measured:
+- **Scope.** A file pass covers every line of its files with all four parts of work order item 1: wrapper types in internal signatures, return types and accessors; named constants; the original's comments; and #735's argument and context structs.
+- **Integer sites** are named primitive integer declarations (`name: u16` and the like, outside comments and strings), counted as the overhaul inventory and #734's Worksets table count them.
+- **Changed lines** are 8.6 to 15.5 per integer site, as #807 and #819 measured. A pass whose diff exceeds about 2,000 changed lines splits at a file boundary.
+- **Callers** are Rust files that name the module (`crate::` paths, grouped `use` and `super::`). Under the [#734 naming decision](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6729665785), every caller of a typed helper changes.
+- **Held callers.** "Held after 148" lists callers that #837, #839, #840, the F cargo work or entry 5 still hold once 146 to 148 land. Under root's [narrow allowance](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6730007460), a pass may rename a call to `<name>_raw` in a held file when the edit is one token per site, a trial merge with the holder is clean and the PR body lists the sites. Any other edit to a held file waits for its holder.
+- **Overlaps.** Callers also count against other queue entries: one file belongs to one open PR.
 
 Dispatched:
 
 | Work order | Owner | State |
 | --- | --- | --- |
-| #734 03 station group with #815's `station_map.rs` items (#827) | `/root/cleanup_734_pass_01c_town_rs` | In review |
-| #734 02 `industry.rs` single-file pass (#828) | `/root/cleanup_734_pass_02c_industry_resolver` | Fixing review findings |
-| #736 W town observations: tunnel matrix, D1 observations 1 to 3 and town names (#829) | `/root/cleanup_736_p_packet` | Draft |
-| #734 13/23 entry 6a: the eight 23 type-bearing files, `tile_cmd.rs` and `tile_owner.rs` | `/root/cleanup_734_pass_02c_industry_resolver` | Dispatched; no reservation posted yet |
-| #815's `road_stop.rs` and `station_association.rs` items | `/root/cleanup_734_pass_01c_town_rs` | Dispatched |
-| #734 03 entry 4a: `station_cmd.rs` single-file pass (4,868 lines). It calls the station group, so it starts after #827 integrates, and keeps raw calls into `station_service.rs` until entry 5. Its owner drafted five reviewer groups: services and shared checks, rail stations, road stops, airports and docks, and tile procs with caller edits. | `/root/cleanup_734_pass_01c_town_rs` | Starts after #827 |
+| #734 13/23 entry 6a (#832) with #815's `road_stop.rs` and `station_association.rs` items (#834), combined as #841 | `/root/cleanup_734_pass_02c_industry_resolver`; `/root/cleanup_734_pass_01c_town_rs` | Integration 146 |
+| Entry 10: #830 industry allows with #815's `CreateNewIndustry` item (#838) | `/root/cleanup_734_pass_02c_industry_resolver` | Accepted at `00519a0107`; in integration 146 |
+| #737 V remainder part 1 (#825), outside the queue | `/root/cleanup_737_v_vehicle_boundary` | Accepted at `cb2b8b77b4`, but CI's comparisons job fails there: `train-edge-comparison.cpp` no longer compiles after the merge of 144. Fix in progress; integration 147 |
+| #737 V remainder part 2 (#837): engine, fleet and vehicle duplicate bindings | `/root/cleanup_737_v_vehicle_boundary` | Draft. Its [reservation](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6730521670) also holds `company_identity.rs`, `fleet.rs` and `fleet/pending.rs` |
+| #734 03 entry 4a: `station_cmd.rs` single-file pass (#839; 4,866 lines, 286 integer sites) | `/root/cleanup_734_pass_01c_town_rs` | Draft, groups 1 and 2 pushed |
+| #734 03 entry 5: `station_service.rs` single-file pass (2,286 lines, 63 sites, 542 to 976 changed lines, 18 caller files) | `/root/cleanup_734_pass_01c_town_rs` | Follows 4a. #825 released the file on #737 |
+| Entry 12: #736 W house protocol (#840) | `/root/cleanup_736_p_packet` | Accepted at `b3fd687af2`; in integration 146 |
+| Entry 14's cargo half: #736 F `cargo_payment.rs` and `cargo_storage.rs` test modules | `/root/cleanup_736_p_packet` | In progress: income oracle captured from the original only |
+| TGP speed fix-forward (#843): `tile_loop.rs` industry arm, `HouseZones::iter()` | `/root/cleanup_734_pass_02c_industry_resolver` | In review; TGP −80.6M Ir |
+| Entry 18: #835 timing races | `/root/cleanup_734_pass_02c_industry_resolver` | Dispatched as its own small tools PR while #843 is in review |
+| #734 13 entry 6b-1 | `/root/cleanup_734_pass_02c_industry_resolver` | Starts after 147 and #843, with the four workset 13 leaves folded in |
 
-#825 (the #737 V remainder, `/root/cleanup_737_v_vehicle_boundary`) is in progress outside the queue. Its #737 reservation also covers files it has not yet touched: `station_service.rs`, `ship_yapf.rs`, the vehicle, engine, fleet and company files, and `services.rs` with `src/rust/services*`. #827 and #828 both change `industry.rs` and `industry/construction.rs`.
+Entry 6b-1:
+- **File set.** The checkpoint does not record 6b-1's file set. Entry 6b's files are assumed: `direction_func.rs` (123 lines, 16 sites, 25 callers), `slope_func.rs` (201, 21, 28) and `spiral.rs` (157, 22, 10). Together: 481 lines, 59 sites, 507 to 914 changed lines.
+- **Held after 148.** `town.rs`, `town/house.rs` and `town/resolver.rs` (#840); `ground_vehicle.rs`, `newgrf_vehicle.rs` and `vehicle_effect.rs` (#837, 9 sites); `station_cmd.rs` and `station_cmd/waypoint.rs` (#839, 10 sites). #837's and #839's sites fit the allowance.
+- **`change_diag_dir_typed`.** 6b-1 also removes this leftover in `town.rs` (root, #734).
+- **Fold.** Workset 13's leaves `clear_map.rs` (120, 7), `tree_map.rs` (58, 5), `void_map.rs` (25, 1) and `tree_cmd.rs` (4, 0) total 207 lines, 13 sites and 112 to 202 changed lines, too small for their own PR. Their callers are free after 148, and seven of them are also 6b callers. Fold them into 6b-1 if its owner has not posted a file set; otherwise they stay with entry 7.
+
+Ranked ready entries: 9m (integration 148), 15 (integration 148) and 16 (now) for #734/#735 slots; 17 (integration 146) for an item 4 slot; 18 folds into the next maintenance PR. The rest wait as stated.
 
 Undispatched, work order item 1:
 
-5. **#734 03 `station_service.rs` single-file pass.** 2,285 lines, 61 integer sites; an estimated 520 to 950 changed lines. Waits on #825: its family 2 edits the `load_vehicle` service table at lines 1287 to 1299. Starts when #825 integrates or its owner releases the file on #737.
-6b. **#734 13 leaf helpers:** `direction_func.rs` (123), `slope_func.rs` (201) and `spiral.rs` (157). Waits on #825, #827 and #828, which hold callers: `direction_func` has 24 caller files and `slope_func` 28. It also waits on #829, whose reservation covers test modules in `town.rs` and `town/*.rs`, both of which call these helpers.
-7. **#734 13 part b: map core.** `map_func.rs` (650), `tile_map.rs` (593), `clear_map.rs` (120), `tile_loop.rs` (283), `tilearea.rs` (648), `void_map.rs` (25), `tree_map.rs` (58) and `tree_cmd.rs` (4). Together they hold 2,381 lines and 227 integer sites. `map_func.rs` and `tile_map.rs` call each other.
-   - Not ready. `map_func` has 87 caller files, 29 of them in #825, #827, #828, #829 or the V remainder reservation. `tile_map` has 34 (14 held) and `tilearea` 20 (11 held). `tile_map.rs` also calls `slope_func`, so the part waits on 6b.
-   - The only part b files whose callers are free are `void_map.rs`, `tree_cmd.rs` and `tile_loop.rs` (the last after #828, for `session.rs`). Together they hold 312 lines and 2 integer sites. That is too small for its own PR, and all three call the unpassed `map_func`.
-8. **#734 13 `trees.rs` single-file pass.** 2,062 lines and 137 integer sites. Starts after entry 7 integrates. It is also in #737 W's manifest.
-9. **#734 09 Pathfinding/signals.** `movement.rs` (1,554) gets its own single-file pass first. `rail_yapf.rs` (1,901) follows 9a and 9b:
-   - 9a: `signal_func.rs`, `node_hash.rs`, `yapf_node.rs`, `pathfinder_func.rs`, `follow_track.rs`, `pbs.rs` and `water_regions.rs` (2,015 lines, 127 integer sites).
-   - 9b: `signal.rs`, `road_yapf.rs` and `ship_yapf.rs` (3,110 lines, 219 integer sites).
-   - `movement.rs` is not ready: it has 66 caller files, and 25 of them are held by #825, #827, #828, #829 or the V remainder reservation. Among them are `train.rs`, `aircraft.rs`, `ship_control.rs`, `road.rs`, the station files and `town.rs`.
-   - 9b also waits on #825 for `ship_yapf.rs`.
-
-Undispatched, maintenance placed by root:
-
-10. **Industry lint and fidelity maintenance: #830 with #815's `CreateNewIndustry` item.** Both are placed after #828, and both touch only `industry.rs` and `industry/*`, so they fold into one PR.
-    - #830 removes the module-wide allow at `industry.rs:13`. It gives each faithful cast or name an item-scoped allow with a reason, as #806 did, and records `too_many_lines` and complexity rows in the Clippy debt ledger. About 180 cast warnings are expected.
-    - #815: a reachability check of the missing `assert(i != nullptr || ret.Failed())` in `industry/construction.rs`. If the difference is confirmed, it gets its own `Fix:` commit with `Found-by: review`.
-    - Waits on #828. After #828, the industry files are in no other open PR. #827's `industry.rs` and `industry/construction.rs` edits must integrate first too.
+9m. **#734 09 `movement.rs` single-file pass, with `signal_func.rs`.**
+   - **Files.** `movement.rs` (1,554 lines, 76 sites), its test module `movement/tests.rs` (238, 9) and `signal_func.rs` (33, 2). Together: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
+   - **Why first in 09.** Nearly every 09 file calls `movement.rs`. Among 09 files, `movement.rs` calls only `signal_func.rs`, which is too small for its own PR.
+   - **Fan-in.** 65 caller files name `movement`, and 4 name `signal_func`. These functions would change signature: `track_status`, `pixel_z`, `foundation_slope`, `enter`, `water_tracks`, `depot_ticks`, `should_stop`, the rail and road foundation helpers and `signal_along_trackdir`. Their names occur about 70 times in about 29 files. Most callers use only `native_assert`, `CachedTable` or the service table, which keep their form.
+   - **Held now.** #825 holds 9 callers, including `train.rs`, `road.rs` and `ship_control.rs`. #841 holds `company.rs`, `newgrf_station.rs`, `road_stop.rs` and `station.rs`, and #838 holds `industry/policy.rs`.
+   - **Held after 148.**
+     - #837: `ground_vehicle.rs` (5 sites) and `vehicle_effect.rs` (1).
+     - #839: `station_cmd.rs` (1, `water_tracks`).
+     - #840: `town.rs` (1, `foundation_slope`).
+     - Those eight sites fit the allowance. The other held callers (`animated_tile.rs`, `engine_loading.rs`, `newgrf_vehicle.rs` and `station_cmd/waypoint.rs`) use only unchanged items.
+   - **Ready at integration 148.**
+   - **Overlap with 6b-1.** 6b-1's callers include `movement.rs` and `movement/tests.rs` themselves and 18 of this entry's caller files, among them `train.rs`, `road.rs`, `ground.rs`, `water.rs`, `rail_cmd.rs`, `road_cmd.rs`, `signal.rs` and `disaster.rs`. The two cannot be open together. 6b-1 ranks first: (b) comes before (c). If 148 lands while 6b-1 still waits on #840, root may run this entry first, and 6b-1 then waits for it.
+9a. **#734 09 part a.**
+   - **Files.** `node_hash.rs` (75, 5), `yapf_node.rs` (30, 2), `pathfinder_func.rs` (61, 3), `follow_track.rs` (563, 34), `pbs.rs` (750, 48) and `water_regions.rs` (503, 33). Together: 1,982 lines, 125 sites, 1,075 to 1,938 changed lines.
+   - **Fan-in.** 19 caller files.
+   - **Held after 148.**
+     - #839: `station_cmd.rs`, six `Pbs` method calls (`train_for`, `platform` and `reserved`).
+     - Entry 5: `station_service.rs`, one `platform_length_full` call.
+     - #840: `town.rs` and `test_tables.rs`, which name only `water_regions` and `signal` types and exports.
+   - **Waits on 9m.** `follow_track.rs`, `pbs.rs`, `water_regions.rs` and `pathfinder_func.rs` call `movement.rs`, and `pbs.rs` and `water_regions.rs` are 9m callers. Ready when 9m integrates, with #839's six sites under the allowance.
+9b. **#734 09 part b.**
+   - **Files.** `signal.rs` (1,171, 56), `road_yapf.rs` (907, 86) and `ship_yapf.rs` (1,032, 78). Together: 3,110 lines, 220 sites, 1,892 to 3,410 changed lines, so it splits at a file boundary, for example `signal.rs` with `ship_yapf.rs`, then `road_yapf.rs`.
+   - **Fan-in.** `signal.rs` has 9 caller files, held after 148 only by #839 (`station_cmd.rs`, two `add_track` calls) and #840 (`test_tables.rs`, types only). The two yapf files have no Rust callers. #825 released `ship_yapf.rs`.
+   - **Waits on 9a.** Both yapf files call `follow_track.rs` and `node_hash.rs`.
+9c. **#734 09 `rail_yapf.rs` single-file pass.**
+   - **Size.** 1,901 lines and 184 sites, 1,582 to 2,852 changed lines. Above 2,000 it stays one PR with one reviewer per function group.
+   - **Fan-in.** None in Rust.
+   - **Waits on 9a.** It calls `follow_track.rs`, `node_hash.rs` and `pbs.rs`. It shares no file with 9b, so the two can run together.
+15. **#734 07 vehicle transactions.**
+    - **Files,** all under `vehicle_transactions/` except the first: `vehicle_transactions.rs` (707, 56), `refit.rs` (655, 39), `mass.rs` (306, 27), `clone_name.rs` (92, 0), `rail.rs` (993, 22), `articulated.rs` (270, 0), `build.rs` (312, 13), `clone.rs` (415, 9) and `construct.rs` (321, 5). Together: 4,071 lines, 171 sites, 1,471 to 2,650 changed lines.
+    - **Split.** If the diff passes 2,000 lines, it splits at a file boundary. The first part is `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs` (122 sites, 1,049 to 1,891), which the other five call. The second is the other five (49 sites, 421 to 760).
+    - **Fan-in outside the group:** 4 files.
+      - `fleet/transactions.rs` (#837) has five calls: `build`, `refit`, `rail::nested_move`, `sell` and `startstop`.
+      - `station_service.rs` (entry 5) has one `refit::refit` call.
+      - `settings_table.rs` and `vehicle/visits.rs` name only module paths and types.
+    - **Held now.** #825 holds `articulated.rs`, `build.rs`, `clone.rs` and `construct.rs`.
+    - **Ready at integration 148.** #837's five sites fit the allowance. If entry 5 has opened, its one site does too; otherwise this pass edits it, and entry 5 adopts the typed form.
+    - **Order.** 07's core is these files' callee and would go first: `vehicle.rs` (429, 12; 48 callers), `vehicle_base.rs` (849, 53; 25) and `vehicle_func.rs` (102, 2; 7). After 148 the core still has 14 held callers, in #837 and its reservation, #839, #840's `test_tables.rs`, the F cargo files and entry 5. This group therefore keeps raw calls into the core, and the core's later pass edits them.
+    - **Rank.** 08 ranks above 07, but its files are 9m callers or #837's (`ground_vehicle.rs`, `vehicle_effect.rs`), so 08 follows 9m. 15 shares no file with 9m, 6b-1 or 16.
+16. **#734 21 `saveload.rs` single-file pass.**
+    - **Size.** 1,909 lines, 98 sites, 843 to 1,519 changed lines.
+    - **Fan-in.** One caller, `session.rs`, which is free. The file is over 1,500 lines and `session.rs` (also in 21) calls it, so it gets its own pass before 21's other files.
+    - **Ready now.** No file is in an open PR, a reservation or another queue entry.
+    - **Rank.** In (d), workset 21 (fan-in 62) comes second, after 16 (67). Workset 16 is not ready:
+      - its two largest files are held: `newgrf_vehicle.rs` (1,689 lines) by #837 and `newgrf_station.rs` (1,156) by #841 until 146;
+      - its other files have callers in #837 or #840, or in 9m or 6b-1.
+7. **#734 13 part b: map core.** Not ready.
+   - **First pass.** `map_func.rs` (650, 103; 87 callers) and `tile_map.rs` (593, 64; 34) call each other, so they pass together: 1,243 lines, 167 sites and 1,436 to 2,588 changed lines in the two files, plus caller edits in up to 87 files. It stays one PR with one reviewer per function group.
+   - **Second pass.** `tilearea.rs` (648, 49; 20) and `tile_loop.rs` (593 lines with #833's tests, 18 sites; #840 holds its test module), with the four leaves unless 6b-1 takes them: 1,448 lines, 80 sites, 688 to 1,240 changed lines.
+   - **Held after 148.** `map_func.rs` still has ten held callers, beyond the allowance:
+     - #840: `animated_tile.rs`, `tile_loop.rs`, `town.rs` and `town/house.rs`;
+     - #837: `ground_vehicle.rs` and `vehicle_effect.rs`;
+     - #839: `station_cmd.rs` and `station_cmd/waypoint.rs`;
+     - F cargo: `cargo_storage.rs`;
+     - entry 5: `station_service.rs`.
+   - **Waits on** #840, #837, the F cargo PR, #839 and entry 5, and on 6b-1, because `tile_map.rs` calls `slope_func`.
+8. **#734 13 `trees.rs` single-file pass.**
+   - **Size.** 2,062 lines and 137 sites, 1,178 to 2,124 changed lines.
+   - **Callers.** Six files: `genworld.rs`, `landscape_cmd.rs`, `landscape_generation.rs`, `native_test_support.rs`, `session.rs` and `tile_loop.rs`. Of those, only `tile_loop.rs` (#840) is held after 148.
+   - **Waits on entry 7** by placement: it calls the map core. It is also a 6b-1 caller, through `slope_func`, and is in #737 W's manifest.
 
 Undispatched, work order item 4:
 
-11. **#737 W World and stations.** 180 gross C++ lines in 85 files, from the overhaul manifest; root re-checks source boundaries before commissioning. Waits on #827, #828, #829 and #825. Those PRs hold `station.rs`, `station_cmd.rs`, `industry.rs`, `subsidy.rs`, `session.rs`, `objects.rs`, `town.rs`, `town/house.rs`, `town_ffi.h`, `native_test_support.rs`, `services.rs` and `src/rust/services*`. It also waits on entry 4a (`station_cmd.rs`).
-12. **#736 W house-protocol follow-up.**
-    - It moves the rest of `src/tests/town_protocol.hpp` (374 lines): rebuild, place and animate, and D1's observation 4. Then it retires `openttd_rust_town_expand`, its `src/rust/town_ffi.h:134` declaration and orphan-baseline row 33. It builds observation 4's input state from the original's own steps, never from a candidate dump.
-    - Files: `town_protocol.hpp`, test modules in `town.rs`, `town/house.rs` and `house.rs`, `town_ffi.h`, and the `HouseServices` entries in #829's `test_tables.rs`.
-    - Waits on #829 (`town.rs`, `town_ffi.h`, `test_tables.rs`) and #827 (`town/house.rs`).
-13. **#736 W landscape tile loop, folding the NewGRF reader cases.**
-    - Retire `tools/simulation/landscape-loop-reference.cpp` (219 lines) and its compile step in `tools/simulation/landscape.py` (`scheduler_gap`). It compares the pinned original's `RunTileLoop` with the Rust tile loop over 7 by 7 map sizes, five ticks, three start cursors, reentry and both backends, so freezing the original's stream retires it.
-    - Move the behavioural cases of `src/tests/landscape_tile_loop.cpp` (403) into Rust tests. These are the shared tile-type callback policy and generation sea iteration. Keep its boundary cases: aliases, serialized threads, native lvalues, ABI layout and native handler calls.
-    - Fold in the reader cases of `src/tests/newgrf_bytereader.cpp` (92). It is under 150 lines and in the same batch.
-    - Files: test modules in `tile_loop.rs` (283), `landscape.rs` (329) and `newgrf_bytereader.rs` (257), `landscape.py`, the three C++ files, their registration entries and a new evidence-replacement manifest. None is in an open PR or reservation. None calls a 6a module.
-    - Waits on #829 only. The Rust run needs station and object service stubs, and root's ruling puts them in #829's shared `test_tables.rs`. The original-only capture can start before #829 integrates.
-    - Leave out the cases that would edit `movement.rs`, `genworld.rs` (6a callers) or `town/import.rs` (#829).
-14. **#736 F cargo and Engine runtime.**
-    - The cargo cases: `tools/migration/cargo-income-gap.cpp` (100), `src/tests/cargo_payment.cpp` (86) and `cargo_payment_stubs.hpp` (35). Fold in `tools/simulation/cargo-list-scaling.cpp` (138), which is under 150 lines, and the Engine runtime cases of `src/tests/engine.cpp` (247).
-    - Rust targets: `cargo_payment.rs`, `cargo_storage.rs` and `engine.rs`.
-    - Waits on #828 (`cargo_payment.rs`) and #825, whose deferred family 2 payment parts need `cargo_payment.rs` and whose reservation covers `engine.rs`.
-    - The other F families (`train.cpp`, `orders.cpp`, `aircraft-range.cpp`, `roadvehicle.cpp`, `vehicle_scheduler.cpp`, `company_economy.cpp`, `fleet.cpp`, `effectvehicle.cpp` and `effect_protocol.hpp`) all target files #825 holds or reserves.
+17. **#736 F vehicle scheduler and company economy.**
+    - **Retire.** The behavioural cases of `src/tests/vehicle_scheduler.cpp` (479 raw lines, 10 cases) and `src/tests/company_economy.cpp` (539, 11), with their registration entries.
+    - **Rust tests.** Test modules in `vehicle/scheduler.rs`, `vehicle/occupancy.rs`, `vehicle/maintenance.rs`, `company.rs` and `command.rs`, with expectations from the unchanged original under #736's oracle rule.
+    - **Keep.** Layout, ABI, alias and native-lifetime cases stay as calling-boundary checks: "consumed boundary layouts", "consumed native ABI", "distinct native shells", "canonical owner layouts and property copy lifetime". The counted C++ removed is therefore below 1,018 lines, and the first checkpoint measures it.
+    - **Colour alias case.** It calls `company_identity.rs`, which #837 reserves, so it waits on #837 or stays.
+    - **Ready at integration 146,** when #841 releases `company.rs`. Entry 9m names `command.rs` but changes none of its calls: the one `movement` call there, `pixel_z`, takes pixel coordinates.
+    - **Other F families.** These wait on 9m's files or #837:
+      - `roadvehicle.cpp` (277), `effectvehicle.cpp` (228) with `effect_protocol.hpp` (170), `orders.cpp` (176), `train.cpp` (106) and `aircraft-range.cpp` (171) target `road.rs`, `effect.rs`, `orders.rs`, `train*.rs` and `aircraft.rs`, which are 9m callers or need 9m's typed calls.
+      - `fleet.cpp` (98) targets `fleet.rs` (#837).
+11. **#737 W World and stations.** Not ready.
+    - **Size.** The overhaul manifest has 180 gross C++ lines in 83 files. Root re-checks source boundaries before commissioning.
+    - **Held after 148.**
+      - #839: `station_cmd.rs`, `station_command_ffi.h` and `station_command_services.hpp`.
+      - #840: `town.rs`, `town/house.rs`, `town/resolver.rs`, `town_ffi.h` and `house_ffi.h`.
+    - **No split.** The station and town files carry 68 of the 180 lines, and the rest carry 112. Both parts are under the 150-line fold bound, so W stays one PR.
+    - **Overlaps.** Its Rust files also include `pbs.rs` and `signal.rs` (9a, 9b), `trees.rs` (entry 8) and `landscape.rs` and `landscape_generation.rs` (6b-1 callers).
+    - **Ready** when #839 and #840 integrate, after 148, at a point where those entries are not open.
+14. **#736 F Engine runtime, entry 14's second half.** The Engine runtime cases of `src/tests/engine.cpp` (247) move to `engine.rs` test modules. Waits on #837, which holds `engine.rs`.
+
+Undispatched, maintenance:
+
+18. **#835: timing races in `tools/test-validation-execution.py`.**
+    - **Scope.** Tooling only; the file is in no open PR.
+    - **Placement.** Its issue places it in the next maintenance batch, too small for its own PR. Root dispatched it as its own small tools PR rather than folding it into #843, which was already in review.
 
 ## Resume checkpoint
 
@@ -391,16 +487,21 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 138, `8e967f83c5`. Two branches are unintegrated: #823 and the batch V remainder.
+Code main is integration 146, `61c6d2c598` (#845: #832, #834, #838 and #840). Platform cadence 145 is green. Stocktake 143 and profile 143 are in "Where the fork stands". Unintegrated branches: #825, #837, #839, #843, #844, #846, entry 17's branch, entry 16's branch and the coverage fix.
+
+**Coverage regression (found 11-09, fix in progress).** Integrations 142 (#829) and 144 (#833) recorded partial transfers as `source:` retirements in `736-w-town.json` and `736-w-landscape.json`. CMake's `add_test_files` drops every `source:` file from `openttd_test`, so the kept boundary cases in `src/tests/townname.cpp` and `src/tests/landscape_tile_loop.cpp` stopped running, and no check failed. `/root/cleanup_736_p_packet`'s `Fix:` PR converts them to `ctest:` identities, and adds a guard in `tools/evidence_replacements.py`: a `source:` retirement whose file still exists is an error. It integrates first in 147.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #823, integrating #819 (`town.rs` pass), #821 (industry resolver pass) and #820 (#736 P packet probe) | Integrator | Exact-head Full is requested at `d6cf15acd7`. Merge as integration 139, post the note, close the components and clean up. All reviews carried; fixes spot-checked or verified. |
-| #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | Family 5 is committed (`4b449ceb27`). Next it pushes a draft PR, then the station visit-type and position families. |
-| Ready queue | Planner `/root/planner_ready_queue`; root dispatches | Entry 1 (#824) is in progress. Entries 2 (`industry.rs`) and 3 (station group) are dispatched and start when #823 lands. Entries 4a onward are undispatched. |
-| D1 from #819 | #736 W | Retire the test-only `openttd_rust_town_expand` after moving its fixture observations to Rust tests. |
-| #737 W | Unassigned | Waits behind the `station_cmd.rs` pass and the industry passes, whose files it overlaps. |
-| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 143; platform cadence after 140. |
+| Integration queue | `/root/integrator` | 147 on 146: the coverage fix, #844 (#736 F cargo, accepted), #846 (#835 timing tests, accepted), #825 at `1934d060ff` (comparisons fix) and #843 after its 146 merge. One fresh reviewer at the combined head verifies #825's fix and #843's fixes and resolution, and re-accepts #825's two records. Then Full. If a member lags, the rest go without it. |
+| #837, #737 V remainder part 2 | `/root/cleanup_737_v_vehicle_boundary` | Ready as part 2 once its checks pass; root starts its reviewer. Part 3 (settings catalog addresses, company identity forwards, fleet `check`/`set_current`/`local`) follows after 147. |
+| Entry 16, `saveload.rs` pass | same | Starting, while #837 is in review. |
+| #839, entry 4a `station_cmd.rs` pass | `/root/cleanup_734_pass_01c_town_rs` | All five groups pushed, with debt rows carried to the new names. It merges 146 and resolves #834's `rail_triggers` move, then is marked ready for five group reviewers. Entry 5 (`station_service.rs`) follows. |
+| #843, TGP speed fix-forward | `/root/cleanup_734_pass_02c_industry_resolver` | Measured: TGP −80.6M Ir (projection 1.230x → 1.163x), P1996 −0.64%. Two review fixes pushed. It merges 146, resolving the house arm, and joins 147. |
+| Entry 6b-1, leaf helpers plus the workset 13 leaves | same | Starts after 147. |
+| Entry 17, #736 F vehicle scheduler and company economy | `/root/cleanup_736_p_packet` | Vehicle side pushed (`vehicle_scheduler.cpp` 479 → 200 lines, kept cases as `ctest:` retirements). The company side resumes after the coverage fix. |
+| #847, direct reaping coverage in `test-validation-execution.py` | Unassigned | Next tooling maintenance batch. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence after 150. |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 
@@ -415,7 +516,7 @@ Remaining placement and limits:
 Retained state for housekeeping:
 
 - Keep the planning checkout `t3-20fec9ce` with its private plan, and origin `preserve/housekeeping-foundation-6ab9c20e5d`. Preserve every checkout with uncommitted or unpushed work. #805 integrated in 130, so `tools/housekeeping.py` now keeps detached unpublished commits; the 11-08 apply removed 40 eligible entries (1.7 GB).
-- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Keep `t3-a490295e` (profile 131, clean `305ac20c28`) with its HDD `.local` (`profile-131-prepare`, `simulation`, `verification`). Its `build-rust` was reclaimed on 11-09; the outputs are intact. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
+- Keep `t3-8ed2642d` (profile 96), `t3-62945724` (98) and `t3-a6181dc7` (100) with their comparisons and frozen runtimes. Keep `.local/worktrees/root-profile-125`, `.local/worktrees/root-profile-119` and `.local/worktrees/root-profile-113` with accepted reports, raw Callgrind and frozen runtimes. Keep `t3-a490295e` (profile 131, clean `305ac20c28`) with its HDD `.local` (`profile-131-prepare`, `simulation`, `verification`). Keep `t3-d3ff7564` (profile 143, clean `da020b52c7`) with its HDD `.local` (`profile-143-prepare`, `simulation`, `verification`, `profile-143.log`). Its `build-rust` was reclaimed on 11-09; the outputs are intact. Profile 119 measures clean `4d3a1d1d41`, not integration 120.
 - Keep `.local/retained-network-693` with the failed Full artifact, inconclusive diagnostics, passing traces and bounded original/original evidence. Keep main `.local/integration-records/`, `.local/speed-pass/` anchors, frozen runtimes and the retained simulation evidence.
 - Leave dirty/staged trees untouched: `t3-3b491ddb` (five files), locked #565 WIP `t3-431c84b4`, locked native evidence `t3-d78d5f8b`, `t3-32cf4edc` (`tools/simulation/roads.py` staged), and `t3-e130d5a3` (`migration/saves/README.md` staged).
 - Keep protected `.local/worktrees/root-docs-72` and locked `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main. Keep the pinned original and main's uncommitted user-owned `.codex/config.toml` unchanged.

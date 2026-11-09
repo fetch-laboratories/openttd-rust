@@ -49,6 +49,7 @@ Under a Claude Code root, these rules move routine work off root, so that root's
 - It escalates to root and does not decide:
   - a conflict in `src/`, `rust/`, `tools/` or `.github/`;
   - a failed Full or cadence run: it diagnoses and reports, and root routes the fix;
+  - except a runner or network failure (a step before any build or test, such as package install, checkout or cache download, or a lost runner with no test output), which it reruns once without asking and names in the integration note. For a simulation shard, the rerun is a fresh `tools/ci.py request`, because after a failed-job rerun, `native / complete` still reads the earlier attempt's shard artifact (#693, 11-09). A second failure of the same job escalates. A network-protocol scenario hang follows #693: keep the evidence, rerun once, record it there;
   - the [rollback rule](root-workflow.md#automatic-rollback-and-wind-down);
   - anything no rule covers.
 - Root sends it each newly ready PR in one line. It reports each merge or escalation to root.

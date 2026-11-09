@@ -42,7 +42,6 @@ template <typename Spec>
 inline size_t RustStationBridgeInfoCount(const Spec *spec) noexcept { return spec->bridgeable_info.size(); }
 inline CargoTypes RustStationCargoTriggers(const StationSpec *spec) noexcept { return spec->cargo_triggers; }
 inline uint16_t RustStationAnimationTriggers(const StationSpec *spec) noexcept { return spec->animation.triggers.base(); }
-inline OpenTTDStationSpecTriggers RustStationSpecTriggers(const StationSpec *spec) noexcept { return {RustStationAnimationTriggers(spec), RustStationCargoTriggers(spec)}; }
 inline size_t RustStationSpecCount(const BaseStation *st) noexcept { return st->speclist.size(); }
 inline const StationSpec *RustStationSlotSpec(const BaseStation *st, size_t index) noexcept { return st->speclist[index].spec; }
 inline uint32_t RustStationSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->speclist[index].grfid; }
@@ -55,6 +54,7 @@ inline void RustStationRebindSpec(BaseStation *st, size_t index, const StationSp
 inline void RustStationSetSpecSlot(BaseStation *st, uint8_t index, const StationSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { RustStationRebindSpec(st, index, spec); auto &slot = st->speclist[index]; slot.grfid = grfid; slot.localidx = local_id; }
 inline uint32_t RustCustomStationIndex(uint32_t tile) noexcept { return GetCustomStationSpecIndex(TileIndex{tile}); }
 inline void RustStationSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->cached_anim_triggers = StationAnimationTriggers(animation); st->cached_cargo_triggers = cargo; }
+inline void RustStationSetCachedCargoTriggers(BaseStation *st, CargoTypes cargo) noexcept { st->cached_cargo_triggers = cargo; }
 inline uint8_t RustRoadStopRandomBits(const BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopRandomBits(TileIndex(tile)); }
 inline void RustRoadStopSetRandomBits(BaseStation *st, uint32_t tile, uint8_t bits) noexcept { st->SetRoadStopRandomBits(TileIndex(tile), bits); }
 inline uint8_t RustRoadStopAnimationFrame(BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopAnimationFrame(TileIndex(tile)); }

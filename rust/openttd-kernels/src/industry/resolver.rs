@@ -144,6 +144,10 @@ fn town_index(town: *const TownHandle, s: &ResolverServices) -> TownID {
 
 /// `MapNewGRFIndustryType`: map the GRF local type `grf_type` of the GRF `grf_id` to an
 /// industry type in the global scope.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "MapNewGRFIndustryType keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) fn map_new_grf_industry_type(grf_type: IndustryType, grf_id: u32) -> IndustryType {
     if grf_type == IndustryType::IT_INVALID {
         return IndustryType::IT_INVALID;
@@ -238,6 +242,10 @@ fn get_nearby_industry_tile_information(
 /// y         the y offset from the northernmost tile
 /// YY        same, but stored in a byte instead of a nibble
 /// ```
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetRelativePosition keeps the original's implicit C++ integer conversions"
+)]
 pub(crate) fn get_relative_position(
     tile: TileIndex,
     ind_tile: TileIndex,
@@ -286,6 +294,11 @@ fn get_closest_industry(
 /// to filter on the same town as the current industry, and `current` the industry for which
 /// the inquiry is made. Returns the formatted answer to the callback: rr(reserved) cc(count)
 /// dddd(manhattan distance of closest sister).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "GetCountAndDistanceOfClosestInstance keeps the original's implicit C++ integer conversions"
+)]
 fn get_count_and_distance_of_closest_instance(
     param_set_id: u8,
     layout_filter: u8,
@@ -369,6 +382,16 @@ fn unhandled_variable(
     u32::MAX
 }
 /// `IndustriesScopeResolver::GetVariable`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "IndustriesScopeResolver::GetVariable keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "IndustriesScopeResolver::GetVariable is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 fn industries_get_variable(
     c: &ResolverContext,
     ro: *const c_void,
@@ -707,6 +730,10 @@ fn industries_get_variable(
     }
 }
 /// `IndustryTileScopeResolver::GetVariable`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "IndustryTileScopeResolver::GetVariable keeps the original's implicit C++ integer conversions"
+)]
 fn industry_tile_get_variable(
     c: &ResolverContext,
     ro: *const c_void,
