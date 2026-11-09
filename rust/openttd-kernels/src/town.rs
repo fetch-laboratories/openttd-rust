@@ -4836,7 +4836,8 @@ mod expansion_tests {
             1950,
         ));
         crate::timer_game_common::write_calendar_date(crate::services::CalendarDate(0));
-        let (base, extended) = fixture_map();
+        // The tile arrays stay allocated until the test ends.
+        let _map = fixture_map();
         let mut owner = fixture_owner();
         let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
         services.map = crate::map_func::fixture::statics();
