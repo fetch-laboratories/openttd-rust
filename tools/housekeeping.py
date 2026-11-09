@@ -346,8 +346,16 @@ def stamp(when: float) -> str:
 
 
 def latest_activity(tree: Path) -> float | None:
-    """Newest of the worktree's activity marks and every entry under its build-rust."""
+    """Newest of the worktree's activity marks, every top-level file, tracked or not
+    (a task's logs and scratch files), and every entry under its build-rust."""
     newest = activity(tree)
+    for entry in tree.iterdir() if tree.is_dir() else []:
+        try:
+            info = entry.lstat()
+        except OSError:
+            continue
+        if not stat.S_ISDIR(info.st_mode):
+            newest = info.st_mtime if newest is None else max(newest, info.st_mtime)
     for folder, directories, files in os.walk(tree / BUILD):
         for name in directories + files:
             try:

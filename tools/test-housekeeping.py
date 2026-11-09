@@ -878,6 +878,20 @@ class HousekeepingTests(unittest.TestCase):
             self.assertTrue(build.exists(), build)
         self.assertTrue((target / "CMakeCache.txt").exists())
 
+    def test_untracked_top_level_files_count_as_build_activity(self) -> None:
+        idle = housekeeping.IDLE_HOURS * 3600
+        tree = self.t3_tree("t3-scratch")
+        build = self.build(tree, idle + 60)
+        scratch = write(tree / "fresh-untracked.txt")
+        with patch.dict(PR_STATES, {tree.name: "OPEN"}):
+            self.assertIn("active within", self.planned_builds()[build].reason)
+            os.utime(scratch, (time.time() - idle - 60,) * 2)
+            item = self.planned_builds()[build]
+            self.assertTrue(item.remove, item.reason)
+            os.utime(scratch)  # written between planning and removal
+            self.assertIn("activity", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(build.exists())
+
     def test_idle_boundary_uses_the_option(self) -> None:
         tree = self.t3_tree("t3-boundary")
         build = self.build(tree, 3 * 3600)
