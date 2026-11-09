@@ -364,18 +364,18 @@ pub(crate) fn generate_station_name(
     }
     StringID(n.fallback)
 }
-/// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `add_facility_typed`.
-pub(crate) fn add_facility(
+/// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `add_facility`.
+pub(crate) fn add_facility_raw(
     st: *mut BaseStation,
     facility: StationFacility,
     tile: u32,
     s: &Services,
 ) {
-    add_facility_typed(st, facility, TileIndex(tile), s);
+    add_facility(st, facility, TileIndex(tile), s);
 }
 /// `Station::AddFacility`: called when a new facility is built on the station. If
 /// it is the first facility it also initializes the `xy` and `random_bits` members.
-pub(crate) fn add_facility_typed(
+pub(crate) fn add_facility(
     st: *mut BaseStation,
     new_facility_bit: StationFacility,
     facil_xy: TileIndex,
