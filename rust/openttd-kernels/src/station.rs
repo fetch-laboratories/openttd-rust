@@ -583,6 +583,7 @@ fn catchment_rect(st: *mut BaseStation, state: *mut Service, c: &Ctx<'_>) -> Sta
     let r = unsafe { *rect(state) };
     c.check(!r.is_empty());
     let radius = catchment_radius(st, c) as i32;
+    /* Compute acceptance rectangle */
     StationRect {
         left: (r.left - radius).max(0),
         top: (r.top - radius).max(0),
@@ -599,10 +600,12 @@ pub(crate) fn add_industry_to_deliver(
     tile: TileIndex,
     c: &Ctx<'_>,
 ) {
+    /* Using DistanceMax to get about the same order as with previously used SpiralTileSequence. */
     let distance = c.map.distance_max((c.c.location)(st), tile.0);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
+        /* Don't check further if this industry is already in the list but update the distance if it's closer */
         if let Some(pos) = list.position(ind) {
             if list.0[pos].distance > distance {
                 let mut entry = list.0.remove(pos);
@@ -612,6 +615,7 @@ pub(crate) fn add_industry_to_deliver(
             return;
         }
     }
+    /* Include only industries that can accept cargo */
     if !crate::industry::is_cargo_accepted((c.c.industry_owner)(ind)) {
         return;
     }
@@ -820,6 +824,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             if (c.s.station_serve_neutral)() || (c.c.industry_neutral)(i).is_null() {
                 // SAFETY: Live industry owner; immediate mutation.
                 unsafe { (*c.industry_stations(i)).insert(st, id) };
+                /* Add if we can deliver to this industry as well */
                 add_industry_to_deliver(st, state, i, tile, c);
             }
         }
@@ -867,12 +872,14 @@ pub(crate) fn for_all_stations_around_tiles_typed(
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, TileIndex) -> bool,
 ) {
-    // With no stations, the scan cannot find anything.
+    /* There are no stations, so we will never find anything. */
     if (c.c.station_count)() == 0 {
         return;
     }
-    // Scan around the building using the maximum possible catchment.
+    /* Not using, or don't have a nearby stations list, so we need to scan. */
     let mut seen = Vec::new();
+    /* Scan an area around the building covering the maximum possible station
+     * to find the possible nearby stations. */
     let max_c = if (c.c.modified_catchment)() {
         u32::from(MAX_CATCHMENT)
     } else {
@@ -892,11 +899,13 @@ pub(crate) fn for_all_stations_around_tiles_typed(
         if st.is_null() {
             continue; // Waypoint.
         }
+        /* Check if station is attached to an industry */
         if !(c.s.station_serve_neutral)() && !(c.c.associated_industry)(st).is_null() {
             continue;
         }
         let state = (c.c.owner)(st);
         for tile in ta.tiles(c.map).map(TileIndex) {
+            /* Test if the tile is within the station's catchment */
             // SAFETY: Live owner; the membership borrow ends before `func`.
             if unsafe { tile_is_in_catchment(state, tile, c) }
                 && func(StationListEntry { station: st, id }, tile)
