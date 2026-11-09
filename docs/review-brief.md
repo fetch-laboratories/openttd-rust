@@ -44,7 +44,7 @@ Do not commit, push, request Full or merge. The PR's Opus implementer fixes each
   Literals the original itself writes as literals stay. Operators and control flow follow the original's: a `switch` with `NOT_REACHED` stays a match with the native unreachable path, not an ordering comparison.
 - **Adapters and boundary.** Each raw adapter delegates to one typed definition and serves only callers in files no pass has finished. A pass converts callers in finished files to the typed form. Each touched orphan export is a finding; tests and the orphan baseline do not keep an export alive.
 - **Evidence.** The changed paths stay reached by the scenarios and tests the PR cites. A branch the PR newly leaves unreached or unobserved is a finding. Oracles come from the unchanged original only.
-- **Lint records.** Each carry keeps the same lint and scope, and its head magnitude is not above the `from` magnitude ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)).
+- **Lint records.** Each declared carry keeps the same lint and scope, and its head magnitude is not above the `from` magnitude. The ratchets pair unambiguous renames themselves; a lint exception names the original behaviour that needs it ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)).
 
 ## Policy questions
 
