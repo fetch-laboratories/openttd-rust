@@ -558,6 +558,12 @@ impl Engine<'_> {
     }
     /// `CheckIfCanLevelIndustryPlatform`: this function tries to flatten out the land below
     /// an industry, without damaging the surroundings too much.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        reason = "CheckIfCanLevelIndustryPlatform keeps the original's implicit C++ integer conversions"
+    )]
     fn check_if_can_level_industry_platform(
         &self,
         tile: TileIndex,
@@ -806,6 +812,10 @@ struct LocationCall<'a, 'b> {
     candidate: IndustryCandidate,
     seed: u32,
 }
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CheckIfCallBackAllowsCreation's location callback keeps the original's implicit C++ integer conversions"
+)]
 unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandle) {
     let call = unsafe { &*context.cast::<LocationCall<'_, '_>>() };
     let (e, candidate) = (call.engine, &call.candidate);
@@ -851,6 +861,10 @@ struct ShapeCall<'a, 'b> {
     its: *const IndustryTileSpec,
     gfx: IndustryGfx,
 }
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CheckIfIndustryTileSlopes's shape callback keeps the original's implicit C++ integer conversions"
+)]
 unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) {
     let call = unsafe { &*context.cast::<ShapeCall<'_, '_>>() };
     let (e, candidate) = (call.engine, &call.candidate);
@@ -866,13 +880,13 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let callback_res =
         unsafe { (e.x.resolve_shape)(shell, call.ind_tile.0, call.gfx.0, parameter) };
     if callback_res.callback == CALLBACK_FAILED {
-        if !is_slope_refused(
+        if is_slope_refused(
             e.tile_slope(call.ind_tile),
             Slope(unsafe { (*call.its).slopes_refused }),
         ) {
-            e.success();
-        } else {
             e.fail(StringID(e.e.site));
+        } else {
+            e.success();
         }
     } else if (e.s.shared().grf_file_version)(unsafe { (*call.its).grf_prop.grffile }) < 7 {
         if callback_res.callback != 0 {
@@ -937,6 +951,14 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
 /// remain immutable. Commands, allocation and resolvers receive no owner borrow.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CmdBuildIndustry keeps the original's implicit C++ integer conversions"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "CmdBuildIndustry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_build(
     out: *mut IndustryCost,
     tile: u32,
@@ -1109,6 +1131,10 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
 /// # Safety
 /// Live stack result/output; source preconditions require a nonempty layout list.
 #[unsafe(no_mangle)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CreateNewIndustry keeps the original's implicit C++ integer conversions"
+)]
 pub unsafe extern "C" fn openttd_rust_industry_create(
     out: *mut IndustryCost,
     industry: *mut *mut ShellHandle,

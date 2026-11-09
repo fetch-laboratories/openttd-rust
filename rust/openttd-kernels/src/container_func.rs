@@ -1,8 +1,13 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared container helpers from `core/container_func.hpp`.
-#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 
-/// `find_index` returns the first match, narrowing the iterator distance to native int.
+/// `find_index`: helper function to get the index of an item. Returns the index of the
+/// first matching element if found, otherwise -1.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "find_index returns the iterator distance as int"
+)]
 pub(crate) fn find_index<T: PartialEq>(container: &[T], item: &T) -> i32 {
     container
         .iter()
@@ -10,7 +15,8 @@ pub(crate) fn find_index<T: PartialEq>(container: &[T], item: &T) -> i32 {
         .map_or(-1, |index| index as i32)
 }
 
-/// `Slide` moves `[first, last)` before `position` and returns its new bounds.
+/// `Slide`: move elements between `first` and `last` to a new `position`, rotating elements
+/// in between as necessary. Returns the first and last indices after being moved.
 pub(crate) fn slide<T>(
     container: &mut [T],
     first: usize,

@@ -487,19 +487,21 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 145, `cf6ea49111` (#842, the Emscripten apt mirror; `CI_ON_DEMAND` restored to `true` after its bootstrap Full). Stocktake 143 and profile 143 are in "Where the fork stands". Profile 143's attribution is done, and its slot is released. Unintegrated branches: #825, #832, #834, #835's tools PR, #837, #838, #839, #840, #843 and the F cargo PR.
+Code main is integration 146, `61c6d2c598` (#845: #832, #834, #838 and #840). Platform cadence 145 is green. Stocktake 143 and profile 143 are in "Where the fork stands". Unintegrated branches: #825, #837, #839, #843, #844, #846, entry 17's branch, entry 16's branch and the coverage fix.
+
+**Coverage regression (found 11-09, fix in progress).** Integrations 142 (#829) and 144 (#833) recorded partial transfers as `source:` retirements in `736-w-town.json` and `736-w-landscape.json`. CMake's `add_test_files` drops every `source:` file from `openttd_test`, so the kept boundary cases in `src/tests/townname.cpp` and `src/tests/landscape_tile_loop.cpp` stopped running, and no check failed. `/root/cleanup_736_p_packet`'s `Fix:` PR converts them to `ctest:` identities, and adds a guard in `tools/evidence_replacements.py`: a `source:` retirement whose file still exists is an error. It integrates first in 147.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| Integration queue | `/root/integrator` | 146 combines #832, #834, #838 and #840 (`root/integrate-146`): base update onto 145, then root posts one re-acceptance for #838's records at the combined head, then Full alongside the platform cadence due after 145. 147 is #825 alone, after its comparisons fix. Then #843. |
-| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary` | Accepted at `cb2b8b77b4`, but CI's comparisons job fails there (`train-edge-comparison.cpp` no longer compiles after the merge of 144). Fix in progress; after it, a fresh reviewer verifies and re-accepts. Integration 147. |
-| #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Resuming with a merge of 144. |
-| #838, #734 entry 10 (#830 allows) | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_838_industry_allows` | Accepted at `00519a0107`: eight naming findings fixed by renames, nine suppressions and two lint-growth rows accepted, lint-policy at 0 errors. Queued after 146. |
-| #734 entry 6b-1 | same | Starts after the speed fix, once 146 and #840 merge. |
-| #734 4a, `station_cmd.rs` pass (#839) | `/root/cleanup_734_pass_01c_town_rs` | Draft, groups 1 and 2 pushed, group 3 (road stops) in progress. It includes a `Fix:` commit for the `TILE_HEIGHT_STEP` error parameter. Five reviewers by group when ready. Entry 5 (`station_service.rs`) follows. |
-| #840, #736 W house-protocol follow-up (entry 12) | `/root/cleanup_736_p_packet` | Draft; local gates pass, the native verify is running. An evidence reviewer follows when it is ready. |
-| TGP speed fix-forward | `/root/cleanup_734_pass_02c_industry_resolver` | One maintenance PR: pass a local `IndustryServices` copy in `tile_loop.rs`, and make `HouseZones::iter()` walk only the set bits. Measured on TGP and P1996 Ir. |
-| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence alongside 146 (due after 145). |
+| Integration queue | `/root/integrator` | 147 on 146: the coverage fix, #844 (#736 F cargo, accepted), #846 (#835 timing tests, accepted), #825 at `1934d060ff` (comparisons fix) and #843 after its 146 merge. One fresh reviewer at the combined head verifies #825's fix and #843's fixes and resolution, and re-accepts #825's two records. Then Full. If a member lags, the rest go without it. |
+| #837, #737 V remainder part 2 | `/root/cleanup_737_v_vehicle_boundary` | Ready as part 2 once its checks pass; root starts its reviewer. Part 3 (settings catalog addresses, company identity forwards, fleet `check`/`set_current`/`local`) follows after 147. |
+| Entry 16, `saveload.rs` pass | same | Starting, while #837 is in review. |
+| #839, entry 4a `station_cmd.rs` pass | `/root/cleanup_734_pass_01c_town_rs` | All five groups pushed, with debt rows carried to the new names. It merges 146 and resolves #834's `rail_triggers` move, then is marked ready for five group reviewers. Entry 5 (`station_service.rs`) follows. |
+| #843, TGP speed fix-forward | `/root/cleanup_734_pass_02c_industry_resolver` | Measured: TGP −80.6M Ir (projection 1.230x → 1.163x), P1996 −0.64%. Two review fixes pushed. It merges 146, resolving the house arm, and joins 147. |
+| Entry 6b-1, leaf helpers plus the workset 13 leaves | same | Starts after 147. |
+| Entry 17, #736 F vehicle scheduler and company economy | `/root/cleanup_736_p_packet` | Vehicle side pushed (`vehicle_scheduler.cpp` 479 → 200 lines, kept cases as `ctest:` retirements). The company side resumes after the coverage fix. |
+| #847, direct reaping coverage in `test-validation-execution.py` | Unassigned | Next tooling maintenance batch. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence after 150. |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 

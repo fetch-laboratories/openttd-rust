@@ -138,7 +138,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
                 s.shared,
             );
         },
-        3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile) },
+        3 => unsafe { town::house::tile_loop(s.town, s.shared, crate::tile_type::TileIndex(tile)) },
         4 => unsafe {
             let settings = trees::LoopSettings {
                 ambient_callback: AMBIENT,

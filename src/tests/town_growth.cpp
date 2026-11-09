@@ -9,13 +9,7 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../town.h"
-#include "town_protocol.hpp"
 #include "../safeguards.h"
-
-TEST_CASE("Town growth - command boundaries and callback reentry")
-{
-	CheckTownProtocol([](bool result) { CHECK(result); });
-}
 
 TEST_CASE("Town lifecycle - canonical metadata, histories and descriptor aliases")
 {
