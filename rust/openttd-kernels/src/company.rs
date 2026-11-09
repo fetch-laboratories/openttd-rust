@@ -3062,3 +3062,123 @@ mod control_tests {
         }
     }
 }
+
+/// "Company economy - competitor posts return to the caller before each Post" from the retired
+/// part of `src/tests/company_economy.cpp` (#736 F), with the fixture's own expected values.
+/// The observation is `on_tick`'s return protocol, so the test calls the production function
+/// directly; the loop below replays the session caller (`while on_tick(..) { post_ai }`) as
+/// scaffolding.
+#[cfg(test)]
+mod competitor_tests {
+    use super::*;
+    use crate::openttd::GameMode;
+    use crate::test_tables::{COMPANY, FINANCE, SHARED};
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static MAX_COMPETITORS: Cell<u8> = const { Cell::new(0) };
+        static COMPANY_LIMIT: Cell<u8> = const { Cell::new(15) };
+        static INTERVAL: Cell<u16> = const { Cell::new(0) };
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn none(_: u8) -> *mut Finances {
+        std::ptr::null_mut()
+    }
+    extern "C" fn no_companies() -> usize {
+        0
+    }
+    extern "C" fn end(_: u32) -> CompanyRef {
+        CompanyRef {
+            finances: std::ptr::null_mut(),
+            id: INVALID,
+        }
+    }
+    extern "C" fn no_random(_: u32) -> u32 {
+        0
+    }
+    extern "C" fn reset_timeout(ticks: u32) {
+        TRACE.with(|t| t.borrow_mut().push(format!("timeout {ticks}")));
+    }
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn services() -> Services {
+        let mut shared = SHARED;
+        shared.settings = leak(crate::settings_type::SettingAddresses {
+            max_competitors: MAX_COMPETITORS.with(Cell::as_ptr),
+            max_companies: COMPANY_LIMIT.with(Cell::as_ptr),
+            competitor_interval: INTERVAL.with(Cell::as_ptr),
+            ..crate::settings_type::SettingAddresses::NULL
+        });
+        let mut finance = FINANCE;
+        finance.networking = no;
+        finance.company_finances = none;
+        let mut s = COMPANY;
+        s.shared = leak(shared);
+        s.finance = leak(finance);
+        s.competitor_fired = yes;
+        s.ai_can_start = yes;
+        s.company_count = no_companies;
+        s.company_next = end;
+        s.script_random_next = no_random;
+        s.reset_competitor_timeout = reset_timeout;
+        s
+    }
+    fn set_mode(mode: GameMode) -> GameMode {
+        // SAFETY: The canonical session state, serialized by the game-state test lock.
+        unsafe {
+            let state = crate::session::openttd_rust_session_storage();
+            std::mem::replace(&mut (*state).mode, mode)
+        }
+    }
+
+    #[test]
+    fn competitor_posts_return_before_each_post() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let s = services();
+        let saved_mode = set_mode(GameMode::NORMAL);
+        for change_limit in [false, true] {
+            TRACE.with(|t| t.borrow_mut().clear());
+            // SAFETY: The process-wide tick cursor, serialized by the lock.
+            let cursor = unsafe { *openttd_rust_company_tick() };
+            MAX_COMPETITORS.set(2);
+            INTERVAL.set(0);
+            let mut tick = Tick::default();
+            let mut posts = 0;
+            // SAFETY: The test's live services; posts run between calls, as natively.
+            while unsafe { on_tick(&s, &mut tick) } {
+                assert!(
+                    TRACE.with(|t| t.borrow().is_empty()),
+                    "the caller posts before the timeout"
+                );
+                posts += 1;
+                if change_limit {
+                    MAX_COMPETITORS.set(1);
+                }
+            }
+            assert_eq!(posts, if change_limit { 1 } else { 2 });
+            // The competitor timeout reads the same settings and game mode in place.
+            INTERVAL.set(1);
+            MAX_COMPETITORS.set(1);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 1);
+            MAX_COMPETITORS.set(0);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 0);
+            MAX_COMPETITORS.set(1);
+            INTERVAL.set(0);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 0);
+            assert_eq!(TRACE.with(|t| t.borrow().clone()), ["timeout 19425"]);
+            // SAFETY: As above.
+            assert_eq!(
+                unsafe { *openttd_rust_company_tick() },
+                (cursor + 1) % u32::from(MAX_COMPANIES)
+            );
+        }
+        set_mode(saved_mode);
+    }
+}
