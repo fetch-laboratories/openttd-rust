@@ -220,6 +220,7 @@ impl Ctx<'_> {
             out.error(self.s.strings.unsuitable);
             return StationID::INVALID;
         }
+        /* Check if the tile is the base tile of another station */
         let mut search = SignSearch {
             c: self,
             station: wp,
