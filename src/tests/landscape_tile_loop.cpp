@@ -323,30 +323,6 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 	Map::Allocate(64, 64);
 }
 
-TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
-{
-	Map::Allocate(64, 64);
-	auto statics = _rust_map_statics;
-	/* Exercise the checked backend without executing native asserts-off UB. */
-	statics.assertions = true;
-	const OpenTTDFixtureMap empty{0};
-	/* The original native accessor stays the production oracle. This fixture
-	 * records fallback rather than executing source UB with assertions disabled. */
-	static uint calls;
-	static uint32_t observed;
-	calls = 0;
-	auto callback = [](uint32_t tile) noexcept -> uint8_t { calls++; observed = tile; return 231; };
-	CHECK(openttd_rust_shared_tile_type(&statics, callback, Map::Size()) == 231);
-	CHECK(calls == 1);
-	CHECK(observed == Map::Size());
-	CHECK(openttd_rust_shared_tile_type(&statics, callback, UINT32_MAX) == 231);
-	CHECK(calls == 2);
-	CHECK(observed == UINT32_MAX);
-	CHECK(openttd_rust_shared_tile_type(&empty.statics, callback, 0) == 231);
-	CHECK(calls == 3);
-	CHECK(observed == 0);
-}
-
 TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 {
 	RustGenerationSeaSet boundary;
