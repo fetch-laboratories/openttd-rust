@@ -3310,7 +3310,7 @@ impl Ctx<'_> {
         {
             return false;
         }
-        !(!is_drive_through && info.drive_only)
+        is_drive_through || !info.drive_only
     }
     /// `CmdBuildRoadStop`: build a bus or truck stop.
     fn cmd_build_road_stop(
