@@ -24,6 +24,7 @@ BASE = "b" * 40
 MERGE = "d" * 40
 TREE = "f" * 40
 PREVIOUS = "9" * 40
+PARENT = "8" * 40  # The captured merge's first parent, deliberately not PULL's base.
 RUN = "https://github.com/example/fork/actions/runs/123"
 ACTIONS = {"login": "github-actions[bot]", "type": "Bot"}
 PULL = {
@@ -147,7 +148,8 @@ const github = {{paginate: async (_method, args) => {{
 }}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
   repos: {{
-  getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
+  getCommit: async () => ({{data: {{parents: [{{sha: {json.dumps(PARENT)}}}],
+    commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
   getCollaboratorPermissionLevel: async () => ({{data: {{permission: 'write'}}}}),
   getCombinedStatusForRef: async args => ({{data: {{statuses: args.ref === {json.dumps(PREVIOUS)} ?
     {json.dumps(list(previous))}.map(({{creator, ...status}}) => status) : {json.dumps([latest] if latest else [])}}}}}),
@@ -267,7 +269,7 @@ def validation(
     ]
 
 
-CODE, DOC = entry("src/game.cpp"), entry("README.md", BASE)
+CODE, DOC = entry("src/game.cpp"), entry("docs/a.md", BASE)
 INVENTORY = tree(CODE, DOC)
 
 
@@ -292,6 +294,10 @@ def inventory_cases() -> list[tuple[dict[str, object], str]]:
         (tree(CODE, DOC, DOC), "true"),
         (tree(CODE, dict(DOC, type="commit", mode="160000")), "true"),
         (tree(CODE, dict(DOC, path="../a.md")), "true"),
+        # Packaged or root-level Markdown is a build input.
+        (tree(CODE, DOC, entry("README.md", MERGE)), "true"),
+        (tree(CODE, DOC, entry("docs/fonts.md", MERGE)), "true"),
+        (tree(CODE, dict(DOC, path="docs/fonts.md")), "true"),
         (tree(CODE, sha=None), "true"),
     ]
 
@@ -330,6 +336,157 @@ class GateTests(unittest.TestCase):
                     self.assertEqual(result["outputs"]["merge"], MERGE)
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
+
+    def test_checker_only_full_requests_skip_builds(self) -> None:
+        checker = [
+            {"filename": "tools/lint-ratchet.py"},
+            {"filename": "tools/test-cleanup-checks.py"},
+            {"filename": "migration/clippy-debt.json"},
+            {"filename": "migration/lints/clippy.toml"},
+            {"filename": "docs/roadmap.md"},
+            {"filename": "AGENTS.md"},
+        ]
+        renamed = {
+            "filename": "tools/cleanup_contract.py",
+            "previous_filename": "tools/ci.py",
+        }
+        for label, profile, files, expected in (
+            ("checker only", "full", checker, "true"),
+            (
+                "checker rename",
+                "full",
+                [dict(renamed, previous_filename="tools/lint-policy.py")],
+                "true",
+            ),
+            ("rename from a built file", "full", [renamed], "false"),
+            (
+                "rename into packaged docs",
+                "full",
+                [{"filename": "docs/fonts.md", "previous_filename": "docs/x.md"}],
+                "false",
+            ),
+            ("root Markdown", "full", [{"filename": "README.md"}], "false"),
+            ("packaged docs", "full", [{"filename": "docs/desync.md"}], "false"),
+            (
+                "other Markdown",
+                "full",
+                [{"filename": "media/baseset/OpenTTD-font.md"}],
+                "false",
+            ),
+            (
+                "workflow",
+                "full",
+                [*checker, {"filename": ".github/workflows/ci-request.yml"}],
+                "false",
+            ),
+            ("other tool", "full", [{"filename": "tools/simulate.py"}], "false"),
+            ("near miss", "full", [{"filename": "tools/lint-ratchet.pyc"}], "false"),
+            ("nested", "full", [{"filename": "src/tools/lint-ratchet.py"}], "false"),
+            ("source", "full", [{"filename": "src/rust/x.h"}], "false"),
+            ("no filename", "full", [{}], "false"),
+            ("no files", "full", [], "false"),
+            ("missing list", "full", None, "false"),
+            ("comparison cap", "full", [{"filename": "docs/a.md"}] * 300, "false"),
+            ("rust profile", "rust", checker, "false"),
+            ("merge base is not the first parent", "full", checker, "false"),
+        ):
+            with self.subTest(label):
+                env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
+                data: dict[str, object] = {} if files is None else {"files": files}
+                # An overlapping base advance can give a stale test merge another
+                # best common ancestor; only the first parent's own diff counts.
+                merge_base = HEAD if label.startswith("merge base") else PARENT
+                data["merge_base_commit"] = {"sha": merge_base}
+                compare = f"""async args => {{
+                  if (args.basehead !== '{PARENT}...{MERGE}') throw new Error('basehead');
+                  return {{data: {json.dumps(data)}}};
+                }}"""
+                result = execute_script(
+                    "ci-request.yml", "plan", PULL, env=env, compare=compare
+                )
+                self.assertEqual(result["outputs"]["checker"], expected)
+        for name in ("native", "platform"):
+            condition = job("ci-request.yml", name)["if"]
+            for value, expected in (("true", False), ("false", True)):
+                outputs = {"profile": "full", "checker": value}
+                needs = {"plan": {"result": "success", "outputs": outputs}}
+                self.assertEqual(evaluate(condition, needs=needs), expected)
+
+    def test_inert_markdown_excludes_every_markdown_build_input(self) -> None:
+        sources = [ROOT / "CMakeLists.txt", *sorted((ROOT / "cmake").glob("*.cmake"))]
+        built = {
+            match
+            for path in sources
+            for match in re.findall(
+                r"\$\{CMAKE_SOURCE_DIR\}/([^\s\"@]+\.md)", path.read_text()
+            )
+        }
+        self.assertIn("docs/fonts.md", built)
+        tracked = subprocess.check_output(
+            ["git", "ls-files", "*.md"], cwd=ROOT, text=True
+        ).split()
+        blocks = []
+        for filename, name in (
+            ("ci-request.yml", "plan"),
+            ("ci-invalidate.yml", "invalidate"),
+            ("ci-policy.yml", "policy"),
+        ):
+            script = script_for(filename, name)
+            start = script.index("// Markdown that no build reads")
+            blocks.append(
+                script[start : script.index(");", script.index("const inert")) + 2]
+            )
+        # Indentation follows each script's nesting; the code itself must match.
+        self.assertEqual(len({" ".join(block.split()) for block in blocks}), 1)
+        paths = sorted(
+            built | set(tracked) | {"docs/skills/x/SKILL.md", "docs/fonts.md.txt"}
+        )
+        verdicts = cast(
+            dict[str, bool],
+            node(
+                blocks[0]
+                + f"\nconsole.log(JSON.stringify(Object.fromEntries({json.dumps(paths)}.map(p => [p, inert(p)]))));"
+            ),
+        )
+        for path in built:
+            self.assertFalse(verdicts[path], path)
+        for path, verdict in verdicts.items():
+            expected = (
+                path == "AGENTS.md"
+                or path.startswith("docs/")
+                and path.endswith(".md")
+                and path not in built
+            )
+            self.assertEqual(verdict, expected, path)
+
+    def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
+        def needs(quick: str) -> dict[str, dict[str, Any]]:
+            result = good_needs()
+            result["plan"]["outputs"]["checker"] = "true"
+            result["quick"]["result"] = quick
+            for name in ("native", "platform"):
+                result[name] = {"result": "skipped", "outputs": {}}
+            return result
+
+        passed = execute_publisher(needs("success"), PULL)
+        self.assertEqual([s["context"] for s in passed["statuses"]], [ci.CONTEXT])
+        self.assertEqual(passed["statuses"][0]["state"], "success")
+        self.assertFalse(passed["failures"])
+        for outcome in ("failure", "skipped", "cancelled"):
+            with self.subTest(outcome):
+                failed = execute_publisher(needs(outcome), PULL)
+                self.assertEqual(failed["statuses"][0]["state"], "failure")
+        moved = dict(PULL, head={"sha": "c" * 40})
+        self.assertEqual(
+            execute_publisher(needs("success"), moved)["statuses"][0]["state"],
+            "failure",
+        )
+        # Without the plan's checker output, skipped builds still fail.
+        unmarked = needs("success")
+        del unmarked["plan"]["outputs"]["checker"]
+        self.assertEqual(
+            execute_publisher(unmarked, PULL)["statuses"][0]["state"], "failure"
+        )
 
     def test_privileged_jobs_run_only_for_protected_full_requests(self) -> None:
         plan = job("ci-request.yml", "plan")["if"]
@@ -905,7 +1062,7 @@ class PolicyTests(unittest.TestCase):
             error = f"Object.assign(new Error('API failed'), {json.dumps(failure)})"
             compare = f"""async () => {{
               if (++calls === 1 || !{json.dumps(recover)}) throw {error};
-              return {{data: {{files: [{{filename: 'README.md'}}]}}}};
+              return {{data: {{files: [{{filename: 'docs/readme.md'}}]}}}};
             }}"""
             with self.subTest(failure=failure, recover=recover):
                 result = run_policy(trees={BASE: source, TREE: source}, compare=compare)
@@ -925,6 +1082,9 @@ class PolicyTests(unittest.TestCase):
             ("true", "push", [{"filename": "tools/ci.py"}], "true"),
             ("true", "push", [renamed], "true"),
             ("true", "push", [{"filename": "docs/new.md"}] * 300, "true"),
+            ("true", "push", [{"filename": "README.md"}], "true"),
+            ("true", "push", [{"filename": "docs/multiplayer.md"}], "true"),
+            ("true", "push", [{"filename": "AGENTS.md"}], "false"),
             ("true", "push", [], "true"),
             ("true", "push", None, "true"),
         ):
@@ -938,16 +1098,21 @@ class PolicyTests(unittest.TestCase):
 
     def test_docs_fast_path_checks_tree_types_and_complete_inventories(self) -> None:
         code = entry("src/game.cpp")
-        link = entry("module.md", mode="160000", kind="commit")
-        doc = entry("module.md")
-        files = [{"filename": "module.md"}]
-        renamed = [{"filename": "new.md", "previous_filename": "module.md"}]
+        link = entry("docs/module.md", mode="160000", kind="commit")
+        doc = entry("docs/module.md")
+        files = [{"filename": "docs/module.md"}]
+        renamed = [{"filename": "docs/new.md", "previous_filename": "docs/module.md"}]
         docs_before, docs_after = tree(code, doc), tree(code, dict(doc, sha=MERGE))
         cases = [
             (tree(code, link), tree(code, dict(link, sha=MERGE)), files, "true"),
             (tree(code), tree(code, dict(link, sha=MERGE)), files, "true"),
             (tree(code, link), tree(code), files, "true"),
-            (tree(code, link), tree(code, dict(link, path="new.md")), renamed, "true"),
+            (
+                tree(code, link),
+                tree(code, dict(link, path="docs/new.md")),
+                renamed,
+                "true",
+            ),
             (docs_before, docs_after, files, "false"),
         ]
         for bad in (dict(docs_before, truncated=True), dict(docs_before, tree=[{}])):

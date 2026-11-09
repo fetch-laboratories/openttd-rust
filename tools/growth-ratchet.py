@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Reject independent C++/boundary growth; require exact-head reviewed exceptions."""
+"""Reject independent C++/boundary growth; require reviewed exceptions.
+
+An acceptance names the reviewed head. It also holds at a later head while the
+source of every added key is byte-identical, so a base update or an unrelated
+push keeps it. Identity counters (exports, callback slots) stay exact-head.
+"""
 
 import argparse
 
@@ -7,6 +12,8 @@ import argparse
 import importlib
 import importlib.util
 import json
+import subprocess
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -45,13 +52,40 @@ def increases(
     return result
 
 
+FILE_KEYED = {"tools_cpp", "tests_cpp", "outside_cpp"}
+
+
+def known(revision: str) -> bool:
+    """A shallow checkout may lack the accepted commit; then only the head counts."""
+    check = ["git", "cat-file", "-e", f"{revision}^{{commit}}"]
+    return subprocess.run(check, cwd=METRICS.ROOT, capture_output=True).returncode == 0
+
+
+def same_source(growth: dict[str, Any], current: str, accepted_at: str) -> bool:
+    """Whether every added key's source is identical at the accepted commit."""
+    counter, keys = growth["counter"], growth["added"]
+    if not known(accepted_at):
+        return False
+    if counter == "generated_records":
+        before = METRICS.generated_records(accepted_at)
+        after = METRICS.generated_records(current)
+        return all(key in before and before[key] == after.get(key) for key in keys)
+    if counter in FILE_KEYED:
+        return all(
+            (text := METRICS.show(current, key)) != ""
+            and METRICS.show(accepted_at, key) == text
+            for key in keys
+        )
+    return False
+
+
 def accepted(
     growth: dict[str, Any],
-    proposals: list[dict[str, Any]],
-    comments: list[str],
-    author: str,
-    head: str,
+    contract: tuple[str, list[dict[str, Any]], list[str], str],
+    current: str = "HEAD",
 ) -> bool:
+    """`contract` is `cleanup_contract.context()`: author, proposals, comments, head."""
+    author, proposals, comments, head = contract
     for proposal in proposals:
         if proposal.get("kind") != "growth" or any(
             proposal.get(key) != value for key, value in growth.items()
@@ -67,7 +101,8 @@ def accepted(
             )
         ):
             continue
-        if reviewed(proposal, comments, author, head):
+        unchanged = partial(same_source, growth, current)
+        if reviewed(proposal, comments, author, head, unchanged):
             return True
     return False
 
@@ -99,10 +134,11 @@ def main() -> int:
     )
     if not growth:
         return 0
-    author, proposals, comments, head = context()
+    contract = context()
+    head = contract[3]
     errors = []
     for delta in growth:
-        if accepted(delta, proposals, comments, author, head):
+        if accepted(delta, contract, args.head):
             print(json.dumps({"accepted_at": head, "growth": delta}, sort_keys=True))
         else:
             errors.append(delta["counter"])

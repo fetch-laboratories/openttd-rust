@@ -61,6 +61,7 @@ jobs:
       tree: ${{ steps.plan.outputs.tree }}
       profile: ${{ steps.plan.outputs.profile }}
       pr: ${{ steps.plan.outputs.pr }}
+      checker: ${{ steps.plan.outputs.checker }}
     steps:
     # No checkout: this publisher executes only the reviewed workflow definition.
     - id: plan
@@ -94,8 +95,36 @@ jobs:
           const {data: tested} = await github.rest.repos.getCommit({
             ...context.repo, ref: pull.merge_commit_sha
           });
+          // Only Quick reads these checker scripts and debt records, and no build reads
+          // inert Markdown. A full request whose merge changes nothing else runs Quick
+          // alone. The base's post-merge run still builds the tree.
+          const checkerPaths = new RegExp('^(tools/(lint-ratchet|lint-policy|growth-ratchet|refactor-proof|' +
+            'baseline_ratchet|cleanup_contract|test-cleanup-checks)\\.py|' +
+            'migration/(clippy-debt|ruff-debt)\\.json|migration/lints/clippy\\.toml)$');
+          // Markdown that no build reads: AGENTS.md and docs/, except the docs CMake packages for
+          // the in-game viewer (tools/test-ci.py checks this list against CMake).
+          const builtDocs = ['admin_network', 'debugging_desyncs', 'desync', 'directory_structure', 'eints', 'fonts',
+            'game_coordinator', 'linkgraph', 'logging_and_performance_metrics', 'multiplayer', 'savegame_format',
+            'symbol_server'];
+          const inert = path => typeof path === 'string' && (path === 'AGENTS.md' || path.startsWith('docs/') &&
+            path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
+          const quickOnly = path => typeof path === 'string' && (checkerPaths.test(path) || inert(path));
+          let checker = false;
+          // Classify exactly what the captured merge changes against its own first parent,
+          // never the mutable PR file list or a base that may have moved since GitHub merged.
+          const parent = tested.parents?.[0]?.sha;
+          if (profile === 'full' && /^[0-9a-f]{40}$/.test(parent || '')) {
+            const {data: comparison} = await github.rest.repos.compareCommitsWithBasehead({
+              ...context.repo, basehead: `${parent}...${pull.merge_commit_sha}`
+            });
+            // GitHub caps comparison files at 300: fail closed if the list may be truncated.
+            const files = comparison?.files;
+            checker = comparison?.merge_base_commit?.sha === parent && Array.isArray(files) &&
+              files.length > 0 && files.length < 300 && files.every(file =>
+                quickOnly(file?.filename) && (file.previous_filename == null || quickOnly(file.previous_filename)));
+          }
           for (const [key, value] of Object.entries({head, base: pull.base.sha, merge: pull.merge_commit_sha,
-              tree: tested.commit.tree.sha, profile, pr})) {
+              tree: tested.commit.tree.sha, profile, pr, checker})) {
             core.setOutput(key, String(value));
           }
           if (profile === 'full') {
@@ -132,14 +161,16 @@ jobs:
 
   native:
     needs: plan
-    if: needs.plan.outputs.profile == 'native' || needs.plan.outputs.profile == 'full'
+    if: >-
+      (needs.plan.outputs.profile == 'native' || needs.plan.outputs.profile == 'full') &&
+      needs.plan.outputs.checker != 'true'
     uses: ./.github/workflows/rust-migration.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
 
   platform:
     needs: plan
-    if: needs.plan.outputs.profile != 'rust'
+    if: needs.plan.outputs.profile != 'rust' && needs.plan.outputs.checker != 'true'
     uses: ./.github/workflows/ci-build.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
@@ -178,17 +209,21 @@ jobs:
           // Head identity remains valid when another PR or docs advance the base.
           // Post-merge policy checks the resulting tree to catch combined changes.
           const current = pull.state === 'open' && pull.base.ref === 'rust-migration' && pull.head.sha === head;
-          const complete = ['plan', 'quick', 'native', 'platform'].every(
-            name => needs[name]?.result === 'success') &&
-            needs.native?.outputs?.validated === 'true' && needs.platform?.outputs?.validated === 'true';
+          // A checker-only request proves Quick alone. It publishes no Validated tree,
+          // so nothing later treats its tree as built.
+          const checker = needs.plan.outputs.checker === 'true';
+          const complete = ['plan', 'quick'].every(name => needs[name]?.result === 'success') && (checker ||
+            ['native', 'platform'].every(name => needs[name]?.result === 'success') &&
+            needs.native?.outputs?.validated === 'true' && needs.platform?.outputs?.validated === 'true');
           const passed = current && complete;
           await github.rest.repos.createCommitStatus({
             ...context.repo, sha: head, context: 'Full validation', state: passed ? 'success' : 'failure',
             target_url: runUrl,
-            description: passed ? 'All required validation passed for this PR head' :
+            description: passed ? (checker ? 'Checker-only PR: Quick passed; no build reads these files' :
+              'All required validation passed for this PR head') :
               current ? 'Required validation failed, skipped, or was cancelled' : 'PR head changed; request validation again'
           });
-          if (passed) {
+          if (passed && !checker) {
             await github.rest.repos.createCommitStatus({
               ...context.repo, sha: head, context: 'Validated tree', state: 'success',
               target_url: runUrl, description: needs.plan.outputs.tree

@@ -693,21 +693,72 @@ class GrowthTests(unittest.TestCase):
             [report("/review", "a" * 40)],
         ):
             self.assertFalse(
-                GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
+                GROWTH.accepted(
+                    delta, ("/implementation", [proposal], comments, "head")
+                )
             )
         self.assertTrue(
             GROWTH.accepted(
                 delta,
-                [proposal],
-                [report("/review", "head")],
-                "/implementation",
-                "head",
+                ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
         changed = dict(proposal, reason="different operation")
         self.assertFalse(
             reviewed(changed, [report("/review", "head")], "/implementation", "head")
         )
+
+    def test_growth_acceptance_holds_while_its_source_is_unchanged(self) -> None:
+        earlier, missing = "a" * 40, "b" * 40
+        records = {
+            earlier: {"abi-record-x.h": "struct X { int a; };"},
+            "HEAD": {"abi-record-x.h": "struct X { int a; };", "abi-record-y.h": ""},
+        }
+        files = {(earlier, "tools/x.cpp"): "int x;", ("HEAD", "tools/x.cpp"): "int x;"}
+
+        def check(counter: str, key: str, edits: Mapping[str, str]) -> bool:
+            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
+            proposal = dict(
+                delta,
+                kind="growth",
+                reason="source contract",
+                existing_alternatives="none available",
+                retiring_owner="owner",
+                retirement_condition="native shell removed",
+            )
+            comment = (
+                "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": edits.get("at", earlier), "accept": [proposal]})
+                + "\n```"
+            )
+            current = {rev: dict(rows) for rev, rows in records.items()}
+            current["HEAD"].update({k: v for k, v in edits.items() if k != "at"})
+            text = dict(files)
+            text.update({("HEAD", k): v for k, v in edits.items() if k != "at"})
+            with (
+                patch.object(GROWTH, "known", lambda rev: rev != missing),
+                patch.object(GROWTH.METRICS, "generated_records", current.__getitem__),
+                patch.object(GROWTH.METRICS, "show", lambda r, p: text.get((r, p), "")),
+            ):
+                return GROWTH.accepted(
+                    delta, ("/implementation", [proposal], [comment], "new-head")
+                )
+
+        self.assertTrue(check("generated_records", "abi-record-x.h", {}))
+        self.assertFalse(
+            check(
+                "generated_records",
+                "abi-record-x.h",
+                {"abi-record-x.h": "struct X { int b; };"},
+            )
+        )
+        self.assertFalse(check("generated_records", "abi-record-y.h", {}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": missing}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
+        self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
+        self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
+        self.assertFalse(check("exports", "tools/x.cpp", {}))
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:

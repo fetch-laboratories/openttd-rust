@@ -32,6 +32,13 @@ jobs:
           // Never let a delayed invalidation overwrite a request started after this push.
           if (latest && latest.updated_at >= event.updated_at) return;
           // Same non-Markdown inventory rule as the post-merge cache refresh in ci-policy.yml.
+          // Markdown that no build reads: AGENTS.md and docs/, except the docs CMake packages for
+          // the in-game viewer (tools/test-ci.py checks this list against CMake).
+          const builtDocs = ['admin_network', 'debugging_desyncs', 'desync', 'directory_structure', 'eints', 'fonts',
+            'game_coordinator', 'linkgraph', 'logging_and_performance_metrics', 'multiplayer', 'savegame_format',
+            'symbol_server'];
+          const inert = path => typeof path === 'string' && (path === 'AGENTS.md' || path.startsWith('docs/') &&
+            path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
           const entries = async sha => {
             const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
             const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};
@@ -41,7 +48,7 @@ jobs:
                   typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
                   typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
                 new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
-            return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && entry.path.endsWith('.md')))
+            return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && inert(entry.path)))
               .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
           };
           // A push that keeps the previous head's Full-tested non-Markdown tree, such as a
