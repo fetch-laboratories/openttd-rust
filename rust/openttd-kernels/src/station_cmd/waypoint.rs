@@ -445,11 +445,10 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let reuse = args.station_to_join != StationID::NEW;
-        let station_to_join = if reuse {
-            args.station_to_join
-        } else {
-            StationID::INVALID
-        };
+        let mut station_to_join = args.station_to_join;
+        if !reuse {
+            station_to_join = StationID::INVALID;
+        }
         let distant_join = station_to_join != StationID::INVALID;
         if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
         {
@@ -662,11 +661,10 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let reuse = args.station_to_join != StationID::NEW;
-        let station_to_join = if reuse {
-            args.station_to_join
-        } else {
-            StationID::INVALID
-        };
+        let mut station_to_join = args.station_to_join;
+        if !reuse {
+            station_to_join = StationID::INVALID;
+        }
         let distant_join = station_to_join != StationID::INVALID;
         if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
         {
@@ -723,10 +721,11 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         /* Check if there is an already existing, deleted, waypoint close to us that we can reuse. */
+        let offset = self.offs_by_other_axis(axis);
         let center_tile = TileIndex(
             start_tile
                 .0
-                .wrapping_add(u32::from(count / 2).wrapping_mul(self.offs_by_other_axis(axis))),
+                .wrapping_add(u32::from(count / 2).wrapping_mul(offset)),
         );
         if wp.is_null() && reuse {
             wp = self.find_deleted_waypoint_close_to(
@@ -796,12 +795,9 @@ impl Ctx<'_> {
             (self.s.road_triggers)(wp, roadstopspec);
         }
         self.reset_delete_counter(wp);
-        (self.s.set_facility_bits)(
-            wp,
-            StationFacilities::from_element(StationFacility::BusStop)
-                .with(StationFacilities::from_element(StationFacility::TruckStop))
-                .0,
-        );
+        let facilities = StationFacilities::from_element(StationFacility::BusStop)
+            .with(StationFacilities::from_element(StationFacility::TruckStop));
+        (self.s.set_facility_bits)(wp, facilities.0);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
         if (self.s.station_town)(wp).is_null() {
@@ -810,6 +806,7 @@ impl Ctx<'_> {
         (self.s.virtual_coord)(wp);
         let id = (self.links().graphs.station_id)(wp);
         let world = || crate::map_func::World::new(self.shared);
+        let replacement_spec_index = i32::from(specindex.value);
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
             /* Get existing road types and owners before any tile clearing */
@@ -834,18 +831,11 @@ impl Ctx<'_> {
                 self.road_owner(cur_tile, true)
             };
             if crate::station_map::is_road_waypoint_tile(TileIndex(cur_tile), self.shared) {
-                self.remove_road_tile(
-                    ret,
-                    ret,
-                    cur_tile,
-                    flags.0,
-                    i32::from(specindex.value),
-                    true,
-                );
+                self.remove_road_tile(ret, ret, cur_tile, flags.0, replacement_spec_index, true);
             }
             self.area_add((self.s.road_waypoint_tile_area)(wp), cur_tile);
             self.before_add_tile(ret, wp, cur_tile, StationRectMode::ADD_TRY);
-            let update_company_road_infrastructure = |rt, company, count| unsafe {
+            let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(
                     (self.shared.road_commands)(),
                     rt,
@@ -856,27 +846,19 @@ impl Ctx<'_> {
             /* Update company infrastructure counts. If the current tile is a normal road tile, remove the old
              * bits first. */
             if world().is_normal_road_tile(cur_tile) {
-                update_company_road_infrastructure(
+                update(
                     road_rt,
                     road_owner,
                     -(world().road_bits(cur_tile, false).count_ones() as i32),
                 );
-                update_company_road_infrastructure(
+                update(
                     tram_rt,
                     tram_owner,
                     -(world().road_bits(cur_tile, true).count_ones() as i32),
                 );
             }
-            update_company_road_infrastructure(
-                road_rt,
-                road_owner,
-                ROAD_STOP_TRACKBIT_FACTOR as i32,
-            );
-            update_company_road_infrastructure(
-                tram_rt,
-                tram_owner,
-                ROAD_STOP_TRACKBIT_FACTOR as i32,
-            );
+            update(road_rt, road_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
+            update(tram_rt, tram_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
             (self.s.make_drive_stop)(
                 cur_tile,
                 owner,

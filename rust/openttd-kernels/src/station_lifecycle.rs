@@ -180,28 +180,14 @@ fn cmsa_water(tile: TileIndex, m: &TileTypeAccess) -> bool {
 fn cmsa_tree(tile: TileIndex, m: &TileTypeAccess) -> bool {
     TileType(m.read(tile.0)) == TileType::MP_TREES
 }
-/// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `generate_station_name`.
-pub(crate) fn generate_name(
+/// `GenerateStationName`'s scan of the other stations of the same town: their
+/// industry types and used default names.
+fn station_name_information(
     st: *mut BaseStation,
-    tile: u32,
-    class: StationNaming,
+    town: *const crate::services::TownHandle,
     s: &Services,
-) -> u32 {
-    generate_station_name(st, TileIndex(tile), class, s).0
-}
-/// `GenerateStationName`, including industry aliases and fallback exhaustion.
-pub(crate) fn generate_station_name(
-    st: *mut BaseStation,
-    tile: TileIndex,
-    name_class: StationNaming,
-    s: &Services,
-) -> StringID {
-    let m = s.map_access();
-    let map = s.shared.map();
-    let size_y = (s.shared.map_max_y)() + 1;
-    let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
+) -> NameInformation {
     let n = &s.names;
-    let town = (s.commands().station_town)(st);
     let mut sni = NameInformation {
         used_names: [false; 256],
         indtypes: [false; NUM_INDUSTRYTYPES as usize],
@@ -236,6 +222,31 @@ pub(crate) fn generate_station_name(
             sni.set_used(StringID(if str == n.forest { n.woods } else { str }), s);
         }
     }
+    sni
+}
+/// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `generate_station_name`.
+pub(crate) fn generate_name(
+    st: *mut BaseStation,
+    tile: u32,
+    class: StationNaming,
+    s: &Services,
+) -> u32 {
+    generate_station_name(st, TileIndex(tile), class, s).0
+}
+/// `GenerateStationName`, including industry aliases and fallback exhaustion.
+pub(crate) fn generate_station_name(
+    st: *mut BaseStation,
+    tile: TileIndex,
+    name_class: StationNaming,
+    s: &Services,
+) -> StringID {
+    let m = s.map_access();
+    let map = s.shared.map();
+    let size_y = (s.shared.map_max_y)() + 1;
+    let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
+    let n = &s.names;
+    let town = (s.commands().station_town)(st);
+    let mut sni = station_name_information(st, town, s);
     let mut spiral = crate::spiral::square(
         map.tile_x(tile.0),
         map.tile_y(tile.0),
@@ -330,11 +341,10 @@ pub(crate) fn generate_station_name(
     /* check elevation compared to town */
     let z = crate::tile_map::get_tile_z(&m, tile.0, map.size_x(), size_y).unwrap();
     let z2 = crate::tile_map::get_tile_z(&m, town_xy.0, map.size_x(), size_y).unwrap();
-    if z < z2 {
-        if sni.is_available(StringID(n.valley), s) {
-            return StringID(n.valley);
-        }
-    } else if z > z2 && sni.is_available(StringID(n.heights), s) {
+    if z < z2 && sni.is_available(StringID(n.valley), s) {
+        return StringID(n.valley);
+    }
+    if z > z2 && sni.is_available(StringID(n.heights), s) {
         return StringID(n.heights);
     }
     /* check direction compared to town */
@@ -419,6 +429,14 @@ pub(crate) unsafe fn tile_loop_station(
 ) {
     let map = crate::map_func::Map::from_log_x(size_x.trailing_zeros());
     let st = unsafe { ((*s.roadstop).by_tile)(tile.0) };
+    let trigger_road_stop_animation = || {
+        crate::animated_tile::openttd_rust_trigger_roadstop(
+            st,
+            tile.0,
+            StationAnimationTrigger::TileLoop.0,
+            CargoType::INVALID_CARGO.0,
+        );
+    };
     match crate::station_map::get_station_type(m, tile)
         .unwrap_or_else(|| (s.shared.station_type)(tile.0))
     {
@@ -460,14 +478,7 @@ pub(crate) unsafe fn tile_loop_station(
                 );
             }
         }
-        StationType::Truck | StationType::Bus => {
-            crate::animated_tile::openttd_rust_trigger_roadstop(
-                st,
-                tile.0,
-                StationAnimationTrigger::TileLoop.0,
-                CargoType::INVALID_CARGO.0,
-            );
-        }
+        StationType::Truck | StationType::Bus => trigger_road_stop_animation(),
         StationType::RoadWaypoint => {
             let on_snow_or_desert =
                 || crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile).unwrap();
@@ -514,12 +525,7 @@ pub(crate) unsafe fn tile_loop_station(
                 .unwrap();
                 (s.shared.mark_dirty)(tile.0);
             }
-            crate::animated_tile::openttd_rust_trigger_roadstop(
-                st,
-                tile.0,
-                StationAnimationTrigger::TileLoop.0,
-                CargoType::INVALID_CARGO.0,
-            );
+            trigger_road_stop_animation();
         }
         _ => {}
     }
