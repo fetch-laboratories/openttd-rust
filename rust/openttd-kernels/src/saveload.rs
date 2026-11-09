@@ -66,7 +66,7 @@ impl SaveLoadAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct NeedLength(u8);
 impl NeedLength {
-    /// Not working in NeedLength mode.
+    /// Not working in `NeedLength` mode.
     const NL_NONE: Self = Self(0);
     /// Writing length and data.
     const NL_WANTLENGTH: Self = Self(1);
