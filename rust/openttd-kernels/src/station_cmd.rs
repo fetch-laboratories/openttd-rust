@@ -2875,11 +2875,10 @@ impl Ctx<'_> {
     }
     /// `GetRoadType(tile, rtt)`.
     fn get_road_type(&self, tile: TileIndex, rtt: RoadTramType) -> RoadType {
-        RoadType(if rtt == RoadTramType::RTT_TRAM {
-            (self.shared.tram_type)(tile.0).0
-        } else {
-            (self.shared.road_type)(tile.0)
-        })
+        RoadType(
+            crate::map_func::World::new(self.shared)
+                .road_type(tile.0, rtt == RoadTramType::RTT_TRAM),
+        )
     }
     /// `GetRoadOwner(tile, rtt)`.
     fn get_road_owner(&self, tile: TileIndex, rtt: RoadTramType) -> CompanyID {
