@@ -42,11 +42,6 @@ pub struct Industry {
     _private: [u8; 0],
 }
 
-/// `IndustryRandomTrigger::CargoReceived`.
-pub const RANDOM_TRIGGER_CARGO_RECEIVED: u8 = IndustryRandomTrigger::CargoReceived.0;
-/// `IndustryAnimationTrigger::CargoReceived`.
-pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = IndustryAnimationTrigger::CargoReceived.0;
-
 /// `IndustryLifeType::Extractive` mask.
 pub use crate::industrytype::LIFE_EXTRACTIVE;
 

@@ -39,7 +39,7 @@ fn can_cargo_service_industry(
         return;
     }
     // Check for acceptance of cargo
-    if unsafe { super::get_cargo_accepted(ind, cargo.0).is_some() }
+    if unsafe { super::get_cargo_accepted(ind, cargo).is_some() }
         && !unsafe {
             super::resolver::industry_temporarily_refuses_cargo(shell, ind, cargo, &*s.resolver)
         }
@@ -47,7 +47,7 @@ fn can_cargo_service_industry(
         *c_accepts = true;
     }
     // Check for produced cargo
-    if unsafe { super::get_cargo_produced(ind, cargo.0).is_some() } {
+    if unsafe { super::get_cargo_produced(ind, cargo).is_some() } {
         *c_produces = true;
     }
 }
@@ -268,13 +268,6 @@ pub(crate) const fn uses_original_economy(
                     IndustryCallbackMask::ProdChangeBuild,
                 )),
         )
-}
-/// Temporary raw adapter for [`uses_original_economy`].
-pub(crate) const fn original_economy(callback_mask: u16, economy_type: u8) -> bool {
-    uses_original_economy(
-        IndustryCallbackMasks(callback_mask),
-        EconomyType(economy_type),
-    )
 }
 /// `IndustrySpec::GetConstructionCost`: get the cost for constructing this industry, under
 /// the `raw_industry_construction` setting.
