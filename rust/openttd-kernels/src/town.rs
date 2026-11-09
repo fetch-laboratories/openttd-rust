@@ -5129,7 +5129,7 @@ mod protocol_tests {
             }
             with(|w| (w.owner_reads, w.map_reads) = (0, 0));
             // SAFETY: Live fixture tables and owner.
-            unsafe { house::tile_loop(leaves, services, 2080) };
+            unsafe { house::tile_loop(leaves, services, TileIndex(2080)) };
             assert_eq!(
                 with(|w| (w.owner_reads, w.map_reads)),
                 (1, 1),
@@ -5243,7 +5243,7 @@ mod protocol_tests {
         unsafe { (*services).tick_counter = second_tick };
         with(|w| (w.owner_reads, w.map_reads) = (0, 0));
         // SAFETY: Live fixture tables and owner.
-        unsafe { house::animate(leaves, services, 2080) };
+        unsafe { house::animate(leaves, services, TileIndex(2080)) };
         assert_eq!(
             with(|w| (w.owner_reads, w.map_reads)),
             (0, 0),

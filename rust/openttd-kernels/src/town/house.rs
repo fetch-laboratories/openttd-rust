@@ -1588,12 +1588,12 @@ pub(super) fn trigger_house_animation_construction_stage_changed(
 // Native entries: immutable static tables outlive each synchronous call; native
 // result and cargo-array storage are stack-owned by the native frame.
 /// `TileLoop_Town`; the tile scheduler calls it directly, like every Rust-owned tile kind.
-pub(crate) unsafe fn tile_loop(leaves: *const Leaves, services: *const Services, tile: u32) {
-    house(leaves, services).tile_loop_town(TileIndex(tile));
+pub(crate) unsafe fn tile_loop(leaves: *const Leaves, services: *const Services, tile: TileIndex) {
+    house(leaves, services).tile_loop_town(tile);
 }
 /// `AnimateTile_Town`, for the animated-tile dispatch.
-pub(crate) unsafe fn animate(leaves: *const Leaves, services: *const Services, tile: u32) {
-    house(leaves, services).animate_tile_town(TileIndex(tile));
+pub(crate) unsafe fn animate(leaves: *const Leaves, services: *const Services, tile: TileIndex) {
+    house(leaves, services).animate_tile_town(tile);
 }
 /// `ClearTile_Town` for the landscape clear dispatch, which passes base integers
 /// until its own pass.
