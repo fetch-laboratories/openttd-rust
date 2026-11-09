@@ -128,6 +128,7 @@ def execute_script(
     previous: Iterable[object] = (),
     trees: object = None,
     compare: str | None = None,
+    files: Iterable[object] = (),
 ) -> dict[str, Any]:
     """Run a status writer; `previous` holds the statuses of the PREVIOUS head."""
     script = script_for(filename, name)
@@ -142,6 +143,7 @@ const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
 const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
   info: () => {{}}}};
 const github = {{paginate: async (_method, args) => {{
+  if (args.pull_number !== undefined) return {json.dumps(list(files))};
   if (args.ref !== {json.dumps(PREVIOUS)}) throw new Error('Unexpected status ref');
   return {json.dumps(list(previous))};
 }}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
@@ -330,6 +332,83 @@ class GateTests(unittest.TestCase):
                     self.assertEqual(result["outputs"]["merge"], MERGE)
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
+
+    def test_checker_only_full_requests_skip_builds(self) -> None:
+        checker = [
+            {"filename": "tools/lint-ratchet.py"},
+            {"filename": "tools/test-cleanup-checks.py"},
+            {"filename": "migration/clippy-debt.json"},
+            {"filename": "migration/lints/clippy.toml"},
+            {"filename": "docs/roadmap.md"},
+        ]
+        renamed = {
+            "filename": "tools/cleanup_contract.py",
+            "previous_filename": "tools/ci.py",
+        }
+        for label, profile, files, expected in (
+            ("checker only", "full", checker, "true"),
+            (
+                "checker rename",
+                "full",
+                [dict(renamed, previous_filename="tools/lint-policy.py")],
+                "true",
+            ),
+            ("rename from a built file", "full", [renamed], "false"),
+            (
+                "workflow",
+                "full",
+                [*checker, {"filename": ".github/workflows/ci-request.yml"}],
+                "false",
+            ),
+            ("other tool", "full", [{"filename": "tools/simulate.py"}], "false"),
+            ("near miss", "full", [{"filename": "tools/lint-ratchet.pyc"}], "false"),
+            ("nested", "full", [{"filename": "src/tools/lint-ratchet.py"}], "false"),
+            ("source", "full", [{"filename": "src/rust/x.h"}], "false"),
+            ("no files", "full", [], "false"),
+            ("api limit", "full", [{"filename": "a.md"}] * 3000, "false"),
+            ("rust profile", "rust", checker, "false"),
+        ):
+            with self.subTest(label):
+                env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
+                result = execute_script(
+                    "ci-request.yml", "plan", PULL, env=env, files=files
+                )
+                self.assertEqual(result["outputs"]["checker"], expected)
+        for name in ("native", "platform"):
+            condition = job("ci-request.yml", name)["if"]
+            for value, expected in (("true", False), ("false", True)):
+                outputs = {"profile": "full", "checker": value}
+                needs = {"plan": {"result": "success", "outputs": outputs}}
+                self.assertEqual(evaluate(condition, needs=needs), expected)
+
+    def test_checker_only_publisher_needs_quick_and_marks_no_tree(self) -> None:
+        def needs(quick: str) -> dict[str, dict[str, Any]]:
+            result = good_needs()
+            result["plan"]["outputs"]["checker"] = "true"
+            result["quick"]["result"] = quick
+            for name in ("native", "platform"):
+                result[name] = {"result": "skipped", "outputs": {}}
+            return result
+
+        passed = execute_publisher(needs("success"), PULL)
+        self.assertEqual([s["context"] for s in passed["statuses"]], [ci.CONTEXT])
+        self.assertEqual(passed["statuses"][0]["state"], "success")
+        self.assertFalse(passed["failures"])
+        for outcome in ("failure", "skipped", "cancelled"):
+            with self.subTest(outcome):
+                failed = execute_publisher(needs(outcome), PULL)
+                self.assertEqual(failed["statuses"][0]["state"], "failure")
+        moved = dict(PULL, head={"sha": "c" * 40})
+        self.assertEqual(
+            execute_publisher(needs("success"), moved)["statuses"][0]["state"],
+            "failure",
+        )
+        # Without the plan's checker output, skipped builds still fail.
+        unmarked = needs("success")
+        del unmarked["plan"]["outputs"]["checker"]
+        self.assertEqual(
+            execute_publisher(unmarked, PULL)["statuses"][0]["state"], "failure"
+        )
 
     def test_privileged_jobs_run_only_for_protected_full_requests(self) -> None:
         plan = job("ci-request.yml", "plan")["if"]

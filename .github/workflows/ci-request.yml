@@ -61,6 +61,7 @@ jobs:
       tree: ${{ steps.plan.outputs.tree }}
       profile: ${{ steps.plan.outputs.profile }}
       pr: ${{ steps.plan.outputs.pr }}
+      checker: ${{ steps.plan.outputs.checker }}
     steps:
     # No checkout: this publisher executes only the reviewed workflow definition.
     - id: plan
@@ -94,8 +95,23 @@ jobs:
           const {data: tested} = await github.rest.repos.getCommit({
             ...context.repo, ref: pull.merge_commit_sha
           });
+          // Only Quick reads these checker scripts, their debt records and Markdown;
+          // no native or platform job does. A full request whose PR changes nothing
+          // else runs Quick alone. The base's post-merge run still builds the tree.
+          const checkerPaths = new RegExp('^(tools/(lint-ratchet|lint-policy|growth-ratchet|refactor-proof|' +
+            'baseline_ratchet|cleanup_contract|test-cleanup-checks)\\.py|' +
+            'migration/(clippy-debt|ruff-debt)\\.json|migration/lints/clippy\\.toml|.*\\.md)$');
+          let checker = false;
+          if (profile === 'full') {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: pr, per_page: 100
+            });
+            // The files API lists at most 3000 entries; a longer list stays full.
+            checker = files.length > 0 && files.length < 3000 && files.every(file =>
+              [file.filename, file.previous_filename].every(path => path === undefined || checkerPaths.test(path)));
+          }
           for (const [key, value] of Object.entries({head, base: pull.base.sha, merge: pull.merge_commit_sha,
-              tree: tested.commit.tree.sha, profile, pr})) {
+              tree: tested.commit.tree.sha, profile, pr, checker})) {
             core.setOutput(key, String(value));
           }
           if (profile === 'full') {
@@ -132,14 +148,16 @@ jobs:
 
   native:
     needs: plan
-    if: needs.plan.outputs.profile == 'native' || needs.plan.outputs.profile == 'full'
+    if: >-
+      (needs.plan.outputs.profile == 'native' || needs.plan.outputs.profile == 'full') &&
+      needs.plan.outputs.checker != 'true'
     uses: ./.github/workflows/rust-migration.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
 
   platform:
     needs: plan
-    if: needs.plan.outputs.profile != 'rust'
+    if: needs.plan.outputs.profile != 'rust' && needs.plan.outputs.checker != 'true'
     uses: ./.github/workflows/ci-build.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
@@ -178,17 +196,21 @@ jobs:
           // Head identity remains valid when another PR or docs advance the base.
           // Post-merge policy checks the resulting tree to catch combined changes.
           const current = pull.state === 'open' && pull.base.ref === 'rust-migration' && pull.head.sha === head;
-          const complete = ['plan', 'quick', 'native', 'platform'].every(
-            name => needs[name]?.result === 'success') &&
-            needs.native?.outputs?.validated === 'true' && needs.platform?.outputs?.validated === 'true';
+          // A checker-only request proves Quick alone. It publishes no Validated tree,
+          // so nothing later treats its tree as built.
+          const checker = needs.plan.outputs.checker === 'true';
+          const complete = ['plan', 'quick'].every(name => needs[name]?.result === 'success') && (checker ||
+            ['native', 'platform'].every(name => needs[name]?.result === 'success') &&
+            needs.native?.outputs?.validated === 'true' && needs.platform?.outputs?.validated === 'true');
           const passed = current && complete;
           await github.rest.repos.createCommitStatus({
             ...context.repo, sha: head, context: 'Full validation', state: passed ? 'success' : 'failure',
             target_url: runUrl,
-            description: passed ? 'All required validation passed for this PR head' :
+            description: passed ? (checker ? 'Checker-only PR: Quick passed; no build reads these files' :
+              'All required validation passed for this PR head') :
               current ? 'Required validation failed, skipped, or was cancelled' : 'PR head changed; request validation again'
           });
-          if (passed) {
+          if (passed && !checker) {
             await github.rest.repos.createCommitStatus({
               ...context.repo, sha: head, context: 'Validated tree', state: 'success',
               target_url: runUrl, description: needs.plan.outputs.tree
