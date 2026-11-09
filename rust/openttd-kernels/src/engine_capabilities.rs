@@ -696,6 +696,29 @@ pub(crate) unsafe fn unknown_callback(
     unsafe { ((*((s.loading)())).unknown_refit)(grfid, callback.0, result) };
 }
 
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
+    crate::engine_capabilities::Services {
+        resolver: crate::test_tables::unreachable0,
+        engine: crate::test_tables::unreachable1,
+        engine_if_valid: crate::test_tables::unreachable1,
+        id: crate::test_tables::unreachable1,
+        loading: crate::test_tables::unreachable0,
+        cargo_classes: crate::test_tables::unreachable1,
+        multiplier: crate::test_tables::unreachable1,
+        pool_available: crate::test_tables::unreachable1,
+        new_temporary: crate::test_tables::unreachable0,
+        destroy_temporary: crate::test_tables::unreachable1,
+        vehicle_engine_object: crate::test_tables::unreachable1,
+        vehicle_cargo: crate::test_tables::unreachable1,
+        vehicle_subtype: crate::test_tables::unreachable1,
+        shared: &crate::test_tables::SHARED,
+        assertions: false,
+        life_extension: crate::test_tables::unreachable0,
+        invalid_string_id: 0,
+    };
+
 #[cfg(test)]
 mod tests {
     use super::*;

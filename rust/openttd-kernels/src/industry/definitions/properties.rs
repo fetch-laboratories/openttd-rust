@@ -32,8 +32,6 @@ const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
     value: CT_INVALID,
     mixed: false,
 };
-/// `STR_NULL` (`table/strings.h`).
-const STR_NULL: StringID = StringID(0);
 /// `GRFFilePropsBase::SetGRFFile` with the context's non-null file.
 fn set_grf_file(props: &mut industrytype::SubstituteProps, c: &Context) {
     props.grffile = c.file;
@@ -666,7 +664,7 @@ unsafe fn industries_change_info(
             0x24 => {
                 let str = buf.word()?;
                 if str == 0 {
-                    unsafe { (*indsp).station_name = STR_NULL.0 };
+                    unsafe { (*indsp).station_name = StringID::STR_NULL.0 };
                 } else {
                     unsafe { (s.map_string)(str, &raw mut (*indsp).station_name) };
                 }

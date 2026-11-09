@@ -5,6 +5,12 @@ A dry run prints each candidate with its size and reason; `--apply` removes exac
 `remove` lines unless a live output handle appears before deletion. Worktrees go through `git worktree remove` without `--force`, so a dirty
 or locked one is kept. Live output handles are checked again before removal. Output in a
 live worktree's own `.local` stays with that worktree.
+
+A worktree that is kept still gives up its git-ignored `build-rust` (#824) once its work is
+merged or closed, or, for a T3 task's checkout, once it has been idle for `--idle-hours`. Locked, referenced, evidence
+and profile worktrees, a live cwd inside, a symlinked `build-rust` and one holding tracked
+or staged files keep the build. Only
+that directory is deleted, never the checkout or its staged or uncommitted files.
 """
 
 import argparse
@@ -21,6 +27,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import vcs
@@ -45,6 +52,12 @@ KEPT = {
 }
 # A run without report.json touched this recently may still be running.
 RUNNING_SECONDS = 12 * 3600
+# A kept worktree's build-rust is reclaimed once its activity is this old (#824).
+IDLE_HOURS = 2.0
+BUILD = "build-rust"
+# Retained profile checkouts; their builds are evidence, not cache. Under the main
+# checkout's .local/worktrees, git lists them by their resolved HDD path.
+PROFILES = "root-profile-"
 # Session managers hide their cwd from their own user and never run agent work.
 SESSION_MANAGERS = {"systemd", "(sd-pam)"}
 REFERENCE = re.compile(r"\.local/(" + "|".join(OUTPUT) + r")/([^/\"\s]+)")
@@ -60,6 +73,8 @@ class Item:
     unlock: bool = False  # stale lock released by --apply before removal
     prune: bool = False  # missing folder; --apply prunes its record
     completed: bool = False  # pushed completion bypasses only the activity fallback
+    owner: Path | None = None  # kept worktree whose build-rust this item reclaims
+    idle_seconds: float | None = None  # idle reclaim rechecks activity at removal
     identity: tuple[int, int] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
@@ -245,6 +260,125 @@ def plan_worktrees(
     return protect_outputs(items)
 
 
+def with_builds(
+    main: Path,
+    items: list[Item],
+    pr_state: PrState,
+    references: str,
+    idle_hours: float,
+) -> list[Item]:
+    """Follow each kept worktree with its build-rust row (#824)."""
+    trees = {tree.path: tree for tree in list_worktrees(main)[1:]}
+    kept = [
+        trees[item.path]
+        for item in items
+        if item.worktree and not item.remove and item.path in trees
+    ]
+    builds = [plan_build(main, tree, pr_state, references, idle_hours) for tree in kept]
+    protected = iter(protect_outputs([build for build in builds if build]))
+    owners = {tree.path for tree, build in zip(kept, builds, strict=True) if build}
+    result = []
+    for item in items:
+        result.append(item)
+        if item.worktree and not item.remove and item.path in owners:
+            result.append(next(protected))
+    return result
+
+
+def plan_build(
+    main: Path, tree: Worktree, pr_state: PrState, references: str, idle_hours: float
+) -> Item | None:
+    """A kept worktree's build-rust: reclaimed when idle or its work is finished."""
+    build = tree.path / BUILD
+    if not build.is_dir() and not build.is_symlink():
+        return None
+    label = "build-rust of kept worktree"
+    if exclusion := build_exclusion(main, tree, references):
+        return Item(build, False, f"{label}: {exclusion}")
+    newest = latest_activity(tree.path)
+    shown = "unknown" if newest is None else stamp(newest)
+    idle = 0.0 if newest is None else time.time() - newest
+    task = ".t3/worktrees/" in tree.path.as_posix()
+    # Ruling B (#824): only a T3 task's checkout is reclaimed for idleness.
+    if task and newest is not None and idle >= idle_hours * 3600:
+        why = f"idle {idle / 3600:.0f}h; newest activity {shown}"
+        seconds = idle_hours * 3600
+        return Item(
+            build, True, f"{label}: {why}", owner=tree.path, idle_seconds=seconds
+        )
+    if work_done(main, tree, pr_state):
+        why = f"merged/closed; newest activity {shown}"
+        return Item(build, True, f"{label}: {why}", owner=tree.path)
+    if not task:
+        return Item(build, False, f"{label}: not a T3 task; work not merged or closed")
+    return Item(build, False, f"{label}: active within {idle_hours:g}h ({shown})")
+
+
+def build_exclusion(main: Path, tree: Worktree, references: str) -> str | None:
+    """Builds that stay with their worktree: links, evidence, profiles, locks, live cwd."""
+    checks: list[tuple[Callable[[], bool], str]] = [
+        ((tree.path / BUILD).is_symlink, "symlinked"),
+        (
+            lambda: tree.path.is_relative_to(main / ".local/reference"),
+            "pinned reference",
+        ),
+        (lambda: tree.path.name.startswith(PROFILES), "retained profile"),
+        (lambda: tree.locked, "locked"),
+    ]
+    found = next((reason for check, reason in checks if check()), None)
+    return (
+        found
+        or indexed_refusal(tree.path)
+        or retained_refusal(main, tree.path, references)
+        or cwd_refusal(tree.path)
+    )
+
+
+def indexed_refusal(tree: Path) -> str | None:
+    """Ignore rules do not protect files already tracked or staged under build-rust."""
+    try:
+        listed = git(tree, "ls-files", "--cached", "-z", "--", BUILD)
+    except subprocess.CalledProcessError as error:
+        return f"cannot inspect index: {error}"
+    return "tracked or staged files under build-rust" if listed.strip("\0") else None
+
+
+def work_done(main: Path, tree: Worktree, pr_state: PrState) -> bool:
+    """Merged into the base off its first-parent chain, or its branch's PR merged or closed."""
+    if tree.branch and pr_state(main, tree.branch) in ("MERGED", "CLOSED"):
+        return True
+    first_parent = set(git(main, "rev-list", "--first-parent", BASE).split())
+    ancestor = subprocess.run(
+        ["git", "-C", str(main), "merge-base", "--is-ancestor", tree.head, BASE]
+    )
+    return tree.head not in first_parent and ancestor.returncode == 0
+
+
+def stamp(when: float) -> str:
+    return datetime.fromtimestamp(when, UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def latest_activity(tree: Path) -> float | None:
+    """Newest of the worktree's activity marks, every top-level file, tracked or not
+    (a task's logs and scratch files), and every entry under its build-rust."""
+    newest = activity(tree)
+    for entry in tree.iterdir() if tree.is_dir() else []:
+        try:
+            info = entry.lstat()
+        except OSError:
+            continue
+        if not stat.S_ISDIR(info.st_mode):
+            newest = info.st_mtime if newest is None else max(newest, info.st_mtime)
+    for folder, directories, files in os.walk(tree / BUILD):
+        for name in directories + files:
+            try:
+                when = os.lstat(os.path.join(folder, name)).st_mtime
+            except OSError:
+                continue
+            newest = when if newest is None else max(newest, when)
+    return newest
+
+
 def worktree_references(main: Path) -> str:
     """Open issues include PRs; paginate so no retained task is silently omitted."""
     bodies = subprocess.check_output(
@@ -265,8 +399,8 @@ def worktree_references(main: Path) -> str:
     return bodies + (roadmap.read_text() if roadmap.exists() else "")
 
 
-def recently_active(tree: Path) -> bool:
-    """Codex delegates hold no cwd between commands; git and file writes show activity."""
+def activity(tree: Path) -> float | None:
+    """Newest git or top-level file write; Codex delegates hold no cwd between commands."""
     try:
         admin = tree / (tree / ".git").read_text().removeprefix("gitdir:").strip()
         marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
@@ -275,17 +409,28 @@ def recently_active(tree: Path) -> bool:
             for name in git(tree, "ls-files", "-z").split("\0")
             if name and "/" not in name
         ]
-        now = time.time()
-        return any(
-            now - m.stat().st_mtime < RUNNING_SECONDS for m in marks if m.exists()
-        )
+        return max((m.stat().st_mtime for m in marks if m.exists()), default=None)
     except OSError:
-        return False
+        return None
+
+
+def recently_active(tree: Path) -> bool:
+    newest = activity(tree)
+    return newest is not None and time.time() - newest < RUNNING_SECONDS
 
 
 def worktree_refusal(
     main: Path, path: Path, references: str, completed: bool = False
 ) -> str | None:
+    if refusal := retained_refusal(main, path, references) or cwd_refusal(path):
+        return refusal
+    if not completed and ".t3/worktrees/" in path.as_posix() and recently_active(path):
+        return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
+    return None
+
+
+def retained_refusal(main: Path, path: Path, references: str) -> str | None:
+    """Roadmap or issue references and retained evidence keep a worktree whole."""
     if path.name in references or str(path) in references:
         return "referenced by roadmap or open issue/PR"
     local = main / ".local"
@@ -298,6 +443,10 @@ def worktree_refusal(
         return "output named by current deep report or speed anchors"
     if any((path / ".local").rglob("provenance.json")):
         return "pinned runtime (provenance.json)"
+    return None
+
+
+def cwd_refusal(path: Path) -> str | None:
     try:
         for process in PROC_ROOT.iterdir():
             if not process.name.isdecimal():
@@ -328,8 +477,6 @@ def worktree_refusal(
                 return f"cannot inspect process cwd: {error}"
     except OSError as error:
         return f"cannot inspect process cwd: {error}"
-    if not completed and ".t3/worktrees/" in path.as_posix() and recently_active(path):
-        return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
     return None
 
 
@@ -612,9 +759,7 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
         git(main, "worktree", "prune")
         listed = {tree.path for tree in list_worktrees(main)}
         return "record not pruned" if item.path in listed else None
-    if item.worktree and (
-        refusal := worktree_refusal(main, item.path, references, item.completed)
-    ):
+    if refusal := ownership_refusal(main, item, references):
         return refusal
     handles, error = open_outputs()
     if refusal := output_refusal(item.path, handles, error):
@@ -626,12 +771,7 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     except OSError as error:
         return f"cannot inspect output candidate: {error}"
     if not item.worktree:
-        writable(item.path)
-        if item.path.is_dir() and not item.path.is_symlink():
-            shutil.rmtree(item.path)
-        else:
-            item.path.unlink()
-        return None
+        return delete_output(item)
     command = ["git", "-C", str(main), "worktree", "remove", str(item.path)]
     if git(item.path, "status", "--porcelain").strip():
         return "worktree became dirty"
@@ -645,6 +785,52 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     return None
 
 
+def delete_output(item: Item) -> str | None:
+    """Delete a non-worktree item; a build first rechecks after the output scans."""
+    if item.owner is not None and (
+        refusal := indexed_refusal(item.owner) or idle_refusal(item)
+    ):
+        return refusal
+    writable(item.path)
+    if item.path.is_dir() and not item.path.is_symlink():
+        shutil.rmtree(item.path)
+    else:
+        item.path.unlink()
+    return None
+
+
+def idle_refusal(item: Item) -> str | None:
+    if item.idle_seconds is None or item.owner is None:
+        return None
+    newest = latest_activity(item.owner)
+    if newest is None or time.time() - newest < item.idle_seconds:
+        return "activity since planning"
+    return None
+
+
+def ownership_refusal(main: Path, item: Item, references: str) -> str | None:
+    """Recheck a worktree, or a kept worktree's build, just before deletion."""
+    if item.worktree:
+        return worktree_refusal(main, item.path, references, item.completed)
+    return build_refusal(main, item, references) if item.owner else None
+
+
+def build_refusal(main: Path, item: Item, references: str) -> str | None:
+    owner = item.owner
+    assert owner is not None
+    if item.path.is_symlink():
+        return "build-rust became a symlink"
+    if any(tree.locked for tree in list_worktrees(main) if tree.path == owner):
+        return "worktree became locked"
+    if refusal := (
+        indexed_refusal(owner)
+        or retained_refusal(main, owner, references)
+        or cwd_refusal(owner)
+    ):
+        return refusal
+    return idle_refusal(item)
+
+
 def main(
     argv: list[str] | None = None,
     pr_state: PrState = gh_pr_state,
@@ -656,11 +842,18 @@ def main(
     parser.add_argument(
         "--repo", type=Path, default=Path(__file__).resolve().parents[1]
     )
+    parser.add_argument(
+        "--idle-hours",
+        type=float,
+        default=IDLE_HOURS,
+        help="reclaim a kept worktree's build-rust after this long idle (default: %(default)g)",
+    )
     args = parser.parse_args(argv)
     main_root = list_worktrees(args.repo)[0].path
     git(main_root, "fetch", "--prune", "--quiet", "origin")
     references = references_reader(main_root)
     items = plan(args.repo, pr_state, time.time(), references, issue_state)
+    items = with_builds(main_root, items, pr_state, references, args.idle_hours)
     total = 0
     for item in items:
         bytes_ = size(item.path) if item.remove and item.path.exists() else 0

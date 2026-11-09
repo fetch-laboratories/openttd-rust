@@ -4270,7 +4270,7 @@ impl Control {
                     if kind == OT_GOTO_DEPOT && order.action() & 2 != 0 {
                         continue;
                     }
-                    let hangar = crate::station_map::is_hangar_tile(
+                    let hangar = crate::station_map::is_hangar_tile_raw(
                         read_field!(g.backup(ob), tile),
                         crate::newgrf_airport::runtime(),
                     );

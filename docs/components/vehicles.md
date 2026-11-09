@@ -154,7 +154,7 @@
 
 - Rust owns: tile track status, admission, pixel height, foundation dispatch and tile policy, rail/road foundations, depot distances, portal frames and bridge entry preparation.
 - C++ keeps: map arrays, pools, vehicle shells, storage/setters and native callers. Road controllers use the shared map descriptor for track-status tile reads; other movement entries and water-subtype reads use typed services.
-- Checks: `python3 tools/migration.py rust-checks`, `build`, native ABI tests, rail/road/station scenarios and `python3 tools/landscape-comparison.py`. Frozen original foundation/extreme-coordinate observations run against production Rust; the native scheduler comparison and mutation/reset observations remain.
+- Checks: `python3 tools/migration.py rust-checks`, `build`, native ABI tests, rail/road/station scenarios and the `movement::evidence_tests` Rust tests. Frozen original foundation/extreme-coordinate observations run against production Rust; the scheduler and mutation/reset observations run in `tile_loop::comparison_tests`.
 - Limits: Gaps remain in NewGRF foundations, train/ship bridges, road tunnels, partial-depot reversal timing, half-water, and extreme bridge-speed branches (#156).
 - PRs: #374, #517, #523; movement evidence #748/#755.
 

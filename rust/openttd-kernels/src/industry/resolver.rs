@@ -11,7 +11,8 @@ use crate::debug::debug;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{IndustryGfx, IndustryID, IndustryType};
 use crate::industrytype::{
-    IndustryBehaviour, IndustryBehaviours, IndustrySpec, get_industry_spec, get_industry_tile_spec,
+    IndustryBehaviour, get_industry_spec, get_industry_tile_spec, spec_behaviour,
+    spec_callback_mask,
 };
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CallbackID, IndustryCallbackMask, IndustryCallbackMasks,
@@ -127,22 +128,6 @@ impl ResolverServices {
     fn resolver_callback(&self, ro: *const c_void) -> CallbackID {
         CallbackID(unsafe { (self.callback_id)(ro) })
     }
-    /// Temporary raw adapter for [`get_industry_spec`], used by `industry.rs`.
-    pub(crate) fn spec(kind: u8) -> *const SpecHandle {
-        get_industry_spec(IndustryType(kind))
-    }
-    /// Temporary raw adapter for `IndustrySpec::behaviour`, used by `industry.rs`.
-    pub(crate) fn behaviour(spec: *const SpecHandle) -> u32 {
-        behaviour(spec).0
-    }
-}
-/// `IndustrySpec::behaviour`.
-fn behaviour(spec: *const IndustrySpec) -> IndustryBehaviours {
-    IndustryBehaviours(unsafe { (*spec).behaviour })
-}
-/// `IndustrySpec::callback_mask`.
-fn callback_mask(spec: *const IndustrySpec) -> IndustryCallbackMasks {
-    IndustryCallbackMasks(unsafe { (*spec).callback_mask })
 }
 /// `Industry::location.tile`.
 fn location_tile(i: *const Industry) -> TileIndex {
@@ -272,7 +257,7 @@ unsafe fn industries_of_type_at(
     kind: IndustryType,
     n: usize,
 ) -> IndustryID {
-    IndustryID(unsafe { (&(*builder).registry)[usize::from(kind.0)][n] })
+    unsafe { (&(*builder).registry)[usize::from(kind.0)][n] }
 }
 /// `GetClosestIndustry`.
 fn get_closest_industry(
@@ -441,7 +426,7 @@ fn industries_get_variable(
             0x8B => {
                 return s.get_closest_water_distance(
                     c.tile(),
-                    !behaviour(get_industry_spec(IndustryType(unsafe {
+                    !spec_behaviour(get_industry_spec(IndustryType(unsafe {
                         (*i).metadata.kind
                     })))
                     .test(IndustryBehaviour::BuiltOnWater),
@@ -466,7 +451,7 @@ fn industries_get_variable(
     match variable {
         // waiting cargo, but only if those two callback flags are set
         0x40..=0x42 => {
-            let callback = callback_mask(indspec);
+            let callback = spec_callback_mask(indspec);
             if !callback.any(
                 IndustryCallbackMasks::from_element(IndustryCallbackMask::ProductionCargoArrival)
                     .with(IndustryCallbackMasks::from_element(
@@ -475,7 +460,7 @@ fn industries_get_variable(
             ) {
                 return 0;
             }
-            let multiplier = if behaviour(indspec).test(IndustryBehaviour::ProdMultiHandling) {
+            let multiplier = if spec_behaviour(indspec).test(IndustryBehaviour::ProdMultiHandling) {
                 let level = unsafe { (*i).fields.prod_level };
                 if level == 0 {
                     return 0;
@@ -492,7 +477,7 @@ fn industries_get_variable(
         // Manhattan distance of closes dry/water tile
         0x43 if c.tile() != TileIndex::INVALID => s.get_closest_water_distance(
             c.tile(),
-            !behaviour(indspec).test(IndustryBehaviour::BuiltOnWater),
+            !spec_behaviour(indspec).test(IndustryBehaviour::BuiltOnWater),
         ),
         // Layout number
         0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
@@ -587,7 +572,7 @@ fn industries_get_variable(
         0x69..=0x6D | 0x70 | 0x71 => {
             let cargo: CargoType =
                 get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
-            let Some(it) = (unsafe { super::get_cargo_produced(i, cargo.0) }) else {
+            let Some(it) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0; // invalid cargo
             };
             let it = unsafe { &*super::produced(i, it) };
@@ -604,7 +589,7 @@ fn industries_get_variable(
         0x6E | 0x6F => {
             let cargo: CargoType =
                 get_cargo_translation(parameter as u8, (s.shared().resolver_grf_file)(ro), false);
-            let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo.0) }) else {
+            let Some(it) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0; // invalid cargo
             };
             let it = unsafe { &*super::accepted(i, it) };
@@ -1001,7 +986,7 @@ pub(crate) fn get_industry_probability_callback(
 ) -> u32 {
     witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
     let indspec = get_industry_spec(kind);
-    if callback_mask(indspec).test(IndustryCallbackMask::Probability) {
+    if spec_callback_mask(indspec).test(IndustryCallbackMask::Probability) {
         let res = unsafe {
             (s.callback)(
                 CallbackID::CBID_INDUSTRY_PROBABILITY.0,
@@ -1071,7 +1056,7 @@ pub(crate) unsafe fn industry_temporarily_refuses_cargo(
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
     let kind = IndustryType(unsafe { (*owner).metadata.kind });
     let indspec = get_industry_spec(kind);
-    if callback_mask(indspec).test(IndustryCallbackMask::RefuseCargo) {
+    if spec_callback_mask(indspec).test(IndustryCallbackMask::RefuseCargo) {
         let file = unsafe { (*indspec).grf_prop.grffile };
         let parameter = (s.shared().grf_cargo_map)(file, cargo_type.0);
         let tile = location_tile(owner);

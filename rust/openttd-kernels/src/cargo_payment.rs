@@ -204,8 +204,7 @@ fn deliver_goods(
         }
         let owner = (subsidies.industry_owner)(ind.cast());
         // Check if matching cargo has been found.
-        let Some(slot) = (unsafe { crate::industry::get_cargo_accepted(owner, cargo_type.0) })
-        else {
+        let Some(slot) = (unsafe { crate::industry::get_cargo_accepted(owner, cargo_type) }) else {
             return true;
         };
         // Check if the industry temporarily refuses acceptance.
@@ -231,7 +230,7 @@ fn deliver_goods(
         }
         let amount = unsafe {
             crate::industry::accept_delivery(owner, slot, remaining, || {
-                crate::timer_game_common::economy_date().0
+                crate::timer_game_common::economy_date()
             })
         };
         remaining -= amount;
@@ -500,7 +499,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: 
         let subsidies = unsafe { &*(s.subsidies)() };
         let owner = (subsidies.industry_owner)(ind.cast());
         unsafe {
-            crate::industry::trigger_delivery(
+            crate::industry::trigger_industry_production(
                 ind,
                 owner,
                 IndustryID((subsidies.industry_id)(ind.cast())),

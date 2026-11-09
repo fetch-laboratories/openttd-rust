@@ -298,15 +298,13 @@ template <typename Check> void CheckTownProtocol(Check check)
 		*reinterpret_cast<bool *>(out) = TownProtocol_build_road(town, tile, bits, rt, (flags & 1) == 0 ? 0 : (flags & 8) != 0 ? 1 : 2);
 	}; roads.rail_commands = &rail;
 	OpenTTDRoadCommandContext road{&roads, nullptr, reinterpret_cast<OpenTTDCommandCost *>(&road_ok), nullptr};
+	/* Checked in town::expansion_tests (#736 W); kept as the house steps' setup. */
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 1);
-	check(w.roads == 0 && w.draws == 0 && w.company == 7);
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 2);
-	check(w.roads == 1 && w.draws == 1 && w.company == 7);
 	/* Expansion updates radii; restore the isolated house-placement setup. */
 	std::fill_n(fields->radius, 5, 100);
 	w.clears = 0; w.clear_ok = false;
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 2);
-	check(w.clears == 25 * 13 && w.company == 7 && w.draws == 1);
 	w.clear_ok = true; w.house_callback = true;
 	auto *id_counts = static_cast<uint16_t *>(openttd_rust_town_id_counts(owner.get()).data);
 	auto *class_counts = static_cast<uint16_t *>(openttd_rust_town_class_counts(owner.get()).data);
