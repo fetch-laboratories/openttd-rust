@@ -24,6 +24,7 @@ BASE = "b" * 40
 MERGE = "d" * 40
 TREE = "f" * 40
 PREVIOUS = "9" * 40
+PARENT = "8" * 40  # The captured merge's first parent, deliberately not PULL's base.
 RUN = "https://github.com/example/fork/actions/runs/123"
 ACTIONS = {"login": "github-actions[bot]", "type": "Bot"}
 PULL = {
@@ -147,7 +148,8 @@ const github = {{paginate: async (_method, args) => {{
 }}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
   repos: {{
-  getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
+  getCommit: async () => ({{data: {{parents: [{{sha: {json.dumps(PARENT)}}}],
+    commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
   getCollaboratorPermissionLevel: async () => ({{data: {{permission: 'write'}}}}),
   getCombinedStatusForRef: async args => ({{data: {{statuses: args.ref === {json.dumps(PREVIOUS)} ?
     {json.dumps(list(previous))}.map(({{creator, ...status}}) => status) : {json.dumps([latest] if latest else [])}}}}}),
@@ -386,12 +388,17 @@ class GateTests(unittest.TestCase):
             ("missing list", "full", None, "false"),
             ("comparison cap", "full", [{"filename": "docs/a.md"}] * 300, "false"),
             ("rust profile", "rust", checker, "false"),
+            ("merge base is not the first parent", "full", checker, "false"),
         ):
             with self.subTest(label):
                 env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
-                data = {} if files is None else {"files": files}
+                data: dict[str, object] = {} if files is None else {"files": files}
+                # An overlapping base advance can give a stale test merge another
+                # best common ancestor; only the first parent's own diff counts.
+                merge_base = HEAD if label.startswith("merge base") else PARENT
+                data["merge_base_commit"] = {"sha": merge_base}
                 compare = f"""async args => {{
-                  if (args.basehead !== '{BASE}...{MERGE}') throw new Error('basehead');
+                  if (args.basehead !== '{PARENT}...{MERGE}') throw new Error('basehead');
                   return {{data: {json.dumps(data)}}};
                 }}"""
                 result = execute_script(

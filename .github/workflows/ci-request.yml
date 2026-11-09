@@ -110,15 +110,18 @@ jobs:
             path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
           const quickOnly = path => typeof path === 'string' && (checkerPaths.test(path) || inert(path));
           let checker = false;
-          if (profile === 'full') {
-            // Classify the captured base and merge commits, never the mutable PR file list.
+          // Classify exactly what the captured merge changes against its own first parent,
+          // never the mutable PR file list or a base that may have moved since GitHub merged.
+          const parent = tested.parents?.[0]?.sha;
+          if (profile === 'full' && /^[0-9a-f]{40}$/.test(parent || '')) {
             const {data: comparison} = await github.rest.repos.compareCommitsWithBasehead({
-              ...context.repo, basehead: `${pull.base.sha}...${pull.merge_commit_sha}`
+              ...context.repo, basehead: `${parent}...${pull.merge_commit_sha}`
             });
             // GitHub caps comparison files at 300: fail closed if the list may be truncated.
             const files = comparison?.files;
-            checker = Array.isArray(files) && files.length > 0 && files.length < 300 && files.every(file =>
-              quickOnly(file?.filename) && (file.previous_filename == null || quickOnly(file.previous_filename)));
+            checker = comparison?.merge_base_commit?.sha === parent && Array.isArray(files) &&
+              files.length > 0 && files.length < 300 && files.every(file =>
+                quickOnly(file?.filename) && (file.previous_filename == null || quickOnly(file.previous_filename)));
           }
           for (const [key, value] of Object.entries({head, base: pull.base.sha, merge: pull.merge_commit_sha,
               tree: tested.commit.tree.sha, profile, pr, checker})) {

@@ -160,7 +160,7 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
   - `migration/lints/clippy.toml`;
   - inert Markdown.
 
-  The plan compares the captured base and merge commits, not the PR's file list. No native or platform job reads those files, so its Full runs Quick alone, in about 8 minutes instead of 22. It publishes `Full validation` without a `Validated tree` marker, so the post-merge run still builds the merged tree. Protection also requires cheap checks, resolved conversations and a branch current with base. See [integration](root-workflow.md#integration) for the exact-head gate.
+  The plan compares the captured merge commit with its own first parent, not the PR's file list or a base that may have moved. It fails closed when GitHub's comparison picks another merge base or lists 300 or more files. No native or platform job reads those files, so its Full runs Quick alone, in about 8 minutes instead of 22. It publishes `Full validation` without a `Validated tree` marker, so the post-merge run still builds the merged tree. Protection also requires cheap checks, resolved conversations and a branch current with base. See [integration](root-workflow.md#integration) for the exact-head gate.
 - Inert Markdown is `AGENTS.md` and `docs/**.md`, except the docs CMake packages for the in-game viewer. Root-level Markdown such as `README.md`, and every other Markdown file, is a build input. The checker-only plan, carried validation and the post-merge Markdown-only skip share this rule; `tools/test-ci.py` checks it against CMake.
 
 | Command | Purpose |
