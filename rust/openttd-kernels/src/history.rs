@@ -175,6 +175,22 @@ pub(crate) fn update_valid_history_year(valid_history: u64, cur_month: u32) -> u
         .fold(valid_history, |mask, hr| update(mask, hr, cur_month))
 }
 
+/// `GetAndResetAccumulatedAverage<uint16_t>`: get an average value for the previous month,
+/// as reset for the next month. `total` is the accrued total to average and is reset to zero;
+/// `days_since_last_month` is `TimerGameEconomy::days_since_last_month`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ClampTo<uint16_t> narrows the clamped average"
+)]
+pub(crate) fn get_and_reset_accumulated_average(
+    total: &mut u32,
+    days_since_last_month: u32,
+) -> u16 {
+    let result = (*total / days_since_last_month.max(1)).min(u32::from(u16::MAX)) as u16;
+    *total = 0;
+    result
+}
+
 /// `RotateHistory(history, valid_history, HISTORY_YEAR, cur_month)`: subdivisions
 /// rotate first, as the original recursion.
 pub(crate) fn rotate_history_year<T: HistoryElement>(
