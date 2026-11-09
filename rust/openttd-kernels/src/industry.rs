@@ -536,6 +536,10 @@ impl Services {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
+    /// `_settings_game.game_creation.landscape`, through the service.
+    pub(crate) fn landscape_type(&self) -> LandscapeType {
+        LandscapeType(unsafe { (self.landscape)() })
+    }
 }
 impl Map {
     fn coordinates(self) -> crate::services::Map {
@@ -1755,16 +1759,16 @@ fn plant_farm_field(
     industry: IndustryID,
     map: Map,
     s: &Services,
-    landscape: &impl Fn() -> u8,
+    landscape: &impl Fn() -> LandscapeType,
 ) {
-    if LandscapeType(landscape()) == LandscapeType::Arctic
+    if landscape() == LandscapeType::Arctic
         && (s.shared().tile_z)(tile.0) + 2 >= i32::from(crate::snow_line::get(s.shared()))
     {
         return;
     }
     // determine field size
     let mut r = (random(s) & 0x303) + 0x404;
-    if LandscapeType(landscape()) == LandscapeType::Arctic {
+    if landscape() == LandscapeType::Arctic {
         r += 0x404;
     }
     let size_x = gb(r, 0, 8);
@@ -1807,9 +1811,7 @@ fn plant_farm_field(
         }
     }
     let mut kind = 3;
-    if LandscapeType(landscape()) != LandscapeType::Arctic
-        && LandscapeType(landscape()) != LandscapeType::Tropic
-    {
+    if landscape() != LandscapeType::Arctic && landscape() != LandscapeType::Tropic {
         kind = PLANTFARMFIELD_TYPE[(random(s) & 0xF) as usize];
     }
     let (w, h) = (u32::from(ta.w), u32::from(ta.h));
@@ -1839,7 +1841,7 @@ fn plant_random_farm_field(
     id: IndustryID,
     map: Map,
     s: &Services,
-    landscape: &impl Fn() -> u8,
+    landscape: &impl Fn() -> LandscapeType,
 ) {
     let location = unsafe { (s.location)(i) };
     let x = (u32::from(location.w) / 2)
@@ -1869,8 +1871,8 @@ fn tick_map(s: &Services) -> Map {
 }
 /// `PlantRandomFarmField`, reading the landscape from the game settings.
 fn plant_random_farm_field_with_settings(i: *mut c_void, id: IndustryID, map: Map, s: &Services) {
-    plant_random_farm_field(i, id, map, s, &|| unsafe {
-        s.shared().settings().climate.read()
+    plant_random_farm_field(i, id, map, s, &|| {
+        LandscapeType(unsafe { s.shared().settings().climate.read() })
     });
 }
 /// # Safety

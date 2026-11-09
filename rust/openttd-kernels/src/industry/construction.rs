@@ -498,7 +498,7 @@ pub(crate) unsafe fn do_create_new_industry(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::plant_random_farm_field(industry, id, map, s, &|| unsafe { (s.landscape)() });
+            super::plant_random_farm_field(industry, id, map, s, &|| s.landscape_type());
         }
     }
     unsafe {
