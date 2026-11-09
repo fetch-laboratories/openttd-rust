@@ -3,7 +3,7 @@
     "retires": [
       "source:tools/simulation/town-reference-gaps.cpp"
     ],
-    "oracle": "PARTIAL SOURCE TRANSFER ONLY. The source and its 1508-case native tunnel bridge/matrix remain. Frozen town/policy-oracle.txt captures all five Compare policy matrices from the source-only branch of base 45843e22f6f718eec6e3aff67e884086fe7431ee using complete unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 town_cmd.cpp and town.h bodies before removal. GCC 13.3.0 Linux x86_64, C++20 -O2 -fno-strict-overflow. Rows retain full dimensions, operation order and all existing observations; no candidate linked. Native ABI/generic history, monthly/query fixtures stay. Policy-only generated extraction stops; CanRoadContinueIntoNextTile/GrowTownWithTunnel extraction remains, with no unmeasured volume credit.",
+    "oracle": "Retired in two transfers. Policy (#803): frozen town/policy-oracle.txt captures all five Compare policy matrices from the source-only branch of base 45843e22f6f718eec6e3aff67e884086fe7431ee using complete unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 town_cmd.cpp and town.h bodies before removal. GCC 13.3.0 Linux x86_64, C++20 -O2 -fno-strict-overflow. Rows retain full dimensions, operation order and all existing observations; no candidate linked. Tunnel (#736 W): frozen town/tunnel-oracle.txt holds the fixture's 1508 GrowTownWithTunnel/CanRoadContinueIntoNextTile cases from the original bodies tools/simulation/towns.py extracted at d9cae2c923, built with the fixture's candidate half removed and no Rust archive linked (GCC 13.3.0 GNU/Linux x86_64, C++20 -O2); that run reproduced the shipped fixture's transcript byte for byte; the recipe is in the oracle header. The source, its towns.py extraction step and the openttd_test_town_tunnel native-test export are deleted.",
     "observations": {
       "400 supplied-history wrapping/int-accumulator/division cases": [
         "rust:lib:town::policy_tests::histories_match_original_policy_corpus"
@@ -19,6 +19,9 @@
       ],
       "36 transported-percent wrapping/clamping cases": [
         "rust:lib:town::policy_tests::percent_transported_matches_original_policy_corpus"
+      ],
+      "1508 tunnel cases: four directions over obstruction and mountain lengths and populations, entrance and mountain slopes, disconnected start, continuation tile types, stops, depots and rail tunnels at both ends, invalid tiles, the crossing setting and road/tunnel test/execute failures, with the result, execute effects, RNG draws and the ordered road-type, road-build and tunnel-build calls": [
+        "rust:lib:town::tunnel_tests::tunnel_growth_matches_original_fixture_matrix"
       ]
     }
   },

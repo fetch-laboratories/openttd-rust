@@ -348,7 +348,6 @@ pub struct CommandServicesTable {
     pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
     pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
     pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
-    pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub road_ground: *const crate::ground::RoadServices,
     /// `road_waypoint_area`, in place.
     pub road_waypoint_tile_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
@@ -1756,7 +1755,7 @@ impl Ctx<'_> {
             return;
         }
         (self.s.set_train_area)(st, area);
-        crate::station_lifecycle::add_facility(st, StationFacility::Train, area.tile, unsafe {
+        crate::station_lifecycle::add_facility_raw(st, StationFacility::Train, area.tile, unsafe {
             &*self.s.lifecycle
         });
         self.before_add_rect(
@@ -2769,7 +2768,7 @@ impl Ctx<'_> {
                 (self.s.set_stop_next)(tail, stop);
             }
             self.area_add((self.s.stop_area)(st, truck), tile);
-            crate::station_lifecycle::add_facility(
+            crate::station_lifecycle::add_facility_raw(
                 st,
                 if truck {
                     StationFacility::TruckStop
@@ -3479,7 +3478,7 @@ impl Ctx<'_> {
         unsafe {
             noise_ptr.write(noise_ptr.read().wrapping_add(noise as u16));
         }
-        crate::station_lifecycle::add_facility(st, StationFacility::Airport, tile, unsafe {
+        crate::station_lifecycle::add_facility_raw(st, StationFacility::Airport, tile, unsafe {
             &*self.s.lifecycle
         });
         (self.s.set_airport_details)(st, airport, layout, rotation);
@@ -3904,7 +3903,7 @@ impl Ctx<'_> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             self.area_add((self.s.ship_station_area)(st), tile);
             self.area_add((self.s.ship_station_area)(st), flat);
-            crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
+            crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile, unsafe {
                 &*self.s.lifecycle
             });
             self.before_add_rect(ret, st, area, StationRectMode::ADD_TRY);
@@ -4378,7 +4377,7 @@ impl Ctx<'_> {
                     self.remove_road_tile(cost, ret, tile, flags, -1, true);
                 }
             }
-            6 => self.remove_buoy(cost, tile, flags),
+            6 => self.remove_buoy_raw(cost, tile, flags),
             5 => self.remove_dock(cost, ret, tile, flags),
             _ => cost.error(INVALID_STRING_ID),
         }
@@ -4756,7 +4755,6 @@ crate::abi::layouts! {
         make_buoy,
         make_rail_waypoint,
         new_waypoint,
-        rail_axis,
         road_ground,
         road_waypoint_tile_area,
         set_facility_bits,

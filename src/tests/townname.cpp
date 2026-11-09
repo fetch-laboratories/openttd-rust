@@ -12,46 +12,29 @@
 #include "../strings_internal.h"
 #include "../safeguards.h"
 
-TEST_CASE("Town names - dispatch, prefixes, repeated appends and company formatting")
+TEST_CASE("Town names - builder append and company formatting")
 {
-	/* Fixtures from the unchanged pinned generators: each ID at both u32 endpoints. */
-	static constexpr std::string_view expected[][2] = {
-		{"Invenville", "Fort Wenfingburg Springs"},
-		{"Agincourt", "Alen\u00e7on"},
-		{"Berlin", "W\u00fcrzwald"},
-		{"Stanningville", "Old Stanthwaite Springs"},
-		{"Caracas", "Santa Rosa"},
-		{"Binkyton", "Griddlebridge"},
-		{"Backarp", "Stora \u00d6ster\u00e5s"},
-		{"Drogestad", "Klein Hilend"},
-		{"Hiekkaharju", "Lieksa"},
-		{"Frombork", "Opoczno"},
-		{"Bratislava", "Zvolen"},
-		{"Alta", "V\u00e5g\u00e5sen"},
-		{"Ajka", "V\u00e1s\u00e1rosv\u00f6lgy"},
-		{"Bruck", "Maria Weissenhaag ob der Ill"},
-		{"Adjud", "Zal\u0103u"},
-		{"A\u0161", "Lipi\u0161t\u011b"},
-		{"Aarau", "Zug"},
-		{"Agerbasse", "Kongens \u00c5lskov"},
-		{"Ak\u00e7aaga\u00e7dere", "Yeniayva"},
-		{"Roma", "Roccaforte"},
-		{"Barcelona", "Vilafranca del Pened\u00e8s"},
+	/* townname::generator_tests carries every generator's names (#736 W). This keeps the C++
+	 * GenerateTownNameString append and the company-name dispatch around them, at the first and
+	 * last generator; the fixture's names come from the unchanged pinned generators. */
+	static constexpr std::pair<size_t, std::array<std::string_view, 2>> expected[] = {
+		{0, {"Invenville", "Fort Wenfingburg Springs"}},
+		{20, {"Barcelona", "Vilafranca del Pened\u00e8s"}},
 	};
 	/* Existing bytes include curse/vowel text, UTF-8 and NUL: output starts after them. */
 	const std::string prefix("Cunt aou \u00e4\0", 12);
-	for (size_t lang = 0; lang < std::size(expected); lang++) {
+	for (const auto &[lang, names] : expected) {
 		for (size_t endpoint = 0; endpoint < 2; endpoint++) {
 			const uint32_t seed = endpoint == 0 ? 0 : UINT32_MAX;
 			std::string result = prefix;
 			StringBuilder builder(result);
 			GenerateTownNameString(builder, lang, seed);
 			GenerateTownNameString(builder, lang, seed);
-			CHECK(result == prefix + std::string(expected[lang][endpoint]) + std::string(expected[lang][endpoint]));
+			CHECK(result == prefix + std::string(names[endpoint]) + std::string(names[endpoint]));
 			result = prefix;
 			auto params = MakeParameters(seed);
 			GetStringWithArgs(builder, SPECSTR_COMPANY_NAME_START + static_cast<StringID>(lang), params);
-			CHECK(result == prefix + std::string(expected[lang][endpoint]) + " Transport");
+			CHECK(result == prefix + std::string(names[endpoint]) + " Transport");
 		}
 	}
 	/* Finnish scans only the newly appended stem; a prefix vowel must not force la. */

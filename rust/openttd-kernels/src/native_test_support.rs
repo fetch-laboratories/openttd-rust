@@ -624,21 +624,6 @@ pub unsafe extern "C" fn openttd_test_object_generate(
     u8::from(unsafe { crate::objects::generate(s, out, tmp, aux, frame) })
 }
 
-/// Exercise the town tunnel path with native fixture services.
-/// # Safety
-/// Tables and town/map identities satisfy the town module's serialized entry contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_town_tunnel(
-    leaves: *const crate::town::Leaves,
-    services: *const crate::services::Services,
-    road: *const crate::road_cmd::CommandContext,
-    town: u32,
-    tile: u32,
-    dir: u32,
-) -> u8 {
-    u8::from(unsafe { crate::town::tunnel(leaves, services, road, town, tile, dir) })
-}
-
 /// Exercise production tree generation with native fixture callbacks.
 /// # Safety
 /// Immutable tables and settings satisfy the tree module's serialized entry contract.
