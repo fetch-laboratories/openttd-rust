@@ -104,7 +104,6 @@ struct OpenTTDStationCommandServices {
 	bool (*rail_boolean)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_boolean);
 	void (*rail_callback_error)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_callback_error);
 	void (*set_train_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_train_area);
-	void (*rail_triggers)(BaseStation *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_triggers);
 	bool (*reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved);
 	Train *(*last_train)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(last_train);
 	const OpenTTDTrainServices *train;

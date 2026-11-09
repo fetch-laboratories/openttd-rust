@@ -237,7 +237,6 @@ pub struct CommandServicesTable {
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
-    pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
@@ -1773,7 +1772,7 @@ impl Ctx<'_> {
         crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
             // Include this spec in the cached animation trigger mask.
-            (self.s.rail_triggers)(st, spec);
+            (unsafe { &*self.s.rail_association }.rail_triggers)(st, spec);
         }
         let owner = (self.world().station_owner)(st);
         let id = (self.links().graphs.station_id)(st);
@@ -4653,7 +4652,6 @@ crate::abi::layouts! {
         rail_boolean,
         rail_callback_error,
         set_train_area,
-        rail_triggers,
         reserved,
         last_train,
         train,
