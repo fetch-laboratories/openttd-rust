@@ -607,3 +607,51 @@ crate::abi::layouts! {
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
     "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }
+
+/// Test-only table for `crate::test_tables`; its private fields keep it in this module.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: crate::station_lifecycle::Services =
+    crate::station_lifecycle::Services {
+        shared: &crate::test_tables::SHARED,
+        catchment: &crate::test_tables::CATCHMENT,
+        names: crate::station_lifecycle::Names {
+            base: 0,
+            central: 0,
+            airport: 0,
+            oilfield: 0,
+            docks: 0,
+            heliport: 0,
+            mines: 0,
+            lakeside: 0,
+            woods: 0,
+            forest: 0,
+            valley: 0,
+            heights: 0,
+            north: 0,
+            south: 0,
+            east: 0,
+            west: 0,
+            transfer: 0,
+            halt: 0,
+            exchange: 0,
+            annexe: 0,
+            sidings: 0,
+            branch: 0,
+            upper: 0,
+            lower: 0,
+            fallback: 0,
+            undefined: 0,
+            null: 0,
+        },
+        industry_type: crate::test_tables::unreachable1,
+        set_industry_type: crate::test_tables::unreachable2,
+        roadstop: std::ptr::null(),
+        cleaning_pool: crate::test_tables::unreachable0,
+        close_view: crate::test_tables::unreachable1,
+        delete_news: crate::test_tables::unreachable1,
+        sign_valid: crate::test_tables::unreachable1,
+        remove_sign: crate::test_tables::unreachable1,
+        last_loading: crate::test_tables::unreachable1,
+        airport_maintenance: crate::test_tables::unreachable1,
+        maintenance_price: 0,
+    };
