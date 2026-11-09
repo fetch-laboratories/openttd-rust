@@ -554,3 +554,198 @@ crate::abi::layouts! {
         feeder_payment_share,
     };
 }
+
+/// `GetTransportedGoodsIncome` and `CargoPayment::PayTransfer` over the retired
+/// `tools/migration/cargo-income-gap.cpp` domain (#736 F), against its original-only capture
+/// in `cargo_payment/income-oracle.txt`.
+#[cfg(test)]
+mod income_tests {
+    use super::*;
+    use crate::cargo_registry::Invocation;
+    use crate::oracle;
+    use crate::test_tables::CARGO;
+    use std::cell::Cell;
+    use std::ffi::c_void;
+    use std::ptr;
+
+    const ORACLE: &str = include_str!("cargo_payment/income-oracle.txt");
+    const PAYMENTS: [i64; 7] = [
+        i64::MIN,
+        i32::MIN as i64,
+        -1,
+        0,
+        6000,
+        i32::MAX as i64,
+        i64::MAX,
+    ];
+    const PERIODS1: [u8; 3] = [0, 20, 255];
+    const PERIODS2: [u8; 5] = [0, 20, 224, 225, 255];
+    const PIECES: [u32; 7] = [0, 1, 255, 256, 65535, 0x8000_0000, u32::MAX];
+    const DISTANCES: [u32; 6] = [0, 1, 65535, 65536, 0x8000_0000, u32::MAX];
+    const PERIODS: [u16; 7] = [0, 20, 244, 245, 255, 256, 65535];
+    const CALLBACKS: [u16; 6] = [0, 0x3FFF, 0x4000, 0x7FFF, 0x8000, 0xFFFF];
+    const EXTREMES: [i64; 4] = [i64::MIN, -1, 0, i64::MAX];
+    const SHARES: [u8; 4] = [0, 75, 100, 255];
+
+    thread_local! {
+        /// The fixture's spec: payment, valid, transit periods; its profit callback is enabled.
+        static SPEC: Cell<(i64, u8, u8, u8)> = const { Cell::new((0, 0, 0, 0)) };
+        static CALLBACK: Cell<u16> = const { Cell::new(0) };
+        static CALLS: Cell<u32> = const { Cell::new(0) };
+        /// The last callback's `var18`; like the fixture's global, never reset.
+        static ARGUMENT: Cell<u32> = const { Cell::new(0) };
+        static SHARE: Cell<u8> = const { Cell::new(0) };
+    }
+    extern "C" fn spec(_: u8, out: *mut Spec) {
+        let (payment, valid, periods1, periods2) = SPEC.get();
+        // SAFETY: The income routine's own spec slot.
+        unsafe {
+            out.write(Spec {
+                payment,
+                valid,
+                callback: 1,
+                periods1,
+                periods2,
+            });
+        }
+    }
+    extern "C" fn registry_spec(_: u8) -> *const c_void {
+        ptr::null()
+    }
+    extern "C" fn invocation(_: *const c_void, _: *mut Invocation) {}
+    extern "C" fn callback_frame(invocation: *const Invocation, _: *mut i32, _: usize) -> u16 {
+        CALLS.set(CALLS.get() + 1);
+        // SAFETY: The callback's live invocation.
+        ARGUMENT.set(unsafe { (*invocation).param2 });
+        CALLBACK.get()
+    }
+    extern "C" fn feeder_payment_share() -> u8 {
+        SHARE.get()
+    }
+
+    /// Income for each case of the fixture's nested domain: (inputs, "income calls argument").
+    fn income_cases(s: &Services) -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for payment in PAYMENTS {
+            for (p1, p2) in PERIODS1
+                .into_iter()
+                .flat_map(|p1| PERIODS2.map(|p2| (p1, p2)))
+            {
+                for (pieces, distance) in PIECES
+                    .into_iter()
+                    .flat_map(|pieces| DISTANCES.map(|distance| (pieces, distance)))
+                {
+                    for (periods, callback) in PERIODS
+                        .into_iter()
+                        .flat_map(|periods| CALLBACKS.map(|callback| (periods, callback)))
+                    {
+                        CALLBACK.set(callback);
+                        CALLS.set(0);
+                        SPEC.set((payment, 1, p1, p2));
+                        // SAFETY: The test's live services.
+                        let income =
+                            unsafe { openttd_rust_cargo_income(s, pieces, distance, periods, 0) };
+                        cases.push((
+                            format!(
+                                "payment {payment} periods {p1}/{p2} pieces {pieces} distance {distance} transit {periods} callback {callback:#x}"
+                            ),
+                            format!("{income} {} {}", CALLS.get(), ARGUMENT.get()),
+                        ));
+                    }
+                }
+            }
+        }
+        cases
+    }
+
+    /// `PayTransfer` of 65535 of a 65535-piece packet, distance 250 and 45 periods, with the
+    /// income loop's last spec: (inputs, "profit `visual_transfer` calls argument").
+    fn transfer_cases(s: &Services) -> Vec<(String, String)> {
+        let mut cases = Vec::new();
+        for initial in EXTREMES {
+            for feeder in EXTREMES {
+                for share in SHARES {
+                    SHARE.set(share);
+                    CALLS.set(0);
+                    let payment =
+                        openttd_rust_cargo_payment_new(ptr::null_mut(), StationID(0xFFFF));
+                    // SAFETY: Allocated above and released below; the packet is a local.
+                    let (profit, fields) = unsafe {
+                        (*payment).fields = Fields {
+                            front: ptr::null_mut(),
+                            route_profit: i64::MIN,
+                            visual_profit: i64::MAX,
+                            visual_transfer: initial,
+                        };
+                        let packet = crate::cargo_storage::Packet {
+                            feeder_share: feeder,
+                            count: 65535,
+                            ..crate::cargo_storage::Packet::default()
+                        };
+                        let profit = openttd_rust_cargo_payment_transfer(
+                            payment,
+                            s,
+                            0,
+                            &raw const packet,
+                            65535,
+                            250,
+                            45,
+                        );
+                        let fields = (*payment).fields;
+                        openttd_rust_cargo_payment_destroy(payment, ptr::null(), 1);
+                        (profit, fields)
+                    };
+                    let inputs =
+                        format!("visual_transfer {initial} feeder_share {feeder} share {share}");
+                    // The fixture's own check: a transfer leaves the route and visual profits alone.
+                    assert_eq!(
+                        (fields.route_profit, fields.visual_profit),
+                        (i64::MIN, i64::MAX),
+                        "{inputs}: route and visual profit"
+                    );
+                    cases.push((
+                        inputs,
+                        format!(
+                            "{profit} {} {} {}",
+                            fields.visual_transfer,
+                            CALLS.get(),
+                            ARGUMENT.get()
+                        ),
+                    ));
+                }
+            }
+        }
+        cases
+    }
+
+    #[test]
+    fn income_and_transfer_match_original() {
+        let mut registry = crate::cargo_registry::TEST_TABLE;
+        registry.spec = registry_spec;
+        registry.invocation = invocation;
+        registry.callback_frame = callback_frame;
+        let mut s = CARGO;
+        s.spec = spec;
+        s.registry = &raw const registry;
+        s.feeder_payment_share = feeder_payment_share;
+        let sections = oracle::parse(ORACLE);
+
+        // The three sections run in the fixture's order: its callback argument and spec carry over.
+        assert_eq!(
+            oracle::check(&sections, "income", income_cases(&s)),
+            185_220
+        );
+        assert_eq!(oracle::check(&sections, "transfer", transfer_cases(&s)), 64);
+        let (payment, _, periods1, periods2) = SPEC.get();
+        SPEC.set((payment, 0, periods1, periods2));
+        CALLS.set(0);
+        // SAFETY: The test's live services.
+        let income =
+            unsafe { openttd_rust_cargo_income(&raw const s, u32::MAX, u32::MAX, 65535, 0) };
+        let invalid = [(
+            "invalid spec, pieces and distance UINT32_MAX, transit 65535".to_owned(),
+            format!("{income} {}", CALLS.get()),
+        )];
+        assert_eq!(oracle::check(&sections, "invalid", invalid), 1);
+    }
+}

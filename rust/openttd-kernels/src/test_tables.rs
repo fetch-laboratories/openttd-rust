@@ -13,8 +13,8 @@
 //! placeholders that no test may rely on; a test that reads one sets it. References name
 //! the matching table, so `&'static` chains are valid. No builders, macros, traits,
 //! defaults or behaviour. A later item adds only the tables it needs.
-//! `crate::engine_capabilities::TEST_TABLE` and `crate::station_lifecycle::TEST_TABLE` stay in
-//! their modules for their private fields.
+//! `crate::engine_capabilities::TEST_TABLE`, `crate::station_lifecycle::TEST_TABLE` and
+//! `crate::cargo_registry::TEST_TABLE` stay in their modules for their private fields.
 
 use std::ptr;
 
@@ -871,3 +871,24 @@ pub(crate) const INDUSTRY_TILES: crate::industry::tile::TileServices =
         pixel_max_z: unreachable1,
         callback: unreachable5,
     };
+
+/// `crate::cargo_payment::Services` with every entry unreachable.
+pub(crate) const CARGO: crate::cargo_payment::Services = crate::cargo_payment::Services {
+    spec: unreachable2,
+    registry: ptr::null(),
+    station_company: unreachable1,
+    station_town: unreachable1,
+    resolver: ptr::null(),
+    subsidies: unreachable0,
+    industry_delivery: ptr::null(),
+    detach_payment: unreachable1,
+    finance: ptr::null(),
+    vehicles: ptr::null(),
+    local_company: unreachable0,
+    expense: unreachable2,
+    profit: unreachable1,
+    shared: ptr::null(),
+    feeder_animation: unreachable5,
+    subsidy_multiplier: unreachable0,
+    feeder_payment_share: unreachable0,
+};
