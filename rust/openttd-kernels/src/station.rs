@@ -1038,24 +1038,36 @@ pub(crate) fn acceptance_around_tiles(
     }
     acceptance
 }
-/// `GetAcceptanceAroundStation`: explicit bitmap iteration of the catchment.
+/// Raw adapter for `station_service.rs`, reserved by the #737 V remainder;
+/// delegates to `acceptance_around_station_typed`.
 /// # Safety
-/// `state` is a live station owner whose catchment is not reset by the tile procs.
+/// As `acceptance_around_station_typed`.
 pub(crate) unsafe fn acceptance_around_station(
     state: *mut Service,
     always_accepted: *mut u64,
     c: &Ctx<'_>,
 ) -> [u32; NUM_CARGO as usize] {
+    unsafe { acceptance_around_station_typed(state, always_accepted.cast(), c) }
+}
+/// `GetAcceptanceAroundStation`: explicit bitmap iteration of the catchment. Takes
+/// the plain name once `station_service.rs` adopts it.
+/// # Safety
+/// `state` is a live station owner whose catchment is not reset by the tile procs.
+pub(crate) unsafe fn acceptance_around_station_typed(
+    state: *mut Service,
+    always_accepted: *mut CargoTypes,
+    c: &Ctx<'_>,
+) -> [u32; NUM_CARGO as usize] {
     let mut acceptance = [0_u32; NUM_CARGO as usize];
     // SAFETY: Null or the caller's writable mask.
     if let Some(always) = unsafe { always_accepted.as_mut() } {
-        *always = 0;
+        *always = CargoTypes(0);
     }
     let bitmap = unsafe { &raw const (*catchment(state)).tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while TileIndex(it.tile()) != TileIndex::INVALID {
-        crate::tile_cmd::add_accepted_cargo(it.tile(), &mut acceptance, always_accepted, c);
+        crate::tile_cmd::add_accepted_cargo(it.tile(), &mut acceptance, always_accepted.cast(), c);
         unsafe { it.advance(bitmap, c.map, check) };
     }
     acceptance
