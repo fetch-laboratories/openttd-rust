@@ -92,7 +92,11 @@ Profile 143 on clean `da020b52c7` (integration 143, [#275](https://github.com/fe
 
 All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling. The five play loops fell, consistent with #737 batch V moving vehicle reads and station loading into Rust; their projections stay at the anchor floors.
 
-TGP's projection rose 5.32% (1.168178x to 1.230318x), over the 3% projection-rise row, so root ruled that the row applies. TGP is 0.0047x under its 1.235x band start. `/root/profile_143` is attributing the +74.3M Ir per function to integrations 132 to 143. The fix-forward goes in the next maintenance PR, and ownership PRs proceed meanwhile. If TGP reaches its band first, a speed pass follows. No anchor or history was reset.
+TGP's projection rose 5.32% (1.168178x to 1.230318x), over the 3% projection-rise row, so root ruled that the row applies. TGP is 0.0047x under its 1.235x band start. [Attribution](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731594943) traces it to two causes:
+- +57.0M in `tile_loop::run`: #816 passes `&s.industry`, which spills the services copy (integration 138).
+- +27.4M in `town::get_town_radius_group`: #819's `HZ_ZONE_ALL` loop runs through a 16-step filtered `HouseZones::iter()` (integration 139).
+
+#814 offsets 10.3M. The fix-forward PR (`/root/cleanup_734_pass_02c_industry_resolver`) recovers an estimated 85M, back to the anchor floor. Ownership PRs proceed meanwhile. If TGP reaches its band first, a speed pass follows. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
@@ -405,7 +409,7 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 144, `1b8b85c524` (#833). Stocktake 143 and profile 143 are in "Where the fork stands". `/root/profile_143` is attributing TGP's rise and holds one implementer slot. Unintegrated branches: #825, #832, #834, #837, #838, #839, #840, #841 and #842.
+Code main is integration 144, `1b8b85c524` (#833). Stocktake 143 and profile 143 are in "Where the fork stands". Profile 143's attribution is done, and its slot is released. Unintegrated branches: #825, #832, #834, #837, #838, #839, #840, #841 and #842.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
@@ -413,10 +417,10 @@ Code main is integration 144, `1b8b85c524` (#833). Stocktake 143 and profile 143
 | #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary`; re-check by `/root/review_825_recheck` | The stub-table fix is pushed at `cb2b8b77b4`. The re-check verifies the merge and the stubs, then re-posts both acceptances at that head. |
 | #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Resuming with a merge of 144. |
 | #838, #734 entry 10 (#830 allows) | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_838_industry_allows` | Accepted at `00519a0107`: eight naming findings fixed by renames, nine suppressions and two lint-growth rows accepted, lint-policy at 0 errors. Queued after 146. |
-| #734 entry 6b-1 | same | Starts after #825, #841, #838 and #840 merge. |
+| #734 entry 6b-1 | same | Starts after the speed fix, once 146 and #840 merge. |
 | #734 4a, `station_cmd.rs` pass (#839) | `/root/cleanup_734_pass_01c_town_rs` | Draft, groups 1 and 2 pushed, group 3 (road stops) in progress. It includes a `Fix:` commit for the `TILE_HEIGHT_STEP` error parameter. Five reviewers by group when ready. Entry 5 (`station_service.rs`) follows. |
 | #840, #736 W house-protocol follow-up (entry 12) | `/root/cleanup_736_p_packet` | Draft; local gates pass, the native verify is running. An evidence reviewer follows when it is ready. |
-| TGP speed attribution | `/root/profile_143` | Ranking TGP's per-function rise since 131 by intervening PR; the fix-forward goes in the next maintenance PR. |
+| TGP speed fix-forward | `/root/cleanup_734_pass_02c_industry_resolver` | One maintenance PR: pass a local `IndustryServices` copy in `tile_loop.rs`, and make `HouseZones::iter()` walk only the set bits. Measured on TGP and P1996 Ir. |
 | Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence alongside 146 (due after 145). |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
