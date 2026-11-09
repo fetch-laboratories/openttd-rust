@@ -10,7 +10,7 @@ Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
 
 Integrations 132 to 143 merged between 19:23 UTC on 11-08 and 02:31 UTC on 11-09 with the four-implementer cap (user, 2026-11-08), a delegated integrator and a planner-filled ready queue. The table measures stocktake 143 (`da020b52c7`, #827) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full; none was rolled back. Integration 141's Full needed one authorized rerun of a simulation shard that hung on `network-protocol-loopback` (#693). Platform cadence 135 failed on Windows x86 oracle tests and 137 (#818) fixed it; cadence 140 failed on a `-Wmissing-field-initializers` warning from #814 and 141 (#831) fixed it, with the rerun green. The next cadence follows 145, and the next stocktake and profile follow 155. Profile 143: TBD (profile 143).
 
-Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 138) −1,067: −759 by 137, almost all #810's #736 U vector transfer (135, tools C++ −746), and −308 at 138 (#814 #737 V, compiled −263). On 11-09 (139 to 143) −326: −77 at 139 (#820 #736 P), −246 at 142 (#829 #736 W) and −3 at 143 (#827). Original C++ retired fell by 9 lines in simulation logic at 138 (#814's glue edits in `src/economy.cpp`, `src/order_cmd.cpp`, `src/train_cmd.cpp` and `src/vehicle.cpp`; 137 still measures 62,710). Root should confirm this is a classification shift, not restored original code. Tooling since 131: −1,692 code lines, mostly #810's Python fixture retirement at 135; 140 (#826) added 287.
+Fork C++ change since stocktake 131: −1,393 counted lines. On 11-08 (132 to 138) −1,067: −759 by 137, almost all #810's #736 U vector transfer (135, tools C++ −746), and −308 at 138 (#814 #737 V, compiled −263). On 11-09 (139 to 143) −326: −77 at 139 (#820 #736 P), −246 at 142 (#829 #736 W) and −3 at 143 (#827). Original C++ retired fell by 9 lines in simulation logic at 138 (#814's glue edits in `src/economy.cpp`, `src/order_cmd.cpp`, `src/train_cmd.cpp` and `src/vehicle.cpp`; 137 still measures 62,710). Root checked every line #814 added to those four files against the pinned original, and none is original code. The −9 is a classification shift in the metric, not restored original C++ (root, 2026-11-09). Tooling since 131: −1,692 code lines, mostly #810's Python fixture retirement at 135; 140 (#826) added 287.
 
 | Measured quantity | Integration 131 | Integration 143 |
 | --- | ---: | ---: |
@@ -403,16 +403,20 @@ Active with the four-implementer cap restored (user, 2026-11-08, after an earlie
 - a planner keeps the [ready queue](#ready-queue) filled;
 - implementers pipeline onto the next ready entry while their PR waits.
 
-Code main is integration 138, `8e967f83c5`. Two branches are unintegrated: #823 and the batch V remainder.
+Code main is integration 143, `da020b52c7`. Stocktake 143 is in "Where the fork stands"; profile 143 (`/root/profile_143`) is running and holds one implementer slot. Unintegrated branches: #825, #832, #833, #834, #837 and #838.
 
 | Work | Owner (T3 child) | Next action |
 | --- | --- | --- |
-| #823, integrating #819 (`town.rs` pass), #821 (industry resolver pass) and #820 (#736 P packet probe) | Integrator | Exact-head Full is requested at `d6cf15acd7`. Merge as integration 139, post the note, close the components and clean up. All reviews carried; fixes spot-checked or verified. |
-| #737 batch V remainder | `/root/cleanup_737_v_vehicle_boundary` | Family 5 is committed (`4b449ceb27`). Next it pushes a draft PR, then the station visit-type and position families. |
-| Ready queue | Planner `/root/planner_ready_queue`; root dispatches | Entry 1 (#824) is in progress. Entries 2 (`industry.rs`) and 3 (station group) are dispatched and start when #823 lands. Entries 4a onward are undispatched. |
-| D1 from #819 | #736 W | Retire the test-only `openttd_rust_town_expand` after moving its fixture observations to Rust tests. |
-| #737 W | Unassigned | Waits behind the `station_cmd.rs` pass and the industry passes, whose files it overlaps. |
-| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 143; platform cadence after 140. |
+| Integration queue | `/root/integrator` | 144: #833, rerunning one Emscripten job after an `apt` network failure. 145: #834 or #832, whichever is ready first, then the platform cadence. Then #825, after its stub-table fix. |
+| #825, #737 V remainder part 1 | `/root/cleanup_737_v_vehicle_boundary` | Accepted with no findings. Its base update onto 142 failed to compile, because #829's shared `test_tables.rs` initializes the structs #825 changes. The fix is prepared and waits for 144. After the fix, the reviewer re-posts both acceptances at the new head. |
+| #837, #737 V remainder part 2 | same | Draft, two milestones pushed. Paused for #825's fix. |
+| #832, #734 entry 6a | `/root/cleanup_734_pass_02c_industry_resolver`; reviewed by `/root/review_832_leaf_helpers` | Accepted. The resolution of its `station.rs` conflict with #827 is awaiting the reviewer's check. |
+| #838, #734 entry 10 (#830 allows) | same | Draft, scenarios running. 17 suppression proposals await review. |
+| #834, #815 station items | `/root/cleanup_734_pass_01c_town_rs`; reviewed by `/root/review_834_station_815` | Accepted and queued. |
+| #734 4a, `station_cmd.rs` pass | same | In progress, including a `Fix:` commit for the `TILE_HEIGHT_STEP` error parameter. Entry 5 (`station_service.rs`) follows. |
+| #833, #736 W landscape tile loop | `/root/cleanup_736_p_packet`; reviewed by `/root/review_833_tile_loop` | Accepted, integrating as 144. |
+| #736 W house-protocol follow-up (entry 12) | same | Written, with focused `cargo test` allowed. It retires `town_protocol.hpp`, `openttd_rust_town_expand` and eight orphaned exports. Native builds wait for profile 143. |
+| Next stocktake/profile and cadence | Root; integrator for cadence | Stocktake/profile after 155; platform cadence after 145. |
 
 Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
 
