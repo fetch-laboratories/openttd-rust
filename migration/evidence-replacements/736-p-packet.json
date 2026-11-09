@@ -1,0 +1,20 @@
+[
+  {
+    "retires": [
+      "source:tools/migration/packet-comparison.cpp",
+      "comparison:packet-comparison.py"
+    ],
+    "oracle": "Original-only capture: the probe and its driver at 5af17025a3 built against the unchanged pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree at -O0 and -O2 -DNDEBUG (GCC 13.3.0, GNU/Linux x86_64); the recipe and the conversion rule are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/packet/comparison-oracle.txt; its values do not depend on pointer width or platform. The tests drive the production openttd_rust_packet_* exports; the transfer, crypto, strict-mac and type sections mirror the fork's C++ glue around them. C++ calling-boundary observations stay in tools/migration/core-boundary-comparison.cpp (tools/core-boundary-comparison.py, batch A), section CORE_BOUNDARY_PACKET, whose candidate stream must equal the pinned original's at -O0 and -O2 -DNDEBUG: packet.h move construction/assignment and the Send_bytes suffix subspan's size and offset into its input for limits 3, 4 and 8 (retire with the C++ Packet facade); the TransferIn/TransferOutWithLimit templates' callback call, exception propagation and live-cursor commit after reentry (retires with the last C++ transfer caller); packet.cpp's native encryption-handler path (MACSize/Encrypt/Decrypt order, spans, exceptions, partial effects, reentry, strict MAC frame, GetPacketType's send-handler MAC) and the socket services' base MarkClosed dispatch (retire with the native NetworkEncryptionHandler implementations and socket services). The derived-close count column of the probe's state lines is that dispatch and is not stored in the oracle.",
+    "observations": {
+      "Scalar send/receive at every width with canonical and noncanonical booleans, PrepareToSend framing, copy and assignment independence, sized buffers (0/1/8/257), truncated buffers and their close, Send_bytes suffixes, Recv_string truncation, terminator drain and validation for 3 settings over 4 inputs and 7 lengths, unterminated strings, ParsePacketSize for TCP header-first and UDP full storage, persistent uint16 cursor narrowing at every width, CanReadFromPacket wrap/close/quit order, Recv_bytes defined domains, 65537-byte prefix narrowing and empty-source reads": [
+        "rust:lib:packet::comparison_tests::packet_bytes_cursors_and_strings_match_original"
+      ],
+      "Transfer callback return, exception and reentrant live-cursor commit (7 modes, both directions), native encryption-handler construction, PrepareToSend/PrepareToRead call order, spans, throws, partial effects and reentry (6 modes, both directions), the strict MAC frame (0/3/4) and GetPacketType's send-handler MAC with its throw, through the production Rust helpers": [
+        "rust:lib:packet::comparison_tests::packet_transfer_and_native_handler_glue_match_original"
+      ],
+      "NDEBUG-only release paths: null receive socket, writes beyond the limit with repeated PrepareToSend, and Recv_string lengths 0 and 1": [
+        "rust:lib:packet::comparison_tests::packet_release_assertion_paths_match_original"
+      ]
+    }
+  }
+]

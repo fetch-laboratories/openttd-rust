@@ -159,7 +159,7 @@ impl Services {
     fn source_tile(&self, source: Source) -> TileIndex {
         TileIndex(unsafe {
             if source.kind == Source::TOWN {
-                town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
+                town::position_raw((self.shared().town_owner_by_id)(u32::from(source.id)))
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
@@ -270,8 +270,8 @@ impl Services {
         }
         let a = Source::town(src.id.0);
         let b = Source::town(dst.id.0);
-        let from = TileIndex(unsafe { town::position(src.state) });
-        let to = TileIndex(unsafe { town::position(dst.state) });
+        let from = TileIndex(unsafe { town::position_raw(src.state) });
+        let to = TileIndex(unsafe { town::position_raw(dst.state) });
         if !self.within_subsidy_distance(from, to)
             || Self::check_subsidy_duplicate(cargo_type, a, b)
         {
@@ -292,7 +292,7 @@ impl Services {
             }
         }
         let shared = self.shared();
-        let xy = unsafe { town::position(owner) };
+        let xy = unsafe { town::position_raw(owner) };
         let map = shared.map();
         let mut area = crate::tilearea::TileArea {
             tile: xy,

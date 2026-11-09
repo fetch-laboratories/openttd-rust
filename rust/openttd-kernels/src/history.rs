@@ -125,7 +125,9 @@ impl From<Option<bool>> for HistoryQuery {
 // Maximum subdivision among the original month, quarter and year ranges.
 const HISTORY_MAX_DIVISION: usize = 4;
 
-trait HistoryElement: Copy + Default {
+use crate::history_type::{HISTORY_PERIODS, HISTORY_RECORDS};
+
+pub(crate) trait HistoryElement: Copy + Default {
     fn sum(history: &[Self]) -> Self;
 }
 
@@ -138,6 +140,64 @@ impl HistoryElement for crate::industry::Pair {
 impl HistoryElement for crate::town::SuppliedHistory {
     fn sum(history: &[Self]) -> Self {
         crate::town::sum_history(history)
+    }
+}
+
+/// The scalar fields of `HISTORY_MONTH`, `HISTORY_QUARTER` and `HISTORY_YEAR`, in the
+/// subdivision-first order of the original recursion over `HISTORY_YEAR`. Only the
+/// mask update and rotation fields are used; the query-only child fields stay zero.
+const HISTORY_YEAR_RANGES: [Descriptor; 3] = {
+    const fn range(first: u8, last: u8, division: u8, total_division: u8) -> Descriptor {
+        Descriptor {
+            child: 0,
+            periods: HISTORY_PERIODS,
+            records: last - first,
+            first,
+            last,
+            division,
+            total_division,
+            child_periods: 0,
+            child_division: 0,
+        }
+    }
+    [
+        range(1, 25, 1, 1),
+        range(25, 42, 3, 3),
+        range(42, 61, 4, 12),
+    ]
+};
+
+/// `UpdateValidHistory(valid_history, HISTORY_YEAR, cur_month)`: subdivisions update
+/// first, as the original recursion.
+pub(crate) fn update_valid_history_year(valid_history: u64, cur_month: u32) -> u64 {
+    HISTORY_YEAR_RANGES
+        .into_iter()
+        .fold(valid_history, |mask, hr| update(mask, hr, cur_month))
+}
+
+/// `RotateHistory(history, valid_history, HISTORY_YEAR, cur_month)`: subdivisions
+/// rotate first, as the original recursion.
+pub(crate) fn rotate_history_year<T: HistoryElement>(
+    history: &mut [T; HISTORY_RECORDS],
+    valid_history: u64,
+    cur_month: u32,
+) {
+    for hr in HISTORY_YEAR_RANGES {
+        if !cur_month.is_multiple_of(u32::from(hr.total_division)) {
+            continue;
+        }
+        let (first, last, division) = (
+            usize::from(hr.first),
+            usize::from(hr.last),
+            usize::from(hr.division),
+        );
+        history.copy_within(first..last - 1, first + 1);
+        if hr.total_division == 1 {
+            history[first] = history[first - 1];
+            history[0] = T::default();
+        } else if has_bit(valid_history, u32::from(hr.first - hr.division)) {
+            history[first] = T::sum(&history[first - division..first]);
+        }
     }
 }
 

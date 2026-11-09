@@ -28,6 +28,33 @@
     clippy::collapsible_if,
     clippy::if_not_else
 )]
+
+/// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
+/// The other enumerators join with their first Rust user.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadTypeFlag(pub u8);
+#[allow(
+    non_upper_case_globals,
+    reason = "original road.h RoadTypeFlag enumerators"
+)]
+impl RoadTypeFlag {
+    /// Bit number for setting this roadtype as not house friendly
+    pub const NoHouses: Self = Self(2);
+    /// Bit number for allowing towns to build this roadtype.
+    pub const TownBuild: Self = Self(4);
+}
+/// Set of `RoadTypeFlag`s (`road.h`), retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RoadTypeFlags(pub u8);
+impl RoadTypeFlags {
+    /// Native `Test` of one element.
+    #[must_use]
+    pub const fn test(self, element: RoadTypeFlag) -> bool {
+        self.0 & (1 << element.0) != 0
+    }
+}
 use crate::direction_func::dir_to_diag_dir as diag;
 use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;

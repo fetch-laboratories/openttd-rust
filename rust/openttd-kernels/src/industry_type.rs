@@ -2,29 +2,16 @@
 //! Shared constants of `industry_type.h`.
 /// Native `NUM_INDUSTRYTYPES`.
 pub const NUM_INDUSTRYTYPES: u8 = IndustryType::NUM_INDUSTRYTYPES.0;
-/// Native `INVALID_INDUSTRY`.
-pub const INVALID_INDUSTRY: u16 = IndustryID::INVALID.0;
 /// Native `IT_INVALID`.
 pub const IT_INVALID: u8 = IndustryType::IT_INVALID.0;
 /// Native `NEW_INDUSTRYTILEOFFSET`.
 pub const NEW_INDUSTRYTILEOFFSET: u16 = IndustryGfx::NEW_INDUSTRYTILEOFFSET.0;
-/// Native `INVALID_INDUSTRYTILE`.
-pub const INVALID_INDUSTRYTILE: u16 = IndustryGfx::INVALID_INDUSTRYTILE.0;
-
-/// Masks from `industrytype.h::IndustryBehaviour`.
-pub use crate::industrytype::BUILT_ON_WATER;
-/// Native `PROD_MULTI_HANDLING`.
-pub use crate::industrytype::PROD_MULTI_HANDLING;
 
 /// Native `NEW_INDUSTRYOFFSET`.
 pub const NEW_INDUSTRYOFFSET: u16 = IndustryType::NEW_INDUSTRYOFFSET.0 as u16;
 /// Native `NUM_INDUSTRYTILES`.
 pub const NUM_INDUSTRYTILES: u16 = IndustryGfx::NUM_INDUSTRYTILES.0;
 
-/// Native `NUM_INDUSTRYTYPES_PER_GRF`.
-pub const NUM_INDUSTRYTYPES_PER_GRF: u8 = IndustryType::NUM_INDUSTRYTYPES_PER_GRF.0;
-/// Native `NUM_INDUSTRYTILES_PER_GRF`.
-pub const NUM_INDUSTRYTILES_PER_GRF: u16 = IndustryGfx::NUM_INDUSTRYTILES_PER_GRF.0;
 /// Native `INDUSTRY_NUM_INPUTS`.
 pub const INDUSTRY_NUM_INPUTS: usize = 16;
 /// Native `INDUSTRY_NUM_OUTPUTS`.
