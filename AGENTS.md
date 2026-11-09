@@ -1,7 +1,7 @@
 # OpenTTD-Rust
 
 This independent experimental fork reproduces OpenTTD in Rust while preserving observable behavior.
-Every line of original C++ and fork C++ glue will retire. The Rust build will be the only build (#581; user, 2026-10-28).
+Every line of original C++ and fork-written C++ (glue, tools and tests) will retire. The Rust build will be the only build (#581; user, 2026-10-28).
 This file holds what every agent needs. The routing table points to the rest (user, 2026-10-30).
 
 ## Every agent
