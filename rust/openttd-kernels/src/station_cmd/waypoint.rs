@@ -161,7 +161,7 @@ impl Ctx<'_> {
     fn cmd_rename_waypoint(&self, call: WaypointCall<'_>, args: CmdRenameWaypoint) {
         w::hit(w::WAYPOINT_RENAME);
         let (out, flags) = (call.cost, call.flags);
-        let wp = self.waypoint(args.waypoint_id.0);
+        let wp = self.waypoint(args.waypoint_id);
         if wp.is_null() {
             return out.error(StringID::INVALID_STRING_ID.0);
         }
@@ -179,7 +179,7 @@ impl Ctx<'_> {
             }
             // `IsUniqueWaypointName`: check whether the name is unique amongst the waypoints.
             for index in 0..(self.world().pool_size)() {
-                let candidate = self.waypoint(index as u16);
+                let candidate = self.waypoint(StationID(index as u16));
                 if !candidate.is_null() && (self.s.name_equals)(candidate, args.text, args.length) {
                     return out.error(self.s.strings.name_unique);
                 }
@@ -204,7 +204,7 @@ impl Ctx<'_> {
         w::hit(w::WAYPOINT_MOVE_NAME);
         let (out, flags) = (call.cost, call.flags);
         let tile = args.tile;
-        let wp = self.waypoint(args.waypoint_id.0);
+        let wp = self.waypoint(args.waypoint_id);
         if wp.is_null() {
             out.error(StringID::INVALID_STRING_ID.0);
             return StationID::INVALID;
@@ -216,7 +216,7 @@ impl Ctx<'_> {
                 return StationID::INVALID;
             }
         }
-        if !self.rect_contains(wp, tile.0) {
+        if !self.rect_contains(wp, tile) {
             out.error(self.s.strings.unsuitable);
             return StationID::INVALID;
         }
@@ -336,7 +336,7 @@ impl Ctx<'_> {
         // Pool ID order is Waypoint::Iterate order. Equal distances never replace
         // the earlier candidate, including deleted waypoints outside the kdtree.
         for id in 0..(self.world().pool_size)() {
-            let wp = self.waypoint(id as u16);
+            let wp = self.waypoint(StationID(id as u16));
             if wp.is_null()
                 || (self.world().in_use)(wp)
                 || StringID((self.s.string_id)(wp)) != str
@@ -445,8 +445,7 @@ impl Ctx<'_> {
             station_to_join = StationID::INVALID;
         }
         let distant_join = station_to_join != StationID::INVALID;
-        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
-        {
+        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join).is_null()) {
             return None;
         }
         Some((count, reuse, station_to_join))
@@ -518,15 +517,15 @@ impl Ctx<'_> {
             }
             tile = TileIndex(tile.0.wrapping_add(offset));
         }
-        let mut wp = self.join(JoiningStation {
+        let mut wp = self.find_joining_base_station(JoiningStation {
             out: ret,
-            existing: est.0,
-            target: station_to_join.0,
+            existing_station: est,
+            station_to_join,
             adjacent: args.adjacent,
-            area: new_location,
+            ta: new_location,
             waypoint: true,
             road: false,
-            overbuild_error: self.s.strings.remove_rail_waypoint,
+            error_message: StringID(self.s.strings.remove_rail_waypoint),
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -719,15 +718,15 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        let mut wp = self.join(JoiningStation {
+        let mut wp = self.find_joining_base_station(JoiningStation {
             out: ret,
-            existing: est,
-            target: station_to_join.0,
+            existing_station: StationID(est),
+            station_to_join,
             adjacent: args.adjacent,
-            area: roadstop_area,
+            ta: roadstop_area,
             waypoint: true,
             road: true,
-            overbuild_error: self.s.strings.remove_road_waypoint,
+            error_message: StringID(self.s.strings.remove_road_waypoint),
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -843,8 +842,8 @@ impl Ctx<'_> {
             if crate::station_map::is_road_waypoint_tile(TileIndex(cur_tile), self.shared) {
                 self.remove_road_tile(ret, ret, cur_tile, flags.0, replacement_spec_index, true);
             }
-            self.area_add((self.s.road_waypoint_tile_area)(wp), cur_tile);
-            self.before_add_tile(ret, wp, cur_tile, StationRectMode::ADD_TRY);
+            self.area_add((self.s.road_waypoint_tile_area)(wp), TileIndex(cur_tile));
+            self.before_add_tile(ret, wp, TileIndex(cur_tile), StationRectMode::ADD_TRY);
             let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(
                     (self.shared.road_commands)(),
@@ -899,7 +898,7 @@ impl Ctx<'_> {
             return cost.error(self.s.strings.unsuitable);
         }
         // `IsBuoyBridgeAboveOk`.
-        self.default_bridge_ok(ret, tile.0, StationType::Buoy.0, 0);
+        self.default_bridge_above_ok(ret, tile, StationType::Buoy, StationGfx(0));
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -939,7 +938,7 @@ impl Ctx<'_> {
             (self.s.set_location)(wp, tile.0);
             (self.s.waypoint_view_invalidate)(wp);
         }
-        self.before_add_tile(ret, wp, tile.0, StationRectMode::ADD_TRY);
+        self.before_add_tile(ret, wp, tile, StationRectMode::ADD_TRY);
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
         (self.s.set_facility_bits)(wp, StationFacilities::from_element(StationFacility::Dock).0);
         (self.s.set_station_owner)(wp, CompanyID::NONE.0);
@@ -1014,7 +1013,7 @@ impl Ctx<'_> {
                     self.s.restoration,
                 );
             }
-            self.after_remove_tile(wp, tile.0);
+            self.after_remove_tile(wp, tile);
             (self.s.virtual_coord)(wp);
             self.reset_delete_counter(wp);
         }
