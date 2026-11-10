@@ -1675,7 +1675,12 @@ fn reserve_consist(
             && v.cargo_cap() != 0
         {
             let observed = (l.cargo_capacity)(v);
-            let remaining = VehicleCargo(observed.owner.cast_mut()).remaining_count();
+            let v_cargo = VehicleCargo(observed.owner.cast_mut());
+            let map = crate::map_func::World::new(unsafe { &*w.shared });
+            if map.types.assertions() {
+                map.check(u32::from(v.cargo_cap()) >= v_cargo.remaining_count());
+            }
+            let remaining = v_cargo.remaining_count();
             let cargo = usize::from(observed.cargo);
             consist_capleft[cargo] = consist_capleft[cargo]
                 .wrapping_add(u32::from(v.cargo_cap()).wrapping_sub(remaining));
@@ -1975,6 +1980,11 @@ fn update_load_unload_ticks(
 #[allow(clippy::too_many_lines)]
 unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
     let (w, l) = (c.w, c.l);
+    let map = crate::map_func::World::new(unsafe { &*w.shared });
+    if map.types.assertions() {
+        map.check(front.current_order().kind() == crate::order_type::OrderType::OT_LOADING.0);
+    }
+
     // SAFETY: The immutable shared vehicle table outlives this entry.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)(front.last_station());
@@ -2115,6 +2125,9 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                     }
                 }
                 crate::witness::hit(crate::witness::STATION_UNLOAD_CARGO);
+                if map.types.assertions() {
+                    map.check(!payment.is_null());
+                }
                 amount_unloaded = (l.unload_cargo)(st.native, v, amount_unloaded, payment);
                 let remaining = v_cargo.unload_count() > 0;
                 if amount_unloaded > 0 {
@@ -2176,6 +2189,9 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
                 .wrapping_sub(unsafe { (resolver.build_year)(front.0.as_ptr()) });
             unsafe {
                 (&raw mut (*ge).last_age).write(clamp_to_u8(i64::from(age)));
+            }
+            if map.types.assertions() {
+                map.check(u32::from(v.cargo_cap()) >= v_cargo.stored_count());
             }
             /* Capacity available for loading more cargo. */
             let mut cap_left = u32::from(v.cargo_cap()).wrapping_sub(v_cargo.stored_count());
@@ -2414,11 +2430,15 @@ unsafe fn load_unload_station_queue(
     c: &LoadingContext<'_>,
 ) {
     let l = c.l;
+    let map = crate::map_func::World::new(unsafe { &*c.w.shared });
     let mut last_loading = None;
     /* Check if anything will be loaded at all. Otherwise we don't need to reserve either. */
     while !node.is_null() {
         let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node).cast(), &*l.vehicle) };
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
+            if map.types.assertions() {
+                map.check((l.load_unload_ticks)(v) != 0);
+            }
             let ticks = (l.load_unload_ticks)(v).wrapping_sub(1);
             (l.set_load_ticks)(v, ticks);
             if ticks == 0 {
