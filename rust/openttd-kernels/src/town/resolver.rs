@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, Leaves, State, house};
-use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
+use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
@@ -945,27 +945,38 @@ pub unsafe extern "C" fn openttd_rust_house_animation_callback(
     tile: u32,
     watched: u64,
 ) -> u16 {
-    unsafe { get_house_animation_callback(callback, param1, param2, spec, town, tile, watched) }
+    unsafe {
+        get_house_animation_callback(
+            CallbackID(callback),
+            param1,
+            param2,
+            spec,
+            town,
+            TileIndex(tile),
+            CargoTypes(watched),
+        )
+    }
 }
+/// Original `GetSimpleHouseCallback`, as `HouseAnimationBase` calls it.
 pub(crate) unsafe fn get_house_animation_callback(
-    callback: u16,
+    callback: CallbackID,
     param1: u32,
     param2: u32,
     spec: *const c_void,
     town: *mut TownHandle,
-    tile: u32,
-    watched: u64,
+    tile: TileIndex,
+    watched: CargoTypes,
 ) -> u16 {
     let house = (services().spec_house)(spec);
     let args = CallbackArgs {
         town,
-        watched,
+        watched: watched.0,
         param1,
         param2,
-        tile,
+        tile: tile.0,
         view: 0,
         house,
-        callback,
+        callback: callback.0,
         initial_random: 0,
         prospective: false,
     };
