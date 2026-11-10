@@ -209,7 +209,9 @@ pub(crate) unsafe fn cmd_build_vehicle(
      * seeds to prevent desyncs. */
     let seeds = unsafe { (s.random.save)() };
     let v = match kind {
-        VehicleType::TRAIN => unsafe { rail::build(s, temporary, subflags.0, tile, e) },
+        VehicleType::TRAIN => unsafe {
+            rail::cmd_build_rail_vehicle(s, temporary, subflags, cmd.tile, e)
+        },
         VehicleType::ROAD => unsafe {
             construct::cmd_build_road_vehicle(s, temporary, subflags, cmd.tile, e)
         },
@@ -303,7 +305,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
             {
                 /* Move any free wagons to the new vehicle. */
                 // The speculative-build result in `temporary` was consumed above.
-                unsafe { rail::normalize(s, temporary, v) };
+                unsafe { rail::normalize_train_veh_in_depot(s, temporary, v) };
             }
             (s.presentation)(v, kind);
         }

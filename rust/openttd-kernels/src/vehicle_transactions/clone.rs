@@ -290,13 +290,15 @@ unsafe fn cmd_clone_vehicle(
                     /* this s a train car
                      * add this unit to the end of the train */
                     let moved = unsafe {
-                        super::rail::nested_move(
+                        super::rail::nested_move_rail_vehicle(
                             s.build,
                             part,
-                            flags.0,
-                            (b.groups.vehicle_id)(w),
-                            (b.groups.vehicle_id)(rear),
-                            true,
+                            flags,
+                            super::rail::CmdMoveRailVehicle {
+                                src_veh: VehicleID((b.groups.vehicle_id)(w)),
+                                dest_veh: VehicleID((b.groups.vehicle_id)(rear)),
+                                move_chain: true,
+                            },
                         )
                     };
                     if !moved {

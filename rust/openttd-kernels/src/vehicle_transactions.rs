@@ -732,15 +732,7 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         // The build root is late-bound through the fleet table, as autoreplace does.
         let root = (s.transactions.build_services)();
         unsafe {
-            rail::sell(
-                root,
-                cost,
-                flags.0,
-                v,
-                sell_chain,
-                backup_order,
-                client_id.0,
-            );
+            rail::cmd_sell_rail_wagon(root, cost, flags, v, sell_chain, backup_order, client_id);
         };
         return;
     }
