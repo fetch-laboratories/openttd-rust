@@ -144,7 +144,7 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
     if direction == crate::direction_type::INVALID_DIAGDIR {
         return crate::tile_type::INVALID_TILE;
     }
-    let delta = w.dimensions.offs_by_diag_dir(direction);
+    let delta = w.dimensions.tile_offs_by_diag_dir_raw(direction);
     loop {
         tile = tile.wrapping_add(delta);
         if !valid(&w, tile) {
@@ -231,7 +231,7 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     };
     check(dir < 4);
     RoadPiece {
-        tile: tile.wrapping_add(w.dimensions.offs_by_diag_dir(dir)),
+        tile: tile.wrapping_add(w.dimensions.tile_offs_by_diag_dir_raw(dir)),
         bits: crate::road_func::diag_dir_to_road_bits_raw(bits_dir, check),
     }
 }

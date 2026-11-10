@@ -447,7 +447,9 @@ impl<'a> Ctx<'a> {
         let mut neighbours = 0;
         for dir in 0..4 {
             if present & dir_bit(dir) != 0
-                && self.any_bits(self.map.add_diag(tile, dir), rtt) & dir_bit(dir ^ 2) != 0
+                && self.any_bits(self.map.tile_add_by_diag_dir_raw(tile, dir), rtt)
+                    & dir_bit(dir ^ 2)
+                    != 0
             {
                 neighbours |= dir_bit(dir);
             }
@@ -1233,7 +1235,7 @@ impl<'a> Ctx<'a> {
         }
     }
     fn connect(&self, tile: u32, rt: u8, dir: u8) -> bool {
-        let tile = self.map.add_diag(tile, dir);
+        let tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
@@ -1359,7 +1361,7 @@ impl<'a> Ctx<'a> {
             if tile == end {
                 break;
             }
-            tile = self.map.add_diag(tile, dir);
+            tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
         }
         if !success {
             cost.take(last);

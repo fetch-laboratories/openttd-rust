@@ -1613,7 +1613,7 @@ impl World<'_> {
                     crate::witness::hit(crate::witness::OBJECT_LIGHTHOUSE);
                     return true;
                 }
-                tile = self.map.add_diag(tile, dir);
+                tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
                 if !(self.shared.tile_valid)(tile) {
                     return false;
                 }

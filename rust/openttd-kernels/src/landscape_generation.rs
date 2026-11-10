@@ -241,7 +241,7 @@ impl World<'_> {
                     if mask & (1 << dir) == 0 {
                         continue;
                     }
-                    let dest = self.map.add_dir(tile, dir);
+                    let dest = self.map.tile_add_by_dir_raw(tile, dir);
                     let other = crate::map_func::World::new(self.s).tile_slope(dest) & !SLOPE_STEEP;
                     if other == SLOPE_FLAT
                         || is_slope_with_one_corner_raised_raw(other)
@@ -693,7 +693,7 @@ impl World<'_> {
                     return;
                 }
                 for dir in 0..4 {
-                    if self.water(self.map.add_diag(tile, dir)) {
+                    if self.water(self.map.tile_add_by_diag_dir_raw(tile, dir)) {
                         self.river_tile(tile);
                         break;
                     }
@@ -795,7 +795,7 @@ impl World<'_> {
             return false;
         }
         for dir in 0..4 {
-            let other = self.map.add_diag(tile, dir);
+            let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
             if self.valid(other)
                 && !(self.a.sea_contains)(frame, other)
                 && self.connected_sea(frame, other, limit)
@@ -864,7 +864,7 @@ impl World<'_> {
                 }
             }
             for dir in 0..4 {
-                let other = self.map.add_diag(end, dir);
+                let other = self.map.tile_add_by_diag_dir_raw(end, dir);
                 if self.valid(other) && !marks.contains(&other) && self.flows_down(end, other) {
                     marks.insert(other);
                     queue.push(other);
@@ -1095,7 +1095,7 @@ impl World<'_> {
             let mut flat_river = false;
             let mut sloped_river = false;
             for dir in 0..4 {
-                let other = self.map.add_diag(tile, dir);
+                let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
                 let slope = crate::map_func::World::new(self.s).tile_slope(other);
                 if self.water(other) && (self.a.river)(other) {
                     if is_inclined_slope_raw(slope)
@@ -1126,7 +1126,7 @@ impl World<'_> {
             }
             if desired == SLOPE_FLAT && is_slope_with_three_corners_raised_raw(current) {
                 for dir in 0..4 {
-                    let other = self.map.add_diag(tile, dir);
+                    let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
                     if is_inclined_slope_raw(crate::map_func::World::new(self.s).tile_slope(other))
                         && self.water(other)
                     {
@@ -1151,7 +1151,7 @@ impl World<'_> {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
                     }
-                    let other = self.map.add_diag(
+                    let other = self.map.tile_add_by_diag_dir_raw(
                         tile,
                         change_diag_dir_raw(direction, diff, |ok| {
                             crate::movement::native_assert(self.a.shared(), ok);
@@ -1179,8 +1179,8 @@ impl World<'_> {
         if is_inclined_slope_raw(current) {
             w::hit(w::GENERATION_WIDEN_SLOPE);
             let direction = get_inclined_slope_direction_raw(current);
-            let upstream = self.map.add_diag(tile, direction);
-            let downstream = self.map.add_diag(
+            let upstream = self.map.tile_add_by_diag_dir_raw(tile, direction);
+            let downstream = self.map.tile_add_by_diag_dir_raw(
                 tile,
                 reverse_diag_dir_raw(direction, |ok| {
                     crate::movement::native_assert(self.a.shared(), ok);
@@ -1358,7 +1358,10 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
     }
     fn follow_node(&mut self, old: usize) {
         for dir in 0..4 {
-            let tile = self.world.map.add_diag(self.nodes[old].get_tile(), dir);
+            let tile = self
+                .world
+                .map
+                .tile_add_by_diag_dir_raw(self.nodes[old].get_tile(), dir);
             if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile(), tile) {
                 self.add_new_node(RiverNode::set(Some(old), tile));
             }

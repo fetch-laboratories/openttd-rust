@@ -821,7 +821,10 @@ impl Context<'_> {
                                                 TRACKDIR_BIT_X_NE | TRACKDIR_BIT_Y_NW,
                                             ),
                                         ] {
-                                            let t = self.world.dimensions.add_diag(tile, dir);
+                                            let t = self
+                                                .world
+                                                .dimensions
+                                                .tile_add_by_diag_dir_raw(tile, dir);
                                             if self.world.level_crossing_tile(t)
                                                 && self.world.crossing_barred(t)
                                             {

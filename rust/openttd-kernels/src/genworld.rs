@@ -416,7 +416,8 @@ impl World<'_> {
                         if remaining == 0 {
                             break 'patch;
                         }
-                        let next = map.add_diag(tile, gb(shared.random(), 0, 2) as u8);
+                        let next =
+                            map.tile_add_by_diag_dir_raw(tile, gb(shared.random(), 0, 2) as u8);
                         if (shared.tile_type)(next) == MP_CLEAR
                             && (shared.clear_ground)(next).0 != CLEAR_DESERT
                         {

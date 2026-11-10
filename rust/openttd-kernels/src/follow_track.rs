@@ -265,7 +265,9 @@ impl State {
             }
             w.check(reverse_diag_dir_raw(dir, |ok| w.check(ok)) == self.exitdir);
         }
-        self.new_tile.0 = w.dimensions.add_diag(self.old_tile.0, self.exitdir);
+        self.new_tile.0 = w
+            .dimensions
+            .tile_add_by_diag_dir_raw(self.old_tile.0, self.exitdir);
         self.is_station = (self.mode == RAIL && w.station_rail_raw(self.new_tile.0))
             || (self.mode == ROAD && w.station_road_stop(self.new_tile.0));
     }
@@ -345,7 +347,7 @@ impl State {
             self.tiles_skipped = length.wrapping_sub(1) as i32;
             self.new_tile.0 = self.new_tile.0.wrapping_add(
                 w.dimensions
-                    .offs_by_diag_dir(self.exitdir)
+                    .tile_offs_by_diag_dir_raw(self.exitdir)
                     .wrapping_mul(self.tiles_skipped as u32),
             );
         }
@@ -447,7 +449,7 @@ pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> 
     w.check(dir < crate::direction_type::DIAGDIR_END);
     loop {
         length = length.wrapping_add(1);
-        tile = w.dimensions.add_diag(tile, dir);
+        tile = w.dimensions.tile_add_by_diag_dir_raw(tile, dir);
         if !w.compatible_station(tile, start) {
             return length;
         }
@@ -493,7 +495,7 @@ pub(crate) fn speed_limit_with_road(
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut State) -> bool {
     if ft.is_station {
-        let diff = pbs.map().offs_by_diag_dir(ft.exitdir);
+        let diff = pbs.map().tile_offs_by_diag_dir_raw(ft.exitdir);
         let mut tile = ft
             .new_tile
             .0

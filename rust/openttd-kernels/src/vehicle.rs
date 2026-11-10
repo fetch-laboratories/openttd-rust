@@ -424,11 +424,11 @@ mod tests {
     #[test]
     fn map_offsets_follow_the_original_tables() {
         let map = Map { log_x: 8 };
-        assert_eq!(map.add_diag(0x1010, 0), 0x100f);
-        assert_eq!(map.add_diag(0x1010, 1), 0x1110);
-        assert_eq!(map.add_dir(0x1010, 0), 0x0f0f);
-        assert_eq!(map.add_dir(0x1010, 5), 0x1011);
-        assert_eq!(map.add_dir(0, 0), 0_u32.wrapping_sub(257));
+        assert_eq!(map.tile_add_by_diag_dir_raw(0x1010, 0), 0x100f);
+        assert_eq!(map.tile_add_by_diag_dir_raw(0x1010, 1), 0x1110);
+        assert_eq!(map.tile_add_by_dir_raw(0x1010, 0), 0x0f0f);
+        assert_eq!(map.tile_add_by_dir_raw(0x1010, 5), 0x1011);
+        assert_eq!(map.tile_add_by_dir_raw(0, 0), 0_u32.wrapping_sub(257));
         assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
         assert_eq!(advance_distance(3), 192);
     }

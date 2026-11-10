@@ -331,7 +331,7 @@ impl World<'_> {
         dir: u8,
     ) {
         self.expense(out, 0);
-        let delta = self.map.offs_by_diag_dir(dir);
+        let delta = self.map.tile_offs_by_diag_dir_raw(dir);
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
@@ -432,7 +432,7 @@ impl World<'_> {
             self.error(out, self.a.strings.sloped_wrong);
             return;
         }
-        let lower = tile.wrapping_sub(self.map.offs_by_diag_dir(dir));
+        let lower = tile.wrapping_sub(self.map.tile_offs_by_diag_dir_raw(dir));
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;
@@ -446,7 +446,9 @@ impl World<'_> {
                 return;
             }
         }
-        let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
+        let delta = self
+            .map
+            .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
@@ -647,7 +649,9 @@ impl World<'_> {
                     return;
                 }
                 let part = (self.a.lock_part)(tile).0;
-                let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
+                let delta = self
+                    .map
+                    .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
                 let middle = match part {
                     0 => tile,
                     1 => tile.wrapping_add(delta),

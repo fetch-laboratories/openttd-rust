@@ -1668,9 +1668,10 @@ impl<'a> Ctx<'a> {
                 while v.is_null() && i < 2 {
                     if crate::map_func::World::new(self.shared).has_signal_on_trackdir(tile, td ^ 8)
                     {
-                        let next = self
-                            .map
-                            .add_diag(tile, crate::track_func::trackdir_to_exitdir(td));
+                        let next = self.map.tile_add_by_diag_dir_raw(
+                            tile,
+                            crate::track_func::trackdir_to_exitdir(td),
+                        );
                         let tracks = trackdir_tracks(reaches(td));
                         let reserved = self.reserved(next);
                         if reserved & tracks != 0 {

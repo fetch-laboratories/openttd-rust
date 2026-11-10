@@ -98,7 +98,7 @@ impl<'a> Pbs<'a> {
     pub(crate) fn platform(self, start: u32, dir: u8, reserved: bool) {
         (self.0.assert_platform)(start, dir);
         let map = self.shared().map();
-        let diff = map.offs_by_diag_dir(dir);
+        let diff = map.tile_offs_by_diag_dir_raw(dir);
         let mut tile = start;
         loop {
             (self.0.set_station)(tile, reserved);
@@ -334,7 +334,7 @@ impl<'a> Pbs<'a> {
                 ft.new_td_bits & track_bits_to_trackdir_bits(self.reserved(ft.new_tile.0));
             if reserved == 0 {
                 if ft.is_station {
-                    let diff = self.map().offs_by_diag_dir(ft.exitdir);
+                    let diff = self.map().tile_offs_by_diag_dir_raw(ft.exitdir);
                     while {
                         let skipped = ft.tiles_skipped;
                         ft.tiles_skipped = ft.tiles_skipped.wrapping_sub(1);
@@ -476,7 +476,7 @@ impl<'a> Pbs<'a> {
             {
                 let diff = self
                     .map()
-                    .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
+                    .tile_offs_by_diag_dir_raw(trackdir_to_exitdir(reverse_trackdir(res.td)));
                 let mut st_tile = res.tile.wrapping_add(diff);
                 while other.read().record.is_null()
                     && World::new(self.shared()).compatible_station(st_tile, res.tile)
@@ -535,7 +535,7 @@ impl<'a> Pbs<'a> {
             if crate::map_func::World::new(self.shared()).rail_station(res.tile) {
                 let diff = self
                     .map()
-                    .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
+                    .tile_offs_by_diag_dir_raw(trackdir_to_exitdir(reverse_trackdir(res.td)));
                 let mut st_tile = res.tile.wrapping_add(diff);
                 while World::new(self.shared()).compatible_station(st_tile, res.tile) {
                     self.check_trains(&res, st_tile, &mut best);

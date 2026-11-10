@@ -236,7 +236,10 @@ pub extern "C" fn openttd_rust_script_rail_depot_front_tile(s: &Services, depot:
         return crate::tile_type::INVALID_TILE;
     }
     let w = world(s);
-    depot.wrapping_add(w.dimensions.offs_by_diag_dir(w.rail_depot_dir(depot)))
+    depot.wrapping_add(
+        w.dimensions
+            .tile_offs_by_diag_dir_raw(w.rail_depot_dir(depot)),
+    )
 }
 
 /// `ScriptRail::GetRailStationDirection`.

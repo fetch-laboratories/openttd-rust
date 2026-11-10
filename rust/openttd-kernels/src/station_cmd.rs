@@ -1966,7 +1966,10 @@ impl Ctx<'_> {
             let dir = axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
             });
-            let tile_offset = self.map().offs_by_diag_dir(dir.0);
+            let tile_offset = self
+                .map()
+                .tile_offs_by_diag_dir(dir, |ok| crate::movement::native_assert(self.shared, ok))
+                .cast_unsigned();
             let mut platform_begin = tile;
             let mut platform_end = tile;
             /* We can only account for tiles that are reachable from this tile, so ignore primarily blocked tiles while finding the platform begin and end. */
@@ -4734,10 +4737,6 @@ struct CmdBuildDock {
 }
 
 impl Ctx<'_> {
-    /// `t + TileOffsByDiagDir(d)`.
-    fn tile_add_by_diag_dir(&self, t: TileIndex, d: DiagDirection) -> TileIndex {
-        TileIndex(self.map().add_diag(t.0, d.0))
-    }
     /// `IsPossibleDockingTile`.
     fn is_possible_docking_tile(&self, t: TileIndex) -> bool {
         match TileType((self.shared.tile_type)(t.0)) {
@@ -4757,7 +4756,9 @@ impl Ctx<'_> {
     fn check_for_docking_tile(&self, t: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -4816,7 +4817,9 @@ impl Ctx<'_> {
     /// `RemoveDockingTile`.
     fn remove_docking_tile(&self, t: TileIndex) {
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -4843,7 +4846,11 @@ impl Ctx<'_> {
     fn clear_docking_tiles_checking_neighbours(&self, tile: TileIndex) {
         /* Clear and maybe re-set docking tile */
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let docking_tile = self.tile_add_by_diag_dir(tile, DiagDirection(d));
+            let docking_tile = self
+                .map()
+                .tile_add_by_diag_dir(tile, DiagDirection(d), |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                });
             if !(self.shared.tile_valid)(docking_tile.0) {
                 continue;
             }
@@ -4866,7 +4873,9 @@ impl Ctx<'_> {
     ) {
         let world = crate::map_func::World::new(self.shared);
         self.area_add((self.s.ship_station_area)(st), tile);
-        let flat_tile = self.tile_add_by_diag_dir(tile, direction);
+        let flat_tile = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         self.area_add((self.s.ship_station_area)(st), flat_tile);
         crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
             &*self.s.lifecycle
@@ -4948,7 +4957,9 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         cost.add_money(ret.money());
-        let tile_cur = self.tile_add_by_diag_dir(tile, direction);
+        let tile_cur = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur.0) {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -4977,7 +4988,9 @@ impl Ctx<'_> {
         if add_cost {
             cost.add_money(ret.money());
         }
-        let tile_cur = self.tile_add_by_diag_dir(tile_cur, direction);
+        let tile_cur = self.map().tile_add_by_diag_dir(tile_cur, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
             || !world.tile_flat(tile_cur.0)
         {
@@ -5032,7 +5045,9 @@ impl Ctx<'_> {
             return t;
         }
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -5040,7 +5055,12 @@ impl Ctx<'_> {
                 continue;
             }
             if world.get_station_gfx(tile).0 < GFX_DOCK_BASE_WATER_PART
-                && self.tile_add_by_diag_dir(tile, world.get_dock_direction(tile)) == t
+                && self
+                    .map()
+                    .tile_add_by_diag_dir(tile, world.get_dock_direction(tile), |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    })
+                    == t
             {
                 return tile;
             }
@@ -5122,9 +5142,10 @@ impl Ctx<'_> {
         if tile1 == TileIndex::INVALID {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let tile2 = self.tile_add_by_diag_dir(
+        let tile2 = self.map().tile_add_by_diag_dir(
             tile1,
             crate::map_func::World::new(self.shared).get_dock_direction(tile1),
+            |ok| crate::movement::native_assert(self.shared, ok),
         );
         unsafe {
             self.command.no_vehicle(cost.0, tile1.0);

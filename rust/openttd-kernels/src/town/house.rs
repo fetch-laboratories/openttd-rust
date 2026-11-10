@@ -1158,10 +1158,22 @@ impl<'a> House<'a> {
             ta.add(self.tile_add_xy(tile, 1, 1).0, map);
         }
         if building_flags.test(BuildingFlag::Size2x1) {
-            ta.add(map.add_diag(tile.0, DiagDirection::DIAGDIR_SW.0), map);
+            ta.add(
+                map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SW, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })
+                .0,
+                map,
+            );
         }
         if building_flags.test(BuildingFlag::Size1x2) {
-            ta.add(map.add_diag(tile.0, DiagDirection::DIAGDIR_SE.0), map);
+            ta.add(
+                map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SE, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })
+                .0,
+                map,
+            );
         }
         // SAFETY: Static command table referenced by the house table.
         let commands = unsafe { &*self.h.commands };
