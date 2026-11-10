@@ -419,9 +419,7 @@ unsafe fn refit_chain(
             if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
-                    unsafe {
-                        (c.transactions.check)(!shadow.is_null());
-                    }
+                    c.transactions.check(!shadow.is_null());
                 }
                 let cap = crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }

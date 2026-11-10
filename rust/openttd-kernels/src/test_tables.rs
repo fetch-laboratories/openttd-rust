@@ -982,7 +982,6 @@ pub(crate) const SCHEDULER: crate::vehicle::scheduler::SchedulerServices =
 
 /// `crate::fleet::pending::Services` with every entry unreachable.
 pub(crate) const FLEET_PENDING: crate::fleet::pending::Services = crate::fleet::pending::Services {
-    set_current: unreachable1,
     company: ptr::null(),
     subtract: unreachable1,
     command: unreachable2,
@@ -1014,7 +1013,6 @@ pub(crate) const FLEET_TRANSACTIONS: crate::fleet::transactions::Services =
         capabilities: &crate::engine_capabilities::TEST_TABLE,
         stopped_in_depot: unreachable1,
         max_length: unreachable0,
-        check: unreachable1,
         needs_renew: unreachable2,
         engine_valid: unreachable1,
         company_valid: unreachable1,
@@ -1025,7 +1023,6 @@ pub(crate) const FLEET_TRANSACTIONS: crate::fleet::transactions::Services =
         order_refit: unreachable1,
         order_auto: unreachable1,
         order_cargo: unreachable1,
-        local: unreachable0,
         refit_news: unreachable2,
         subtype: unreachable3,
         reverse: unreachable1,

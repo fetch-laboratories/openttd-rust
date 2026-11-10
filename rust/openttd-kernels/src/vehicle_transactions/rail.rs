@@ -153,7 +153,7 @@ impl Ctx {
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
-            unsafe { (self.w.check)(condition()) };
+            self.w.check(condition());
         }
     }
     /// `Train::GetIfValid`.

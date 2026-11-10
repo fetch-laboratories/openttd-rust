@@ -14,7 +14,6 @@ use std::collections::BTreeMap;
 /// transaction tables.
 #[repr(C)]
 pub struct Services {
-    pub(crate) set_current: unsafe extern "C" fn(u8),
     pub(crate) company: *const crate::company_identity::Services,
     pub(crate) subtract: unsafe extern "C" fn(i64),
     pub(crate) command: unsafe extern "C" fn(*mut (), u32),
@@ -25,6 +24,12 @@ pub struct Services {
 }
 /// `INVALID_STRING_ID`.
 const INVALID_STRING: u32 = 0xFFFF;
+
+/// `SetCurrentCompany`, through the command table's finance owner.
+fn set_current_company(t: &TransactionServices, company: u8) {
+    // SAFETY: The command table is immutable for the process lifetime.
+    (unsafe { &*t.commands }.finance.set_current_company)(company);
+}
 
 static PENDING: GameState<BTreeMap<u32, bool>> = GameState::new(BTreeMap::new());
 /// Clear pending replacements at the original initialization/tick-start point.
@@ -77,7 +82,7 @@ pub(crate) unsafe fn drain(
     let visit = |id, leave| {
         let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
         let owner = v.owner();
-        unsafe { (w.set_current)(owner) };
+        set_current_company(t, owner);
         if leave {
             v.write_status(v.status() & !crate::vehicle_base::VS_STOPPED);
         }
@@ -93,7 +98,7 @@ pub(crate) unsafe fn drain(
             (w.command)(cost, id);
             (w.subtract)(reserve.wrapping_neg());
         }
-        if !unsafe { (t.local)() } {
+        if !crate::command::is_local_company(unsafe { &*t.commands }) {
             return;
         }
         if unsafe { (t.success)(cost) } {
@@ -115,13 +120,12 @@ pub(crate) unsafe fn drain(
         }
     };
     unsafe { for_each_pending(visit) };
-    unsafe { (w.set_current)(previous) };
+    set_current_company(t, previous);
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDFleetPendingServices" ["fleet"] => Services {
-        set_current,
         company,
         subtract,
         command,

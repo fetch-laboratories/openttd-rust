@@ -1170,8 +1170,15 @@ mod pool_tests {
         scheduler.shared = &raw const shared;
         scheduler.with_loading_timer = no_station_loading;
         scheduler.reset_accumulators = no_accumulators;
-        let mut pending = FLEET_PENDING;
-        pending.set_current = keep_company;
+        let pending = FLEET_PENDING;
+        static FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
+            set_current_company: keep_company,
+            ..crate::test_tables::FINANCE
+        };
+        let mut commands = crate::test_tables::COMMANDS;
+        commands.finance = &FINANCE;
+        let mut transaction = FLEET_TRANSACTIONS;
+        transaction.commands = &raw const commands;
         let mut group = FLEET_GROUPS;
         group.shared = &raw const shared;
         let tables = Tables {
@@ -1180,7 +1187,7 @@ mod pool_tests {
             station: null(),
             loading: null(),
             pending: &raw const pending,
-            transaction: &FLEET_TRANSACTIONS,
+            transaction: &raw const transaction,
             group: &raw const group,
             visits: null(),
             refit_cost: null_mut(),
