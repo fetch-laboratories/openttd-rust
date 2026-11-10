@@ -7,7 +7,16 @@
 
 //! Complete scalar spiral traversal; map storage stays in C++.
 
-use crate::direction_type::{DIAGDIR_BEGIN, DIAGDIR_END, INVALID_DIAGDIR};
+use crate::direction_type::{
+    DIAGDIR_BEGIN, DIAGDIR_END, DiagDirection, Direction, INVALID_DIAGDIR,
+};
+use crate::map_func::{tile_index_diff_c_by_diag_dir, tile_index_diff_c_by_dir};
+use crate::map_type::TileIndexDiffC;
+
+/// The canonical native assertion, for the map helpers' preconditions.
+fn native_check(ok: bool) {
+    crate::services_assert::check(ok);
+}
 
 /// Copyable traversal state, with all original unsigned arithmetic at 32 bits.
 #[repr(C)]
@@ -49,10 +58,14 @@ impl SpiralState {
             .wrapping_add(1);
     }
 
+    /// Add a `TileIndexDiffC` to the unsigned coordinates.
+    fn step(&mut self, diff: TileIndexDiffC) {
+        self.x = self.x.wrapping_add_signed(i32::from(diff.x));
+        self.y = self.y.wrapping_add_signed(i32::from(diff.y));
+    }
     /// One step by `TileIndexDiffCByDir(DIR_W)`.
     fn west(&mut self) {
-        self.x = self.x.wrapping_add(1);
-        self.y = self.y.wrapping_sub(1);
+        self.step(tile_index_diff_c_by_dir(Direction::DIR_W, native_check));
     }
 
     /// `SpiralTileIterator::Increment`: advance the internal state to the next
@@ -69,22 +82,18 @@ impl SpiralState {
             return;
         }
         /* Step to the next 'neighbour' in the circular line */
-        match self.direction {
-            0 => self.x = self.x.wrapping_sub(1),
-            1 => self.y = self.y.wrapping_add(1),
-            2 => self.x = self.x.wrapping_add(1),
-            3 => self.y = self.y.wrapping_sub(1),
-            _ => {
-                // TileIndexDiffCByDiagDir asserts IsValidDiagDirection(dir).
-                crate::services_assert::check(false);
-                std::process::abort()
-            }
-        }
+        self.step(tile_index_diff_c_by_diag_dir(
+            DiagDirection(self.direction),
+            native_check,
+        ));
         self.position = self.position.wrapping_sub(1);
+        /* Corner reached, switch direction */
         if self.position > 0 {
             return;
         }
-        self.direction += 1; // Valid directions are 0..3 before this increment.
+        // Valid directions are 0..3 before this increment.
+        self.direction += 1;
+        /* Jump to next circle */
         if self.direction == DIAGDIR_END {
             self.west();
             self.cur_radius = self.cur_radius.wrapping_add(1);
