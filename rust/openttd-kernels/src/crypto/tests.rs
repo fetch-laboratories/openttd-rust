@@ -49,25 +49,32 @@ fn monocypher_known_answers() {
                 let public = public_key(&secret);
                 let peer = public_key(&peer_secret);
                 let mut keys = [0; 64];
-                assert!(derive(
+                assert!(exchange(
                     &mut keys,
                     &secret,
                     &public,
                     &peer,
-                    true,
+                    X25519KeyExchangeSide::SERVER,
                     &bytes(p[3])
                 ));
                 assert_eq!(keys, array::<64>(p[4]));
-                assert!(derive(
+                assert!(exchange(
                     &mut keys,
                     &peer_secret,
                     &peer,
                     &public,
-                    false,
+                    X25519KeyExchangeSide::CLIENT,
                     &bytes(p[3])
                 ));
                 assert_eq!(keys, array::<64>(p[4]));
-                assert!(!derive(&mut keys, &secret, &public, &[0; 32], true, &[]));
+                assert!(!exchange(
+                    &mut keys,
+                    &secret,
+                    &public,
+                    &[0; 32],
+                    X25519KeyExchangeSide::SERVER,
+                    &[]
+                ));
                 assert_eq!(keys, array::<64>(p[4]));
             }
             "stream" => {

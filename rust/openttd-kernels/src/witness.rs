@@ -113,7 +113,7 @@ witness_blocks! {
         GENERATION_TGP_ABORT = 32 => "generation.tgp_abort",
         GENERATION_HEIGHTMAP_CCW = 33 => "generation.heightmap_ccw",
         GENERATION_HEIGHTMAP_CW = 34 => "generation.heightmap_cw",
-}
+    }
     ground {
         GROUND_ROAD_POWER = 0 => "ground.road_power",
         GROUND_RAIL_POWER = 1 => "ground.rail_power",

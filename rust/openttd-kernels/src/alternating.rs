@@ -5,58 +5,80 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Alternating traversal decisions; typed iterators and their live boundaries stay in C++.
+//! `AlternatingIterator` (`misc/alternating_iterator.hpp`): iterator that
+//! alternately takes from the "middle" of a range. The traversal decisions live
+//! here; the typed iterators and their live boundaries stay in C++.
 
-/// Copyable scalar state. Selectors are 0 for before-middle and 1 for after-middle.
+/// The scalar state of an `AlternatingIterator`. A state flag is 1 to take from
+/// after the middle and 0 to take from before it.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct AlternatingState {
-    /// Logical position; equality/ordering do not compare underlying iterators.
+    /// Position within the entire range.
     pub position: usize,
-    /// Side to move on the next nonterminal increment.
-    pub next_after: u8,
-    /// Side currently selected by `Base()`, including after reaching end.
-    pub current_after: u8,
+    /// Next state for advancing iterator. If true take from after middle, otherwise take from before middle.
+    pub next_state: u8,
+    /// Current state for reading iterator. If true take from after middle, otherwise take from before middle.
+    pub state: u8,
 }
 
-/// One logical increment and its typed iterator movement request.
+/// No iterator movement: the increment reached the end.
+pub const MOVEMENT_NONE: u8 = 0;
+/// `++after`.
+pub const MOVEMENT_AFTER: u8 = 1;
+/// `--before`.
+pub const MOVEMENT_BEFORE: u8 = 2;
+
+/// One `operator++` and the iterator movement C++ makes for it.
 #[repr(C)]
 pub struct AlternatingStep {
-    /// Updated logical state.
+    /// Updated state.
     pub state: AlternatingState,
-    /// 0 means no movement, 1 increments after, 2 decrements before.
+    /// `MOVEMENT_NONE`, `MOVEMENT_AFTER` or `MOVEMENT_BEFORE`.
     pub movement: u8,
 }
 
-pub fn initialize(end_position: usize, before_at_first: bool) -> AlternatingState {
-    let side = u8::from(before_at_first);
+/// `AlternatingIterator::AlternatingIterator`'s state: `position` is 0 for a
+/// begin iterator, otherwise the range's distance; `before_at_first` is
+/// `before == first`.
+pub fn initialize(position: usize, before_at_first: bool) -> AlternatingState {
+    let next_state = u8::from(before_at_first);
     AlternatingState {
-        position: end_position,
-        next_after: side,
-        current_after: side,
+        position,
+        next_state,
+        state: next_state,
     }
 }
 
-pub fn advance(mut state: AlternatingState, live_size: usize) -> AlternatingStep {
-    assert!(state.position < live_size);
+/// `AlternatingIterator::operator++` up to `Next()`'s iterator movement.
+pub fn advance(mut state: AlternatingState, size: usize) -> AlternatingStep {
+    if state.position >= size {
+        crate::services_assert::check(false);
+    }
     state.position += 1;
-    let movement = if state.position < live_size {
-        state.current_after = state.next_after;
-        if state.next_after != 0 { 1 } else { 2 }
+    let movement = if state.position < size {
+        /* Next(): */
+        state.state = state.next_state;
+        if state.next_state != 0 {
+            MOVEMENT_AFTER
+        } else {
+            MOVEMENT_BEFORE
+        }
     } else {
-        // Original ++ skips Next() at end, preserving the last selected Base().
-        0
+        MOVEMENT_NONE
     };
     AlternatingStep { state, movement }
 }
 
+/// The rest of `AlternatingIterator::Next()` after its iterator movement. After
+/// `++after`, `boundary` is `before == first`; after `--before`, it is
+/// `std::next(after) != last`. Both select after the middle when true.
 pub fn complete(mut state: AlternatingState, boundary: bool) -> AlternatingState {
-    // After moving after, boundary means before == first. After moving before,
-    // it means next(after) != last. Both original cases select after iff true.
-    state.next_after = u8::from(boundary);
+    state.next_state = u8::from(boundary);
     state
 }
 
+/// `AlternatingIterator`'s comparisons: they compare `position` only.
 pub fn compare(left: AlternatingState, right: AlternatingState) -> i8 {
     match left.position.cmp(&right.position) {
         std::cmp::Ordering::Less => -1,
@@ -69,8 +91,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRustAlternatingState" ["probe"] => AlternatingState {
         position,
-        next_after,
-        current_after,
+        next_state,
+        state,
     };
     "OpenTTDRustAlternatingStep" ["probe"] => AlternatingStep {
         state,

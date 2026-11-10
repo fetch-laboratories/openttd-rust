@@ -584,6 +584,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.not_reached = RustNotReached,
 };
 
+/* Game entries also bind the canonical fatal slot; tool-only links keep assertion binding. */
+[[maybe_unused]] static const bool _rust_invariants_bound = (openttd_rust_assert_bind(RustAssertCondition, &_rust_shared_services), true);
+
 const OpenTTDSharedServices &GetRustSharedServices() noexcept
 {
 	return _rust_shared_services;
