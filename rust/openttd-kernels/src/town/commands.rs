@@ -404,15 +404,17 @@ impl<'a> Commands<'a> {
                         id: t.id,
                         shell: t.shell,
                     },
-                    CompanyID(company),
-                    RATING_BRIBE_UP_STEP,
-                    RATING_BRIBE_MAXIMUM,
-                    DoCommandFlags::from_element(DoCommandFlag::Execute),
-                    ((*(*self.f.growth).houses)
-                        .authority
-                        .as_ref()
-                        .unwrap()
-                        .bulldozer)(),
+                    super::RatingChange {
+                        company: CompanyID(company),
+                        add: RATING_BRIBE_UP_STEP,
+                        maximum: RATING_BRIBE_MAXIMUM,
+                        flags: DoCommandFlags::from_element(DoCommandFlag::Execute),
+                        bulldozer: ((*(*self.f.growth).houses)
+                            .authority
+                            .as_ref()
+                            .unwrap()
+                            .bulldozer)(),
+                    },
                 );
             }
             if unsafe { (*t.state).simulation.exclusivity } != company

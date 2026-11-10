@@ -3194,21 +3194,33 @@ pub(crate) struct RatedTown {
     pub id: TownId,
     pub shell: *const crate::services::TownHandle,
 }
-/// `ChangeTownRating`: change the town rating of `company` by `add`, without passing
-/// `maximum`. `company` is `_current_company` and `bulldozer` the magic bulldozer cheat,
-/// both observed by the caller.
+/// The arguments of one `ChangeTownRating` call; `company` is `_current_company` and
+/// `bulldozer` the magic bulldozer cheat, both observed by the caller.
+#[derive(Clone, Copy)]
+pub(crate) struct RatingChange {
+    pub company: CompanyID,
+    pub add: i32,
+    pub maximum: i32,
+    pub flags: DoCommandFlags,
+    pub bulldozer: bool,
+}
+/// `ChangeTownRating`: change the town rating of `change.company` by `change.add`,
+/// without passing `change.maximum`.
 /// # Safety
 /// `t.state` is null or a live owner; the tables are live for the call.
 pub(crate) unsafe fn change_town_rating(
     leaves: &Leaves,
     services: &Services,
     t: RatedTown,
-    company: CompanyID,
-    add: i32,
-    maximum: i32,
-    flags: DoCommandFlags,
-    bulldozer: bool,
+    change: RatingChange,
 ) {
+    let RatingChange {
+        company,
+        add,
+        maximum,
+        flags,
+        bulldozer,
+    } = change;
     let (state, shell) = (t.state, t.shell as usize);
     /* if magic_bulldozer cheat is active, town doesn't penalize for removing stuff */
     if state.is_null()
@@ -3276,11 +3288,13 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
                 id: TownId(town as u16),
                 shell: shell as *const crate::services::TownHandle,
             },
-            CompanyID(company),
-            add,
-            maximum,
-            flags,
-            bulldozer,
+            RatingChange {
+                company: CompanyID(company),
+                add,
+                maximum,
+                flags,
+                bulldozer,
+            },
         );
     }
 }

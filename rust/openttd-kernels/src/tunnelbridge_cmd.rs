@@ -231,11 +231,13 @@ impl<'a> World<'a> {
                     },
                     shell: town,
                 },
-                crate::company_type::CompanyID((self.s.current_company)()),
-                delta,
-                minimum,
-                crate::command_type::DoCommandFlags(flags),
-                (self.authority.bulldozer)(),
+                crate::town::RatingChange {
+                    company: crate::company_type::CompanyID((self.s.current_company)()),
+                    add: delta,
+                    maximum: minimum,
+                    flags: crate::command_type::DoCommandFlags(flags),
+                    bulldozer: (self.authority.bulldozer)(),
+                },
             );
         }
     }

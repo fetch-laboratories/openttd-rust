@@ -1057,11 +1057,13 @@ impl<'a> House<'a> {
                     id: t.id,
                     shell: t.shell,
                 },
-                company,
-                -rating,
-                RATING_HOUSE_MINIMUM,
-                flags,
-                (authority.bulldozer)(),
+                super::RatingChange {
+                    company,
+                    add: -rating,
+                    maximum: RATING_HOUSE_MINIMUM,
+                    flags,
+                    bulldozer: (authority.bulldozer)(),
+                },
             );
         }
         if flags.test(DoCommandFlag::Execute) {

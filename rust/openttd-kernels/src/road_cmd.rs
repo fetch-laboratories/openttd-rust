@@ -472,11 +472,13 @@ impl<'a> Ctx<'a> {
                     id: crate::town_type::TownId((self.authority.town_index)(town)),
                     shell: town,
                 },
-                crate::company_type::CompanyID(company),
-                decrease,
-                RATING_ROAD_MINIMUM,
-                crate::command_type::DoCommandFlags(flags),
-                (self.authority.bulldozer)(),
+                crate::town::RatingChange {
+                    company: crate::company_type::CompanyID(company),
+                    add: decrease,
+                    maximum: RATING_ROAD_MINIMUM,
+                    flags: crate::command_type::DoCommandFlags(flags),
+                    bulldozer: (self.authority.bulldozer)(),
+                },
             );
         }
     }
