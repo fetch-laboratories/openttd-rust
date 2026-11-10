@@ -151,9 +151,13 @@ def request(args: argparse.Namespace) -> Path | None:
         if run := passed_run(repository, head):
             print(f"PR #{args.pr} at {head} already passed Full validation: {run}")
             return None
-        if variable(repository, "CI_MERGE_QUEUE") == "true" and changes_definitions(
-            repository, args.pr
-        ):
+        try:
+            queue = variable(repository, "CI_MERGE_QUEUE") == "true"
+        except subprocess.CalledProcessError:
+            # Reading variables needs its own token permission, which an ordinary
+            # request never needed; the plan applies the same rule server-side.
+            queue = False
+        if queue and changes_definitions(repository, args.pr):
             raise ValueError(
                 "In merge-queue mode a PR changing .github/workflows/ needs root's "
                 "reviewed bootstrap Full"

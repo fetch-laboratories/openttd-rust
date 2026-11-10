@@ -2117,6 +2117,28 @@ class RequestTests(unittest.TestCase):
                 ]
                 self.assertEqual(not writes, refused)
 
+    def test_full_request_dispatches_when_variables_are_unreadable(self) -> None:
+        def answer(*args: str) -> str:
+            if args[0] == "variable":
+                raise subprocess.CalledProcessError(1, ["gh", *args], stderr="HTTP 403")
+            return json.dumps([[]])
+
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(
+                repo="example/fork",
+                pr=170,
+                profile="full",
+                bootstrap=False,
+                request_file=Path(directory) / "request.json",
+            )
+            with (
+                patch.object(ci, "api", side_effect=pull_and_statuses([])),
+                patch.object(ci, "gh", side_effect=answer) as gh,
+                patch("builtins.print"),
+            ):
+                self.assertIsNotNone(ci.request(args))
+            self.assertEqual(gh.call_args.args[:2], ("workflow", "run"))
+
     def test_run_discovery_uses_unique_request_identity(self) -> None:
         record = {
             "profile": "rust",
