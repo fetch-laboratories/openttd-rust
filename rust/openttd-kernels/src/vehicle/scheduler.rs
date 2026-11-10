@@ -1154,6 +1154,10 @@ mod pool_tests {
     /// Run `CallVehicleTicks` (outside normal play: no day work) with `tick`. It clears and
     /// drains the process-wide pending map, so it holds that map's test lock.
     fn run_ticks(tick: extern "C" fn(VehicleRef) -> bool) {
+        static FINANCE: crate::company::FinanceServices = crate::company::FinanceServices {
+            set_current_company: keep_company,
+            ..crate::test_tables::FINANCE
+        };
         let _guard = crate::fleet::pending::TEST_LOCK.lock().unwrap();
         let shared = crate::services::fixture(null_mut(), draw, no_industry);
         let mut scheduler = SCHEDULER;
@@ -1164,8 +1168,11 @@ mod pool_tests {
         scheduler.shared = &raw const shared;
         scheduler.with_loading_timer = no_station_loading;
         scheduler.reset_accumulators = no_accumulators;
-        let mut pending = FLEET_PENDING;
-        pending.set_current = keep_company;
+        let pending = FLEET_PENDING;
+        let mut commands = crate::test_tables::COMMANDS;
+        commands.finance = &FINANCE;
+        let mut transaction = FLEET_TRANSACTIONS;
+        transaction.commands = &raw const commands;
         let mut group = FLEET_GROUPS;
         group.shared = &raw const shared;
         let tables = Tables {
@@ -1174,7 +1181,7 @@ mod pool_tests {
             station: null(),
             loading: null(),
             pending: &raw const pending,
-            transaction: &FLEET_TRANSACTIONS,
+            transaction: &raw const transaction,
             group: &raw const group,
             visits: null(),
             refit_cost: null_mut(),

@@ -45,7 +45,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 
 		.road_state = VehicleRefitRoadState,
 		.aircraft_handle = GetRustAircraftVehicle,
-		.road_acceleration = RustRoadAccelerationModel,
 		.details_ui = VehicleRefitDetailsUI,
 		.lists_ui = VehicleRefitListsUI,
 	};

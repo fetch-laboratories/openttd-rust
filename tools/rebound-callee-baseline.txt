@@ -11,8 +11,6 @@ forwarded | src/object_cmd.cpp | industry_tiles = GetRustIndustryLoopServices().
 forwarded | src/object_cmd.cpp | scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d
 forwarded | src/object_cmd.cpp | set_owner = GetRustSharedServices().set_tile_owner
 forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
-forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
-forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicleServices().newgrf
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
@@ -72,7 +70,6 @@ rebound | RustAssertCondition | src/cargomonitor.cpp | check
 rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
-rebound | RustAssertCondition | src/rust/fleet_transaction_services.hpp | check
 rebound | RustAssertCondition | src/rust/newgrf_storage_services.cpp | check
 rebound | RustAssertCondition | src/signal.cpp | assert_condition
 rebound | RustBaseStationByTile | src/newgrf_roadstop.cpp | by_tile
@@ -121,7 +118,6 @@ rebound | RustIndustryNeutralBaseStation | src/station.cpp | industry_neutral
 rebound | RustIndustryTileIndex | src/industry_cmd.cpp | industry_index
 rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
-rebound | RustIsLocalCompany | src/rust/fleet_transaction_services.hpp | local
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
@@ -168,8 +164,6 @@ rebound | RustRoadStopTileDataCount | src/animated_tile.cpp | road_count
 rebound | RustRoadStopTileDataCount | src/newgrf_roadstop.cpp | tile_count
 rebound | RustSelectedHangarTile | src/newgrf_airport.cpp | hangar_tile
 rebound | RustSelectedHangarTile | src/rust/station_command_services.hpp | hangar_tile
-rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_company
-rebound | RustSetCurrentCompanyID | src/rust/fleet_pending_services.hpp | set_current
 rebound | RustSetRailStationReservation | src/pbs.cpp | set_station
 rebound | RustSetRailStationReservation | src/rust/station_command_services.hpp | set_rail_station_reservation
 rebound | RustSetTunnelBridgeReservation | src/pbs.cpp | set_wormhole

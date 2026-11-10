@@ -479,27 +479,25 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-09; ne
 
 At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis lives on the stream issue: the fan-in, held callers and later passes for this queue, measured at `c12561671f`, are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933).
 
-Agent: /root/planner_merge_8 | Model: claude-fable-5-2 | Reasoning effort: high
+Agent: /root | Model: claude-fable-5-2 | Reasoning effort: xhigh
 
-Checked on 2026-11-10 against #871, #872, #873 and dispatched entry 6b-1. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
+Refreshed by root on 2026-11-10 after the eleventh merge, from the planner's measurements at `c12561671f`, and checked against #876, #877, #878 and the two branches without a PR yet (entry 15 and #736's NewGRF loading family). Entry 15 (vehicle transactions) was dispatched on 2026-11-10 and has left the queue. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
 
-1. **15, #734 workset 07 vehicle transactions.**
-   - **Files:** `vehicle_transactions.rs` and its eight submodules: 4,062 lines, 172 sites, 1,479 to 2,666 changed lines. It splits at a file boundary.
-     - 15a: `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs` (1,760 lines, 123 sites).
-     - 15b: `rail.rs`, `articulated.rs`, `build.rs`, `clone.rs` and `construct.rs` (2,302 lines, 49 sites, 178 missing comment lines).
-   - **Callers:** four files outside the group. Only `settings_table.rs` is held (#872), and it names module paths only.
-   - **Waits on:** nothing for 15a, which shares no file with 6b-1. 15b waits on #873, which edits `rail.rs`.
+1. **23r, #734 workset 23 remainder.**
+   - **Files:** `alternating.rs`, `builder.rs`, `consumer.rs`, `crypto.rs`, `crypto/ffi.rs`, `crypto/tests.rs`, `md5.rs`, `pool/tests.rs`, `debug.rs`, `game_state.rs`, `raw_field.rs` and `witness.rs`: 2,964 lines, 89 sites, 765 to 1,380 changed lines. One PR.
+   - **Callers:** none edited. These are integer and string helpers whose signatures stay, as #832's eight were.
+   - **Waits on:** nothing. No file is in an open PR, and it can stay open beside 7a.
+   - **Rank:** last in order (d). It is queued because it is the only pass free while 7a's 95 files are held.
 2. **7a, #734 workset 13 map core.**
    - **Files:** `map_func.rs` and `tile_map.rs`: 1,243 lines, 167 sites, 1,436 to 2,588 changed lines. One PR, one reviewer per function group.
-   - **Callers:** 93 files, the highest fan-in in the tree. The 23 finished ones adopt the typed forms; the 70 unfinished ones take one-token `_raw` renames.
-   - **Waits on:** #871 and 6b-1, which both edit `map_func.rs`. If #872 or #873 is still open, their nine caller files take the narrow allowance.
-   - **Rank:** order (b) puts it before 9m. The callers that held it back at steering 33 have merged, so both become ready at 6b-1's merge.
+   - **Callers:** 93 files, the highest fan-in in the tree. The finished ones adopt the typed forms; the unfinished ones take one-token `_raw` renames. Among the finished callers, `town.rs` keeps six `Engine` map-reader wrappers that this pass converts ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6770371199)).
+   - **Waits on:** #878 (entry 6b-1), which edits `map_func.rs`, and then #737's W and I PRs, which cannot be open beside it ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767606869)). Root says when it opens.
 3. **9m, #734 workset 09 `movement.rs` single-file pass.**
    - **Files:** `movement.rs`, `movement/tests.rs` and `signal_func.rs`: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
    - **Callers:** 66 files.
    - **Waits on:** 7a. The two share 50 files, `movement.rs` among them, and cannot be open together.
 
-While 7a is open, only passes outside its 95 files are free; the #734 comment ranks them, 23's remainder first. Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
+Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
 
 ## Resume checkpoint
 

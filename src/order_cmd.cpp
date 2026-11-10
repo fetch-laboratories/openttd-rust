@@ -89,19 +89,9 @@ extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
 	return Ticks::TICKS_PER_SECOND;
 }
 
-extern "C" uint64_t openttd_orders_economy_fraction() noexcept
-{
-	return TimerGameEconomy::date_fract;
-}
-
 extern "C" uint64_t openttd_orders_maximum_date() noexcept
 {
 	return EconomyTime::MAX_DATE.base();
-}
-
-extern "C" uint64_t openttd_orders_timetable_year_limit() noexcept
-{
-	return TimerGameEconomy::DateAtStartOfYear(MAX_TIMETABLE_START_YEARS).base();
 }
 
 extern "C" void *openttd_orders_allocate_list() noexcept
@@ -302,11 +292,6 @@ extern "C" uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept
 }
 
 
-extern "C" uint64_t openttd_orders_review_setting() noexcept
-{
-	return _settings_client.gui.order_review_system;
-}
-
 extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -483,9 +468,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.primary_vehicle = openttd_orders_primary_vehicle,
 	.ticks_per_second = openttd_orders_ticks_per_second,
 	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
-	.economy_fraction = openttd_orders_economy_fraction,
 	.maximum_date = openttd_orders_maximum_date,
-	.timetable_year_limit = openttd_orders_timetable_year_limit,
 	.allocate_list = openttd_orders_allocate_list,
 	.shared_window = openttd_orders_shared_window,
 	.vehicle_id = openttd_orders_vehicle_id,
@@ -530,7 +513,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.default_group = openttd_orders_default_group,
 	.vehicle_group = openttd_orders_vehicle_group,
 	.unique_backup_name = openttd_orders_unique_backup_name,
-	.review_setting = openttd_orders_review_setting,
 	.local_owner = openttd_orders_local_owner,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,

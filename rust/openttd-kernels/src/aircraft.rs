@@ -187,8 +187,6 @@ pub struct Leaves {
         unsafe extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u8,
     pub service_interval: unsafe extern "C" fn(Vehicle) -> u16,
     pub chain_in_depot: unsafe extern "C" fn(Vehicle) -> bool,
-    pub nearest_depot_order: unsafe extern "C" fn(Vehicle) -> bool,
-    pub part_of_orders: unsafe extern "C" fn(Vehicle) -> bool,
     pub next_aircraft: unsafe extern "C" fn(u32) -> Vehicle,
     pub viewport: unsafe extern "C" fn(Vehicle),
     pub rotor_image: unsafe extern "C" fn(Vehicle),
@@ -504,8 +502,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         service_interval(self; v: Vehicle) => unsafe { (self.leaves.service_interval)(v) };
         chain_in_depot(self; v: Vehicle) => unsafe { (self.leaves.chain_in_depot)(v) };
         waiting_unbunching(self; v: Vehicle) => (self.vs.waiting_for_unbunching)(v.base());
-        nearest_depot_order(self; v: Vehicle) => unsafe { (self.leaves.nearest_depot_order)(v) };
-        part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
+        nearest_depot_order(self; v: Vehicle) => v.base().current_order().depot_action_flags() & crate::order_type::ODATF_NEAREST_DEPOT != 0;
+        part_of_orders(self; v: Vehicle) => v.base().current_order().depot_type() & crate::order_type::ODTF_PART_OF_ORDERS != 0;
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
         speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
         cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from((self.vs.engine)(v.base()).cargo_age())) as u32;
@@ -2491,8 +2489,6 @@ crate::abi::layouts! {
         hangar_exit,
         service_interval,
         chain_in_depot,
-        nearest_depot_order,
-        part_of_orders,
         next_aircraft,
         viewport,
         rotor_image,

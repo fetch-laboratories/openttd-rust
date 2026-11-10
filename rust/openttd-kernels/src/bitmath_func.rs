@@ -59,6 +59,19 @@ pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
     *value
 }
 
+/// `AssignBit<uint16_t>`: [`assign_bit`] on a uint16 field. `SB<T>` computes in the promoted
+/// width and stores back into `T`, so the narrowing keeps every source-valid bit.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "AssignBit<uint16_t> stores SB's promoted result back into the uint16_t field"
+)]
+pub fn assign_bit16(value: &mut u16, bit: u8, enabled: bool) -> u16 {
+    let mut promoted = u32::from(*value);
+    assign_bit(&mut promoted, bit, enabled);
+    *value = promoted as u16;
+    *value
+}
+
 /// `GB`: fetch `count` bits from `value`, started at bit `start`.
 ///
 /// This function can be used to fetch `count` bits from the value `value`. The `start` value

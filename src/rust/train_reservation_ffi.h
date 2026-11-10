@@ -56,7 +56,6 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*is_plain)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain);
 	uint64_t (*is_station)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	uint64_t (*is_waypoint)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_waypoint);
-	uint64_t (*line_reverse)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(line_reverse);
 	uint64_t (*oneway)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(oneway);
 	uint64_t (*order_service)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(order_service);
 	uint64_t (*order_type)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(order_type);

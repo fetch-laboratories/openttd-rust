@@ -62,6 +62,8 @@ struct TimetableDateFixture {
 TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 {
 	const auto saved_date = TimerGameEconomy::date;
+	const auto saved_fraction = TimerGameEconomy::date_fract;
+	TimerGameEconomy::date_fract = 0;
 	TimetableDateFixture fixture;
 	OpenTTDOrdersLeaves leaves{};
 	leaves.vehicle = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->vehicle; };
@@ -76,9 +78,7 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	leaves.base = &base; leaves.station_commands = &station;
 	AutoRestoreBackup<CompanyID> actor(_current_company, CompanyID(0));
 	leaves.tick_counter = []() noexcept -> uint64_t { return UINT64_MAX; };
-	leaves.economy_fraction = []() noexcept -> uint64_t { return 0; };
 	leaves.maximum_date = []() noexcept -> uint64_t { return INT32_MAX; };
-	leaves.timetable_year_limit = []() noexcept -> uint64_t { return 366; };
 	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<CommandCost *>(out) = CMD_ERROR; };
 	struct Case { int32_t date; uint64_t tick; bool valid; };
 	for (const Case test : {Case{INT32_MIN, UINT64_MAX, false}, Case{-1, 73, true}, Case{0, UINT64_MAX, true}, Case{INT32_MAX, UINT64_MAX, true}, Case{INT32_MAX, 73, false}}) {
@@ -89,6 +89,7 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 		CHECK(result.Failed() == !test.valid);
 	}
 	TimerGameEconomy::date = saved_date;
+	TimerGameEconomy::date_fract = saved_fraction;
 }
 TEST_CASE("Orders ownership - early validation and complete native error storage")
 {
