@@ -53,8 +53,6 @@ rebound | OpenTTDMapLogX | src/rust/vehicle_services.cpp | map_log_x
 rebound | OpenTTDMapLogX | src/town_cmd.cpp | map_log_x
 rebound | OpenTTDMapScaleLandProportion | src/industry_cmd.cpp | scale_by_land_proportion
 rebound | OpenTTDMapScaleLandProportion | src/town_cmd.cpp | scale_land
-rebound | OpenTTDMapScaleSize | src/industry_cmd.cpp | scale_by_map_size
-rebound | OpenTTDMapScaleSize | src/town_cmd.cpp | scale_size
 rebound | OpenTTDScaleTownCargo | src/object_cmd.cpp | scale_cargo
 rebound | OpenTTDScaleTownCargo | src/town_cmd.cpp | scale_cargo
 rebound | OpenTTDTileMaxPixelZ | src/industry_cmd.cpp | pixel_max_z
