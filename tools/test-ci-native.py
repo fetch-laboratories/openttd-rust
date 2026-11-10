@@ -94,7 +94,13 @@ class ShardTests(unittest.TestCase):
                 [(r["shard"], r["attempt"], r["passed"]) for r in reports],
                 [(0, 1, True), (1, 2, True)],
             )
-            (folder / "shard-2.json").write_text("{}")
+            # The base branch's workflow may still write the unversioned name.
+            (folder / "shard-2.json").write_text('{"shard": 2, "attempt": 0}')
+            self.assertEqual(
+                [(r["shard"], r["attempt"]) for r in ci_native.latest_reports(folder)],
+                [(0, 1), (1, 2), (2, 0)],
+            )
+            (folder / "shard-3-a.json").write_text("{}")
             with self.assertRaises(ValueError):
                 ci_native.latest_reports(folder)
 
