@@ -1100,6 +1100,11 @@ impl Engine<'_> {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { population(self.owner) }
     }
+    /// `NOT_REACHED()`: the native fatal error; it does not return.
+    fn not_reached(&self) -> ! {
+        (self.services.not_reached)();
+        unreachable!("NOT_REACHED returned")
+    }
     fn layout(&self) -> TownLayout {
         TownLayout(read_field!(self.owner, simulation.layout))
     }
@@ -1574,17 +1579,24 @@ impl Engine<'_> {
         /* align the grid to the downtown */
         let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile); // Vector from downtown to the tile
         let mut rcmd = RoadBits::ROAD_NONE;
-        // `TL_2X2_GRID` uses every third tile; `TL_3X3_GRID` every fourth.
-        let spacing = if self.layout() == TownLayout::TL_2X2_GRID {
-            3
-        } else {
-            4
-        };
-        if grid_pos.x % spacing == 0 {
-            rcmd |= RoadBits::ROAD_Y;
-        }
-        if grid_pos.y % spacing == 0 {
-            rcmd |= RoadBits::ROAD_X;
+        match self.layout() {
+            TownLayout::TL_2X2_GRID => {
+                if grid_pos.x % 3 == 0 {
+                    rcmd |= RoadBits::ROAD_Y;
+                }
+                if grid_pos.y % 3 == 0 {
+                    rcmd |= RoadBits::ROAD_X;
+                }
+            }
+            TownLayout::TL_3X3_GRID => {
+                if grid_pos.x % 4 == 0 {
+                    rcmd |= RoadBits::ROAD_Y;
+                }
+                if grid_pos.y % 4 == 0 {
+                    rcmd |= RoadBits::ROAD_X;
+                }
+            }
+            _ => self.not_reached(),
         }
         /* Optimise only X-junctions */
         if rcmd != RoadBits::ROAD_ALL {
@@ -2016,47 +2028,52 @@ impl Engine<'_> {
                 self.level_town_land(tile);
             }
             /* Is a road allowed here? */
-            if layout.0 >= TownLayout::TL_2X2_GRID.0 {
-                // TL_3X3_GRID, TL_2X2_GRID
-                rcmd = self.get_town_road_grid_element(tile, target_dir);
-                if rcmd == RoadBits::ROAD_NONE {
-                    return TownGrowthResult::SearchStopped;
+            match layout {
+                TownLayout::TL_3X3_GRID | TownLayout::TL_2X2_GRID => {
+                    rcmd = self.get_town_road_grid_element(tile, target_dir);
+                    if rcmd == RoadBits::ROAD_NONE {
+                        return TownGrowthResult::SearchStopped;
+                    }
                 }
-            } else {
-                // TL_BETTER_ROADS, TL_ORIGINAL
-                if !self.is_road_allowed_here(t1, tile, target_dir) {
-                    return TownGrowthResult::SearchStopped;
-                }
-                let source_dir = self.reverse_diag_dir(target_dir);
-                if self.chance16(1, 4) {
-                    /* Randomize a new target dir */
-                    target_dir = self.random_diag_dir();
-                    while target_dir == source_dir {
+                TownLayout::TL_BETTER_ROADS | TownLayout::TL_ORIGINAL => {
+                    if !self.is_road_allowed_here(t1, tile, target_dir) {
+                        return TownGrowthResult::SearchStopped;
+                    }
+                    let source_dir = self.reverse_diag_dir(target_dir);
+                    if self.chance16(1, 4) {
+                        /* Randomize a new target dir */
                         target_dir = self.random_diag_dir();
+                        while target_dir == source_dir {
+                            target_dir = self.random_diag_dir();
+                        }
                     }
-                }
-                let next_tile = self.tile_add_by_diag_dir(tile, target_dir);
-                if !self.is_road_allowed_here(t1, next_tile, target_dir) {
-                    /* A road is not allowed to continue the randomized road,
-                     *  return if the road we're trying to build is curved. */
-                    if target_dir != self.reverse_diag_dir(source_dir) {
-                        return TownGrowthResult::SearchStopped;
-                    }
-                    /* Return if neither side of the new road is a house */
-                    let right = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
-                    let left = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
-                    if !self
-                        .is_tile_type(self.tile_add_by_diag_dir(tile, right), TileType::MP_HOUSE)
-                        && !self
+                    let next_tile = self.tile_add_by_diag_dir(tile, target_dir);
+                    if !self.is_road_allowed_here(t1, next_tile, target_dir) {
+                        /* A road is not allowed to continue the randomized road,
+                         *  return if the road we're trying to build is curved. */
+                        if target_dir != self.reverse_diag_dir(source_dir) {
+                            return TownGrowthResult::SearchStopped;
+                        }
+                        /* Return if neither side of the new road is a house */
+                        let right =
+                            change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
+                        let left =
+                            change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
+                        if !self.is_tile_type(
+                            self.tile_add_by_diag_dir(tile, right),
+                            TileType::MP_HOUSE,
+                        ) && !self
                             .is_tile_type(self.tile_add_by_diag_dir(tile, left), TileType::MP_HOUSE)
-                    {
-                        return TownGrowthResult::SearchStopped;
+                        {
+                            return TownGrowthResult::SearchStopped;
+                        }
+                        /* That means that the road is only allowed if there is a house
+                         *  at any side of the new road. */
                     }
-                    /* That means that the road is only allowed if there is a house
-                     *  at any side of the new road. */
+                    rcmd = self.diag_dir_to_road_bits(target_dir)
+                        | self.diag_dir_to_road_bits(source_dir);
                 }
-                rcmd =
-                    self.diag_dir_to_road_bits(target_dir) | self.diag_dir_to_road_bits(source_dir);
+                _ => self.not_reached(),
             }
         } else if target_dir.0 < DiagDirection::DIAGDIR_END.0
             && cur_rb & self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir))
@@ -2071,13 +2088,15 @@ impl Engine<'_> {
             /* Continue building on a partial road.
              * Should be always OK, so we only generate
              * the fitting RoadBits */
-            rcmd = if layout.0 >= TownLayout::TL_2X2_GRID.0 {
-                // TL_3X3_GRID, TL_2X2_GRID
-                self.get_town_road_grid_element(tile, target_dir)
-            } else {
-                // TL_BETTER_ROADS, TL_ORIGINAL
-                self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir))
-            };
+            match layout {
+                TownLayout::TL_3X3_GRID | TownLayout::TL_2X2_GRID => {
+                    rcmd = self.get_town_road_grid_element(tile, target_dir);
+                }
+                TownLayout::TL_BETTER_ROADS | TownLayout::TL_ORIGINAL => {
+                    rcmd = self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir));
+                }
+                _ => self.not_reached(),
+            }
         } else {
             let mut allow_house = true; // Value which decides if we want to construct a house
 
@@ -2123,24 +2142,39 @@ impl Engine<'_> {
             let mut result = TownGrowthResult::Continue;
             rcmd = RoadBits::ROAD_NONE;
             if target_dir != DiagDirection::DIAGDIR_END && town_allowed_to_build_roads(modes) {
-                // TL_3X3_GRID: use 2x2 grid afterwards! TL_BETTER_ROADS: use original afterwards!
-                let extra_tile = self.tile_add_by_diag_dir(house_tile, target_dir);
-                if (layout == TownLayout::TL_3X3_GRID || layout == TownLayout::TL_BETTER_ROADS)
-                    && self.grow_town_with_extra_house(t1, extra_tile, modes)
-                {
-                    result = TownGrowthResult::Succeed;
-                }
-                if layout.0 >= TownLayout::TL_2X2_GRID.0 {
-                    // TL_3X3_GRID, TL_2X2_GRID
-                    rcmd = self.get_town_road_grid_element(tile, target_dir);
-                    allow_house = rcmd & target_rb == RoadBits::ROAD_NONE;
-                } else {
-                    // TL_BETTER_ROADS, TL_ORIGINAL
-                    /* Allow a house at the edge. 60% chance or
-                     * always ok if no road allowed. */
-                    rcmd = target_rb;
-                    allow_house = !self.is_road_allowed_here(t1, house_tile, target_dir)
-                        || self.chance16(6, 10);
+                match layout {
+                    TownLayout::TL_3X3_GRID | TownLayout::TL_2X2_GRID => {
+                        // TL_3X3_GRID: Use 2x2 grid afterwards!
+                        if layout == TownLayout::TL_3X3_GRID
+                            && self.grow_town_with_extra_house(
+                                t1,
+                                self.tile_add_by_diag_dir(house_tile, target_dir),
+                                modes,
+                            )
+                        {
+                            result = TownGrowthResult::Succeed;
+                        }
+                        rcmd = self.get_town_road_grid_element(tile, target_dir);
+                        allow_house = rcmd & target_rb == RoadBits::ROAD_NONE;
+                    }
+                    TownLayout::TL_BETTER_ROADS | TownLayout::TL_ORIGINAL => {
+                        // TL_BETTER_ROADS: Use original afterwards!
+                        if layout == TownLayout::TL_BETTER_ROADS
+                            && self.grow_town_with_extra_house(
+                                t1,
+                                self.tile_add_by_diag_dir(house_tile, target_dir),
+                                modes,
+                            )
+                        {
+                            result = TownGrowthResult::Succeed;
+                        }
+                        /* Allow a house at the edge. 60% chance or
+                         * always ok if no road allowed. */
+                        rcmd = target_rb;
+                        allow_house = !self.is_road_allowed_here(t1, house_tile, target_dir)
+                            || self.chance16(6, 10);
+                    }
+                    _ => self.not_reached(),
                 }
             }
             allow_house &= self.road_types_allow_house_here(house_tile);
