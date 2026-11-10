@@ -1125,12 +1125,12 @@ pub(crate) unsafe fn move_goods_to_station(
 ) -> u32 {
     // SAFETY: Live immutable tables; caller contract for the set.
     unsafe {
-        crate::station_service::distribute(
-            cargo.0,
+        crate::station_service::move_goods_to_station(
+            cargo,
             amount,
             source,
             all_stations,
-            exclusivity.0,
+            exclusivity,
             c.c.station,
             &*c.c.visits,
         )
