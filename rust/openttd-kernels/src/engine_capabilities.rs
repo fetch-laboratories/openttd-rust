@@ -324,13 +324,17 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
     engine: u16,
     purchase: bool,
 ) -> u32 {
-    unsafe { count_articulated_parts(s, engine, purchase) }
+    unsafe { count_articulated_parts(s, crate::engine_type::EngineID(engine), purchase) }
 }
 /// `CountArticulatedParts`: count the number of articulated parts of an engine, outside
 /// (`purchase` false) or inside the purchase window's scope.
-unsafe fn count_articulated_parts(s: &Services, engine: u16, purchase: bool) -> u32 {
+unsafe fn count_articulated_parts(
+    s: &Services,
+    engine: crate::engine_type::EngineID,
+    purchase: bool,
+) -> u32 {
     unsafe {
-        if openttd_rust_articulated_is_abi(s, engine) == 0 {
+        if openttd_rust_articulated_is_abi(s, engine.0) == 0 {
             return 0;
         }
         // If we can't allocate a vehicle now, we can't allocate it in the command
@@ -344,13 +348,13 @@ unsafe fn count_articulated_parts(s: &Services, engine: u16, purchase: bool) -> 
             null_mut()
         } else {
             let v = (s.new_temporary)();
-            crate::vehicle::VehicleRef::of(v).write_engine(engine);
+            crate::vehicle::VehicleRef::of(v).write_engine(engine.0);
             crate::vehicle::VehicleRef::of(v).write_owner((s.shared.current_company)());
             v
         };
         let mut i = 1;
         while i < MAX_ARTICULATED_PARTS {
-            if openttd_rust_articulated_next(s, i, engine, v, null_mut()) == INVALID_ENGINE {
+            if openttd_rust_articulated_next(s, i, engine.0, v, null_mut()) == INVALID_ENGINE {
                 break;
             }
             i += 1;
