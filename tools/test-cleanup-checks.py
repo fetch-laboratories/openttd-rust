@@ -1457,11 +1457,17 @@ class OrdinaryRustTests(unittest.TestCase):
                 )
                 self.assertNotEqual(result.returncode, 0)
                 raw = result.stdout + result.stderr
-                self.assertIn("generated 1 warning\n" + header + cause, raw)
-                shown = migration.failure_output("rust-clippy", raw)
-                self.assertIn(header + cause, shown)
-                self.assertIn("could not compile", shown)
-                self.assertNotIn("unsafe function's docs", shown)
+                # Cargo checks the library and its test target in either order,
+                # so the error may sit directly below a warning summary, or no
+                # warning may print at all. Whatever the order, no error line
+                # may be lost; the synthetic case pins the adjacency itself.
+                errors = [line for line in raw.splitlines() if line.startswith("error")]
+                self.assertTrue(any(line.startswith(header + cause) for line in errors))
+                self.assertTrue(any("could not compile" in line for line in errors))
+                shown = migration.failure_output("rust-clippy", raw).splitlines()
+                for line in errors:
+                    self.assertIn(line, shown)
+                self.assertFalse([line for line in shown if line.startswith("warning")])
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"
