@@ -1493,7 +1493,9 @@ fn setup_target_count(builder: *mut Builder, s: &Services) {
         while r >= unsafe { (*builddata(b, it)).probability } {
             r -= unsafe { (*builddata(b, it)).probability };
             it.0 += 1;
+            s.assert_with(|| it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
         }
+        s.assert_with(|| unsafe { (*builddata(b, it)).probability } > 0);
         unsafe {
             (*builddata(b, it)).target_count = (*builddata(b, it)).target_count.wrapping_add(1);
         }
@@ -1598,7 +1600,7 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
                 0
             };
             let mut it = IndustryType(0);
-            loop {
+            while it.0 < IndustryType::NUM_INDUSTRYTYPES.0 {
                 let f = builddata(b, it);
                 // Type may not be built now.
                 if unsafe { (*f).wait_count == 0 } {
@@ -1607,13 +1609,19 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
                     // Too many of this kind.
                     if difference > 0 {
                         if count == 1 || r < difference as u32 {
-                            break it;
+                            break;
                         }
                         r -= difference as u32;
                     }
                 }
                 it.0 += 1;
             }
+            s.assert_with(|| {
+                it.0 < IndustryType::NUM_INDUSTRYTYPES.0
+                    && unsafe { (*builddata(b, it)).target_count }
+                        > get_industry_type_count(builder, it, s)
+            });
+            it
         } else {
             forced_build
         };

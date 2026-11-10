@@ -233,6 +233,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
         // Try to build one industry per type independent of any probabilities
         for it in 0..IndustryType::NUM_INDUSTRYTYPES.0 {
             if p.force_one[usize::from(it)] {
+                s.assert_with(|| total_amount > 0);
                 total_amount = total_amount.wrapping_sub(1);
                 if !place_initial_industry(IndustryType(it), water, true, context, s, g) {
                     return u8::from(false);
@@ -246,7 +247,9 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             while r >= p.probs[usize::from(it.0)] {
                 r = r.wrapping_sub(p.probs[usize::from(it.0)]);
                 it.0 += 1;
+                s.assert_with(|| it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
             }
+            s.assert_with(|| p.probs[usize::from(it.0)] > 0);
             if !place_initial_industry(it, water, false, context, s, g) {
                 return u8::from(false);
             }

@@ -725,6 +725,8 @@ impl Engine<'_> {
         ip: *mut *mut ShellHandle,
     ) -> bool {
         let (tile, kind) = (candidate.tile, candidate.kind);
+        self.s
+            .assert_with(|| candidate.layout_index < unsafe { (*indspec).layouts.len() });
         let layout = unsafe { &raw const (*indspec).layouts.as_slice()[candidate.layout_index] };
         unsafe { *ip = ptr::null_mut() };
         // 1. Cheap: Built-in checks on industry level.
@@ -734,6 +736,8 @@ impl Engine<'_> {
         let Some(t) = self.find_town_for_industry(tile, kind) else {
             return false;
         };
+        self.s.assert_with(|| !t.is_null());
+
         if !self.check_if_industry_is_allowed(tile, kind, t) {
             return false;
         }
@@ -1172,16 +1176,9 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         );
     }
 }
-/// `CreateNewIndustry`: create a new industry of random layout at `tile`. `industry`
-/// receives the created industry, or null if it failed.
-///
 /// # Safety
 /// Live stack result/output; source preconditions require a nonempty layout list.
 #[unsafe(no_mangle)]
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "CreateNewIndustry keeps the original's implicit C++ integer conversions"
-)]
 pub unsafe extern "C" fn openttd_rust_industry_create(
     out: *mut IndustryCost,
     industry: *mut *mut ShellHandle,
@@ -1191,7 +1188,32 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
     context: *const TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    let kind = IndustryType(kind);
+    unsafe {
+        create_new_industry(
+            &e,
+            industry,
+            TileIndex(tile),
+            IndustryType(kind),
+            IndustryAvailabilityCallType(creation_type),
+        );
+    }
+}
+/// `CreateNewIndustry`: create a new industry of random layout at `tile`. `industry`
+/// receives the created industry, or null if it failed.
+///
+/// # Safety
+/// Live output; source preconditions require a nonempty layout list.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CreateNewIndustry keeps the original's implicit C++ integer conversions"
+)]
+unsafe fn create_new_industry(
+    e: &Engine<'_>,
+    industry: *mut *mut ShellHandle,
+    tile: TileIndex,
+    kind: IndustryType,
+    creation_type: IndustryAvailabilityCallType,
+) {
     let indspec = get_industry_spec(kind);
     let seed = e.s.shared().random();
     let seed2 = e.s.shared().random();
@@ -1199,20 +1221,21 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
         e.s.shared()
             .random_range(unsafe { (*indspec).layouts.len() } as u32) as usize;
     let candidate = IndustryCandidate {
-        tile: TileIndex(tile),
+        tile,
         kind,
         layout_index,
         initial_random_bits: gb(seed2, 0, 16) as u16,
         founder: Owner::NONE,
-        creation_type: IndustryAvailabilityCallType(creation_type),
+        creation_type,
     };
-    e.create_new_industry_helper(
+    let succeeded = e.create_new_industry_helper(
         &candidate,
         DoCommandFlags::from_element(DoCommandFlag::Execute),
         indspec,
         seed,
         industry,
     );
+    e.s.assert_with(|| unsafe { !(*industry).is_null() } || !succeeded);
 }
 
 /// # Safety
