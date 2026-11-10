@@ -114,7 +114,7 @@ def clippy_command(*options: str) -> list[str]:
 # A rendered diagnostic or Cargo status line starts at column 0 with its level;
 # the lines that follow belong to it. Cargo puts no blank line between one
 # target's warning summary and the next target's first diagnostic.
-DIAGNOSTIC = re.compile(r"(warning|error)(\[\w:]+\])?: ")
+DIAGNOSTIC = re.compile(r"(warning|error)(\[[\w:]+\])?: ")
 
 
 def failure_output(name: str, text: str) -> str:

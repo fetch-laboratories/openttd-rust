@@ -1369,6 +1369,15 @@ class OrdinaryRustTests(unittest.TestCase):
             "error: could not compile `x` (lib test) due to 1 previous error\n",
         )
         self.assertEqual(migration.failure_output("rust-check", log), log)
+        # Every header form starts a diagnostic: with a code, a lint path, or neither.
+        for header in ("error[E0425]: ", "error: ", "error[clippy::eq_op]: "):
+            coded = (
+                "warning[W1]: debt\n  --> a.rs:1:1\n" + header + "cause\n  --> b.rs\n"
+            )
+            self.assertEqual(
+                migration.failure_output("rust-clippy", coded),
+                header + "cause\n  --> b.rs\n",
+            )
 
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
         import migration
@@ -1430,21 +1439,29 @@ class OrdinaryRustTests(unittest.TestCase):
                 LINT.collect("clippy", root)
             # Cargo prints the library's warning summary directly above the test
             # target's error, with no blank line: the error must survive.
-            (root / "src/lib.rs").write_text(
-                "pub unsafe fn undocumented() {}\n"
-                "#[cfg(test)]\npub fn bad() -> bool { true == true }\n"
-            )
-            gate = migration.clippy_command("-j1")
-            result = subprocess.run(
-                gate, cwd=root, env=env, capture_output=True, text=True
-            )
-            self.assertNotEqual(result.returncode, 0)
-            raw = result.stdout + result.stderr
-            self.assertRegex(raw, r"generated 1 warning\nerror: equal expressions")
-            shown = migration.failure_output("rust-clippy", raw)
-            self.assertIn("equal expressions", shown)
-            self.assertIn("could not compile", shown)
-            self.assertNotIn("unsafe function's docs", shown)
+            # A lint error has no code; a compiler error has one (`error[E0425]`).
+            for body, header, cause in (
+                ("bool { true == true }", "error: ", "equal expressions"),
+                ("i32 { missing }", "error[E0425]: ", "cannot find value"),
+            ):
+                (root / "src/lib.rs").write_text(
+                    "pub unsafe fn undocumented() {}\n"
+                    f"#[cfg(test)]\npub fn bad() -> {body}\n"
+                )
+                result = subprocess.run(
+                    migration.clippy_command("-j1"),
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                raw = result.stdout + result.stderr
+                self.assertIn("generated 1 warning\n" + header + cause, raw)
+                shown = migration.failure_output("rust-clippy", raw)
+                self.assertIn(header + cause, shown)
+                self.assertIn("could not compile", shown)
+                self.assertNotIn("unsafe function's docs", shown)
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"
