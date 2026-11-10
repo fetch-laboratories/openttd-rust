@@ -34,6 +34,7 @@ from code_lines import (
     Comment,
     String,
     code_lines,
+    persist,
     tokens,
     without_comments,
 )
@@ -424,6 +425,13 @@ def expanded_rust(revision: str) -> str:
     cache.write_text(expanded)
     _EXPANDED[key] = expanded
     return expanded
+
+
+def keep_code_lines() -> None:
+    """Share code-line results between runs and worktrees of this clone."""
+    import migration
+
+    persist(migration.COMMON_LOCAL / "growth-inputs")
 
 
 def growth_inventory(head: str) -> dict[str, dict[str, int]]:
@@ -906,6 +914,7 @@ def main() -> None:
         "implies --whole-fork",
     )
     args = parser.parse_args()
+    keep_code_lines()
     args.whole_fork |= args.functions is not None
     base = (
         BASELINE

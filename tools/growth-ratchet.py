@@ -112,6 +112,7 @@ def main() -> int:
     parser.add_argument("--base-ref", default="origin/rust-migration")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args()
+    METRICS.keep_code_lines()
     before = METRICS.growth_inventory(args.base_ref)
     after = METRICS.growth_inventory(args.head)
     growth = increases(before, after)
