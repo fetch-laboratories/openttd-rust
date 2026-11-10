@@ -778,11 +778,21 @@ class PolicyTests(unittest.TestCase):
         dispatch = "workflow_dispatch"
         all_linux, both_windows = ["clang", "sdl2", "dedicated"], ["x86", "x64"]
         for profile, checkout, event, heavy, covered, linux, windows, macos in (
-            ("full", "merge", dispatch, "", "", ["sdl2"], ["x64"], False),
+            ("full", "merge", dispatch, "", "", all_linux, both_windows, False),
             ("native", "merge", dispatch, "", "", ["sdl2"], [], False),
             ("platform", "merge", dispatch, "", "", all_linux, both_windows, True),
             ("", "", dispatch, "", "", ["clang", "dedicated"], both_windows, True),
-            ("", "", "push", "false", "true", ["sdl2"], ["x64"], False),
+            # A covered push refreshes every cached flavour Full restores.
+            (
+                "",
+                "",
+                "push",
+                "false",
+                "true",
+                ["sdl2", "dedicated"],
+                both_windows,
+                False,
+            ),
             ("", "", "push", "true", "", all_linux, both_windows, True),
             ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
         ):

@@ -39,7 +39,7 @@ For final validation and merge, root follows these steps:
 
 - `CI_ON_DEMAND=true` enables `tools/ci.py` requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
 - For a workflow-changing PR, root reviews its workflow, temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap` through `ci:full`. After merge, restore the variable to `true` and record both changes in the PR.
-- Run macOS, Windows x86, Linux Clang and Linux GCC Dedicated on `rust-migration` after every fifth integration (user, 2026-10-22 and 2026-10-26; #357, #514): `gh workflow run ci-build.yml --ref rust-migration`. Fix a red result before further integrations. An uncovered protected push also runs them. The dispatch includes the [platform comparison](rust-migration.md#continuous-integration).
+- Run macOS and the [platform comparison](rust-migration.md#continuous-integration) on `rust-migration` after every fifth integration (user, 2026-10-22; #357): `gh workflow run ci-build.yml --ref rust-migration`. Fix a red result before further integrations. An uncovered protected push also runs them. Windows x86, Linux Clang and GCC Dedicated run in every Full (user, 2026-11-10; #860), so the dispatch's builds of them repeat a tested tree.
 - After two hosted-capacity cancellations of a macOS run, run `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, rerun, then `gh variable delete CI_MACOS_HEAVY` when it finishes.
 
 ## Stocktake facts
