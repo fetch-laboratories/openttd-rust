@@ -639,7 +639,9 @@ mod release_search_tests {
             return;
         }
         extern "C" fn assertions_disabled(_: bool) {}
-        crate::services_assert::openttd_rust_assert_bind(assertions_disabled);
+        unsafe {
+            crate::services_assert::openttd_rust_assert_bind(assertions_disabled, std::ptr::null());
+        }
         assert_eq!(super::find(b"abc", b"", super::FIND_STRING), 0);
         assert_eq!(super::find(b"", b"", super::FIND_STRING), 0);
         for policy in [

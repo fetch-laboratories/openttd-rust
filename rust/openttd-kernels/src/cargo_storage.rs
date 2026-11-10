@@ -1951,10 +1951,14 @@ mod tests {
     /// Failed native checks on this thread while running `operation`. Other tests
     /// keep failing fast afterwards.
     fn failed_checks(operation: impl FnOnce()) -> u32 {
-        crate::services_assert::openttd_rust_assert_bind(record_failed_check);
+        unsafe {
+            crate::services_assert::openttd_rust_assert_bind(record_failed_check, std::ptr::null());
+        }
         FAILED_CHECKS.with(|failed| failed.set(0));
         operation();
-        crate::services_assert::openttd_rust_assert_bind(abort_failed_check);
+        unsafe {
+            crate::services_assert::openttd_rust_assert_bind(abort_failed_check, std::ptr::null());
+        }
         FAILED_CHECKS.with(Cell::get)
     }
 

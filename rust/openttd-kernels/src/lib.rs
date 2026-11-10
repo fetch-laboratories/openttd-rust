@@ -1208,6 +1208,7 @@ mod network_command;
 mod network_connection;
 mod network_content;
 mod network_crypto;
+mod network_crypto_internal;
 mod network_dispatch;
 mod network_frame;
 mod network_internal;

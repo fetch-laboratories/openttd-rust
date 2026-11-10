@@ -9,6 +9,10 @@
 //! The incremental AEAD keeps its nonce fixed and replaces its key after each
 //! successful message with the upper half of `ChaCha20` block zero.
 
+use crate::network_crypto_internal::{
+    X25519_KEY_SIZE, X25519DerivedKeys, X25519Key, X25519KeyExchangeSide, X25519PublicKey,
+    X25519SecretKey,
+};
 use blake2::{Blake2b128, Blake2b256, Blake2b512, Digest};
 use chacha20::{
     ChaCha20Legacy, R20,
@@ -71,18 +75,50 @@ impl Hash {
 }
 
 /// `crypto_x25519_public_key`.
-pub(crate) fn public_key(secret: &[u8; 32]) -> [u8; 32] {
+pub(crate) fn public_key(secret: &X25519SecretKey) -> X25519PublicKey {
     MontgomeryPoint::mul_base_clamped(*secret).to_bytes()
 }
 
 /// `crypto_x25519`.
-pub(crate) fn x25519(secret: &[u8; 32], peer: &[u8; 32]) -> [u8; 32] {
+pub(crate) fn x25519(secret: &X25519SecretKey, peer: &X25519PublicKey) -> X25519Key {
     MontgomeryPoint(*peer).mul_clamped(*secret).to_bytes()
 }
 
-/// `X25519DerivedKeys::Exchange`: perform the actual key exchange. `server` is
-/// whether we are the server; it orders the public keys in the hash. Returns
+/// `X25519DerivedKeys::Exchange`: perform the actual key exchange. `side` is
+/// the side of the exchange; it orders the public keys in the hash. Returns
 /// false when an illegal public key was given.
+pub(crate) fn exchange(
+    keys: &mut X25519DerivedKeys,
+    secret: &X25519SecretKey,
+    public: &X25519PublicKey,
+    peer: &X25519PublicKey,
+    side: X25519KeyExchangeSide,
+    extra: &[u8],
+) -> bool {
+    let shared = Zeroizing::new(x25519(secret, peer));
+    if bool::from(shared.ct_eq(&[0; X25519_KEY_SIZE])) {
+        /* A shared secret of all zeros means that the peer tried to force the shared secret to a known constant. */
+        return false;
+    }
+    let mut hash = Hash::new(keys.len());
+    hash.update(shared.as_ref());
+    match side {
+        X25519KeyExchangeSide::SERVER => {
+            hash.update(public);
+            hash.update(peer);
+        }
+        X25519KeyExchangeSide::CLIENT => {
+            hash.update(peer);
+            hash.update(public);
+        }
+        _ => crate::services_assert::not_reached(),
+    }
+    hash.update(extra);
+    hash.finish(keys);
+    true
+}
+
+/// Raw adapter for unfinished `auth.rs` callers until its pass.
 pub(crate) fn derive(
     keys: &mut [u8; 64],
     secret: &[u8; 32],
@@ -91,23 +127,18 @@ pub(crate) fn derive(
     server: bool,
     extra: &[u8],
 ) -> bool {
-    let shared = Zeroizing::new(x25519(secret, peer));
-    if bool::from(shared.ct_eq(&[0; 32])) {
-        /* A shared secret of all zeros means that the peer tried to force the shared secret to a known constant. */
-        return false;
-    }
-    let mut hash = Hash::new(keys.len());
-    hash.update(shared.as_ref());
-    let (server, client) = if server {
-        (public, peer)
-    } else {
-        (peer, public)
-    };
-    hash.update(server);
-    hash.update(client);
-    hash.update(extra);
-    hash.finish(keys);
-    true
+    exchange(
+        keys,
+        secret,
+        public,
+        peer,
+        if server {
+            X25519KeyExchangeSide::SERVER
+        } else {
+            X25519KeyExchangeSide::CLIENT
+        },
+        extra,
+    )
 }
 
 /// `crypto_aead_ctx`.
