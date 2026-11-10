@@ -257,18 +257,25 @@ pub struct OpenTTDRustSaveLoadCodec {
     pub write_cursor: *mut u8,
     /// `MemoryDumper::bufe`.
     pub write_end: *mut u8,
+    /// `_sl.obj_len`: the length of the current object we are busy with.
     pub obj_len: usize,
     /// `_next_offs`.
     pub next_offs: usize,
+    /// `_sl.array_index`: in the case of an array, the current position.
     pub array_index: i32,
+    /// `_sl.last_array_index`: in the case of an array, the last position.
     pub last_array_index: i32,
     /// `&_sl_version`, set once by native code.
     pub version: *const u16,
     /// `&_sl_minor_version`, set once by native code.
     pub minor_version: *const u8,
+    /// `_sl.action`: are we doing a save or a load atm.
     pub action: u8,
+    /// `_sl.need_length`: working in `NeedLength` (Autolength) mode?
     pub need_length: u8,
+    /// `_sl.block_mode`.
     pub block_mode: u8,
+    /// `_sl.expect_table_header`: in the case of a table, if the header is saved/loaded.
     pub expect_table_header: bool,
 }
 
@@ -1324,7 +1331,8 @@ fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -
     len + gamma_length(len) as usize
 }
 
-/// `SlReadString`.
+/// `SlReadString`: read the given amount of bytes from the buffer into the string.
+/// Does not perform any validation on validity of the string.
 fn read_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, length: usize) -> Status {
     let mut data = std::ptr::null_mut();
     if !(services.string_resize)(ptr, length, &raw mut data) {
