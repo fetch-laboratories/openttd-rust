@@ -59,11 +59,16 @@ pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
     *value
 }
 
-/// `AssignBit`: assigns a single bit in a variable. The variable is changed and the value is
-/// also returned. For uint16 fields.
+/// `AssignBit<uint16_t>`: [`assign_bit`] on a uint16 field. `SB<T>` computes in the promoted
+/// width and stores back into `T`, so the narrowing keeps every source-valid bit.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "AssignBit<uint16_t> stores SB's promoted result back into the uint16_t field"
+)]
 pub fn assign_bit16(value: &mut u16, bit: u8, enabled: bool) -> u16 {
-    *value &= !1_u16.wrapping_shl(u32::from(bit));
-    *value |= u16::from(enabled).wrapping_shl(u32::from(bit));
+    let mut promoted = u32::from(*value);
+    assign_bit(&mut promoted, bit, enabled);
+    *value = promoted as u16;
     *value
 }
 
