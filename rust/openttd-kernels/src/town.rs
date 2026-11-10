@@ -599,7 +599,7 @@ pub struct SuppliedEntry {
     pub created: bool,
 }
 /// `Town::GetOrCreateCargoSupplied`.
-unsafe fn supplied_entry(state: *mut State, cargo: CargoType) -> SuppliedEntry {
+pub(crate) unsafe fn supplied_entry(state: *mut State, cargo: CargoType) -> SuppliedEntry {
     // SAFETY: Live sole owner, no native vector views survive its mutation.
     let rows = unsafe { &mut (*state).supplied };
     let at = rows.partition_point(|row| row.cargo < cargo.0);

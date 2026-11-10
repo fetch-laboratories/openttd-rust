@@ -22,7 +22,7 @@ pub(crate) fn update_town_max_pass(leaves: &Leaves, owner: *mut State) {
             if production != 0 {
                 let cargo = CargoType(cargo_registry::town_cargo(effect.0, i));
                 // GetOrCreateCargoSupplied can relocate the vector; no borrow spans scaling.
-                let entry = unsafe { super::openttd_rust_town_supplied_entry(owner, cargo.0) };
+                let entry = unsafe { super::supplied_entry(owner, cargo) };
                 unsafe {
                     (*entry.entry).history[usize::from(crate::history_type::LAST_MONTH)]
                         .production = production;
