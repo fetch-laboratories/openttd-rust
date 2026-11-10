@@ -196,7 +196,11 @@ def native_cases(ref: str | None = None) -> tuple[dict[str, str], list[str]]:
     """CTest case names of the registered native test sources, with their files."""
     cases: dict[str, str] = {}
     found = []
-    present = set(git("ls-tree", "-r", "--name-only", ref, "--", "src/tests").split()) if ref else None
+    present = (
+        set(git("ls-tree", "-r", "--name-only", ref, "--", "src/tests").split())
+        if ref
+        else None
+    )
     for path in native_inventory(ref)["native_tests"]:
         if not path.endswith(".cpp") or (present is not None and path not in present):
             continue
@@ -244,7 +248,9 @@ def ctest_case_errors(
         if name not in base and name not in BELATED_CASES:
             found.append(f"ctest: record names no CTest case at the base: {name}")
         elif name in tree:
-            found.append(f"ctest: record retires a CTest case that still exists: {name}")
+            found.append(
+                f"ctest: record retires a CTest case that still exists: {name}"
+            )
     return found
 
 

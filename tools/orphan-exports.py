@@ -54,7 +54,8 @@ def member_definitions(source: str) -> list[tuple[str, str, int, int, int]]:
         end = closing(source, match.end() - 1, "(", ")")
         if end < 0:
             continue
-        body = QUALIFIERS.match(source, end).end()
+        qualifiers = QUALIFIERS.match(source, end)
+        body = qualifiers.end() if qualifiers else end
         if source.startswith("{", body):
             end = closing(source, body, "{", "}")
             found.append((owner, member, match.start(), body, end))
@@ -136,9 +137,7 @@ def scan(files: dict[str, str], broad: bool = False) -> dict[str, set[str]]:
         for definition in member_definitions(source)
     }
     instantiated = {
-        member
-        for source in sources.values()
-        for member in INSTANTIATED.findall(source)
+        member for source in sources.values() for member in INSTANTIATED.findall(source)
     }
     uncalled = (defined if broad else defined & instantiated) - used
     owners: dict[str, set[str]] = {}

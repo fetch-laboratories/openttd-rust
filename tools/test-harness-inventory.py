@@ -164,7 +164,12 @@ class CaseNameTests(unittest.TestCase):
     FILE = "src/tests/kept.cpp"
     BASE = {"Kept - a": FILE, "Kept - b": FILE}
 
-    def errors(self, tree: dict[str, str], retired: set[str], base_retired=()) -> str:
+    def errors(
+        self,
+        tree: dict[str, str],
+        retired: set[str],
+        base_retired: frozenset[str] = frozenset(),
+    ) -> str:
         found = hi.ctest_case_errors(self.BASE, tree, retired, set(base_retired))
         return "\n".join(found)
 
@@ -173,11 +178,15 @@ class CaseNameTests(unittest.TestCase):
 
     def test_renamed_kept_case_fails(self) -> None:
         tree = {"Kept - a": self.FILE, "Kept - b renamed": self.FILE}
-        self.assertIn("removed without a ctest: record: Kept - b", self.errors(tree, set()))
+        self.assertIn(
+            "removed without a ctest: record: Kept - b", self.errors(tree, set())
+        )
 
     def test_deleted_kept_case_needs_its_record(self) -> None:
         tree = {"Kept - a": self.FILE}
-        self.assertIn("removed without a ctest: record: Kept - b", self.errors(tree, set()))
+        self.assertIn(
+            "removed without a ctest: record: Kept - b", self.errors(tree, set())
+        )
         self.assertEqual(self.errors(tree, {"ctest:Kept - b"}), "")
 
     def test_whole_retired_source_needs_no_case_records(self) -> None:
@@ -194,7 +203,7 @@ class CaseNameTests(unittest.TestCase):
 
     def test_records_at_the_base_are_not_rechecked(self) -> None:
         retired = {"ctest:Gone long ago"}
-        self.assertEqual(self.errors(dict(self.BASE), retired, retired), "")
+        self.assertEqual(self.errors(dict(self.BASE), retired, frozenset(retired)), "")
 
     def test_names_are_exact_literals(self) -> None:
         text = (
@@ -207,7 +216,9 @@ class CaseNameTests(unittest.TestCase):
         self.assertEqual(found, [])
         for text in ("TEST_CASE(NAME)\n", 'TEST_CASE("a" "b")\nTEST_CASE(X)\n'):
             self.assertIn("without a plain", " ".join(hi.case_names(text, "x.cpp")[1]))
-        self.assertIn("escape", " ".join(hi.case_names('TEST_CASE("a\\n")', "x.cpp")[1]))
+        self.assertIn(
+            "escape", " ".join(hi.case_names('TEST_CASE("a\\n")', "x.cpp")[1])
+        )
 
     def test_tree_cases_parse(self) -> None:
         cases, found = hi.native_cases()

@@ -12,10 +12,11 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import IO, Any, cast
+from typing import IO, cast
 from unittest.mock import patch
 
 import validation_execution
@@ -149,9 +150,9 @@ class ExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "timeout.log"
             supervisors: list[subprocess.Popen[bytes]] = []
-            popen = subprocess.Popen
+            popen = cast("Callable[..., subprocess.Popen[bytes]]", subprocess.Popen)
 
-            def recorded(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+            def recorded(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
                 supervisors.append(popen(*args, **kwargs))
                 return supervisors[-1]
 
