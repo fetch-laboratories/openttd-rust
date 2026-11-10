@@ -197,7 +197,7 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
-	animation.industry_tiles = &tileservice;
+	auto tile_shared = *animation.shared; tile_shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { return GetTileType(tile); }; const auto *base_shared = std::exchange(animation.shared, &tile_shared); animation.industries = &services; animation.construction = &construction; animation.industry_tiles = &tileservice;
 	builtin_mode = true;
 	uint cases = 0;
 	for (uint32_t seed : {0U, 1U, 0x12345678U, UINT32_MAX}) for (uint64_t tick : {0ULL, 1ULL, 2ULL, 3ULL, 7ULL, 8ULL, 1023ULL, 1024ULL, 1025ULL, 1056ULL, 1407ULL, 1408ULL, 1439ULL, 1440ULL, 1536ULL, 1568ULL, 1919ULL, 1920ULL, 1951ULL, 1952ULL, 2047ULL, static_cast<unsigned long long>(UINT64_MAX)}) {
@@ -207,7 +207,7 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 				auto setup = [&] { openttd_rust_animation_initialize(); openttd_rust_animation_append(2); animation_state = AnimatedTileState::Animated; rng = seed; trace.clear(); builtin = {gfx, frame, loop, 0}; _settings_client.sound.ambient = ambient; TimerGameTick::counter = tick; builtin_spec.animation.status = custom ? AnimationStatus::Animated : AnimationStatus::NoAnimation; openttd_rust_industry_tile_specs()[gfx].animation.status = custom ? ::AnimationStatus::Looping : ::AnimationStatus::NoAnimation; };
 				setup(); AnimateTile_Industry(2);
 				const auto expected_trace = trace; const auto expected_state = builtin; const auto expected_rng = rng; const auto expected_animation = animation_state;
-				setup(); openttd_rust_industry_tile_animate(2, &services, &construction, &tileservice);
+				setup(); openttd_rust_animate_tile(2);
 				if (trace != expected_trace || builtin != expected_state || rng != expected_rng || animation_state != expected_animation || openttd_rust_animation_count() != 1 || openttd_rust_animation_at(0) != 2) {
 					std::fprintf(stderr, "builtin gfx %u tick %llu frame %u loop %u ambient %d custom %d: traces %zu/%zu\n", gfx, static_cast<unsigned long long>(tick), frame, loop, ambient, custom, trace.size(), expected_trace.size());
 					std::abort();
@@ -216,7 +216,7 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 			}
 		}
 	}
-	animation.industry_tiles = nullptr;
+	animation.industries = nullptr; animation.construction = nullptr; animation.industry_tiles = nullptr; animation.shared = base_shared;
 	openttd_rust_animation_initialize();
 	builtin_mode = false;
 	std::printf("Industry builtin animation reference cases: %u\n", cases);

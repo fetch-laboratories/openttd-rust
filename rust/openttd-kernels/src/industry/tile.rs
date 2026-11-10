@@ -296,17 +296,6 @@ fn animate_mine_tower(tile: TileIndex, s: &Services, t: &TileServices) {
         mark_tile_dirty_by_tile(tile, s);
     }
 }
-/// # Safety
-/// Industry tile; immutable service tables outlive the synchronous invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
-    tile: u32,
-    s: *const Services,
-    c: *const ConstructionServices,
-    t: *const TileServices,
-) {
-    unsafe { animate_tile_industry(TileIndex(tile), &*s, &*c, &*t) };
-}
 /// `AnimateTile_Industry`.
 pub(crate) fn animate_tile_industry(
     tile: TileIndex,
