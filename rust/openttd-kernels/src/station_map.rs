@@ -101,10 +101,9 @@ pub(crate) fn is_road_waypoint_tile(tile: TileIndex, s: &Services) -> bool {
     (s.tile_type)(tile.0) == MP_STATION && (s.station_type)(tile.0) == StationType::RoadWaypoint
 }
 
-/// `GetAirportGfx`: get the station graphics of this airport tile. Airport
-/// membership is established by each caller before this read, proving its
-/// native `IsAirport` assertion. `GetStationGfx` retains its native station
-/// assertion; translation calls the Rust owner directly.
+/// `GetAirportGfx`: get the station graphics of this airport tile.
+/// `GetStationGfx` retains its native station assertion; translation calls
+/// the Rust owner directly.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_airport_gfx(
@@ -112,6 +111,8 @@ pub(crate) fn get_airport_gfx(
     s: &Services,
     airport: &crate::newgrf_airport::Services,
 ) -> StationGfx {
+    let world = crate::map_func::World::new(s);
+    world.assert_with(|| world.is_airport(tile));
     StationGfx(crate::newgrf_airport::translate_tile(
         (s.station_gfx)(tile.0),
         airport,
