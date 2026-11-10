@@ -34,10 +34,9 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 ## Review
 
-Each reviewer tells you in one line when its report is posted, and gives its thread ID. Root relays nothing ([review loop](team.md#review-loop)).
+Each reviewer tells you in one line when its report is posted, and gives its thread ID. Root relays nothing ([review loop](team.md#review-loop)). A tool call cancelled with a notice to stop as such a message arrives is the host delivering it, not a refusal: read the message, rerun the call and carry on ([spawning](team.md#spawning)).
 
 - Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - Ask each finding's reviewer to verify, in one line naming the fixing commits, with `t3_thread_send` to its thread ID and `mode: "queue"`.
-- A tool call cancelled with a notice to stop, at the moment a message arrives, is the host delivering that message, not a refusal. Read the message, rerun the call and carry on ([spawning](team.md#spawning)).
 - When every reviewer accepts, queue the PR under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
 - Ask root only for a fresh reviewer after a substantive rewrite or a base update that needs one, or when you and a reviewer disagree.
