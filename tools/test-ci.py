@@ -94,6 +94,7 @@ def evaluate(
     failed = "failure" in results
     return node(
         f"const cancelled = () => {json.dumps(cancelled)}, always = () => true;\n"
+        "const format = (text, ...args) => text.replace(/\\{(\\d+)\\}/g, (_, i) => String(args[i]));\n"
         f"const success = () => {json.dumps(succeeded)}, failure = () => {json.dumps(failed)};\n"
         + declarations
         + f"console.log(JSON.stringify({expression}));"
@@ -129,27 +130,54 @@ def execute_script(
     previous: Iterable[object] = (),
     trees: object = None,
     compare: str | None = None,
+    event_name: str = "workflow_dispatch",
+    commits: Mapping[str, object] | None = None,
+    runs: str = "async () => ({data: {workflow_runs: []}})",
+    progress: Mapping[int, list[object]] | None = None,
+    statuses: Mapping[str, Iterable[object]] | None = None,
+    files: object = None,
+    tick: int = 0,
 ) -> dict[str, Any]:
-    """Run a status writer; `previous` holds the statuses of the PREVIOUS head."""
+    """Run a status writer; `previous` holds the statuses of the PREVIOUS head.
+
+    `commits` answers getCommit by ref, `runs` is the workflow run listing,
+    `progress` the successive getWorkflowRun answers by run ID, `statuses` the
+    listed statuses of other refs and `files` the PR file list (None fails the
+    lookup). Each Date.now() call advances the clock by `tick` milliseconds.
+    """
     script = script_for(filename, name)
     payload = {"pull_request": event, **(payload or {})}
     compare = compare or "async () => ({data: {behind_by: 0}})"
+    listed = {PREVIOUS: list(previous)}
+    listed |= {ref: list(rows) for ref, rows in (statuses or {}).items()}
+    tested = {"parents": [{"sha": PARENT}], "commit": {"tree": {"sha": TREE}}}
     return cast(
         dict[str, Any],
         node(f"""
-const statuses = [], failures = [], outputs = {{}}, trees = {json.dumps(trees or {})};
-const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
+const statuses = [], failures = [], outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
+const commits = {json.dumps(commits or {})}, progress = {json.dumps(progress or {})};
+let now = 0;
+Date.now = () => (now += {tick});
+const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
+const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root', eventName: {json.dumps(event_name)},
   serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
 const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
   info: () => {{}}}};
-const github = {{paginate: async (_method, args) => {{
-  if (args.ref !== {json.dumps(PREVIOUS)}) throw new Error('Unexpected status ref');
-  return {json.dumps(list(previous))};
-}}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
+const github = {{paginate: async (method, args) => {{
+  if (method === github.rest.pulls.listFiles) {{
+    const files = {json.dumps(files)};
+    if (files === null) throw new Error('Not Found');
+    return files;
+  }}
+  const listed = {json.dumps(listed)};
+  if (!(args.ref in listed)) throw new Error('Unexpected status ref');
+  return listed[args.ref];
+}}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}}), listFiles: () => {{}}}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
+  actions: {{listWorkflowRuns: {runs},
+    getWorkflowRun: async args => ({{data: progress[args.run_id].shift()}})}},
   repos: {{
-  getCommit: async () => ({{data: {{parents: [{{sha: {json.dumps(PARENT)}}}],
-    commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
+  getCommit: async args => ({{data: commits[args.ref] ?? {json.dumps(tested)}}}),
   getCollaboratorPermissionLevel: async () => ({{data: {{permission: 'write'}}}}),
   getCombinedStatusForRef: async args => ({{data: {{statuses: args.ref === {json.dumps(PREVIOUS)} ?
     {json.dumps(list(previous))}.map(({{creator, ...status}}) => status) : {json.dumps([latest] if latest else [])}}}}}),
@@ -158,25 +186,31 @@ const github = {{paginate: async (_method, args) => {{
   createCommitStatus: async value => statuses.push(value)
 }}}}}};
 Object.assign(process.env, {json.dumps(env or {})});
-(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs}})))
-  .catch(error => console.log(JSON.stringify({{error: error.message, statuses}})));
+(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs, delays}})))
+  .catch(error => console.log(JSON.stringify({{error: error.message, statuses, delays}})));
 """),
     )
 
 
 def execute_publisher(
-    needs: object, pull: object, superseded: bool = False
+    needs: object,
+    pull: object,
+    superseded: bool = False,
+    queue: bool = False,
+    latest: object = True,
 ) -> dict[str, Any]:
-    latest = {
-        "context": ci.CONTEXT,
-        "target_url": RUN.replace("123", "999") if superseded else RUN,
-    }
+    if latest is True:
+        latest = {
+            "context": ci.CONTEXT,
+            "target_url": RUN.replace("123", "999") if superseded else RUN,
+        }
     return execute_script(
         "ci-request.yml",
         "publish",
         pull,
         env={"RESULTS": json.dumps(needs)},
         latest=latest,
+        **cast(dict[str, Any], QUEUE if queue else {}),
     )
 
 
@@ -194,6 +228,21 @@ def execute_invalidator(
 
 
 SYNCHRONIZE = {"action": "synchronize", "before": PREVIOUS}
+QUEUE_REF = f"refs/heads/gh-readonly-queue/rust-migration/pr-170-{BASE}"
+# A merge group for PR 170: its commit MERGE merges HEAD into PARENT, the base
+# with any PRs queued ahead.
+QUEUE: dict[str, Any] = {
+    "event_name": "merge_group",
+    "payload": {
+        "merge_group": {
+            "head_sha": MERGE,
+            "head_ref": QUEUE_REF,
+            "base_sha": BASE,
+            "base_ref": "refs/heads/rust-migration",
+        }
+    },
+}
+GROUP = {"parents": [{"sha": PARENT}, {"sha": HEAD}], "commit": {"tree": {"sha": TREE}}}
 
 
 def run_policy(
@@ -408,7 +457,7 @@ class GateTests(unittest.TestCase):
         for name in ("native", "platform"):
             condition = job("ci-request.yml", name)["if"]
             for value, expected in (("true", False), ("false", True)):
-                outputs = {"profile": "full", "checker": value}
+                outputs = {"profile": "full", "checker": value, "carried": ""}
                 needs = {"plan": {"result": "success", "outputs": outputs}}
                 self.assertEqual(evaluate(condition, needs=needs), expected)
 
@@ -494,9 +543,14 @@ class GateTests(unittest.TestCase):
         same = {"label": {"name": "ci:full"}, "pull_request": {"head": repo}}
         fork = dict(same, pull_request={"head": {"repo": {"full_name": "other"}}})
         dispatch, pull_request = "workflow_dispatch", "pull_request"
+        queue = {"merge_group": {"base_ref": "refs/heads/rust-migration"}}
+        other = {"merge_group": {"base_ref": "refs/heads/master"}}
         for event, ref, on_demand, payload, expected in (
             (dispatch, "refs/heads/rust-migration", "true", {}, True),
             (dispatch, "refs/heads/feature", "true", {}, False),
+            ("merge_group", QUEUE_REF, "true", queue, True),
+            ("merge_group", QUEUE_REF, "", queue, True),
+            ("merge_group", QUEUE_REF, "true", other, False),
             (pull_request, "refs/pull/1/merge", "false", same, True),
             (pull_request, "refs/pull/1/merge", "true", same, False),
             (pull_request, "refs/pull/1/merge", "false", fork, False),
@@ -509,13 +563,19 @@ class GateTests(unittest.TestCase):
                 result = evaluate(plan, github=github, vars=variables)
                 self.assertEqual(result, expected)
         publish = job("ci-request.yml", "publish")["if"]
-        for result, profile, expected in (
-            ("success", "full", True),
-            ("success", "rust", False),
-            ("failure", "full", False),
+        for event, result, profile, expected in (
+            (dispatch, "success", "full", True),
+            (dispatch, "success", "rust", False),
+            (dispatch, "failure", "full", False),
+            # A merge group publishes a failed plan, so the queue drops the PR at once.
+            ("merge_group", "success", "full", True),
+            ("merge_group", "failure", "", True),
+            ("merge_group", "cancelled", "", True),
+            ("merge_group", "skipped", "", False),
         ):
             needs = {"plan": {"result": result, "outputs": {"profile": profile}}}
-            self.assertEqual(evaluate(publish, needs=needs), expected)
+            github = {"event_name": event}
+            self.assertEqual(evaluate(publish, needs=needs, github=github), expected)
 
     def test_publisher_requires_every_job_and_the_unchanged_head(self) -> None:
         cases = [("success", good_needs(), PULL, False, "success")]
@@ -720,6 +780,448 @@ class GateTests(unittest.TestCase):
                         self.assertNotIn("run", step)
                         self.assertRegex(step["uses"], r"^actions/github-script@")
         self.assertTrue(privileged)
+
+
+EARLIER = "c" * 40  # An earlier group commit of the same PR head.
+EARLIER_RUN = RUN.replace("123", "100")
+
+
+def earlier_run(**fields: object) -> dict[str, object]:
+    """The workflow run that tested EARLIER, before the queue rebuilt the group."""
+    branch = f"gh-readonly-queue/rust-migration/pr-170-{PREVIOUS}"
+    return {
+        "id": 100,
+        "event": "merge_group",
+        "head_branch": branch,
+        "head_sha": EARLIER,
+        "status": "completed",
+        "conclusion": "success",
+        **fields,
+    }
+
+
+def plan_queue(
+    *,
+    listed: Iterable[object] | None = None,
+    commits: Mapping[str, object] | None = None,
+    statuses: Mapping[str, Iterable[object]] | None = None,
+    trees: object = None,
+    **options: object,
+) -> dict[str, Any]:
+    """Plan a merge group for PR 170 whose earlier group EARLIER passed in run 100.
+
+    EARLIER's tree BASE differs from the group's tree TREE only in Markdown.
+    """
+    runs = json.dumps(list(listed) if listed is not None else [earlier_run()])
+    options.setdefault(
+        "runs",
+        f"""async args => {{
+      if (args.workflow_id !== 'ci-request.yml' || args.event !== 'merge_group') throw new Error('runs');
+      return {{data: {{workflow_runs: {runs}}}}};
+    }}""",
+    )
+    earlier = {
+        "parents": [{"sha": BASE}, {"sha": HEAD}],
+        "commit": {"tree": {"sha": BASE}},
+    }
+    return execute_script(
+        "ci-request.yml",
+        "plan",
+        options.pop("pull", PULL),
+        env={"PR": "", "HEAD": "", "PROFILE": str(options.pop("profile", "full"))},
+        commits={MERGE: GROUP, EARLIER: earlier, **(commits or {})},
+        statuses=statuses
+        if statuses is not None
+        else {EARLIER: validation(run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=BASE)},
+        trees=trees if trees is not None else {TREE: tree(CODE), BASE: INVENTORY},
+        **cast(dict[str, Any], {**QUEUE, **options}),
+    )
+
+
+class MergeQueueTests(unittest.TestCase):
+    def test_merge_group_plan_tests_the_group_commit_against_its_first_parent(
+        self,
+    ) -> None:
+        # Mergeability is the PR's own merge, which the queue does not test.
+        result = plan_queue(listed=[], pull=dict(PULL, mergeable=None))
+        self.assertEqual(
+            result["outputs"],
+            {
+                "head": HEAD,
+                # The first parent is the base plus any PRs queued ahead, so a
+                # second queued PR's gates count only its own changes.
+                "base": PARENT,
+                "merge": MERGE,
+                "tree": TREE,
+                "profile": "full",
+                "pr": "170",
+                "checker": "false",
+                "carried": "",
+                "carried-tree": "",
+            },
+        )
+        observed = [(s["sha"], s["state"], s["target_url"]) for s in result["statuses"]]
+        self.assertEqual(observed, [(MERGE, "pending", RUN)])
+        group = QUEUE["payload"]["merge_group"]
+        other_head = dict(GROUP, parents=[{"sha": PARENT}, {"sha": "e" * 40}])
+        for label, change in (
+            ("other base", {"head_ref": QUEUE_REF.replace("rust-migration", "master")}),
+            ("no number", {"head_ref": QUEUE_REF.replace("pr-170", "pr-")}),
+            ("zero", {"head_ref": QUEUE_REF.replace("pr-170", "pr-0")}),
+            ("suffix", {"head_ref": QUEUE_REF + "x"}),
+            ("missing ref", {"head_ref": None}),
+            ("bad group commit", {"head_sha": "commit"}),
+        ):
+            with self.subTest(label):
+                payload = {"merge_group": dict(group, **change)}
+                failed = plan_queue(payload=payload)
+                self.assertIn("Invalid validation request", failed["error"])
+                self.assertEqual(failed["statuses"], [])
+        for label, options in (
+            ("other head", {"commits": {MERGE: other_head}}),
+            (
+                "one parent",
+                {"commits": {MERGE: dict(GROUP, parents=[{"sha": PARENT}])}},
+            ),
+            ("closed", {"pull": dict(PULL, state="closed")}),
+            ("other base", {"pull": dict(PULL, base={"ref": "master", "sha": BASE})}),
+            ("native profile", {"profile": "native"}),
+        ):
+            with self.subTest(label):
+                failed = plan_queue(**cast(dict[str, Any], options))
+                self.assertTrue(failed["error"])
+                self.assertEqual(failed["statuses"], [])
+
+    def test_rebuilt_group_carries_an_earlier_run_of_the_same_head_and_tree(
+        self,
+    ) -> None:
+        running = earlier_run(status="in_progress", conclusion=None)
+        trusted = validation(run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=BASE)
+        bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
+        checker = (
+            """async () => ({data: {merge_base_commit: {sha: '%s'},
+          files: [{filename: 'tools/lint-ratchet.py'}]}})"""
+            % PARENT
+        )
+        chained = RUN.replace("123", "50")
+        carried = (EARLIER_RUN, BASE)
+        cases: list[tuple[str, dict[str, Any], tuple[str, str], list[int]]] = [
+            ("passed", {}, carried, []),
+            (
+                "still testing",
+                {"listed": [running], "progress": {100: [running, earlier_run()]}},
+                carried,
+                [30000, 30000],
+            ),
+            # An earlier group that itself carried a result passes it on.
+            (
+                "carried earlier",
+                {
+                    "statuses": {
+                        EARLIER: validation(
+                            run=chained, marker_run=chained, tree=PREVIOUS
+                        )
+                    },
+                    "trees": {TREE: tree(CODE), BASE: INVENTORY, PREVIOUS: INVENTORY},
+                },
+                (chained, PREVIOUS),
+                [],
+            ),
+        ]
+        normal: list[tuple[str, dict[str, Any], list[int]]] = [
+            ("no earlier run", {"listed": []}, []),
+            ("later run", {"listed": [earlier_run(id=200)]}, []),
+            ("this run", {"listed": [earlier_run(id=123)]}, []),
+            ("other event", {"listed": [earlier_run(event="pull_request")]}, []),
+            ("failed", {"listed": [earlier_run(conclusion="failure")]}, []),
+            ("cancelled", {"listed": [earlier_run(conclusion="cancelled")]}, []),
+            ("bad commit", {"listed": [earlier_run(head_sha="commit")]}, []),
+            (
+                "still testing at the deadline",
+                {
+                    "listed": [running],
+                    "progress": {100: [running] * 5},
+                    "tick": 20 * 60000,
+                },
+                [30000, 30000],
+            ),
+            (
+                "failed after the wait",
+                {
+                    "listed": [running],
+                    "progress": {100: [earlier_run(conclusion="failure")]},
+                },
+                [30000],
+            ),
+            (
+                "other head",
+                {
+                    "commits": {
+                        EARLIER: dict(GROUP, parents=[{"sha": BASE}, {"sha": "e" * 40}])
+                    }
+                },
+                [],
+            ),
+            (
+                "other tree",
+                {"trees": {TREE: tree(CODE), BASE: tree(dict(CODE, sha=MERGE))}},
+                [],
+            ),
+            (
+                "incomplete tree",
+                {"trees": {TREE: tree(CODE), BASE: tree(CODE, truncated=True)}},
+                [],
+            ),
+            (
+                "marker tree differs",
+                {
+                    "statuses": {
+                        EARLIER: validation(
+                            run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=PREVIOUS
+                        )
+                    },
+                    "trees": {
+                        TREE: tree(CODE),
+                        BASE: INVENTORY,
+                        PREVIOUS: tree(dict(CODE, sha=MERGE)),
+                    },
+                },
+                [],
+            ),
+            ("no statuses", {"statuses": {EARLIER: []}}, []),
+            (
+                "listing fails",
+                {"runs": "async () => { throw new Error('Not Found'); }"},
+                [],
+            ),
+            ("status lookup fails", {"statuses": {}}, []),
+            # A checker-only group runs Quick alone, which costs less than a wait.
+            ("checker-only group", {"compare": checker}, []),
+        ]
+        for branch in ("pr-17", "pr-1700", "pr-170x", "master/pr-170"):
+            name = f"gh-readonly-queue/rust-migration/{branch}-{PREVIOUS}"
+            if branch.startswith("master"):
+                name = f"gh-readonly-queue/{branch}-{PREVIOUS}"
+            normal.append(
+                (f"branch {branch}", {"listed": [earlier_run(head_branch=name)]}, [])
+            )
+        for state, marker in (
+            ("pending", "success"),
+            ("failure", "success"),
+            ("success", "failure"),
+        ):
+            forged = validation(state, marker, EARLIER_RUN, EARLIER_RUN, BASE)
+            normal.append(
+                (f"result {state} {marker}", {"statuses": {EARLIER: forged}}, [])
+            )
+        for index in (0, 1):
+            for creator in (None, {}, {"login": "writer", "type": "User"}):
+                forged = [dict(status) for status in trusted]
+                forged[index]["creator"] = creator
+                normal.append(
+                    (
+                        f"untrusted {index} {creator}",
+                        {"statuses": {EARLIER: forged}},
+                        [],
+                    )
+                )
+        for label, statuses in (
+            (
+                "marker of another run",
+                validation(run=EARLIER_RUN, marker_run=RUN, tree=BASE),
+            ),
+            (
+                "marker not a tree",
+                validation(run=EARLIER_RUN, marker_run=EARLIER_RUN, tree="tree"),
+            ),
+            ("marker missing", trusted[:1]),
+            *(
+                (f"run {run}", validation(run=run, marker_run=run, tree=BASE))
+                for run in bad_runs
+            ),
+        ):
+            normal.append((label, {"statuses": {EARLIER: statuses}}, []))
+        cases += [
+            (label, options, ("", ""), delays) for label, options, delays in normal
+        ]
+        for label, options, (url, validated), delays in cases:
+            with self.subTest(label):
+                result = plan_queue(**options)
+                outputs = result["outputs"]
+                self.assertEqual(
+                    (outputs["carried"], outputs["carried-tree"]), (url, validated)
+                )
+                self.assertEqual(result["delays"], delays)
+                # The group is marked pending either way; only the publisher decides.
+                self.assertEqual([s["state"] for s in result["statuses"]], ["pending"])
+        # A requested Full of a PR head never carries a merge group's result.
+        requested = execute_script(
+            "ci-request.yml",
+            "plan",
+            PULL,
+            env={"PR": "170", "HEAD": HEAD, "PROFILE": "full"},
+            commits={MERGE: GROUP},
+            runs=f"async () => ({{data: {{workflow_runs: {json.dumps([earlier_run()])}}}}})",
+        )
+        self.assertEqual(requested["outputs"]["carried"], "")
+
+    def test_group_carry_uses_the_shared_inventory_rule(self) -> None:
+        for after, expected in inventory_cases():
+            for incomplete_side in (False, True):
+                left, right = (
+                    (after, INVENTORY) if incomplete_side else (INVENTORY, after)
+                )
+                with self.subTest(after=after, incomplete_side=incomplete_side):
+                    result = plan_queue(trees={BASE: left, TREE: right})
+                    carried = EARLIER_RUN if expected == "false" else ""
+                    self.assertEqual(result["outputs"]["carried"], carried)
+
+    def test_carried_group_skips_every_validation_job(self) -> None:
+        for carried in ("", EARLIER_RUN):
+            outputs = {"profile": "full", "checker": "false", "carried": carried}
+            needs = {"plan": {"result": "success", "outputs": outputs}}
+            for name in ("quick", "native", "platform"):
+                with self.subTest(job=name, carried=carried):
+                    condition = job("ci-request.yml", name)["if"]
+                    self.assertEqual(evaluate(condition, needs=needs), not carried)
+
+    def test_group_publisher_writes_the_group_commit(self) -> None:
+        def observe(result: dict[str, Any]) -> list[tuple[object, ...]]:
+            return [
+                (s["sha"], s["state"], s["context"], s["target_url"], s["description"])
+                for s in result["statuses"]
+            ]
+
+        passed = execute_publisher(
+            dict(good_needs(), plan=dict(good_needs()["plan"])), PULL, queue=True
+        )
+        description = "All required validation passed for this PR head"
+        self.assertEqual(
+            observe(passed),
+            [
+                (MERGE, "success", ci.CONTEXT, RUN, description),
+                (MERGE, "success", "Validated tree", RUN, TREE),
+            ],
+        )
+        failed = good_needs()
+        failed["native"]["result"] = "failure"
+        self.assertEqual(
+            observe(execute_publisher(failed, PULL, queue=True))[0][:4],
+            (MERGE, "failure", ci.CONTEXT, RUN),
+        )
+        carried = good_needs()
+        carried["plan"]["outputs"].update(
+            {"carried": EARLIER_RUN, "carried-tree": BASE}
+        )
+        for name in ("quick", "native", "platform"):
+            carried[name] = {"result": "skipped", "outputs": {}}
+        result = execute_publisher(carried, PULL, queue=True)
+        self.assertFalse(result["failures"])
+        description = "Carried from run 100: non-Markdown tree unchanged"
+        self.assertEqual(
+            observe(result),
+            [
+                (MERGE, "success", ci.CONTEXT, EARLIER_RUN, description),
+                (MERGE, "success", "Validated tree", EARLIER_RUN, BASE),
+            ],
+        )
+        moved = execute_publisher(
+            carried, dict(PULL, head={"sha": "e" * 40}), queue=True
+        )
+        self.assertEqual(observe(moved)[0][:4], (MERGE, "failure", ci.CONTEXT, RUN))
+        # A failed plan marked nothing pending; the group still fails at once.
+        unplanned = {"plan": {"result": "failure", "outputs": {}}}
+        for name in ("quick", "native", "platform"):
+            unplanned[name] = {"result": "skipped", "outputs": {}}
+        result = execute_publisher(unplanned, PULL, queue=True, latest=None)
+        self.assertEqual(
+            observe(result),
+            [(MERGE, "failure", ci.CONTEXT, RUN, "Merge group plan failed")],
+        )
+        self.assertTrue(result["failures"])
+        superseded = execute_publisher(good_needs(), PULL, superseded=True, queue=True)
+        self.assertEqual(superseded["statuses"], [])
+        # Outside the queue an unmarked head is still a superseded request.
+        self.assertEqual(
+            execute_publisher(good_needs(), PULL, latest=None)["statuses"], []
+        )
+
+    def test_group_runs_and_status_locks_are_per_run(self) -> None:
+        definition = workflow("ci-request.yml")
+        github = {"event_name": "merge_group", "run_id": 42, "event": QUEUE["payload"]}
+        expressions = [
+            definition["concurrency"]["group"],
+            job("ci-request.yml", "plan")["concurrency"]["group"],
+            job("ci-request.yml", "publish")["concurrency"]["group"],
+        ]
+        groups = [
+            evaluate(group, interpolate=True, inputs={}, github=github)
+            for group in expressions
+        ]
+        self.assertEqual(
+            groups,
+            [
+                "requested-ci-queue-42-full",
+                "validation-status-queue-42",
+                "validation-status-queue-42",
+            ],
+        )
+
+    def test_run_names_keep_request_titles_and_name_the_queue(self) -> None:
+        name = workflow("ci-request.yml")["run-name"]
+        for inputs, github, expected in (
+            (
+                {"profile": "rust", "pr": "170", "request": "unique"},
+                {"event_name": "workflow_dispatch", "run_id": 7, "event": {}},
+                "CI rust PR 170 unique",
+            ),
+            (
+                {},
+                {
+                    "event_name": "pull_request",
+                    "run_id": 7,
+                    "event": {"pull_request": {"number": 170}},
+                },
+                "CI full PR 170 bootstrap-7",
+            ),
+            (
+                {},
+                {"event_name": "merge_group", "run_id": 7, "event": QUEUE["payload"]},
+                f"CI full queue {QUEUE_REF}",
+            ),
+        ):
+            with self.subTest(github["event_name"]):
+                self.assertEqual(
+                    evaluate(name, interpolate=True, inputs=inputs, github=github),
+                    expected,
+                )
+
+    def test_required_pull_request_checks_report_skipped_in_the_queue(self) -> None:
+        # A required check must report on the group commit, and skipped counts as
+        # passed; Full's own Quick runs these checks on the group.
+        for filename, name in (
+            ("commit-checker.yml", "commit-checker"),
+            ("unused-strings.yml", "unused-strings"),
+            ("script-missing-mode-enforcement.yml", "script-missing-mode-enforcement"),
+            ("ci-quick.yml", "quick"),
+        ):
+            triggers = cast(dict[Any, Any], workflow(filename))[True]
+            self.assertIn("merge_group", triggers, filename)
+            condition = job(filename, name)["if"]
+            for event, checkout, expected in (
+                ("pull_request", "", True),
+                ("push", "", True),
+                ("merge_group", "", False),
+                # Full calls Quick inside the merge group.
+                ("merge_group", MERGE, filename == "ci-quick.yml"),
+            ):
+                with self.subTest(filename=filename, event=event, checkout=checkout):
+                    observed = evaluate(
+                        condition,
+                        github={"event_name": event},
+                        inputs={"checkout-ref": checkout},
+                    )
+                    self.assertEqual(observed, expected)
 
 
 class CacheTests(unittest.TestCase):
