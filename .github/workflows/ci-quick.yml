@@ -46,10 +46,22 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/lint-ratchet.py clippy --base-ref "$BASE_REF"
+    # Inline, not the shared apt-install action: on a pull request this job checks out
+    # the PR head, and a branch older than a local action does not contain it. #862
+    # used the action here, and Quick then failed on every such branch (#863).
     - name: Install nested collection probe dependency
-      uses: ./.github/actions/apt-install
-      with:
-        packages: valgrind
+      run: |
+        options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+        install=(install -y --no-install-recommends valgrind)
+        for attempt in 1 2; do
+          if sudo timeout 60 apt-get "${options[@]}" update && sudo timeout 60 apt-get "${options[@]}" "${install[@]}"; then
+            exit 0
+          fi
+          echo "::warning::apt attempt $attempt failed or stalled; retrying without the Azure mirror"
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+        done
+        sudo apt-get "${options[@]}" update
+        sudo apt-get "${options[@]}" "${install[@]}"
     - name: Python formatting, lint and maintenance regression checks
       run: |
         uvx --from ruff==0.16.8 ruff check tools/

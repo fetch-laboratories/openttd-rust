@@ -825,6 +825,14 @@ class PolicyTests(unittest.TestCase):
                     ),
                 )
 
+    def test_quick_uses_no_local_action(self) -> None:
+        """On a pull request Quick checks out the PR head, and a branch older
+        than a local action does not contain it (#862 broke Quick that way)."""
+        steps = workflow("ci-quick.yml")["jobs"]["quick"]["steps"]
+        self.assertTrue(steps)
+        for step in steps:
+            self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
+
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
         for event, checkout, branch, expected in (
