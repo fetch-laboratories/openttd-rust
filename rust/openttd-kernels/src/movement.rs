@@ -311,7 +311,9 @@ impl Context<'_> {
             || (kind == MP_ROAD && !self.world.is_normal_road(tile))
             || (kind == MP_OBJECT
                 && !unsafe {
-                    ((*(*(*(*(self.shared().station_commands)()).command).rail_map).ground)
+                    ((*(*(*(self.shared().station_commands)()).command)
+                        .rail_map
+                        .ground)
                         .owned_land)(tile)
                 })
         {
