@@ -50,6 +50,9 @@ jobs:
       with:
         packages: gcc-12 g++-12 ccache
         recommends: 'true'
+        # This job has no limit of its own, fetches a 40 MB index and 58 MB of
+        # packages, and met both mirrors at about 1 MB/s (#862's first Full).
+        last-bound: '480'
 
     - name: Select modern GCC
       run: |

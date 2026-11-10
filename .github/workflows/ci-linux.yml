@@ -81,7 +81,7 @@ jobs:
         "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
 
     - name: Install dependencies
-      timeout-minutes: 25
+      timeout-minutes: 15
       uses: ./.github/actions/apt-install
       with:
         packages: >-
