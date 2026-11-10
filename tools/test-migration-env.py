@@ -31,6 +31,9 @@ DIRECTORIES = {
     "PKG_CONFIG_SYSROOT_DIR",
     "CARGO_TARGET_DIR",
 }
+# The checkout's own Clippy configuration, which hand-run Clippy shares with
+# the gate and the debt ratchet.
+CHECKOUT = {"CLIPPY_CONF_DIR": migration.ROOT / migration.CLIPPY_CONFIGURATION}
 
 
 class MigrationEnvTests(unittest.TestCase):
@@ -80,7 +83,9 @@ class MigrationEnvTests(unittest.TestCase):
     def test_exports_point_inside_bootstrapped_local(self) -> None:
         self.bootstrap()
         exports = self.exports()
-        self.assertEqual(set(exports), PATH_LISTS | DIRECTORIES)
+        self.assertEqual(set(exports), PATH_LISTS | DIRECTORIES | set(CHECKOUT))
+        for name, path in CHECKOUT.items():
+            self.assertEqual(exports[name], str(path))
         for name in DIRECTORIES:
             self.assertTrue(self.inside(exports[name]), name)
         for name in PATH_LISTS:
@@ -122,6 +127,7 @@ class MigrationEnvTests(unittest.TestCase):
                 {
                     "CARGO_TARGET_DIR": str(self.build / "cargo"),
                     "CPATH": str(self.build / "generated-abi"),
+                    **{name: str(path) for name, path in CHECKOUT.items()},
                 },
             )
 

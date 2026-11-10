@@ -1315,6 +1315,53 @@ class ArchiveTests(unittest.TestCase):
 
 
 class OrdinaryRustTests(unittest.TestCase):
+    def test_debt_collection_repeats_the_gate_clippy_command(self) -> None:
+        """Cargo replays the gate's run only for the same command, build
+        directory and configuration; a second check of the crate costs a pass."""
+        import migration
+
+        gate = migration.clippy_command()
+        for lint in LINT.CLIPPY:
+            self.assertIn("clippy::" + lint, gate)
+        self.assertEqual(gate[gate.index("--") + 1 :][:2], ["-D", "warnings"])
+        calls = []
+
+        def run(command: list[str], **options: object) -> object:
+            calls.append((command, options))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            patch.object(LINT.subprocess, "run", run),
+            patch.object(
+                LINT.subprocess, "check_output", lambda *a, **k: "rustc 1.99.0"
+            ),
+        ):
+            LINT.collect("clippy", migration.ROOT)
+        ((command, options),) = calls
+        self.assertEqual(command, migration.clippy_command("--message-format=json"))
+        self.assertEqual(
+            [part for part in command if part != "--message-format=json"], gate
+        )
+        env = options["env"]
+        assert isinstance(env, dict)
+        self.assertEqual(env["CARGO_TARGET_DIR"], str(migration.CARGO_TARGET_DIR))
+        self.assertEqual(
+            env["CLIPPY_CONF_DIR"], migration.environment()["CLIPPY_CONF_DIR"]
+        )
+
+    def test_a_failed_clippy_gate_shows_errors_without_debt_warnings(self) -> None:
+        import migration
+
+        log = (
+            "warning: this function has too many arguments (8/7)\n  --> a.rs:1:1\n\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n\n"
+            "warning: `x` (lib) generated 1 warning\n"
+        )
+        shown = migration.failure_output("rust-clippy", log)
+        self.assertIn("equal expressions", shown)
+        self.assertNotIn("too many arguments", shown)
+        self.assertEqual(migration.failure_output("rust-check", log), log)
+
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
         import migration
 
@@ -1328,15 +1375,7 @@ class OrdinaryRustTests(unittest.TestCase):
                 "cannot find function `missing`",
             ),
             (
-                [
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
+                migration.clippy_command()[1:],
                 "pub fn x() -> bool { true == true }\n",
                 "equal expressions",
             ),
@@ -1376,6 +1415,11 @@ class OrdinaryRustTests(unittest.TestCase):
             )
             raw, _ = LINT.collect("clippy", root)
             self.assertIn("too_many_arguments", raw)
+            # A Clippy error stops the collection and is shown as rust-checks
+            # shows it, not as a count of debt.
+            (root / "src/lib.rs").write_text("pub fn x() -> bool { true == true }\n")
+            with self.assertRaisesRegex(ValueError, "equal expressions"):
+                LINT.collect("clippy", root)
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"
