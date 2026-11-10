@@ -1046,16 +1046,20 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
     context: *mut std::ffi::c_void,
 ) -> u8 {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
+    u8::from(check_reverse_train(&g, id))
+}
+
+/// `CheckReverseTrain`.
+fn check_reverse_train(g: &Game, id: Handle) -> bool {
     // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-    if !unsafe { g.shared().settings().line_reverse_mode.read() }
-        && id.get_track() != u64::from(DEPOT)
-        && id.get_track() != u64::from(WORMHOLE)
-        && id.vehicle().direction() & 1 != 0
+    if unsafe { g.shared().settings().line_reverse_mode.read() }
+        || id.get_track() == u64::from(DEPOT)
+        || id.get_track() == u64::from(WORMHOLE)
+        || id.vehicle().direction() & 1 == 0
     {
-        (g.leaves.check_reverse)(g.context, id) as u8
-    } else {
-        0
+        return false;
     }
+    (g.leaves.check_reverse)(g.context, id) != 0
 }
 
 /// Synchronous reservation policy; order snapshots live on the Rust stack.

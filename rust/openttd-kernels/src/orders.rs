@@ -1572,62 +1572,70 @@ pub unsafe extern "C" fn openttd_rust_timetable_on_time(
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_timetable_start(
-    v: *mut c_void,
-    execute: u8,
-    all: u8,
+/// `CmdSetTimetableStart`'s arguments.
+struct TimetableStart {
+    vehicle: *mut c_void,
+    execute: bool,
+    all: bool,
     start: u64,
     output: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.command_error(output, 0);
+}
+
+/// `CmdSetTimetableStart`: set the start date of the timetable.
+fn set_timetable_start(g: Game, c: &TimetableStart) -> u32 {
+    if !g.primary(c.vehicle) {
+        return g.command_error(c.output, 0);
     }
-    if g.orders(v).is_null() {
-        return g.command_error(output, 0);
+    if g.orders(c.vehicle).is_null() {
+        return g.command_error(c.output, 0);
     }
-    if !g.owner_check(v, output) {
+    if !g.owner_check(c.vehicle, c.output) {
         return 0;
     }
     {
-        let list = g.orders(v);
+        let list = g.orders(c.vehicle);
         let total = g.duration(list);
         let date = crate::timer_game_common::economy_date().0;
         let start_date = date.wrapping_add(
-            (start.wrapping_sub((g.0.tick_counter)()) as i32)
+            (c.start.wrapping_sub((g.0.tick_counter)()) as i32)
                 .wrapping_add(i32::from(crate::timer_game_common::economy_fraction()))
                 / DAY_TICKS,
         );
         let max_date = (g.0.maximum_date)() as i32;
+        // Don't let a timetable start at an invalid date.
         if start_date < 0 || start_date > max_date {
-            return g.command_error(output, 0);
+            return g.command_error(c.output, 0);
         }
+        // Don't let a timetable start more than 15 years into the future...
         if start_date.wrapping_sub(date)
             > crate::timer_game_common::date_at_start_of_year(
                 crate::timetable::MAX_TIMETABLE_START_YEARS,
             )
-            || date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR
         {
-            return g.command_error(output, 0);
+            return g.command_error(c.output, 0);
         }
-        if all != 0 && !g.complete(list) {
-            return g.command_error(output, 4);
+        // ...or 1 year in the past.
+        if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
+            return g.command_error(c.output, 0);
         }
-        if all != 0 && start_date.wrapping_add(total / DAY_TICKS) > max_date {
-            return g.command_error(output, 0);
+        // If trying to distribute start dates over a shared order group, we need to know the total duration.
+        if c.all && !g.complete(list) {
+            return g.command_error(c.output, 4);
         }
-        if execute != 0 {
+        // Don't allow invalid start dates for other vehicles in the shared order group.
+        if c.all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
+            return g.command_error(c.output, 0);
+        }
+        if c.execute {
             let mut vehicles = Vec::new();
-            if all != 0 {
+            if c.all {
                 let mut u = read_field!(g.list(list), first);
                 while !u.is_null() {
                     vehicles.push(u);
                     u = g.next(u);
                 }
             } else {
-                vehicles.push(v);
+                vehicles.push(c.vehicle);
             }
             if vehicles.len() >= 2 {
                 vehicles.sort_unstable_by(|all, start| g.timetable_sort(*all, *start));
@@ -1640,15 +1648,35 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
                 write_field!(
                     us,
                     start,
-                    start.wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
+                    c.start
+                        .wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
                 );
-                // Preserve the original v (rather than u) reset quirk.
-                g.reset(v);
+                // Preserve the original c.vehicle (rather than u) reset quirk.
+                g.reset(c.vehicle);
                 g.dirty(u);
             }
         }
     };
     1
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_timetable_start(
+    v: *mut c_void,
+    execute: u8,
+    all: u8,
+    start: u64,
+    output: *mut c_void,
+    leaves: &'static Leaves,
+) -> u32 {
+    let c = TimetableStart {
+        vehicle: v,
+        execute: execute != 0,
+        all: all != 0,
+        start,
+        output,
+    };
+    set_timetable_start(Game(leaves), &c)
 }
 
 #[unsafe(no_mangle)]
@@ -4223,15 +4251,24 @@ impl Control {
         let g = self.g;
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
         let review = unsafe { g.shared().settings().order_review_system.read() };
-        if review == 0
-            || {
-                let status = native_vehicle(v, g.0.base).status();
-                status & 128 != 0 || (review == 1 && status & 2 != 0)
-            }
-            || g.first(v) != v
-        {
+        // Does the user wants us to check things?
+        if review == 0 {
             return;
         }
+        let status = native_vehicle(v, g.0.base).status();
+        // Do nothing for crashed vehicles
+        if status & VS_CRASHED != 0 {
+            return;
+        }
+        // Do nothing for stopped vehicles if setting is '1'
+        if review == 1 && status & VS_STOPPED != 0 {
+            return;
+        }
+        // do nothing we we're not the first vehicle in a share-chain
+        if g.first(v) != v {
+            return;
+        }
+        // Only check every 20 days, so that we don't flood the message log
         if g.local_owner(v) == 0 || !(native_vehicle(v, g.0.base)).day().is_multiple_of(20) {
             return;
         }
