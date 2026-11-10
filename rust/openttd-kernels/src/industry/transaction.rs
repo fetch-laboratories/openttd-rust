@@ -907,7 +907,7 @@ fn is_slope_refused(current: Slope, refused: Slope) -> bool {
         if is_steep_slope(refused) {
             return true;
         }
-        let t = complement_slope(current).0;
+        let t = complement_slope(current, |ok| crate::services_assert::check(ok)).0;
         if refused.0 & Slope::SLOPE_W.0 != 0 && t & Slope::SLOPE_NW.0 != 0 {
             return true;
         }

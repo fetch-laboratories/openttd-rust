@@ -1532,7 +1532,8 @@ impl Engine<'_> {
         } else {
             Slope::SLOPE_NE
         };
-        if desired_slope != cur_slope && complement_slope(desired_slope) != cur_slope {
+        if desired_slope != cur_slope && complement_slope(desired_slope, self.check()) != cur_slope
+        {
             if self.chance16(1, 8) {
                 let mut res = false;
                 if !(self.leaves.generating_world)() && self.chance16(1, 10) {

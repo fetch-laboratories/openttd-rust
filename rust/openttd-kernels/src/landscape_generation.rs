@@ -848,6 +848,7 @@ impl World<'_> {
                             self.terraform(tile, SLOPE_ELEVATED, false, F::EXECUTE);
                             let slope = complement_slope_raw(
                                 crate::map_func::World::new(self.s).tile_slope(tile),
+                                |ok| crate::movement::native_assert(self.a.shared(), ok),
                             );
                             self.terraform(tile, slope, true, F::EXECUTE);
                             tile = (self.a.sea_next)(frame);
@@ -1135,7 +1136,9 @@ impl World<'_> {
                 w::hit(w::GENERATION_WIDEN_TERRAFORM);
                 self.terraform(
                     tile,
-                    complement_slope_raw(current),
+                    complement_slope_raw(current, |ok| {
+                        crate::movement::native_assert(self.a.shared(), ok);
+                    }),
                     true,
                     F::EXECUTE | F::AUTO,
                 );
@@ -1160,7 +1163,9 @@ impl World<'_> {
                 }
                 let mut change = current ^ desired;
                 if !is_slope_with_one_corner_raised_raw(current) {
-                    change &= complement_slope_raw(desired);
+                    change &= complement_slope_raw(desired, |ok| {
+                        crate::movement::native_assert(self.a.shared(), ok);
+                    });
                     self.terraform(tile, change, false, F::EXECUTE | F::AUTO);
                 }
                 current = crate::map_func::World::new(self.s).tile_slope(tile);

@@ -894,7 +894,9 @@ impl<'a> World<'a> {
             return cost.error(self.a.strings.excavate);
         }
         cost.add_money(ret.money());
-        if end_slope != complement_slope_raw(start_slope) {
+        if end_slope
+            != complement_slope_raw(start_slope, |ok| crate::movement::native_assert(self.s, ok))
+        {
             w::hit(w::TB_TUNNEL_TERRAFORM);
             // The canonical scratch owner returns a stable index, then restores
             // the first tile after recursive terraform may append/reallocate.

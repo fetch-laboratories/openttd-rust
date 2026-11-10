@@ -361,7 +361,9 @@ pub extern "C" fn openttd_rust_script_tile_complement_slope(slope: u32) -> u32 {
     if slope & !u32::from(SLOPE_ELEVATED) != 0 {
         return SLOPE_INVALID;
     }
-    u32::from(complement_slope_raw(slope as u8))
+    u32::from(complement_slope_raw(slope as u8, |ok| {
+        crate::services_assert::check(ok);
+    }))
 }
 
 /// `ScriptTile::GetMinHeight`.

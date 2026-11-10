@@ -33,9 +33,11 @@ pub fn is_halftile_slope(s: Slope) -> bool {
 pub const fn remove_halftile_slope(s: Slope) -> Slope {
     Slope(s.0 & !Slope::SLOPE_HALFTILE_MASK.0)
 }
-/// `ComplementSlope`; callers pass no steep or halftile slope.
-#[must_use]
-pub fn complement_slope(s: Slope) -> Slope {
+/// `ComplementSlope`.
+pub fn complement_slope(s: Slope, check: impl Fn(bool)) -> Slope {
+    if is_steep_slope(s) || is_halftile_slope(s) {
+        check(false);
+    }
     s ^ Slope::SLOPE_ELEVATED
 }
 /// `IsSlopeWithOneCornerRaised`.
@@ -95,11 +97,14 @@ pub const fn opposite_corner(corner: Corner) -> Corner {
 pub fn is_slope_with_three_corners_raised(s: Slope) -> bool {
     !is_halftile_slope(s)
         && !is_steep_slope(s)
-        && is_slope_with_one_corner_raised(complement_slope(s))
+        && is_slope_with_one_corner_raised(complement_slope(s, |ok| {
+            crate::services_assert::check(ok);
+        }))
 }
 /// `SlopeWithThreeCornersRaised`.
 pub fn slope_with_three_corners_raised(corner: Corner, check: impl Fn(bool)) -> Slope {
-    complement_slope(slope_with_one_corner_raised(corner, check))
+    let s = slope_with_one_corner_raised(corner, &check);
+    complement_slope(s, check)
 }
 /// `SteepSlope`.
 pub fn steep_slope(corner: Corner, check: impl Fn(bool)) -> Slope {
@@ -187,9 +192,8 @@ pub fn is_halftile_slope_raw(s: u8) -> bool {
     is_halftile_slope(Slope(s))
 }
 /// Raw adapter: `ComplementSlope`.
-#[must_use]
-pub fn complement_slope_raw(s: u8) -> u8 {
-    complement_slope(Slope(s)).0
+pub fn complement_slope_raw(s: u8, check: impl Fn(bool)) -> u8 {
+    complement_slope(Slope(s), check).0
 }
 /// Raw adapter: `IsSlopeWithThreeCornersRaised`.
 #[must_use]
