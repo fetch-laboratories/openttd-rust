@@ -211,10 +211,6 @@ uint8_t openttd_rust_industry_animate_abi(OpenTTDIndustry *, uint16_t, uint8_t, 
 extern "C++" inline bool openttd_rust_industry_animate(OpenTTDIndustry *a0, uint16_t a1, uint8_t a2, uint32_t a3, const OpenTTDIndustryServices *a4, const OpenTTDIndustryLifecycleServices *a5) { return openttd_rust_industry_animate_abi(a0, a1, a2, a3, a4, a5) != 0; }
 typedef struct OpenTTDIndustrySpecHandle OpenTTDIndustrySpecHandle;
 typedef struct OpenTTDIndustryGenerationContext OpenTTDIndustryGenerationContext;
-typedef struct OpenTTDIndustryGenerationInfo {
-	uint8_t appear;
-	bool enabled, layouts;
-} OpenTTDIndustryGenerationInfo;
 typedef struct OpenTTDIndustryGenerationServices {
 	OpenTTDEnvironmentServices environment;
 	uint8_t (*density)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(density);

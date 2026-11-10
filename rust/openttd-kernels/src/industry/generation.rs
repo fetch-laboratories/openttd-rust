@@ -20,12 +20,6 @@ pub struct GenerationContext {
     _private: [u8; 0],
 }
 #[repr(C)]
-pub struct GenerationInfo {
-    pub appear: u8,
-    pub enabled: bool,
-    pub layouts: bool,
-}
-#[repr(C)]
 pub struct GenerationServices {
     pub environment: crate::services::EnvironmentServices,
     pub density: unsafe extern "C" fn() -> u8,

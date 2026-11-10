@@ -852,15 +852,3 @@ pub const CHOPPER_ATTACKS: u32 =
 /// Raw compatibility mask for `IndustryBehaviour::CanSubsidence`.
 pub const CAN_SUBSIDENCE: u32 =
     IndustryBehaviours::from_element(IndustryBehaviour::CanSubsidence).0;
-
-/// Raw compatibility mask for `IndustryBehaviour::CutTrees`.
-pub const CUT_TREES: u32 = IndustryBehaviours::from_element(IndustryBehaviour::CutTrees).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Extractive`.
-pub const LIFE_EXTRACTIVE: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Extractive).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Organic`.
-pub const LIFE_ORGANIC: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Organic).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Processing`.
-pub const LIFE_PROCESSING: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Processing).0;

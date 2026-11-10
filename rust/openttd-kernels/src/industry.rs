@@ -2591,11 +2591,6 @@ crate::abi::layouts! {
         build_window_dirty,
         serve_neutral,
     };
-    "OpenTTDIndustryGenerationInfo" ["industry"] => crate::industry::GenerationInfo {
-        appear,
-        enabled,
-        layouts,
-    };
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
         environment,
         density,
