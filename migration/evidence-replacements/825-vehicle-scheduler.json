@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "ctest:Base vehicle scheduler - scalar member identity and lifetime"
+    ],
+    "oracle": "Fork-only native case, absent from the pinned original 14ec60f248547d4d062a1160f0fc26d742319888, deleted without a record by a9f471051f (#825) and recorded here by #856. It checked the native Tick facade's post-Tick address bundle: after Vehicle::Tick, the survivor's cargo age period, cargo age counter, motion counter, subtype, tick counter and status, and its front's speed, type and status, are the canonical record members; the two statuses are distinct. a9f471051f retired that bundle: Rust now reads the survivor's type and First() after the survival assertion and addresses the record fields itself, as CallVehicleTicks does. The Rust test checks the same addresses on canonical records, with the fixture's own expectations, and that types above aircraft address none of them. Not carried: the bundle's stores through native shells, and its addresses across pool growth and slot reuse, which observed the retired native carrier and have no remaining native counterpart.",
+    "observations": {
+      "Post-Tick addresses of the survivor's and its front's canonical record fields": [
+        "rust:lib:vehicle::scheduler::tests::post_tick_addresses_survivor_and_front_records"
+      ]
+    }
+  }
+]
