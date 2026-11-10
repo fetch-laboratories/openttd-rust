@@ -70,6 +70,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     }
     crate::witness::hit(crate::witness::VT_ROAD);
     let company = CompanyID((b.shared.current_company)());
+    // The native allocation clears gcache.first_engine: needs to be set before first callback.
     let v = (k.new_road)(tile);
     unsafe {
         crate::road::set_depot_state((r.road_state)(

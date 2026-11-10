@@ -294,6 +294,7 @@ unsafe fn cmd_build_rail_wagon(
     let mut v = ptr::null_mut();
     if flags.test(DoCommandFlag::Execute) {
         let a = x.b.construct.articulated;
+        // The native allocation clears gcache.first_engine: needs to be set before first callback.
         v = x.rec((x.s.new_wagon)(tile.0, e));
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
@@ -417,6 +418,7 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
         let k: &construct::Services = x.b.construct;
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
+        // The native allocation clears gcache.first_engine: needs to be set before first callback.
         v = x.rec((s.new_engine)(tile.0, e));
         (x.c.vehicles.set_max_age)(Ctx::vref(v), unsafe {
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
@@ -479,13 +481,15 @@ fn make_train_backup(x: Ctx, mut t: R) -> Vec<R> {
 }
 /// `RestoreTrainBackup`: restore the train from the backup list.
 fn restore_train_backup(x: Ctx, list: &[R]) {
+    /* No train, nothing to do. */
     if list.is_empty() {
         return;
     }
     let mut prev: R = ptr::null_mut();
+    /* Iterate over the list and rebuild it. */
     for &t in list {
         if prev.is_null() {
-            // Make sure the head of the train is always the first in the chain.
+            /* Make sure the head of the train is always the first in the chain. */
             let previous = x.previous(t);
             if !previous.is_null() {
                 x.set_next(previous, ptr::null_mut());

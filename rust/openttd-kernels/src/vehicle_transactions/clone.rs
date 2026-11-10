@@ -129,12 +129,6 @@ pub(crate) struct CmdCloneVehicle {
 /// `CmdCloneVehicle`: clone a vehicle. If it is a train, it will clone all the
 /// cars too. Returns the new vehicle ID; the cost or error is in `out`.
 ///
-/// `original` is `v_front`, the front engine in the original vehicle; `v` is
-/// the car/vehicle of the original vehicle that is currently being copied;
-/// `front` is `w_front`, the front engine of the cloned vehicle; `w` is the
-/// car/vehicle currently being cloned; `rear` is `w_rear`, the rear end of the
-/// cloned train. It's used to add more cars and is only used by trains.
-///
 /// # Safety
 /// Four distinct stack-constructed native costs and immutable tables remain live.
 /// Resolved shells follow original clone lifetimes. No borrow survives callbacks,
@@ -166,6 +160,13 @@ unsafe fn cmd_clone_vehicle(
         return invalid;
     }
     let original = v;
+    /*
+     * original (v_front) is the front engine in the original vehicle
+     * v is the car/vehicle of the original vehicle that is currently being copied
+     * front (w_front) is the front engine of the cloned vehicle
+     * w is the car/vehicle currently being cloned
+     * rear (w_rear) is the rear end of the cloned train. It's used to add more cars and is only used by trains
+     */
     unsafe {
         b.commands
             .ownership(temporary, crate::fleet::record(b.groups, v).owner(), 0);
