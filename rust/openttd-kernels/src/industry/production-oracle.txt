@@ -8,6 +8,8 @@
 # Conversion (#736 oracle compaction): section I stores each distinct output (the fields after => above,
 # runs included) once, in original case order; the test regenerates version level behaviour limit reason
 # amount in the 4 x 5 x 4 x 4 x 2 x 7 nest, so no input is stored.
+# Recipe: tools/oracle-recipes/production.patch applied to that fixture; `python3 tools/oracle-recapture-comparison.py production`
+# rebuilds the capture against the pinned sources only and checks this file byte for byte.
 @@ I
 305419896 0 1 65535 15 1 65535 15 1 1 1:0:0:0:0
 305419896 0 1 65535 15 1 65535 15 1 1 1:0:1:0:0

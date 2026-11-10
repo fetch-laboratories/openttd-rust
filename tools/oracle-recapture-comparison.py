@@ -106,6 +106,47 @@ def tunnel(lines: Sequence[str]) -> list[str]:
     return section("tunnel", streams(lines)["tunnel"])
 
 
+def pair_runs(pairs: Sequence[tuple[int, int]]) -> list[str]:
+    """Ordered (random, parameter) pairs as greedy `count:first1:first2:delta1:delta2`
+    runs, each delta modulo 2^32 and taken from the run's first two pairs."""
+    runs = []
+    i = 0
+    while i < len(pairs):
+        j = i
+        delta = (0, 0)
+        if i + 1 < len(pairs):
+            delta = tuple(
+                (b - a) % 2**32 for a, b in zip(pairs[i], pairs[i + 1], strict=True)
+            )
+            j = i + 1
+            while (
+                j + 1 < len(pairs)
+                and tuple(
+                    (b - a) % 2**32 for a, b in zip(pairs[j], pairs[j + 1], strict=True)
+                )
+                == delta
+            ):
+                j += 1
+        first = pairs[i]
+        runs.append(f"{j - i + 1}:{first[0]}:{first[1]}:{delta[0]}:{delta[1]}")
+        i = j + 1
+    return runs
+
+
+def production(lines: Sequence[str]) -> list[str]:
+    outputs = []
+    for case in streams(lines)["I"]:
+        fields = [int(v) for v in case.split()]
+        pairs = [(fields[i], fields[i + 1]) for i in range(10, len(fields), 2)]
+        outputs.append(" ".join([*map(str, fields[:10]), *pair_runs(pairs)]))
+    return section("I", outputs)
+
+
+def policy(lines: Sequence[str]) -> list[str]:
+    s = streams(lines)
+    return [line for kind in "HRZAP" for line in section(kind, s[kind])]
+
+
 @dataclass(frozen=True)
 class Recipe:
     oracle: str
@@ -120,6 +161,48 @@ class Recipe:
 
 
 RECIPE: dict[str, Recipe] = {
+    "policy": Recipe(
+        oracle="town/policy-oracle.txt",
+        fixture="45843e22f6:tools/simulation/town-reference-gaps.cpp",
+        convert=policy,
+        extract=tuple(
+            ("town-tunnel-original.hpp", "src/town_cmd.cpp", signature, "")
+            for signature in (
+                "static bool CanRoadContinueIntoNextTile(",
+                "static bool GrowTownWithTunnel(",
+                "template <>\nTown::SuppliedHistory SumHistory(",
+                "void SetTownRatingTestMode(",
+                "static int GetRating(",
+                "void ChangeTownRating(",
+                "void UpdateTownRadius(",
+                "CommandCost CheckIfAuthorityAllowsNewStation(",
+                "CommandCost CheckforTownRating(",
+            )
+        )
+        + (
+            (
+                "town-percent-original.hpp",
+                "src/town.h",
+                "uint8_t PctTransported() const",
+                "",
+            ),
+        ),
+        flags=("-DUNIX", "-fno-strict-overflow"),
+    ),
+    "production": Recipe(
+        oracle="industry/production-oracle.txt",
+        fixture="45843e22f6:tools/migration/industry-production-gap.cpp",
+        convert=production,
+        extract=(
+            (
+                "industry-production-reference.inc",
+                "src/newgrf_industries.cpp",
+                "void IndustryProductionCallback(Industry *ind, int reason)",
+                "/**\n * Check whether an industry temporarily",
+            ),
+        ),
+        flags=("-DUNIX", "-fno-strict-overflow"),
+    ),
     "tunnel": Recipe(
         oracle="town/tunnel-oracle.txt",
         fixture="d9cae2c923:tools/simulation/town-reference-gaps.cpp",

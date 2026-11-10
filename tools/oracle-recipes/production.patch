@@ -1,0 +1,101 @@
+--- a/capture.in
++++ b/capture.in
+@@ -5,11 +5,14 @@
+  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+  */
+
+-/** @file industry-production-gap.cpp Unchanged production policy for absent NewGRF versions. */
++/** @file industry-production-gap.cpp Original-only capture of industry/production-oracle.txt (#736). Was: Unchanged production policy for absent NewGRF versions. */
+ #include "stdafx.h"
+ #include "core/math_func.hpp"
+ #include "core/bitmath_func.hpp"
+-#include "rust/industry_ffi.h"
++#include <cstdio>
++#include <string>
++#include <vector>
++#include <algorithm>
+ #include <variant>
+ using CargoType = uint8_t;
+ static constexpr uint16_t CALLBACK_FAILED = 0xFFFF;
+@@ -23,7 +26,7 @@
+ static IndustrySpec spec;
+ struct Slot { CargoType cargo; uint16_t waiting; };
+ struct Industry {
+-	OpenTTDIndustry *owner;
++	void *owner;
+ 	std::vector<Slot> accepted, produced;
+ 	uint8_t prod_level, type = 0;
+ 	struct { uint32_t tile = 0; } location;
+@@ -57,39 +60,10 @@
+ static void ShowErrorMessage(int, int, int) { errors++; }
+ static void SetWindowDirty(int, uint16_t) { dirty++; }
+ #include "industry-production-reference.inc"
+-struct Produced { uint8_t cargo; uint16_t waiting; uint8_t rate; uint16_t history[122]; };
+-struct Accepted { uint8_t cargo; uint16_t waiting; uint32_t accumulated; int32_t date; void *history; };
+-static void Resolve(void *, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out)
+-{
+-	IndustriesResolverObject object(0, nullptr, 0);
+-	object.callback_param1 = random;
+-	object.callback_param2 = parameter;
+-	const auto *g = object.Resolve<IndustryProductionSpriteGroup>();
+-	out->present = g != nullptr;
+-	if (g == nullptr) return;
+-	out->version = g->version;
+-	if (g->version == 255) return;
+-	out->num_input = g->num_input;
+-	out->num_output = g->num_output;
+-	auto deref = [&](int field) { return g->version >= 1 ? object.GetRegister(field) : field; };
+-	for (size_t n = 0; n < 3; n++) {
+-		out->subtract[n] = deref(g->subtract_input[n]);
+-		out->add[n] = deref(g->add_output[n]);
+-		out->cargo_input[n] = g->cargo_input[n];
+-		out->cargo_output[n] = g->cargo_output[n];
+-	}
+-	out->again = deref(g->again);
+-}
+ int main()
+ {
+ 	std::remove_pointer_t<decltype(spec.grf_prop.grffile)> file{};
+ 	spec.grf_prop.grffile = &file;
+-	OpenTTDIndustryServices services{};
+-	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); });
+-	services.shared = &shared;
+-	services.set_dirty = [](void *) noexcept { dirty++; };
+-	services.callback_error = [](void *, bool) noexcept { errors++; };
+-	uint cases = 0;
+ 	for (uint8_t version : {0, 1, 2, 255}) for (uint8_t level : {0, 4, 16, 128, 255}) for (uint32_t behaviour : {0u, 1u << 14, 1u << 15, 3u << 14}) {
+ 		for (uint32_t limit : {0u, 1u, 3u, 65536u}) for (uint8_t reason : {0, 1}) {
+ 			for (int32_t amount : {INT32_MIN, -65536, -1, 0, 1, 65536, INT32_MAX}) {
+@@ -104,25 +78,14 @@
+ 				Industry reference{nullptr, {{cargo, 65535}, {255, 15}, {3, 1}}, {{cargo, 65535}, {255, 15}, {8, 1}}, level};
+ 				rng = 0x12345678; errors = dirty = 0; parameters.clear();
+ 				IndustryProductionCallback(&reference, reason);
+-				auto expected = parameters; auto expected_rng = rng; auto expected_errors = errors; auto expected_dirty = dirty;
+-				Industry candidate{openttd_rust_industry_new(), {}, {}, level};
+-				auto *fields = openttd_rust_industry_fields(candidate.owner); fields->prod_level = level;
+-				openttd_rust_industry_accepted_resize(candidate.owner, 3);
+-				openttd_rust_industry_produced_resize(candidate.owner, 3);
+-				auto a = openttd_rust_industry_accepted_view(candidate.owner);
+-				auto p = openttd_rust_industry_produced_view(candidate.owner);
+-				for (size_t n = 0; n < 3; n++) {
+-					auto *slot_a = static_cast<Accepted *>(a.data) + n; slot_a->cargo = n == 0 ? cargo : n == 1 ? 255 : 3; slot_a->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
+-					auto *slot_p = static_cast<Produced *>(p.data) + n; slot_p->cargo = n == 0 ? cargo : n == 1 ? 255 : 8; slot_p->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
+-				}
+-				rng = 0x12345678; errors = dirty = 0; parameters.clear();
+-				openttd_rust_industry_production_callback(&candidate, candidate.owner, nullptr, behaviour, reason, Resolve, &services);
+-				if (parameters != expected || rng != expected_rng || errors != expected_errors || dirty != expected_dirty) return 1;
+-				for (size_t n = 0; n < 3; n++) if (reference.accepted[n].waiting != static_cast<Accepted *>(a.data)[n].waiting || reference.produced[n].waiting != static_cast<Produced *>(p.data)[n].waiting) return 2;
+-				openttd_rust_industry_destroy(candidate.owner);
+-				cases++;
++				std::printf("I %u %u %u", rng, errors, dirty);
++				for (const auto &slot : reference.accepted) std::printf(" %u", slot.waiting);
++				for (const auto &slot : reference.produced) std::printf(" %u", slot.waiting);
++				std::printf(" %zu", parameters.size());
++				for (const auto &[random, parameter] : parameters) std::printf(" %u %u", random, parameter);
++				std::printf("\n");
+ 			}
+ 		}
+ 	}
+-	std::printf("industry NewGRF gap: %u unchanged-body version/repeat/arithmetic cases passed\n", cases);
++
+ }
