@@ -809,6 +809,7 @@ def earlier_run(**fields: object) -> dict[str, object]:
     branch = f"gh-readonly-queue/rust-migration/pr-170-{PREVIOUS}"
     return {
         "id": 100,
+        "path": ".github/workflows/ci-request.yml",
         "event": "merge_group",
         "head_branch": branch,
         "head_sha": EARLIER,
@@ -854,6 +855,33 @@ def plan_queue(
         trees=trees if trees is not None else {TREE: tree(CODE), BASE: INVENTORY},
         **cast(dict[str, Any], {**QUEUE, **options}),
     )
+
+
+ORIGIN = "e" * 40  # The group commit an origin run built, before EARLIER.
+
+
+def chain(
+    *, second: str = HEAD, built: str = PREVIOUS, **fields: object
+) -> dict[str, Any]:
+    """plan_queue options where EARLIER carried a result built by run 50 on ORIGIN.
+
+    `fields` change run 50, `second` ORIGIN's PR head and `built` its tree; the
+    carried marker names tree PREVIOUS.
+    """
+    origin = RUN.replace("123", str(fields.get("id", 50)))
+    branch = f"gh-readonly-queue/rust-migration/pr-170-{BASE}"
+    run = earlier_run(id=50, head_sha=ORIGIN, head_branch=branch) | fields
+    return {
+        "statuses": {EARLIER: validation(run=origin, marker_run=origin, tree=PREVIOUS)},
+        "commits": {
+            ORIGIN: {
+                "parents": [{"sha": BASE}, {"sha": second}],
+                "commit": {"tree": {"sha": built}},
+            }
+        },
+        "progress": {run["id"]: [run]},
+        "trees": {TREE: tree(CODE), BASE: INVENTORY, PREVIOUS: INVENTORY},
+    }
 
 
 class MergeQueueTests(unittest.TestCase):
@@ -934,19 +962,46 @@ class MergeQueueTests(unittest.TestCase):
             # An earlier group that itself carried a result passes it on.
             (
                 "carried earlier",
-                {
-                    "statuses": {
-                        EARLIER: validation(
-                            run=chained, marker_run=chained, tree=PREVIOUS
-                        )
-                    },
-                    "trees": {TREE: tree(CODE), BASE: INVENTORY, PREVIOUS: INVENTORY},
-                },
+                chain(),
                 (chained, PREVIOUS),
                 [],
             ),
         ]
         normal: list[tuple[str, dict[str, Any], list[int]]] = [
+            # The result must name the run that built it, never this or a later run.
+            *(
+                (f"result of run {origin}", chain(id=origin), [])
+                for origin in (100 + 1, 123, 200)
+            ),
+            ("origin unknown", dict(chain(), progress={}), []),
+            ("origin failed", chain(conclusion="failure"), []),
+            ("origin running", chain(status="in_progress", conclusion=None), []),
+            ("origin of another event", chain(event="workflow_dispatch"), []),
+            (
+                "origin of another workflow",
+                chain(path=".github/workflows/other.yml"),
+                [],
+            ),
+            (
+                "origin of another PR",
+                chain(head_branch=f"gh-readonly-queue/rust-migration/pr-17-{BASE}"),
+                [],
+            ),
+            ("origin of another head", chain(second="e" * 40), []),
+            ("origin built another tree", chain(built=BASE), []),
+            # A direct result's marker must name the candidate group's own tree.
+            (
+                "marker names another tree",
+                {
+                    "statuses": {
+                        EARLIER: validation(
+                            run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=PREVIOUS
+                        )
+                    },
+                    "trees": {TREE: tree(CODE), BASE: INVENTORY, PREVIOUS: INVENTORY},
+                },
+                [],
+            ),
             ("no earlier run", {"listed": []}, []),
             ("later run", {"listed": [earlier_run(id=200)]}, []),
             ("this run", {"listed": [earlier_run(id=123)]}, []),

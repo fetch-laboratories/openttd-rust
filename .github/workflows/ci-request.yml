@@ -202,6 +202,21 @@ jobs:
                     status.creator?.login === 'github-actions[bot]' && status.creator?.type === 'Bot') ||
                   typeof url !== 'string' || !url.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(url.slice(runPrefix.length)) ||
                   marker.target_url !== url || !/^[0-9a-f]{40}$/.test(marker.description)) continue;
+              // The result names the run that built its tree: this candidate, or, through a chain of
+              // carries, an older successful merge-group run of this workflow for the same PR head
+              // whose group tree is the marker's.
+              const origin = Number(url.slice(runPrefix.length));
+              if (!Number.isSafeInteger(origin) || origin > candidate.id) continue;
+              let source = run, built = commit;
+              if (origin !== candidate.id) {
+                ({data: source} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: origin}));
+                ({data: built} = await github.rest.repos.getCommit({...context.repo, ref: source.head_sha}));
+              }
+              if (source?.id !== origin || source.path !== '.github/workflows/ci-request.yml' ||
+                  source.event !== 'merge_group' || source.status !== 'completed' || source.conclusion !== 'success' ||
+                  !source.head_branch?.startsWith(`gh-readonly-queue/rust-migration/pr-${pr}-`) ||
+                  built?.parents?.length !== 2 || built.parents[1]?.sha !== head ||
+                  built.commit?.tree?.sha !== marker.description) continue;
               const validated = await entries(marker.description);
               if (validated === null || JSON.stringify(validated) !== JSON.stringify(current)) continue;
               return {url, tree: marker.description};
