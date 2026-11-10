@@ -129,6 +129,7 @@ pub mod order_type;
 mod overflowsafe_type;
 pub(crate) mod packet;
 mod pathfinder_func;
+mod pathfinder_type;
 mod pbs;
 mod rail_cmd;
 pub mod rail_yapf;
