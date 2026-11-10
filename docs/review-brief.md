@@ -11,7 +11,7 @@ Everything else is here ([delegation](team.md#review-loop)).
 
 ## Before reviewing
 
-1. Read [AGENTS.md](../AGENTS.md), the [review checklist](review-checklist.md), [review](workflow.md#review) and [Claude Code root](team.md#claude-code-root).
+1. Read [AGENTS.md](../AGENTS.md), the [review checklist](review-checklist.md) and [review](workflow.md#review).
 2. Read the docs the PR's stream needs:
    - [porting](porting.md) for code standards, the boundary and evidence;
    - the stream issue, with its recorded decisions (for example #734, #735, #736 or #737);
@@ -61,7 +61,6 @@ To confirm a suspected difference, run the narrowest check, after `eval "$(pytho
 
 Post one report on the PR, with the PR template's review skeleton, starting `Reviewed commit: <sha>` and attributed exactly as `Agent: <your name> | Model: <model> | Reasoning effort: <effort>`. The lint gates parse this exact form.
 
-- Name the original functions you compared.
 - For each finding give:
   - its location (file:line at the reviewed head);
   - what it departs from;

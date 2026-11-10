@@ -38,20 +38,13 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 ## Review
 
 - Infrastructure reviews apply [cost decisions](planning.md#cost-decisions).
-- A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md). For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
-- For each new scenario, fixture or checker, the reviewer names the behavior it distinguishes that existing checks cannot ([cost decisions](planning.md#cost-decisions)). One that names none, or compares an operation with itself, is a finding; the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
-- The reviewer commits each fix to the PR branch; under a Claude Code root the reviewer reports findings and the implementer commits the fixes ([team](team.md#claude-code-root)). Rerun only checks affected by those fixes; a review without fixes reruns nothing. List each finding, its fixing commit and the check that found it. Send findings that need a scope or policy decision to root unfixed.
-- Use the review report skeleton in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md), starting with `Reviewed commit: <sha>`. Name the functions or files compared with original bodies and duplicate callbacks; cite the quick-CI orphan-export check for exports and declarations. Each orphan is a finding. Add no narration when there are no findings. Put branches the harness does not reach in #156, not only in the disposition.
+- A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md) and reports as its [report](review-checklist.md#report) says. For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review. CI checks those commits. A simulation behavior fix found by CI needs a fresh scoped review, including arithmetic or assertion fixes.
 - A reviewed PR's base update that meets a condition under [integration](root-workflow.md#integration) needs only CI.
 
 ## Integration
 
 When every reviewer accepts, the implementer queues the PR in the merge queue under [integration](root-workflow.md#integration).
-
-## Cleanup
-
-Root follows [cleanup and housekeeping](root-workflow.md#cleanup).
 
 ## Automatic rollback and wind-down
 
