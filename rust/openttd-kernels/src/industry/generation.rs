@@ -177,6 +177,17 @@ fn place_initial_industry(
     unsafe { (s.restore_company)(cur_company) };
     true
 }
+/// # Safety
+/// As `generate_industries`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
+    builder: *mut Builder,
+    context: *mut GenerationContext,
+    s: *const Services,
+    g: *const GenerationServices,
+) -> u8 {
+    u8::from(unsafe { generate_industries(builder, context, &*s, &*g) })
+}
 /// Original `GenerateIndustries`: this function will create random industries during game
 /// creation. It will scale the amount of industries by mapsize and difficulty level.
 ///
@@ -185,23 +196,20 @@ fn place_initial_industry(
 /// cancellation callbacks catch only the named ordinary generation abort signal.
 // Keep the wanted-number services inside the source nonzero-total branch.
 #[allow(clippy::manual_checked_ops)]
-#[unsafe(no_mangle)]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "GenerateIndustries keeps the original's implicit C++ integer conversions"
 )]
-pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
+unsafe fn generate_industries(
     builder: *mut Builder,
     context: *mut GenerationContext,
-    s: *const Services,
-    g: *const GenerationServices,
-) -> u8 {
-    let s = unsafe { &*s };
-    let g = unsafe { &*g };
+    s: &Services,
+    g: &GenerationServices,
+) -> bool {
     if !(g.environment.editor)()
         && IndustryDensity(unsafe { (g.density)() }) == IndustryDensity::ID_FUND_ONLY
     {
-        return u8::from(true); // No industries in the game.
+        return true; // No industries in the game.
     }
     // Get the probabilities for all industries. This is done first as we need the total of
     // both land and water for scaling later.
@@ -228,7 +236,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             total_amount = p.num_forced;
         }
         if !unsafe { (g.set_progress)(context, water, total_amount) } {
-            return u8::from(false);
+            return false;
         }
         // Try to build one industry per type independent of any probabilities
         for it in 0..IndustryType::NUM_INDUSTRYTYPES.0 {
@@ -236,7 +244,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
                 s.assert_with(|| total_amount > 0);
                 total_amount = total_amount.wrapping_sub(1);
                 if !place_initial_industry(IndustryType(it), water, true, context, s, g) {
-                    return u8::from(false);
+                    return false;
                 }
             }
         }
@@ -251,12 +259,12 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             }
             s.assert_with(|| p.probs[usize::from(it.0)] > 0);
             if !place_initial_industry(it, water, false, context, s, g) {
-                return u8::from(false);
+                return false;
             }
         }
     }
     super::industry_build_data_reset(builder);
-    u8::from(true)
+    true
 }
 /// Original `CheckIndustries`: verify whether the generated industries are complete, and
 /// warn the user if not. The builder, tables and returned immutable specs remain live for

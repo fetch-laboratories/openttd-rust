@@ -860,13 +860,8 @@ pub(crate) unsafe fn on_tick_industry(builder: *mut Builder, services: *const Se
     }
 }
 /// # Safety
-/// Industry, owner and services follow the tick contract; distribution can reenter
-/// industry access, so history/waiting writes occur before/after with raw fields.
+/// As `transport_industry_goods`.
 #[unsafe(no_mangle)]
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "TransportIndustryGoods keeps the original's implicit C++ integer conversions"
-)]
 pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     i: *mut c_void,
     owner: *mut Industry,
@@ -874,7 +869,24 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     recession: bool,
     services: *const Services,
 ) -> u8 {
-    let s = unsafe { &*services };
+    u8::from(unsafe { transport_industry_goods(i, owner, minimal_cargo, recession, &*services) })
+}
+/// `TransportIndustryGoods`: move the waiting produced cargo of an industry to its
+/// stations; whether any cargo moved.
+/// # Safety
+/// Industry, owner and services follow the tick contract; distribution can reenter
+/// industry access, so history/waiting writes occur before/after with raw fields.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "TransportIndustryGoods keeps the original's implicit C++ integer conversions"
+)]
+unsafe fn transport_industry_goods(
+    i: *mut c_void,
+    owner: *mut Industry,
+    minimal_cargo: u8,
+    recession: bool,
+    s: &Services,
+) -> bool {
     let mut moved_cargo = false;
     let mut catchment = None;
     for n in 0..produced_count(owner) {
@@ -918,7 +930,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
         }
         moved_cargo |= am != 0;
     }
-    u8::from(moved_cargo)
+    moved_cargo
 }
 /// `Industry::RecomputeProductionMultipliers`, with its `UsesOriginalEconomy` assertion.
 fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services) {
@@ -1747,12 +1759,17 @@ pub(crate) unsafe fn economy_industries_monthly(builder: *mut Builder, services:
         (s.directory_dirty)(IndustryDirectoryInvalidateWindowData::IDIWD_PRODUCTION_CHANGE.0);
     }
 }
+/// # Safety
+/// As `trim_industry_accepted_produced`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
+    unsafe { trim_industry_accepted_produced(i) };
+}
 /// `TrimIndustryAcceptedProduced`.
 ///
 /// # Safety
 /// Live industry with no outstanding iterators. Rust owns removal/history freeing.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
+unsafe fn trim_industry_accepted_produced(i: *mut Industry) {
     unsafe {
         let a = &mut (*i).accepted;
         let n = a
@@ -2301,18 +2318,23 @@ fn industry_production_callback(
 pub unsafe extern "C" fn openttd_rust_industry_build_type_reset(fields: *mut BuildFields) {
     unsafe { (*fields).reset() };
 }
-/// `StartupIndustryDailyChanges`: initialize the variables that will maintain the daily
-/// industry change system. `init_counter` specifies if the counter is required to be
-/// initialized.
-///
 /// # Safety
-/// Live builder; native map-size preconditions constrain the original shift.
+/// As `startup_industry_daily_changes`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_daily_start(
     builder: *mut Builder,
     map_bits: u32,
     init_counter: u8,
 ) {
+    unsafe { startup_industry_daily_changes(builder, map_bits, init_counter != 0) };
+}
+/// `StartupIndustryDailyChanges`: initialize the variables that will maintain the daily
+/// industry change system. `init_counter` specifies if the counter is required to be
+/// initialized.
+///
+/// # Safety
+/// Live builder; native map-size preconditions constrain the original shift.
+unsafe fn startup_industry_daily_changes(builder: *mut Builder, map_bits: u32, init_counter: bool) {
     let fields = build_fields(builder);
     unsafe {
         // After getting map size, it needs to be scaled appropriately and divided by 31,
@@ -2324,7 +2346,7 @@ pub unsafe extern "C" fn openttd_rust_industry_daily_start(
         (*fields).daily_increment = (1u32 << map_bits) / 31;
         // A new game or a savegame from an older version will require the counter to be
         // initialized
-        if init_counter != 0 {
+        if init_counter {
             (*fields).daily_counter = 0;
         }
     }
