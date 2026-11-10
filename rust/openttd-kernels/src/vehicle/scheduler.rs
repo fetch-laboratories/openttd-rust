@@ -118,17 +118,6 @@ unsafe fn next<const COUNTED: bool>(
     }
     None
 }
-/// Native transient probe uses the same cursor as scheduler, with actual pool storage.
-/// # Safety
-/// As next; native test owns writable descriptor and numeric cursor for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_cursor_next(
-    s: *const SchedulerServices,
-    pool: *mut PoolCursor,
-    from: *mut usize,
-) -> Option<VehicleRef> {
-    unsafe { next::<false>(&*s, &mut *pool, &mut *from) }
-}
 unsafe fn day<const COUNTED: bool>(
     tables: &Tables,
     s: &SchedulerServices,
@@ -916,10 +905,9 @@ mod tests {
     }
 }
 
-/// Traversal cases of the retired `src/tests/vehicle_scheduler.cpp` (#736 F) on the real Rust
-/// pool owner: production deletion, reuse and growth order; the live cursor; and Tick growth
-/// with a fresh type. Traces come from `scheduler/pool-oracle.txt`, an original-only capture
-/// of the unchanged `PoolIterator`; the other values are the fixture's own checks.
+/// Traversal on the real Rust pool owner: deletion, reuse and growth order; the live cursor;
+/// and Tick growth with a fresh type. Traces are checked against `scheduler/pool-oracle.txt`,
+/// captured from the unchanged original `PoolIterator`.
 #[cfg(test)]
 mod pool_tests {
     use super::*;
@@ -1227,7 +1215,7 @@ mod pool_tests {
     }
 
     /// "Base vehicle scheduler - live cursor equals unchanged PoolIterator": mutate the pool
-    /// after each visit of `openttd_rust_vehicle_cursor_next`.
+    /// after each visit of `next`.
     fn live_cursor(indexing_growth: bool) -> (String, String) {
         let _pool = new_pool();
         GROWTH.set(usize::MAX);
@@ -1241,13 +1229,7 @@ mod pool_tests {
         let mut first_unused = 0;
         let mut from = 0;
         // SAFETY: The test's live pool; the cursor is refreshed by `next`.
-        while let Some(vehicle) = unsafe {
-            openttd_rust_vehicle_cursor_next(
-                &raw const services,
-                &raw mut pool_cursor,
-                &raw mut from,
-            )
-        } {
+        while let Some(vehicle) = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) } {
             let id = index_of(vehicle);
             visits.push(id);
             if id == 0 {
@@ -1282,14 +1264,7 @@ mod pool_tests {
         pool_cursor = cursor(); // Fresh acquisition after reset; an empty pool ends.
         from = 0;
         // SAFETY: The cleaned live pool.
-        let empty = unsafe {
-            openttd_rust_vehicle_cursor_next(
-                &raw const services,
-                &raw mut pool_cursor,
-                &raw mut from,
-            )
-        }
-        .is_none();
+        let empty = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) }.is_none();
         let inputs = format!("indexing growth {indexing_growth}");
         (
             inputs,

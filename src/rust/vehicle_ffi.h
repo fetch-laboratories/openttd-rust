@@ -163,7 +163,4 @@ void openttd_rust_occupancy_on_advance(const OpenTTDVehicleServices *, OpenTTDVe
 OpenTTDVehicleNear openttd_rust_occupancy_near(const OpenTTDVehicleServices *, int32_t, int32_t, uint32_t);
 void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTDVehicleNear *);
 }
-extern "C" {
-OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleSchedulerServices *, OpenTTDVehiclePoolCursor *, size_t *);
-}
 #endif /* RUST_VEHICLE_FFI_H */
