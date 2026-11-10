@@ -1124,6 +1124,7 @@ mod timer_game_calendar;
 mod timer_game_common;
 mod timer_game_economy;
 mod timer_game_tick;
+mod timetable;
 
 pub mod subsidy_type;
 

@@ -510,9 +510,7 @@ pub struct Leaves {
     pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
     pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub economy_fraction: extern "C" fn() -> u64,
     pub maximum_date: extern "C" fn() -> u64,
-    pub timetable_year_limit: extern "C" fn() -> u64,
     pub allocate_list: extern "C" fn() -> *mut c_void,
     pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -1600,14 +1598,17 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
         let date = crate::timer_game_common::economy_date().0;
         let start_date = date.wrapping_add(
             (start.wrapping_sub((g.0.tick_counter)()) as i32)
-                .wrapping_add((g.0.economy_fraction)() as i32)
+                .wrapping_add(i32::from(crate::timer_game_common::economy_fraction()))
                 / DAY_TICKS,
         );
         let max_date = (g.0.maximum_date)() as i32;
         if start_date < 0 || start_date > max_date {
             return g.command_error(output, 0);
         }
-        if start_date.wrapping_sub(date) > (g.0.timetable_year_limit)() as i32
+        if start_date.wrapping_sub(date)
+            > crate::timer_game_common::date_at_start_of_year(
+                crate::timetable::MAX_TIMETABLE_START_YEARS,
+            )
             || date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR
         {
             return g.command_error(output, 0);
@@ -2965,7 +2966,8 @@ impl Control {
                         g.increment_real(v);
                     } else if g.current(v).action() & 2 != 0 {
                         if g.destination_tile(v) == 0
-                            && (g.0.economy_fraction)() != g.vehicle_id(v) % DAY_TICKS as u64
+                            && u64::from(crate::timer_game_common::economy_fraction())
+                                != g.vehicle_id(v) % DAY_TICKS as u64
                         {
                         } else {
                             let mut closest = Closest::default();
@@ -4591,9 +4593,7 @@ crate::abi::layouts! {
         primary_vehicle,
         ticks_per_second,
         unit_number,
-        economy_fraction,
         maximum_date,
-        timetable_year_limit,
         allocate_list,
         shared_window,
         vehicle_id,
