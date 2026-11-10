@@ -5,7 +5,6 @@
 #include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
 #include "../../src/rust/command_services_ffi.h"
-#include "../../src/rust/company_ffi.h"
 #include "../../src/rust/station_lifecycle_ffi.h"
 #include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
@@ -33,7 +32,6 @@ struct SessionFixture {
 	OpenTTDVehicleSchedulerServices scheduler{};
 	OpenTTDFleetPendingServices pending{};
 	OpenTTDFleetTransactionServices transaction{};
-	OpenTTDCompanyFinanceServices finance{};
 	OpenTTDCommandServices commands{};
 	OpenTTDFleetGroupServices group{};
 	OpenTTDVehicleSchedulerTables tables{};
