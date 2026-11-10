@@ -127,8 +127,6 @@ inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return Rust
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
-Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
-Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->GetDirection(); }

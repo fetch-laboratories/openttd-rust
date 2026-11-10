@@ -27,7 +27,6 @@ struct OpenTTDVehicleTransactionServices {
 	void (*clear_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(clear_name);
 	void (*set_name)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*name_dirty)(void *) noexcept OPENTTD_SERVICE_DEFAULT(name_dirty);
-	bool (*interval_percent)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(interval_percent);
 	uint16_t (*interval_clamp)(int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(interval_clamp);
 	void (*set_interval)(void *, uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_interval);
 	uint32_t unique_name;
@@ -39,8 +38,6 @@ struct OpenTTDVehicleSelectionServices {
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDStationLinks *links;
 	bool (*in_depot)(void *) noexcept OPENTTD_SERVICE_DEFAULT(in_depot);
-	void *(*first_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine_part);
-	void *(*other_multihead)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multihead);
 	void (*list_clear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(list_clear);
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 };

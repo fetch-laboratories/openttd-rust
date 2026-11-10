@@ -105,7 +105,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     (k.service_flags)(
         v,
         engine.exclusive_preview(),
-        (b.interval_percent)(company.0),
+        b.interval_is_percent(company),
     );
     unsafe { articulated::add_articulated_parts(a, v) };
     /* Call various callbacks after the whole consist has been constructed */
@@ -273,7 +273,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
     (k.service_flags)(
         v,
         engine.exclusive_preview(),
-        (b.interval_percent)(company.0),
+        b.interval_is_percent(company),
     );
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }

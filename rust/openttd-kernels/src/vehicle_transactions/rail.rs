@@ -6,11 +6,14 @@
 #![allow(clippy::many_single_char_names, clippy::too_many_lines)]
 use super::{CommonServices, ERROR, TransactionServices, build, construct, refit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::CompanyID;
 use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
 use crate::ground_vehicle as gv;
 use crate::network_type::ClientID;
+use crate::newgrf_text_type::GRFStringID;
 use crate::raw_field::{read_field, write_field};
 use crate::services::{CommandCost, Cost};
+use crate::strings_type::StringID;
 use crate::tile_type::TILE_SIZE;
 use crate::tile_type::TileIndex;
 use crate::vehicle::OpenTTDVehicle;
@@ -135,6 +138,16 @@ impl Ctx {
     /// `GroundVehicle::GetLastEnginePart`.
     fn last_engine_part(self, v: R) -> R {
         Self::vref(v).last_engine_part().0.as_ptr()
+    }
+    /// `GroundVehicle::GetFirstEnginePart`.
+    fn first_engine_part(self, v: R) -> R {
+        Self::vref(v).first_engine_part().0.as_ptr()
+    }
+    /// `Train::other_multiheaded_part`.
+    fn other_multiheaded_part(self, v: R) -> R {
+        Self::vref(v)
+            .other_multiheaded_part()
+            .map_or(ptr::null_mut(), |v| v.0.as_ptr())
     }
     /// A non-null live record.
     fn vref(v: R) -> VehicleRef {
@@ -428,7 +441,7 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
         (k.service_flags)(
             Ctx::sh(v),
             crate::vehicle::EngineRef::of(e).exclusive_preview(),
-            (x.t.interval_percent)(company),
+            x.t.interval_is_percent(CompanyID(company)),
         );
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.set_subtype(v, gv::set_front_engine);
@@ -542,7 +555,7 @@ fn normalise_dual_heads(x: Ctx, mut t: R) {
                 }
                 u = next;
             }
-            let other = x.rec((x.r.selection.other_multihead)(Ctx::sh(t)));
+            let other = x.other_multiheaded_part(t);
             if u != other {
                 /* Remove the part from the 'wrong' train */
                 remove_from_consist(x, other, false);
@@ -668,13 +681,17 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
             (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
                 /* A failing callback means everything is okay */
-                let mut error = strings.null_string;
+                let null_string = StringID(strings.null_string);
+                let mut error = null_string;
                 let grf_text = |n: u32| {
-                    x.c.grf_text_raw(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
+                    x.c.grf_text(
+                        Ctx::sh(head),
+                        GRFStringID(strings.grf_text.0.wrapping_add(n)),
+                    )
                 };
                 if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
-                        error = strings.incompatible_rail;
+                        error = StringID(strings.incompatible_rail);
                     }
                     if callback < 0xFD {
                         error = grf_text(u32::from(callback));
@@ -694,16 +711,17 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error =
-                                x.c.grf_text_raw(Ctx::sh(head), unsafe { regs100.assume_init() }
-                                    as u32);
+                            error = x.c.grf_text(
+                                Ctx::sh(head),
+                                GRFStringID(unsafe { regs100.assume_init() } as u32),
+                            );
                         }
                         // unknown reason, or 0x402: disallow attaching
-                        _ => error = strings.incompatible_rail,
+                        _ => error = StringID(strings.incompatible_rail),
                     }
                 }
-                if error != strings.null_string {
-                    return Some(error);
+                if error != null_string {
+                    return Some(error.0);
                 }
             }
         }
@@ -896,10 +914,9 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         }
     }
     /* if an articulated part is being handled, deal with its parent vehicle */
-    let first_part = x.r.selection.first_engine_part;
-    src = x.rec(first_part(Ctx::sh(src)));
+    src = x.first_engine_part(src);
     if !dst.is_null() {
-        dst = x.rec(first_part(Ctx::sh(dst)));
+        dst = x.first_engine_part(dst);
     }
     /* don't move the same vehicle.. */
     if src == dst {
@@ -926,11 +943,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
         return (cost.zero)(out);
     }
     /* When moving a multiheaded part to be place after itself, bail out. */
-    if !move_chain
-        && !dst.is_null()
-        && x.is_rear(dst)
-        && src == x.rec((x.r.selection.other_multihead)(Ctx::sh(dst)))
-    {
+    if !move_chain && !dst.is_null() && x.is_rear(dst) && src == x.other_multiheaded_part(dst) {
         return (cost.zero)(out);
     }
     /* Check if all vehicles in the source train are stopped inside a depot. */
@@ -1104,7 +1117,7 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     let x = Ctx::new(b);
     let s = x.s;
     let cost = x.t.cost;
-    let v = x.rec((x.r.selection.first_engine_part)(t));
+    let v = x.first_engine_part(x.rec(t));
     let first = x.first(v);
     if x.is_rear(v) {
         return (cost.error)(out, s.strings.rear_follow);

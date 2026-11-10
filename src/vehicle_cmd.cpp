@@ -90,7 +90,6 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 		.clear_name = RustVehicleClearName,
 		.set_name = RustVehicleSetName,
 		.name_dirty = VehicleTransactionNameDirty,
-		.interval_percent = RustCompanyServiceIntervalPercent,
 		.interval_clamp = VehicleTransactionClampInterval,
 		.set_interval = VehicleTransactionSetInterval,
 		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
