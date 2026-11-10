@@ -19,7 +19,7 @@ A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2
 - Keep at most six unmerged component branches, including drafts and WIP (#157). Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is never such a dependency. The first PR to merge adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by multiple drafts once in its own small PR from `rust-migration`. Drafts do not build parallel copies.
 - A sweep across most of `src/`, such as #581 PR-B, merges before any other `src/` change. Other drafts continue implementation and review but queue only after it merges, because each merge ahead of it would force a new sweep. No draft waits for another draft's services. A reviewed PR gains no new scope before it merges.
-- Spot-check reviewers' fix commits before a PR is queued ([report](review-checklist.md#report)). Under a Claude Code root, each finding's reviewer verifies them instead ([review loop](team.md#review-loop)).
+- Reviewers verify the implementer's fixing commits before a PR is queued; root reads their dispositions ([review loop](team.md#review-loop)).
 
 To merge a PR, its implementer follows these steps:
 
@@ -38,7 +38,7 @@ A red platform cadence or a confirmed code regression on `rust-migration` stops 
 ## CI administration
 
 - `CI_ON_DEMAND=true` enables `tools/ci.py` requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
-- For a workflow-changing PR, root reviews its workflow, temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap` through `ci:full`; then its implementer queues it. After merge, restore the variable to `true` and record both changes in the PR.
+- For a workflow-changing PR, root reviews its workflow after the reviewer accepts the source, unsets `CI_ON_DEMAND`, requests `--profile full --bootstrap` through `ci:full`, and sets the variable back to `true` as soon as that run's `plan` job has succeeded. Only that job's condition reads the variable; while it is unset, every PR push runs the automatic heavy jobs and skips the invalidation that admits a head to the queue. The implementer queues the PR when the run passes, and pushes nothing in between: a new head needs a new bootstrap Full. Record both variable changes in the PR. #882's window was 22 seconds (2026-11-10).
 - Run macOS and the [platform comparison](rust-migration.md#continuous-integration) on `rust-migration` after every fifth merge (user, 2026-10-22; #357): `gh workflow run ci-build.yml --ref rust-migration`. A red result stops merges until it is fixed ([integration](#integration)). An uncovered protected push also runs them. Windows x86, Linux Clang and GCC Dedicated run in every Full (user, 2026-11-10; #860), so the dispatch's builds of them repeat a tested tree.
 - After two hosted-capacity cancellations of a macOS run, run `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, rerun, then `gh variable delete CI_MACOS_HEAVY` when it finishes.
 

@@ -8,7 +8,10 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 - primitive-integer parameters and fields whose name names a concept with a
   named type;
 - transparent wrapper types and named constants;
-- literal sites that stand for a named value.
+- literal sites that stand for a named value;
+- Rust functions with more than seven parameters, as FFI exports, commands
+  (taking the command's `flags: u16`) and helpers (#874), outside test code
+  and `#[cfg(test)]` modules.
 
 With file paths it prints those files' residue instead of the totals. The Rust
 and the candidate C++ come from the revision's archive, the original from the
@@ -503,6 +506,56 @@ def type_sites(path: str, source: str) -> list[Site]:
     return sites
 
 
+LONG_PARAMETERS = 7
+
+
+def test_modules(rust: dict[str, str]) -> set[str]:
+    """Paths of the module files that a `#[cfg(test)] mod name;` declares."""
+    found = set()
+    for path, source in rust.items():
+        parent = PurePosixPath(path)
+        if parent.name not in ("lib.rs", "mod.rs"):
+            parent = parent.with_suffix("")
+        else:
+            parent = parent.parent
+        for name in re.findall(r"#\[cfg\(test\)\]\s*(?:pub\S*\s+)?mod (\w+);", source):
+            found |= {str(parent / f"{name}.rs"), str(parent / name / "mod.rs")}
+    return found
+
+
+def long_functions(path: str, source: str) -> list[Site]:
+    """Non-test Rust functions with more than LONG_PARAMETERS parameters, `self` included."""
+    data = source.encode()
+    found = []
+    for node in walk(PARSERS["rust"].parse(data).root_node):
+        parameters = node.child_by_field_name("parameters")
+        if node.type != "function_item" or parameters is None:
+            continue
+        count = sum(
+            p.type in ("parameter", "self_parameter", "variadic_parameter")
+            for p in parameters.named_children
+        )
+        if count <= LONG_PARAMETERS or in_test(node, data, path):
+            continue
+        name = text(node.child_by_field_name("name"), data)
+        head = text(node, data).split("fn ", 1)[0]
+        if "no_mangle" in leading(node, data) or 'extern "C"' in head:
+            kind = "ffi export"
+        elif any(
+            p.type == "parameter"
+            and text(p.child_by_field_name("pattern"), data) == "flags"
+            and text(p.child_by_field_name("type"), data) == "u16"
+            for p in parameters.named_children
+        ):
+            kind = "command"
+        else:
+            kind = "helper"
+        found.append(
+            Site(path, node.start_point[0] + 1, kind, f"{name}: {count} parameters")
+        )
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -534,6 +587,13 @@ def main() -> int:
         if not selected or path in selected
         for site in type_sites(path, source)
     ]
+    tests = test_modules(rust)
+    long = [
+        site
+        for path, source in sorted(rust.items())
+        if (not selected or path in selected) and path not in tests
+        for site in long_functions(path, source)
+    ]
     missing = [
         (r, o, o.comments - r.comments) for r, o in pairs if o.comments > r.comments
     ]
@@ -545,6 +605,8 @@ def main() -> int:
         for site in sorted(sites, key=lambda s: (s.path, s.line)):
             if site.kind in ("bare integer", "literal"):
                 print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
+        for site in long:
+            print(f"{site.path}:{site.line}: long {site.kind}: {site.detail}")
     counts = {
         kind: sum(s.kind == kind for s in sites)
         for kind in ("bare integer", "wrapper", "constant", "literal")
@@ -553,7 +615,11 @@ def main() -> int:
         f"Code-standards inventory at {args.head}: {len(pairs)} matched bodies, "
         f"{sum(m[2] for m in missing)} missing comment lines, "
         f"{counts['bare integer']} bare-integer sites, {counts['wrapper']} wrappers, "
-        f"{counts['constant']} named constants, {counts['literal']} literal sites"
+        f"{counts['constant']} named constants, {counts['literal']} literal sites, "
+        f"{len(long)} functions over {LONG_PARAMETERS} parameters "
+        f"({sum(s.kind == 'ffi export' for s in long)} FFI exports, "
+        f"{sum(s.kind == 'helper' for s in long)} helpers, "
+        f"{sum(s.kind == 'command' for s in long)} commands)"
     )
     return 0
 

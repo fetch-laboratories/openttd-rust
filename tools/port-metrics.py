@@ -7,6 +7,9 @@ lines), then physical-line totals for comparison with historical metrics.
 whole-fork and simulation shares, and Rust exports/service callback slots.
 --functions [AREA ...] adds the remaining lines per file and top-level function.
 Glue includes generated records; evidence_cpp adds other generated and tracked C++.
+embedded_cpp counts C++ that tools keep outside C++ files (#736): Python string
+constants, oracle recipe patches and sites that extract original bodies. It
+stays outside the census and earns no retirement credit.
 This is a source/guard inventory, not full preprocessing or behavioral coverage.
 
 Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
@@ -14,6 +17,7 @@ Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
 """
 
 import argparse
+import ast
 import hashlib
 import io
 import json
@@ -25,7 +29,7 @@ import tempfile
 from collections.abc import Iterator, Sequence
 from difflib import SequenceMatcher
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NotRequired, TypedDict
 
 import vcs
@@ -102,8 +106,15 @@ class EvidenceMetrics(TypedDict):
     files: list[EvidenceRow]
 
 
+class EmbeddedMetrics(TypedDict):
+    strings: dict[str, int]
+    recipes: dict[str, int]
+    extraction_sites: dict[str, int]
+
+
 class Metrics(TypedDict, total=False):
     evidence_cpp: EvidenceMetrics
+    embedded_cpp: EmbeddedMetrics
     fork_cpp: int
     candidate_cpp_upper_bound: int
     rust: int
@@ -655,6 +666,41 @@ def evidence_cpp(head: str, all_lines: bool = False) -> EvidenceMetrics:
     )
 
 
+def embedded_cpp(head: str, all_lines: bool = False) -> EmbeddedMetrics:
+    """C++ held in tool files that are not C++ sources, by file."""
+
+    def lines(text: str) -> int:
+        return len(classify(text)) if all_lines else len(code_lines(text, "x.cpp"))
+
+    result: EmbeddedMetrics = {"strings": {}, "recipes": {}, "extraction_sites": {}}
+    for path in git("ls-tree", "-r", "--name-only", head, "tools/").splitlines():
+        if path.startswith("tools/oracle-recipes/") and path.endswith(".patch"):
+            added = [
+                line[1:]
+                for line in show(head, path).splitlines()
+                if line.startswith("+") and not line.startswith("+++")
+            ]
+            result["recipes"][path] = lines("\n".join(added) + "\n")
+        if not path.endswith(".py") or PurePosixPath(path).name.startswith("test-"):
+            continue
+        text = show(head, path)
+        for node in ast.parse(text).body:
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+                and any(
+                    isinstance(t, ast.Name) and t.id.endswith("_SOURCE")
+                    for t in node.targets
+                )
+            ):
+                name = next(t.id for t in node.targets if isinstance(t, ast.Name))
+                result["strings"][f"{path}:{name}"] = lines(node.value.value)
+        if sites := len(re.findall(r"\bprobe\.body\(", text)):
+            result["extraction_sites"][path] = sites
+    return result
+
+
 def generated_glue(rev: str, all_lines: bool = False) -> int:
     """Lines of generated C++ record declarations, including unchanged headers."""
     return sum(
@@ -751,6 +797,7 @@ def metrics(
         evidence = evidence_cpp(head, all_lines)
         result.update(
             evidence_cpp=evidence,
+            embedded_cpp=embedded_cpp(head, all_lines),
             fork_cpp=compiled + evidence["total"],
             candidate_cpp_upper_bound=compiled
             + evidence["total"]
@@ -994,6 +1041,13 @@ def main() -> None:
             evidence = result["evidence_cpp"]
             print(
                 f"Evidence C++: tracked {evidence['tracked']} | generated non-record {evidence['generated']} | candidate/shared {evidence['candidate_shared']} | reference-only {evidence['reference_only']} | unresolved {evidence['unresolved']}"
+            )
+            embedded = result["embedded_cpp"]
+            print(
+                "Embedded C++ (outside the census, no retirement credit): "
+                f"Python strings {sum(embedded['strings'].values())} | "
+                f"oracle recipes {sum(embedded['recipes'].values())} | "
+                f"original-body extraction sites {sum(embedded['extraction_sites'].values())}"
             )
             print(
                 f"Fork C++ source census: {result['fork_cpp']} | candidate dependency upper bound (includes unresolved): {result['candidate_cpp_upper_bound']}"

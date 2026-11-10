@@ -177,7 +177,7 @@ jobs:
     - name: Validate required community inputs
       run: python3 -m tools.simulation.community_ai fetch
     - name: Compare assigned simulation inventory
-      run: python3 tools/ci_native.py shard ${{ matrix.shard }} --jobs "$(nproc)" --output .local/shard-${{ matrix.shard }}.json
+      run: python3 tools/ci_native.py shard ${{ matrix.shard }} --jobs "$(nproc)" --output .local/shard-${{ matrix.shard }}-${{ github.run_attempt }}.json
     - name: Collect simulation evidence
       if: always()
       run: python3 tools/ci_native.py evidence .local/ci-evidence
@@ -185,9 +185,11 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: migration-simulation-${{ matrix.shard }}
+        # Each attempt keeps its own report: a rerun's latest passes, and an
+        # earlier attempt's failure remains for flake reports (#881).
+        name: migration-simulation-${{ matrix.shard }}-${{ github.run_attempt }}
         path: |
-          .local/shard-${{ matrix.shard }}.json
+          .local/shard-${{ matrix.shard }}-${{ github.run_attempt }}.json
           .local/ci-evidence
         include-hidden-files: true
 

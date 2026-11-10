@@ -399,6 +399,34 @@ class PortMetricsTests(unittest.TestCase):
         head = self.commit()
         self.assertEqual(METRICS.boundary(head), {"exports": 2, "callback_slots": 2})
 
+    def test_embedded_cpp_counts_strings_recipes_and_extraction_sites(self) -> None:
+        (self.root / "tools/simulation").mkdir(parents=True)
+        (self.root / "tools/oracle-recipes").mkdir()
+        self.write(
+            "tools/simulation/stations.py",
+            'COMMAND_SOURCE = r"""\nint a = 1;\n// note\nint b = 2;\n"""\n'
+            'OTHER = "int c = 3;\\n"\n'
+            "x = probe.body(text, 'void F(') + probe.body(text, 'void G(')\n",
+        )
+        self.write("tools/test-stations.py", 'EXAMPLE_SOURCE = "int d = 4;\\n"\n')
+        self.write(
+            "tools/oracle-recipes/case.patch",
+            "--- a/capture.in\n+++ b/capture.in\n@@ -1 +1,2 @@\n int e;\n+int f = 5;\n",
+        )
+        head = self.commit()
+        self.assertEqual(
+            METRICS.embedded_cpp(head),
+            {
+                "strings": {"tools/simulation/stations.py:COMMAND_SOURCE": 2},
+                "recipes": {"tools/oracle-recipes/case.patch": 1},
+                "extraction_sites": {"tools/simulation/stations.py": 2},
+            },
+        )
+        self.assertEqual(
+            METRICS.embedded_cpp(head, all_lines=True)["strings"],
+            {"tools/simulation/stations.py:COMMAND_SOURCE": 4},
+        )
+
     def test_simulation_inventory(self) -> None:
         for path in (
             "src/town_cmd.cpp",

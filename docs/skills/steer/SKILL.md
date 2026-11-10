@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Steer the OpenTTD-Rust migration
 
-Review root's autonomous work between sessions. Root usually runs `gpt-6.1-sol` xhigh in Codex (Astra before 2026-10-08), sometimes Claude Opus in Claude Code. Find what root cannot see and correct rules, roadmap order, issues and PR comments; leave code to root's PR process. [Navigate](../navigate/SKILL.md) owns the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), and the roadmap's "Phases". Work within that course. Root acts on corrections literally, so write them carefully.
+Review root's autonomous work between sessions. Root may run under Codex or Claude Code, with settings chosen by the user ([team](../../team.md#roles-and-models)). Find what root cannot see and correct rules, roadmap order, issues and PR comments; leave code to root's PR process. [Navigate](../navigate/SKILL.md) owns the goal line in `AGENTS.md`, [goal and phases](../../planning.md#goal-and-phases), and the roadmap's "Phases". Work within that course. Root acts on corrections literally, so write them carefully.
 
 User focus: $ARGUMENTS (in Codex, any text sent with `$steer`). Answer a focused question first, to its root cause. Read it broadly: housekeeping includes code, tests and refactoring. Tell the user which of steps 2 and 3 still run. Land the answer and root's next action in step 4. Handle restart requests in step 6.
 
@@ -107,10 +107,10 @@ Done when the prompt has been checked and any needed edit is included.
 Report the review and restart root only if the focus requested it.
 
 1. Briefly report root's track, audit findings with numbers, changes with issue links and commit hash, reversed user direction, and anything only the user can supply.
-2. If asked to restart, wait until `origin/rust-migration` has the commit. Launch one thread with `t3_thread_launch` (load it with ToolSearch in Claude Code). Only the model, effort and workspace vary; omit every other setting to inherit this thread's.
-   - `modelSelection`: the focus's model and effort, else root's default, `{instanceId: "codex", model: "gpt-6.1-sol", options: [{id: "effort", value: "xhigh"}]}`. Claude Code uses `instanceId: "claudeAgent"`.
+2. If asked to restart, wait until `origin/rust-migration` has the commit. Launch one thread with `t3_thread_launch`, using the host's tool discovery (ToolSearch in Claude Code; `ALL_TOOLS` in Codex code mode). Recover the previous development root's settings under [team](../../team.md#roles-and-models), then apply the user's explicit overrides. Read the selected source thread before launching; do not use this steering session as the source.
+   - `modelSelection`: the recovered provider, exact model and model options, with any explicit user overrides. Map them to the host's current schema; preserve effort and service tier where supported. Ask only when a required setting is missing or unavailable.
    - `workspaceStrategy: {type: "root"}`, a title, and a stable `clientRequestId`, so a retry after an error cannot launch twice.
-   - The prompt `$start-development` in Codex or `/start-development` in Claude Code, followed by any scope from the focus.
+   - The prompt `$start-development` in Codex or `/start-development` in Claude Code, followed by any scope from the focus. Preserve other root settings from the source thread where the host supports them, subject to the current session's permission limits.
 3. Confirm with `t3_thread_read` that it is running, and link it with the `link` the launch returns.
 4. Otherwise tell the user to start root with start-development. Either way, say whether the review changed the prompt; the prompt lives in the skill, not the reply.
 

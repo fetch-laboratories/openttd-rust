@@ -27,6 +27,26 @@ impl VehicleListType {
     pub const VLT_END: Self = Self(5);
 }
 
+/// Native `VehicleListIdentifier`: the information about a vehicle list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VehicleListIdentifier {
+    /// The type of vehicle list.
+    pub list_type: VehicleListType,
+    /// The vehicle type associated with this list.
+    pub vtype: crate::vehicle_type::VehicleType,
+    /// The company associated with this list.
+    pub company: crate::company_type::CompanyID,
+    /// A vehicle list type specific index.
+    pub index: u32,
+}
+impl VehicleListIdentifier {
+    /// `VehicleListIdentifier::Valid`.
+    #[must_use]
+    pub fn valid(&self) -> bool {
+        self.list_type < VehicleListType::VLT_END
+    }
+}
+
 /// `VL_STANDARD`.
 pub const VL_STANDARD: u8 = VehicleListType::VL_STANDARD.0;
 /// `VL_SHARED_ORDERS`.

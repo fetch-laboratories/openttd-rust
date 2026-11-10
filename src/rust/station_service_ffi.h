@@ -72,6 +72,7 @@ enum OrderType : uint8_t;
 struct OpenTTDOrderDestination {
 	uint16_t destination;
 	OrderType kind;
+	bool nearest_depot;
 };
 struct OpenTTDTruncatedSource {
 	uint32_t amount;

@@ -1164,10 +1164,14 @@ def definition_reload(
     env: dict[str, str],
     result: core.Result,
 ) -> Scenario:
+    # The main viewport's smooth scroll steps by real time (#880), so a save
+    # taken mid-scroll differs between runs; without it a scroll lands at once.
+    steady = "setting gui.smooth_scroll 0"
+
     def build(role: str) -> Scenario:
         return {
             **scenario,
-            "console": ["engines_scenario types-definitions-build", "unpause"],
+            "console": [steady, "engines_scenario types-definitions-build", "unpause"],
             "ticks": 74,
         }
 
@@ -1210,5 +1214,5 @@ def definition_reload(
         **scenario,
         "executables": executables,
         "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
-        "console": ["engines_scenario types-definitions-reload", "unpause"],
+        "console": [steady, "engines_scenario types-definitions-reload", "unpause"],
     }

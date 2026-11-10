@@ -87,7 +87,10 @@ pub(crate) unsafe fn road(
     (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
         crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
     });
-    (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD.0) as u16);
+    (k.service_dates)(
+        v,
+        b.interval_default_raw(company, VehicleType::ROAD.0) as u16,
+    );
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
     (k.road_front)(
@@ -123,7 +126,7 @@ pub(crate) unsafe fn road(
             r.road,
         );
     }
-    if r.road_acceleration_model() != 0 {
+    if r.road_acceleration_model() != crate::vehicle_type::AccelerationModel::AM_ORIGINAL {
         crate::ground_vehicle::cargo_changed(
             r.road_ground.physics,
             unsafe { vehicle_ref(v, r.common.vehicles) }.first(),
@@ -248,7 +251,7 @@ pub(crate) unsafe fn aircraft(
     }
     (k.service_dates)(
         v,
-        b.interval_default(company, VehicleType::AIRCRAFT.0) as u16,
+        b.interval_default_raw(company, VehicleType::AIRCRAFT.0) as u16,
     );
     (k.build_stamp)(v);
     (k.build_stamp)(u);
