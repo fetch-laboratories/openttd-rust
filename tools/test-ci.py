@@ -253,9 +253,13 @@ def run_policy(
     trees: object = None,
     pulls: Iterable[object] = (),
     statuses: Iterable[object] = (),
+    pushed: Iterable[object] = (),
     compare: str | None = None,
 ) -> dict[str, Any]:
-    """Run the actual policy script; `trees` maps the base and pushed tree SHAs."""
+    """Run the actual policy script; `trees` maps the base and pushed tree SHAs.
+
+    `statuses` are the merged PR head's and `pushed` the pushed commit's own.
+    """
     script = script_for("ci-policy.yml", "policy")
     compare = compare or f"async () => ({{data: {{files: {json.dumps(files)}}}}})"
     return cast(
@@ -269,11 +273,14 @@ const context = {{eventName: {json.dumps(event)}, repo: {{owner: 'example', repo
   serverUrl: 'https://github.com', sha: 'head',
   payload: {{before: 'base', pull_request: {{base: {{ref: 'rust-migration'}}}}}}}};
 const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}, warning: () => {{}}}};
-const github = {{paginate: async () => {json.dumps(list(pulls))}, rest: {{
+const listed = {{head: {json.dumps(list(pushed))}, {json.dumps(HEAD)}: {json.dumps(list(statuses))}}};
+const github = {{paginate: async (method, args) =>
+  method === github.rest.repos.listPullRequestsAssociatedWithCommit ? {json.dumps(list(pulls))} : listed[args.ref],
+  rest: {{
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
   repos: {{
     getCommit: async args => ({{data: {{commit: {{tree: {{sha: args.ref === 'base' ? '{BASE}' : '{TREE}'}}}}}}}}),
-    getCombinedStatusForRef: async () => ({{data: {{statuses: {json.dumps(list(statuses))}}}}}),
+    listPullRequestsAssociatedWithCommit: () => {{}}, listCommitStatusesForRef: () => {{}},
     compareCommitsWithBasehead: {compare}
   }}
 }}}};
@@ -1657,6 +1664,34 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(full=full, marker=marker, run=run, merged=merged):
                 result = run_policy(files=files, pulls=[pull], statuses=statuses)
                 self.assertEqual(result["outputs"]["heavy"], expected)
+                # A merge-queue merge pushes the tested group commit itself, which
+                # needs no merged PR.
+                if merged:
+                    result = run_policy(files=files, pushed=statuses)
+                    self.assertEqual(result["outputs"]["heavy"], expected)
+
+    def test_coverage_trusts_only_the_publishers_statuses(self) -> None:
+        files = [{"filename": "src/code.cpp"}]
+        merged = [dict(PULL, merged_at="date")]
+        trusted = validation()
+        for index in (0, 1):
+            for creator in (None, {}, {"login": "writer", "type": "User"}):
+                forged = [dict(status) for status in trusted]
+                forged[index]["creator"] = creator
+                with self.subTest(index=index, creator=creator):
+                    for result in (
+                        run_policy(files=files, pushed=forged),
+                        run_policy(files=files, pulls=merged, statuses=forged),
+                    ):
+                        self.assertEqual(result["outputs"]["heavy"], "true")
+                    # A newer untrusted status hides an older trusted one.
+                    result = run_policy(files=files, pushed=[forged[index], *trusted])
+                    self.assertEqual(result["outputs"]["heavy"], "true")
+        # An untested pushed commit still finds the merged PR head's result.
+        result = run_policy(
+            files=files, pushed=validation("failure"), pulls=merged, statuses=trusted
+        )
+        self.assertEqual(result["outputs"], {"heavy": "false", "covered": "true"})
 
     def test_markdown_tree_differences_require_complete_inventories(self) -> None:
         for after, expected in inventory_cases():
