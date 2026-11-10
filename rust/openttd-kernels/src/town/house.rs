@@ -13,7 +13,7 @@ use super::{
     change_population, engine, update_town_radius,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
+use crate::cargo_type::{CargoArray, CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
 use crate::cargotype::{TOWN_PRODUCTION_DIVISOR, TownProductionEffect};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
@@ -241,14 +241,10 @@ impl StationFinder<'_> {
     }
 }
 
-/// `produced[cargo]++` in the caller's 64-entry array.
-/// # Safety
-/// `cargoes` names 64 writable values.
-unsafe fn add_one(cargoes: *mut u32, cargo: CargoType) {
-    unsafe {
-        let slot = cargoes.add(usize::from(cargo.0));
-        *slot = (*slot).wrapping_add(1);
-    }
+/// `produced[cargo]++`.
+fn add_one(cargoes: &mut CargoArray, cargo: CargoType) {
+    let slot = &mut cargoes[usize::from(cargo.0)];
+    *slot = slot.wrapping_add(1);
 }
 
 /// Gameplay arguments of `town_cmd.cpp::CmdPlaceHouse`, in command order.
@@ -1249,18 +1245,15 @@ impl<'a> House<'a> {
     fn add_accepted_cargo_set_mask(
         cargo: CargoType,
         amount: u32,
-        acceptance: *mut u32,
-        always_accepted: *mut u64,
+        acceptance: &mut CargoArray,
+        always_accepted: &mut CargoTypes,
     ) {
         if !is_valid_cargo_type(cargo.0) || amount == 0 {
             return;
         }
-        // SAFETY: The caller's 64-entry cargo array and mask outlive this entry.
-        unsafe {
-            let slot = acceptance.add(usize::from(cargo.0));
-            *slot = (*slot).wrapping_add(amount);
-            set_bit64(&mut *always_accepted, cargo.0);
-        }
+        let slot = &mut acceptance[usize::from(cargo.0)];
+        *slot = slot.wrapping_add(amount);
+        set_bit64(&mut always_accepted.0, cargo.0);
     }
     /// `AddAcceptedCargoOfHouse`: determine accepted cargo for a house.
     /// `TileIndex::INVALID` with a null town is a prototype not yet built.
@@ -1269,8 +1262,8 @@ impl<'a> House<'a> {
         tile: TileIndex,
         house: HouseID,
         t: *mut TownHandle,
-        acceptance: *mut u32,
-        always_accepted: *mut u64,
+        acceptance: &mut CargoArray,
+        always_accepted: &mut CargoTypes,
     ) {
         let hs = (self.h.acceptance)(house);
         let callback_mask = self.callback_mask(house);
@@ -1314,8 +1307,18 @@ impl<'a> House<'a> {
             if callback != CALLBACK_FAILED {
                 let callback = u32::from(callback);
                 let (a, always) = (acceptance, always_accepted);
-                Self::add_accepted_cargo_set_mask(accepts[0], gb(callback, 0, 4), a, always);
-                Self::add_accepted_cargo_set_mask(accepts[1], gb(callback, 4, 4), a, always);
+                Self::add_accepted_cargo_set_mask(
+                    accepts[0],
+                    gb(callback, 0, 4),
+                    &mut *a,
+                    &mut *always,
+                );
+                Self::add_accepted_cargo_set_mask(
+                    accepts[1],
+                    gb(callback, 4, 4),
+                    &mut *a,
+                    &mut *always,
+                );
                 if LandscapeType((self.l.climate)()) != LandscapeType::Temperate
                     && has_bit(callback, 12)
                 {
@@ -1333,18 +1336,23 @@ impl<'a> House<'a> {
             Self::add_accepted_cargo_set_mask(
                 cargo,
                 u32::from(amount),
-                acceptance,
-                always_accepted,
+                &mut *acceptance,
+                &mut *always_accepted,
             );
         }
     }
     /// `AddAcceptedCargo_Town`.
-    fn add_accepted_cargo_town(&self, tile: TileIndex, acceptance: *mut u32, always: *mut u64) {
+    fn add_accepted_cargo_town(
+        &self,
+        tile: TileIndex,
+        acceptance: &mut CargoArray,
+        always: &mut CargoTypes,
+    ) {
         let entry = (self.h.entry)(tile.0);
         self.add_accepted_cargo_of_house(tile, entry.house, entry.town.shell, acceptance, always);
     }
     /// `AddProducedCargo_Town`.
-    fn add_produced_cargo_town(&self, tile: TileIndex, produced: *mut u32) {
+    fn add_produced_cargo_town(&self, tile: TileIndex, produced: &mut CargoArray) {
         let entry = (self.h.entry)(tile.0);
         let house_id = entry.house;
         let hs = (self.h.production)(house_id);
@@ -1368,8 +1376,7 @@ impl<'a> House<'a> {
                 if !is_valid_cargo_type(cargo.0) {
                     continue;
                 }
-                // SAFETY: The caller's 64-entry cargo array outlives this entry.
-                unsafe { add_one(produced, cargo) };
+                add_one(produced, cargo);
             }
         } else {
             for (tpe, rate) in [
@@ -1385,8 +1392,7 @@ impl<'a> House<'a> {
                     if cs.cargo == CargoType::INVALID_CARGO.0 {
                         break;
                     }
-                    // SAFETY: The caller's 64-entry cargo array outlives this entry.
-                    unsafe { add_one(produced, CargoType(cs.cargo)) };
+                    add_one(produced, CargoType(cs.cargo));
                     at += 1;
                 }
             }
@@ -1656,23 +1662,30 @@ pub unsafe extern "C" fn openttd_rust_house_place(
         },
     );
 }
-/// `AddAcceptedCargoOfHouse`, raw adapter retained for `subsidy.rs` until its pass.
-pub(crate) unsafe fn accepted(
+/// `AddAcceptedCargoOfHouse`: determine accepted cargo for a house.
+/// # Safety
+/// Live immutable tables; `town` is a live town or null for a prototype.
+pub(crate) unsafe fn add_accepted_cargo_of_house(
     leaves: *const Leaves,
     services: *const Services,
-    tile: u32,
+    tile: TileIndex,
     id: HouseID,
     town: *mut TownHandle,
-    acceptance: *mut u32,
-    always: *mut u64,
+    acceptance: &mut CargoArray,
+    always: &mut CargoTypes,
 ) {
-    house(leaves, services).add_accepted_cargo_of_house(
-        TileIndex(tile),
-        id,
-        town,
-        acceptance,
-        always,
-    );
+    house(leaves, services).add_accepted_cargo_of_house(tile, id, town, acceptance, always);
+}
+/// `AddProducedCargo_Town`.
+/// # Safety
+/// Live immutable tables; `tile` is a house tile.
+pub(crate) unsafe fn add_produced_cargo_town(
+    leaves: *const Leaves,
+    services: *const Services,
+    tile: TileIndex,
+    produced: &mut CargoArray,
+) {
+    house(leaves, services).add_produced_cargo_town(tile, produced);
 }
 /// `AddAcceptedCargo_Town`, for the shared tile dispatch.
 /// # Safety
@@ -1685,7 +1698,11 @@ pub unsafe extern "C" fn openttd_rust_house_accepted_tile(
     acceptance: *mut u32,
     always: *mut u64,
 ) {
-    house(leaves, services).add_accepted_cargo_town(TileIndex(tile), acceptance, always);
+    house(leaves, services).add_accepted_cargo_town(
+        TileIndex(tile),
+        unsafe { &mut *acceptance.cast::<CargoArray>() },
+        unsafe { &mut *always.cast::<CargoTypes>() },
+    );
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_produced(
@@ -1694,7 +1711,9 @@ pub unsafe extern "C" fn openttd_rust_house_produced(
     tile: u32,
     produced: *mut u32,
 ) {
-    house(leaves, services).add_produced_cargo_town(TileIndex(tile), produced);
+    house(leaves, services).add_produced_cargo_town(TileIndex(tile), unsafe {
+        &mut *produced.cast::<CargoArray>()
+    });
 }
 /// `TriggerHouseAnimation_WatchedCargoAccepted`.
 /// # Safety
@@ -1860,12 +1879,12 @@ pub unsafe extern "C" fn openttd_rust_house_accepted_prototype(
     unsafe {
         std::ptr::write_bytes(acceptance, 0, usize::from(crate::cargo_type::NUM_CARGO));
     }
-    let mut always = 0;
+    let mut always = CargoTypes(0);
     house(leaves, services).add_accepted_cargo_of_house(
         TileIndex::INVALID,
         id,
         std::ptr::null_mut(),
-        acceptance,
-        &raw mut always,
+        unsafe { &mut *acceptance.cast::<CargoArray>() },
+        &mut always,
     );
 }

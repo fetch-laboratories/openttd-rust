@@ -16,7 +16,7 @@
     clippy::comparison_chain,
     clippy::if_not_else
 )]
-use crate::cargo_type::{CargoType, NUM_CARGO, is_valid_cargo_type};
+use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO, is_valid_cargo_type};
 use crate::cargotype::TownProductionEffect;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
@@ -308,22 +308,22 @@ impl Services {
                 if accepted {
                     let house = &*(*self.town).houses;
                     let entry = (house.entry)(tile);
-                    let mut always = 0;
-                    town::house::accepted(
+                    let mut always = CargoTypes(0);
+                    town::house::add_accepted_cargo_of_house(
                         self.town,
                         self.shared,
-                        tile,
+                        TileIndex(tile),
                         entry.house,
                         entry.town.shell,
-                        scratch.data,
-                        &raw mut always,
+                        &mut *scratch.data.cast::<CargoArray>(),
+                        &mut always,
                     );
                 } else {
-                    town::house::openttd_rust_house_produced(
+                    town::house::add_produced_cargo_town(
                         self.town,
                         self.shared,
-                        tile,
-                        scratch.data,
+                        TileIndex(tile),
+                        &mut *scratch.data.cast::<CargoArray>(),
                     );
                 }
             }
