@@ -70,6 +70,6 @@ Post one report on the PR, with the PR template's review skeleton, starting `Rev
   - the suggested remedy.
 - End with the disposition: accepted, or findings to remediate.
 
-After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID: your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
+After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"` ([spawning](team.md#spawning)): your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
 
 Your last line is `PR <url>, head <SHA>, checks and reviews <state>`.
