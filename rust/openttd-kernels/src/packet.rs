@@ -69,7 +69,7 @@ crate::abi::shared_records! {
         /// Initialized bytes, null only when capacity is zero.
         pub data: *mut u8,
         /// Packet byte count: bytes written so far when sending, allocated read size
-        /// before PrepareToRead, and the full packet size after PrepareToRead.
+        /// before `PrepareToRead`, and the full packet size after `PrepareToRead`.
         pub size: usize,
         /// Rust allocation capacity.
         pub capacity: usize,
@@ -101,13 +101,13 @@ pub struct Services {
     pub stream: unsafe extern "C" fn(*const NetworkEncryptionHandler) -> *mut OpenTTDAuthStream,
 }
 
-/// Native leaves shared by packet construction, string receive and send operations.
+/// Live packet state shared by the string receive operations.
 #[derive(Clone, Copy)]
-pub struct Context<'a> {
-    /// Live nonthrowing socket/encryption operations.
+pub struct ReceiveContext<'a> {
+    /// Live record; no record or byte borrow spans a native service.
+    pub state: *mut State,
+    /// Live nonthrowing socket operations.
     pub services: &'a Services,
-    /// Assertion callback selected by the native build policy.
-    pub check: extern "C" fn(bool),
 }
 
 impl State {
@@ -143,7 +143,7 @@ impl State {
     }
 
     /// Create a packet to send; `socket` may be null and `packet_type` identifies it.
-    /// `limit` defaults in the native facade to COMPAT_MTU. Changing it requires care:
+    /// `limit` defaults in the native facade to `COMPAT_MTU`. Changing it requires care:
     /// older clients/servers may not expect substantially larger packets.
     /// The send handler's MAC size is queried before constructing this framing.
     #[must_use]
@@ -304,7 +304,8 @@ impl State {
     /// `ParsePacketSize`: read the wire size and accept only plausible packet sizes.
     pub fn parse_size(&mut self) -> bool {
         // SAFETY: The original requires both size-header bytes to be initialized.
-        let size = unsafe { usize::from(*self.data) | (usize::from(*self.data.add(1)) << 8) };
+        let size =
+            unsafe { usize::from(*self.data).wrapping_add(usize::from(*self.data.add(1)) << 8) };
         /* A size smaller than the bytes required for size and type, or greater than
          * the allowed limit, means something is wrong: regard the packet as garbage. */
         if size < encoded_length_of_packet_size() + encoded_length_of_packet_type()
@@ -380,9 +381,15 @@ impl State {
     /// When source is nonempty, `destination.len()` must not exceed `remaining()`.
     /// Destination is exclusive, live and disjoint from packet storage.
     pub unsafe fn recv_bytes(&mut self, destination: &mut [u8]) -> usize {
-        if self.remaining() == 0 {
+        let remaining = self.transfer_amount(usize::MAX);
+        if remaining == 0 {
             return 0;
         }
+        // TransferOutWithLimit checks the entire remaining span before transferring it.
+        crate::services_assert::check(usize::from(self.position) < self.size);
+        crate::services_assert::check(
+            usize::from(self.position).wrapping_add(remaining) <= self.size,
+        );
         let amount = destination.len();
         // SAFETY: The caller preserves packet.cpp's original span precondition (#41).
         unsafe {
@@ -392,7 +399,7 @@ impl State {
                 amount,
             );
         }
-        self.position = self.position.wrapping_add(prefix(amount));
+        self.transfer_commit(amount.cast_signed());
         amount
     }
 }
@@ -472,7 +479,7 @@ pub unsafe fn can_read(state: *mut State, services: &Services, amount: usize, cl
 /// # Safety
 /// Same live record, native service and byte-interval contract as `can_read`.
 pub unsafe fn recv_uint8(state: *mut State, services: &Services) -> u8 {
-    if !unsafe { can_read(state, services, 1, true) } {
+    if !unsafe { can_read(state, services, size_of::<u8>(), true) } {
         return 0;
     }
     unsafe { &mut *state }.read_integer::<1>()[0]
@@ -481,7 +488,7 @@ pub unsafe fn recv_uint8(state: *mut State, services: &Services) -> u8 {
 /// # Safety
 /// Same contract as `recv_uint8`.
 pub unsafe fn recv_uint16(state: *mut State, services: &Services) -> u16 {
-    if !unsafe { can_read(state, services, 2, true) } {
+    if !unsafe { can_read(state, services, size_of::<u16>(), true) } {
         return 0;
     }
     u16::from_le_bytes(unsafe { &mut *state }.read_integer())
@@ -490,7 +497,7 @@ pub unsafe fn recv_uint16(state: *mut State, services: &Services) -> u16 {
 /// # Safety
 /// Same contract as `recv_uint8`.
 pub unsafe fn recv_uint32(state: *mut State, services: &Services) -> u32 {
-    if !unsafe { can_read(state, services, 4, true) } {
+    if !unsafe { can_read(state, services, size_of::<u32>(), true) } {
         return 0;
     }
     u32::from_le_bytes(unsafe { &mut *state }.read_integer())
@@ -499,7 +506,7 @@ pub unsafe fn recv_uint32(state: *mut State, services: &Services) -> u32 {
 /// # Safety
 /// Same contract as `recv_uint8`.
 pub unsafe fn recv_uint64(state: *mut State, services: &Services) -> u64 {
-    if !unsafe { can_read(state, services, 8, true) } {
+    if !unsafe { can_read(state, services, size_of::<u64>(), true) } {
         return 0;
     }
     u64::from_le_bytes(unsafe { &mut *state }.read_integer())
@@ -529,13 +536,13 @@ pub unsafe fn recv_buffer_size(state: *mut State, services: &Services) -> usize 
 /// # Safety
 /// Same contract as `recv_uint8`. The output callback is nonthrowing and retains no byte pointer.
 pub unsafe fn recv_string_into(
-    state: *mut State,
-    context: Context<'_>,
+    context: ReceiveContext<'_>,
+    check: extern "C" fn(bool),
     mut length: usize,
     settings: StringValidationSettings,
     append: impl FnMut(&[u8]),
 ) {
-    (context.check)(length > 1);
+    check(length > 1);
     // Packet::Recv_string uses native small-string storage for short input.
     let mut inline = [0; 64];
     let mut inline_size = 0;
@@ -547,7 +554,7 @@ pub unsafe fn recv_string_into(
         if length == 0 {
             break;
         }
-        let byte = unsafe { recv_uint8(state, context.services) };
+        let byte = unsafe { recv_uint8(context.state, context.services) };
         if byte == 0 {
             break;
         }
@@ -564,7 +571,7 @@ pub unsafe fn recv_string_into(
     }
     if length == 0 {
         /* The string in the packet was longer. Read until the termination. */
-        while unsafe { recv_uint8(state, context.services) } != 0 {}
+        while unsafe { recv_uint8(context.state, context.services) } != 0 {}
     }
     let raw = if overflow.is_empty() {
         &inline[..inline_size]
@@ -579,21 +586,22 @@ pub unsafe fn recv_string_into(
 /// Socket may be null; otherwise it and the nonthrowing services are live.
 pub unsafe fn new_outgoing(
     socket: *mut NetworkSocketHandler,
-    context: Context<'_>,
+    services: &Services,
+    check: extern "C" fn(bool),
     packet_type: PacketType,
     limit: usize,
 ) -> State {
     let handler = if socket.is_null() {
         ptr::null_mut()
     } else {
-        unsafe { (context.services.send_handler)(socket) }
+        unsafe { (services.send_handler)(socket) }
     };
     let mac = if handler.is_null() {
         0
     } else {
-        unsafe { (context.services.mac_size)(handler) }
+        unsafe { (services.mac_size)(handler) }
     };
-    State::new_send(limit, packet_type, mac, socket, context.check)
+    State::new_send(limit, packet_type, mac, socket, check)
 }
 
 unsafe fn crypt(
@@ -639,21 +647,23 @@ unsafe fn crypt(
 /// Read the packet type after the original size assertion and send-handler query.
 /// # Safety
 /// Same live record and service contract as `prepare_to_send`.
-pub unsafe fn get_type(state: *const State, context: Context<'_>) -> PacketType {
+pub unsafe fn get_type(
+    state: *const State,
+    services: &Services,
+    check: extern "C" fn(bool),
+) -> PacketType {
     unsafe {
-        (context.check)(
-            (*state).size >= encoded_length_of_packet_size() + encoded_length_of_packet_type(),
-        );
+        check((*state).size >= encoded_length_of_packet_size() + encoded_length_of_packet_type());
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (context.services.send_handler)(socket)
+            (services.send_handler)(socket)
         };
         let mac = if handler.is_null() {
             0
         } else {
-            (context.services.mac_size)(handler)
+            (services.mac_size)(handler)
         };
         (&*state).packet_type(mac)
     }
@@ -663,18 +673,18 @@ pub unsafe fn get_type(state: *const State, context: Context<'_>) -> PacketType 
 /// # Safety
 /// State, socket and nonthrowing services are live. Handlers expose a live Rust stream.
 /// No state borrow spans a service call.
-pub unsafe fn prepare_to_send(state: *mut State, context: Context<'_>) {
+pub unsafe fn prepare_to_send(state: *mut State, services: &Services, check: extern "C" fn(bool)) {
     unsafe {
-        (&mut *state).begin_send(context.check);
+        (&mut *state).begin_send(check);
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (context.services.send_handler)(socket)
+            (services.send_handler)(socket)
         };
         if !handler.is_null() {
-            let mac = (context.services.mac_size)(handler);
-            crypt(state, context.services, handler, mac, true);
+            let mac = (services.mac_size)(handler);
+            crypt(state, services, handler, mac, true);
         }
         (&mut *state).finish_send();
     }
@@ -700,6 +710,17 @@ pub unsafe fn prepare_to_read(state: *mut State, services: &Services) -> bool {
     }
 }
 
+/// Packet copy assignment leaves self-assignment untouched.
+/// # Safety
+/// Both records are live, and distinct records own disjoint initialized storage.
+pub unsafe fn assign(destination: *mut State, source: *const State) {
+    unsafe {
+        if !ptr::eq(destination, source) {
+            (&mut *destination).clone_from(&*source);
+        }
+    }
+}
+
 /// Native facade for the direct type lookup.
 /// # Safety
 /// Pointers follow this module's shared-record contract.
@@ -709,15 +730,7 @@ pub unsafe extern "C" fn openttd_rust_packet_get_type(
     services: *const Services,
     check: extern "C" fn(bool),
 ) -> u8 {
-    unsafe {
-        get_type(
-            state,
-            Context {
-                services: &*services,
-                check,
-            },
-        )
-    }
+    unsafe { get_type(state, &*services, check) }
 }
 
 /// Native constructor using the same direct Rust entry as network callers.
@@ -733,15 +746,7 @@ pub unsafe extern "C" fn openttd_rust_packet_init_outgoing(
     limit: usize,
 ) {
     unsafe {
-        state.write(new_outgoing(
-            socket,
-            Context {
-                services: &*services,
-                check,
-            },
-            packet_type,
-            limit,
-        ));
+        state.write(new_outgoing(socket, &*services, check, packet_type, limit));
     }
 }
 
@@ -793,11 +798,7 @@ pub unsafe extern "C" fn openttd_rust_packet_clone(destination: *mut State, sour
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_assign(destination: *mut State, source: *const State) {
-    unsafe {
-        if !ptr::eq(destination, source) {
-            (&mut *destination).clone_from(&*source);
-        }
-    }
+    unsafe { assign(destination, source) }
 }
 
 /// Native facade for `destroy`.
@@ -942,13 +943,7 @@ pub unsafe extern "C" fn openttd_rust_packet_prepare_to_send(
     check: extern "C" fn(bool),
 ) {
     unsafe {
-        prepare_to_send(
-            state,
-            Context {
-                services: &*services,
-                check,
-            },
-        );
+        prepare_to_send(state, &*services, check);
     }
 }
 
@@ -1046,11 +1041,11 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_string(
 ) {
     unsafe {
         recv_string_into(
-            state,
-            Context {
+            ReceiveContext {
+                state,
                 services: &*services,
-                check,
             },
+            check,
             length,
             StringValidationSettings(settings),
             |bytes| {
@@ -1313,7 +1308,7 @@ mod comparison_tests {
 
     fn outgoing(
         socket: &Socket,
-        packet_type: u8,
+        packet_type: PacketType,
         limit: usize,
         check: extern "C" fn(bool),
     ) -> State {
@@ -1827,7 +1822,11 @@ mod comparison_tests {
     }
 
     /// packet.cpp's `Packet(cs, type, limit)` with a native send handler.
-    unsafe fn native_outgoing(socket: &Socket, handler: &mut Handler, packet_type: u8) -> State {
+    unsafe fn native_outgoing(
+        socket: &Socket,
+        handler: &mut Handler,
+        packet_type: PacketType,
+    ) -> State {
         let Ok(mac) = (unsafe { handler.mac_size() }) else {
             panic!("the probe constructs in mode 0");
         };
@@ -1906,7 +1905,10 @@ mod comparison_tests {
     }
 
     /// packet.cpp's `GetPacketType` with a native send handler.
-    unsafe fn native_packet_type(packet: *mut State, handler: &mut Handler) -> Result<u8, Thrown> {
+    unsafe fn native_packet_type(
+        packet: *mut State,
+        handler: &mut Handler,
+    ) -> Result<PacketType, Thrown> {
         unsafe {
             asserts(
                 (*packet).size >= encoded_length_of_packet_size() + encoded_length_of_packet_type(),

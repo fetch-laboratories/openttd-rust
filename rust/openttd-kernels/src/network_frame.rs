@@ -144,10 +144,8 @@ pub(crate) fn packet_new(s: &Services, game: *mut socket::GameSocket, kind: u8) 
     unsafe {
         packet::new_outgoing(
             socket::base(game),
-            packet::Context {
-                services: s.packet,
-                check: packet_check(s),
-            },
+            s.packet,
+            packet_check(s),
             kind,
             crate::network_config::COMPAT_MTU,
         )
@@ -155,13 +153,7 @@ pub(crate) fn packet_new(s: &Services, game: *mut socket::GameSocket, kind: u8) 
 }
 pub(crate) fn packet_send(s: &Services, game: *mut socket::GameSocket, p: &mut PacketState) {
     unsafe {
-        packet::prepare_to_send(
-            p,
-            packet::Context {
-                services: s.packet,
-                check: packet_check(s),
-            },
-        );
+        packet::prepare_to_send(p, s.packet, packet_check(s));
     }
     (s.tcp.packet_enqueue)(socket::tcp(game), p);
 }
@@ -182,11 +174,11 @@ pub(crate) fn packet_recv_string(
     (s.text_reset)(text);
     unsafe {
         packet::recv_string_into(
-            p,
-            packet::Context {
+            packet::ReceiveContext {
+                state: p,
                 services: s.packet,
-                check: packet_check(s),
             },
+            packet_check(s),
             length,
             crate::string_type::StringValidationSettings::from_element(
                 crate::string_type::StringValidationSetting::ReplaceWithQuestionMark,

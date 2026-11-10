@@ -379,23 +379,10 @@ fn transfer_to_network_queue(
             break;
         }
         let record = (f.tcp.packet_record)(packet);
-        last = unsafe {
-            packet::get_type(
-                record,
-                packet::Context {
-                    services: f.packet,
-                    check: packet_check(f),
-                },
-            )
-        } == crate::tcp_game::PACKET_SERVER_MAP_DONE;
+        last = unsafe { packet::get_type(record, f.packet, packet_check(f)) }
+            == crate::tcp_game::PACKET_SERVER_MAP_DONE;
         unsafe {
-            packet::prepare_to_send(
-                record,
-                packet::Context {
-                    services: f.packet,
-                    check: packet_check(f),
-                },
-            );
+            packet::prepare_to_send(record, f.packet, packet_check(f));
         }
         (s.map_enqueue)(writer);
         if last {
@@ -535,10 +522,8 @@ pub(crate) fn send_newgrf_check(
     let mut p = unsafe {
         packet::new_outgoing(
             socket::base(socket),
-            packet::Context {
-                services: f.packet,
-                check: packet_check(f),
-            },
+            f.packet,
+            packet_check(f),
             crate::tcp_game::PACKET_SERVER_CHECK_NEWGRFS,
             crate::network_config::TCP_MTU,
         )
