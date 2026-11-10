@@ -392,7 +392,7 @@ Actions:
    - The [ready queue](#ready-queue) holds at most three undispatched entries. A dispatched entry leaves the queue, and its state lives on its PR.
    - The planner's analysis of later entries lives on the stream issue; the earlier one moved to [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
    - Root commits the roadmap only at stocktakes, course changes and wind-down; the planner's queue refresh is the one exception ([team](team.md#ready-queue-and-pipelining)).
-6. **One user decision is corrected.** The 11-06 approval to keep the length, nesting and complexity Clippy families is reversed by #855, on the measured cost above. The delegation model, the four-implementer cap, report-only reviewers and the twelfth-integration stocktake stand. One question remains the user's: should the delegation model also apply when root runs in Codex?
+6. **One user decision is corrected.** The 11-06 approval to keep the length, nesting and complexity Clippy families is reversed by #855, on the measured cost above. The delegation model, the four-implementer cap, report-only reviewers and the twelfth-integration stocktake stand. The user extended the delegation model to Codex on 2026-11-10; both providers use report-only reviewers, implementer fixes and the same ready-queue and pipelining rules ([team](team.md#delegation-user-2026-11-08)).
 
 ## Earlier steering, still in force
 
@@ -507,7 +507,7 @@ Work order item 4 is not queued here: root dispatches it from the rankings on [#
 
 Agent: /root | Model: claude-fable-5-2 | Reasoning effort: xhigh
 
-**Paused at the user's request (wind-down, 2026-11-10 17:14 UTC).** No implementer, reviewer or planner runs; both implementers' tasks were cancelled after their checkpoints were pushed. Code main is `03613dd0ac` (#879, merge 16), and the docs tip is this commit. No rollback was performed, and the merge queue is empty. Base `03613dd0ac` is green: Quick, Migration baseline and CI - Build (run 42861359447) passed. The platform cadence after merge 13 is green (run 42849903006; its macOS Debug job passed on a rerun with `CI_MACOS_HEAVY`, which is deleted again). `CI_ON_DEMAND` and `CI_MERGE_QUEUE` are `true`. One CI run was pending at the pause: #884's Quick, run 42863173744, started by the wind-down push. On resume the [delegation](team.md#delegation-user-2026-11-08) model applies as before, with reviewers in Codex's fast mode ([team](team.md#claude-code-root)).
+**Paused at the user's request (wind-down, 2026-11-10 17:14 UTC).** No implementer, reviewer or planner runs; both implementers' tasks were cancelled after their checkpoints were pushed. Code main is `03613dd0ac` (#879, merge 16), and the docs tip is this commit. No rollback was performed, and the merge queue is empty. Base `03613dd0ac` is green: Quick, Migration baseline and CI - Build (run 42861359447) passed. The platform cadence after merge 13 is green (run 42849903006; its macOS Debug job passed on a rerun with `CI_MACOS_HEAVY`, which is deleted again). `CI_ON_DEMAND` and `CI_MERGE_QUEUE` are `true`. One CI run was pending at the pause: #884's Quick, run 42863173744, started by the wind-down push. On resume the [delegation](team.md#delegation-user-2026-11-08) model applies as before, with models and effort from [team](team.md#roles-and-models).
 
 | Open work | Head | State, CI and jobs at pause | Next action on resume |
 | --- | --- | --- | --- |

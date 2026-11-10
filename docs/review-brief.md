@@ -21,7 +21,7 @@ Everything else is here ([delegation](team.md#review-loop)).
 
 ## Report only
 
-Do not commit, push, request Full or merge. The PR's Opus implementer fixes each finding in its own commits ending `Found-by: review`. When the implementer asks, verify the fixing commits for your own findings and post the verification, also report only.
+Do not commit, push, request Full or merge. The PR's implementer fixes each finding in its own commits ending `Found-by: review`. When the implementer asks, verify the fixing commits for your own findings and post the verification, also report only.
 
 ## What to examine in your group
 

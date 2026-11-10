@@ -20,7 +20,7 @@ Readers: Every agent changing the repository.
 
 ## Branches and worktrees
 
-For substantive changes create a fork issue with a clear owner, then use an isolated branch and worktree based on `rust-migration`. The implementation agent opens a draft PR targeting `rust-migration`, links the issue and records exact validation commands and limits. See [team](team.md#claude-code-root) for Claude Code worktree creation.
+For substantive changes create a fork issue with a clear owner, then use an isolated branch and worktree based on `rust-migration`. The implementation agent opens a draft PR targeting `rust-migration`, links the issue and records exact validation commands and limits. See [team](team.md#spawning) for worktree creation on either provider.
 
 ## Commits and pushes
 
