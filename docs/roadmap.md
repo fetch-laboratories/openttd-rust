@@ -442,7 +442,7 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 ## Recurring
 
 - After every twelfth integration (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow integration 155.
-- Run the platform cadence after every fifth integration; the next follows 150. A new failure stops integrations. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
+- Run the platform cadence after every fifth integration; the next follows 150. A new failure stops integrations. Full runs Windows x86, Clang and GCC Dedicated itself (#860), so the cadence adds macOS and the platform comparison. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.

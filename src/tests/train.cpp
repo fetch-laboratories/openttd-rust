@@ -68,7 +68,8 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	owner->cached_max_curve_speed = 180;
 	auto table = OpenTTDTrainServices{};
 	uint8_t acceleration = 0;
-	const OpenTTDSettingAddresses settings{.train_acceleration_model = &acceleration};
+	OpenTTDSettingAddresses settings{};
+	settings.train_acceleration_model = &acceleration;
 	table.is_station = [](OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
 	table.order_max_speed = [](OpenTTDTrainHandle) noexcept -> uint64_t { return 160; };
 	OpenTTDSharedServices shared{};

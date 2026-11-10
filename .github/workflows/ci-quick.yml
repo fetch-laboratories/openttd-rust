@@ -47,7 +47,9 @@ jobs:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/lint-ratchet.py clippy --base-ref "$BASE_REF"
     - name: Install nested collection probe dependency
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends valgrind
+      uses: ./.github/actions/apt-install
+      with:
+        packages: valgrind
     - name: Python formatting, lint and maintenance regression checks
       run: |
         uvx --from ruff==0.16.8 ruff check tools/
