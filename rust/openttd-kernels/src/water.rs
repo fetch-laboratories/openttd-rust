@@ -293,7 +293,7 @@ impl<'a> World<'a> {
             4 => {
                 if self
                     .types
-                    .asserted(self.s, |m| crate::tree_map::get_tree_ground(m, tile))
+                    .asserted(self.s, |m| crate::tree_map::get_tree_ground_raw(m, tile))
                     == 3
                 {
                     3
@@ -599,7 +599,7 @@ impl<'a> World<'a> {
                     if kind == 4
                         && self
                             .types
-                            .asserted(self.s, |m| crate::tree_map::get_tree_ground(m, target))
+                            .asserted(self.s, |m| crate::tree_map::get_tree_ground_raw(m, target))
                             == 3
                     {
                         continue;

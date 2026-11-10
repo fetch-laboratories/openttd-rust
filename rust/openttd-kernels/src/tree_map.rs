@@ -8,35 +8,86 @@
 //! Read helpers of `tree_map.h` for the audited map reader.
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
-use crate::tile_type::MP_TREES;
-/// `TREE_COUNT_TOYLAND`.
+use crate::tile_type::{MP_TREES, TileIndex};
+
+/// Native `TreeType`, retaining every underlying `u8` value.
+///
+/// List of tree types along all landscape types.
+///
+/// This enumeration contains a list of the different tree types along
+/// all landscape types. The values for the enumerations may be used for
+/// offsets from the grfs files. These points to the start of
+/// the tree list for a landscape. See the `TREE_COUNT_*` enumerations
+/// for the amount of different trees for a specific landscape.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TreeType(pub u8);
+
+/// Native `TreeGrowthStage`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TreeGrowthStage(pub u8);
+
+/// `TREE_COUNT_TOYLAND`: number of tree types on a toyland map.
 pub(crate) const TREE_COUNT_TOYLAND: u8 = 9;
 /// `TREE_GROUND_SHORE`.
 pub(crate) const TREE_GROUND_SHORE: u8 = TreeGround::TREE_GROUND_SHORE.0;
+
+/// `GetTreeType`.
 #[inline]
-pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_type(t, MP_TREES)?;
-    Some(((fields.m2() >> 6) & 7) as u8)
+pub(crate) fn get_tree_type(m: &TileTypeAccess, t: TileIndex) -> Option<TreeType> {
+    m.require_type(t.0, MP_TREES)?;
+    m.m3(t.0).map(TreeType)
 }
+/// `GetTreeGround`.
 #[inline]
-pub(crate) fn get_tree_density(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_type(t, MP_TREES)?;
+pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGround> {
+    let fields = m.require_type(t.0, MP_TREES)?;
+    Some(TreeGround(((fields.m2() >> 6) & 7) as u8))
+}
+/// `GetTreeDensity`.
+#[inline]
+pub(crate) fn get_tree_density(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
+    let fields = m.require_type(t.0, MP_TREES)?;
     Some(((fields.m2() >> 4) & 3) as u8)
 }
+/// `GetTreeCount`.
 #[inline]
-pub(crate) fn get_tree_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_TREES)?;
-    m.m3(t)
-}
-#[inline]
-pub(crate) fn get_tree_count(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_type(t, MP_TREES)?;
+pub(crate) fn get_tree_count(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
+    let fields = m.require_type(t.0, MP_TREES)?;
     Some((fields.m5() >> 6) + 1)
 }
+/// `GetTreeGrowth`.
 #[inline]
-pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_type(t, MP_TREES)?;
-    Some(fields.m5() & 7)
+pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGrowthStage> {
+    let fields = m.require_type(t.0, MP_TREES)?;
+    Some(TreeGrowthStage(fields.m5() & 7))
+}
+
+/// Raw adapter: `GetTreeType` over base values, for files no pass has finished yet.
+#[inline]
+pub(crate) fn get_tree_type_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    get_tree_type(m, TileIndex(t)).map(|v| v.0)
+}
+/// Raw adapter: `GetTreeGround` over base values.
+#[inline]
+pub(crate) fn get_tree_ground_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    get_tree_ground(m, TileIndex(t)).map(|v| v.0)
+}
+/// Raw adapter: `GetTreeDensity` over a base tile.
+#[inline]
+pub(crate) fn get_tree_density_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    get_tree_density(m, TileIndex(t))
+}
+/// Raw adapter: `GetTreeCount` over a base tile.
+#[inline]
+pub(crate) fn get_tree_count_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    get_tree_count(m, TileIndex(t))
+}
+/// Raw adapter: `GetTreeGrowth` over base values.
+#[inline]
+pub(crate) fn get_tree_growth_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    get_tree_growth(m, TileIndex(t)).map(|v| v.0)
 }
 
 /// Native `TreeGround` representation; every byte pattern is retained.

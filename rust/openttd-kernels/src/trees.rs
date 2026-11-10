@@ -298,9 +298,9 @@ impl Trees<'_> {
                 };
                 if p.tile_type == MP_CLEAR {
                     p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
-                    p.ground = crate::clear_map::get_clear_ground(m, tile)?;
-                    p.density = crate::clear_map::get_clear_density(m, tile)?;
-                    p.snow = crate::clear_map::is_snow_tile(m, tile)?;
+                    p.ground = crate::clear_map::get_clear_ground_raw(m, tile)?;
+                    p.density = crate::clear_map::get_clear_density_raw(m, tile)?;
+                    p.snow = crate::clear_map::is_snow_tile_raw(m, tile)?;
                 } else if p.tile_type == MP_WATER {
                     p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
                     p.coast = crate::water_map::is_coast(m, tile)? && {
@@ -328,19 +328,19 @@ impl Trees<'_> {
             .unwrap_or_else(|| pick((self.t.tree_observation)(tile)))
     }
     fn ground(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_ground, |t| t.ground)
+        self.field(tile, crate::tree_map::get_tree_ground_raw, |t| t.ground)
     }
     fn density(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_density, |t| t.density)
+        self.field(tile, crate::tree_map::get_tree_density_raw, |t| t.density)
     }
     fn species(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_type, |t| t.species)
+        self.field(tile, crate::tree_map::get_tree_type_raw, |t| t.species)
     }
     fn count(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_count, |t| t.count)
+        self.field(tile, crate::tree_map::get_tree_count_raw, |t| t.count)
     }
     fn growth(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_growth, |t| t.growth)
+        self.field(tile, crate::tree_map::get_tree_growth_raw, |t| t.growth)
     }
     fn zone(&self, tile: u32) -> u8 {
         self.field(tile, crate::tile_map::get_tropic_zone, |t| t.zone)
@@ -1145,7 +1145,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
             continue;
         }
         if world.kind(target) == MP_TREES
-            && world.asserted(|m| crate::tree_map::get_tree_count(m, target)) < 4
+            && world.asserted(|m| crate::tree_map::get_tree_count_raw(m, target)) < 4
         {
             (services.add_count)(target, 1);
             (services.set_growth)(target, GROWING1);

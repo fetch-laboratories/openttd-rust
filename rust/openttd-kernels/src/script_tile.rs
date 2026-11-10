@@ -255,7 +255,7 @@ fn is_coast(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         (is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_coast(m, tile)))
             || (is_type(w, tile, MP_TREES)
-                && w.asserted(|m| crate::tree_map::get_tree_ground(m, tile))
+                && w.asserted(|m| crate::tree_map::get_tree_ground_raw(m, tile))
                     == crate::tree_map::TREE_GROUND_SHORE)
     })
 }
@@ -291,7 +291,7 @@ fn has_tree(s: &Services, tile: u32) -> bool {
 fn clear_ground(s: &Services, tile: u32, ground: u8) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_CLEAR)
-            && w.asserted(|m| crate::clear_map::get_clear_ground(m, tile)) == ground
+            && w.asserted(|m| crate::clear_map::get_clear_ground_raw(m, tile)) == ground
     })
 }
 
@@ -313,7 +313,7 @@ fn is_rough(s: &Services, tile: u32) -> bool {
 /// `ScriptTile::IsSnowTile`.
 fn is_snow(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
-        is_type(w, tile, MP_CLEAR) && w.asserted(|m| crate::clear_map::is_snow_tile(m, tile))
+        is_type(w, tile, MP_CLEAR) && w.asserted(|m| crate::clear_map::is_snow_tile_raw(m, tile))
     })
 }
 
