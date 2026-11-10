@@ -837,9 +837,9 @@ pub(crate) unsafe fn terraform_tile_industry(
         //  - Disallow autoslope if callback succeeds and returns non-zero.
         let tileh_old = Slope(crate::map_func::World::new(shared).tile_slope(tile.0));
         // TileMaxZ must not be changed. Slopes must not be steep.
-        if !is_steep_slope(tileh_old.0)
-            && !is_steep_slope(tileh_new.0)
-            && unsafe { (p.tile_max_z)(tile.0) } == z_new.wrapping_add(get_slope_max_z(tileh_new.0))
+        if !is_steep_slope(tileh_old)
+            && !is_steep_slope(tileh_new)
+            && unsafe { (p.tile_max_z)(tile.0) } == z_new.wrapping_add(get_slope_max_z(tileh_new))
         {
             let gfx = t.get_industry_gfx(tile);
             let itspec: *const IndustryTileSpec = get_industry_tile_spec(gfx);

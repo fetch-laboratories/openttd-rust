@@ -399,7 +399,7 @@ impl Ctx<'_> {
         let tileh = Slope(crate::map_func::World::new(self.shared).tile_slope(tile.0));
         if tileh != Slope::SLOPE_FLAT
             && (!(self.shared.build_on_slopes)()
-                || crate::slope_func::is_steep_slope(tileh.0)
+                || crate::slope_func::is_steep_slope(tileh)
                 || tileh.0 & (0x3 << axis.0) == 0
                 || tileh.0 & !(0x3 << axis.0) == 0)
         {

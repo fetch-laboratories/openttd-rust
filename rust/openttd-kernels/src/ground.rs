@@ -20,7 +20,7 @@ use crate::services::{
     Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
     RailGroundType, RoadBits, RoadType, Roadside, Services, Slope, Track, TrackBits, WaterClass,
 };
-use crate::slope_func::{is_slope_with_three_corners_raised, is_steep_slope};
+use crate::slope_func::{is_slope_with_three_corners_raised_raw, is_steep_slope_raw};
 
 /// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
 pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
@@ -519,18 +519,18 @@ pub(crate) unsafe fn rail_tile_loop(
                 });
             match foundation {
                 0 => {
-                    if is_slope_with_three_corners_raised(ground.slope.0) {
+                    if is_slope_with_three_corners_raised_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 2 | 3 => {
-                    if is_steep_slope(ground.slope.0) {
+                    if is_steep_slope_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 4 => ground.z += 1,
                 _ => {
-                    if is_steep_slope(ground.slope.0) {
+                    if is_steep_slope_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                     ground.z += 1;

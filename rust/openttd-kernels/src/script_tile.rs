@@ -20,8 +20,8 @@
 use crate::map_func::World;
 use crate::script_host::{self, Services};
 use crate::slope_func::{
-    SLOPE_ELEVATED, SLOPE_HALFTILE_MASK, SLOPE_STEEP, complement_slope, is_halftile_slope,
-    is_steep_slope,
+    SLOPE_ELEVATED, SLOPE_HALFTILE_MASK, SLOPE_STEEP, complement_slope_raw, is_halftile_slope_raw,
+    is_steep_slope_raw,
 };
 use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_ROAD, MP_STATION, MP_TREES, MP_WATER};
 
@@ -274,12 +274,12 @@ fn game_slope(slope: u32) -> Option<u8> {
 
 /// `ScriptTile::IsSteepSlope`.
 fn script_is_steep_slope(slope: u32) -> bool {
-    game_slope(slope).is_some_and(is_steep_slope)
+    game_slope(slope).is_some_and(is_steep_slope_raw)
 }
 
 /// `ScriptTile::IsHalftileSlope`.
 fn script_is_halftile_slope(slope: u32) -> bool {
-    game_slope(slope).is_some_and(is_halftile_slope)
+    game_slope(slope).is_some_and(is_halftile_slope_raw)
 }
 
 /// `ScriptTile::HasTreeOnTile`.
@@ -361,7 +361,7 @@ pub extern "C" fn openttd_rust_script_tile_complement_slope(slope: u32) -> u32 {
     if slope & !u32::from(SLOPE_ELEVATED) != 0 {
         return SLOPE_INVALID;
     }
-    u32::from(complement_slope(slope as u8))
+    u32::from(complement_slope_raw(slope as u8))
 }
 
 /// `ScriptTile::GetMinHeight`.
@@ -396,7 +396,7 @@ pub extern "C" fn openttd_rust_script_tile_corner_height(
 ) -> i64 {
     let corner = corner as u8;
     let map = world(s);
-    if !valid(&map, tile) || !crate::slope_func::is_valid_corner(corner) {
+    if !valid(&map, tile) || !crate::slope_func::is_valid_corner_raw(corner) {
         return -1;
     }
     let (size_x, size_y) = map.size();

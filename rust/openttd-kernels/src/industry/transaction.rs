@@ -900,14 +900,14 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
 }
 /// `IsSlopeRefused`.
 fn is_slope_refused(current: Slope, refused: Slope) -> bool {
-    if is_steep_slope(current.0) {
+    if is_steep_slope(current) {
         return true;
     }
     if current != Slope::SLOPE_FLAT {
-        if is_steep_slope(refused.0) {
+        if is_steep_slope(refused) {
             return true;
         }
-        let t = complement_slope(current.0);
+        let t = complement_slope(current).0;
         if refused.0 & Slope::SLOPE_W.0 != 0 && t & Slope::SLOPE_NW.0 != 0 {
             return true;
         }

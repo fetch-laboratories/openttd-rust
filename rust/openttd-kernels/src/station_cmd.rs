@@ -718,13 +718,13 @@ impl<'a> Ctx<'a> {
          *   1) The tile is "steep" (i.e. stretches two height levels).
          *   2) The tile is non-flat and the build_on_slopes switch is disabled.
          */
-        if (!allow_steep && is_steep_slope(tileh.0))
+        if (!allow_steep && is_steep_slope(tileh))
             || (!(self.shared.build_on_slopes)() && tileh != Slope::SLOPE_FLAT)
         {
             return out.error(self.s.strings.flat_land);
         }
         out.set(0);
-        let flat_z = z + get_slope_max_z(tileh.0);
+        let flat_z = z + get_slope_max_z(tileh);
         if tileh != Slope::SLOPE_FLAT {
             /* Forbid building if the tile faces a slope in a invalid direction. */
             for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
@@ -4920,7 +4920,7 @@ impl Ctx<'_> {
         {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let direction = DiagDirection(get_inclined_slope_direction(world.tile_slope(tile.0)));
+        let direction = get_inclined_slope_direction(Slope(world.tile_slope(tile.0)));
         if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -5592,7 +5592,7 @@ impl Ctx<'_> {
             /* TODO: If you implement newgrf callback 149 'land slope check', you have to decide what to do with it here.
              *       TTDP does not call it.
              */
-            && (self.shared.tile_max_z)(tile.0) == z_new.wrapping_add(get_slope_max_z(tileh_new.0))
+            && (self.shared.tile_max_z)(tile.0) == z_new.wrapping_add(get_slope_max_z(tileh_new))
         {
             let allowed = match StationType((self.shared.station_type)(tile.0).0) {
                 StationType::RailWaypoint | StationType::Rail => (self.s.autoslope_axis)(

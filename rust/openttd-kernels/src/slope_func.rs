@@ -11,42 +11,68 @@
 /// Compatibility constants from the original type header.
 pub use crate::slope_type::*;
 
+use crate::direction_type::{Axis, DiagDirection};
+
+/// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
+#[must_use]
+pub const fn is_valid_corner(corner: Corner) -> bool {
+    corner.0 < Corner::CORNER_END.0
+}
 /// `IsSteepSlope`.
 #[must_use]
-pub fn is_steep_slope(s: u8) -> bool {
-    (s & SLOPE_STEEP) != 0
+pub fn is_steep_slope(s: Slope) -> bool {
+    (s & Slope::SLOPE_STEEP) != Slope::SLOPE_FLAT
 }
-
-/// `IsSlopeWithOneCornerRaised`.
-#[must_use]
-pub fn is_slope_with_one_corner_raised(s: u8) -> bool {
-    (s == SLOPE_W) || (s == SLOPE_S) || (s == SLOPE_E) || (s == SLOPE_N)
-}
-
 /// `IsHalftileSlope`.
 #[must_use]
-pub fn is_halftile_slope(s: u8) -> bool {
-    (s & SLOPE_HALFTILE) != 0
+pub fn is_halftile_slope(s: Slope) -> bool {
+    (s & Slope::SLOPE_HALFTILE) != Slope::SLOPE_FLAT
 }
-
+/// `RemoveHalftileSlope`.
+#[must_use]
+pub const fn remove_halftile_slope(s: Slope) -> Slope {
+    Slope(s.0 & !Slope::SLOPE_HALFTILE_MASK.0)
+}
 /// `ComplementSlope`; callers pass no steep or halftile slope.
 #[must_use]
-pub fn complement_slope(s: u8) -> u8 {
-    s ^ SLOPE_ELEVATED
+pub fn complement_slope(s: Slope) -> Slope {
+    s ^ Slope::SLOPE_ELEVATED
 }
-
-/// `IsSlopeWithThreeCornersRaised`.
+/// `IsSlopeWithOneCornerRaised`.
 #[must_use]
-pub fn is_slope_with_three_corners_raised(s: u8) -> bool {
-    !is_halftile_slope(s)
-        && !is_steep_slope(s)
-        && is_slope_with_one_corner_raised(complement_slope(s))
+pub fn is_slope_with_one_corner_raised(s: Slope) -> bool {
+    (s == Slope::SLOPE_W) || (s == Slope::SLOPE_S) || (s == Slope::SLOPE_E) || (s == Slope::SLOPE_N)
 }
-
+/// `SlopeWithOneCornerRaised`.
+pub fn slope_with_one_corner_raised(corner: Corner, check: impl Fn(bool)) -> Slope {
+    if !is_valid_corner(corner) {
+        check(false);
+    }
+    Slope((1_u32.wrapping_shl(u32::from(corner.0)) & 0xff) as u8)
+}
+/// `HasSlopeHighestCorner`.
+#[must_use]
+pub fn has_slope_highest_corner(s: Slope) -> bool {
+    let s = remove_halftile_slope(s);
+    is_steep_slope(s) || is_slope_with_one_corner_raised(s)
+}
+/// `GetHighestSlopeCorner`; the caller supplies its non-returning failure operation.
+pub fn get_highest_slope_corner(s: Slope, not_reached: impl FnOnce()) -> Corner {
+    match remove_halftile_slope(s) {
+        Slope::SLOPE_W | Slope::SLOPE_STEEP_W => Corner::CORNER_W,
+        Slope::SLOPE_S | Slope::SLOPE_STEEP_S => Corner::CORNER_S,
+        Slope::SLOPE_E | Slope::SLOPE_STEEP_E => Corner::CORNER_E,
+        Slope::SLOPE_N | Slope::SLOPE_STEEP_N => Corner::CORNER_N,
+        _ => {
+            not_reached();
+            std::process::abort()
+        }
+    }
+}
 /// `GetSlopeMaxZ`.
 #[must_use]
-pub fn get_slope_max_z(s: u8) -> i32 {
-    if s == SLOPE_FLAT {
+pub fn get_slope_max_z(s: Slope) -> i32 {
+    if s == Slope::SLOPE_FLAT {
         return 0;
     }
     if is_steep_slope(s) {
@@ -54,78 +80,53 @@ pub fn get_slope_max_z(s: u8) -> i32 {
     }
     1
 }
-
 /// `GetSlopeMaxPixelZ`.
 #[must_use]
-pub fn get_slope_max_pixel_z(s: u8) -> i32 {
+pub fn get_slope_max_pixel_z(s: Slope) -> i32 {
     get_slope_max_z(s) * crate::tile_type::TILE_HEIGHT.cast_signed()
 }
-
+/// `OppositeCorner`.
+#[must_use]
+pub const fn opposite_corner(corner: Corner) -> Corner {
+    Corner(corner.0 ^ 2)
+}
+/// `IsSlopeWithThreeCornersRaised`.
+#[must_use]
+pub fn is_slope_with_three_corners_raised(s: Slope) -> bool {
+    !is_halftile_slope(s)
+        && !is_steep_slope(s)
+        && is_slope_with_one_corner_raised(complement_slope(s))
+}
+/// `SlopeWithThreeCornersRaised`.
+pub fn slope_with_three_corners_raised(corner: Corner, check: impl Fn(bool)) -> Slope {
+    complement_slope(slope_with_one_corner_raised(corner, check))
+}
+/// `SteepSlope`.
+pub fn steep_slope(corner: Corner, check: impl Fn(bool)) -> Slope {
+    Slope::SLOPE_STEEP | slope_with_three_corners_raised(opposite_corner(corner), check)
+}
 /// `IsInclinedSlope`.
 #[must_use]
-pub fn is_inclined_slope(s: u8) -> bool {
-    (s == SLOPE_NW) || (s == SLOPE_SW) || (s == SLOPE_SE) || (s == SLOPE_NE)
+pub fn is_inclined_slope(s: Slope) -> bool {
+    (s == Slope::SLOPE_NW)
+        || (s == Slope::SLOPE_SW)
+        || (s == Slope::SLOPE_SE)
+        || (s == Slope::SLOPE_NE)
 }
-
 /// `GetInclinedSlopeDirection`.
 #[must_use]
-pub fn get_inclined_slope_direction(s: u8) -> u8 {
-    use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR};
+pub fn get_inclined_slope_direction(s: Slope) -> DiagDirection {
     match s {
-        SLOPE_NE => DIAGDIR_NE,
-        SLOPE_SE => DIAGDIR_SE,
-        SLOPE_SW => DIAGDIR_SW,
-        SLOPE_NW => DIAGDIR_NW,
-        _ => INVALID_DIAGDIR,
-    }
-}
-
-/// `RemoveHalftileSlope`.
-pub const fn remove_halftile_slope(s: u8) -> u8 {
-    s & !SLOPE_HALFTILE_MASK
-}
-/// `HasSlopeHighestCorner`.
-pub fn has_slope_highest_corner(s: u8) -> bool {
-    let s = remove_halftile_slope(s);
-    is_steep_slope(s) || is_slope_with_one_corner_raised(s)
-}
-/// `FlatteningFoundation`.
-pub const fn flattening_foundation(s: u8) -> u8 {
-    if s == SLOPE_FLAT {
-        FOUNDATION_NONE
-    } else {
-        FOUNDATION_LEVELED
-    }
-}
-/// `InclinedFoundation`.
-pub const fn inclined_foundation(axis: u8) -> u8 {
-    if axis == 0 {
-        FOUNDATION_INCLINED_X
-    } else {
-        FOUNDATION_INCLINED_Y
-    }
-}
-
-/// `GetHighestSlopeCorner`; the caller supplies its non-returning failure operation.
-pub fn get_highest_slope_corner(s: u8, not_reached: impl FnOnce()) -> u8 {
-    match remove_halftile_slope(s) {
-        1 | 27 => 0,
-        2 | 23 => 1,
-        4 | 30 => 2,
-        8 | 29 => 3,
-        _ => {
-            not_reached();
-            std::process::abort()
-        }
+        Slope::SLOPE_NE => DiagDirection::DIAGDIR_NE,
+        Slope::SLOPE_SE => DiagDirection::DIAGDIR_SE,
+        Slope::SLOPE_SW => DiagDirection::DIAGDIR_SW,
+        Slope::SLOPE_NW => DiagDirection::DIAGDIR_NW,
+        _ => DiagDirection::INVALID_DIAGDIR,
     }
 }
 /// `InclinedSlope`: the slope inclined in the given direction (up when moving
 /// in it); the caller supplies its non-returning failure operation.
-pub fn inclined_slope(
-    dir: crate::direction_type::DiagDirection,
-    not_reached: impl FnOnce(),
-) -> Slope {
-    use crate::direction_type::DiagDirection;
+pub fn inclined_slope(dir: DiagDirection, not_reached: impl FnOnce()) -> Slope {
     match dir {
         DiagDirection::DIAGDIR_NE => Slope::SLOPE_NE,
         DiagDirection::DIAGDIR_SE => Slope::SLOPE_SE,
@@ -137,42 +138,132 @@ pub fn inclined_slope(
         }
     }
 }
-/// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
-pub const fn is_valid_corner(c: u8) -> bool {
-    c < 4
+/// `FlatteningFoundation`.
+#[must_use]
+pub fn flattening_foundation(s: Slope) -> Foundation {
+    if s == Slope::SLOPE_FLAT {
+        Foundation::FOUNDATION_NONE
+    } else {
+        Foundation::FOUNDATION_LEVELED
+    }
 }
-/// `SteepSlope`.
-pub fn steep_slope(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    SLOPE_STEEP | slope_with_three_corners_raised(opposite_corner(c), check)
+/// `InclinedFoundation`.
+#[must_use]
+pub fn inclined_foundation(axis: Axis) -> Foundation {
+    if axis == Axis::AXIS_X {
+        Foundation::FOUNDATION_INCLINED_X
+    } else {
+        Foundation::FOUNDATION_INCLINED_Y
+    }
 }
-/// `OppositeCorner`.
-pub const fn opposite_corner(c: u8) -> u8 {
-    c ^ 2
-}
-/// `SlopeWithOneCornerRaised`.
-pub fn slope_with_one_corner_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if !is_valid_corner(c) {
+/// `HalftileFoundation`.
+pub fn halftile_foundation(corner: Corner, check: impl Fn(bool)) -> Foundation {
+    if !is_valid_corner(corner) {
         check(false);
     }
-    (1_u32.wrapping_shl(u32::from(c)) & 0xff) as u8
+    Foundation(Foundation::FOUNDATION_HALFTILE_W.0.wrapping_add(corner.0))
 }
-/// `SlopeWithThreeCornersRaised`.
-pub fn slope_with_three_corners_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    complement_slope(slope_with_one_corner_raised(c, check))
-}
-/// `HalftileFoundation`, with a valid native corner.
-pub fn halftile_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if !is_valid_corner(c) {
+/// `SpecialRailFoundation`.
+pub fn special_rail_foundation(corner: Corner, check: impl Fn(bool)) -> Foundation {
+    if !is_valid_corner(corner) {
         check(false);
     }
-    FOUNDATION_HALFTILE_W.wrapping_add(c)
+    Foundation(Foundation::FOUNDATION_RAIL_W.0.wrapping_add(corner.0))
 }
-/// `SpecialRailFoundation`, with a valid native corner.
-pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if !is_valid_corner(c) {
-        check(false);
-    }
-    FOUNDATION_RAIL_W.wrapping_add(c)
+
+/// Raw adapter: `IsSteepSlope` over a base value, for files no pass has finished yet.
+#[must_use]
+pub fn is_steep_slope_raw(s: u8) -> bool {
+    is_steep_slope(Slope(s))
+}
+/// Raw adapter: `IsSlopeWithOneCornerRaised`.
+#[must_use]
+pub fn is_slope_with_one_corner_raised_raw(s: u8) -> bool {
+    is_slope_with_one_corner_raised(Slope(s))
+}
+/// Raw adapter: `IsHalftileSlope`.
+#[must_use]
+pub fn is_halftile_slope_raw(s: u8) -> bool {
+    is_halftile_slope(Slope(s))
+}
+/// Raw adapter: `ComplementSlope`.
+#[must_use]
+pub fn complement_slope_raw(s: u8) -> u8 {
+    complement_slope(Slope(s)).0
+}
+/// Raw adapter: `IsSlopeWithThreeCornersRaised`.
+#[must_use]
+pub fn is_slope_with_three_corners_raised_raw(s: u8) -> bool {
+    is_slope_with_three_corners_raised(Slope(s))
+}
+/// Raw adapter: `GetSlopeMaxZ`.
+#[must_use]
+pub fn get_slope_max_z_raw(s: u8) -> i32 {
+    get_slope_max_z(Slope(s))
+}
+/// Raw adapter: `GetSlopeMaxPixelZ`.
+#[must_use]
+pub fn get_slope_max_pixel_z_raw(s: u8) -> i32 {
+    get_slope_max_pixel_z(Slope(s))
+}
+/// Raw adapter: `IsInclinedSlope`.
+#[must_use]
+pub fn is_inclined_slope_raw(s: u8) -> bool {
+    is_inclined_slope(Slope(s))
+}
+/// Raw adapter: `GetInclinedSlopeDirection`.
+#[must_use]
+pub fn get_inclined_slope_direction_raw(s: u8) -> u8 {
+    get_inclined_slope_direction(Slope(s)).0
+}
+/// Raw adapter: `HasSlopeHighestCorner`.
+#[must_use]
+pub fn has_slope_highest_corner_raw(s: u8) -> bool {
+    has_slope_highest_corner(Slope(s))
+}
+/// Raw adapter: `FlatteningFoundation`.
+#[must_use]
+pub fn flattening_foundation_raw(s: u8) -> u8 {
+    flattening_foundation(Slope(s)).0
+}
+/// Raw adapter: `InclinedFoundation`.
+#[must_use]
+pub fn inclined_foundation_raw(axis: u8) -> u8 {
+    inclined_foundation(Axis(axis)).0
+}
+/// Raw adapter: `GetHighestSlopeCorner`.
+pub fn get_highest_slope_corner_raw(s: u8, not_reached: impl FnOnce()) -> u8 {
+    get_highest_slope_corner(Slope(s), not_reached).0
+}
+/// Raw adapter: `IsValidCorner`.
+#[must_use]
+pub const fn is_valid_corner_raw(c: u8) -> bool {
+    is_valid_corner(Corner(c))
+}
+/// Raw adapter: `SteepSlope`.
+pub fn steep_slope_raw(c: u8, check: impl Fn(bool)) -> u8 {
+    steep_slope(Corner(c), check).0
+}
+/// Raw adapter: `OppositeCorner`.
+#[must_use]
+pub const fn opposite_corner_raw(c: u8) -> u8 {
+    opposite_corner(Corner(c)).0
+}
+/// Raw adapter: `SlopeWithOneCornerRaised`.
+pub fn slope_with_one_corner_raised_raw(c: u8, check: impl Fn(bool)) -> u8 {
+    slope_with_one_corner_raised(Corner(c), check).0
+}
+/// Raw adapter: `SlopeWithThreeCornersRaised`.
+pub fn slope_with_three_corners_raised_raw(c: u8, check: impl Fn(bool)) -> u8 {
+    slope_with_three_corners_raised(Corner(c), check).0
+}
+/// Raw adapter: `HalftileFoundation`.
+pub fn halftile_foundation_raw(c: u8, check: impl Fn(bool)) -> u8 {
+    halftile_foundation(Corner(c), check).0
+}
+/// Raw adapter: `SpecialRailFoundation`.
+pub fn special_rail_foundation_raw(c: u8, check: impl Fn(bool)) -> u8 {
+    special_rail_foundation(Corner(c), check).0
 }
 
 #[cfg(test)]
@@ -182,20 +273,20 @@ mod tests {
     fn helpers_match_the_header_tables() {
         for s in 0..=u8::MAX {
             assert_eq!(
-                is_slope_with_three_corners_raised(s),
+                is_slope_with_three_corners_raised_raw(s),
                 matches!(s, 7 | 11 | 13 | 14)
             );
-            assert_eq!(is_inclined_slope(s), matches!(s, 3 | 6 | 9 | 12));
+            assert_eq!(is_inclined_slope_raw(s), matches!(s, 3 | 6 | 9 | 12));
             assert_eq!(
-                get_inclined_slope_direction(s) != 0xFF,
-                is_inclined_slope(s)
+                get_inclined_slope_direction_raw(s) != 0xFF,
+                is_inclined_slope_raw(s)
             );
         }
         assert_eq!(
-            get_slope_max_z(SLOPE_STEEP | SLOPE_S | SLOPE_E | SLOPE_N),
+            get_slope_max_z_raw(SLOPE_STEEP | SLOPE_S | SLOPE_E | SLOPE_N),
             2
         );
-        assert_eq!(get_inclined_slope_direction(SLOPE_NE), 0);
-        assert_eq!(get_inclined_slope_direction(SLOPE_NW), 3);
+        assert_eq!(get_inclined_slope_direction_raw(SLOPE_NE), 0);
+        assert_eq!(get_inclined_slope_direction_raw(SLOPE_NW), 3);
     }
 }

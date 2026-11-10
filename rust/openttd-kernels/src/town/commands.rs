@@ -280,7 +280,9 @@ impl<'a> Commands<'a> {
             spiral = spiral.advance(self.map().size_x(), self.size_y());
             tile_count += 1;
             // Statues can be build on slopes, just like houses. Only the steep slopes is a no go.
-            if is_steep_slope(crate::map_func::World::new(self.shared).tile_slope(tile.0)) {
+            if is_steep_slope(crate::slope_type::Slope(
+                crate::map_func::World::new(self.shared).tile_slope(tile.0),
+            )) {
                 continue;
             }
             // Don't build statues under bridges.

@@ -29,7 +29,9 @@ use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Foundation, Map, RailMapServices, Services,
     Slope, TownHandle,
 };
-use crate::slope_func::{get_slope_max_z, is_slope_with_one_corner_raised, is_steep_slope};
+use crate::slope_func::{
+    get_slope_max_z_raw, is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
+};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 use crate::witness as w;
@@ -196,7 +198,7 @@ fn dir_bit(dir: u8) -> u8 {
     8 >> dir
 }
 fn simple_slope(slope: u8) -> u8 {
-    if !is_steep_slope(slope) {
+    if !is_steep_slope_raw(slope) {
         return slope;
     }
     // Steep W/S/E/N have every corner except the opposite corner raised.
@@ -762,7 +764,7 @@ impl<'a> Ctx<'a> {
             && (other == type_bits || other == 0)
             && INVALID_SLOPES[1][usize::from(slope)] & (other | type_bits) == 0
         {
-            if is_slope_with_one_corner_raised(slope) {
+            if is_slope_with_one_corner_raised_raw(slope) {
                 if (self.shared.build_on_slopes)() {
                     if other | existing == 0 {
                         cost.set(price(57));
@@ -938,7 +940,7 @@ impl<'a> Ctx<'a> {
                 _ => unreachable!(),
             },
             MP_RAILWAY => {
-                if is_steep_slope(slope) || CROSSING_SLOPES & (1 << slope) == 0 {
+                if is_steep_slope_raw(slope) || CROSSING_SLOPES & (1 << slope) == 0 {
                     cost.error(self.r.strings.sloped_wrong);
                     return;
                 }
@@ -1730,8 +1732,8 @@ impl<'a> Ctx<'a> {
         if (self.shared.build_on_slopes)() && (self.shared.autoslope)() {
             let valid = match self.kind(tile) {
                 1 => {
-                    !is_steep_slope(slope)
-                        && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)
+                    !is_steep_slope_raw(slope)
+                        && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
                         && CROSSING_SLOPES & (1 << slope) != 0
                 }
                 2 => (self.r.entrance_edge)(

@@ -31,10 +31,11 @@ use crate::services::{Foundation, FoundationSlope, RoadBits, Services, Slope, Tr
 use crate::slope_func::{
     FOUNDATION_INCLINED_X, FOUNDATION_INCLINED_Y, FOUNDATION_INVALID, FOUNDATION_LEVELED,
     FOUNDATION_NONE, FOUNDATION_STEEP_BOTH, FOUNDATION_STEEP_LOWER, SLOPE_E, SLOPE_FLAT, SLOPE_N,
-    SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE, SLOPE_SW, SLOPE_W, flattening_foundation,
-    get_highest_slope_corner, halftile_foundation, is_slope_with_one_corner_raised,
-    is_slope_with_three_corners_raised, is_steep_slope, opposite_corner,
-    slope_with_one_corner_raised, slope_with_three_corners_raised, special_rail_foundation,
+    SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE, SLOPE_SW, SLOPE_W, flattening_foundation_raw,
+    get_highest_slope_corner_raw, halftile_foundation_raw, is_slope_with_one_corner_raised_raw,
+    is_slope_with_three_corners_raised_raw, is_steep_slope_raw, opposite_corner_raw,
+    slope_with_one_corner_raised_raw, slope_with_three_corners_raised_raw,
+    special_rail_foundation_raw,
 };
 use crate::tile_cmd::{CANNOT_ENTER, ENTERED_STATION, ENTERED_WORMHOLE};
 use crate::tile_type::{
@@ -210,7 +211,7 @@ impl Context<'_> {
                         (self.native_assert)(ok);
                     })
                 } else {
-                    flattening_foundation(slope)
+                    flattening_foundation_raw(slope)
                 }
             }
             MP_ROAD => {
@@ -219,10 +220,10 @@ impl Context<'_> {
                         (self.native_assert)(ok);
                     })
                 } else {
-                    flattening_foundation(slope)
+                    flattening_foundation_raw(slope)
                 }
             }
-            MP_STATION => flattening_foundation(slope),
+            MP_STATION => flattening_foundation_raw(slope),
             MP_TUNNELBRIDGE => {
                 if self.world.tunnel(tile) {
                     FOUNDATION_NONE
@@ -275,14 +276,14 @@ impl Context<'_> {
                         return FOUNDATION_NONE;
                     }
                 }
-                flattening_foundation(slope)
+                flattening_foundation_raw(slope)
             }
             MP_OBJECT => {
                 let p = (self.object_foundation)(tile);
                 if p.enabled && p.no_foundation {
                     FOUNDATION_NONE
                 } else {
-                    flattening_foundation(slope)
+                    flattening_foundation_raw(slope)
                 }
             }
             _ => FOUNDATION_NONE,
@@ -466,17 +467,18 @@ pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
     if b == TRACK_BIT_NONE {
         return FOUNDATION_NONE;
     }
-    if is_steep_slope(s) {
+    if is_steep_slope_raw(s) {
         if b == TRACK_BIT_X {
             return FOUNDATION_INCLINED_X;
         }
         if b == TRACK_BIT_Y {
             return FOUNDATION_INCLINED_Y;
         }
-        let corner = get_highest_slope_corner(s, || unreachable!("native highest slope corner"));
+        let corner =
+            get_highest_slope_corner_raw(s, || unreachable!("native highest slope corner"));
         let higher = crate::track_func::corner_to_track_bits(corner, check);
         if b == higher {
-            return halftile_foundation(corner, check);
+            return halftile_foundation_raw(corner, check);
         }
         if crate::track_func::tracks_overlap(b | higher) {
             return FOUNDATION_INVALID;
@@ -520,31 +522,31 @@ pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
         TRACK_BIT_UPPER => CORNER_N,
         TRACK_BIT_HORZ => {
             if s == SLOPE_N {
-                return halftile_foundation(CORNER_N, check);
+                return halftile_foundation_raw(CORNER_N, check);
             }
             if s == SLOPE_S {
-                return halftile_foundation(CORNER_S, check);
+                return halftile_foundation_raw(CORNER_S, check);
             }
             return leveled;
         }
         TRACK_BIT_VERT => {
             if s == SLOPE_W {
-                return halftile_foundation(CORNER_W, check);
+                return halftile_foundation_raw(CORNER_W, check);
             }
             if s == SLOPE_E {
-                return halftile_foundation(CORNER_E, check);
+                return halftile_foundation_raw(CORNER_E, check);
             }
             return leveled;
         }
         TRACK_BIT_X => {
-            return if is_slope_with_one_corner_raised(s) {
+            return if is_slope_with_one_corner_raised_raw(s) {
                 FOUNDATION_INCLINED_X
             } else {
                 leveled
             };
         }
         TRACK_BIT_Y => {
-            return if is_slope_with_one_corner_raised(s) {
+            return if is_slope_with_one_corner_raised_raw(s) {
                 FOUNDATION_INCLINED_Y
             } else {
                 leveled
@@ -555,30 +557,30 @@ pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
     if !valid {
         return FOUNDATION_INVALID;
     }
-    if is_slope_with_three_corners_raised(s) {
+    if is_slope_with_three_corners_raised_raw(s) {
         return FOUNDATION_LEVELED;
     }
-    if s & slope_with_three_corners_raised(opposite_corner(corner), check)
-        == slope_with_one_corner_raised(corner, check)
+    if s & slope_with_three_corners_raised_raw(opposite_corner_raw(corner), check)
+        == slope_with_one_corner_raised_raw(corner, check)
     {
-        return halftile_foundation(corner, check);
+        return halftile_foundation_raw(corner, check);
     }
-    special_rail_foundation(corner, check)
+    special_rail_foundation_raw(corner, check)
 }
 pub(crate) fn road_foundation(mut s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
     if s == SLOPE_FLAT || b == 0 {
         return FOUNDATION_NONE;
     }
-    if is_steep_slope(s) {
-        s = slope_with_one_corner_raised(
-            get_highest_slope_corner(s, || unreachable!("native highest slope corner")),
+    if is_steep_slope_raw(s) {
+        s = slope_with_one_corner_raised_raw(
+            get_highest_slope_corner_raw(s, || unreachable!("native highest slope corner")),
             check,
         );
     }
     if crate::road_cmd::INVALID_SLOPES[0][usize::from(s)] & b == 0 {
         return FOUNDATION_LEVELED;
     }
-    if !is_slope_with_one_corner_raised(s)
+    if !is_slope_with_one_corner_raised_raw(s)
         && crate::road_cmd::INVALID_SLOPES[1][usize::from(s)] & b == 0
     {
         return FOUNDATION_NONE;
@@ -662,7 +664,7 @@ impl Context<'_> {
                 if mode == TRANSPORT_WATER
                     && self.world.is_plain_rail(tile)
                     && self.world.rail_ground(tile) == RAIL_GROUND_HALF_TILE_WATER
-                    && is_slope_with_one_corner_raised(self.world.tile_slope(tile))
+                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(tile))
                 {
                     w::hit(w::MOVE_HALF_WATER);
                     bits = match self.world.tracks(tile) {

@@ -39,7 +39,7 @@ use crate::services::{
 };
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS,
-    is_slope_with_one_corner_raised, is_steep_slope,
+    is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
@@ -446,7 +446,7 @@ impl<'a> Ctx<'a> {
             )
         }
         .0 != 0
-            && !is_steep_slope(tileh)
+            && !is_steep_slope_raw(tileh)
             && !LEVELED_TRACKS[usize::from(tileh)] & (bits | existing) != 0
         {
             out.error(self.s.strings.build_on_water);
@@ -657,7 +657,7 @@ impl<'a> Ctx<'a> {
         }
         if fall_through {
             let water_ground =
-                self.tile_type(tile) == MP_WATER && is_slope_with_one_corner_raised(tileh);
+                self.tile_type(tile) == MP_WATER && is_slope_with_one_corner_raised_raw(tileh);
             self.check_rail_slope(ret, tileh, trackbit, 0, tile);
             if !ret.ok() {
                 return cost.take(ret);
@@ -923,7 +923,7 @@ impl<'a> Ctx<'a> {
                     if present == 0 {
                         let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
                         if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                            && is_slope_with_one_corner_raised(tileh)
+                            && is_slope_with_one_corner_raised_raw(tileh)
                         {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
                             (self.s.make_shore)(tile);
@@ -1099,7 +1099,7 @@ impl<'a> Ctx<'a> {
         if tileh != SLOPE_FLAT {
             const INCLINED: [u8; 4] = [12, 6, 3, 9];
             let entrance = INCLINED[usize::from(dir)];
-            let fits = if is_steep_slope(tileh) {
+            let fits = if is_steep_slope_raw(tileh) {
                 tileh & entrance == entrance
             } else {
                 tileh & entrance != 0
@@ -2088,7 +2088,7 @@ impl<'a> Ctx<'a> {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
                 let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
                 let water_ground = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                    && is_slope_with_one_corner_raised(tileh);
+                    && is_slope_with_one_corner_raised_raw(tileh);
                 let mut tracks = self.tracks(tile);
                 while tracks != 0 {
                     let track = tracks.trailing_zeros() as u8;
@@ -2208,7 +2208,7 @@ impl<'a> Ctx<'a> {
         cost.set(price(PR_BUILD_FOUNDATION));
         if tileh_old != tileh_new {
             if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                && is_slope_with_one_corner_raised(tileh_old)
+                && is_slope_with_one_corner_raised_raw(tileh_old)
             {
                 cost.add_money(price(PR_CLEAR_WATER));
             }
@@ -2225,7 +2225,7 @@ impl<'a> Ctx<'a> {
         if (self.shared.is_plain_rail)(tile) {
             let bits = self.tracks(tile);
             let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                && is_slope_with_one_corner_raised(tileh_old);
+                && is_slope_with_one_corner_raised_raw(tileh_old);
             if was_water
                 && self.vehicles().any_on_tile(tile, |v| {
                     v.vehicle_type() == crate::vehicle::VehicleType::SHIP.0

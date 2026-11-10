@@ -305,7 +305,7 @@ impl Trees<'_> {
                     p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
                     p.coast = crate::water_map::is_coast(m, tile)? && {
                         let width = self.s.map().size_x();
-                        !crate::slope_func::is_slope_with_one_corner_raised(
+                        !crate::slope_func::is_slope_with_one_corner_raised_raw(
                             crate::tile_map::get_tile_slope(m, tile, width, m.count() / width)?,
                         )
                     };

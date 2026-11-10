@@ -32,8 +32,8 @@ use crate::services::{
     TownHandle, Train, TransportType,
 };
 use crate::slope_func::{
-    FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, complement_slope,
-    get_inclined_slope_direction,
+    FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, complement_slope_raw,
+    get_inclined_slope_direction_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{
@@ -824,7 +824,7 @@ impl<'a> World<'a> {
             company = self.deity_owner(start);
         }
         let (start_slope, start_z) = self.slope_z(start);
-        let direction = get_inclined_slope_direction(start_slope);
+        let direction = get_inclined_slope_direction_raw(start_slope);
         if direction == INVALID_DIAGDIR {
             return cost.error(self.a.strings.tunnel_site);
         }
@@ -894,7 +894,7 @@ impl<'a> World<'a> {
             return cost.error(self.a.strings.excavate);
         }
         cost.add_money(ret.money());
-        if end_slope != complement_slope(start_slope) {
+        if end_slope != complement_slope_raw(start_slope) {
             w::hit(w::TB_TUNNEL_TERRAFORM);
             // The canonical scratch owner returns a stable index, then restores
             // the first tile after recursive terraform may append/reallocate.

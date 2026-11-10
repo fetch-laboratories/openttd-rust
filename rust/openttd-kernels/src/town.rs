@@ -1532,7 +1532,7 @@ impl Engine<'_> {
         } else {
             Slope::SLOPE_NE
         };
-        if desired_slope != cur_slope && Slope(complement_slope(desired_slope.0)) != cur_slope {
+        if desired_slope != cur_slope && complement_slope(desired_slope) != cur_slope {
             if self.chance16(1, 8) {
                 let mut res = false;
                 if !(self.leaves.generating_world)() && self.chance16(1, 10) {
@@ -1862,8 +1862,8 @@ impl Engine<'_> {
                 }
                 let slope = self.get_tile_slope(slope_tile);
                 if slope != Self::inclined_slope(tunnel_dir)
-                    && !is_steep_slope(slope.0)
-                    && !is_slope_with_one_corner_raised(slope.0)
+                    && !is_steep_slope(slope)
+                    && !is_slope_with_one_corner_raised(slope)
                 {
                     return false;
                 }
@@ -2393,7 +2393,7 @@ impl Engine<'_> {
     fn can_build_house_here(&self, tile: TileIndex, noslope: bool) -> bool {
         /* cannot build on these slopes... */
         let slope = self.get_tile_slope(tile);
-        if (noslope && slope != Slope::SLOPE_FLAT) || is_steep_slope(slope.0) {
+        if (noslope && slope != Slope::SLOPE_FLAT) || is_steep_slope(slope) {
             return false;
         }
         /* at least one RoadTypes allow building the house here? */

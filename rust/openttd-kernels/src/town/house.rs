@@ -1080,8 +1080,8 @@ impl<'a> House<'a> {
             self.get_house_north_part(&mut house);
             // Here we differ from TTDP by checking BuildingFlag::NotSloped.
             if !self.building_flags(house).test(BuildingFlag::NotSloped)
-                && !is_steep_slope(tileh_new.0)
-                && (self.s.tile_max_z)(tile.0) == z_new + get_slope_max_z(tileh_new.0)
+                && !is_steep_slope(tileh_new)
+                && (self.s.tile_max_z)(tile.0) == z_new + get_slope_max_z(tileh_new)
             {
                 let mut allow_terraform = true;
                 // Call the autosloping callback per tile, not for the whole building at once.
@@ -1162,7 +1162,7 @@ impl<'a> House<'a> {
         for subtile in ta.tiles(map).map(TileIndex) {
             // Houses cannot be built on steep slopes.
             let slope = Slope(crate::map_func::World::new(self.s).tile_slope(subtile.0));
-            if is_steep_slope(slope.0) {
+            if is_steep_slope(slope) {
                 (c.error)(call.result, self.h.errors.sloped);
                 return;
             }
