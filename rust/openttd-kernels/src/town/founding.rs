@@ -13,6 +13,7 @@ use super::{
 };
 use crate::cargotype::TownAcceptanceEffect;
 use crate::clear_map::ClearGround;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::landscape_type::LandscapeType;
@@ -32,14 +33,6 @@ macro_rules! observed {
 }
 pub(super) use observed;
 
-macro_rules! native_byte {
-    ($($name:ident),+) => { $(
-        #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub u8);
-    )+ };
-}
-native_byte!(AcceptanceEffect);
 pub use crate::tile_type::TileIndex as Tile;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
 #[repr(C)]
@@ -121,7 +114,6 @@ struct Founding<'a> {
     names: &'a names::NameServices,
     cost: &'a CommandCostServices,
     map: OnceCell<crate::services::Map>,
-    size_y: OnceCell<u32>,
 }
 impl<'a> Founding<'a> {
     unsafe fn new(s: &'a FoundingServices) -> Self {
@@ -136,16 +128,13 @@ impl<'a> Founding<'a> {
             names,
             cost,
             map: OnceCell::new(),
-            size_y: OnceCell::new(),
         }
     }
     fn map(&self) -> crate::services::Map {
         *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
-        *self
-            .size_y
-            .get_or_init(|| observed!((self.shared.map_max_y)()).wrapping_add(1))
+        crate::map_func::World::new(self.shared).size_y()
     }
     fn engine(&self, town: TownRef) -> Engine<'a> {
         let map = OnceCell::new();
@@ -196,22 +185,26 @@ impl<'a> Founding<'a> {
     /// Check whether a town can be placed on the tile (`town_cmd.cpp::TownCanBePlacedHere`).
     /// `check_surrounding` also requires surrounding tiles to be free.
     /// Return no error if allowed, otherwise the native placement error.
-    fn town_can_be_placed_here(&self, tile: TileIndex, check_surrounding: bool) -> Option<u32> {
+    fn town_can_be_placed_here(
+        &self,
+        tile: TileIndex,
+        check_surrounding: bool,
+    ) -> Option<crate::strings_type::StringID> {
         w::hit(w::TOWN_PLACEMENT);
         // Check if too close to the edge of map.
         if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
-            return Some(self.s.edge_error);
+            return Some(crate::strings_type::StringID(self.s.edge_error));
         }
         // Check distance to all other towns.
         if observed!(super::spatial::is_close_to_town(self.shared, tile, 20)) {
-            return Some(self.s.close_error);
+            return Some(crate::strings_type::StringID(self.s.close_error));
         }
         // Can only build on clear flat areas, possibly with trees.
         let tile_type = TileType(observed!((self.shared.tile_type)(tile.0)));
         if (tile_type != TileType::MP_CLEAR && tile_type != TileType::MP_TREES)
             || !observed!((self.s.flat)(tile))
         {
-            return Some(self.s.unsuitable_error);
+            return Some(crate::strings_type::StringID(self.s.unsuitable_error));
         }
         // We might want to make sure the town has enough room.
         if check_surrounding {
@@ -246,7 +239,7 @@ impl<'a> Founding<'a> {
                 spiral = spiral.advance(self.map().size_x(), self.size_y());
             }
             if counter < VALID_TILE_GOAL {
-                return Some(self.s.unsuitable_error);
+                return Some(crate::strings_type::StringID(self.s.unsuitable_error));
             }
         }
         None
@@ -313,7 +306,7 @@ impl<'a> Founding<'a> {
         }
         // SAFETY: Fresh canonical owner; no count view exists yet.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
+            super::resolver::initialize_building_counts(
                 self.leaves,
                 self.shared,
                 town.state,
@@ -419,19 +412,20 @@ impl<'a> Founding<'a> {
         city: bool,
         layout: TownLayout,
     ) -> Option<TownRef> {
-        // Editor or world generation is required by CMD_DELETE_TOWN.
+        // These are the preconditions for CMD_DELETE_TOWN
         observed!((self.s.assert_random_context)());
         if !observed!((self.s.can_allocate)()) {
             return None;
         }
         loop {
-            // Generate a tile index not too close to the edge.
+            // Generate a tile index not too close from the edge
             let random = self.random();
             let mut tile = self.align_tile_to_grid(
                 TileIndex(self.map().random_tile_seed(self.size_y(), random)),
                 layout,
             );
-            // If the random tile is water, find suitable land nearby; otherwise evaluate it.
+            // If we tried to place the town on water, find a suitable land tile nearby.
+            // Otherwise, evaluate the land tile.
             let valid =
                 if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_WATER {
                     tile = self.find_nearest_good_coastal_town_spot(tile, layout);
@@ -440,7 +434,7 @@ impl<'a> Founding<'a> {
                     self.town_can_be_placed_here(tile, true).is_none()
                 };
             if valid {
-                // Allocate a town struct.
+                // Allocate a town struct
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
                     self.do_create_town(
@@ -455,7 +449,8 @@ impl<'a> Founding<'a> {
                         },
                     );
                 }
-                // A population still at zero means the placement was too bad to grow at all.
+                // if the population is still 0 at the point, then the
+                // placement is so bad it couldn't grow at all
                 if unsafe { super::population(town.state) } > 0 {
                     return Some(town);
                 }
@@ -464,8 +459,10 @@ impl<'a> Founding<'a> {
                     observed!((self.leaves.exchange_company)(u32::from(CompanyID::TOWN.0)));
                 observed!((self.s.delete_town)(town.id));
                 observed!((self.leaves.exchange_company)(cur_company));
-                // Creating and deleting resets allocation checks. We could allocate on entry,
-                // but must check again when assertions are enabled.
+                // We already know that we can allocate a single town when
+                // entering this function. However, we create and delete
+                // a town which "resets" the allocation checks. As such we
+                // need to check again when assertions are enabled.
                 observed!((self.s.assert_allocation)());
             }
             w::hit(w::TOWN_RETRY);
@@ -483,7 +480,7 @@ impl<'a> Founding<'a> {
         if u32::from(number_towns) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
             return u32::from(observed!((self.s.custom_number)()));
         }
-        // Native setting's original array domain; no extra rejection is added.
+        // SAFETY: The setting's domain is the array's; the original indexes it unchecked.
         let value = unsafe { *NUM_INITIAL_TOWNS.get_unchecked(usize::from(number_towns)) };
         observed!((self.s.scale_size)(value))
     }
@@ -547,10 +544,79 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     text: ByteSpan,
     execute: bool,
 ) {
+    let context = FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    };
+    let cmd = CmdFoundTown {
+        tile,
+        size,
+        city,
+        layout,
+        random_location,
+        townnameparts,
+        text,
+    };
+    unsafe { cmd_found_town(context, result, execute_flags(execute), cmd) };
+}
+/// The command flags of a positional export's execute boolean.
+fn execute_flags(execute: bool) -> DoCommandFlags {
+    if execute {
+        DoCommandFlags::from_element(DoCommandFlag::Execute)
+    } else {
+        DoCommandFlags(0)
+    }
+}
+/// The tables and native frames of one `CmdFoundTown` invocation.
+#[derive(Clone, Copy)]
+pub(crate) struct FoundTownContext {
+    pub s: *const FoundingServices,
+    pub road: *const crate::road_cmd::CommandContext,
+    pub frame: *mut Frame,
+    pub name_frame: *mut names::NameFrame,
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdFoundTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdFoundTown {
+    pub tile: Tile,
+    pub size: TownSize,
+    pub city: bool,
+    pub layout: TownLayout,
+    pub random_location: bool,
+    pub townnameparts: u32,
+    pub text: ByteSpan,
+}
+/// `CmdFoundTown`: create a new town.
+/// # Safety
+/// Live tables, native frames, result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_found_town(
+    context: FoundTownContext,
+    result: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdFoundTown,
+) {
     // Multidimensional arrays have to have defined length of non-first dimension.
     #[allow(non_upper_case_globals)]
     const price_mult: [[i32; TownSize::TSZ_RANDOM.0 as usize + 1]; 2] =
         [[15, 25, 40, 25], [20, 35, 55, 35]];
+    let FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    } = context;
+    let CmdFoundTown {
+        tile,
+        size,
+        city,
+        layout,
+        random_location,
+        townnameparts,
+        text,
+    } = cmd;
+    let execute = flags.test(DoCommandFlag::Execute);
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
@@ -617,7 +683,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     }
     if !random_location {
         if let Some(error) = f.town_can_be_placed_here(tile, false) {
-            observed!((f.cost.error)(result, error));
+            observed!((f.cost.error)(result, error.0));
             return;
         }
     }
@@ -669,23 +735,25 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         observed!((f.s.set_result)(frame, town.id));
         if text.size != 0 {
             unsafe {
-                names::openttd_rust_town_set_name(town.state, text);
+                names::set_town_name(town.state, text);
             }
             observed!((f.s.name_changed)(town.shell, unsafe {
-                names::openttd_rust_town_name(town.state)
+                names::town_name(town.state)
             }));
             observed!((f.s.update_virt)(town.shell));
         }
         if !observed!((f.leaves.environment.editor)()) {
+            // 't' can't be nullptr since 'random' is false outside scenedit
+            let world = crate::map_func::World::new(f.shared);
+            world.assert_with(|| !random_location);
+
             observed!((f.s.founded_news)(town.id, tile));
             observed!((f.s.founded_events)(town.id));
         }
     }
 }
-/// Generate towns for the Scenario Editor Random Towns button or world generation.
-/// `has_number == false` uses the game settings (`town_cmd.cpp::GenerateTowns`).
 /// # Safety
-/// Tables and native stack frames remain live; result is writable. Only named progress services report cancellation; scratch drops before native rethrow.
+/// As `generate_towns`; `result` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     s: *const FoundingServices,
@@ -697,10 +765,35 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     number: u32,
     result: *mut bool,
 ) -> u8 {
+    let context = FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    };
+    let number = has_number.then_some(number);
+    u8::from(unsafe { generate_towns(context, layout, number, &mut *result) })
+}
+/// Generate towns for the Scenario Editor Random Towns button or world generation.
+/// `number == None` uses the game settings (`town_cmd.cpp::GenerateTowns`).
+/// # Safety
+/// Tables and native stack frames remain live; Only named progress services report cancellation; scratch drops before native rethrow.
+pub(crate) unsafe fn generate_towns(
+    context: FoundTownContext,
+    layout: TownLayout,
+    number: Option<u32>,
+    result: &mut bool,
+) -> bool {
+    let FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    } = context;
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     let mut current_number = 0_u32;
-    let mut total = if has_number {
+    let mut total = if let Some(number) = number {
         number
     } else if u32::from(observed!((f.s.town_density)())) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
         f.get_default_towns_for_map_size()
@@ -716,21 +809,20 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     w::hit(w::TOWN_ENTRIES);
     if !observed!((f.s.set_progress)(frame, total)) {
         w::hit(w::TOWN_CANCELLED);
-        return u8::from(false);
+        return false;
     }
     // Pre-populate the name list with the names of towns already on the map.
-    let mut town = observed!((f.names.next)(u32::from(TownID::BEGIN.0)));
-    while !town.shell.is_null() {
-        let custom = unsafe { names::openttd_rust_town_name(town.state) };
+    for town in super::iterate_refs(|from| observed!((f.names.next)(from))) {
+        let custom = unsafe { names::town_name(town.state) };
         let name = if custom.size == 0 {
             observed!((f.s.cached_name)(town.shell))
         } else {
             custom
         };
         town_names.insert(unsafe { names::bytes(name) }.to_vec());
-        town = observed!((f.names.next)(u32::from(town.id.0).wrapping_add(1)));
     }
-    // Randomise the city-status offset: at 1 in 4, ten towns may yield two or three cities.
+    // Randomised offset for city status. This means with e.g. 1-in-4 towns being cities, a map with 10 towns
+    // may have 2 or 3 cities, instead of always 3.
     let larger_towns = observed!((f.s.larger_towns)());
     let city_random_offset = if larger_towns == 0 {
         w::hit(w::TOWN_NO_CITIES);
@@ -738,23 +830,26 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     } else {
         f.random() % u32::from(larger_towns)
     };
-    // The requested number is a suggestion, so creation cannot lock up on a crowded map.
+    // First attempt will be made at creating the suggested number of towns.
+    // Note that this is really a suggested value, not a required one.
+    // We would not like the system to lock up just because the user wanted 100 cities on a 64*64 map, would we?
     loop {
         let larger_towns = observed!((f.s.larger_towns)());
         let city = larger_towns != 0
             && city_random_offset.wrapping_add(current_number) % u32::from(larger_towns) == 0;
         if !observed!((f.s.increase_progress)(frame)) {
             w::hit(w::TOWN_CANCELLED);
-            return u8::from(false);
+            return false;
         }
-        // Get a unique town name, then try 20 times to create a random-sized town.
+        // Get a unique name for the town.
         if unsafe { f.generate_town_name(name_frame, &raw mut town_names, &raw mut townnameparts) }
+            // try 20 times to create a random-sized town for the first loop.
             && unsafe {
                 f.create_random_town(20, townnameparts, TownSize::TSZ_RANDOM, city, layout)
             }
             .is_some()
         {
-            // If creation succeeded, raise the flag.
+            // If creation was successful, raise a flag.
             current_number = current_number.wrapping_add(1);
         }
         total = total.wrapping_sub(1);
@@ -763,15 +858,14 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         }
     }
     town_names.clear();
-    // Rebuild the town k-d tree so it is well balanced.
+    // Build the town k-d tree again to make sure it's well balanced
     observed!(crate::town::spatial::rebuild_town_kdtree(f.shared));
     if current_number != 0 {
-        unsafe {
-            result.write(true);
-        }
-        return u8::from(true);
+        *result = true;
+        return true;
     }
-    // No town was created. Give it a final, more aggressive try.
+    // If current_number is still zero at this point, it means that not a single town has been created.
+    // So give it a last try, but now more aggressive
     w::hit(w::TOWN_FALLBACK);
     let success =
         unsafe { f.generate_town_name(name_frame, std::ptr::null_mut(), &raw mut townnameparts) }
@@ -785,17 +879,16 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
                 )
             }
             .is_some();
-    // If there are no towns at all while generating a new game, bail out.
+    // If there are no towns at all and we are generating new game, bail out
     if !success
         && observed!((f.shared.town_count)()) == 0
         && !observed!((f.leaves.environment.editor)())
     {
         observed!((f.s.no_town_error)());
     }
-    unsafe {
-        result.write(success);
-    }
-    u8::from(true)
+    // we are still without a town? we failed, simply
+    *result = success;
+    true
 }
 /// Rename a town (server-only; `town_cmd.cpp::CmdRenameTown`).
 /// # Safety
@@ -808,7 +901,27 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
     text: ByteSpan,
     execute: bool,
 ) {
-    let f = unsafe { Founding::new(&*s) };
+    let cmd = CmdRenameTown { town_id, text };
+    unsafe { cmd_rename_town(&*s, result, execute_flags(execute), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdRenameTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdRenameTown {
+    pub town_id: TownId,
+    pub text: ByteSpan,
+}
+/// `CmdRenameTown`: rename a town (server-only).
+/// # Safety
+/// Live tables, result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_rename_town(
+    s: &FoundingServices,
+    result: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdRenameTown,
+) {
+    let CmdRenameTown { town_id, text } = cmd;
+    let execute = flags.test(DoCommandFlag::Execute);
+    let f = unsafe { Founding::new(s) };
     w::hit(w::TOWN_ENTRIES);
     w::hit(w::TOWN_RENAME);
     let town = observed!((f.s.resolve)(town_id));
@@ -831,10 +944,10 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
     if execute {
         observed!((f.s.prepare_rename)(town.shell));
         unsafe {
-            names::openttd_rust_town_set_name(town.state, text);
+            names::set_town_name(town.state, text);
         }
         observed!((f.s.name_changed)(town.shell, unsafe {
-            names::openttd_rust_town_name(town.state)
+            names::town_name(town.state)
         }));
         observed!((f.s.update_virt)(town.shell));
         observed!((f.s.directory_resort)());

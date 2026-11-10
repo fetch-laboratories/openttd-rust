@@ -89,11 +89,11 @@ impl Services {
     }
     /// `GetIndustrySpec`.
     fn spec(kind: IndustryType) -> *const IndustrySpec {
-        industrytype::industry(u16::from(kind.0))
+        industrytype::get_industry_spec(kind).cast_const()
     }
     /// `_settings_game.game_creation.landscape`.
-    fn landscape() -> LandscapeType {
-        LandscapeType(unsafe { ((*crate::animated_tile::services().industries).landscape)() })
+    fn landscape(&self) -> LandscapeType {
+        LandscapeType(unsafe { self.shared.settings().climate.read() })
     }
 }
 
@@ -153,12 +153,12 @@ fn cmsa_mine(tile: TileIndex, m: &TileTypeAccess, s: &Services) -> bool {
         return false;
     }
     let mut result = false;
-    crate::industry::for_each_produced_cargo(owner, |cargo| {
+    crate::industry::for_each_cargo_produced(owner, |cargo| {
         /* The industry extracts something non-liquid, i.e. no oil or plastic, so it is a mine.
          * Also the production of passengers and mail is ignored. */
         if !result
-            && is_valid_cargo_type(cargo)
-            && !CargoClasses(unsafe { (s.vehicle_resolver().cargo_classes)(cargo) }).any(
+            && is_valid_cargo_type(cargo.0)
+            && !CargoClasses(unsafe { (s.vehicle_resolver().cargo_classes)(cargo.0) }).any(
                 CargoClasses::from_element(CargoClass::Liquid)
                     .with(CargoClasses::from_element(CargoClass::Passengers))
                     .with(CargoClasses::from_element(CargoClass::Mail)),
@@ -230,7 +230,7 @@ pub(crate) fn generate_station_name(
 ) -> StringID {
     let m = s.map_access();
     let map = s.shared.map();
-    let size_y = (s.shared.map_max_y)() + 1;
+    let size_y = crate::map_func::World::new(s.shared).size_y();
     let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
     let n = &s.names;
     let town = (s.commands().station_town)(st);
@@ -315,12 +315,12 @@ pub(crate) fn generate_station_name(
     if sni.is_available(StringID(n.woods), s)
         && (count_map_square_around(tile, map, size_y, freeform, |at| cmsa_tree(at, &m)) >= 8
             || count_map_square_around(tile, map, size_y, freeform, |at| {
-                crate::industry::forest(at.0, unsafe {
+                crate::industry::policy::is_tile_forest_industry(at, unsafe {
                     &*crate::animated_tile::services().industries
                 })
             }) >= 2)
     {
-        return StringID(if Services::landscape() == LandscapeType::Tropic {
+        return StringID(if s.landscape() == LandscapeType::Tropic {
             n.forest
         } else {
             n.woods
@@ -459,9 +459,12 @@ pub(crate) unsafe fn tile_loop_station(
         }
         StationType::Truck | StationType::Bus => trigger_road_stop_animation(),
         StationType::RoadWaypoint => {
-            let on_snow_or_desert =
-                || crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile).unwrap();
-            let change = match Services::landscape() {
+            let on_snow_or_desert = || {
+                m.asserted(s.shared, |m| {
+                    crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile)
+                })
+            };
+            let change = match s.landscape() {
                 LandscapeType::Arctic => {
                     on_snow_or_desert()
                         != (crate::tile_map::get_tile_z(m, tile.0, size_x, size_y).unwrap()
@@ -475,10 +478,12 @@ pub(crate) unsafe fn tile_loop_station(
                 _ => false,
             };
             if change {
-                crate::station_map::toggle_road_waypoint_on_snow_or_desert(m, tile).unwrap();
+                m.asserted(s.shared, |m| {
+                    crate::station_map::toggle_road_waypoint_on_snow_or_desert(m, tile)
+                });
                 (s.shared.mark_dirty)(tile.0);
             }
-            let t = crate::town::spatial::closest(s.shared, tile.0, u32::MAX);
+            let t = crate::town::spatial::closest_town_from_tile(s.shared, tile, u32::MAX);
             let new_zone = if t.is_null() {
                 HouseZone::TownEdge
             } else {
@@ -490,18 +495,21 @@ pub(crate) unsafe fn tile_loop_station(
             } else {
                 ROADSIDE_PAVED
             };
-            let cur_rs = crate::station_map::get_road_waypoint_roadside(m, tile).unwrap();
+            let cur_rs = m.asserted(s.shared, |m| {
+                crate::station_map::get_road_waypoint_roadside(m, tile)
+            });
             if new_rs != cur_rs {
-                crate::station_map::set_road_waypoint_roadside(
-                    m,
-                    tile,
-                    if cur_rs == ROADSIDE_BARREN {
-                        new_rs
-                    } else {
-                        ROADSIDE_BARREN
-                    },
-                )
-                .unwrap();
+                m.asserted(s.shared, |m| {
+                    crate::station_map::set_road_waypoint_roadside(
+                        m,
+                        tile,
+                        if cur_rs == ROADSIDE_BARREN {
+                            new_rs
+                        } else {
+                            ROADSIDE_BARREN
+                        },
+                    )
+                });
                 (s.shared.mark_dirty)(tile.0);
             }
             trigger_road_stop_animation();
@@ -512,8 +520,9 @@ pub(crate) unsafe fn tile_loop_station(
 /// `Station::~Station`; the native destructor retains only member destruction.
 /// Aircraft-hangar orders need special treatment, as the hangars are part of a
 /// station (tile type `MP_STATION`) but the order type is `OT_GOTO_DEPOT`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut BaseStation) {
+/// # Safety
+/// `st` is the live station being destroyed; its native members outlive this call.
+unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     let c = s.commands();
     let w = unsafe { &*c.station };
     let links = unsafe { &*c.links };
@@ -615,9 +624,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         }
     }
     /* Remove station from industries and towns that reference it. */
-    unsafe {
-        crate::station::openttd_rust_station_remove_from_nearby_lists(st, s.catchment);
-    }
+    let catchment = unsafe { crate::station::Ctx::new(s.catchment) };
+    crate::station::remove_from_all_nearby_lists(st, (catchment.c.owner)(st), &catchment);
     /* Clear the persistent storage. */
     (c.delete_airport_storage)(st);
     if CompanyID((w.station_owner)(st)) == CompanyID::NONE {
@@ -660,6 +668,12 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     if (s.sign_valid)(st) {
         (s.remove_sign)(id);
     }
+}
+/// # Safety
+/// As `station_destruct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut BaseStation) {
+    unsafe { station_destruct(s, st) };
 }
 
 #[unsafe(no_mangle)]

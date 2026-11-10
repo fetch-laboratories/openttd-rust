@@ -215,25 +215,29 @@ impl<'a> World<'a> {
         // SAFETY: shell identity is source-live. The rating owner ends access
         // before its native invalidation callbacks; no caller owner is borrowed.
         unsafe {
-            crate::town::openttd_rust_town_change_rating(
-                self.road.town,
-                self.r.shared,
-                if town.is_null() {
-                    std::ptr::null_mut()
-                } else {
-                    (self.s.town_owner)(town)
+            crate::town::change_town_rating(
+                &*self.road.town,
+                &*self.r.shared,
+                crate::town::RatedTown {
+                    state: if town.is_null() {
+                        std::ptr::null_mut()
+                    } else {
+                        (self.s.town_owner)(town)
+                    },
+                    id: if town.is_null() {
+                        crate::town_type::TownId(u16::MAX)
+                    } else {
+                        crate::town_type::TownId((self.authority.town_index)(town))
+                    },
+                    shell: town,
                 },
-                if town.is_null() {
-                    u32::from(u16::MAX)
-                } else {
-                    u32::from((self.authority.town_index)(town))
+                crate::town::RatingChange {
+                    company: crate::company_type::CompanyID((self.s.current_company)()),
+                    add: delta,
+                    maximum: minimum,
+                    flags: crate::command_type::DoCommandFlags(flags),
+                    bulldozer: (self.authority.bulldozer)(),
                 },
-                town as usize,
-                (self.s.current_company)(),
-                delta,
-                minimum,
-                flags & DoCommandFlag::NO_MODIFY_TOWN_RATING != 0,
-                (self.authority.bulldozer)(),
             );
         }
     }
@@ -241,14 +245,14 @@ impl<'a> World<'a> {
         w::hit(w::TB_TOWN_RATING);
         // SAFETY: source permits a null town and the native slot is live.
         unsafe {
-            crate::town::openttd_rust_town_authority_remove(
-                self.road.authority,
-                self.r.shared,
-                self.r.cost,
+            crate::town::check_for_town_rating(
+                &*self.road.authority,
+                &*self.r.shared,
+                &*self.r.cost,
                 out.0,
+                crate::command_type::DoCommandFlags(flags),
                 town,
-                flags & DoCommandFlag::NO_TEST_TOWN_RATING != 0,
-                1,
+                crate::town::TownRatingCheckType::TunnelBridgeRemove,
             );
         }
     }

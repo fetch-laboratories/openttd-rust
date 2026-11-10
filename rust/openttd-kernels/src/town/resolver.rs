@@ -1,10 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, Leaves, State, house};
-use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
+use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
+use crate::math::{clamp_to_u8, clamp_to_u16};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, TileIndex, TileType};
@@ -119,9 +120,12 @@ struct HouseClassMapping {
 }
 /// Original `_class_mapping`.
 static CLASSES: GameState<Vec<HouseClassMapping>> = GameState::new(Vec::new());
-/// `ResetHouseClassIDs`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_classes_reset() {
+    reset_house_classes();
+}
+/// `ResetHouseClassIDs`.
+pub(crate) fn reset_house_classes() {
     unsafe {
         let classes = &mut *CLASSES.get();
         classes.clear();
@@ -129,9 +133,12 @@ pub extern "C" fn openttd_rust_house_classes_reset() {
         classes.push(HouseClassMapping::default());
     }
 }
-/// `AllocateHouseClassID`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_class_allocate(grf_class_id: u8, grfid: u32) -> HouseClassID {
+    allocate_house_class_id(grf_class_id, grfid)
+}
+/// `AllocateHouseClassID`.
+pub(crate) fn allocate_house_class_id(grf_class_id: u8, grfid: u32) -> HouseClassID {
     unsafe {
         let classes = &mut *CLASSES.get();
         // Start from 1 because 0 means that no class has been assigned.
@@ -161,8 +168,7 @@ unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
 }
 /// Initialise global building counts and all town building counts
 /// (`InitializeBuildingCounts()`), or only `owner`'s counts when it is not null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_counts_init(
+pub(crate) unsafe fn initialize_building_counts(
     l: &Leaves,
     s: &Services,
     owner: *mut State,
@@ -180,11 +186,9 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
     };
-    let mut id = (l.next_town)(u32::from(crate::town_type::TownID::BEGIN.0));
-    while id != u32::MAX {
-        let owner = (s.town_owner_by_id)(id);
+    for id in super::iterate(|from| (l.next_town)(from)) {
+        let owner = (s.town_owner_by_id)(u32::from(id.0));
         unsafe { initialize_counts(owner, specs, classes) };
-        id = (l.next_town)(id + 1);
     }
 }
 /// `GetNumHouses`: direct canonical counts; all four `ClampTo<uint8_t>` precede packing.
@@ -203,10 +207,10 @@ unsafe fn get_num_houses(owner: *const State, house_id: HouseID, class_id: House
             c.classes[usize::from(class_id)],
         )
     };
-    map_class_count.min(u32::from(u8::MAX)) << 24
-        | u32::from(town_class_count.min(u16::from(u8::MAX))) << 16
-        | map_id_count.min(u32::from(u8::MAX)) << 8
-        | u32::from(town_id_count.min(u16::from(u8::MAX)))
+    u32::from(clamp_to_u8(i64::from(map_class_count))) << 24
+        | u32::from(clamp_to_u8(i64::from(town_class_count))) << 16
+        | u32::from(clamp_to_u8(i64::from(map_id_count))) << 8
+        | u32::from(clamp_to_u8(i64::from(town_id_count)))
 }
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
 unsafe fn town_history_helper(
@@ -216,17 +220,28 @@ unsafe fn town_history_helper(
     transported: bool,
 ) -> u32 {
     unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
-        (if transported {
+        u32::from(clamp_to_u16(i64::from(if transported {
             h.transported
         } else {
             h.production
-        })
-        .min(u32::from(u16::MAX))
+        })))
     })
 }
+/// # Safety
+/// As `town_get_variable`.
 #[unsafe(no_mangle)]
-/// `TownScopeResolver::GetVariable`.
 pub unsafe extern "C" fn openttd_rust_town_variable(
+    s: &ResolverServices,
+    scope: *const TownScope,
+    ro: *const c_void,
+    variable: u8,
+    parameter: u32,
+    available: *mut bool,
+) -> u32 {
+    unsafe { town_get_variable(s, scope, ro, variable, parameter, available) }
+}
+/// `TownScopeResolver::GetVariable`.
+pub(crate) unsafe fn town_get_variable(
     s: &ResolverServices,
     scope: *const TownScope,
     ro: *const c_void,
@@ -294,7 +309,8 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0x80 => state.simulation.xy,
             0x81 => gb(state.simulation.xy, 8, 8),
             0x82 | 0x83 => {
-                state.simulation.population.min(u32::from(u16::MAX)) >> (8 * (variable & 1))
+                u32::from(clamp_to_u16(i64::from(state.simulation.population)))
+                    >> (8 * (variable & 1))
             }
             0x8A => u32::from(state.growth.counter / TOWN_GROWTH_TICKS),
             // In original game, 0x92 and 0x93 are one word.
@@ -302,9 +318,10 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0x93 => 0,
             // Squared zone radii from `HouseZone::TownEdge` to `HouseZone::TownCentre`.
             0x94..=0x9D => {
-                state.simulation.radius[usize::from(HouseZone::TownEdge.0 + (variable - 0x94) / 2)]
-                    .min(u32::from(u16::MAX))
-                    >> (8 * (variable & 1))
+                u32::from(clamp_to_u16(i64::from(
+                    state.simulation.radius
+                        [usize::from(HouseZone::TownEdge.0 + (variable - 0x94) / 2)],
+                ))) >> (8 * (variable & 1))
             }
             0x9E..=0xAD => {
                 let rating = state.simulation.ratings[usize::from((variable - 0x9E) / 2)];
@@ -316,7 +333,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             }
             0xAE => u32::from(state.simulation.have_ratings),
             0xB2 => u32::from(state.simulation.statues),
-            0xB6 => state.simulation.num_houses.min(u32::from(u16::MAX)),
+            0xB6 => u32::from(clamp_to_u16(i64::from(state.simulation.num_houses))),
             0xB9 => u32::from(state.growth.rate / TOWN_GROWTH_TICKS),
             0xCC..=0xD3 => {
                 let index = variable - 0xCC;
@@ -353,8 +370,19 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         value
     }
 }
+/// # Safety
+/// As `town_store_psa`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_scope_store(
+    s: &ResolverServices,
+    scope: *const TownScope,
+    ro: *const c_void,
+    pos: u32,
+    value: i32,
+) {
+    unsafe { town_store_psa(s, scope, ro, pos, value) }
+}
+pub(crate) unsafe fn town_store_psa(
     s: &ResolverServices,
     scope: *const TownScope,
     ro: *const c_void,
@@ -377,9 +405,18 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
         );
     }
 }
-/// `HouseScopeResolver::GetRandomBits` and `GetRandomTriggers`.
+/// # Safety
+/// As `house_random_bits`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_random(
+    s: &ResolverServices,
+    scope: *const HouseScope,
+    triggers: bool,
+) -> u32 {
+    unsafe { house_random_bits(s, scope, triggers) }
+}
+/// `HouseScopeResolver::GetRandomBits` and `GetRandomTriggers`.
+pub(crate) unsafe fn house_random_bits(
     s: &ResolverServices,
     scope: *const HouseScope,
     triggers: bool,
@@ -413,19 +450,18 @@ unsafe fn get_distance_from_nearby_house(
 ) -> u32 {
     let searchtype = gb(u32::from(parameter), 6, 2);
     let searchradius = gb(u32::from(parameter), 0, 6);
-    // Do not use a too low radius.
+    // do not use a too low radius
     if searchradius < 1 {
         return 0;
     }
     let start_hs = (s.search_spec)(start_house);
     let mut start_house = start_house;
     let leaves = unsafe { &*s.towns };
-    // Modifies 'start_house'!
-    let start_north_tile =
-        start_tile
-            .0
-            .wrapping_add(house::get_house_north_part(leaves, &mut start_house, map));
-    let size_y = (unsafe { &*s.shared }.map_max_y)() + 1;
+    // modifies 'start_house'!
+    let start_north_tile = start_tile
+        .0
+        .wrapping_add_signed(house::get_house_north_part(leaves, &mut start_house, map));
+    let size_y = crate::map_func::World::new(unsafe { &*s.shared }).size_y();
     let mut spiral = crate::spiral::square(
         map.tile_x(start_tile.0),
         map.tile_y(start_tile.0),
@@ -438,20 +474,24 @@ unsafe fn get_distance_from_nearby_house(
         if TileType((unsafe { &*s.shared }.tile_type)(tile.0)) == TileType::MP_HOUSE {
             let mut house = (unsafe { &*leaves.houses }.house_type)(tile.0);
             let hs = (s.search_spec)(house);
-            // Must be one from a grf file, and always ignore the origin house.
+            // must be one from a grf file
+            // Always ignore origin house
             if hs.has_file
                 && start_north_tile
                     != tile
                         .0
-                        .wrapping_add(house::get_house_north_part(leaves, &mut house, map))
+                        .wrapping_add_signed(house::get_house_north_part(leaves, &mut house, map))
             {
                 let matched = match searchtype {
-                    // Same local id as the one requested, from the same grf.
-                    0 => hs.local == start_hs.local && hs.grfid == start_hs.grfid,
-                    // Same classid as the one requested, from the same grf.
-                    1 => hs.house_class == start_hs.house_class && hs.grfid == start_hs.grfid,
-                    // From the same grf.
-                    2 => hs.grfid == start_hs.grfid,
+                    0 => {
+                        hs.local == start_hs.local // same local id as the one requested
+                            && hs.grfid == start_hs.grfid // from the same grf
+                    }
+                    1 => {
+                        hs.house_class == start_hs.house_class // same classid as the one requested
+                            && hs.grfid == start_hs.grfid // from the same grf
+                    }
+                    2 => hs.grfid == start_hs.grfid, // from the same grf
                     _ => return 0,
                 };
                 if matched {
@@ -463,10 +503,22 @@ unsafe fn get_distance_from_nearby_house(
     }
     0
 }
-/// `HouseScopeResolver::GetVariable`, used by the resolver to get values for feature 07
-/// deterministic spritegroups.
+/// # Safety
+/// As `house_get_variable`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_variable(
+    s: &ResolverServices,
+    scope: *const HouseScope,
+    ro: *const c_void,
+    variable: u8,
+    parameter: u32,
+    available: *mut bool,
+) -> u32 {
+    unsafe { house_get_variable(s, scope, ro, variable, parameter, available) }
+}
+/// `HouseScopeResolver::GetVariable`, used by the resolver to get values for feature 07
+/// deterministic spritegroups.
+pub(crate) unsafe fn house_get_variable(
     s: &ResolverServices,
     scope: *const HouseScope,
     ro: *const c_void,
@@ -478,8 +530,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let l = unsafe { &*s.towns };
     let shared = unsafe { &*s.shared };
     if scope.tile == INVALID_TILE {
-        // House does not yet exist, nor is it being planned to exist. Provide some
-        // default values instead.
+        // House does not yet exist, nor is it being planned to exist. Provide some default values instead.
         return match variable {
             // Construction stage.
             0x40 => u32::from(TOWN_HOUSE_COMPLETED) | (scope.view as u32).wrapping_shl(2),
@@ -595,8 +646,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
-        // Cargo acceptance history of nearby stations, through the canonical
-        // GoodsEntry::ConvertState helper.
+        // Cargo acceptance history of nearby stations
         0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
         // Distance test for some house types.
         0x65 => unsafe {
@@ -631,7 +681,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 u32::from(nearby_house_id)
             } else {
                 // Spec only allows 8 bits, so all local-ids above 254 are clamped.
-                same_file << 8 | u32::from(hs.local.min(u16::from(u8::MAX)))
+                same_file << 8 | u32::from(clamp_to_u8(i64::from(hs.local)))
             };
             houseclass << 16 | local_houseid
         }
@@ -670,12 +720,12 @@ unsafe fn acceptance_history(
     parameter: u32,
     map: Map,
 ) -> u32 {
-    let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+    let cargo = crate::cargo_registry::get_cargo_translation(
         parameter as u8,
         (s.shared().resolver_grf_file)(ro),
         false,
     );
-    if !is_valid_cargo_type(cargo) {
+    if !is_valid_cargo_type(cargo.0) {
         return 0;
     }
     // Extract tile offset. ResolverObject::GetRegister uses this process-wide canonical
@@ -685,7 +735,10 @@ unsafe fn acceptance_history(
     let y_offs = gb(register, 8, 8) as i8;
     let offset = map.diff(i32::from(x_offs), i32::from(y_offs));
     let shared = unsafe { &*s.shared };
-    let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
+    let tile = map.wrap_to_map(
+        scope.tile.wrapping_add(offset),
+        crate::map_func::World::new(shared).size_y(),
+    );
     let c = crate::station::Ctx::from_shared(shared);
     let mut stations =
         crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });
@@ -695,10 +748,7 @@ unsafe fn acceptance_history(
     // SAFETY: The call-local finder's set; each visit reads canonical status only.
     unsafe {
         crate::station::for_each_station(list, |near| {
-            let ge = crate::station_service::goods(
-                (c.c.owner)(near.station),
-                crate::cargo_type::CargoType(cargo),
-            );
+            let ge = crate::station_service::goods((c.c.owner)(near.station), cargo);
             // Read only canonical status, then use the shared pure conversion.
             result |= u32::from(crate::station_base::goods_entry::convert_state(
                 crate::station_base::goods_entry::States((*ge).status),
@@ -706,7 +756,7 @@ unsafe fn acceptance_history(
         });
     }
     // Cargo triggered CB 148?
-    if scope.watched & (1_u64 << cargo) != 0 {
+    if scope.watched & (1_u64 << cargo.0) != 0 {
         crate::bitmath_func::set_bit(&mut result, 4);
     }
     result
@@ -846,6 +896,15 @@ pub extern "C" fn openttd_rust_house_scope(
     scope: u8,
     relative: u8,
 ) -> *mut c_void {
+    house_get_scope(ro, house, town, scope, relative)
+}
+pub(crate) fn house_get_scope(
+    ro: *mut c_void,
+    house: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
     match scope {
         VSG_SCOPE_SELF => house,
         VSG_SCOPE_PARENT => town,
@@ -859,6 +918,14 @@ pub extern "C" fn openttd_rust_town_scope(
     scope: u8,
     relative: u8,
 ) -> *mut c_void {
+    town_get_scope(ro, town, scope, relative)
+}
+pub(crate) fn town_get_scope(
+    ro: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
     if scope == VSG_SCOPE_SELF {
         town
     } else {
@@ -866,6 +933,8 @@ pub extern "C" fn openttd_rust_town_scope(
     }
 }
 
+/// # Safety
+/// As `get_house_animation_callback`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_animation_callback(
     callback: u16,
@@ -876,16 +945,38 @@ pub unsafe extern "C" fn openttd_rust_house_animation_callback(
     tile: u32,
     watched: u64,
 ) -> u16 {
+    unsafe {
+        get_house_animation_callback(
+            CallbackID(callback),
+            param1,
+            param2,
+            spec,
+            town,
+            TileIndex(tile),
+            CargoTypes(watched),
+        )
+    }
+}
+/// Original `GetSimpleHouseCallback`, as `HouseAnimationBase` calls it.
+pub(crate) unsafe fn get_house_animation_callback(
+    callback: CallbackID,
+    param1: u32,
+    param2: u32,
+    spec: *const c_void,
+    town: *mut TownHandle,
+    tile: TileIndex,
+    watched: CargoTypes,
+) -> u16 {
     let house = (services().spec_house)(spec);
     let args = CallbackArgs {
         town,
-        watched,
+        watched: watched.0,
         param1,
         param2,
-        tile,
+        tile: tile.0,
         view: 0,
         house,
-        callback,
+        callback: callback.0,
         initial_random: 0,
         prospective: false,
     };
