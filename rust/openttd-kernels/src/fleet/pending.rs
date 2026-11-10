@@ -98,7 +98,7 @@ pub(crate) unsafe fn drain(
             (w.command)(cost, id);
             (w.subtract)(reserve.wrapping_neg());
         }
-        if !crate::command::is_local_company(unsafe { &*t.commands }) {
+        if !t.is_local_company() {
             return;
         }
         if unsafe { (t.success)(cost) } {

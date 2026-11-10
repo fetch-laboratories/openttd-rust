@@ -82,6 +82,11 @@ impl Services {
     pub(crate) fn check(&self, condition: bool) {
         crate::movement::native_assert((self.common)().base.shared, condition);
     }
+    /// `IsLocalCompany`, through the command layer's company and finance owners.
+    pub(crate) fn is_local_company(&self) -> bool {
+        // SAFETY: The command table is immutable for the process lifetime.
+        crate::command::is_local_company(unsafe { &*self.commands })
+    }
 }
 /// Canonical record of a live native transaction shell.
 pub(crate) fn record(w: &Services, v: *mut ()) -> crate::vehicle::VehicleRef {
@@ -593,7 +598,7 @@ unsafe fn build(
     }
     let cargo = unsafe { new_cargo(w, gw, old, engine, chain) };
     if cargo == INVALID_CARGO {
-        if crate::command::is_local_company(unsafe { &*w.commands }) && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
+        if w.is_local_company() && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
             let order = unsafe { incompatible_refit(w, gw, old, engine) };
             unsafe { (w.refit_news)(old, order) };
         }
@@ -1228,12 +1233,12 @@ unsafe fn set_rule(
     };
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
         unsafe { update_autoreplace(gw, company) };
-        if crate::command::is_local_company(unsafe { &*w.commands }) {
+        if w.is_local_company() {
             unsafe { (gw.replace_dirty)(kind) };
         }
         unsafe { (gw.list_set_dirty)(company, kind) };
     }
-    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && crate::command::is_local_company(unsafe { &*w.commands }) {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && w.is_local_company() {
         unsafe { (w.rule_window)(from, id) };
     }
     cost
