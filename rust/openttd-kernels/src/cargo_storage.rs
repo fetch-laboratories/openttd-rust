@@ -654,14 +654,6 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
     travelled.min(direct)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_packet_split(
-    p: *mut Packet,
-    s: *const Services,
-    amount: u32,
-) -> *mut c_void {
-    unsafe { split(p, *s, amount) }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_packet_merge(
     p: *mut Packet,
     s: *const Services,
@@ -669,12 +661,6 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_merge(
 ) {
     unsafe {
         merge(p, *s, other);
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_packet_reduce(p: *mut Packet, amount: u32) {
-    unsafe {
-        reduce(p, amount);
     }
 }
 #[unsafe(no_mangle)]
@@ -876,10 +862,6 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_has(
         (0..length).any(|index| keys.contains(&unsafe { next.at(index) }))
             || keys.contains(&INVALID),
     )
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_list_age(l: *mut List, s: *const Services) {
-    unsafe { age::<false>(l, s) };
 }
 
 /// Scheduler accounting includes every packet lookup, erased for ordinary callers.
@@ -1942,13 +1924,7 @@ mod tests {
             };
             CAPACITY_CALLS.with(|log| log.borrow_mut().clear());
             // SAFETY: The stack packet and synchronous fixture table remain live.
-            let part = unsafe {
-                openttd_rust_cargo_packet_split(
-                    &raw mut packet,
-                    &raw const service,
-                    u32::try_from(amount).unwrap(),
-                )
-            };
+            let part = unsafe { split(&raw mut packet, service, u32::try_from(amount).unwrap()) };
             assert!(part.is_null());
             assert_eq!(i64::from(packet.count), count);
             assert_eq!(packet.feeder_share, feeder);
@@ -2319,7 +2295,7 @@ mod tests {
                 std::ptr::null_mut(),
                 5,
             );
-            openttd_rust_cargo_list_age(vehicle, &raw const service);
+            age::<false>(vehicle, &raw const service);
             assert_eq!(fields(vehicle).cargo_periods_in_transit, 51);
             openttd_rust_cargo_invalidate(&raw const service, 9, 0);
             assert_eq!(

@@ -65,9 +65,7 @@ CargoPacket::CargoPacket(uint16_t count, uint16_t periods, StationID first, Tile
 	assert(count != 0);
 }
 CargoPacket::~CargoPacket() { openttd_rust_cargo_packet_destroy(this->state); }
-CargoPacket *CargoPacket::Split(uint amount) { return static_cast<CargoPacket *>(openttd_rust_cargo_packet_split(this->state, &_cargo_storage_services, amount)); }
 void CargoPacket::Merge(CargoPacket *other) { openttd_rust_cargo_packet_merge(this->state, &_cargo_storage_services, other); }
-void CargoPacket::Reduce(uint amount) { openttd_rust_cargo_packet_reduce(this->state, amount); }
 void CargoPacket::UpdateLoadingTile(TileIndex tile) { openttd_rust_cargo_packet_tile(this->state, &_cargo_storage_services, tile.base(), 1); }
 void CargoPacket::UpdateUnloadingTile(TileIndex tile) { openttd_rust_cargo_packet_tile(this->state, &_cargo_storage_services, tile.base(), 0); }
 uint CargoPacket::GetDistance(TileIndex tile) const { return openttd_rust_cargo_packet_distance(this->state, &_cargo_storage_services, tile.base()); }
@@ -128,7 +126,6 @@ StationID VehicleCargoList::GetFirstStation() const { return StationID(openttd_r
 StationID StationCargoList::GetFirstStation() const { return StationID(openttd_rust_cargo_list_first(this->state, &_cargo_storage_services)); }
 void VehicleCargoList::Append(CargoPacket *cp, MoveToAction action) { openttd_rust_cargo_list_append(this->state, &_cargo_storage_services, cp, action); }
 void StationCargoList::Append(CargoPacket *cp, StationID next) { openttd_rust_cargo_list_append(this->state, &_cargo_storage_services, cp, next.base()); }
-void VehicleCargoList::AgeCargo() { openttd_rust_cargo_list_age(this->state, &_cargo_storage_services); }
 void VehicleCargoList::KeepAll() { openttd_rust_cargo_list_keep(this->state); }
 bool StationCargoList::HasCargoFor(std::span<const StationID> next) const
 {
