@@ -59,6 +59,14 @@ pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
     *value
 }
 
+/// `AssignBit`: assigns a single bit in a variable. The variable is changed and the value is
+/// also returned. For uint16 fields.
+pub fn assign_bit16(value: &mut u16, bit: u8, enabled: bool) -> u16 {
+    *value &= !1_u16.wrapping_shl(u32::from(bit));
+    *value |= u16::from(enabled).wrapping_shl(u32::from(bit));
+    *value
+}
+
 /// `GB`: fetch `count` bits from `value`, started at bit `start`.
 ///
 /// This function can be used to fetch `count` bits from the value `value`. The `start` value

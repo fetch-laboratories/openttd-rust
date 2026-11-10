@@ -25,6 +25,7 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
+use crate::bitmath_func::{assign_bit16, has_bit};
 use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
@@ -675,49 +676,19 @@ leaves! {
     fn change_timetable_command(ctx: *mut c_void, index: u8, field: u8, value: u16);
 }
 
-// Fields the canonical vehicle record owns, read and written in place at the
-// former callbacks' observation points.
-impl Game {
-    /// `v->First()`.
-    fn first_vehicle(self, v: *mut c_void) -> *mut c_void {
-        native_vehicle(v, self.0.base).first().shell()
-    }
-    /// `v->GetLastStationVisited()`.
-    fn last_station(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).last_station())
-    }
-    /// `v->GetVehStatus()`.
-    fn vehicle_status(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).status())
-    }
-    /// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
-    fn stopped_or_crashed(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).status() & (VS_STOPPED | VS_CRASHED) != 0)
-    }
-    /// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
-    fn suppress_implicit(self, v: *mut c_void) -> u64 {
-        let flags = native_vehicle(v, self.0.base).ground_vehicle_flags();
-        u64::from(flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS) != 0)
-    }
-    /// `v->GetTile()`.
-    fn vehicle_tile(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).tile())
-    }
-    /// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress != 0)`.
-    fn suppress_implicit_write(self, v: *mut c_void, suppress: u8) {
-        let v = native_vehicle(v, self.0.base);
-        let flags = v.ground_vehicle_flags();
-        let mask = 1 << GVF_SUPPRESS_IMPLICIT_ORDERS;
-        v.write_ground_vehicle_flags(if suppress != 0 {
-            flags | mask
-        } else {
-            flags & !mask
-        });
-    }
-    /// `v->SetLastStationVisited(station)`.
-    fn last_station_write(self, v: *mut c_void, station: u16) {
-        native_vehicle(v, self.0.base).write_last_station(station);
-    }
+/// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
+fn suppress_implicit(v: VehicleRef) -> bool {
+    has_bit(v.ground_vehicle_flags(), GVF_SUPPRESS_IMPLICIT_ORDERS)
+}
+/// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress)`.
+fn assign_suppress_implicit(v: VehicleRef, suppress: bool) {
+    let mut flags = v.ground_vehicle_flags();
+    assign_bit16(&mut flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress);
+    v.write_ground_vehicle_flags(flags);
+}
+/// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
+fn stopped_or_crashed(v: VehicleRef) -> bool {
+    v.status() & (VS_STOPPED | VS_CRASHED) != 0
 }
 
 impl Game {
@@ -780,7 +751,7 @@ impl Game {
     fn first(self, v: *mut c_void) -> *mut c_void {
         let list = self.orders(v);
         if list.is_null() {
-            self.first_vehicle(v)
+            native_vehicle(v, self.0.base).first().shell()
         } else {
             read_field!(self.list(list), first)
         }
@@ -892,7 +863,7 @@ impl Game {
                 return;
             }
             let order = self.order(list, next).unwrap();
-            let last = self.last_station(v) as u16;
+            let last = native_vehicle(v, self.0.base).last_station();
             if (order.kind() == OT_GOTO_STATION || order.kind() == OT_IMPLICIT)
                 && order.destination == last
                 && matches!(order.unload(), 1 | 2)
@@ -1867,7 +1838,7 @@ impl Game {
         let mut time = 0i32;
         let mut u = self.first(v);
         while !u.is_null() {
-            if self.stopped_or_crashed(u) == 0 {
+            if !stopped_or_crashed(native_vehicle(u, self.0.base)) {
                 count = count.wrapping_add(1);
                 time = time.wrapping_add(read_field!(self.consist(u), round_trip));
             }
@@ -1878,9 +1849,10 @@ impl Game {
         let departure = tick.wrapping_add(separation as u64);
         u = self.first(v);
         while !u.is_null() {
-            if self.stopped_or_crashed(u) == 0 {
+            let record = native_vehicle(u, self.0.base);
+            if !stopped_or_crashed(record) {
                 write_field!(self.consist(u), next_departure, departure);
-                (self.maintenance().view_dirty)(native_vehicle(u, self.0.base));
+                (self.maintenance().view_dirty)(record);
             }
             u = self.next(u);
         }
@@ -2236,7 +2208,7 @@ impl Control {
                 }
             }
             if index == read_field!(state, implicit) && g.vehicle_type(u) < u64::from(VEH_SHIP) {
-                g.suppress_implicit_write(u, 1);
+                assign_suppress_implicit(native_vehicle(u, g.0.base), true);
             }
             if index <= read_field!(state, implicit) {
                 let next = u16::from(read_field!(state, implicit)) + 1;
@@ -2337,8 +2309,9 @@ impl Control {
     fn delete_implicit(&self, v: *mut c_void) {
         let g = self.g;
         let state = g.consist(v);
-        if g.vehicle_type(v) < u64::from(VEH_SHIP) && g.suppress_implicit(v) != 0 {
-            g.suppress_implicit_write(v, 0);
+        let record = native_vehicle(v, g.0.base);
+        if g.vehicle_type(v) < u64::from(VEH_SHIP) && suppress_implicit(record) {
+            assign_suppress_implicit(record, false);
             write_field!(state, implicit, read_field!(state, real));
             g.invalidate_order(v, 0);
             return;
@@ -3060,7 +3033,7 @@ impl Control {
                             read_field!(state, time).wrapping_add(i32::from(travel))
                         );
                         if g.vehicle_type(v) < u64::from(VEH_SHIP) {
-                            g.suppress_implicit_write(v, 1);
+                            assign_suppress_implicit(native_vehicle(v, g.0.base), true);
                         }
                     } else {
                         g.update_timetable(v, true);
@@ -3116,7 +3089,7 @@ impl Control {
             && u64::from(current.destination) == g.tile_station(v)
         {
             self.delete_implicit(v);
-            g.last_station_write(v, current.destination);
+            native_vehicle(v, g.0.base).write_last_station(current.destination);
             g.update_timetable(v, true);
             g.increment_implicit(v);
             // Deletion/timetable/index updates may mutate the list or reenter.
@@ -3829,7 +3802,7 @@ impl Game {
     fn captured(self, backup: *mut c_void, v: *mut c_void, user: u32) {
         let state = self.backup(backup);
         write_field!(state, user, user);
-        write_field!(state, tile, self.vehicle_tile(v) as u32);
+        write_field!(state, tile, native_vehicle(v, self.0.base).tile());
         write_field!(state, group, self.vehicle_group(v) as u16);
         reenter!(openttd_rust_consist_copy(
             self.backup_consist(backup),
@@ -4035,7 +4008,7 @@ impl Control {
         let mut ob = self.g.next_backup(&mut cursor);
         while !ob.is_null() {
             let state = g.backup(ob);
-            if g.vehicle_tile(v) as u32 == read_field!(state, tile)
+            if native_vehicle(v, g.0.base).tile() == read_field!(state, tile)
                 && read_field!(state, user) == a as u32
             {
                 self.restore_backup(ob, v);
@@ -4249,8 +4222,10 @@ impl Control {
         let g = self.g;
         let review = (g.0.review_setting)();
         if review == 0
-            || g.vehicle_status(v) & 128 != 0
-            || (review == 1 && g.vehicle_status(v) & 2 != 0)
+            || {
+                let status = native_vehicle(v, g.0.base).status();
+                status & 128 != 0 || (review == 1 && status & 2 != 0)
+            }
             || g.first(v) != v
         {
             return;
@@ -4316,7 +4291,8 @@ impl Control {
     fn begin_loading_orders(&self, v: *mut c_void) {
         let g = self.g;
         let current = g.current(v);
-        let last = g.last_station(v) as u16;
+        let record = native_vehicle(v, g.0.base);
+        let last = record.last_station();
         if current.kind() == OT_GOTO_STATION && current.destination == last {
             self.delete_implicit(v);
             let mut current = g.current(v);
@@ -4334,7 +4310,7 @@ impl Control {
         if g.vehicle_type(v) < u64::from(VEH_SHIP)
             && !in_list.is_some_and(|o| o.kind() == OT_IMPLICIT && o.destination == last)
         {
-            let suppress = g.suppress_implicit(v) != 0;
+            let suppress = suppress_implicit(record);
             let previous = if implicit > 0 {
                 g.vehicle_order(v, implicit - 1)
             } else if g.count(v) > 1 {
@@ -4414,7 +4390,7 @@ impl Control {
                             read_field!(state, implicit).wrapping_sub(1)
                         );
                     }
-                    g.suppress_implicit_write(v, 0);
+                    assign_suppress_implicit(record, false);
                 }
             }
         }
