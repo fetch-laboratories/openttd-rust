@@ -854,15 +854,6 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
     }
 }
 
-/// Raw adapter for `industry/construction.rs` and `town.rs`, which open PRs
-/// hold; delegates to `for_all_stations_around_tiles`.
-pub(crate) fn for_all_stations_around_tiles_raw(
-    ta: TileArea,
-    c: &Ctx<'_>,
-    mut func: impl FnMut(StationListEntry, u32) -> bool,
-) {
-    for_all_stations_around_tiles(ta, c, |st, tile| func(st, tile.0));
-}
 /// `ForAllStationsAroundTiles`: visit stations, in ID order, whose catchment
 /// covers part of `ta`; `func` (a `Station*, TileIndex` callback) returning
 /// `false` keeps testing the area's remaining tiles for that station.

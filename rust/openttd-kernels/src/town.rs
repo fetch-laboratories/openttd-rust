@@ -2576,7 +2576,7 @@ impl Engine<'_> {
             },
         };
         let list = stations_near(self.owner);
-        crate::station::for_all_stations_around_tiles_raw(
+        crate::station::for_all_stations_around_tiles(
             area,
             &crate::station::Ctx::from_shared(self.services),
             |near, _| {
