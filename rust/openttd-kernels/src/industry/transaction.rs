@@ -940,16 +940,26 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
         }
     }
 }
-/// `CmdBuildIndustry`: build or fund an industry at `tile`. `first_layout` is the first
-/// layout to try, `fund` is false to prospect and true to fund (only valid if the current
-/// company is `OWNER_DEITY`), and `seed` is used for desync-free randomisations. The result
-/// holds the cost of this operation or an error.
+/// `CmdBuildIndustry`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildIndustry {
+    /// The tile to build the industry at.
+    pub(crate) tile: TileIndex,
+    /// The industry type to build.
+    pub(crate) it: IndustryType,
+    /// The first layout to try.
+    pub(crate) first_layout: u32,
+    /// False = prospect, True = fund (only valid if current company is DEITY).
+    pub(crate) fund: bool,
+    /// Seed to use for desyncfree randomisations.
+    pub(crate) seed: u32,
+}
+/// `CmdBuildIndustry`: build/fund an industry. The result in `out` holds the cost of this
+/// operation or an error.
 ///
 /// # Safety
 /// Live native stack cost/output and synchronous services. Borrowed specs/layouts
 /// remain immutable. Commands, allocation and resolvers receive no owner borrow.
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "CmdBuildIndustry keeps the original's implicit C++ integer conversions"
@@ -958,18 +968,20 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
     clippy::too_many_lines,
     reason = "CmdBuildIndustry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
 )]
-pub unsafe extern "C" fn openttd_rust_industry_build(
+pub(crate) unsafe fn cmd_build_industry(
     out: *mut IndustryCost,
-    tile: u32,
-    kind: u8,
-    flags: u16,
-    first_layout: u32,
-    fund: bool,
-    seed: u32,
-    context: *const TransactionContext,
+    flags: DoCommandFlags,
+    args: CmdBuildIndustry,
+    context: &TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    let (tile, it, flags) = (TileIndex(tile), IndustryType(kind), DoCommandFlags(flags));
+    let CmdBuildIndustry {
+        tile,
+        it,
+        first_layout,
+        fund,
+        seed,
+    } = args;
     if it >= IndustryType::NUM_INDUSTRYTYPES {
         e.fail(StringID::INVALID_STRING_ID);
         return;
@@ -1125,6 +1137,35 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         )
     };
     unsafe { (e.cost.expense_money)(out, ExpensesType::EXPENSES_OTHER.0, construction) };
+}
+/// # Safety
+/// As `cmd_build_industry`; the transaction tables are live.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn openttd_rust_industry_build(
+    out: *mut IndustryCost,
+    tile: u32,
+    kind: u8,
+    flags: u16,
+    first_layout: u32,
+    fund: bool,
+    seed: u32,
+    context: *const TransactionContext,
+) {
+    unsafe {
+        cmd_build_industry(
+            out,
+            DoCommandFlags(flags),
+            CmdBuildIndustry {
+                tile: TileIndex(tile),
+                it: IndustryType(kind),
+                first_layout,
+                fund,
+                seed,
+            },
+            &*context,
+        );
+    }
 }
 /// `CreateNewIndustry`: create a new industry of random layout at `tile`. `industry`
 /// receives the created industry, or null if it failed.
