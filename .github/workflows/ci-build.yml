@@ -60,7 +60,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flavour: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["clang","sdl2","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["clang","dedicated"]' || '["sdl2"]') }}
+        # Full runs every flavour (#860): each red cadence from 11-05 to 11-09 came from
+        # Clang, GCC Dedicated or Windows x86. A covered push refreshes both ccache flavours.
+        flavour: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["clang","sdl2","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["clang","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'push') && '["sdl2","dedicated"]' || '["sdl2"]') }}
 
     name: Linux (${{ matrix.flavour == 'clang' && 'Clang' || matrix.flavour == 'dedicated' && 'GCC - Dedicated' || 'GCC - SDL2' }})
 
@@ -146,7 +148,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["x86","x64"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["x86","x64"]' || '["x64"]') }}
+        arch: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (inputs.checkout-ref == '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch'))) && '["x86","x64"]' || '["x64"]') }}
 
     name: Windows (${{ matrix.arch }})
 

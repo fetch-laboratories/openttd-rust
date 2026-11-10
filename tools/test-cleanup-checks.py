@@ -1315,6 +1315,70 @@ class ArchiveTests(unittest.TestCase):
 
 
 class OrdinaryRustTests(unittest.TestCase):
+    def test_debt_collection_repeats_the_gate_clippy_command(self) -> None:
+        """Cargo replays the gate's run only for the same command, build
+        directory and configuration; a second check of the crate costs a pass."""
+        import migration
+
+        gate = migration.clippy_command()
+        for lint in LINT.CLIPPY:
+            self.assertIn("clippy::" + lint, gate)
+        self.assertEqual(gate[gate.index("--") + 1 :][:2], ["-D", "warnings"])
+        calls = []
+
+        def run(command: list[str], **options: object) -> object:
+            calls.append((command, options))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            patch.object(LINT.subprocess, "run", run),
+            patch.object(
+                LINT.subprocess, "check_output", lambda *a, **k: "rustc 1.99.0"
+            ),
+        ):
+            LINT.collect("clippy", migration.ROOT)
+        ((command, options),) = calls
+        self.assertEqual(command, migration.clippy_command("--message-format=json"))
+        self.assertEqual(
+            [part for part in command if part != "--message-format=json"], gate
+        )
+        env = options["env"]
+        assert isinstance(env, dict)
+        self.assertEqual(env["CARGO_TARGET_DIR"], str(migration.CARGO_TARGET_DIR))
+        self.assertEqual(
+            env["CLIPPY_CONF_DIR"], migration.environment()["CLIPPY_CONF_DIR"]
+        )
+
+    def test_a_failed_clippy_gate_shows_errors_without_debt_warnings(self) -> None:
+        import migration
+
+        log = (
+            "    Checking x v0.1.0 (/x)\n"
+            "warning: this function has too many arguments (8/7)\n  --> a.rs:1:1\n\n"
+            "warning: `x` (lib) generated 1 warning\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n"
+        )
+        shown = migration.failure_output("rust-clippy", log)
+        self.assertEqual(
+            shown,
+            "    Checking x v0.1.0 (/x)\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n",
+        )
+        self.assertEqual(migration.failure_output("rust-check", log), log)
+        # Every header form starts a diagnostic: with a code, a lint path, or neither.
+        for header in ("error[E0425]: ", "error: ", "error[clippy::eq_op]: "):
+            coded = (
+                "warning[W1]: debt\n  --> a.rs:1:1\n" + header + "cause\n  --> b.rs\n"
+            )
+            self.assertEqual(
+                migration.failure_output("rust-clippy", coded),
+                header + "cause\n  --> b.rs\n",
+            )
+
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
         import migration
 
@@ -1328,15 +1392,7 @@ class OrdinaryRustTests(unittest.TestCase):
                 "cannot find function `missing`",
             ),
             (
-                [
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
+                migration.clippy_command()[1:],
                 "pub fn x() -> bool { true == true }\n",
                 "equal expressions",
             ),
@@ -1376,6 +1432,42 @@ class OrdinaryRustTests(unittest.TestCase):
             )
             raw, _ = LINT.collect("clippy", root)
             self.assertIn("too_many_arguments", raw)
+            # A Clippy error stops the collection and is shown as rust-checks
+            # shows it, not as a count of debt.
+            (root / "src/lib.rs").write_text("pub fn x() -> bool { true == true }\n")
+            with self.assertRaisesRegex(ValueError, "equal expressions"):
+                LINT.collect("clippy", root)
+            # Cargo prints the library's warning summary directly above the test
+            # target's error, with no blank line: the error must survive.
+            # A lint error has no code; a compiler error has one (`error[E0425]`).
+            for body, header, cause in (
+                ("bool { true == true }", "error: ", "equal expressions"),
+                ("i32 { missing }", "error[E0425]: ", "cannot find value"),
+            ):
+                (root / "src/lib.rs").write_text(
+                    "pub unsafe fn undocumented() {}\n"
+                    f"#[cfg(test)]\npub fn bad() -> {body}\n"
+                )
+                result = subprocess.run(
+                    migration.clippy_command("-j1"),
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                raw = result.stdout + result.stderr
+                # Cargo checks the library and its test target in either order,
+                # so the error may sit directly below a warning summary, or no
+                # warning may print at all. Whatever the order, no error line
+                # may be lost; the synthetic case pins the adjacency itself.
+                errors = [line for line in raw.splitlines() if line.startswith("error")]
+                self.assertTrue(any(line.startswith(header + cause) for line in errors))
+                self.assertTrue(any("could not compile" in line for line in errors))
+                shown = migration.failure_output("rust-clippy", raw).splitlines()
+                for line in errors:
+                    self.assertIn(line, shown)
+                self.assertFalse([line for line in shown if line.startswith("warning")])
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"

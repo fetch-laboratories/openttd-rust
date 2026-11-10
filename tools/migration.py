@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -57,6 +58,13 @@ REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
 CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
 # Cargo output shared by driver runs and `env` shells, whatever the sanitizer.
 CARGO_TARGET_DIR = ROOT / "build-rust/cargo"
+# The two lints whose debt tools/lint-ratchet.py counts. The gate's Clippy run
+# force-warns them and the ratchet repeats that exact command, so Cargo replays
+# the gate's result instead of checking the crate a second time. Function
+# length, nesting and cognitive complexity are not collected: a faithful port
+# keeps the original's function structure (steering 33).
+CLIPPY_DEBT_LINTS = ("too_many_arguments", "missing_safety_doc")
+CLIPPY_CONFIGURATION = "migration/lints"
 # Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
 # stays uninstrumented.
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -82,6 +90,47 @@ def deps_libraries() -> Path:
     return bootstrapped("deps") / "usr/lib/x86_64-linux-gnu"
 
 
+def clippy_command(*options: str) -> list[str]:
+    """The one Clippy command of the gate and the debt ratchet. A force-warned
+    lint stays a warning under `-D warnings`, so its debt never fails the gate."""
+    return [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        *options,
+        "--",
+        "-D",
+        "warnings",
+        *(
+            part
+            for lint in CLIPPY_DEBT_LINTS
+            for part in ("--force-warn", "clippy::" + lint)
+        ),
+    ]
+
+
+# A rendered diagnostic or Cargo status line starts at column 0 with its level;
+# the lines that follow belong to it. Cargo puts no blank line between one
+# target's warning summary and the next target's first diagnostic.
+DIAGNOSTIC = re.compile(r"(warning|error)(\[[\w:]+\])?: ")
+
+
+def failure_output(name: str, text: str) -> str:
+    """The end of a failed command's output. Clippy's force-warned debt never
+    fails the gate, so each warning is dropped, up to the next diagnostic."""
+    if name == "rust-clippy":
+        kept, warning = [], False
+        for line in text.splitlines(keepends=True):
+            if start := DIAGNOSTIC.match(line):
+                warning = start[1] == "warning"
+            if not warning:
+                kept.append(line)
+        text = "".join(kept)
+    return text[-16000:]
+
+
 def environment() -> dict[str, str]:
     env = os.environ.copy()
 
@@ -103,6 +152,7 @@ def environment() -> dict[str, str]:
         env["PKG_CONFIG_SYSROOT_DIR"] = str(deps)
     # Fork headers also reach generated records in probes using reference flags.
     prepend("CPATH", CANDIDATE_BUILD / "generated-abi")
+    env["CLIPPY_CONF_DIR"] = str(ROOT / CLIPPY_CONFIGURATION)
     if (prefix := SCENARIO_COVERAGE_PREFIX.get()) is not None:
         env["OPENTTD_COVERAGE_PREFIX"] = prefix
     return env
@@ -566,19 +616,7 @@ def command_rust_checks(execution: Execution) -> None:
             "rust-check",
             ["cargo", "check", "--workspace", "--all-targets", "--locked"],
         ),
-        (
-            "rust-clippy",
-            [
-                "cargo",
-                "clippy",
-                "--workspace",
-                "--all-targets",
-                "--locked",
-                "--",
-                "-D",
-                "warnings",
-            ],
-        ),
+        ("rust-clippy", clippy_command()),
         ("rust-tests", ["cargo", "test", "--workspace", "--locked"]),
     ):
         run(name, command)
@@ -880,7 +918,9 @@ def main() -> None:
             }
         )
         if code:
-            print(log.read_text(errors="replace")[-16000:], file=sys.stderr)
+            print(
+                failure_output(name, log.read_text(errors="replace")), file=sys.stderr
+            )
             raise RuntimeError(f"{name} failed; see {log}")
         return log
 
