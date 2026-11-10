@@ -62,6 +62,13 @@ class WorkflowTests(unittest.TestCase):
             {"name": "Gate", "run": "echo ${{ github.sha }}"},
             {"name": "Gate", "run": "true", "env": {"X": "${{ github.sha }}"}},
             {"name": "Gate", "run": "true", "env": {"GH_TOKEN": "${{ secrets.X }}"}},
+            {"name": "Gate", "run": "true", "env": {"BASE_REF": "${{ github.sha }}"}},
+            {
+                "name": "Gate",
+                "run": "true",
+                "env": {"BASE_REF": "${{ inputs.base-ref || secrets.X }}"},
+            },
+            {"name": "Gate", "run": "true", "env": {"BASE_REF": "${{ x }}${{ y }}"}},
             {"name": "Gate", "run": "true", "if": "github.event_name == 'push'"},
         ):
             with self.assertRaisesRegex(ValueError, "step 'Gate'"):

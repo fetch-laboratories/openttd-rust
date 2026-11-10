@@ -37,6 +37,15 @@ SKIPPED = {
         f"preflight runs the same pinned checker as {COMMITS!r}"
     ),
 }
+# BASE_REF becomes --base only when its expression is an `||` chain of these
+# base-commit sources; any other expression stops preflight.
+BASE_SOURCES = {
+    "inputs.base-ref",
+    "github.event.pull_request.base.sha",
+    "github.event.merge_group.base_sha",
+    "github.event.before",
+}
+BASE_EXPRESSION = re.compile(r"\s*\$\{\{(.*?)\}\}\s*", re.DOTALL)
 # Workflow tokens are left to the local `gh` login and environment.
 TOKENS = {"GH_TOKEN", "GITHUB_TOKEN"}
 EXPRESSION = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
@@ -77,12 +86,19 @@ def hooks_checkout(supplied: Path | None = None) -> Path:
     return destination
 
 
+def is_base(text: str) -> bool:
+    match = BASE_EXPRESSION.fullmatch(text)
+    return (
+        bool(match) and {term.strip() for term in match[1].split("||")} <= BASE_SOURCES
+    )
+
+
 def step_env(name: str, env: dict[str, Any], base: str) -> dict[str, str]:
     """A step's `env:` with BASE_REF bound to the base and tokens left local."""
     resolved = {}
     for key, value in env.items():
         text = str(value)
-        if key == "BASE_REF":
+        if key == "BASE_REF" and is_base(text):
             resolved[key] = base
         elif key in TOKENS and text.strip() == "${{ github.token }}":
             continue
