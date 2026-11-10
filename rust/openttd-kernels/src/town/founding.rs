@@ -188,22 +188,26 @@ impl<'a> Founding<'a> {
     /// Check whether a town can be placed on the tile (`town_cmd.cpp::TownCanBePlacedHere`).
     /// `check_surrounding` also requires surrounding tiles to be free.
     /// Return no error if allowed, otherwise the native placement error.
-    fn town_can_be_placed_here(&self, tile: TileIndex, check_surrounding: bool) -> Option<u32> {
+    fn town_can_be_placed_here(
+        &self,
+        tile: TileIndex,
+        check_surrounding: bool,
+    ) -> Option<crate::strings_type::StringID> {
         w::hit(w::TOWN_PLACEMENT);
         // Check if too close to the edge of map.
         if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
-            return Some(self.s.edge_error);
+            return Some(crate::strings_type::StringID(self.s.edge_error));
         }
         // Check distance to all other towns.
         if observed!(super::spatial::is_close_to_town(self.shared, tile, 20)) {
-            return Some(self.s.close_error);
+            return Some(crate::strings_type::StringID(self.s.close_error));
         }
         // Can only build on clear flat areas, possibly with trees.
         let tile_type = TileType(observed!((self.shared.tile_type)(tile.0)));
         if (tile_type != TileType::MP_CLEAR && tile_type != TileType::MP_TREES)
             || !observed!((self.s.flat)(tile))
         {
-            return Some(self.s.unsuitable_error);
+            return Some(crate::strings_type::StringID(self.s.unsuitable_error));
         }
         // We might want to make sure the town has enough room.
         if check_surrounding {
@@ -238,7 +242,7 @@ impl<'a> Founding<'a> {
                 spiral = spiral.advance(self.map().size_x(), self.size_y());
             }
             if counter < VALID_TILE_GOAL {
-                return Some(self.s.unsuitable_error);
+                return Some(crate::strings_type::StringID(self.s.unsuitable_error));
             }
         }
         None
@@ -609,7 +613,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     }
     if !random_location {
         if let Some(error) = f.town_can_be_placed_here(tile, false) {
-            observed!((f.cost.error)(result, error));
+            observed!((f.cost.error)(result, error.0));
             return;
         }
     }
