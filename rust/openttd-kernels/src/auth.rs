@@ -109,6 +109,21 @@ pub(crate) struct Stream {
     context: Aead,
 }
 
+impl Stream {
+    /// `NetworkEncryptionHandler::Encrypt`: encrypt the message and then write its MAC.
+    /// # Safety
+    /// `mac` is writable for the native 16-byte authentication tag.
+    pub(crate) unsafe fn encrypt(&mut self, mac: *mut u8, message: &mut [u8]) {
+        let tag = self.context.write(message, &[]);
+        unsafe { ptr::copy_nonoverlapping(tag.as_ptr(), mac, 16) };
+    }
+
+    /// `NetworkEncryptionHandler::Decrypt`: authenticate and decrypt the message.
+    pub(crate) fn decrypt(&mut self, mac: &[u8; 16], message: &mut [u8]) -> bool {
+        self.context.read(message, mac, &[])
+    }
+}
+
 impl Handler {
     unsafe fn single(&self) -> &Single {
         match &self.kind {
@@ -610,8 +625,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_encrypt(
 ) {
     assert!(isize::try_from(length).is_ok());
     unsafe {
-        let tag = (*owner).context.write(bytes_mut(message, length), &[]);
-        ptr::copy_nonoverlapping(tag.as_ptr(), mac, 16);
+        (*owner).encrypt(mac, bytes_mut(message, length));
     }
 }
 #[unsafe(no_mangle)]
@@ -622,13 +636,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_decrypt(
     length: usize,
 ) -> u8 {
     assert!(isize::try_from(length).is_ok());
-    unsafe {
-        u8::from(
-            (*owner)
-                .context
-                .read(bytes_mut(message, length), &*mac.cast::<[u8; 16]>(), &[]),
-        )
-    }
+    unsafe { u8::from((*owner).decrypt(&*mac.cast::<[u8; 16]>(), bytes_mut(message, length))) }
 }
 
 crate::abi::layouts! {
