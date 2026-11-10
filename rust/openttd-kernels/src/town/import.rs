@@ -111,14 +111,12 @@ impl ImportServices {
         }
     }
 
-    /// `LoadTownData` founding loop: seek a suitable tile up to 16 tiles away.
-    /// The target may be water, blocked, or a steep slope the founding command cannot terraform.
-    /// `SpiralTileSequence(target_tile, 16, 0, 0)` excludes the target itself.
+    /// `LoadTownData`'s founding loop over `SpiralTileSequence(target_tile, 16, 0, 0)`.
     fn found(&self, frame: *mut Frame, target_tile: TileIndex, feature: &Feature) -> TownID {
         let s = unsafe { &*self.shared };
         let layout = (unsafe { &*self.founding }.layout_setting)();
         let map = s.map();
-        let size_y = (s.map_max_y)().wrapping_add(1);
+        let size_y = crate::map_func::World::new(s).size_y();
         let mut spiral = crate::spiral::hole(
             map.tile_x(target_tile.0),
             map.tile_y(target_tile.0),
@@ -128,7 +126,9 @@ impl ImportServices {
             map.size_x(),
             size_y,
         );
-        let mut town_id = TownID::INVALID;
+        let mut town_id = TownID::INVALID; // The TownID of the town in OpenTTD. Not imported, but set during the founding process and stored here for convenience.
+        // Try founding on the target tile, and if that doesn't work, find the nearest suitable tile up to 16 tiles away.
+        // The target might be on water, blocked somehow, or on a steep slope that can't be terraformed by the founding command.
         while !spiral.is_end() {
             let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
             town_id = (self.found)(
@@ -151,7 +151,9 @@ impl ImportServices {
 
     /// `genworld.cpp::LoadTownData`: found towns, then expand to target populations.
     fn load_town_data(&self, frame: *mut Frame, rotation: HeightmapRotation) {
-        // Load the JSON file as a string, parse it, and check that the result is an array.
+        // Load the JSON file as a string initially. We'll parse it soon.
+        // Now parse the JSON.
+        // Check for JSON formatting errors with the array of towns.
         if !(self.load)(frame) {
             self.format_error();
             return;
@@ -168,17 +170,18 @@ impl ImportServices {
                 y: 0.0,
                 city: false,
             };
-            // Ensure the feature is an object and its fields exist with the correct types.
+            // Ensure JSON is formatted properly.
+            // Check to ensure all fields exist and are of the correct type.
             match (self.feature)(frame, index, &raw mut feature) {
                 FEATURE_OK => {}
                 FEATURE_END => break,
                 FEATURE_NAMED_MALFORMED => {
-                    // Other malformed fields let us tell the player which town is the problem.
+                    // If other fields are formatted wrong, we can actually inform the player which town is the problem.
                     (self.named_error)(self.strings.load_failed, self.strings.town_format, frame);
                     return;
                 }
                 _ => {
-                    // A malformed town name permits only a general warning.
+                    // If the town name is formatted wrong, all we can do is give a general warning.
                     self.format_error();
                     return;
                 }
@@ -193,8 +196,8 @@ impl ImportServices {
             let target_tile = self.target(rotation, feature.x, feature.y);
             let town_id = self.found(frame, target_tile, &feature);
             if town_id == TownID::INVALID {
-                // Leave a sign at the intended location and count the failure, so the
-                // player can diagnose heightmap misalignment or place rough-terrain towns manually.
+                // If we still fail to found the town, we'll create a sign at the intended location and tell the player how many towns we failed to create in an error message.
+                // This allows the player to diagnose a heightmap misalignment, if towns end up in the sea, or place towns manually, if in rough terrain.
                 (self.place_sign)(target_tile, frame);
                 failed_towns = failed_towns.wrapping_add(1);
                 continue;
@@ -205,20 +208,19 @@ impl ImportServices {
                 feature.population,
             ));
         }
-        // Tell the player how many towns could not be founded.
+        // If we couldn't found a town (or multiple), display a message to the player with the number of failed towns.
         if failed_towns > 0 {
             (self.failed_warning)(self.strings.failed_towns, failed_towns);
         }
-        // Now that the towns have been created, grow them to their target populations.
+        // Now that we've created the towns, let's grow them to their target populations.
         for (town_id, state, population) in towns {
-            // Grow a constant number of houses, rather than basing growth on town size,
-            // so the try limit applies predictably regardless of road layout and geography.
+            // Grow by a constant number of houses each time, instead of growth based on current town size.
+            // We want our try limit to apply in a predictable way, no matter the road layout and other geography.
             const HOUSES_TO_GROW: u32 = 10;
-            // Grid towns can grow almost forever, but wandering roads randomly gets
-            // less efficient. An arbitrary limit yields about 4900 houses on a flat
-            // 3x3 grid, or 2800 houses with "Better roads".
+            // Grid towns can grow almost forever, but the town growth algorithm gets less and less efficient as it wanders roads randomly,
+            // so we set an arbitrary limit. With a flat map and a 3x3 grid layout this results in about 4900 houses, or 2800 houses with "Better roads."
             let mut try_limit: i32 = 1000;
-            // Repeated failed growth attempts only waste time.
+            // If a town repeatedly fails to grow, continuing to try only wastes time.
             let mut fail_limit: i32 = 10;
             loop {
                 // SAFETY: The founded town's owner lives through expansion; each read ends before Post.

@@ -14,7 +14,7 @@ use super::{
     Services, SpecHandle,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_type::CargoType;
+use crate::cargo_type::{CargoArray, CargoType, CargoTypes};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::economy_type::{ExpensesType, Price};
@@ -110,9 +110,6 @@ impl TileServices {
     fn tile_callback(&self, tile: TileIndex, gfx: IndustryGfx, callback: CallbackID) -> u16 {
         unsafe { (self.callback)(tile.0, gfx.0, callback.0, 0, 0) }
     }
-}
-fn chance16(s: &Services, a: u32, b: u32) -> bool {
-    crate::random_func::chance16_i(a, b, s.shared().random())
 }
 fn ambient(s: &Services) -> bool {
     unsafe { s.shared().settings().ambient.read() }
@@ -234,7 +231,7 @@ fn animate_oil_well(
     cons: &ConstructionServices,
     tiles: &TileServices,
 ) {
-    let b = chance16(svc, 1, 7);
+    let b = crate::random_func::chance16(svc.shared(), 1, 7);
     let mut m = tiles.get_animation_frame(tile).wrapping_add(1);
     // `m == 4 && (m = 0, ++gfx) == GFX_OILWELL_ANIMATED_3 + 1 && (gfx = GFX_OILWELL_ANIMATED_1, b)`
     let last = m == 4
@@ -300,18 +297,12 @@ fn animate_mine_tower(tile: TileIndex, s: &Services, t: &TileServices) {
     }
 }
 /// `AnimateTile_Industry`.
-///
-/// # Safety
-/// Industry tile; immutable service tables outlive the synchronous invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
-    tile: u32,
-    s: *const Services,
-    c: *const ConstructionServices,
-    t: *const TileServices,
+pub(crate) fn animate_tile_industry(
+    tile: TileIndex,
+    s: &Services,
+    c: &ConstructionServices,
+    t: &TileServices,
 ) {
-    let (s, c, t) = unsafe { (&*s, &*c, &*t) };
-    let tile = TileIndex(tile);
     let gfx = t.get_industry_gfx(tile);
     if unsafe { (*get_industry_tile_spec(gfx)).animation.status } != AnimationStatus::NoAnimation.0
     {
@@ -390,9 +381,9 @@ fn make_industry_tile_bigger(
         (c.set_construction_counter)(tile.0, 0);
         (c.set_construction_stage)(tile.0, stage);
         // `TriggerIndustryTileAnimation_ConstructionStageChanged(tile, false)`.
-        super::openttd_rust_industry_animate_tile_abi(
-            tile.0,
-            IndustryAnimationTrigger::ConstructionStageChanged.0,
+        super::trigger_industry_tile_animation(
+            tile,
+            IndustryAnimationTrigger::ConstructionStageChanged,
             0,
             s,
             l,
@@ -499,9 +490,9 @@ pub(crate) unsafe fn tile_loop(
     }
     let industry = unsafe { (tiles.industry)(tile.0) };
     unsafe {
-        super::openttd_rust_industry_randomise_tile(
-            tile.0,
-            IndustryRandomTrigger::TileLoop.0,
+        super::trigger_industry_tile_randomisation(
+            tile,
+            IndustryRandomTrigger::TileLoop,
             industry.shell.cast::<c_void>(),
             industry.owner,
             prod,
@@ -518,14 +509,14 @@ pub(crate) unsafe fn tile_loop(
     if unsafe { (tiles.transport)(tile.0) } {
         let industry = unsafe { (tiles.industry)(tile.0) };
         if !unsafe {
-            super::openttd_rust_industry_animate_abi(
+            super::trigger_industry_animation(
                 industry.owner,
-                (tiles.industry_index)(tile.0),
-                IndustryAnimationTrigger::CargoDistributed.0,
+                crate::industry_type::IndustryID((tiles.industry_index)(tile.0)),
+                IndustryAnimationTrigger::CargoDistributed,
                 map.size_x(),
                 prod,
                 life,
-            ) != 0
+            )
         } {
             let gfx = tiles.get_industry_gfx(tile);
             let newgfx = IndustryGfx(u16::from(unsafe {
@@ -541,13 +532,13 @@ pub(crate) unsafe fn tile_loop(
         }
     }
     if unsafe {
-        super::openttd_rust_industry_animate_tile_abi(
-            tile.0,
-            IndustryAnimationTrigger::TileLoop.0,
+        super::trigger_industry_tile_animation(
+            tile,
+            IndustryAnimationTrigger::TileLoop,
             0,
             prod,
             life,
-        ) != 0
+        )
     } {
         return;
     }
@@ -566,7 +557,8 @@ pub(crate) unsafe fn tile_loop(
         IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_COPPER_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_GOLD_MINE_TOWER_NOT_ANIMATED => {
-            if tick_counter(prod) & 0x400 == 0 && chance16(prod, 1, 2) {
+            if tick_counter(prod) & 0x400 == 0 && crate::random_func::chance16(prod.shared(), 1, 2)
+            {
                 gfx = match gfx {
                     IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED => {
                         IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED
@@ -582,7 +574,7 @@ pub(crate) unsafe fn tile_loop(
             }
         }
         IndustryGfx::GFX_OILWELL_NOT_ANIMATED => {
-            if chance16(prod, 1, 6) {
+            if crate::random_func::chance16(prod.shared(), 1, 6) {
                 tiles.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_ANIMATED_1);
                 tiles.set_animation_frame(tile, 0);
                 add_animated_tile(tile);
@@ -609,7 +601,7 @@ pub(crate) unsafe fn tile_loop(
             }
         }
         IndustryGfx::GFX_POWERPLANT_SPARKS => {
-            if chance16(prod, 1, 3) {
+            if crate::random_func::chance16(prod.shared(), 1, 3) {
                 ambient_sound(tile, SoundFx::SND_0C_POWER_STATION, prod);
                 add_animated_tile(tile);
             }
@@ -634,31 +626,48 @@ pub(crate) unsafe fn tile_loop(
         }
         IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, prod, map),
         IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile),
-        IndustryGfx::GFX_SUGAR_MINE_SIEVE if chance16(prod, 1, 3) => add_animated_tile(tile),
+        IndustryGfx::GFX_SUGAR_MINE_SIEVE if crate::random_func::chance16(prod.shared(), 1, 3) => {
+            add_animated_tile(tile);
+        }
         _ => {}
     }
 }
 
-/// `AddAcceptedCargo_Industry`.
-///
 /// # Safety
 /// Live industry tile, 64 native `CargoArray` entries and a live `CargoTypes` mask.
-/// Immutable specs outlive the call. Resolver callbacks retain no owner borrow;
-/// each final membership test reads the current accepted list at its source point.
 #[unsafe(no_mangle)]
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "AddAcceptedCargo_Industry keeps the original's implicit C++ integer conversions"
-)]
 pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     tile: u32,
     acceptance: *mut u32,
     always_accepted: *mut u64,
     services: *const TileServices,
 ) {
-    let t = unsafe { &*services };
-    let tile = TileIndex(tile);
+    unsafe {
+        add_accepted_cargo_industry(
+            TileIndex(tile),
+            &mut *acceptance.cast::<CargoArray>(),
+            &mut *always_accepted.cast::<CargoTypes>(),
+            &*services,
+        );
+    }
+}
+/// `AddAcceptedCargo_Industry`.
+///
+/// # Safety
+/// Live industry tile; immutable specs outlive the call. Resolver callbacks retain no
+/// owner borrow; each final membership test reads the current accepted list at its
+/// source point.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "AddAcceptedCargo_Industry keeps the original's implicit C++ integer conversions"
+)]
+pub(crate) unsafe fn add_accepted_cargo_industry(
+    tile: TileIndex,
+    acceptance: &mut CargoArray,
+    always_accepted: &mut CargoTypes,
+    t: &TileServices,
+) {
     let gfx = t.get_industry_gfx(tile);
     let itspec = get_industry_tile_spec(gfx);
     let ind = unsafe { (t.industry)(tile.0) };
@@ -679,12 +688,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
         // Copy all accepted cargoes from industry itself.
         for n in 0..super::accepted_count(ind.owner) {
             let cargo = CargoType(unsafe { (*super::accepted(ind.owner, n)).cargo });
-            // Not found, insert; with nowhere to place it, give up on this one.
+            // Not found, insert
             let Some(pos) = info.cargo.iter().position(|&c| c == cargo.0).or_else(|| {
                 info.cargo
                     .iter()
                     .position(|&c| c == CargoType::INVALID_CARGO.0)
             }) else {
+                // nowhere to place, give up on this one
                 continue;
             };
             info.cargo[pos] = cargo.0;
@@ -723,13 +733,11 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             continue;
         }
         // Add accepted cargo.
-        unsafe {
-            let entry = acceptance.add(usize::from(cargo.0));
-            *entry = (*entry).wrapping_add(amount as u32);
-        }
+        let entry = &mut acceptance[usize::from(cargo.0)];
+        *entry = entry.wrapping_add(amount as u32);
         // Maybe set 'always accepted' bit (if it's not set already).
         let bit = 1_u64.wrapping_shl(u32::from(cargo.0));
-        if unsafe { *always_accepted } & bit != 0 {
+        if always_accepted.0 & bit != 0 {
             continue;
         }
         // Test whether the industry itself accepts the cargo type.
@@ -739,7 +747,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             continue;
         }
         // If the industry itself doesn't accept this cargo, set 'always accepted' bit.
-        unsafe { set_bit64(&mut *always_accepted, cargo.0) };
+        set_bit64(&mut always_accepted.0, cargo.0);
     }
 }
 
@@ -774,9 +782,10 @@ pub(crate) unsafe fn clear_tile_industry(
         (*i.owner).metadata.kind
     }));
     let current_company = || CompanyID(unsafe { (policy.current_company)() });
-    // Water can destroy industries, in editor you can bulldoze industries, with
-    // magic_bulldozer cheat you can destroy industries (area around OILRIG is water, so
-    // water shouldn't flood it).
+    // water can destroy industries
+    // in editor you can bulldoze industries
+    // with magic_bulldozer cheat you can destroy industries
+    // (area around OILRIG is water, so water shouldn't flood it
     if (current_company() != Owner::WATER
         && !(generation.environment.editor)()
         && !unsafe { (policy.magic_bulldozer)() })

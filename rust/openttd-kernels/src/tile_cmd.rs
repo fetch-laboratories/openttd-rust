@@ -83,11 +83,11 @@ pub(crate) fn add_accepted_cargo(
                 );
             }
             TileType::MP_INDUSTRY => {
-                crate::industry::tile::openttd_rust_industry_tile_acceptance(
-                    tile.0,
-                    cargoes,
-                    always,
-                    c.c.industry_tile,
+                crate::industry::tile::add_accepted_cargo_industry(
+                    tile,
+                    &mut *cargoes.cast::<CargoArray>(),
+                    &mut *always.cast::<CargoTypes>(),
+                    &*c.c.industry_tile,
                 );
             }
             _ => crate::objects::openttd_rust_object_cargo(c.c.object, tile.0, cargoes, always),
@@ -118,21 +118,4 @@ pub(crate) fn add_produced_cargo(
             _ => {}
         }
     }
-}
-/// Temporary raw adapter for [`add_accepted_cargo`], used by `station.rs` until its pass.
-pub(crate) fn add_accepted_cargo_raw(
-    tile: u32,
-    acceptance: &mut CargoArray,
-    always_accepted: *mut u64,
-    c: &crate::station::Ctx<'_>,
-) {
-    add_accepted_cargo(TileIndex(tile), acceptance, always_accepted.cast(), c);
-}
-/// Temporary raw adapter for [`add_produced_cargo`], used by `station.rs` until its pass.
-pub(crate) fn add_produced_cargo_raw(
-    tile: u32,
-    produced: &mut CargoArray,
-    c: &crate::station::Ctx<'_>,
-) {
-    add_produced_cargo(TileIndex(tile), produced, c);
 }

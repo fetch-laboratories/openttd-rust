@@ -396,14 +396,14 @@ impl<'a> Ctx<'a> {
     fn rating(&self, c: Cost<'_>, town: *const TownHandle, flags: u16, kind: u8) {
         // SAFETY: live native town identity (or null), immutable tables and stack cost.
         unsafe {
-            crate::town::openttd_rust_town_authority_remove(
-                self.s.authority,
-                self.r.shared,
-                self.r.cost,
+            crate::town::check_for_town_rating(
+                &*self.s.authority,
+                &*self.r.shared,
+                &*self.r.cost,
                 c.0,
+                crate::command_type::DoCommandFlags(flags),
                 town,
-                flags & 16 != 0,
-                kind,
+                crate::town::TownRatingCheckType(kind),
             );
         }
     }
@@ -466,17 +466,21 @@ impl<'a> Ctx<'a> {
         }
         // SAFETY: owner access resolves here and ends before the reentrant dirty-window service.
         unsafe {
-            crate::town::openttd_rust_town_change_rating(
-                self.s.town,
-                self.r.shared,
-                (self.shared.town_owner)(town),
-                u32::from((self.authority.town_index)(town)),
-                town as usize,
-                company,
-                decrease,
-                RATING_ROAD_MINIMUM,
-                flags & 512 != 0,
-                (self.authority.bulldozer)(),
+            crate::town::change_town_rating(
+                &*self.s.town,
+                &*self.r.shared,
+                crate::town::RatedTown {
+                    state: (self.shared.town_owner)(town),
+                    id: crate::town_type::TownId((self.authority.town_index)(town)),
+                    shell: town,
+                },
+                crate::town::RatingChange {
+                    company: crate::company_type::CompanyID(company),
+                    add: decrease,
+                    maximum: RATING_ROAD_MINIMUM,
+                    flags: crate::command_type::DoCommandFlags(flags),
+                    bulldozer: (self.authority.bulldozer)(),
+                },
             );
         }
     }

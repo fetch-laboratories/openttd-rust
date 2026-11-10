@@ -692,9 +692,14 @@ pub(crate) unsafe fn road_tile_loop(
             let owner = (s.town_owner)(town);
             // SAFETY: The shared town owner belongs to the live closest-town shell.
             // Only copied inputs survive the following native services.
-            let (months, group, distance) =
-                unsafe { crate::town::road_context(owner, tile, size_x) };
-            zone = group;
+            let (months, group, distance) = unsafe {
+                crate::town::road_context(
+                    owner,
+                    crate::tile_type::TileIndex(tile),
+                    crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
+                )
+            };
+            zone = group.0;
             if months != 0
                 && (distance < 8 || zone != 0)
                 && crate::map_func::World::new(s).is_normal_road_tile(tile)

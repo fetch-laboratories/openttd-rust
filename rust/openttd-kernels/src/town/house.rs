@@ -13,7 +13,7 @@ use super::{
     change_population, engine, update_town_radius,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_type::{CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
+use crate::cargo_type::{CargoArray, CargoLabel, CargoType, CargoTypes, is_valid_cargo_type};
 use crate::cargotype::{TOWN_PRODUCTION_DIVISOR, TownProductionEffect};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
@@ -26,6 +26,7 @@ use crate::house::{
 };
 use crate::house_type::{HouseID, HouseRandomTrigger, HouseRandomTriggers};
 use crate::landscape_type::LandscapeType;
+use crate::map_type::TileIndexDiff;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CALLBACK_HOUSEPRODCARGO_END, CallbackID, HouseCallbackMask, HouseCallbackMasks,
 };
@@ -240,14 +241,10 @@ impl StationFinder<'_> {
     }
 }
 
-/// `produced[cargo]++` in the caller's 64-entry array.
-/// # Safety
-/// `cargoes` names 64 writable values.
-unsafe fn add_one(cargoes: *mut u32, cargo: CargoType) {
-    unsafe {
-        let slot = cargoes.add(usize::from(cargo.0));
-        *slot = (*slot).wrapping_add(1);
-    }
+/// `produced[cargo]++`.
+fn add_one(cargoes: &mut CargoArray, cargo: CargoType) {
+    let slot = &mut cargoes[usize::from(cargo.0)];
+    *slot = slot.wrapping_add(1);
 }
 
 /// Gameplay arguments of `town_cmd.cpp::CmdPlaceHouse`, in command order.
@@ -290,27 +287,31 @@ pub(super) fn building_flags(leaves: &Leaves, house: HouseID) -> BuildingFlags {
     BuildingFlags((leaves.house_flags)(house))
 }
 /// Determines if a given `HouseID` is part of a multitile house (`GetHouseNorthPart`).
-/// The given ID is set to the ID of the north tile and the `TileIndexDiff` (as its
-/// unsigned pattern) to the north tile is returned. Shared by lifecycle and resolver queries.
-pub(super) fn get_house_north_part(leaves: &Leaves, house: &mut HouseID, map: Map) -> u32 {
+/// The given ID is set to the ID of the north tile and the `TileIndexDiff` to the north
+/// tile is returned. Shared by lifecycle and resolver queries.
+pub(super) fn get_house_north_part(
+    leaves: &Leaves,
+    house: &mut HouseID,
+    map: Map,
+) -> TileIndexDiff {
     // House id 0,1,2 MUST be single tile houses, or this code breaks.
     if *house >= 3 {
         let previous_flags = building_flags(leaves, *house - 1);
         if previous_flags.test(BuildingFlag::Size2x1) {
             *house -= 1;
-            return map.diff(-1, 0);
+            return map.diff(-1, 0).cast_signed();
         } else if previous_flags.any(BuildingFlags::BUILDING_2_TILES_Y) {
             *house -= 1;
-            return map.diff(0, -1);
+            return map.diff(0, -1).cast_signed();
         } else if building_flags(leaves, *house - 2).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 2;
-            return map.diff(-1, 0);
+            return map.diff(-1, 0).cast_signed();
         } else if building_flags(leaves, *house - 3).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 3;
-            return map.diff(-1, -1);
+            return map.diff(-1, -1).cast_signed();
         }
     }
-    map.diff(0, 0)
+    map.diff(0, 0).cast_signed()
 }
 impl<'a> House<'a> {
     fn map(&self) -> Map {
@@ -360,7 +361,7 @@ impl<'a> House<'a> {
     fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
         (self.s.mark_dirty)(tile.0);
     }
-    fn get_house_north_part(&self, house: &mut HouseID) -> u32 {
+    fn get_house_north_part(&self, house: &mut HouseID) -> TileIndexDiff {
         get_house_north_part(self.l, house, self.map())
     }
     /// `TriggerHouseAnimation_ConstructionStageChanged`.
@@ -466,7 +467,10 @@ impl<'a> House<'a> {
     /// `ClearTownHouse`: population, counts and flags precede the footprint.
     fn clear_town_house(&self, town: TownRef, tile: TileIndex, mut house: HouseID) {
         // The northernmost tile of the house is the main house.
-        let tile = TileIndex(tile.0.wrapping_add(self.get_house_north_part(&mut house)));
+        let tile = TileIndex(
+            tile.0
+                .wrapping_add_signed(self.get_house_north_part(&mut house)),
+        );
         let flags = self.building_flags(house);
         // Remove population from the town if the house is finished.
         if (self.h.completed)(tile.0) {
@@ -969,14 +973,13 @@ impl<'a> House<'a> {
             return;
         }
         let rec = (self.h.lift)(tile.0);
-        let mut destination = rec.destination;
         if !rec.has_destination {
             witness::hit(W_LIFT_START);
             let mut i;
             // Building has 6 floors, number 0 .. 6, where 1 is illegal.
             // This is due to the fact that the first floor is, in the graphics,
-            // the height of 2 'normal' floors.
-            // Furthermore, there are 6 lift positions from floor N (incl) to floor N + 1 (excl).
+            //  the height of 2 'normal' floors.
+            // Furthermore, there are 6 lift positions from floor N (incl) to floor N + 1 (excl)
             loop {
                 i = self.s.random_range(7);
                 if !(i == 1 || i * 6 == u32::from(rec.position)) {
@@ -984,11 +987,10 @@ impl<'a> House<'a> {
                 }
             }
             (self.h.set_lift_destination)(tile.0, i as u8);
-            // `GetLiftDestination` reads the stored three-bit field.
-            destination = i as u8 & 7;
         }
-        let mut pos = i32::from(rec.position);
-        let dest = i32::from(destination) * 6;
+        let lift = (self.h.lift)(tile.0);
+        let mut pos = i32::from(lift.position);
+        let dest = i32::from(lift.destination) * 6;
         pos += if pos < dest { 1 } else { -1 };
         (self.h.set_lift_position)(tile.0, pos as u8);
         if pos == dest {
@@ -1047,17 +1049,21 @@ impl<'a> House<'a> {
         }
         // SAFETY: Static tables and live owner; the shell address keys scratch ratings.
         unsafe {
-            super::openttd_rust_town_change_rating(
+            super::change_town_rating(
                 self.l,
                 self.s,
-                t.state,
-                u32::from(t.id.0),
-                t.shell as usize,
-                company.0,
-                -rating,
-                RATING_HOUSE_MINIMUM,
-                flags.test(DoCommandFlag::NoModifyTownRating),
-                (authority.bulldozer)(),
+                super::RatedTown {
+                    state: t.state,
+                    id: t.id,
+                    shell: t.shell,
+                },
+                super::RatingChange {
+                    company,
+                    add: -rating,
+                    maximum: RATING_HOUSE_MINIMUM,
+                    flags,
+                    bulldozer: (authority.bulldozer)(),
+                },
             );
         }
         if flags.test(DoCommandFlag::Execute) {
@@ -1239,18 +1245,15 @@ impl<'a> House<'a> {
     fn add_accepted_cargo_set_mask(
         cargo: CargoType,
         amount: u32,
-        acceptance: *mut u32,
-        always_accepted: *mut u64,
+        acceptance: &mut CargoArray,
+        always_accepted: &mut CargoTypes,
     ) {
         if !is_valid_cargo_type(cargo.0) || amount == 0 {
             return;
         }
-        // SAFETY: The caller's 64-entry cargo array and mask outlive this entry.
-        unsafe {
-            let slot = acceptance.add(usize::from(cargo.0));
-            *slot = (*slot).wrapping_add(amount);
-            set_bit64(&mut *always_accepted, cargo.0);
-        }
+        let slot = &mut acceptance[usize::from(cargo.0)];
+        *slot = slot.wrapping_add(amount);
+        set_bit64(&mut always_accepted.0, cargo.0);
     }
     /// `AddAcceptedCargoOfHouse`: determine accepted cargo for a house.
     /// `TileIndex::INVALID` with a null town is a prototype not yet built.
@@ -1259,8 +1262,8 @@ impl<'a> House<'a> {
         tile: TileIndex,
         house: HouseID,
         t: *mut TownHandle,
-        acceptance: *mut u32,
-        always_accepted: *mut u64,
+        acceptance: &mut CargoArray,
+        always_accepted: &mut CargoTypes,
     ) {
         let hs = (self.h.acceptance)(house);
         let callback_mask = self.callback_mask(house);
@@ -1304,8 +1307,18 @@ impl<'a> House<'a> {
             if callback != CALLBACK_FAILED {
                 let callback = u32::from(callback);
                 let (a, always) = (acceptance, always_accepted);
-                Self::add_accepted_cargo_set_mask(accepts[0], gb(callback, 0, 4), a, always);
-                Self::add_accepted_cargo_set_mask(accepts[1], gb(callback, 4, 4), a, always);
+                Self::add_accepted_cargo_set_mask(
+                    accepts[0],
+                    gb(callback, 0, 4),
+                    &mut *a,
+                    &mut *always,
+                );
+                Self::add_accepted_cargo_set_mask(
+                    accepts[1],
+                    gb(callback, 4, 4),
+                    &mut *a,
+                    &mut *always,
+                );
                 if LandscapeType((self.l.climate)()) != LandscapeType::Temperate
                     && has_bit(callback, 12)
                 {
@@ -1323,18 +1336,23 @@ impl<'a> House<'a> {
             Self::add_accepted_cargo_set_mask(
                 cargo,
                 u32::from(amount),
-                acceptance,
-                always_accepted,
+                &mut *acceptance,
+                &mut *always_accepted,
             );
         }
     }
     /// `AddAcceptedCargo_Town`.
-    fn add_accepted_cargo_town(&self, tile: TileIndex, acceptance: *mut u32, always: *mut u64) {
+    fn add_accepted_cargo_town(
+        &self,
+        tile: TileIndex,
+        acceptance: &mut CargoArray,
+        always: &mut CargoTypes,
+    ) {
         let entry = (self.h.entry)(tile.0);
         self.add_accepted_cargo_of_house(tile, entry.house, entry.town.shell, acceptance, always);
     }
     /// `AddProducedCargo_Town`.
-    fn add_produced_cargo_town(&self, tile: TileIndex, produced: *mut u32) {
+    fn add_produced_cargo_town(&self, tile: TileIndex, produced: &mut CargoArray) {
         let entry = (self.h.entry)(tile.0);
         let house_id = entry.house;
         let hs = (self.h.production)(house_id);
@@ -1358,8 +1376,7 @@ impl<'a> House<'a> {
                 if !is_valid_cargo_type(cargo.0) {
                     continue;
                 }
-                // SAFETY: The caller's 64-entry cargo array outlives this entry.
-                unsafe { add_one(produced, cargo) };
+                add_one(produced, cargo);
             }
         } else {
             for (tpe, rate) in [
@@ -1375,8 +1392,7 @@ impl<'a> House<'a> {
                     if cs.cargo == CargoType::INVALID_CARGO.0 {
                         break;
                     }
-                    // SAFETY: The caller's 64-entry cargo array outlives this entry.
-                    unsafe { add_one(produced, CargoType(cs.cargo)) };
+                    add_one(produced, CargoType(cs.cargo));
                     at += 1;
                 }
             }
@@ -1399,7 +1415,10 @@ impl<'a> House<'a> {
         let r = self.s.random() as u16;
         let map = self.map();
         // Do the callback, start at northern tile.
-        let north = TileIndex(tile.0.wrapping_add(self.get_house_north_part(&mut id)));
+        let north = TileIndex(
+            tile.0
+                .wrapping_add_signed(self.get_house_north_part(&mut id)),
+        );
         let flags = self.building_flags(id);
         let town = (self.h.town)(tile.0);
         // `DoTriggerHouseAnimation_WatchedCargoAccepted`: run the callback for a single
@@ -1435,18 +1454,12 @@ impl<'a> House<'a> {
     }
     /// `Map::Iterate`, over `Map::Size()`.
     fn map_iterate(&self) -> impl Iterator<Item = TileIndex> {
-        let size = self
-            .map()
-            .size_x()
-            .wrapping_mul((self.s.map_max_y)().wrapping_add(1));
-        Map::iterate(size).map(TileIndex)
+        Map::iterate(self.s.map_size()).map(TileIndex)
     }
     /// `Town::Iterate`.
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
-        let mut town = (self.l.next_town)(u32::from(TownID::BEGIN.0));
-        while town != u32::MAX {
-            visit((self.l.resolve_owner)(town));
-            town = (self.l.next_town)(town.wrapping_add(1));
+        for town in super::iterate(|from| (self.l.next_town)(from)) {
+            visit((self.l.resolve_owner)(u32::from(town.0)));
         }
     }
     /// `RebuildTownCaches`: rebuild all the cached variables of towns; canonical
@@ -1454,7 +1467,7 @@ impl<'a> House<'a> {
     fn rebuild_town_caches(&self) {
         // SAFETY: Rebuild entry is serialized; no native count view survives reset.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
+            super::resolver::initialize_building_counts(
                 self.l,
                 self.s,
                 std::ptr::null_mut(),
@@ -1488,7 +1501,7 @@ impl<'a> House<'a> {
             }
             // Increase the number of houses for every house, but only once.
             let mut house_id = house_id;
-            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0) {
+            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0).cast_signed() {
                 // SAFETY: As above.
                 unsafe {
                     let fields = &raw mut (*town).simulation;
@@ -1506,7 +1519,7 @@ impl<'a> House<'a> {
             if !self.is_house_tile(t) {
                 continue;
             }
-            crate::town_map::increment_house_age(self.h, t);
+            crate::town_map::increment_house_age(self.s, self.h, t);
         }
     }
     /// `IsTileType(tile, MP_HOUSE) && GetCleanHouseType(tile) == house_type`.
@@ -1540,7 +1553,7 @@ impl<'a> House<'a> {
             let mut house_type = (self.h.clean_type)(t.0);
             // Modifies 'house_type'!
             let north_tile =
-                TileIndex(t.0.wrapping_add(self.get_house_north_part(&mut house_type)));
+                TileIndex(t.0.wrapping_add_signed(self.get_house_north_part(&mut house_type)));
             let id = u32::from(house_type);
             if t == north_tile {
                 let flags = self.building_flags(house_type);
@@ -1649,23 +1662,30 @@ pub unsafe extern "C" fn openttd_rust_house_place(
         },
     );
 }
-/// `AddAcceptedCargoOfHouse`, raw adapter retained for `subsidy.rs` until its pass.
-pub(crate) unsafe fn accepted(
+/// `AddAcceptedCargoOfHouse`: determine accepted cargo for a house.
+/// # Safety
+/// Live immutable tables; `town` is a live town or null for a prototype.
+pub(crate) unsafe fn add_accepted_cargo_of_house(
     leaves: *const Leaves,
     services: *const Services,
-    tile: u32,
+    tile: TileIndex,
     id: HouseID,
     town: *mut TownHandle,
-    acceptance: *mut u32,
-    always: *mut u64,
+    acceptance: &mut CargoArray,
+    always: &mut CargoTypes,
 ) {
-    house(leaves, services).add_accepted_cargo_of_house(
-        TileIndex(tile),
-        id,
-        town,
-        acceptance,
-        always,
-    );
+    house(leaves, services).add_accepted_cargo_of_house(tile, id, town, acceptance, always);
+}
+/// `AddProducedCargo_Town`.
+/// # Safety
+/// Live immutable tables; `tile` is a house tile.
+pub(crate) unsafe fn add_produced_cargo_town(
+    leaves: *const Leaves,
+    services: *const Services,
+    tile: TileIndex,
+    produced: &mut CargoArray,
+) {
+    house(leaves, services).add_produced_cargo_town(tile, produced);
 }
 /// `AddAcceptedCargo_Town`, for the shared tile dispatch.
 /// # Safety
@@ -1678,7 +1698,11 @@ pub unsafe extern "C" fn openttd_rust_house_accepted_tile(
     acceptance: *mut u32,
     always: *mut u64,
 ) {
-    house(leaves, services).add_accepted_cargo_town(TileIndex(tile), acceptance, always);
+    house(leaves, services).add_accepted_cargo_town(
+        TileIndex(tile),
+        unsafe { &mut *acceptance.cast::<CargoArray>() },
+        unsafe { &mut *always.cast::<CargoTypes>() },
+    );
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_produced(
@@ -1687,7 +1711,9 @@ pub unsafe extern "C" fn openttd_rust_house_produced(
     tile: u32,
     produced: *mut u32,
 ) {
-    house(leaves, services).add_produced_cargo_town(TileIndex(tile), produced);
+    house(leaves, services).add_produced_cargo_town(TileIndex(tile), unsafe {
+        &mut *produced.cast::<CargoArray>()
+    });
 }
 /// `TriggerHouseAnimation_WatchedCargoAccepted`.
 /// # Safety
@@ -1853,12 +1879,12 @@ pub unsafe extern "C" fn openttd_rust_house_accepted_prototype(
     unsafe {
         std::ptr::write_bytes(acceptance, 0, usize::from(crate::cargo_type::NUM_CARGO));
     }
-    let mut always = 0;
+    let mut always = CargoTypes(0);
     house(leaves, services).add_accepted_cargo_of_house(
         TileIndex::INVALID,
         id,
         std::ptr::null_mut(),
-        acceptance,
-        &raw mut always,
+        unsafe { &mut *acceptance.cast::<CargoArray>() },
+        &mut always,
     );
 }

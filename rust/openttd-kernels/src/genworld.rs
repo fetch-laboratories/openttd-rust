@@ -307,7 +307,7 @@ pub(crate) unsafe fn setup(
     let town = unsafe { &*s.town };
     let growth = unsafe { &*town.growth };
     unsafe {
-        crate::town::resolver::openttd_rust_house_counts_init(
+        crate::town::resolver::initialize_building_counts(
             growth,
             &*town.shared,
             std::ptr::null_mut(),
@@ -454,16 +454,17 @@ impl World<'_> {
         let call = (s.town_begin)(self.frame);
         let mut result = false;
         let completed = unsafe {
-            crate::town::founding::openttd_rust_town_generate_abi(
-                s.town,
-                call.road,
-                call.frame,
-                call.names,
+            crate::town::founding::generate_towns(
+                crate::town::founding::FoundTownContext {
+                    s: s.town,
+                    road: call.road,
+                    frame: call.frame,
+                    name_frame: call.names,
+                },
                 call.layout,
-                false,
-                0,
-                &raw mut result,
-            ) != 0
+                None,
+                &mut result,
+            )
         };
         (s.town_end)(self.frame);
         native(completed)?;
@@ -472,12 +473,12 @@ impl World<'_> {
         }
         let context = (s.industry_begin)(self.frame);
         let completed = unsafe {
-            crate::industry::openttd_rust_industry_generate_abi(
+            crate::industry::generate_industries(
                 (s.industry_builder)(),
                 context,
-                s.industry,
-                s.industry_generation,
-            ) != 0
+                &*s.industry,
+                &*s.industry_generation,
+            )
         };
         (s.industry_end)(self.frame);
         native(completed)?;

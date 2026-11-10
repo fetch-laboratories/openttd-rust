@@ -586,6 +586,13 @@ impl<'a> World<'a> {
     pub(crate) fn check(&self, condition: bool) {
         crate::movement::native_assert(self.shared, condition);
     }
+    /// `assert(condition)`: evaluates the condition only where the native build asserts.
+    #[inline]
+    pub(crate) fn assert_with(&self, condition: impl FnOnce() -> bool) {
+        if self.types.assertions() {
+            self.check(condition());
+        }
+    }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn kind(&self, t: u32) -> u8 {

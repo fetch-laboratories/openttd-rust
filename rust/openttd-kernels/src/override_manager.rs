@@ -119,13 +119,16 @@ pub unsafe extern "C" fn openttd_rust_override_add(
     grfid: u32,
     entity: u32,
 ) {
-    let m = unsafe { &mut *manager };
-    let i = entity as usize;
-    if m.entities[i] != m.invalid {
+    unsafe { add(&mut *manager, local, grfid, entity as usize) };
+}
+/// `OverrideManagerBase::Add`: the entity of `local` in `grfid` overrides `entity`.
+fn add(m: &mut Manager, local: u16, grfid: u32, entity: usize) {
+    /* An override can be set only once */
+    if m.entities[entity] != m.invalid {
         return;
     }
-    m.entities[i] = local;
-    m.grfids[i] = grfid;
+    m.entities[entity] = local;
+    m.grfids[entity] = grfid;
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_reset_mapping(manager: *mut Manager) {
@@ -133,11 +136,18 @@ pub unsafe extern "C" fn openttd_rust_override_reset_mapping(manager: *mut Manag
         (*manager).mappings.fill(Mapping::default());
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_override_reset(manager: *mut Manager) {
+/// `OverrideManagerBase::ResetOverride`: resets the override, which is used while
+/// initializing game.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn reset_override(manager: *mut Manager) {
     let m = unsafe { &mut *manager };
     m.entities.fill(m.invalid);
     m.grfids.fill(0);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_override_reset(manager: *mut Manager) {
+    unsafe { reset_override(manager) };
 }
 pub unsafe fn get(manager: *const Manager, local: u16, grfid: u32) -> u16 {
     let m = unsafe { &*manager };
@@ -201,17 +211,39 @@ pub unsafe extern "C" fn openttd_rust_override_allocate(
     existing: u16,
     valid: unsafe extern "C" fn(*mut c_void, u16) -> u8,
 ) -> u16 {
+    unsafe {
+        add_entity_id(&mut *manager, local, grfid, substitute, existing, |id| {
+            valid(native, id) != 0
+        })
+    }
+}
+/// `OverrideManagerBase::AddEntityID`: the ID for the entity of `local` in `grfid`,
+/// allocating one with substitute `substitute` when it has none. `existing` is
+/// `GetID(local, grfid)` and `valid` the manager's `CheckValidNewID`.
+fn add_entity_id(
+    m: &mut Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+    existing: u16,
+    mut valid: impl FnMut(u16) -> bool,
+) -> u16 {
+    /* Look to see if this entity has already been added. This is done
+     * separately from the loop below in case a GRF has been deleted, and there
+     * are any gaps in the array.
+     */
     let id = existing;
-    let invalid = unsafe { (*manager).invalid };
+    let invalid = m.invalid;
     if id != invalid {
         return id;
     }
-    let (offset, maximum) = unsafe { ((*manager).offset, (*manager).maximum) };
+    /* This entity hasn't been defined before, so give it an ID now. */
+    let (offset, maximum) = (m.offset, m.maximum);
     for id in offset..maximum {
-        if unsafe { valid(native, id) } == 0 {
+        if !valid(id) {
             continue;
         }
-        let map = unsafe { &mut (&mut (*manager).mappings)[usize::from(id)] };
+        let map = &mut m.mappings[usize::from(id)];
         if map.entity_id == 0 && map.grfid == 0 {
             *map = Mapping {
                 grfid,
@@ -229,22 +261,16 @@ pub unsafe fn allocate_house(
     grfid: u32,
     substitute: u16,
 ) -> u16 {
-    // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
-    unsafe extern "C" fn valid(_: *mut c_void, _: u16) -> u8 {
-        u8::from(true)
-    }
     let existing = unsafe { get(manager, local, grfid) };
-    unsafe {
-        openttd_rust_override_allocate(
-            manager,
-            local,
-            grfid,
-            substitute,
-            ptr::null_mut(),
-            existing,
-            valid,
-        )
-    }
+    // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
+    add_entity_id(
+        unsafe { &mut *manager },
+        local,
+        grfid,
+        substitute,
+        existing,
+        |_| true,
+    )
 }
 pub unsafe fn pending_override(manager: *const Manager, id: u16) -> (u16, u32) {
     let m = unsafe { &*manager };

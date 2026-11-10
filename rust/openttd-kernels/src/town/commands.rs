@@ -1,11 +1,12 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Town commands, authority actions and ordered deletion. Post-destruction code never
 //! resolves an ID.
-use super::founding::{AcceptanceEffect, FoundingServices};
+use super::founding::FoundingServices;
 use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE, OWNER_TOWN};
 use crate::economy_type::PR_TOWN_ACTION;
+use crate::movement::native_assert;
 use crate::objects::{Object, ObjectServices, QueryServices};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
@@ -82,7 +83,6 @@ struct Commands<'a> {
     cost: &'a CommandCostServices,
     map: OnceCell<Map>,
     world: OnceCell<crate::map_func::World<'a>>,
-    size_y: OnceCell<u32>,
 }
 impl<'a> Commands<'a> {
     unsafe fn new(s: &'a CommandServices) -> Self {
@@ -95,7 +95,6 @@ impl<'a> Commands<'a> {
             cost: unsafe { &*f.cost },
             map: OnceCell::new(),
             world: OnceCell::new(),
-            size_y: OnceCell::new(),
         }
     }
     fn objects(&self) -> &ObjectServices {
@@ -125,12 +124,12 @@ impl<'a> Commands<'a> {
         crate::road_map::has_town_owned_road(world, tile.0)
     }
     fn size_y(&self) -> u32 {
-        *self
-            .size_y
-            .get_or_init(|| (self.shared.map_max_y)().wrapping_add(1))
+        self.world
+            .get_or_init(|| crate::map_func::World::new(self.shared))
+            .size_y()
     }
     fn map_size(&self) -> u32 {
-        self.map().size_x() * self.size_y()
+        self.shared.map_size()
     }
     fn growth(&self, town: TownRef) -> Engine<'a> {
         let mut e = engine(self.f.growth, self.f.shared);
@@ -400,21 +399,25 @@ impl<'a> Commands<'a> {
         } else {
             // SAFETY: The town owner is live; the rating owner keeps its scratch and cheat semantics.
             unsafe {
-                super::openttd_rust_town_change_rating(
-                    self.f.growth,
-                    self.f.shared,
-                    t.state,
-                    u32::from(t.id.0),
-                    t.shell as usize,
-                    company,
-                    RATING_BRIBE_UP_STEP,
-                    RATING_BRIBE_MAXIMUM,
-                    false,
-                    ((*(*self.f.growth).houses)
-                        .authority
-                        .as_ref()
-                        .unwrap()
-                        .bulldozer)(),
+                super::change_town_rating(
+                    &*self.f.growth,
+                    &*self.f.shared,
+                    super::RatedTown {
+                        state: t.state,
+                        id: t.id,
+                        shell: t.shell,
+                    },
+                    super::RatingChange {
+                        company: CompanyID(company),
+                        add: RATING_BRIBE_UP_STEP,
+                        maximum: RATING_BRIBE_MAXIMUM,
+                        flags: DoCommandFlags::from_element(DoCommandFlag::Execute),
+                        bulldozer: ((*(*self.f.growth).houses)
+                            .authority
+                            .as_ref()
+                            .unwrap()
+                            .bulldozer)(),
+                    },
                 );
             }
             if unsafe { (*t.state).simulation.exclusivity } != company
@@ -460,7 +463,7 @@ impl<'a> Commands<'a> {
         }
         // Or other adjacent road.
         let end = (unsafe { &*self.s.rail }.other_tunnel_bridge_end)(tile.0);
-        // Historical source adds the other end's direction to the ORIGINAL tile.
+        // The other end's direction is added to this tile, not to the other end.
         owns(TileIndex(
             tile.0.wrapping_add(
                 self.map().offs_by_diag_dir(
@@ -500,7 +503,8 @@ impl<'a> Commands<'a> {
                 }
             }
         }
-        // Waypoints, then depots, refer to towns.
+        // Waypoints refer to towns.
+        // Depots refer to towns.
         for next in [self.s.next_waypoint, self.s.next_depot] {
             from = 0;
             loop {
@@ -605,14 +609,45 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
     out: *mut CommandCost,
     flags: u16,
     id: u16,
-    effect: AcceptanceEffect,
+    effect: u8,
     goal: u32,
 ) {
-    let (flags, town_id) = (DoCommandFlags(flags), TownId(id));
+    let cmd = CmdTownCargoGoal {
+        town_id: TownId(id),
+        tae: crate::cargotype::TownAcceptanceEffect(effect),
+        goal,
+    };
+    unsafe { cmd_town_cargo_goal(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownCargoGoal`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownCargoGoal {
+    pub town_id: TownId,
+    pub tae: crate::cargotype::TownAcceptanceEffect,
+    pub goal: u32,
+}
+/// `CmdTownCargoGoal`: change the cargo goal of a town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_cargo_goal(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownCargoGoal,
+) {
+    use crate::cargotype::TownAcceptanceEffect;
+    let CmdTownCargoGoal {
+        town_id,
+        tae: effect,
+        goal,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
-    if c.current_company() != CompanyID::DEITY
-        || effect.0 >= crate::cargotype::TownAcceptanceEffect::NUM_TAE.0
-    {
+    if c.current_company() != CompanyID::DEITY {
+        c.error(out);
+        return;
+    }
+    if effect < TownAcceptanceEffect::TAE_BEGIN || effect >= TownAcceptanceEffect::TAE_END {
         c.error(out);
         return;
     }
@@ -634,6 +669,12 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_text(state: *const State) -> ByteSpan {
+    unsafe { town_text(state) }
+}
+/// `Town::text`: the town's custom text, empty when it has none.
+/// # Safety
+/// Live owner; the bytes stay valid until the next text mutation.
+pub(crate) unsafe fn town_text(state: *const State) -> ByteSpan {
     let text = unsafe { &(*state).text };
     ByteSpan {
         data: text.as_ptr(),
@@ -642,6 +683,12 @@ pub unsafe extern "C" fn openttd_rust_town_text(state: *const State) -> ByteSpan
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_set_text(state: *mut State, text: ByteSpan) {
+    unsafe { set_town_text(state, text) };
+}
+/// `t->text = text`: set the town's custom text.
+/// # Safety
+/// Live, exclusively mutable owner; readable input bytes.
+pub(crate) unsafe fn set_town_text(state: *mut State, text: ByteSpan) {
     let target = unsafe { &mut (*state).text };
     target.clear();
     if text.size != 0 {
@@ -656,14 +703,36 @@ pub unsafe extern "C" fn openttd_rust_town_text_command(
     id: u16,
     text: ByteSpan,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownSetText {
+        town_id: TownId(id),
+        text,
+    };
+    unsafe { cmd_town_set_text(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownSetText`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownSetText {
+    pub town_id: TownId,
+    pub text: ByteSpan,
+}
+/// `CmdTownSetText`: set a custom text in the town window.
+/// # Safety
+/// Live command tables, native result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_town_set_text(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownSetText,
+) {
+    let CmdTownSetText { town_id, text } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
     };
     if flags.test(DoCommandFlag::Execute) {
         unsafe {
-            openttd_rust_town_set_text(t.state, text);
+            set_town_text(t.state, text);
         }
         (s.invalidate_view)(id);
         w::hit(w::TOWN_COMMAND_TEXT);
@@ -678,7 +747,32 @@ pub unsafe extern "C" fn openttd_rust_town_growth_command(
     id: u16,
     rate: u16,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownGrowthRate {
+        town_id: TownId(id),
+        growth_rate: rate,
+    };
+    unsafe { cmd_town_growth_rate(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownGrowthRate`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownGrowthRate {
+    pub town_id: TownId,
+    pub growth_rate: u16,
+}
+/// `CmdTownGrowthRate`: change the growth rate of the town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_growth_rate(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownGrowthRate,
+) {
+    let CmdTownGrowthRate {
+        town_id,
+        growth_rate: rate,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
@@ -699,7 +793,35 @@ pub unsafe extern "C" fn openttd_rust_town_rating_command(
     company: u8,
     rating: i16,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownRating {
+        town_id: TownId(id),
+        company_id: CompanyID(company),
+        rating,
+    };
+    unsafe { cmd_town_rating(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownRating`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownRating {
+    pub town_id: TownId,
+    pub company_id: CompanyID,
+    pub rating: i16,
+}
+/// `CmdTownRating`: change the rating of a company in a town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_rating(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownRating,
+) {
+    let CmdTownRating {
+        town_id,
+        company_id,
+        rating,
+    } = cmd;
+    let (id, company) = (town_id.0, company_id.0);
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
@@ -728,10 +850,36 @@ pub unsafe extern "C" fn openttd_rust_town_expand_command(
     amount: u32,
     modes: u8,
 ) {
-    let (flags, modes) = (
-        DoCommandFlags(flags),
-        crate::town_type::TownExpandModes(modes),
-    );
+    let cmd = CmdExpandTown {
+        town_id: TownId(id),
+        grow_amount: amount,
+        modes: crate::town_type::TownExpandModes(modes),
+    };
+    unsafe { cmd_expand_town(s, road, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdExpandTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdExpandTown {
+    pub town_id: TownId,
+    pub grow_amount: u32,
+    pub modes: crate::town_type::TownExpandModes,
+}
+/// `CmdExpandTown`: expand a town (scenario editor only).
+/// # Safety
+/// Live command tables, road context and native result storage for the call.
+pub(crate) unsafe fn cmd_expand_town(
+    s: &CommandServices,
+    road: *const crate::road_cmd::CommandContext,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdExpandTown,
+) {
+    let CmdExpandTown {
+        town_id,
+        grow_amount: amount,
+        modes,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     if (!(unsafe { &*c.f.growth }.environment.editor)() && c.current_company() != CompanyID::DEITY)
         || modes.0 == 0
@@ -759,6 +907,26 @@ pub unsafe extern "C" fn openttd_rust_town_delete_command(
     flags: u16,
     id: u16,
 ) {
+    let cmd = CmdDeleteTown {
+        town_id: TownId(id),
+    };
+    unsafe { cmd_delete_town(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdDeleteTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdDeleteTown {
+    pub town_id: TownId,
+}
+/// `CmdDeleteTown`: delete a town (scenario editor or worldgen only).
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_delete_town(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdDeleteTown,
+) {
+    let id = cmd.town_id.0;
     let c = unsafe { Commands::new(s) };
     let growth = unsafe { &*c.f.growth };
     if !(growth.environment.editor)() && !(growth.generating_world)() {
@@ -770,10 +938,8 @@ pub unsafe extern "C" fn openttd_rust_town_delete_command(
         c.error(out);
         return;
     }
-    c.delete_town(out, DoCommandFlags(flags), t);
+    c.delete_town(out, flags, t);
 }
-/// Do a town action (`CmdDoTownAction`). This performs an action such as advertising,
-/// building a statue, funding buildings, but also bribing the town-council.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_action(
     s: &CommandServices,
@@ -782,7 +948,30 @@ pub unsafe extern "C" fn openttd_rust_town_action(
     id: u16,
     action: u8,
 ) {
-    let (flags, town_id, action) = (DoCommandFlags(flags), TownId(id), TownAction(action));
+    let cmd = CmdDoTownAction {
+        town_id: TownId(id),
+        action: TownAction(action),
+    };
+    unsafe { cmd_do_town_action(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdDoTownAction`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdDoTownAction {
+    pub town_id: TownId,
+    pub action: TownAction,
+}
+/// Do a town action (`CmdDoTownAction`). This performs an action such as advertising,
+/// building a statue, funding buildings, but also bribing the town-council.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_do_town_action(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdDoTownAction,
+) {
+    let CmdDoTownAction { town_id, action } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let t = c.resolve(town_id);
     if t.shell.is_null()
@@ -903,6 +1092,12 @@ impl Commands<'_> {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: TownRef) {
+    unsafe { town_destruct(s, t) };
+}
+/// `Town::~Town`: clean up a town and everything that refers to it.
+/// # Safety
+/// `t` is the live town being destroyed; the command tables are live.
+unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
     if (s.cleaning_pool)() {
         return;
     }
@@ -919,7 +1114,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
                 break;
             }
             from = i.next;
-            assert!(i.town != t.shell);
+            native_assert(c.shared, i.town != t.shell);
         }
         // ... and no object is related to us.
         from = 0;
@@ -930,18 +1125,24 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
                 break;
             }
             from = o.id.wrapping_add(1);
-            assert!(unsafe { (c.object_query().town)(o.object) } != t.shell);
+            native_assert(
+                c.shared,
+                unsafe { (c.object_query().town)(o.object) } != t.shell,
+            );
         }
         // Check no tile is related to us.
         for tile in crate::map_func::Map::iterate(c.map_size()).map(TileIndex) {
             match c.tile_type(tile) {
-                TileType::MP_HOUSE => assert_ne!(TownId((c.shared.town_index)(tile.0)), t.id),
-                TileType::MP_ROAD => {
-                    assert!(
-                        !c.town_owned_road(tile) || TownId((c.shared.town_index)(tile.0)) != t.id
-                    );
+                TileType::MP_HOUSE => {
+                    native_assert(c.shared, TownId((c.shared.town_index)(tile.0)) != t.id);
                 }
-                TileType::MP_TUNNELBRIDGE => assert!(!c.test_town_owns_bridge(tile, t)),
+                TileType::MP_ROAD => native_assert(
+                    c.shared,
+                    !c.town_owned_road(tile) || TownId((c.shared.town_index)(tile.0)) != t.id,
+                ),
+                TileType::MP_TUNNELBRIDGE => {
+                    native_assert(c.shared, !c.test_town_owns_bridge(tile, t));
+                }
                 _ => {}
             }
         }
@@ -967,6 +1168,12 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
+    unsafe { town_post_destructor(s) };
+}
+/// `Town::PostDestructor`: invalidate the caches that refer to the removed town.
+/// # Safety
+/// The command tables are live; the town has left the pool.
+unsafe fn town_post_destructor(s: &CommandServices) {
     // Invalidating the nearest town cache has to be done after removing the item from the pool.
     let c = unsafe { Commands::new(s) };
     (c.f.directory_rebuild)();

@@ -128,7 +128,7 @@ static void Calls()
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };
 		founding.can_allocate = []() noexcept { return true; };
 		/* TileXY(32, 32) on a 64x64 map is 32 tiles from every edge. */
-		const OpenTTDFixtureMap map{6};
+		const OpenTTDFixtureMap map{6, 64 * 64};
 		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
 		openttd_rust_town_simulation(owner)->xy = 2080;
@@ -488,9 +488,9 @@ int main()
 	CHECK(_unchecked_layouts.empty());
 
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
-	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);
-	size_t name_length;
-	const char *name = openttd_rust_townname_data(townname, &name_length);
+	const OpenTTDFixtureMap townname_map{6}; OpenTTDSharedServices townname_shared{}; townname_shared.map = &townname_map.statics;
+	auto *townname = openttd_rust_townname_generate(&townname_shared, 1, UINT32_MAX);
+	size_t name_length; const char *name = openttd_rust_townname_data(townname, &name_length);
 	CHECK(name_length == 8 && std::memcmp(name, "Alen\xc3\xa7on", name_length) == 0);
 	openttd_rust_townname_destroy(townname);
 	Calls();
