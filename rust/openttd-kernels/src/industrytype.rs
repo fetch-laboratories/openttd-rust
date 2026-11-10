@@ -11,6 +11,7 @@ use crate::industry_type::{
 };
 use crate::newgrf::CargoLabel;
 use crate::newgrf_animation_type::AnimationStatus;
+use crate::newgrf_badge_type::BadgeID;
 use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
 use crate::newgrf_commons::StandardSpriteGroup;
 use std::collections::BTreeMap;
@@ -527,25 +528,25 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
     tiles: bool,
     badge: u32,
 ) -> u8 {
-    u8::from(unsafe { add_badge_to_specs(file, tiles, badge) })
+    u8::from(unsafe { add_badge_to_specs(file, tiles, BadgeID(badge)) })
 }
 /// `AddBadgeToSpecs` over the file's industry or industry-tile specs; whether any exists.
 ///
 /// # Safety
 /// Serialized by the game-state mutex.
-unsafe fn add_badge_to_specs(file: *const c_void, tiles: bool, badge: u32) -> bool {
+unsafe fn add_badge_to_specs(file: *const c_void, tiles: bool, badge: BadgeID) -> bool {
     let Some(specs) = (unsafe { (*FILES.get()).get_mut(&(file as usize)) }) else {
         return false;
     };
     let mut any = false;
     if tiles {
         for spec in specs.tiles.iter_mut().flatten() {
-            spec.badges.push(badge);
+            spec.badges.push(badge.0);
             any = true;
         }
     } else {
         for spec in specs.industries.iter_mut().flatten() {
-            spec.badges.push(badge);
+            spec.badges.push(badge.0);
             any = true;
         }
     }
