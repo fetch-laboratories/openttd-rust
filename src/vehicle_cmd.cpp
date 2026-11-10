@@ -65,11 +65,6 @@
 
 /* Synchronous native storage/presentation leaves only. No Rust borrow crosses
  * these calls; allocation or formatting failures terminate in noexcept leaves. */
-static OpenTTDVehicleTransactionTarget VehicleTransactionTarget(void *shell) noexcept
-{
-	const Vehicle *v = static_cast<Vehicle *>(shell);
-	return {.owner = RustVehicleOwner(v), .primary = RustVehiclePrimary(v)};
-}
 static void VehicleTransactionNameDirty(void *shell) noexcept
 {
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
@@ -91,7 +86,6 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 		.commands = &GetRustCommandServices(),
 		.cost = &GetRustCommandCostServices(),
 		.groups = &FleetGroupServices(),
-		.target = VehicleTransactionTarget,
 		.name = RustVehicleName,
 		.clear_name = RustVehicleClearName,
 		.set_name = RustVehicleSetName,
@@ -140,11 +134,9 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 			.invalid_client = INVALID_CLIENT_ID, .share_orders = CO_SHARE, .copy_orders = CO_COPY,
 			.cargo_count = NUM_CARGO, .invalid_cargo = INVALID_CARGO,
 		},
-		.train_power = RustOpaqueVehicleRead<uint32_t, RustTrainCachedPower>,
 		.aircraft_start = VehicleTransactionAircraftStart,
 		.grf_string = RustGRFString,
 		.waiting_news = VehicleTransactionWaitingNews,
-		.flip_stopped = RustOpaqueVehicleInvoke<RustVehicleFlipStopped>,
 		.startstop_ui = VehicleTransactionStartstopUI,
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,

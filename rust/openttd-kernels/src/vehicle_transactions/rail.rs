@@ -570,7 +570,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
             if callback != CALLBACK_FAILED {
                 let mut error = strings.null_string;
                 let grf_text = |n: u32| {
-                    x.c.grf_text(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
+                    x.c.grf_text_raw(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
                 };
                 if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
@@ -593,9 +593,9 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error = x
-                                .c
-                                .grf_text(Ctx::sh(head), unsafe { regs100.assume_init() } as u32);
+                            error =
+                                x.c.grf_text_raw(Ctx::sh(head), unsafe { regs100.assume_init() }
+                                    as u32);
                         }
                         _ => error = strings.incompatible_rail,
                     }

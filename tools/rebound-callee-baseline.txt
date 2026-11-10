@@ -132,7 +132,6 @@ rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | in
 rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | release_unit
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_articulated_services.hpp | flip_image
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_build_services.hpp | mail_capacity_address
-rebound | RustOpaqueVehicleInvoke | src/vehicle_cmd.cpp | flip_stopped
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_bridge_end
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_end
 rebound | RustRailPoweredMask | src/rust/ground_vehicle_services.cpp | powered

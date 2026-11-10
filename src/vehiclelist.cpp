@@ -16,10 +16,6 @@
 
 #include "rust/vehicle_transaction_ffi.h"
 #include "rust/vehicle_services.h"
-static void SelectionWithOrders(void *ctx, uint8_t (*vehicle)(void *, const Vehicle *), uint8_t (*order)(void *, const Order *), void (*visit)(void *, const Vehicle *)) noexcept
-{
-	FindVehiclesWithOrder([&](const Vehicle *v) { return vehicle(ctx, v) != 0; }, [&](const Order *o) { return order(ctx, o) != 0; }, [&](const Vehicle *v) { visit(ctx, v); });
-}
 static void SelectionListClear(void *list) noexcept { static_cast<VehicleList *>(list)->clear(); }
 static void SelectionListPush(void *list, void *v) noexcept { static_cast<VehicleList *>(list)->push_back(static_cast<Vehicle *>(v)); }
 const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcept
@@ -28,12 +24,10 @@ const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcep
 		.groups = &FleetGroupServices(),
 		.transactions = &FleetTransactionServices(),
 		.vehicles = &GetRustVehicleServices(),
+		.links = &GetRustStationLinks(),
 		.in_depot = RustOpaqueVehicleRead<bool, RustVehicleInDepot>,
-		.free_wagon = RustOpaqueVehicleRead<bool, RustTrainFreeWagon>,
 		.first_engine_part = RustOpaqueVehicleRead<void *, RustTrainFirstEnginePart>,
-		.multiheaded = RustOpaqueVehicleRead<bool, RustTrainMultiheaded>,
 		.other_multihead = RustOpaqueVehicleRead<void *, RustTrainOtherMultihead>,
-		.with_orders = SelectionWithOrders,
 		.list_clear = SelectionListClear,
 		.list_push = SelectionListPush,
 	};

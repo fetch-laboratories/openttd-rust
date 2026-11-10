@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Inspect root's session and the project in /home/fetch/projects/openttd-rust. Send a tailored message to root with `t3_thread_send` in step 5. Stay read-only apart from that send: no commits, pushes, GitHub comments, CI requests, process signals or messages to other agents. Give the user a short note and the message sent.
 
-User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root runs `/start-development` (`docs/skills/start-development/SKILL.md`) under Claude Code, with subagents under [team](../../team.md#roles-and-models), component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
+User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root runs `/start-development` in Claude Code or `$start-development` in Codex (`docs/skills/start-development/SKILL.md`), with subagents under [team](../../team.md#roles-and-models), component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
 
 Quote the first two blocks of the [rollback and wind-down rules](../../root-workflow.md#automatic-rollback-and-wind-down) verbatim from current base in step 4. Apply them without adding process rules. Explicit user scope changes the action allowance, not the merge checks or automatic rollback.
 
@@ -16,10 +16,10 @@ Quote the first two blocks of the [rollback and wind-down rules](../../root-work
 
 Identify root and the actions already underway.
 
-- In T3 Code, load tools with ToolSearch: `select:mcp__t3-code__t3_thread_list,mcp__t3-code__t3_thread_read,mcp__t3-code__t3_thread_send`. Call `t3_thread_list` with `includeSubagents: true`. Find the newest top-level development thread by its assignment and roadmap context, not model alone; do not select this wind-down thread. Subagents have root's `parentThreadId`; `running` or a recent `updatedAt` indicates activity. Read root's latest messages with `t3_thread_read`, view `messages`, near the end of `itemCount`.
-- Otherwise find the most recently modified `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` whose first real user message after the AGENTS.md preamble is `$start-development`. Subagent sessions sit beside it.
+- In T3 Code, discover `t3_thread_list`, `t3_thread_read` and `t3_thread_send` through the host: ToolSearch in Claude Code, or search `ALL_TOOLS` by name in Codex code mode and call the matching `tools` methods. Call `t3_thread_list` with `includeSubagents: true`. Find the newest top-level development thread by its assignment and roadmap context, not model alone; do not select this wind-down thread. Subagents have root's `parentThreadId`; `running` or a recent `updatedAt` indicates activity. Read root's latest messages with `t3_thread_read`, view `messages`, near the end of `itemCount`.
+- Outside T3 Code, use `python3 docs/skills/steer/transcript.py` for Claude Code sessions or add `--codex` for Codex sessions. Identify the latest development root by its start-development assignment, then read its transcript. Codex rollouts also live under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`; subagent sessions sit beside them.
 - In Codex records, `type: response_item` and `payload.type: message` with role `user` or `assistant` are conversation; `function_call`, `custom_tool_call` and `function_call_output` are tools and results. Agent messages are encrypted, but `spawn_agent` names and `list_agents` outputs are plain text. An agent is done when `list_agents` shows `completed`; Codex has no close-agent tool.
-- Read root's recent status and latest `list_agents`. For each running subagent, skim its session for its current step, dirty files and edit or review underway.
+- Read root's recent status and the host's child listing (`list_agents` for Codex native children, T3 thread metadata for delegated children). For each running subagent, skim its session for its current step, dirty files and edit or review underway.
 
 Done when root and each active subagent's current action are identified.
 

@@ -20,11 +20,12 @@ Readers: Every agent changing the repository.
 
 ## Branches and worktrees
 
-For substantive changes create a fork issue with a clear owner, then use an isolated branch and worktree based on `rust-migration`. The implementation agent opens a draft PR targeting `rust-migration`, links the issue and records exact validation commands and limits. See [team](team.md#claude-code-root) for Claude Code worktree creation.
+For substantive changes create a fork issue with a clear owner, then use an isolated branch and worktree based on `rust-migration`. The implementation agent opens a draft PR targeting `rust-migration`, links the issue and records exact validation commands and limits. See [team](team.md#spawning) for worktree creation on either provider.
 
 ## Commits and pushes
 
-- Before pushing, run `python3 tools/preflight.py --base origin/rust-migration`. It runs the pinned inherited commit checker and every gate of Quick's `quick` job, read from `ci-quick.yml`, and lists every failure; `--step TEXT` reruns matching steps. The commit checker rejects titles without a supported prefix such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:` (base merges into a PR included; `Merge:` fails), non-ASCII or tab characters in messages, and non-ASCII text or space indentation in C and C++ diffs. Fix style in the introducing commit.
+- Skip local preflight when the entire outgoing change is inert Markdown under the same rule CI uses to skip builds ([continuous integration](rust-migration.md#continuous-integration)): `AGENTS.md` and Markdown under `docs/`, excluding the docs packaged for the in-game viewer. Check the complete diff, including both paths of renames, and run `git diff --check` instead. The broader docs-only commit policy does not exempt build inputs, scripts or skill metadata; a `[skip ci]` message alone does not qualify a mixed change.
+- For other changes, before pushing run `python3 tools/preflight.py --base origin/rust-migration`. It runs the pinned inherited commit checker and every gate of Quick's `quick` job, read from `ci-quick.yml`, and lists every failure; `--step TEXT` reruns matching steps. The commit checker rejects titles without a supported prefix such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:` (base merges into a PR included; `Merge:` fails), non-ASCII or tab characters in messages, and non-ASCII text or space indentation in C and C++ diffs. Fix style in the introducing commit.
 - A fidelity or crash fix ends with `Found-by:` naming the check: `review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep check` or `user` (#512).
 - Keep an unfinished checkpoint's PR in draft, recording what is incomplete, pending or failed checks and the next action. A checkpoint is not merge evidence. A review that stops before recording findings and disposition counts as no review.
 

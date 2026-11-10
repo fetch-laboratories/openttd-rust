@@ -1,6 +1,6 @@
 interface:
   display_name: "Start Development"
-  short_description: "Start or resume root (gpt-6.1-sol) for the migration"
+  short_description: "Start or resume root for the migration"
   default_prompt: "Use $start-development to resume the OpenTTD-Rust migration as root."
 policy:
   allow_implicit_invocation: false
