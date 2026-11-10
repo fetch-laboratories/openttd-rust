@@ -148,8 +148,8 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
     }
     std::ptr::null_mut()
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
+/// `RoadStop::RoadStop`: the Rust-owned part of a new road stop, with both bays free.
+fn create() -> *mut State {
     Box::into_raw(Box::new(State {
         status: StatusFlags::from_element(StatusFlag::Bay0Free)
             .with(StatusFlag::Bay1Free)
@@ -159,9 +159,8 @@ pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
 }
 /// `RoadStop::~RoadStop`: de-initializes road stops.
 /// # Safety
-/// One native shell transfers its live owner exactly once.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_stop_destroy(state: *mut State) {
+/// The caller transfers a live owner from `create` exactly once.
+unsafe fn destroy(state: *mut State) {
     // SAFETY: Caller transfers the owner; `delete nullptr` is a no-op.
     unsafe {
         let state = Box::from_raw(state);
@@ -170,6 +169,16 @@ pub unsafe extern "C" fn openttd_rust_road_stop_destroy(state: *mut State) {
             drop(Box::from_raw(state.entries));
         }
     }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
+    create()
+}
+/// # Safety
+/// One native shell transfers its live owner exactly once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_stop_destroy(state: *mut State) {
+    unsafe { destroy(state) };
 }
 
 fn status(state: *mut State) -> StatusFlags {
@@ -809,14 +818,16 @@ pub unsafe extern "C" fn openttd_rust_road_stop_check_integrity(
     // SAFETY: Caller's contract.
     check_integrity(unsafe { &*s }, TileIndex(xy), state, DiagDirection(dir));
 }
-/// `AfterLoadRoadStops`: construct the drive-through entries, then rebuild
-/// the data in those entries, each in pool order.
 /// # Safety
 /// Live serialized shared table after the ROAD chunk pointers are fixed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
     // SAFETY: Caller's contract.
-    let s = unsafe { &*s };
+    after_load_road_stops(unsafe { &*s });
+}
+/// `AfterLoadRoadStops`: construct the drive-through entries, then rebuild
+/// the data in those entries, each in pool order.
+fn after_load_road_stops(s: &Services) {
     let t = table(s);
     // Construct the drive-through entries before rebuilding their data.
     let mut index = u32::from(RoadStopID::BEGIN.0);

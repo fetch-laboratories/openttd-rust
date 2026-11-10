@@ -512,8 +512,9 @@ pub(crate) unsafe fn tile_loop_station(
 /// `Station::~Station`; the native destructor retains only member destruction.
 /// Aircraft-hangar orders need special treatment, as the hangars are part of a
 /// station (tile type `MP_STATION`) but the order type is `OT_GOTO_DEPOT`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut BaseStation) {
+/// # Safety
+/// `st` is the live station being destroyed; its native members outlive this call.
+unsafe fn station_destruct(s: &Services, st: *mut BaseStation) {
     let c = s.commands();
     let w = unsafe { &*c.station };
     let links = unsafe { &*c.links };
@@ -659,6 +660,12 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     if (s.sign_valid)(st) {
         (s.remove_sign)(id);
     }
+}
+/// # Safety
+/// As `station_destruct`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut BaseStation) {
+    unsafe { station_destruct(s, st) };
 }
 
 #[unsafe(no_mangle)]
