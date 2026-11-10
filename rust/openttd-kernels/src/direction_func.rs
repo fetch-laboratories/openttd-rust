@@ -11,26 +11,27 @@
 //! original computation. No Rust debug/release assertion setting is consulted.
 use crate::direction_type::{Axis, DiagDirDiff, DiagDirection, DiagDirections, DirDiff, Direction};
 
-/// `IsValidDiagDirection`.
+/// `IsValidDiagDirection`: checks if an integer value is a valid `DiagDirection`.
 pub const fn is_valid_diag_direction(d: DiagDirection) -> bool {
     d.0 < DiagDirection::DIAGDIR_END.0
 }
-/// `IsValidDirection`.
+/// `IsValidDirection`: checks if an integer value is a valid `Direction`.
 pub const fn is_valid_direction(d: Direction) -> bool {
     d.0 < Direction::DIR_END.0
 }
-/// `IsValidAxis`.
+/// `IsValidAxis`: checks if an integer value is a valid `Axis`.
 pub const fn is_valid_axis(d: Axis) -> bool {
     d.0 < Axis::AXIS_END.0
 }
-/// `ReverseDir`.
+/// `ReverseDir`: return the reverse of a direction.
 pub fn reverse_dir(d: Direction, check: impl Fn(bool)) -> Direction {
     if !is_valid_direction(d) {
         check(false);
     }
     Direction(4 ^ d.0)
 }
-/// `DirDifference`.
+/// `DirDifference`: calculate the difference between two directions; how the
+/// second direction drifts of the first one.
 pub fn dir_difference(d0: Direction, d1: Direction, check: impl Fn(bool)) -> DirDiff {
     if !is_valid_direction(d0) {
         check(false);
@@ -42,12 +43,19 @@ pub fn dir_difference(d0: Direction, d1: Direction, check: impl Fn(bool)) -> Dir
      * and we used int instead of uint, further "+ 8" would have to be added. */
     DirDiff((u32::from(d0.0).wrapping_sub(u32::from(d1.0)) % 8) as u8)
 }
-/// `ChangeDirDiff`.
+/// `ChangeDirDiff`: applies two differences together.
+///
+/// This function adds two differences together and returns the resulting
+/// difference. So adding two `DIRDIFF_REVERSE` together results in the
+/// `DIRDIFF_SAME` difference.
 pub const fn change_dir_diff(d: DirDiff, delta: DirDiff) -> DirDiff {
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
     DirDiff(((d.0 as u32 + delta.0 as u32) % 8) as u8)
 }
-/// `ChangeDir`.
+/// `ChangeDir`: change a direction by a given difference.
+///
+/// This functions returns a new direction of the given direction
+/// which is rotated by the given difference.
 pub fn change_dir(d: Direction, delta: DirDiff, check: impl Fn(bool)) -> Direction {
     if !is_valid_direction(d) {
         check(false);
@@ -55,14 +63,17 @@ pub fn change_dir(d: Direction, delta: DirDiff, check: impl Fn(bool)) -> Directi
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
     Direction(((u32::from(d.0) + u32::from(delta.0)) % 8) as u8)
 }
-/// `ReverseDiagDir`.
+/// `ReverseDiagDir`: returns the reverse direction of the given `DiagDirection`.
 pub fn reverse_diag_dir(d: DiagDirection, check: impl Fn(bool)) -> DiagDirection {
     if !is_valid_diag_direction(d) {
         check(false);
     }
     DiagDirection(2 ^ d.0)
 }
-/// `ChangeDiagDir`.
+/// `ChangeDiagDir`: applies a difference on a `DiagDirection`.
+///
+/// This function applies a difference on a `DiagDirection` and returns
+/// the new `DiagDirection`.
 pub fn change_diag_dir(
     d: DiagDirection,
     delta: DiagDirDiff,
@@ -74,42 +85,64 @@ pub fn change_diag_dir(
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
     DiagDirection(((u32::from(d.0) + u32::from(delta.0)) % 4) as u8)
 }
-/// `DirToDiagDir`.
+/// `DirToDiagDir`: convert a `Direction` to a `DiagDirection`.
+///
+/// This function can be used to convert the 8-way `Direction` to
+/// the 4-way `DiagDirection`. If the direction cannot be mapped its
+/// "rounded clockwise". So `DIR_N` becomes `DIAGDIR_NE`.
 pub fn dir_to_diag_dir(dir: Direction, check: impl Fn(bool)) -> DiagDirection {
     if !is_valid_direction(dir) {
         check(false);
     }
     DiagDirection(dir.0 >> 1)
 }
-/// `DiagDirToDir`.
+/// `DiagDirToDir`: convert a `DiagDirection` to a `Direction`.
+///
+/// This function can be used to convert the 4-way `DiagDirection`
+/// to the 8-way `Direction`. As 4-way are less than 8-way not all
+/// possible directions can be calculated.
 pub fn diag_dir_to_dir(dir: DiagDirection, check: impl Fn(bool)) -> Direction {
     if !is_valid_diag_direction(dir) {
         check(false);
     }
     Direction(dir.0.wrapping_mul(2).wrapping_add(1))
 }
-/// `OtherAxis`.
+/// `OtherAxis`: select the other axis as provided.
+///
+/// This is basically the not-operator for the axis.
 pub fn other_axis(a: Axis, check: impl Fn(bool)) -> Axis {
     if !is_valid_axis(a) {
         check(false);
     }
     Axis(a.0 ^ 1)
 }
-/// `DiagDirToAxis`.
+/// `DiagDirToAxis`: convert a `DiagDirection` to the axis.
+///
+/// This function returns the axis which belongs to the given
+/// `DiagDirection`. The axis X belongs to the `DiagDirection`
+/// north-east and south-west.
 pub fn diag_dir_to_axis(d: DiagDirection, check: impl Fn(bool)) -> Axis {
     if !is_valid_diag_direction(d) {
         check(false);
     }
     Axis(d.0 & 1)
 }
-/// `AxisToDiagDir`.
+/// `AxisToDiagDir`: converts an `Axis` to a `DiagDirection`.
+///
+/// This function returns the `DiagDirection` which
+/// belongs to the axis. As 2 directions are mapped to an axis
+/// this function returns the one which points to south,
+/// either south-west (on X axis) or south-east (on Y axis).
 pub fn axis_to_diag_dir(a: Axis, check: impl Fn(bool)) -> DiagDirection {
     if !is_valid_axis(a) {
         check(false);
     }
     DiagDirection(2_u8.wrapping_sub(a.0))
 }
-/// `AxisToDiagDirs`.
+/// `AxisToDiagDirs`: converts an `Axis` to `DiagDirections`.
+///
+/// This function returns both `DiagDirections` which
+/// belong to the axis.
 pub fn axis_to_diag_dirs(a: Axis, check: impl Fn(bool)) -> DiagDirections {
     if !is_valid_axis(a) {
         check(false);
@@ -180,12 +213,18 @@ mod tests {
             assert!(!ok);
             failures.set(failures.get() + 1);
         };
-        assert_eq!(diag_dir_to_axis_raw(4, disabled), 0);
-        assert_eq!(axis_to_diag_dir_raw(3, disabled), 255);
-        assert_eq!(reverse_diag_dir_raw(4, disabled), 6);
-        assert_eq!(dir_to_diag_dir_raw(8, disabled), 4);
-        assert_eq!(diag_dir_to_dir_raw(255, disabled), 255);
-        assert_eq!(reverse_dir_raw(8, disabled), 12);
+        assert_eq!(diag_dir_to_axis(DiagDirection(4), disabled), Axis(0));
+        assert_eq!(axis_to_diag_dir(Axis(3), disabled), DiagDirection(255));
+        assert_eq!(
+            reverse_diag_dir(DiagDirection(4), disabled),
+            DiagDirection(6)
+        );
+        assert_eq!(dir_to_diag_dir(Direction(8), disabled), DiagDirection(4));
+        assert_eq!(
+            diag_dir_to_dir(DiagDirection(255), disabled),
+            Direction(255)
+        );
+        assert_eq!(reverse_dir(Direction(8), disabled), Direction(12));
         assert_eq!(failures.get(), 6);
     }
 }
