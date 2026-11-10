@@ -95,16 +95,23 @@ pub(crate) fn get_field_type(fields: &TileFields<'_>) -> u32 {
 pub(crate) fn get_industry_index_of_field(fields: &TileFields<'_>) -> IndustryID {
     IndustryID(fields.m2())
 }
-/// `GetFence`.
+/// `GetFence`; the caller supplies its non-returning failure operation.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_fence(fields: &TileFields<'_>, side: DiagDirection) -> u32 {
+pub(crate) fn get_fence(
+    fields: &TileFields<'_>,
+    side: DiagDirection,
+    not_reached: impl FnOnce(),
+) -> u32 {
     u32::from(match side {
         DiagDirection::DIAGDIR_SE => (fields.m4() >> 2) & 7,
         DiagDirection::DIAGDIR_SW => fields.m4() >> 5,
         DiagDirection::DIAGDIR_NE => fields.m3() >> 5,
         DiagDirection::DIAGDIR_NW => (fields.m6() >> 2) & 7,
-        _ => unreachable!("DiagDirection"),
+        _ => {
+            not_reached();
+            std::process::abort()
+        }
     })
 }
 /// `IsTileType(t, MP_CLEAR) && IsClearGround(t, CLEAR_FIELDS)`.
@@ -159,11 +166,14 @@ pub(crate) fn require_field_raw(m: &TileTypeAccess, t: u32) -> Option<TileFields
 pub(crate) fn get_industry_index_of_field_raw(fields: &TileFields<'_>) -> u16 {
     get_industry_index_of_field(fields).0
 }
-/// Raw adapter: `GetFence` over a base side.
+/// Raw adapter: `GetFence` over a base side; `NOT_REACHED` fails through the
+/// canonical native assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_fence_raw(fields: &TileFields<'_>, side: u8) -> u32 {
-    get_fence(fields, DiagDirection(side))
+    get_fence(fields, DiagDirection(side), || {
+        crate::services_assert::check(false);
+    })
 }
 /// Raw adapter: the field-tile test over a base tile.
 #[allow(clippy::inline_always)]
