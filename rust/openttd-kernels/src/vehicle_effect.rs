@@ -81,10 +81,6 @@ pub struct Services {
     tunnel: extern "C" fn(u32) -> bool,
     powered: extern "C" fn(u64, crate::services::RailType) -> bool,
 }
-/// `GetTileRailType`, read in place from the canonical map.
-fn tile_rail(s: &Services, tile: u32) -> crate::rail_type::RailType {
-    crate::rail_type::RailType(crate::map_func::World::new(s.shared).tile_rail_type(tile))
-}
 static RUNTIME: AtomicPtr<Services> = AtomicPtr::new(std::ptr::null_mut());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_visual_bind(s: *const Services) -> *const Services {
@@ -333,6 +329,12 @@ fn emit_part(
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
+    show_visual_effect(front, max_speed);
+}
+/// `Vehicle::ShowVisualEffect`, after the native caller's smoke-amount, status and speed
+/// gate: draw the visual effects of `front`'s chain. `max_speed` is the speed as limited by
+/// underground and orders.
+pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
     let s = services();
     let gate = Show {
         speed: front.speed(),
@@ -342,6 +344,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let front_train = if gate.kind == VehicleType::TRAIN {
         let handle = crate::train::Handle::from_record(front.0.as_ptr());
         let tile = front.tile();
+        // For trains, do not show any smoke when:
+        // - the train is reversing
+        // - is entering a station with an order to stop there and its speed is equal to maximum station entering speed
         if handle.get_flags() & crate::train::FLAG_REVERSING != 0
             || (crate::map_func::World::new(s.shared).rail_station(tile)
                 && front.is_front_engine()
@@ -370,6 +375,13 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             }
             m
         };
+        // Show no smoke when:
+        // - Smoke has been disabled for this vehicle
+        // - The vehicle is not visible
+        // - The vehicle is under a bridge
+        // - The vehicle is on a depot tile
+        // - The vehicle is on a tunnel tile
+        // - The vehicle is a train engine that is currently unpowered
         'part: {
             if model == VESM_NONE || p.status & VS_HIDDEN != 0 {
                 break 'part;
@@ -393,7 +405,12 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             } else {
                 None
             };
-            if train.is_some_and(|t| !(s.powered)(t.get_railtypes(), tile_rail(s, p.tile))) {
+            if train.is_some_and(|t| {
+                !(s.powered)(
+                    t.get_railtypes(),
+                    crate::rail::get_tile_rail_type(s.shared, crate::tile_type::TileIndex(p.tile)),
+                )
+            }) {
                 break 'part;
             }
             if emit_part(s, front, v, &gate, &p, train, cache, model, max_speed) {

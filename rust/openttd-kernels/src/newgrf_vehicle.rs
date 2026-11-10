@@ -174,10 +174,6 @@ fn engine(v: V) -> u16 {
 fn ground(v: V) -> bool {
     crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type())
 }
-/// `GetTileRailType`, read in place from the canonical map.
-fn tile_railtype(s: &Services, tile: u32) -> crate::services::RailType {
-    crate::services::RailType(crate::map_func::World::new(s.shared).tile_rail_type(tile))
-}
 // SAFETY throughout: the game-state mutex serializes shell/cache access. The
 // caller retains live shells and immutable services. Raw cache reads/writes are
 // short operations, ending before any native callback or evaluator entry.
@@ -1081,7 +1077,10 @@ unsafe fn variable(
                 let tile = (h).tile();
                 match kind() {
                     0 => {
-                        let rt = tile_railtype(s, tile);
+                        let rt = crate::rail::get_tile_rail_type(
+                            s.shared,
+                            crate::tile_type::TileIndex(tile),
+                        );
                         let types = (s.vehicle.train_handle)(v).get_railtypes();
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
@@ -1218,7 +1217,10 @@ unsafe fn variable(
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
-                    let tile = tile_railtype(s, (h).tile());
+                    let tile = crate::rail::get_tile_rail_type(
+                        s.shared,
+                        crate::tile_type::TileIndex((h).tile()),
+                    );
                     if tile.0 == param.0 {
                         return 15;
                     }

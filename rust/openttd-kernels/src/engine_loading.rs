@@ -266,9 +266,9 @@ fn next(s: &Services, from: u32) -> EngineRef {
     unsafe { ((*s.types).next)(from) }
 }
 /// `_settings_game.game_creation.landscape`, loaded in place from the shared catalog.
-fn climate(s: &Services) -> u8 {
+fn climate(s: &Services) -> crate::landscape_type::LandscapeType {
     // SAFETY: The immutable shared table names the process-wide settings catalog.
-    unsafe { (*s.shared).settings().climate.read() }
+    crate::landscape_type::LandscapeType(unsafe { (*s.shared).settings().climate.read() })
 }
 fn default_count(s: &Services, kind: u8) -> u8 {
     unsafe { *(s.default_counts)().add(usize::from(kind)) }
@@ -500,9 +500,13 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
         (PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS, CC_LIQUID)
     } else if kind == VEH_SHIP {
         match label {
+            // Ferries
             CT_PASSENGERS => (PASSENGERS, 0),
+            // Tankers
             CT_OIL => (CC_LIQUID, 0),
-            _ if climate(s) == crate::services::LandscapeType::TOYLAND.0 => (
+            // Cargo ships
+            // No tanker in toyland :(
+            _ if climate(s) == crate::landscape_type::LandscapeType::Toyland => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
                 PASSENGERS,
             ),
@@ -549,7 +553,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 CC_LIQUID | PASSENGERS,
             ),
         ];
-        let climate = climate(s);
+        let climate = climate(s).0;
         DEFAULTS
             .iter()
             .find(|&&(climates, cargo, _, _)| climates & (1 << climate) != 0 && cargo == label)
@@ -825,7 +829,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                 crate::engine_type::EngineID(id)
             );
         }
-        if !crate::vehicle::EngineRef::of(e.shell).climate(climate(s)) {
+        if !crate::vehicle::EngineRef::of(e.shell).climate(climate(s).0) {
             continue;
         }
         match e.kind.0 {
@@ -1073,6 +1077,11 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
     file: File,
     badge: u32,
 ) -> u32 {
+    finalise_file_badges(s, file, crate::newgrf_badge_type::BadgeID(badge))
+}
+/// `FinaliseBadges`' engine loop for one GRF file's badge: append the badge to every engine
+/// from `file`, returning the feature mask (`GrfSpecFeatures`) of those engines' types.
+fn finalise_file_badges(s: &Services, file: File, badge: crate::newgrf_badge_type::BadgeID) -> u32 {
     let mut features = 0;
     let mut from = 0;
     loop {
@@ -1085,7 +1094,7 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
             continue;
         }
         unsafe {
-            (*e.shell.cast_mut()).bindings.badges.push(badge);
+            (*e.shell.cast_mut()).bindings.badges.push(badge.0);
         }
         features |= 1 << e.kind.0;
     }

@@ -637,7 +637,7 @@ impl Game<'_> {
                 status: v.v.status(),
             };
             let speed = max_speed(v, r, self.acceleration_model, self.l);
-            crate::vehicle_effect::openttd_rust_visual_show(v.v, speed as u32);
+            crate::vehicle_effect::show_visual_effect(v.v, speed as u32);
         }
         SpeedRead {
             max: MaxSpeedRead {
