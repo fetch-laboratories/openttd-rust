@@ -478,23 +478,29 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-09; ne
 
 ## Ready queue
 
-At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis of later entries lives on the stream issue; the queue at `4471d41669`, with fan-in and held-caller counts for 9a to 9c, 7, 8, 11 and 14, is on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
+At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis lives on the stream issue: the fan-in, held callers and later passes for this queue, measured at `c12561671f`, are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933).
 
-Agent: /root/planner_ready_queue_146 | Model: claude-opus-5-5 | Reasoning effort: high (trimmed by steering 33)
+Agent: /root/planner_merge_8 | Model: claude-fable-5-2 | Reasoning effort: high
 
-1. **6b-1, #734 workset 13 leaves.**
-   - **Files:** `direction_func.rs` (123 lines, 16 integer sites), `slope_func.rs` (201, 21) and `spiral.rs` (157, 22), with workset 13's `clear_map.rs`, `tree_map.rs`, `void_map.rs` and `tree_cmd.rs` folded in. About 690 lines and 72 sites.
-   - **Also:** removes `change_diag_dir_typed` from `town.rs`.
-   - **Waits on:** integration 147. Then trial-merge #839, whose fixes add `AxisToDiagDirs` to `direction_func.rs`, and list the overlap.
-2. **9m, #734 workset 09 `movement.rs` single-file pass.**
-   - **Files:** `movement.rs` (1,554 lines, 76 sites), `movement/tests.rs` and `signal_func.rs`.
-   - **Callers:** 65 files name `movement`.
-   - **Waits on:** 6b-1, because the two share 18 caller files and cannot be open together.
-3. **15, #734 workset 07 vehicle transactions.**
-   - **Files:** `vehicle_transactions.rs` and its eight submodules, 4,071 lines and 171 sites. Split at a file boundary above about 2,000 changed lines: the first part is `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs`.
-   - **Waits on:** integration 147, which releases #825's four files. Its five `fleet/transactions.rs` call sites in #837 fit the narrow allowance.
+Checked on 2026-11-10 against #871, #872, #873 and dispatched entry 6b-1. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
 
-The finished-file residue PR and work order items 2 and 3 are not queue entries. Root dispatches them by work order position.
+1. **15, #734 workset 07 vehicle transactions.**
+   - **Files:** `vehicle_transactions.rs` and its eight submodules: 4,062 lines, 172 sites, 1,479 to 2,666 changed lines. It splits at a file boundary.
+     - 15a: `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs` (1,760 lines, 123 sites).
+     - 15b: `rail.rs`, `articulated.rs`, `build.rs`, `clone.rs` and `construct.rs` (2,302 lines, 49 sites, 178 missing comment lines).
+   - **Callers:** four files outside the group. Only `settings_table.rs` is held (#872), and it names module paths only.
+   - **Waits on:** nothing for 15a, which shares no file with 6b-1. 15b waits on #873, which edits `rail.rs`.
+2. **7a, #734 workset 13 map core.**
+   - **Files:** `map_func.rs` and `tile_map.rs`: 1,243 lines, 167 sites, 1,436 to 2,588 changed lines. One PR, one reviewer per function group.
+   - **Callers:** 93 files, the highest fan-in in the tree. The 23 finished ones adopt the typed forms; the 70 unfinished ones take one-token `_raw` renames.
+   - **Waits on:** #871 and 6b-1, which both edit `map_func.rs`. If #872 or #873 is still open, their nine caller files take the narrow allowance.
+   - **Rank:** order (b) puts it before 9m. The callers that held it back at steering 33 have merged, so both become ready at 6b-1's merge.
+3. **9m, #734 workset 09 `movement.rs` single-file pass.**
+   - **Files:** `movement.rs`, `movement/tests.rs` and `signal_func.rs`: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
+   - **Callers:** 66 files.
+   - **Waits on:** 7a. The two share 50 files, `movement.rs` among them, and cannot be open together.
+
+While 7a is open, only passes outside its 95 files are free; the #734 comment ranks them, 23's remainder first. Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
 
 ## Resume checkpoint
 
