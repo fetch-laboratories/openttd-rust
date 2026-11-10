@@ -164,7 +164,6 @@ void openttd_rust_fleet_stats_clear_autoreplace(void *);
 void openttd_rust_fleet_update_children(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_count_vehicle(const OpenTTDFleetGroupServices *, void *, int32_t);
 void openttd_rust_fleet_count_engine(const OpenTTDFleetGroupServices *, void *, int32_t);
-void openttd_rust_fleet_add_profit(const OpenTTDFleetGroupServices *, void *);
 void openttd_rust_fleet_min_age(const OpenTTDFleetGroupServices *, void *);
 void openttd_rust_fleet_update_afterload(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_profits(const OpenTTDFleetGroupServices *);

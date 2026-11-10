@@ -212,7 +212,6 @@ public:
 
 	bool IsPendingDeletion() const { return this->pending; }
 
-	void DeferDeletion();
 	static void ProcessDeferredDeletions();
 };
 

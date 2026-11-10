@@ -4,88 +4,110 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-09, stocktake 143)
+## Where the fork stands (2026-11-10, stocktake after the eighth merge)
 
-Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
+Agent: /root/stocktake_merge_8 | Model: claude-sonnet-5-5 | Reasoning effort: high
 
-**Since stocktake 143 (paused 11-09 05:35 UTC).** Code main is integration 147, `489f4ea161` (#851), plus steering 33's process fixes #858 (`9b379f0d99`) and #859 (`ba7bc3fd44`), 11-09. The fork C++ census is 277,044 and exports are 1,539 ([Phases](#phases)). Platform cadence 145 is green. Unintegrated: #839 (entry 4a), #837 (#737 V part 2), #852 (entry 16) and #853 (entry 17).
+**Since stocktake 143 (`da020b52c7`, 11-09 02:31 UTC).** Code main is `c12561671f` (#868), 11-10 11:35 UTC: the eighth merge through the merge queue (#866, #852, #837, #839, #869, #870, #853, #868), integration 155 in the old count. Open: #871 (draft), #872 and #873. The fork C++ census is 276,186, down 1,380 in 1.378 calendar days (−1,001 a day, commit timestamps; the 11-09 05:35 to 11-10 08:35 pause is inside it). The tests fell 828 lines (`src/tests` 5,615 to 4,787), `tools/` 384 (15,821 to 15,437) and ABI-generated non-record C++ 33. Exports are 1,697 expanded and 1,536 historical ([Phases](#phases) counts 1,539 at integration 146). Original C++ retired fell by 2 (−1.5 a day), in Simulation logic (38,329 to 38,327; remaining 9,095 to 9,097). Merged PRs that touched original-derived files since 143: #845 (`newgrf_station.cpp`), #851 (`effectvehicle.cpp`, `order_cmd.cpp`, `train_cmd.cpp`), #839 and #868 (`station_cmd.cpp`) and #869 (`cargopacket.h`). The figure is the metric's, reported as measured; no line was traced.
 
-Stocktake 143 measures integration 143 (`da020b52c7`) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full, and none was rolled back. Fork C++ fell 1,393 counted lines, mostly through #736: #810 (U) −746, #829 (W) −246 and #820 (P) −77. Original C++ retired fell by 9 lines, a reclassification of #814's glue edits in original-derived files, not restored original code (root, 2026-11-09). The next platform cadence follows integration 150; the next stocktake and profile follow 155.
+**Speed.** Profile 155 passed, with every canonical exit-save comparison equal and all six policy records below band and ceiling. TGP is 1.163070x (143: 1.230318x), as #843 predicted ([Speed](#speed)). No projection rose.
 
-| Measured quantity | Integration 131 | Integration 143 |
+**Streams.** #734 finished 54 of 319 workset files (143: 41) and 46,082 of 183,789 lines (25.1%); worksets 01, 02 and 03 are finished (14, 15 and 14 files). #736 fell 828 lines in `src/tests` and 384 under `tools/`; #737's three baselines fell 17, 25 and 9 rows. #738's corpus rose 22 lines (3,229 to 3,251) with its item ready. #735's `allow` sites are unchanged at 11. The Clippy debt file is 54 keys because #858 stopped gating length, nesting and complexity rows: the same gate gives 59 keys at 143.
+
+**Process since development resumed (11-10 08:35 UTC).**
+- **Merged PRs.** 7 (#852, #837, #839, #869, #870, #853, #868). #866 merged at 08:32 UTC, before the resume. Created to merged: 28.2, 32.0, 31.6, 0.7, 0.8, 30.1 and 2.3 hours (median 28.2); the first, second, third and sixth were opened 11-09 and include the 27-hour pause. Accepted to merged, from the last review report on the merged head: 10, 22, 17, 18, 11, 15 and 16 minutes (median 16).
+- **Merge queue.** 9 entries since 08:35 (10 with #866's): 7 merged and 2 removed, both #853. Of the 11 group runs, 7 passed and 4 failed:
+  - 09:53 #853's own run: Windows x86 Clippy `unnecessary_box_returns` at `vehicle/scheduler.rs:998` (`new_pool() -> Box<PoolCore>`); Quick, native and the other platforms passed (run 42794535339). The lint depends on pointer width, and Windows x86 runs only in Full. Removed at 10:05.
+  - 09:59 #837's and 10:04 #839's runs, both built on top of #853: E0560, `transactions::Services` has no field named `orders` (runs 42795338273 and 42795978873). #837 retired a slot that #853's test tables still set, which Git does not see as a conflict. The queue rebuilt both without #853 at 10:05, and both merged.
+  - 10:33 #853's second run: the same E0560 once #837 was on base (run 42800171322). Its `platform` pre-check had passed at 10:14, before #837 merged. Removed at 10:52, 18 minutes after an error known within 2. #853's `9220c1e356` drops the stale initializer; it merged on its third entry.
+- **Quick failures on PR heads.** 25 runs on the seven merged PRs since 08:35: 19 passed, 4 failed, 2 were cancelled. None of the four failed on the Clippy ratchet step: #839 and #868 failed Python complexity debt and lint policy, #869 Python formatting and lint, #853 Rust formatting, check and warnings. Over the five component PRs' whole lives (#852, #837, #839, #853, #868; 46 Quick runs on the seven PRs since 11-08 18:58): 14 failures, 10 on the Clippy ratchet step, all 11-09 02:20 to 05:35 UTC on #837 (2) and #839 (8), before #858 (11-09 20:52 UTC): 2.0 per component PR (steering 33: 1.8; provisional target below 0.5), 0 since #858.
+- **Simulation-tier runs.** 30: 19 native requests (15 passed, 3 cancelled, 1 failed before the simulation shards) and 11 queue runs (7 passed, 4 failed as above, none in simulation). One ended on the network-protocol hang (#693): native request 42788129285 for #839 (09:08): shard 2 printed nothing after 09:20:09, was cancelled at 09:36:13, and three `openttd-network_protocol` processes were terminated at cleanup. No timeout message was logged, so the attribution is by signature. One in 30 (provisional threshold one in ten; 11-08/09 measured 2 in 26). The other two cancellations were superseded runs whose simulation shards stopped after 2 min 17 s and 37 s.
+- **Branches.** 3 open PRs; 48 remote branches not merged into `rust-migration`: 21 upstream (`release/*`, `master`), 3 open-PR heads and 24 others. `issues.py`: 43 open, 0 unplaced, 1 excluded, 1 roadmap exclusion without an issue.
+
+**Root's reading (root, 2026-11-10).** No course change: fork C++ fell, no scenario is near its ceiling and no item stalled across review rounds.
+- **#738** is the one stream whose inventory rose with ready work: its last item was undispatched, and the 11-10 process rules added lines. Root dispatches it at this stocktake ([work order](#cleanup-work-order) item 5).
+- **#735**'s `allow` sites held at 11 while its ratchet rows fell from 53 to 48. Its "functions over seven parameters" row has no tracked counter; #874 adds one to the inventory tool, folded into the next tools PR.
+- **Clippy ratchet:** 0 failures in 25 Quick runs since #858, against steering 33's provisional target below 0.5 per component PR. The target is met; steering 34 confirms it.
+- **#693:** 1 hang in 30 simulation-tier runs, below the one-in-ten threshold. No diagnosis is selected.
+- **Metric correction to expect:** #872 deletes a wrapper in `src/station_cmd.cpp`, after which the metric lines 343 lines of that file up with the original again and counts them as original, not glue. "Original C++ retired" will read 343 lower at the next stocktake. That is a reclassification; the fork C++ census is unaffected.
+- **Queue:** the two removals and the two process faults found on the first day (steered messages cancelling a running call, reviews held for CI) are on [#860](https://github.com/fetch-laboratories/openttd-rust/issues/860), with their fixes in `0ef341e341` and `1227a1becc`.
+
+| Measured quantity | Integration 143 | Integration 155 (tip) |
 | --- | ---: | ---: |
-| Original C++ remaining | 221,645 | 221,654 |
-| Fork source glue, including generated records | 34,923 | 34,616 |
-| Compiled source and generated records C++ | 256,568 | 256,270 |
-| Tracked tools C++ evidence | 16,869 | 15,821 |
-| ABI-generated non-record C++ evidence | 5,522 | 5,475 |
-| Measured fork C++ series (scope below) | 278,959 | 277,566 |
-| Original C++ retired | 62,710 of 284,355 (22.05%) | 62,701 of 284,355 (22.05%) |
-| Simulation C++ retired | 41,550 of 61,148 (67.95%) | 41,541 of 61,148 (67.94%) |
-| Expanded Rust exports / callback fields | 1,709 / 3,418 | 1,708 / 3,374 |
-| Historical regex exports / callback slots | 1,553 / 3,376 | 1,552 / 3,332 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 | 104 / 304 / 39 |
-| Retained Clippy keys / diagnostics | 664 / 757 | 649 / 739 |
-| Ruff keys / diagnostics | 296 / 296 | 287 / 287 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 | 190,613 / 62,128 |
-| Play-save speed ratio | profile 131 | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
+| Original C++ remaining | 221,654 | 221,656 |
+| Fork source glue, including generated records | 34,616 | 33,651 |
+| Compiled source and generated records C++ | 256,270 | 255,307 |
+| Tracked tools C++ evidence | 15,821 | 15,437 |
+| ABI-generated non-record C++ evidence | 5,475 | 5,442 |
+| Measured fork C++ series (scope below) | 277,566 | 276,186 |
+| Original C++ retired | 62,701 of 284,355 (22.05%) | 62,699 of 284,355 (22.05%) |
+| Simulation C++ retired | 41,541 of 61,148 (67.94%) | 41,539 of 61,148 (67.93%) |
+| Expanded Rust exports / callback fields | 1,708 / 3,374 | 1,697 / 3,340 |
+| Historical regex exports / callback slots | 1,552 / 3,332 | 1,536 / 3,298 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 104 / 304 / 39 | 87 / 279 / 30 |
+| Exports held only by uncalled members (`orphan-exports.py --report-uncalled`, not enforced) | – | 53 |
+| Retained Clippy keys / diagnostics | 649 / 739 (59 / 88 under #858's gate) | 54 / 83 |
+| Ruff keys / diagnostics | 287 / 287 | 287 / 287 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 190,613 / 62,128 | 203,275 / 64,412 |
+| Play-save speed ratio | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors | No wall pass. Play projections 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
 
-Fork-added C++ under `src/tests` (5,615 lines) is within source glue. The 6,090 ABI-generated lines are 615 record declarations within source glue plus the 5,475 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Most of raw GLOBAL Rust's +14,954 is #734 file passes and #736 oracle tests and data.
+Fork-added C++ under `src/tests` (4,787 lines) is within source glue. The 6,064 ABI-generated lines are 622 record declarations within source glue plus the 5,442 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust grew 12,662 lines and tooling 2,284 since 143; the split between executable code and oracle data was not measured.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,329 | 9,095 | 6,456 |
-| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,387 |
+| Simulation logic (phase 1) | 47,424 | 38,327 | 9,097 | 6,427 |
+| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,386 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,067 | 38,727 | 3,360 |
 | Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 551 |
 | GUI and platform (phase 5) | 64,120 | 415 | 63,705 | 465 |
 | Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
 | Data tables | 17,295 | 4,367 | 12,928 | 14 |
-| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,615 |
-| Boundary layer | 0 | 0 | 0 | 16,768 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 4,787 |
+| Boundary layer | 0 | 0 | 0 | 16,661 |
 
-These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF and historical-save corpora and retained native fixtures leave the limits recorded on #156; entry witnesses are not branch coverage. #503 deep checks remain user-requested.
+These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF and historical-save corpora and retained native fixtures leave the limits recorded on #156; entry witnesses are not branch coverage. #503 deep checks remain user-requested. #156 gained one comment since 143, from steering 33's audits (none a demonstrated defect): #810 dropped the short-read view-at-cursor observation and the byte-strings and history sanitizer candidate runs; #825's `wait_twoway` and stuck-train news path have no witness; #814's `deliver_to_transfer` and `deliver_to_keep` are not distinguished, and station auto-refit and first-arrival visit-type bits have no witness; integrations 142 to 146 ran without 14 fork-only kept native cases, restored by #849 in #851.
 
 ### Cleanup stream inventories
 
-Rows marked † are root's, updated at each stocktake ([selection](planning.md#selection)). The others are steering's, measured with the overhaul's analyzers until #854 tracks them in `tools/`; at steering 33 they reproduced integration 129's published figures exactly.
+Rows marked † are root's, updated at each stocktake ([selection](planning.md#selection)). The others are steering's. The comment, integer, wrapper, constant and literal rows now come from `tools/code-standards-inventory.py` (#854, #870); its 143 values were recounted at `da020b52c7` with the same tool, and at integration 129 it reproduced the overhaul's published figures exactly. Finished-file figures count the files in the † row above them.
 
-| Stream | Inventory | Overhaul | Integration 129 | Integration 143 † | Integration 146 (steering 33) |
-| --- | --- | ---: | ---: | ---: | ---: |
-| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319 | 41 of 319 | 51 of 319, with #832's ten |
-| #734 | Workset lines in finished files † | – | – | 32,080 of 176,930 (18.1%) | – |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – | 2,693; 133 of them in finished files |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – | 1,772; 121 of them in finished files, many of them FFI or `repr(C)` boundaries that #355 allows |
-| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – | 287 / 3,482 |
-| #735 | Functions over seven parameters | 150 | 141 | – | 132 (70 FFI exports, 39 helpers, 23 commands) |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 53 / 11 | – |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 15,821 / 5,615 | 15,642 / 5,279 ([Phases](#phases)) |
-| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 104 / 304 / 39 | – |
-| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,229 | 3,231 before this review |
-| None | Ruff rows | 296 | unchanged | 287 | – |
+| Stream | Inventory | Overhaul | Integration 129 | Integration 143 † | Integration 146 (steering 33) | Integration 155 † |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319 | 41 of 319 | 51 of 319, with #832's ten | 54 of 319 (#832's ten, #839, #852, #868) |
+| #734 | Workset lines in finished files † | – | – | 32,080 of 176,930 (18.1%) | – | 46,082 of 183,789 (25.1%) |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | 2,715; 129 in finished files | 2,693; 133 in finished files | 2,577; 152 in finished files |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | 1,766; 118 in finished files | 1,772; 121 in finished files, many of them FFI or `repr(C)` boundaries that #355 allows | 1,695; 150 in finished files |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | 285 / 3,466; 37 / 332 in finished files | 287 / 3,482 | 294 / 3,538; 47 / 435 in finished files |
+| #734 | Literal sites standing for a named value | – | 14 | 14; 0 in finished files | – | 12; 0 in finished files |
+| #735 | Functions over seven parameters | 150 | 141 | – | 132 (70 FFI exports, 39 helpers, 23 commands) | – (no tracked counter; #874) |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 53 / 11 | – | 48 / 11 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 15,821 / 5,615 | 15,642 / 5,279 ([Phases](#phases)) | 15,437 / 4,787 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 104 / 304 / 39 | – | 87 / 279 / 30 |
+| #737 | Exports held only by uncalled members † | – | – | – | – | 53 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,229 | 3,231 before this review | 3,251 |
+| None | Ruff rows | 296 | unchanged | 287 | – | 287 |
 
 Counting commands:
-- **#734:** from its issue's Worksets table and file lists. Lines are `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head. The comment, integer and wrapper rows come from the overhaul's `scratch-comments-signatures/inventory.py` and `scratch-types-literals/inventory.py`, rescanned at the head rather than read from their cached function lists (#854).
-- **#735:** from `migration/clippy-debt.json` and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
-- **#736 and #737:** from `python3 tools/port-metrics.py --whole-fork` and the baselines.
+- **#734:** from its issue's Worksets table and file lists. Lines are `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head. The issue's own "Finished" line is stale (33 files at integration 138): recount finished files from the pass PRs against the lists. At 155 they are workset 01 (14), 02 (15) and 03 (14), `tile_cmd.rs` and `tile_owner.rs` (13), `saveload.rs` (21), and `binaryheap.rs`, `bitmath_func.rs`, `container_func.rs`, `integer.rs`, `kdtree.rs`, `math.rs`, `pool.rs` and `random_func.rs` (23). The comment, integer, wrapper, constant and literal rows: `python3 tools/code-standards-inventory.py [--head REV]` for the tree, and `python3 tools/code-standards-inventory.py [--head REV] RUST_FILE...` with the finished files' paths for the finished-file figures.
+- **#735:** from `migration/clippy-debt.json` (`too_many_arguments` keys) and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
+- **#736, #737 and the Clippy and Ruff rows:** from `python3 tools/port-metrics.py --whole-fork`, `python3 tools/orphan-exports.py --report-uncalled`, `wc -l` of the three baseline files, and the debt files (keys are `sites` entries, diagnostics the sum of their list lengths). Expanded exports: `growth_inventory` in `tools/port-metrics.py`.
 - **#738:** `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`.
-
 
 ### Speed
 
-Profile 143 on clean `da020b52c7` ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) used the same tools as profile 131: Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0. All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling.
+Profile 155 on clean `c12561671f` ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6767370907)) used `simulate --instructions --jobs 2`; every anchor identity was accepted. All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling.
 
-| Scenario | Original Ir | Candidate Ir (143) | Projection (143) | Ir change since 131 |
-| --- | ---: | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,857,546,676 | 1.230318x | +2.6689% |
-| Opus | 21,773,343,583 | 27,569,546,889 | 1.345115x | −1.0596% |
-| Grok | 20,969,727,163 | 26,309,996,893 | 1.346652x | −1.0382% |
-| P1996 | 3,600,502,896 | 4,564,266,895 | 1.352193x | −0.5539% |
-| P2000 | 6,049,922,238 | 7,497,361,602 | 1.444531x | −1.0448% |
-| P2016 | 11,343,424,651 | 13,744,477,974 | 1.382593x | −1.2955% |
-| Drawing | 2,149,015,961 | 2,154,326,198 | 1.004635x | +0.0032% |
+| Scenario | Original Ir | Candidate Ir (155) | Projection (155) | Projection (143) | Ir change since 143 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| TGP | 2,265,528,237 | 2,777,157,377 | 1.163070x | 1.230318x | −2.8132% |
+| Opus | 21,773,343,583 | 27,450,175,408 | 1.345115x | 1.345115x | −0.4330% |
+| Grok | 20,969,727,163 | 26,205,322,261 | 1.346652x | 1.346652x | −0.3979% |
+| P1996 | 3,600,502,896 | 4,536,172,521 | 1.352193x | 1.352193x | −0.6155% |
+| P2000 | 6,049,922,238 | 7,474,158,998 | 1.444531x | 1.444531x | −0.3095% |
+| P2016 | 11,343,424,651 | 13,760,566,379 | 1.382593x | 1.382593x | +0.1171% |
+| Drawing | 2,149,015,961 | 2,154,394,984 | 1.004635x | 1.004635x | +0.0032% |
 
-TGP's projection rose 5.32%, over the 3% row. The [attribution](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731594943) names #816's `&s.industry` spill in `tile_loop::run` and #819's filtered `HouseZones::iter()` scan. #843, inside #851, recovers 80.6M Ir (projection 1.230x → 1.163x); confirm it at profile 155. No anchor or history was reset.
+TGP's Ir fell 80,389,299, the recovery profile 143 expected from #843 (80.6M, projection 1.230x to about 1.163x): it measures 1.163070x, 0.072x below its 1.235x band. No projection rose; the highest play projection, P2000's 1.444531x, is 0.075x below the 1.52x band. No record reached its band, so no speed pass is due. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
@@ -150,7 +172,7 @@ What set the rate:
 
 | Order | Stage | Size now | Exit (end state) | Status |
 | ---: | --- | --- | --- | --- |
-| 1 | Cleanup | #734: 278 of 319 workset files and 144,850 of 176,930 lines unfinished (stocktake 143). #735's 53 `too_many_arguments` rows and 11 `allow` sites fold into those passes. #736: 15,642 counted C++ lines under `tools/` and 5,279 in `src/tests`, plus the `stations.py` string. #737: batch W (about 180 lines) and batch V parts 2 and 3. #738: one item | #734: all 319 files finished and closure (work order item 6) done; #735 closes with it. #736: each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, checks the calling boundary itself and names the boundary whose retirement removes it ([evidence](porting.md#evidence)). #737: batches W and V delivered and its three withheld scanner rows classified. #738: its last item applied. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current. #736 and #737 were reopened at this navigation: #810's "Closes #736 batch U" and #814's "It does not close #737" closed them on merge |
+| 1 | Cleanup | #734: 265 of 319 workset files and 137,707 of 183,789 lines unfinished (stocktake 155). #735's 48 `too_many_arguments` rows and 11 `allow` sites fold into those passes. #736: 15,437 counted C++ lines under `tools/` and 4,787 in `src/tests`, plus the `stations.py` string. #737: batch W (about 180 lines), batch V part 4, and batches I and O (root, 2026-11-10). #738: one item | #734: all 319 files finished and closure (work order item 6) done; #735 closes with it. #736: each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, checks the calling boundary itself and names the boundary whose retirement removes it ([evidence](porting.md#evidence)). #737: batches W, V, I and O delivered and its three withheld scanner rows classified (I and O added by root on 2026-11-10, from #839's review and #856's scanner rule). #738: its last item applied. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current. #736 and #737 were reopened at this navigation: #810's "Closes #736 batch U" and #814's "It does not close #737" closed them on merge |
 | 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,800 compiled lines: script API 13,252, network 10,628, NewGRF 5,184, and save/load 13,023 less the pool and map chunks. The [queued owners](#after-cleanup), planned at integration 67, estimate 4,600 to 7,000 net C++ removed | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Plan it in full before cleanup's last items are dispatched ([goal and phases](planning.md#goal-and-phases)) |
 | 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,899 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 16,759-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in [accepted placement](#accepted-reader-and-pool-placement-2026-11-03-after-integration-67) |
 | 4 | Support | About 32,200: support 21,191 and graphics and viewport 10,982, plus their data tables and startup | As in [planning](planning.md#goal-and-phases) | #3; plan deferred until adjacent (user, 2026-10-28) |
@@ -169,7 +191,7 @@ Root's first actions on resume:
 
 ## Cleanup work order
 
-Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](root-workflow.md#integration)).
+Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs merge on their stream's proof, review and the merge queue's Full, growing neither fork C++ nor the boundary ([integration](root-workflow.md#integration)).
 
 Slots (two implementers; user, 2026-11-10): while ready worksets remain, one slot runs #734/#735 file passes and the other runs items 2 to 4 in order. A running profile counts as one of the two. #738 runs as one docs agent outside the implementer count.
 
@@ -184,12 +206,12 @@ Slots (two implementers; user, 2026-11-10): while ready worksets remain, one slo
 
    A typed accessor replaces its raw form. A temporary raw adapter, delegating to the typed accessor, serves only callers in files no pass has finished yet; each adopts the typed form in its own file's pass. The pass converts callers in already-finished files to the typed form itself, as mechanical edits listed in its body. The narrow allowance's `_raw` renames apply only to held files that are not finished. An adapter retires with its last caller, or at #734 closure.
 
-   **Finished-file residue.** Steering 33's audits found raw calls, a kept bounce, helper copies and missing comments in finished files of worksets 01 to 03. Some arrived after the file was finished, through later passes' renames. The audit lists are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747509029). One residue PR fixes them, ranked right after the 03 remainder (#839 and entry 5) and split by workset only above the review bound. A finished file is one with no remaining finding of the [review brief](review-brief.md)'s every-line list.
+   **Finished-file residue.** Steering 33's audits found raw calls, a kept bounce, helper copies and missing comments in finished files of worksets 01 to 03. Some arrived after the file was finished, through later passes' renames. The audit lists are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747509029). One residue PR fixes them (#871, open, with #857's assertions), ranked right after the 03 remainder (#839 and #868, both merged) and reviewed by function group. A finished file is one with no remaining finding of the [review brief](review-brief.md)'s every-line list.
 
    Split a workset only at a file boundary, and only when its diff would exceed about 2,000 changed lines. That size is provisional: the 33 vocabulary PRs averaged about 150 lines. Above about 1,000 changed lines, assign one reviewer per function group ([review](workflow.md#review)). Later PRs touch a finished file only for a mechanical shared-file edit or for a caller adopting a changed signature.
 
    Order (adopted 2026-11-08 from the overhaul thread's proposal, made at the user's request; it replaces closing passes for 01 to 09 and then the largest integer-site count first): pass a workset before its callers. A file passed after its callees adopts their typed forms in its one pass; one passed before them keeps raw calls and is touched again. Fan-in is the number of files outside the workset that reference it through `crate::` (measured at `5af17025a3`).
-   - (a) Finish the 03 remainder, `station_cmd.rs` (#839) and `station_service.rs` (entry 5), then the finished-file residue PR.
+   - (a) Finish the 03 remainder, `station_cmd.rs` (#839) and `station_service.rs` (#868), then the finished-file residue PR (#871). The two passes have merged.
    - (b) 13 Map/terrain (fan-in 90; `map_func` alone 85), with 23's type-bearing files: `bitmath_func` (39), `random_func` (21), `pool`, `math`, `kdtree`, `binaryheap`, `integer` and `container_func`. 23's fan-in of 137 is mostly `game_state`, `debug` and `witness` (45 to 46 each), which gain nothing from types; they and `raw_field` stay in 23's remainder.
    - (c) 09 (59), 08 (58), 07 (52), 06 (45), 04 (38), 05 (27). The proposal put 04 before 06, but the calls between those two worksets run both ways (06 to 04 in 2 files, 04 to 06 in 1), so strict fan-in governs.
    - (d) The rest by fan-in: 16 (67), 21 (62), 15 (42), 18 (37), 10 (33), 11 (28), 14 (27), 17 (26), 12 (25), and 23's remainder. The leaf worksets 22 (17), 20 (6) and 19 (1) go last. F's closure stays last.
@@ -197,26 +219,25 @@ Slots (two implementers; user, 2026-11-10): while ready worksets remain, one slo
    Large files are not left for later. A file over about 1,500 lines gets its own single-file pass, placed by fan-in like everything else: before its workset's other files when they call it, and otherwise immediately after the workset pass that skipped it (root, 2026-11-09, after the planner showed that `station_cmd.rs` calls the station group and that nearly every 09 file calls `movement.rs`). Twenty-four workset files exceed that size; the largest are `station_cmd.rs` (4,868), `orders.rs` (4,841), `town.rs` (3,373), `train.rs` (3,121), `industry.rs` (2,874) and `company.rs` (2,698). A single file cannot split at a file boundary, so a single-file pass above 2,000 changed lines stays one PR with one reviewer per function group, as #819 did. The 03 remainder therefore becomes three passes: `station_cmd.rs`, `station_service.rs` (2,285), and `station.rs`, `station_map.rs`, `station_cmd/waypoint.rs` and `station_lifecycle.rs` together. #734 reports progress in lines finished as well as files.
 
    A pass's reviewer applies the review brief's every-line list to every line left in its files. Proof follows the [cleanup checklist](review-checklist.md#cleanup-prs). Skip the archive-equivalence attempt for a pass that changes signatures or adds argument structs: it cannot pass, and #801's attempt differed in 15 of 370 object groups.
-2. **Tools maintenance, in this order.**
-   - #855 Clippy ratchet, merged as #858 (`9b379f0d99`): drops the length, nesting and complexity families, fails only on growth against the merge base, and pairs only real renames, which `--write` records. Then, in one tools PR if one reviewer can cover both, #856 (fork-only CTest name ratchet and instantiation-only orphan exports, deleting the `Reassign` chain) and #847.
-   - #854, the comment and type inventory analyzer in `tools/`. Each later pass then reports its files' residue from it.
+2. **Tools maintenance.** Delivered: #855's Clippy ratchet (#858, `9b379f0d99`), #856 with #847 and #867 (#869: fork-only CTest name ratchet, instantiation-only orphan exports and the non-failing `--report-uncalled`), and #854's inventory tool (#870, `tools/code-standards-inventory.py`). Each pass reports its files' residue from that tool.
 
-   Fold any later small tools item into the next tools PR.
-3. **#857**: restore the native assertions dropped in the town, industry and station ports, as one fidelity PR. A file pass that already holds one of those files may fold its row in instead.
-4. **#736 test evidence and #737 boundary debt**, ranked by C++ removed per PR, one PR per batch where the batch fits the review bound above. Fold any item under about 150 counted C++ lines into another item of its batch. Delivered: #736 U (#810), P (#820) and the W town, landscape and house families (#829, #833, #840); #737 V (#814). Order:
-   - the open #736 F cargo (#844, in #851) and vehicle/company (#853) transfers, and #737 V parts 1 and 2 (#825 in #851, #837);
-   - #737 V part 3, with the batch V follow-ups listed on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6747525414);
+   Fold any later small tools item into the next tools PR. Waiting for it: #874 (a tracked counter for functions over seven parameters) and #736's scope follow-up (count `COMMAND_SOURCE` and the extracted-original fragments in `tools/port-metrics.py`).
+3. **#857**: the native assertions dropped in the town, industry and station ports. All of its rows are folded into the residue PR (#871), which holds those files (root, 2026-11-10).
+4. **#736 test evidence and #737 boundary debt**, ranked by C++ removed per PR, one PR per batch where the batch fits the review bound above. Fold any item under about 150 counted C++ lines into another item of its batch. Delivered: #736 U (#810), P (#820), the W town, landscape and house families (#829, #833, #840), F cargo (#844) and F vehicle scheduler and company economy (#853); #737 V (#814) with parts 1 and 2 (#825, #837), and batch O's first PR (#872, 21 chains). Open: #737 V part 3 (#873). Order (root, 2026-11-10, from the planner's rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427)):
+   - #737 V part 4, the last of batch V, with the list of the baseline rows left in V's files and each one's owner;
    - #736 oracle compaction: the 127 to 129 oracles and #844's income oracle, with their capture recipes, as one PR ([#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6747531876));
-   - #737 W;
-   - #736's remaining W/F families folded by file, including Engine runtime.
+   - #736's families by rank, each as its files free: W session, objectives and signs, then W NewGRF loading and storage, then the others. A #736 family PR removes more counted C++ than any remaining #737 PR. T follows W and F;
+   - #737 W with batch O's nine free chains folded in, then batch I (company infrastructure counters, one cross-table PR). Both interrupt the families at entry 6b-1's merge and merge before entry 7a opens, because neither can be open beside the map-core pass;
+   - #737 batch O's last PR, after the #736 families that free its 18 chains. It turns `--report-uncalled` into the enforced rule, which counts calls from upstream tests;
+   - #736's end-state inventory, the stream's last PR.
 
-   Every #736 item follows the oracle rule on #736. Until #856 lands, each #736 PR lists every fork CTest case it deletes or renames, with its record. Root re-checks source boundaries and live reservations before commissioning each item.
+   Every #736 item follows the oracle rule on #736, and each family's first checkpoint reports the share of its lines that is behaviour and moves. Root re-checks source boundaries and live reservations before commissioning each item.
 5. **#738 rules**: its last item follows #855, which changes the carries the brief and checklist describe. One docs agent applies it; root reviews and commits the docs-only change between integrations.
-6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. The end state and later stocktakes and steering measure with #854's tool (item 2).
+6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. Seventeen Rust files (2,944 lines; `test_tables.rs` is 1,735 of them) are in no workset. Each joins one before closure, the type files with F ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)). The end state and later stocktakes and steering measure with #854's tool (item 2).
 
 Corrections adopted on 2026-11-07 under [#746](https://github.com/fetch-laboratories/openttd-rust/issues/746), still in force:
 
-- #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order, plus exact-head Full when compiled code differs. Per-PR Callgrind profiles and disassembly accounting are not required.
+- #734's proof uses the [cleanup checklist](review-checklist.md#cleanup-prs): unchanged operations and order, plus the merge queue's Full when compiled code differs. Per-PR Callgrind profiles and disassembly accounting are not required.
 - #747 is integrated through #751/#752, and #855 narrows it further: the Clippy ratchet keeps parameter count and safety documentation only. Remove unnecessary existing cast suppressions on later base updates.
 - #734 permits the original's integer uses through wrapper accessors and measures wrapper adoption rather than Rust enum counts. The implementer brief places helpers by their original file, including `.cpp`-only helpers (#738).
 
@@ -438,12 +459,13 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 | — | #858 Clippy ratchet for #855 (`9b379f0d99`) | Clippy debt rows 649 → 59: length, nesting and complexity retired; growth-only against the merge base. |
 | 147 | #851: #849 coverage fix, #846 #835 timing tests, #825 #737 V part 1, #844 #736 F cargo, #843, #850 (`489f4ea161`) | Restores the 14 kept CTest cases that integrations 142 and 144 dropped (coverage regression; #849 guards the route). #844's income oracle misses #736's budget: 1,981 bytes per counted line against 1,500, left for oracle compaction. |
 | — | #859 checker-only Full and unchanged growth acceptances (`ba7bc3fd44`) | A PR changing only Quick's checker scripts, their debt files and inert Markdown runs Quick alone for Full (about 8 minutes, not 22). Growth acceptances hold while the added source is unchanged. Inert Markdown narrowed to `AGENTS.md` and `docs/**.md` minus CMake-packaged docs, for carry and post-merge skips too. |
+| Merges 1–8 (queue, 11-10) | #866 preflight parity (`048109075c`); #734 passes #852 `saveload.rs`, #839 `station_cmd.rs` and #868 `station_service.rs` (`c12561671f`); #737 V part 2 #837; #736 F vehicle scheduler and company economy #853; tools #869 (#856, #847, #867) and #870 (#854) | 54 of 319 workset files finished, worksets 01 to 03 complete. Fork C++ census 277,044 → 276,186 from 146; historical exports 1,539 → 1,536; callback slots 3,332 → 3,298. No rollback; #853 left the queue twice before merging. |
 
 ## Recurring
 
 - Merges, [one merged PR each](root-workflow.md#integration), count from the switch to the merge queue after integration 147.
-- After every twelfth merge (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow the eighth merge.
-- Run the platform cadence after every fifth merge; the next follows the third. A new failure stops merges ([integration](root-workflow.md#integration)). Full runs Windows x86, Clang and GCC Dedicated itself (#860), so the cadence adds macOS and the platform comparison. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
+- After every twelfth merge (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow the twentieth merge.
+- Run the platform cadence after every fifth merge; the next follows the thirteenth; the cadences after merges 3 and 8 were green. A new failure stops merges ([integration](root-workflow.md#integration)). Full runs Windows x86, Clang and GCC Dedicated itself (#860), so the cadence adds macOS and the platform comparison. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -455,23 +477,29 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-09; ne
 
 ## Ready queue
 
-At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis of later entries lives on the stream issue; the queue at `4471d41669`, with fan-in and held-caller counts for 9a to 9c, 7, 8, 11 and 14, is on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
+At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis lives on the stream issue: the fan-in, held callers and later passes for this queue, measured at `c12561671f`, are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933).
 
-Agent: /root/planner_ready_queue_146 | Model: claude-opus-5-5 | Reasoning effort: high (trimmed by steering 33)
+Agent: /root/planner_merge_8 | Model: claude-fable-5-2 | Reasoning effort: high
 
-1. **6b-1, #734 workset 13 leaves.**
-   - **Files:** `direction_func.rs` (123 lines, 16 integer sites), `slope_func.rs` (201, 21) and `spiral.rs` (157, 22), with workset 13's `clear_map.rs`, `tree_map.rs`, `void_map.rs` and `tree_cmd.rs` folded in. About 690 lines and 72 sites.
-   - **Also:** removes `change_diag_dir_typed` from `town.rs`.
-   - **Waits on:** integration 147. Then trial-merge #839, whose fixes add `AxisToDiagDirs` to `direction_func.rs`, and list the overlap.
-2. **9m, #734 workset 09 `movement.rs` single-file pass.**
-   - **Files:** `movement.rs` (1,554 lines, 76 sites), `movement/tests.rs` and `signal_func.rs`.
-   - **Callers:** 65 files name `movement`.
-   - **Waits on:** 6b-1, because the two share 18 caller files and cannot be open together.
-3. **15, #734 workset 07 vehicle transactions.**
-   - **Files:** `vehicle_transactions.rs` and its eight submodules, 4,071 lines and 171 sites. Split at a file boundary above about 2,000 changed lines: the first part is `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs`.
-   - **Waits on:** integration 147, which releases #825's four files. Its five `fleet/transactions.rs` call sites in #837 fit the narrow allowance.
+Checked on 2026-11-10 against #871, #872, #873 and dispatched entry 6b-1. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
 
-The finished-file residue PR and work order items 2 and 3 are not queue entries. Root dispatches them by work order position.
+1. **15, #734 workset 07 vehicle transactions.**
+   - **Files:** `vehicle_transactions.rs` and its eight submodules: 4,062 lines, 172 sites, 1,479 to 2,666 changed lines. It splits at a file boundary.
+     - 15a: `vehicle_transactions.rs`, `refit.rs`, `mass.rs` and `clone_name.rs` (1,760 lines, 123 sites).
+     - 15b: `rail.rs`, `articulated.rs`, `build.rs`, `clone.rs` and `construct.rs` (2,302 lines, 49 sites, 178 missing comment lines).
+   - **Callers:** four files outside the group. Only `settings_table.rs` is held (#872), and it names module paths only.
+   - **Waits on:** nothing for 15a, which shares no file with 6b-1. 15b waits on #873, which edits `rail.rs`.
+2. **7a, #734 workset 13 map core.**
+   - **Files:** `map_func.rs` and `tile_map.rs`: 1,243 lines, 167 sites, 1,436 to 2,588 changed lines. One PR, one reviewer per function group.
+   - **Callers:** 93 files, the highest fan-in in the tree. The 23 finished ones adopt the typed forms; the 70 unfinished ones take one-token `_raw` renames.
+   - **Waits on:** #871 and 6b-1, which both edit `map_func.rs`. If #872 or #873 is still open, their nine caller files take the narrow allowance.
+   - **Rank:** order (b) puts it before 9m. The callers that held it back at steering 33 have merged, so both become ready at 6b-1's merge.
+3. **9m, #734 workset 09 `movement.rs` single-file pass.**
+   - **Files:** `movement.rs`, `movement/tests.rs` and `signal_func.rs`: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
+   - **Callers:** 66 files.
+   - **Waits on:** 7a. The two share 50 files, `movement.rs` among them, and cannot be open together.
+
+While 7a is open, only passes outside its 95 files are free; the #734 comment ranks them, 23's remainder first. Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
 
 ## Resume checkpoint
 

@@ -163,12 +163,6 @@ pub unsafe extern "C" fn openttd_rust_network_game_close(
 ) -> u8 {
     close(s, socket, work)
 }
-/// # Safety
-/// `socket` transfers ownership once, until the next deferred-deletion pass.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_defer(socket: *mut GameSocket) {
-    defer(socket);
-}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_process_deferred(s: &Services) {
     process_deferred(s);

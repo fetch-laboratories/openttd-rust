@@ -1110,17 +1110,6 @@ pub unsafe extern "C" fn openttd_rust_list_free(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_decision(
-    list: *mut c_void,
-    next: u8,
-    hops: u32,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    u32::from(g.decision(list, next, hops))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_list_stopping(
     list: *mut c_void,
     v: *mut c_void,
@@ -1175,76 +1164,6 @@ pub unsafe extern "C" fn openttd_rust_list_insert(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_delete(
-    list: *mut c_void,
-    index: u32,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    let state = g.list(list);
-    if (index as usize) < g.stored_count(list) {
-        let order = g.stored_order(list, index as usize);
-        if order.kind() != OT_IMPLICIT {
-            write_field!(state, manual, read_field!(state, manual).wrapping_sub(1));
-        }
-        write_field!(
-            state,
-            timetable,
-            read_field!(state, timetable).wrapping_sub(
-                i32::from(order.timetabled_wait()) + i32::from(order.timetabled_travel()),
-            )
-        );
-        write_field!(
-            state,
-            total,
-            read_field!(state, total).wrapping_sub(i32::from(order.wait) + i32::from(order.travel))
-        );
-        reenter!(openttd_rust_order_vector_erase(
-            g.vector(list),
-            index as usize
-        ));
-    }
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_move(
-    list: *mut c_void,
-    from: u8,
-    to: u8,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    if from < g.size(list) && to < g.size(list) {
-        reenter!(openttd_rust_order_vector_move(
-            g.vector(list),
-            from as usize,
-            to as usize
-        ));
-    }
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_list_remove_vehicle(
-    list: *mut c_void,
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    let state = g.list(list);
-    write_field!(
-        state,
-        vehicles,
-        read_field!(state, vehicles).wrapping_sub(1)
-    );
-    if read_field!(state, first) == v {
-        write_field!(state, first, g.next(v));
-    }
-    0
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_list_complete(
     list: *mut c_void,
     leaves: &'static Leaves,
@@ -1274,6 +1193,32 @@ fn recalculate(g: Game, list: *mut c_void) {
 }
 
 impl Game {
+    /// `OrderList::DeleteOrderAt`: remove an order from the order list and delete it.
+    /// `index` is the position of the order which is to be deleted.
+    fn delete_order_at(self, list: *mut c_void, index: VehicleOrderID) {
+        let index = usize::from(index.0);
+        if index >= self.stored_count(list) {
+            return;
+        }
+        let state = self.list(list);
+        let order = self.stored_order(list, index);
+        if order.kind() != OT_IMPLICIT {
+            write_field!(state, manual, read_field!(state, manual).wrapping_sub(1));
+        }
+        write_field!(
+            state,
+            timetable,
+            read_field!(state, timetable).wrapping_sub(
+                i32::from(order.timetabled_wait()) + i32::from(order.timetabled_travel()),
+            )
+        );
+        write_field!(
+            state,
+            total,
+            read_field!(state, total).wrapping_sub(i32::from(order.wait) + i32::from(order.travel))
+        );
+        reenter!(openttd_rust_order_vector_erase(self.vector(list), index));
+    }
     fn current(self, v: *mut c_void) -> Order {
         load(current_order(self.vehicle(v)))
     }
@@ -2010,35 +1955,6 @@ pub unsafe extern "C" fn openttd_rust_has_depot(v: *mut c_void, leaves: &'static
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_has_full_load(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    u32::from(g.any_order(v, |o| {
-        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
-    }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_has_conditional(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == OT_CONDITIONAL))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_has_unbunching(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_leave_unbunching(
     v: *mut c_void,
     leaves: &'static Leaves,
@@ -2244,22 +2160,6 @@ pub unsafe extern "C" fn openttd_rust_order_convert(p: *mut Order) -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_can_load_unload(p: *mut Order) -> u32 {
-    let order = load(p);
-    u32::from(order.can_load_unload())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_order_can_leave(p: *mut Order, has_cargo: u8) -> u32 {
-    let order = load(p);
-    {
-        u32::from(
-            order.load() != 4 || (has_cargo != 0 && order.unload() != 1 && order.unload() != 2),
-        )
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_should_stop(
     p: *mut Order,
     last_station: u16,
@@ -2374,7 +2274,7 @@ impl Control {
     }
     fn delete(&self, v: *mut c_void, index: u8) {
         let g = self.g;
-        reenter!(openttd_rust_list_delete(g.orders(v), u32::from(index), g.0));
+        g.delete_order_at(g.orders(v), VehicleOrderID(index));
         let mut u = g.first(v);
         g.delete_order_news(u);
         while !u.is_null() {
@@ -2637,16 +2537,6 @@ pub unsafe extern "C" fn openttd_rust_add_shared(
 ) -> u64 {
     let control = Control { g: Game(leaves) };
     control.add_shared(v, shared);
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_remove_shared(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.remove_shared(v);
     0
 }
 
@@ -2914,17 +2804,6 @@ pub unsafe extern "C" fn openttd_rust_backup_vehicle_clear(
 ) -> u64 {
     let control = Control { g: Game(leaves) };
     control.backup_vehicle_clear(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_backup_destination_clear(
-    kind: u8,
-    destination: u16,
-    hangar: u8,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.backup_destination_clear(u64::from(kind), u64::from(destination), u64::from(hangar))
 }
 
 #[unsafe(no_mangle)]

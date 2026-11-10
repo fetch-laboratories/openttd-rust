@@ -304,21 +304,6 @@ EngineID EngineOverrideManager::GetID(VehicleType type, uint16_t grf_local_id, u
 	return EngineID{openttd_rust_engine_mapping_get(type, grf_local_id, grfid)};
 }
 
-/**
- * Look for an unreserved EngineID matching the local id, and reserve it if found.
- * @param type Vehicle type
- * @param grf_local_id The local id in the newgrf
- * @param grfid The GrfID that defines the scope of grf_local_id.
- *              If a newgrf overrides the engines of another newgrf, the "scope grfid" is the ID of the overridden newgrf.
- *              If dynamic_engines is disabled, all newgrf share the same ID scope identified by INVALID_GRFID.
- * @param static_access Whether to actually reserve the EngineID.
- * @return The engine ID if present and now reserved, or EngineID::Invalid() if not.
- */
-EngineID EngineOverrideManager::UseUnreservedID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, bool static_access)
-{
-	return EngineID{openttd_rust_engine_mapping_use(type, grf_local_id, grfid, static_access)};
-}
-
 void EngineOverrideManager::SetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, uint8_t substitute_id, EngineID engine)
 {
 	openttd_rust_engine_mapping_set(type, grf_local_id, grfid, substitute_id, engine.base());
