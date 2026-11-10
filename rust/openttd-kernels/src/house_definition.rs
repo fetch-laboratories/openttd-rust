@@ -611,7 +611,7 @@ pub fn reset(s: &Services) {
     }
     // Reset any overrides that have been set.
     unsafe {
-        override_manager::openttd_rust_override_reset(override_manager::house());
+        override_manager::reset_override(override_manager::house());
     }
 }
 pub fn publish(s: &Services, spec: Spec) {

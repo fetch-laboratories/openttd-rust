@@ -270,8 +270,9 @@ pub unsafe fn finalise(s: &Services) {
 pub(crate) unsafe fn reset(climate: crate::landscape_type::LandscapeType, s: &Services) {
     unsafe {
         industrytype::reset(s.shared, climate, s.origin, s.origin_tiles);
-        override_manager::openttd_rust_override_reset(override_manager::tile());
-        override_manager::openttd_rust_override_reset(override_manager::industry());
+        /* Reset any overrides that have been set. */
+        override_manager::reset_override(override_manager::tile());
+        override_manager::reset_override(override_manager::industry());
     }
 }
 crate::abi::layouts! {

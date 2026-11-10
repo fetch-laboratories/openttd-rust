@@ -172,11 +172,15 @@ pub type Layout = NativeVec<LayoutTile>;
 /// `SubstituteGRFFileProps`, viewed in place.
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "StandardGRFFileProps' static_cast<size_t>(StandardSpriteGroup::End)"
+)]
 pub struct SubstituteProps {
     pub local_id: u16,
     pub grfid: u32,
     pub grffile: *const c_void,
-    pub spritegroups: [*const c_void; 2],
+    pub spritegroups: [*const c_void; StandardSpriteGroup::End.0 as usize],
     pub subst_id: u16,
     pub override_id: u16,
 }
@@ -187,7 +191,7 @@ impl SubstituteProps {
             local_id: 0,
             grfid: 0,
             grffile: std::ptr::null(),
-            spritegroups: [std::ptr::null(); 2],
+            spritegroups: [std::ptr::null(); StandardSpriteGroup::End.0 as usize],
             subst_id,
             override_id: subst_id,
         }

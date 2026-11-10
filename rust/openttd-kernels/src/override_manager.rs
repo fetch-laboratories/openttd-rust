@@ -133,11 +133,17 @@ pub unsafe extern "C" fn openttd_rust_override_reset_mapping(manager: *mut Manag
         (*manager).mappings.fill(Mapping::default());
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_override_reset(manager: *mut Manager) {
+/// `OverrideManagerBase::ResetOverride`: reset the override mappings.
+/// # Safety
+/// `manager` is a live override manager with no other borrow.
+pub(crate) unsafe fn reset_override(manager: *mut Manager) {
     let m = unsafe { &mut *manager };
     m.entities.fill(m.invalid);
     m.grfids.fill(0);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_override_reset(manager: *mut Manager) {
+    unsafe { reset_override(manager) };
 }
 pub unsafe fn get(manager: *const Manager, local: u16, grfid: u32) -> u16 {
     let m = unsafe { &*manager };

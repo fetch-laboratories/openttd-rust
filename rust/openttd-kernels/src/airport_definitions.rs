@@ -412,7 +412,7 @@ pub unsafe fn reset(s: *const Services) {
         for id in u16::from(NEW_AIRPORT_OFFSET)..NUM_AIRPORTS {
             (s.airport_clear)(id);
         }
-        override_manager::openttd_rust_override_reset(override_manager::airport());
+        override_manager::reset_override(override_manager::airport());
     }
 }
 pub unsafe fn reset_tiles(s: *const Services) {
@@ -424,7 +424,7 @@ pub unsafe fn reset_tiles(s: *const Services) {
         for id in u16::from(NEW_AIRPORTTILE_OFFSET)..NUM_AIRPORTTILES {
             (s.tile_clear)(id);
         }
-        override_manager::openttd_rust_override_reset(override_manager::airport_tile());
+        override_manager::reset_override(override_manager::airport_tile());
     }
 }
 macro_rules! publisher {
