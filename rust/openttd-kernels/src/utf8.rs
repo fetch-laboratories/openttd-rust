@@ -42,7 +42,7 @@ pub fn encode(codepoint: u32) -> Encoded {
         bytes: [0; 4],
         length: 0,
     };
-    let part = |shift: u32| 0x80 + u8::try_from(gb(codepoint, shift, 6)).unwrap();
+    let part = |shift: u8| 0x80 + u8::try_from(gb(codepoint, shift, 6)).unwrap();
     if codepoint < 0x80 {
         result.bytes[0] = u8::try_from(codepoint).unwrap();
         result.length = 1;
