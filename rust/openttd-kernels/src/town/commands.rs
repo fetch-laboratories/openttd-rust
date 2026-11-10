@@ -6,6 +6,7 @@ use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE, OWNER_TOWN};
 use crate::economy_type::PR_TOWN_ACTION;
+use crate::movement::native_assert;
 use crate::objects::{Object, ObjectServices, QueryServices};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
@@ -913,7 +914,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
                 break;
             }
             from = i.next;
-            assert!(i.town != t.shell);
+            native_assert(c.shared, i.town != t.shell);
         }
         // ... and no object is related to us.
         from = 0;
@@ -924,18 +925,24 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
                 break;
             }
             from = o.id.wrapping_add(1);
-            assert!(unsafe { (c.object_query().town)(o.object) } != t.shell);
+            native_assert(
+                c.shared,
+                unsafe { (c.object_query().town)(o.object) } != t.shell,
+            );
         }
         // Check no tile is related to us.
         for tile in crate::map_func::Map::iterate(c.map_size()).map(TileIndex) {
             match c.tile_type(tile) {
-                TileType::MP_HOUSE => assert_ne!(TownId((c.shared.town_index)(tile.0)), t.id),
-                TileType::MP_ROAD => {
-                    assert!(
-                        !c.town_owned_road(tile) || TownId((c.shared.town_index)(tile.0)) != t.id
-                    );
+                TileType::MP_HOUSE => {
+                    native_assert(c.shared, TownId((c.shared.town_index)(tile.0)) != t.id);
                 }
-                TileType::MP_TUNNELBRIDGE => assert!(!c.test_town_owns_bridge(tile, t)),
+                TileType::MP_ROAD => native_assert(
+                    c.shared,
+                    !c.town_owned_road(tile) || TownId((c.shared.town_index)(tile.0)) != t.id,
+                ),
+                TileType::MP_TUNNELBRIDGE => {
+                    native_assert(c.shared, !c.test_town_owns_bridge(tile, t));
+                }
                 _ => {}
             }
         }
