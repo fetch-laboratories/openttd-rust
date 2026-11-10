@@ -1572,39 +1572,43 @@ pub unsafe extern "C" fn openttd_rust_timetable_on_time(
     1
 }
 
-/// `CmdSetTimetableStart`'s arguments.
-struct TimetableStart {
-    vehicle: *mut c_void,
+/// A command call's context: `DoCommandFlag::Execute` and the `CommandCost` output.
+struct CommandCall {
     execute: bool,
-    all: bool,
-    start: u64,
     output: *mut c_void,
 }
 
+/// `CmdSetTimetableStart`'s arguments, in the original's order.
+struct TimetableStart {
+    veh: *mut c_void,
+    timetable_all: bool,
+    start_tick: u64,
+}
+
 /// `CmdSetTimetableStart`: set the start date of the timetable.
-fn set_timetable_start(g: Game, c: &TimetableStart) -> u32 {
-    if !g.primary(c.vehicle) {
-        return g.command_error(c.output, 0);
+fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u32 {
+    if !g.primary(args.veh) {
+        return g.command_error(call.output, 0);
     }
-    if g.orders(c.vehicle).is_null() {
-        return g.command_error(c.output, 0);
+    if g.orders(args.veh).is_null() {
+        return g.command_error(call.output, 0);
     }
-    if !g.owner_check(c.vehicle, c.output) {
+    if !g.owner_check(args.veh, call.output) {
         return 0;
     }
     {
-        let list = g.orders(c.vehicle);
+        let list = g.orders(args.veh);
         let total = g.duration(list);
         let date = crate::timer_game_common::economy_date().0;
         let start_date = date.wrapping_add(
-            (c.start.wrapping_sub((g.0.tick_counter)()) as i32)
+            (args.start_tick.wrapping_sub((g.0.tick_counter)()) as i32)
                 .wrapping_add(i32::from(crate::timer_game_common::economy_fraction()))
                 / DAY_TICKS,
         );
         let max_date = (g.0.maximum_date)() as i32;
         // Don't let a timetable start at an invalid date.
         if start_date < 0 || start_date > max_date {
-            return g.command_error(c.output, 0);
+            return g.command_error(call.output, 0);
         }
         // Don't let a timetable start more than 15 years into the future...
         if start_date.wrapping_sub(date)
@@ -1612,30 +1616,30 @@ fn set_timetable_start(g: Game, c: &TimetableStart) -> u32 {
                 crate::timetable::MAX_TIMETABLE_START_YEARS,
             )
         {
-            return g.command_error(c.output, 0);
+            return g.command_error(call.output, 0);
         }
         // ...or 1 year in the past.
         if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
-            return g.command_error(c.output, 0);
+            return g.command_error(call.output, 0);
         }
         // If trying to distribute start dates over a shared order group, we need to know the total duration.
-        if c.all && !g.complete(list) {
-            return g.command_error(c.output, 4);
+        if args.timetable_all && !g.complete(list) {
+            return g.command_error(call.output, 4);
         }
         // Don't allow invalid start dates for other vehicles in the shared order group.
-        if c.all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
-            return g.command_error(c.output, 0);
+        if args.timetable_all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
+            return g.command_error(call.output, 0);
         }
-        if c.execute {
+        if call.execute {
             let mut vehicles = Vec::new();
-            if c.all {
+            if args.timetable_all {
                 let mut u = read_field!(g.list(list), first);
                 while !u.is_null() {
                     vehicles.push(u);
                     u = g.next(u);
                 }
             } else {
-                vehicles.push(c.vehicle);
+                vehicles.push(args.veh);
             }
             if vehicles.len() >= 2 {
                 vehicles.sort_unstable_by(|all, start| g.timetable_sort(*all, *start));
@@ -1644,15 +1648,20 @@ fn set_timetable_start(g: Game, c: &TimetableStart) -> u32 {
             for (index, u) in vehicles.into_iter().enumerate() {
                 let us = g.consist(u);
                 write_field!(us, lateness, 0);
-                write_field!(us, flags, read_field!(us, flags) & !(1 << 3));
+                write_field!(
+                    us,
+                    flags,
+                    read_field!(us, flags) & !crate::base_consist::VF_TIMETABLE_STARTED
+                );
+                // Do multiplication, then division to reduce rounding errors.
                 write_field!(
                     us,
                     start,
-                    c.start
+                    args.start_tick
                         .wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
                 );
-                // Preserve the original c.vehicle (rather than u) reset quirk.
-                g.reset(c.vehicle);
+                // Preserve the original args.veh (rather than u) reset quirk.
+                g.reset(args.veh);
                 g.dirty(u);
             }
         }
@@ -1669,14 +1678,16 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
     output: *mut c_void,
     leaves: &'static Leaves,
 ) -> u32 {
-    let c = TimetableStart {
-        vehicle: v,
+    let call = CommandCall {
         execute: execute != 0,
-        all: all != 0,
-        start,
         output,
     };
-    set_timetable_start(Game(leaves), &c)
+    let args = TimetableStart {
+        veh: v,
+        timetable_all: all != 0,
+        start_tick: start,
+    };
+    set_timetable_start(Game(leaves), &call, &args)
 }
 
 #[unsafe(no_mangle)]

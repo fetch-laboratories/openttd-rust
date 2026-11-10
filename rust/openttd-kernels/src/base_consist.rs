@@ -16,3 +16,5 @@ pub const VF_STOP_LOADING: u16 = 1 << 6;
 pub const VF_CARGO_UNLOADING: u16 = 1 << 1;
 /// `VehicleFlag::BuiltAsPrototype`.
 pub const VF_BUILT_AS_PROTOTYPE: u16 = 1 << 2;
+/// `VehicleFlag::TimetableStarted`.
+pub const VF_TIMETABLE_STARTED: u16 = 1 << 3;
