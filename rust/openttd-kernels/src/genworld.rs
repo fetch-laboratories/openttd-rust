@@ -540,10 +540,10 @@ impl World<'_> {
                 let view = crate::map_func::World::new(shared);
                 let freeform = || unsafe { shared.settings().freeform_edges.read() };
                 for x in 0..map.size_x() {
-                    crate::void_map::make_void(&view, map.tile_xy(x, 0), freeform);
+                    crate::void_map::make_void_raw(&view, map.tile_xy(x, 0), freeform);
                 }
                 for y in 0..=(shared.map_max_y)() {
-                    crate::void_map::make_void(&view, map.tile_xy(0, y), freeform);
+                    crate::void_map::make_void_raw(&view, map.tile_xy(0, y), freeform);
                 }
             }
             if crate::session::mode() != GameMode::MENU {

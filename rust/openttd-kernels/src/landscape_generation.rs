@@ -32,6 +32,7 @@ use crate::landscape_type::{ARCTIC, TROPIC};
 use crate::node_hash::{NodeMap, NodeSet};
 use crate::random_func::chance16_i;
 use crate::services::{ClearGroundType, Map, Services};
+use crate::tree_cmd::TP_NONE;
 use crate::slope_func::{
     SLOPE_ELEVATED, complement_slope_raw, get_inclined_slope_direction_raw, is_inclined_slope_raw,
     is_slope_with_three_corners_raised_raw, is_steep_slope_raw,
@@ -43,7 +44,6 @@ use crate::tile_type::{
     MAX_TILE_HEIGHT, TROPICZONE_DESERT, TROPICZONE_NORMAL, TROPICZONE_RAINFOREST,
 };
 use crate::tile_type::{MP_CLEAR, MP_VOID};
-use crate::tree_cmd::TP_NONE;
 use crate::water::WaterServices;
 use crate::water_type::WATER_CLASS_SEA;
 use crate::witness as w;
@@ -149,7 +149,7 @@ impl<'a> World<'a> {
         unsafe { self.s.settings().freeform_edges.read() }
     }
     fn make_void(&self, view: &crate::map_func::World<'_>, tile: u32) {
-        crate::void_map::make_void(view, tile, || self.freeform_edges());
+        crate::void_map::make_void_raw(view, tile, || self.freeform_edges());
     }
     fn initialize(&self, freeform: bool) {
         w::hit(w::GENERATION_INITIALIZE);
