@@ -42,7 +42,8 @@ type V = *mut OpenTTDVehicle;
 pub(crate) const MAX_ARTICULATED_PARTS: u32 = 100;
 #[repr(C)]
 pub struct Services {
-    pub(crate) resolver: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
+    /// The vehicle owner's table: its `NewGRF` resolver and `TEMP` shell destruction.
+    pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
     pub(crate) engine: extern "C" fn(u16) -> E,
     engine_if_valid: extern "C" fn(u16) -> E,
     pub(crate) id: extern "C" fn(E) -> u16,
@@ -50,7 +51,6 @@ pub struct Services {
     pub(crate) cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
     new_temporary: extern "C" fn() -> V,
-    destroy_temporary: extern "C" fn(V),
     vehicle_engine_object: extern "C" fn(V) -> E,
     pub(crate) vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
@@ -60,14 +60,15 @@ pub struct Services {
     pub(crate) invalid_string_id: u32,
 }
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
+    // A null vehicle is the purchase context.
+    let v = std::ptr::NonNull::new(v).map(crate::vehicle::VehicleRef);
     unsafe {
-        crate::newgrf_vehicle::openttd_rust_vehicle_callback(
-            &*(s.resolver)(),
+        crate::newgrf_vehicle::callback(
+            s.vehicles,
+            v,
+            engine,
             cb,
             p1,
-            0,
-            engine,
-            v,
             null_mut(),
             false,
             null_mut(),
@@ -78,7 +79,7 @@ unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
 unsafe fn property(s: &Services, engine: u16, prop: u8, fallback: u32, v: V) -> u32 {
     unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_property(
-            &*(s.resolver)(),
+            &*(s.vehicles.newgrf)(),
             engine,
             prop,
             fallback as i32,
@@ -323,29 +324,43 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
     engine: u16,
     purchase: bool,
 ) -> u32 {
+    unsafe { count_articulated_parts(s, crate::engine_type::EngineID(engine), purchase) }
+}
+/// `CountArticulatedParts`: count the number of articulated parts of an engine, outside
+/// (`purchase` false) or inside the purchase window's scope.
+unsafe fn count_articulated_parts(
+    s: &Services,
+    engine: crate::engine_type::EngineID,
+    purchase: bool,
+) -> u32 {
     unsafe {
+        if openttd_rust_articulated_is_abi(s, engine.0) == 0 {
+            return 0;
+        }
+        // If we can't allocate a vehicle now, we can't allocate it in the command
+        // either, so it doesn't matter how many articulated parts there are.
         // `Vehicle::CanAllocateItem()` through the shared table's canonical vehicle services.
         let vehicles = &*(*s.shared.movement).vehicle;
-        if openttd_rust_articulated_is_abi(s, engine) == 0 || !(vehicles.can_allocate)(1) {
+        if !(vehicles.can_allocate)(1) {
             return 0;
         }
         let v = if purchase {
             null_mut()
         } else {
             let v = (s.new_temporary)();
-            crate::vehicle::VehicleRef::of(v).write_engine(engine);
+            crate::vehicle::VehicleRef::of(v).write_engine(engine.0);
             crate::vehicle::VehicleRef::of(v).write_owner((s.shared.current_company)());
             v
         };
         let mut i = 1;
         while i < MAX_ARTICULATED_PARTS {
-            if openttd_rust_articulated_next(s, i, engine, v, null_mut()) == INVALID_ENGINE {
+            if openttd_rust_articulated_next(s, i, engine.0, v, null_mut()) == INVALID_ENGINE {
                 break;
             }
             i += 1;
         }
         if !v.is_null() {
-            (s.destroy_temporary)(v);
+            (s.vehicles.destroy)(crate::vehicle::VehicleRef::of(v));
         }
         i - 1
     }
@@ -549,7 +564,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
+        vehicles, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
     };
 }
 
@@ -700,7 +715,7 @@ pub(crate) unsafe fn unknown_callback(
 #[cfg(test)]
 pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
     crate::engine_capabilities::Services {
-        resolver: crate::test_tables::unreachable0,
+        vehicles: &crate::test_tables::VEHICLE,
         engine: crate::test_tables::unreachable1,
         engine_if_valid: crate::test_tables::unreachable1,
         id: crate::test_tables::unreachable1,
@@ -708,7 +723,6 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         cargo_classes: crate::test_tables::unreachable1,
         multiplier: crate::test_tables::unreachable1,
         new_temporary: crate::test_tables::unreachable0,
-        destroy_temporary: crate::test_tables::unreachable1,
         vehicle_engine_object: crate::test_tables::unreachable1,
         vehicle_cargo: crate::test_tables::unreachable1,
         vehicle_subtype: crate::test_tables::unreachable1,

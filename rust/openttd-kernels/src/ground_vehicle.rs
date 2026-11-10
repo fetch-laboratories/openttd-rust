@@ -136,9 +136,10 @@ use crate::vehicle_base::{VS_HIDDEN, VS_STOPPED, is_articulated_part};
 use crate::vehicle_type::GROUND_ACCELERATION;
 use crate::witness::{self, hit};
 
-pub const GVF_SUPPRESS_IMPLICIT_ORDERS: u16 = 2;
-pub const GVF_GOINGUP_BIT: u16 = 0;
-pub const GVF_GOINGDOWN_BIT: u16 = 1;
+/// `GroundVehicleFlags`, a `uint8_t` enumeration of bit positions.
+pub const GVF_SUPPRESS_IMPLICIT_ORDERS: u8 = 2;
+pub const GVF_GOINGUP_BIT: u8 = 0;
+pub const GVF_GOINGDOWN_BIT: u8 = 1;
 const SLOPE_FLAGS: u16 = (1 << GVF_GOINGUP_BIT) | (1 << GVF_GOINGDOWN_BIT);
 pub const AS_ACCEL: u8 = 0;
 pub const AS_BRAKE: u8 = 1;

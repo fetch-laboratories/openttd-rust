@@ -274,7 +274,7 @@ unsafe fn clone(
         loop {
             if flags & DoCommandFlag::EXECUTE != 0 {
                 if c.transactions.assertions {
-                    unsafe { (c.transactions.check)(!w.is_null()) };
+                    c.transactions.check(!w.is_null());
                 }
                 let cargo = unsafe { (c.transactions.cargo_type)(v) };
                 let subtype = unsafe { (c.transactions.subtype)(v, w, cargo) };

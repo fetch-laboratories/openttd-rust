@@ -25,6 +25,7 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
+use crate::bitmath_func::{assign_bit16, has_bit};
 use crate::company_type::OWNER_NONE;
 use crate::depot_type::DepotID;
 use crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
@@ -509,9 +510,7 @@ pub struct Leaves {
     pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
     pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub economy_fraction: extern "C" fn() -> u64,
     pub maximum_date: extern "C" fn() -> u64,
-    pub timetable_year_limit: extern "C" fn() -> u64,
     pub allocate_list: extern "C" fn() -> *mut c_void,
     pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -556,7 +555,6 @@ pub struct Leaves {
     pub default_group: extern "C" fn() -> u64,
     pub vehicle_group: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub review_setting: extern "C" fn() -> u64,
     pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
@@ -675,49 +673,19 @@ leaves! {
     fn change_timetable_command(ctx: *mut c_void, index: u8, field: u8, value: u16);
 }
 
-// Fields the canonical vehicle record owns, read and written in place at the
-// former callbacks' observation points.
-impl Game {
-    /// `v->First()`.
-    fn first_vehicle(self, v: *mut c_void) -> *mut c_void {
-        native_vehicle(v, self.0.base).first().shell()
-    }
-    /// `v->GetLastStationVisited()`.
-    fn last_station(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).last_station())
-    }
-    /// `v->GetVehStatus()`.
-    fn vehicle_status(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).status())
-    }
-    /// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
-    fn stopped_or_crashed(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).status() & (VS_STOPPED | VS_CRASHED) != 0)
-    }
-    /// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
-    fn suppress_implicit(self, v: *mut c_void) -> u64 {
-        let flags = native_vehicle(v, self.0.base).ground_vehicle_flags();
-        u64::from(flags & (1 << GVF_SUPPRESS_IMPLICIT_ORDERS) != 0)
-    }
-    /// `v->GetTile()`.
-    fn vehicle_tile(self, v: *mut c_void) -> u64 {
-        u64::from(native_vehicle(v, self.0.base).tile())
-    }
-    /// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress != 0)`.
-    fn suppress_implicit_write(self, v: *mut c_void, suppress: u8) {
-        let v = native_vehicle(v, self.0.base);
-        let flags = v.ground_vehicle_flags();
-        let mask = 1 << GVF_SUPPRESS_IMPLICIT_ORDERS;
-        v.write_ground_vehicle_flags(if suppress != 0 {
-            flags | mask
-        } else {
-            flags & !mask
-        });
-    }
-    /// `v->SetLastStationVisited(station)`.
-    fn last_station_write(self, v: *mut c_void, station: u16) {
-        native_vehicle(v, self.0.base).write_last_station(station);
-    }
+/// `HasBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS)`.
+fn suppress_implicit(v: VehicleRef) -> bool {
+    has_bit(v.ground_vehicle_flags(), GVF_SUPPRESS_IMPLICIT_ORDERS)
+}
+/// `AssignBit(v->GetGroundVehicleFlags(), GVF_SUPPRESS_IMPLICIT_ORDERS, suppress)`.
+fn assign_suppress_implicit(v: VehicleRef, suppress: bool) {
+    let mut flags = v.ground_vehicle_flags();
+    assign_bit16(&mut flags, GVF_SUPPRESS_IMPLICIT_ORDERS, suppress);
+    v.write_ground_vehicle_flags(flags);
+}
+/// `v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed})`.
+fn stopped_or_crashed(v: VehicleRef) -> bool {
+    v.status() & (VS_STOPPED | VS_CRASHED) != 0
 }
 
 impl Game {
@@ -780,7 +748,7 @@ impl Game {
     fn first(self, v: *mut c_void) -> *mut c_void {
         let list = self.orders(v);
         if list.is_null() {
-            self.first_vehicle(v)
+            native_vehicle(v, self.0.base).first().shell()
         } else {
             read_field!(self.list(list), first)
         }
@@ -892,7 +860,7 @@ impl Game {
                 return;
             }
             let order = self.order(list, next).unwrap();
-            let last = self.last_station(v) as u16;
+            let last = native_vehicle(v, self.0.base).last_station();
             if (order.kind() == OT_GOTO_STATION || order.kind() == OT_IMPLICIT)
                 && order.destination == last
                 && matches!(order.unload(), 1 | 2)
@@ -1604,6 +1572,104 @@ pub unsafe extern "C" fn openttd_rust_timetable_on_time(
     1
 }
 
+/// A command call's context: `DoCommandFlag::Execute` and the `CommandCost` output.
+struct CommandCall {
+    execute: bool,
+    output: *mut c_void,
+}
+
+/// `CmdSetTimetableStart`'s arguments, in the original's order.
+struct TimetableStart {
+    veh: *mut c_void,
+    timetable_all: bool,
+    start_tick: u64,
+}
+
+/// `CmdSetTimetableStart`: set the start date of the timetable.
+fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u32 {
+    if !g.primary(args.veh) {
+        return g.command_error(call.output, 0);
+    }
+    if g.orders(args.veh).is_null() {
+        return g.command_error(call.output, 0);
+    }
+    if !g.owner_check(args.veh, call.output) {
+        return 0;
+    }
+    {
+        let list = g.orders(args.veh);
+        let total = g.duration(list);
+        let date = crate::timer_game_common::economy_date().0;
+        let start_date = date.wrapping_add(
+            (args.start_tick.wrapping_sub((g.0.tick_counter)()) as i32)
+                .wrapping_add(i32::from(crate::timer_game_common::economy_fraction()))
+                / DAY_TICKS,
+        );
+        let max_date = (g.0.maximum_date)() as i32;
+        // Don't let a timetable start at an invalid date.
+        if start_date < 0 || start_date > max_date {
+            return g.command_error(call.output, 0);
+        }
+        // Don't let a timetable start more than 15 years into the future...
+        if start_date.wrapping_sub(date)
+            > crate::timer_game_common::date_at_start_of_year(
+                crate::timetable::MAX_TIMETABLE_START_YEARS,
+            )
+        {
+            return g.command_error(call.output, 0);
+        }
+        // ...or 1 year in the past.
+        if date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR {
+            return g.command_error(call.output, 0);
+        }
+        // If trying to distribute start dates over a shared order group, we need to know the total duration.
+        if args.timetable_all && !g.complete(list) {
+            return g.command_error(call.output, 4);
+        }
+        // Don't allow invalid start dates for other vehicles in the shared order group.
+        if args.timetable_all && start_date.wrapping_add(total / DAY_TICKS) > max_date {
+            return g.command_error(call.output, 0);
+        }
+        if call.execute {
+            let mut vehicles = Vec::new();
+            if args.timetable_all {
+                let mut u = read_field!(g.list(list), first);
+                while !u.is_null() {
+                    vehicles.push(u);
+                    u = g.next(u);
+                }
+            } else {
+                vehicles.push(args.veh);
+            }
+            if vehicles.len() >= 2 {
+                vehicles.sort_unstable_by(|all, start| g.timetable_sort(*all, *start));
+            }
+            let count = vehicles.len() as i32;
+            for (index, u) in vehicles.into_iter().enumerate() {
+                let us = g.consist(u);
+                write_field!(us, lateness, 0);
+                write_field!(
+                    us,
+                    flags,
+                    read_field!(us, flags) & !crate::base_consist::VF_TIMETABLE_STARTED
+                );
+                // Do multiplication, then division to reduce rounding errors.
+                write_field!(
+                    us,
+                    start,
+                    args.start_tick
+                        .wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
+                );
+                // Unbunching data is no longer valid.
+                // The original resets v, not w; the quirk is preserved.
+                g.reset(args.veh);
+                g.dirty(u);
+            }
+        }
+    };
+    1
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_timetable_start(
     v: *mut c_void,
@@ -1613,71 +1679,16 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
     output: *mut c_void,
     leaves: &'static Leaves,
 ) -> u32 {
-    let g = Game(leaves);
-    if !g.primary(v) {
-        return g.command_error(output, 0);
-    }
-    if g.orders(v).is_null() {
-        return g.command_error(output, 0);
-    }
-    if !g.owner_check(v, output) {
-        return 0;
-    }
-    {
-        let list = g.orders(v);
-        let total = g.duration(list);
-        let date = crate::timer_game_common::economy_date().0;
-        let start_date = date.wrapping_add(
-            (start.wrapping_sub((g.0.tick_counter)()) as i32)
-                .wrapping_add((g.0.economy_fraction)() as i32)
-                / DAY_TICKS,
-        );
-        let max_date = (g.0.maximum_date)() as i32;
-        if start_date < 0 || start_date > max_date {
-            return g.command_error(output, 0);
-        }
-        if start_date.wrapping_sub(date) > (g.0.timetable_year_limit)() as i32
-            || date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR
-        {
-            return g.command_error(output, 0);
-        }
-        if all != 0 && !g.complete(list) {
-            return g.command_error(output, 4);
-        }
-        if all != 0 && start_date.wrapping_add(total / DAY_TICKS) > max_date {
-            return g.command_error(output, 0);
-        }
-        if execute != 0 {
-            let mut vehicles = Vec::new();
-            if all != 0 {
-                let mut u = read_field!(g.list(list), first);
-                while !u.is_null() {
-                    vehicles.push(u);
-                    u = g.next(u);
-                }
-            } else {
-                vehicles.push(v);
-            }
-            if vehicles.len() >= 2 {
-                vehicles.sort_unstable_by(|all, start| g.timetable_sort(*all, *start));
-            }
-            let count = vehicles.len() as i32;
-            for (index, u) in vehicles.into_iter().enumerate() {
-                let us = g.consist(u);
-                write_field!(us, lateness, 0);
-                write_field!(us, flags, read_field!(us, flags) & !(1 << 3));
-                write_field!(
-                    us,
-                    start,
-                    start.wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
-                );
-                // Preserve the original v (rather than u) reset quirk.
-                g.reset(v);
-                g.dirty(u);
-            }
-        }
+    let call = CommandCall {
+        execute: execute != 0,
+        output,
     };
-    1
+    let args = TimetableStart {
+        veh: v,
+        timetable_all: all != 0,
+        start_tick: start,
+    };
+    set_timetable_start(Game(leaves), &call, &args)
 }
 
 #[unsafe(no_mangle)]
@@ -1867,7 +1878,7 @@ impl Game {
         let mut time = 0i32;
         let mut u = self.first(v);
         while !u.is_null() {
-            if self.stopped_or_crashed(u) == 0 {
+            if !stopped_or_crashed(native_vehicle(u, self.0.base)) {
                 count = count.wrapping_add(1);
                 time = time.wrapping_add(read_field!(self.consist(u), round_trip));
             }
@@ -1878,9 +1889,10 @@ impl Game {
         let departure = tick.wrapping_add(separation as u64);
         u = self.first(v);
         while !u.is_null() {
-            if self.stopped_or_crashed(u) == 0 {
+            let record = native_vehicle(u, self.0.base);
+            if !stopped_or_crashed(record) {
                 write_field!(self.consist(u), next_departure, departure);
-                (self.maintenance().view_dirty)(native_vehicle(u, self.0.base));
+                (self.maintenance().view_dirty)(record);
             }
             u = self.next(u);
         }
@@ -2236,7 +2248,7 @@ impl Control {
                 }
             }
             if index == read_field!(state, implicit) && g.vehicle_type(u) < u64::from(VEH_SHIP) {
-                g.suppress_implicit_write(u, 1);
+                assign_suppress_implicit(native_vehicle(u, g.0.base), true);
             }
             if index <= read_field!(state, implicit) {
                 let next = u16::from(read_field!(state, implicit)) + 1;
@@ -2337,8 +2349,9 @@ impl Control {
     fn delete_implicit(&self, v: *mut c_void) {
         let g = self.g;
         let state = g.consist(v);
-        if g.vehicle_type(v) < u64::from(VEH_SHIP) && g.suppress_implicit(v) != 0 {
-            g.suppress_implicit_write(v, 0);
+        let record = native_vehicle(v, g.0.base);
+        if g.vehicle_type(v) < u64::from(VEH_SHIP) && suppress_implicit(record) {
+            assign_suppress_implicit(record, false);
             write_field!(state, implicit, read_field!(state, real));
             g.invalidate_order(v, 0);
             return;
@@ -2992,7 +3005,8 @@ impl Control {
                         g.increment_real(v);
                     } else if g.current(v).action() & 2 != 0 {
                         if g.destination_tile(v) == 0
-                            && (g.0.economy_fraction)() != g.vehicle_id(v) % DAY_TICKS as u64
+                            && u64::from(crate::timer_game_common::economy_fraction())
+                                != g.vehicle_id(v) % DAY_TICKS as u64
                         {
                         } else {
                             let mut closest = Closest::default();
@@ -3060,7 +3074,7 @@ impl Control {
                             read_field!(state, time).wrapping_add(i32::from(travel))
                         );
                         if g.vehicle_type(v) < u64::from(VEH_SHIP) {
-                            g.suppress_implicit_write(v, 1);
+                            assign_suppress_implicit(native_vehicle(v, g.0.base), true);
                         }
                     } else {
                         g.update_timetable(v, true);
@@ -3116,7 +3130,7 @@ impl Control {
             && u64::from(current.destination) == g.tile_station(v)
         {
             self.delete_implicit(v);
-            g.last_station_write(v, current.destination);
+            native_vehicle(v, g.0.base).write_last_station(current.destination);
             g.update_timetable(v, true);
             g.increment_implicit(v);
             // Deletion/timetable/index updates may mutate the list or reenter.
@@ -3829,7 +3843,7 @@ impl Game {
     fn captured(self, backup: *mut c_void, v: *mut c_void, user: u32) {
         let state = self.backup(backup);
         write_field!(state, user, user);
-        write_field!(state, tile, self.vehicle_tile(v) as u32);
+        write_field!(state, tile, native_vehicle(v, self.0.base).tile());
         write_field!(state, group, self.vehicle_group(v) as u16);
         reenter!(openttd_rust_consist_copy(
             self.backup_consist(backup),
@@ -4035,7 +4049,7 @@ impl Control {
         let mut ob = self.g.next_backup(&mut cursor);
         while !ob.is_null() {
             let state = g.backup(ob);
-            if g.vehicle_tile(v) as u32 == read_field!(state, tile)
+            if native_vehicle(v, g.0.base).tile() == read_field!(state, tile)
                 && read_field!(state, user) == a as u32
             {
                 self.restore_backup(ob, v);
@@ -4247,14 +4261,26 @@ impl Control {
     }
     fn check_orders(&self, v: *mut c_void) {
         let g = self.g;
-        let review = (g.0.review_setting)();
-        if review == 0
-            || g.vehicle_status(v) & 128 != 0
-            || (review == 1 && g.vehicle_status(v) & 2 != 0)
-            || g.first(v) != v
-        {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        let review = unsafe { g.shared().settings().order_review_system.read() };
+        // Does the user wants us to check things?
+        if review == 0 {
             return;
         }
+        let status = native_vehicle(v, g.0.base).status();
+        // Do nothing for crashed vehicles
+        if status & VS_CRASHED != 0 {
+            return;
+        }
+        // Do nothing for stopped vehicles if setting is '1'
+        if review == 1 && status & VS_STOPPED != 0 {
+            return;
+        }
+        // do nothing we we're not the first vehicle in a share-chain
+        if g.first(v) != v {
+            return;
+        }
+        // Only check every 20 days, so that we don't flood the message log
         if g.local_owner(v) == 0 || !(native_vehicle(v, g.0.base)).day().is_multiple_of(20) {
             return;
         }
@@ -4316,7 +4342,8 @@ impl Control {
     fn begin_loading_orders(&self, v: *mut c_void) {
         let g = self.g;
         let current = g.current(v);
-        let last = g.last_station(v) as u16;
+        let record = native_vehicle(v, g.0.base);
+        let last = record.last_station();
         if current.kind() == OT_GOTO_STATION && current.destination == last {
             self.delete_implicit(v);
             let mut current = g.current(v);
@@ -4334,7 +4361,7 @@ impl Control {
         if g.vehicle_type(v) < u64::from(VEH_SHIP)
             && !in_list.is_some_and(|o| o.kind() == OT_IMPLICIT && o.destination == last)
         {
-            let suppress = g.suppress_implicit(v) != 0;
+            let suppress = suppress_implicit(record);
             let previous = if implicit > 0 {
                 g.vehicle_order(v, implicit - 1)
             } else if g.count(v) > 1 {
@@ -4414,7 +4441,7 @@ impl Control {
                             read_field!(state, implicit).wrapping_sub(1)
                         );
                     }
-                    g.suppress_implicit_write(v, 0);
+                    assign_suppress_implicit(record, false);
                 }
             }
         }
@@ -4615,9 +4642,7 @@ crate::abi::layouts! {
         primary_vehicle,
         ticks_per_second,
         unit_number,
-        economy_fraction,
         maximum_date,
-        timetable_year_limit,
         allocate_list,
         shared_window,
         vehicle_id,
@@ -4662,7 +4687,6 @@ crate::abi::layouts! {
         default_group,
         vehicle_group,
         unique_backup_name,
-        review_setting,
         local_owner,
         no_jet_crash,
         append_station,

@@ -49,8 +49,6 @@ pub struct Services {
     pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) max_length: unsafe extern "C" fn() -> u8,
-    pub(crate) check: unsafe extern "C" fn(bool),
     pub(crate) needs_renew: unsafe extern "C" fn(*mut (), bool) -> bool,
     pub(crate) engine_valid: unsafe extern "C" fn(u16) -> bool,
     pub(crate) company_valid: unsafe extern "C" fn(u8) -> bool,
@@ -61,7 +59,6 @@ pub struct Services {
     pub(crate) order_refit: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) order_auto: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) order_cargo: unsafe extern "C" fn(*mut ()) -> u8,
-    pub(crate) local: unsafe extern "C" fn() -> bool,
     pub(crate) refit_news: unsafe extern "C" fn(*mut (), i32),
     pub(crate) subtype: unsafe extern "C" fn(*mut (), *mut (), u8) -> u8,
     pub(crate) reverse: unsafe extern "C" fn(*mut ()),
@@ -78,6 +75,30 @@ pub struct Services {
     pub(crate) too_long: u32,
     pub(crate) too_long_replacement: u32,
     pub(crate) nothing: u32,
+}
+impl Services {
+    /// An original `assert` site, through the shared native assertion.
+    pub(crate) fn check(&self, condition: bool) {
+        crate::movement::native_assert((self.common)().base.shared, condition);
+    }
+    /// `IsLocalCompany`, through the command layer's company and finance owners.
+    /// `_settings_game.vehicle.max_train_length`, from the settings catalog.
+    pub(crate) fn max_train_length(&self) -> u8 {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe {
+            (self.common)()
+                .base
+                .shared
+                .settings()
+                .max_train_length
+                .read()
+        }
+    }
+    /// `IsLocalCompany`, through the command layer's company and finance owners.
+    pub(crate) fn is_local_company(&self) -> bool {
+        // SAFETY: The command table is immutable for the process lifetime.
+        crate::command::is_local_company(unsafe { &*self.commands })
+    }
 }
 /// Canonical record of a live native transaction shell.
 pub(crate) fn record(w: &Services, v: *mut ()) -> crate::vehicle::VehicleRef {
@@ -335,7 +356,7 @@ macro_rules! check {
     ($w:expr, $condition:expr) => {
         if $w.assertions {
             let condition = $condition;
-            unsafe { ($w.check)(condition) };
+            $w.check(condition);
         }
     };
 }
@@ -589,7 +610,7 @@ unsafe fn build(
     }
     let cargo = unsafe { new_cargo(w, gw, old, engine, chain) };
     if cargo == INVALID_CARGO {
-        if unsafe { (w.local)() } && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
+        if w.is_local_company() && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
             let order = unsafe { incompatible_refit(w, gw, old, engine) };
             unsafe { (w.refit_news)(old, order) };
         }
@@ -902,7 +923,7 @@ unsafe fn replace_chain(
                     u32::from(read_field!(
                         record(w, new_head).ground_cache(),
                         cached_total_length
-                    )) <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
+                    )) <= u32::from(w.max_train_length()) * TILE_SIZE
                 );
                 for item in replacements.iter_mut().skip(1) {
                     let wagon = item.new;
@@ -1224,12 +1245,12 @@ unsafe fn set_rule(
     };
     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
         unsafe { update_autoreplace(gw, company) };
-        if unsafe { (w.local)() } {
+        if w.is_local_company() {
             unsafe { (gw.replace_dirty)(kind) };
         }
         unsafe { (gw.list_set_dirty)(company, kind) };
     }
-    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && unsafe { (w.local)() } {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && w.is_local_company() {
         unsafe { (w.rule_window)(from, id) };
     }
     cost
@@ -1296,8 +1317,6 @@ crate::abi::layouts! {
         cargo_type,
         capabilities,
         stopped_in_depot,
-        max_length,
-        check,
         needs_renew,
         engine_valid,
         company_valid,
@@ -1308,7 +1327,6 @@ crate::abi::layouts! {
         order_refit,
         order_auto,
         order_cargo,
-        local,
         refit_news,
         subtype,
         reverse,
