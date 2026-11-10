@@ -114,6 +114,21 @@ impl PlaceHouses {
     pub const PH_ALLOWED_CONSTRUCTED: Self = Self(2);
 }
 
+/// Native `settings_type.h::TreePlacer`, retaining the full underlying integer domain.
+///
+/// List of tree placer algorithm.
+///
+/// This enumeration defines all possible tree placer algorithm in the game.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TreePlacer(pub u8);
+impl TreePlacer {
+    /// No tree placer algorithm
+    pub const TP_NONE: Self = Self(0);
+}
+/// Raw adapter: `TP_NONE` as a base value, for files no pass has finished yet.
+pub const TP_NONE: u8 = TreePlacer::TP_NONE.0;
+
 /// Native `settings_type.h::IndustryDensity`, retaining the full underlying integer domain.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

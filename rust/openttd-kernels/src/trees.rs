@@ -49,7 +49,7 @@ const ETP_NO_SPREAD: u8 = 0;
 const ETP_SPREAD_RAINFOREST: u8 = 1;
 const ETP_SPREAD_ALL: u8 = 2;
 const ETP_NO_GROWTH_NO_SPREAD: u8 = 3;
-use crate::tree_cmd::TP_NONE;
+use crate::settings_type::TP_NONE;
 const TP_ORIGINAL: u8 = 1;
 const TP_IMPROVED: u8 = 2;
 const DEFAULT_TREE_STEPS: u32 = 1000;

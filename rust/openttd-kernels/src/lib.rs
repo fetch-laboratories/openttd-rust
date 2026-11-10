@@ -194,7 +194,6 @@ mod townname_type;
 mod track_func;
 pub mod track_type;
 pub mod transport_type;
-mod tree_cmd;
 mod trees;
 mod tunnelbridge;
 mod tunnelbridge_cmd;
