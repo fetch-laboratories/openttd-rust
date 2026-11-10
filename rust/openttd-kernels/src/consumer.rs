@@ -194,8 +194,8 @@ pub fn until(bytes: &[u8], str: &[u8], sep: SeparatorUsage) -> SeparatorResult {
     }
 }
 
-/// Raw adapter: [`until`] over a base `SeparatorUsage`, for the export and
-/// `encoded.rs` until its pass.
+/// Raw adapter: [`until`] over a base `SeparatorUsage`, for `encoded.rs` until
+/// its pass.
 pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
     until(bytes, pattern, SeparatorUsage(policy))
 }

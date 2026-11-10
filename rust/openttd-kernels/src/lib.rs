@@ -543,10 +543,10 @@ pub unsafe extern "C" fn openttd_rust_consumer_separator(
     policy: i32,
 ) -> ConsumerSeparator {
     // SAFETY: Both spans are call-local and immutable under the caller contract.
-    consumer::separator(
+    consumer::until(
         unsafe { utf8::borrow(data, length) },
         unsafe { utf8::borrow(pattern, pattern_length) },
-        policy,
+        consumer::SeparatorUsage(policy),
     )
 }
 
