@@ -1231,6 +1231,7 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
 // Keep the source edge/vehicle iteration and its immediate mutation order together.
 #[allow(clippy::too_many_lines)]
 unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
+    let map = crate::map_func::World::new(unsafe { &*w.shared });
     for cargo in (0..NUM_CARGO).map(CargoType) {
         let auto_distributed = (l.automatic_distribution)(cargo.0);
         let lg = live::station_graph(from, cargo.0, l.graphs);
@@ -1241,14 +1242,22 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
         let mut to_remove = Vec::new();
         let count = unsafe { &*lg }.nodes[usize::from(node)].edges.len();
         for index in 0..count {
-            let (destination, last_update) = {
+            let (destination, dest_node, last_update) = {
                 let g = unsafe { &*lg };
                 let e = &g.nodes[usize::from(node)].edges[index];
-                (g.nodes[usize::from(e.dest_node)].station, e.last_update())
+                (
+                    g.nodes[usize::from(e.dest_node)].station,
+                    e.dest_node,
+                    e.last_update(),
+                )
             };
             let edge = (l.edge)(from, destination);
             let to = edge.destination;
             let date = crate::timer_game_common::economy_date().0;
+            if map.types.assertions() {
+                map.check((l.graphs.node)(to, cargo.0) == dest_node);
+                map.check(date >= last_update);
+            }
             let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(edge.distance >> 3) as i32;
             if date.wrapping_sub(last_update) > timeout {
                 let mut updated = false;
@@ -1371,6 +1380,9 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
             unsafe { &mut *lg }.nodes[usize::from(node)].remove_edge(r);
         }
         let date = crate::timer_game_common::economy_date().0;
+        if map.types.assertions() {
+            map.check(date >= unsafe { &*lg }.last_compression);
+        }
         if date.wrapping_sub(unsafe { &*lg }.last_compression) > live::COMPRESSION_INTERVAL {
             unsafe { &mut *lg }.compress(date);
         }
