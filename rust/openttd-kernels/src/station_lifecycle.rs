@@ -89,11 +89,11 @@ impl Services {
     }
     /// `GetIndustrySpec`.
     fn spec(kind: IndustryType) -> *const IndustrySpec {
-        industrytype::industry(u16::from(kind.0))
+        industrytype::get_industry_spec(kind).cast_const()
     }
     /// `_settings_game.game_creation.landscape`.
-    fn landscape() -> LandscapeType {
-        LandscapeType(unsafe { ((*crate::animated_tile::services().industries).landscape)() })
+    fn landscape(&self) -> LandscapeType {
+        LandscapeType(unsafe { self.shared.settings().climate.read() })
     }
 }
 
@@ -315,12 +315,12 @@ pub(crate) fn generate_station_name(
     if sni.is_available(StringID(n.woods), s)
         && (count_map_square_around(tile, map, size_y, freeform, |at| cmsa_tree(at, &m)) >= 8
             || count_map_square_around(tile, map, size_y, freeform, |at| {
-                crate::industry::forest(at.0, unsafe {
+                crate::industry::policy::is_tile_forest_industry(at, unsafe {
                     &*crate::animated_tile::services().industries
                 })
             }) >= 2)
     {
-        return StringID(if Services::landscape() == LandscapeType::Tropic {
+        return StringID(if s.landscape() == LandscapeType::Tropic {
             n.forest
         } else {
             n.woods
@@ -461,7 +461,7 @@ pub(crate) unsafe fn tile_loop_station(
         StationType::RoadWaypoint => {
             let on_snow_or_desert =
                 || crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile).unwrap();
-            let change = match Services::landscape() {
+            let change = match s.landscape() {
                 LandscapeType::Arctic => {
                     on_snow_or_desert()
                         != (crate::tile_map::get_tile_z(m, tile.0, size_x, size_y).unwrap()
@@ -478,7 +478,7 @@ pub(crate) unsafe fn tile_loop_station(
                 crate::station_map::toggle_road_waypoint_on_snow_or_desert(m, tile).unwrap();
                 (s.shared.mark_dirty)(tile.0);
             }
-            let t = crate::town::spatial::closest(s.shared, tile.0, u32::MAX);
+            let t = crate::town::spatial::closest_town_from_tile(s.shared, tile, u32::MAX);
             let new_zone = if t.is_null() {
                 HouseZone::TownEdge
             } else {
