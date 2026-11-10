@@ -39,7 +39,7 @@ use crate::timer_game_tick::{
 };
 use crate::vehicle::VehicleRef;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
-use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
+use crate::vehicle_base::{OpenTTDVehicleShell, VS_CRASHED, VS_STOPPED};
 use crate::vehicle_type::VehicleType;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -204,7 +204,7 @@ pub(crate) unsafe fn goods(state: *mut Service, cargo: CargoType) -> *mut CargoF
     unsafe { cp(state, cargo) }
 }
 pub struct QueueEntry {
-    vehicle: *mut c_void,
+    vehicle: *mut OpenTTDVehicleShell,
     next: *mut QueueEntry,
 }
 impl Drop for Service {
@@ -235,7 +235,7 @@ unsafe fn loading_vehicles_size(state: *const Service) -> usize {
 }
 /// `st->loading_vehicles.push_back(vehicle)`.
 /// SAFETY: `state` is a live owner and no queue node is borrowed.
-unsafe fn loading_vehicles_push_back(state: *mut Service, vehicle: *mut c_void) {
+unsafe fn loading_vehicles_push_back(state: *mut Service, vehicle: *mut OpenTTDVehicleShell) {
     let entry = Box::into_raw(Box::new(QueueEntry {
         vehicle,
         next: std::ptr::null_mut(),
@@ -249,7 +249,10 @@ unsafe fn loading_vehicles_push_back(state: *mut Service, vehicle: *mut c_void) 
 }
 /// `st->loading_vehicles.remove(vehicle)`.
 /// SAFETY: `state` is a live owner; no removed node is used afterwards.
-pub(crate) unsafe fn loading_vehicles_remove(state: *mut Service, vehicle: *mut c_void) {
+pub(crate) unsafe fn loading_vehicles_remove(
+    state: *mut Service,
+    vehicle: *mut OpenTTDVehicleShell,
+) {
     unsafe {
         (*state).queue.retain(|&entry| {
             if (&raw const (*entry).vehicle).read() == vehicle {
@@ -289,7 +292,7 @@ pub(crate) unsafe fn loading_vehicles_next(entry: *const QueueEntry) -> *mut Que
 }
 /// `*it` over `st->loading_vehicles`: the vehicle shell.
 /// SAFETY: `entry` is a live node.
-pub(crate) unsafe fn loading_vehicles_value(entry: *const QueueEntry) -> *mut c_void {
+pub(crate) unsafe fn loading_vehicles_value(entry: *const QueueEntry) -> *mut OpenTTDVehicleShell {
     unsafe { (&raw const (*entry).vehicle).read() }
 }
 /// `st->loading_vehicles.erase(it)`, returning the successor.
@@ -321,14 +324,14 @@ pub unsafe extern "C" fn openttd_rust_station_queue_push(
     state: *mut Service,
     vehicle: *mut c_void,
 ) {
-    unsafe { loading_vehicles_push_back(state, vehicle) };
+    unsafe { loading_vehicles_push_back(state, vehicle.cast()) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_remove(
     state: *mut Service,
     vehicle: *mut c_void,
 ) {
-    unsafe { loading_vehicles_remove(state, vehicle) };
+    unsafe { loading_vehicles_remove(state, vehicle.cast()) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_clear(state: *mut Service) {
@@ -349,7 +352,7 @@ pub unsafe extern "C" fn openttd_rust_station_queue_next(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_value(entry: *const QueueEntry) -> *mut c_void {
-    unsafe { loading_vehicles_value(entry) }
+    unsafe { loading_vehicles_value(entry) }.cast()
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_erase_node(
@@ -1190,7 +1193,7 @@ pub(crate) unsafe fn reroute_cargo(
     let mut node = unsafe { loading_vehicles_begin(state) };
     while !node.is_null() {
         let mut u = NonNull::new(unsafe { loading_vehicles_value(node) }).map(|shell| unsafe {
-            VehicleRef::from_shell(shell.as_ptr(), (*l.vehicle_resolver).vehicle)
+            VehicleRef::from_shell(shell.as_ptr().cast(), (*l.vehicle_resolver).vehicle)
         });
         while let Some(vehicle) = u {
             if (l.cargo_type)(vehicle) == cargo.0 {
@@ -2403,7 +2406,7 @@ unsafe fn load_unload_station_queue(
     let mut last_loading = None;
     /* Check if anything will be loaded at all. Otherwise we don't need to reserve either. */
     while !node.is_null() {
-        let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node), &*l.vehicle) };
+        let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node).cast(), &*l.vehicle) };
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             let ticks = (l.load_unload_ticks)(v).wrapping_sub(1);
             (l.set_load_ticks)(v, ticks);
@@ -2425,7 +2428,7 @@ unsafe fn load_unload_station_queue(
     }
     node = unsafe { loading_vehicles_begin(state) };
     while !node.is_null() {
-        let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node), &*l.vehicle) };
+        let v = unsafe { VehicleRef::from_shell(loading_vehicles_value(node).cast(), &*l.vehicle) };
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
                 load_unload_vehicle(v, c);
