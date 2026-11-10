@@ -159,9 +159,7 @@ impl Services {
     fn source_tile(&self, source: Source) -> TileIndex {
         unsafe {
             if source.kind == Source::TOWN {
-                TileIndex(town::position_raw((self.shared().town_owner_by_id)(
-                    u32::from(source.id),
-                )))
+                town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
@@ -272,8 +270,8 @@ impl Services {
         }
         let a = Source::town(src.id.0);
         let b = Source::town(dst.id.0);
-        let from = TileIndex(unsafe { town::position_raw(src.state) });
-        let to = TileIndex(unsafe { town::position_raw(dst.state) });
+        let from = unsafe { town::position(src.state) };
+        let to = unsafe { town::position(dst.state) };
         if !self.within_subsidy_distance(from, to)
             || Self::check_subsidy_duplicate(cargo_type, a, b)
         {
@@ -294,7 +292,7 @@ impl Services {
             }
         }
         let shared = self.shared();
-        let xy = unsafe { town::position_raw(owner) };
+        let xy = unsafe { town::position(owner) }.0;
         let map = shared.map();
         let mut area = crate::tilearea::TileArea {
             tile: xy,
@@ -600,22 +598,16 @@ impl Services {
                 let shared = self.shared();
                 // SAFETY: The live station owner; the visits read only the map and caches.
                 unsafe {
-                    crate::station::for_each_catchment_tile_raw(
-                        station_state,
-                        &catchment,
-                        |tile| {
-                            if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
-                                return;
-                            }
-                            let town = TownID((shared.town_index)(tile));
-                            if (self.has_source_flag)(
-                                Source::town(town.0),
-                                PartOfSubsidy::Destination,
-                            ) {
-                                towns_near[town_word(town)] |= town_bit(town);
-                            }
-                        },
-                    );
+                    crate::station::for_each_catchment_tile(station_state, &catchment, |tile| {
+                        if TileType((shared.tile_type)(tile.0)) != TileType::MP_HOUSE {
+                            return;
+                        }
+                        let town = TownID((shared.town_index)(tile.0));
+                        if (self.has_source_flag)(Source::town(town.0), PartOfSubsidy::Destination)
+                        {
+                            towns_near[town_word(town)] |= town_bit(town);
+                        }
+                    });
                 }
             }
         }
@@ -667,6 +659,42 @@ pub unsafe extern "C" fn openttd_rust_subsidy_rebuild(s: *const Services) {
 pub unsafe extern "C" fn openttd_rust_subsidy_delete_with(s: *const Services, source: Source) {
     unsafe { &*s }.delete_with(source);
 }
+/// `CmdCreateSubsidy`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdCreateSubsidy {
+    /// `CargoType` of subsidy.
+    pub(crate) cargo_type: CargoType,
+    /// Source.
+    pub(crate) src: Source,
+    /// Destination.
+    pub(crate) dst: Source,
+}
+impl Services {
+    /// `CmdCreateSubsidy`: create a new subsidy. Returns false for `CMD_ERROR`.
+    pub(crate) fn cmd_create_subsidy(&self, flags: DoCommandFlags, args: CmdCreateSubsidy) -> bool {
+        let CmdCreateSubsidy {
+            cargo_type,
+            src,
+            dst,
+        } = args;
+        if !(self.can_allocate)() {
+            return false;
+        }
+        if CompanyID((self.shared().current_company)()) != Owner::DEITY {
+            return false;
+        }
+        if cargo_type >= CargoType::NUM_CARGO || !(self.cargo_valid)(cargo_type.0) {
+            return false;
+        }
+        if !(self.valid_source)(src) || !(self.valid_source)(dst) {
+            return false;
+        }
+        if flags.test(DoCommandFlag::Execute) {
+            self.create_subsidy(cargo_type, src, dst);
+        }
+        true
+    }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     s: *const Services,
@@ -675,22 +703,14 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     src: Source,
     dst: Source,
 ) -> u8 {
-    let s = unsafe { &*s };
-    let cargo_type = CargoType(cargo);
-    let flags = DoCommandFlags(flags);
-    if !(s.can_allocate)()
-        || CompanyID((s.shared().current_company)()) != Owner::DEITY
-        || cargo_type >= CargoType::NUM_CARGO
-        || !(s.cargo_valid)(cargo_type.0)
-        || !(s.valid_source)(src)
-        || !(s.valid_source)(dst)
-    {
-        return u8::from(false);
-    }
-    if flags.test(DoCommandFlag::Execute) {
-        s.create_subsidy(cargo_type, src, dst);
-    }
-    u8::from(true)
+    u8::from(unsafe { &*s }.cmd_create_subsidy(
+        DoCommandFlags(flags),
+        CmdCreateSubsidy {
+            cargo_type: CargoType(cargo),
+            src,
+            dst,
+        },
+    ))
 }
 pub(crate) unsafe fn openttd_rust_subsidy_monthly(s: *const Services, scratch: Cargo) {
     unsafe { &*s }.monthly(scratch);
