@@ -93,7 +93,6 @@ uint16_t openttd_rust_cargo_list_first(const OpenTTDCargoList *, const OpenTTDCa
 uint8_t openttd_rust_cargo_list_has(const OpenTTDCargoList *, const uint16_t *, size_t);
 void openttd_rust_cargo_list_age(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 void openttd_rust_cargo_list_keep(OpenTTDCargoList *);
-uint32_t openttd_rust_cargo_list_reassign(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint8_t, uint32_t);
 uint8_t openttd_rust_cargo_list_stage(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint16_t, const uint16_t *, size_t, uint8_t, const void *, uint8_t, void *, uint32_t);
 uint32_t openttd_rust_cargo_list_move(OpenTTDCargoList *, OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint32_t, uint16_t, uint16_t, const uint16_t *, size_t, const void *, uint8_t, void *, uint32_t);
 }

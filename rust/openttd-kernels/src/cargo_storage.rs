@@ -917,16 +917,6 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_keep(l: *mut List) {
         (*l).fields.action_counts = [0, 0, (*l).fields.count, 0];
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_list_reassign(
-    l: *mut List,
-    s: *const Services,
-    from: u8,
-    to: u8,
-    amount: u32,
-) -> u32 {
-    unsafe { reassign(l, *s, MoveToAction(from), MoveToAction(to), amount) }
-}
 
 /// Stages cargo for unloading, sorting transferred, delivered and kept packets
 /// into consecutive chunks and updating the counts to reflect their sizes.

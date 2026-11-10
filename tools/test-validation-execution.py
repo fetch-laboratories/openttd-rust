@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -148,10 +149,18 @@ class ExecutionTests(unittest.TestCase):
     def test_timeout_reaps_child_and_retains_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "timeout.log"
+            supervisors: list[subprocess.Popen[bytes]] = []
+            popen = cast("Callable[..., subprocess.Popen[bytes]]", subprocess.Popen)
+
+            def recorded(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+                supervisors.append(popen(*args, **kwargs))
+                return supervisors[-1]
+
             # The 0.09 s timeout counts from the child's `started` line.
             with (
                 contextlib.redirect_stdout(io.StringIO()),
                 patch.object(validation_execution, "time", ready_clock(log, 1)),
+                patch.object(validation_execution.subprocess, "Popen", recorded),
             ):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     run_logged(
@@ -168,6 +177,9 @@ class ExecutionTests(unittest.TestCase):
                         timeout=0.09,
                     )
             self.assertEqual(log.read_text(), "started\n")
+            # run_logged waited on its supervisor before raising: it is reaped (#847).
+            self.assertEqual(len(supervisors), 1)
+            self.assertIsNotNone(supervisors[0].returncode)
 
     @unittest.skipUnless(sys.platform == "linux", "Linux descendant process state")
     def test_killed_driver_group_or_timeout_leaves_no_running_descendants(self) -> None:
