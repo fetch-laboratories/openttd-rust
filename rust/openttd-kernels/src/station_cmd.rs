@@ -3292,20 +3292,6 @@ impl Ctx<'_> {
                 .count_ones() as i32),
         );
     }
-    /// `RoadStopSpec::GetBuildCost(category)`, or `_price[category]` without a
-    /// spec.
-    fn road_stop_build_cost(&self, spec: *const RoadSpec, category: Price) -> i64 {
-        if spec.is_null() {
-            return crate::company::price(usize::from(category.0));
-        }
-        let factor = (self.s.road_spec_build_cost)(spec, category.0);
-        crate::economy_func::get_price(
-            u32::from(category.0),
-            u32::from(factor.multiplier),
-            factor.shift,
-            -4,
-        )
-    }
     /// `CmdBuildRoadStop`'s checks of a custom road stop spec against the stop
     /// type and drive-through flag.
     fn road_stop_spec_allows(
@@ -3424,7 +3410,11 @@ impl Ctx<'_> {
             Price::PR_BUILD_STATION_BUS
         };
         /* Total road stop cost. */
-        let unit_cost = self.road_stop_build_cost(roadstopspec, price);
+        let unit_cost = if roadstopspec.is_null() {
+            crate::company::price(usize::from(price.0))
+        } else {
+            crate::newgrf_roadstop::get_build_cost(self.s, roadstopspec, price)
+        };
         let mut est = StationID::INVALID;
         self.calculate_road_stop_cost(RoadStopCost {
             cost,
@@ -3674,20 +3664,6 @@ impl Ctx<'_> {
             }
         }
     }
-    /// `RoadStopSpec::GetClearCost(category)`, or `_price[category]` without a
-    /// spec.
-    fn road_stop_clear_cost(&self, spec: *const RoadSpec, category: Price) -> i64 {
-        if spec.is_null() {
-            return crate::company::price(usize::from(category.0));
-        }
-        let factor = (self.s.road_spec_clear_cost)(spec, category.0);
-        crate::economy_func::get_price(
-            u32::from(category.0),
-            u32::from(factor.multiplier),
-            factor.shift,
-            -4,
-        )
-    }
     /// `RemoveRoadStop`: remove a bus station/truck stop. A negative
     /// `replacement_spec_index` means the tile is not being replaced.
     fn remove_road_stop(
@@ -3838,7 +3814,11 @@ impl Ctx<'_> {
         } else {
             Price::PR_CLEAR_STATION_BUS
         };
-        cost.set(self.road_stop_clear_cost(spec, category));
+        cost.set(if spec.is_null() {
+            crate::company::price(usize::from(category.0))
+        } else {
+            crate::newgrf_roadstop::get_clear_cost(self.s, spec, category)
+        });
     }
     /// `RemoveRoadWaypointStop`: remove a road waypoint. A negative
     /// `replacement_spec_index` means the tile is not being replaced.
@@ -3921,7 +3901,11 @@ impl Ctx<'_> {
                 }
             }
         }
-        cost.set(self.road_stop_clear_cost(spec, Price::PR_CLEAR_STATION_TRUCK));
+        cost.set(if spec.is_null() {
+            crate::company::price(usize::from(Price::PR_CLEAR_STATION_TRUCK.0))
+        } else {
+            crate::newgrf_roadstop::get_clear_cost(self.s, spec, Price::PR_CLEAR_STATION_TRUCK)
+        });
     }
     /// `RemoveGenericRoadStop`: remove a tile area of road stop or road
     /// waypoints.

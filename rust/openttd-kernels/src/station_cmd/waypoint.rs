@@ -687,10 +687,17 @@ impl Ctx<'_> {
             h: u16::from(height),
         };
         /* Total road stop cost. */
-        let unit_cost = self.road_stop_build_cost(
-            roadstopspec,
-            crate::economy_type::Price::PR_BUILD_STATION_TRUCK,
-        );
+        let unit_cost = if roadstopspec.is_null() {
+            crate::company::price(usize::from(
+                crate::economy_type::Price::PR_BUILD_STATION_TRUCK.0,
+            ))
+        } else {
+            crate::newgrf_roadstop::get_build_cost(
+                self.s,
+                roadstopspec,
+                crate::economy_type::Price::PR_BUILD_STATION_TRUCK,
+            )
+        };
         let ddir = crate::direction_type::DiagDirection(crate::direction_func::axis_to_diag_dir(
             axis.0,
             |ok| crate::movement::native_assert(self.shared, ok),
