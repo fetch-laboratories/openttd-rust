@@ -419,10 +419,9 @@ unsafe fn get_distance_from_nearby_house(
     let mut start_house = start_house;
     let leaves = unsafe { &*s.towns };
     // modifies 'start_house'!
-    let start_north_tile =
-        start_tile
-            .0
-            .wrapping_add(house::get_house_north_part(leaves, &mut start_house, map));
+    let start_north_tile = start_tile
+        .0
+        .wrapping_add_signed(house::get_house_north_part(leaves, &mut start_house, map));
     let size_y = crate::map_func::World::new(unsafe { &*s.shared }).size_y();
     let mut spiral = crate::spiral::square(
         map.tile_x(start_tile.0),
@@ -442,7 +441,7 @@ unsafe fn get_distance_from_nearby_house(
                 && start_north_tile
                     != tile
                         .0
-                        .wrapping_add(house::get_house_north_part(leaves, &mut house, map))
+                        .wrapping_add_signed(house::get_house_north_part(leaves, &mut house, map))
             {
                 let matched = match searchtype {
                     0 => {

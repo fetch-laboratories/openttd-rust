@@ -48,7 +48,7 @@ use crate::house::{
 };
 use crate::house_type::{HouseClassID, HouseID};
 use crate::landscape_type::LandscapeType;
-use crate::map_type::TileIndexDiffC;
+use crate::map_type::{TileIndexDiff, TileIndexDiffC};
 use crate::math::round_div_su;
 use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
 use crate::random_func::chance16;
@@ -1012,9 +1012,9 @@ impl Engine<'_> {
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
         TileIndex(self.map().tile_add_xy(tile.0, x, y))
     }
-    /// `TileOffsByDiagDir`, as the unsigned pattern of its `TileIndexDiff`.
-    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> u32 {
-        self.map().offs_by_diag_dir(dir.0)
+    /// `TileOffsByDiagDir`.
+    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> TileIndexDiff {
+        self.map().offs_by_diag_dir(dir.0).cast_signed()
     }
     fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
         TileIndex(self.map().add_diag(tile.0, dir.0))
@@ -1465,13 +1465,13 @@ impl Engine<'_> {
         let dist_multi = (dist_multi + 1) * 4;
         for pos in 4..dist_multi {
             /* Go (pos / 4) tiles to the left or the right */
-            let mut cur = tid_lt[usize::from(pos & 1 == 0)].wrapping_mul(pos / 4);
+            let mut cur = tid_lt[usize::from(pos & 1 == 0)].wrapping_mul((pos / 4).cast_signed());
             /* Use the current tile as origin, or go one tile backwards */
             if pos & 2 != 0 {
                 cur = cur.wrapping_add(tid_lt[2]);
             }
             /* Test for roadbit parallel to dir and facing towards the middle axis */
-            let test = TileIndex(tile.0.wrapping_add(cur));
+            let test = TileIndex(tile.0.wrapping_add_signed(cur));
             if self.is_valid_tile(test)
                 && self.get_town_road_bits(test)
                     & self.diag_dir_to_road_bits(if pos & 2 != 0 {

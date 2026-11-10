@@ -26,6 +26,7 @@ use crate::house::{
 };
 use crate::house_type::{HouseID, HouseRandomTrigger, HouseRandomTriggers};
 use crate::landscape_type::LandscapeType;
+use crate::map_type::TileIndexDiff;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CALLBACK_HOUSEPRODCARGO_END, CallbackID, HouseCallbackMask, HouseCallbackMasks,
 };
@@ -290,27 +291,31 @@ pub(super) fn building_flags(leaves: &Leaves, house: HouseID) -> BuildingFlags {
     BuildingFlags((leaves.house_flags)(house))
 }
 /// Determines if a given `HouseID` is part of a multitile house (`GetHouseNorthPart`).
-/// The given ID is set to the ID of the north tile and the `TileIndexDiff` (as its
-/// unsigned pattern) to the north tile is returned. Shared by lifecycle and resolver queries.
-pub(super) fn get_house_north_part(leaves: &Leaves, house: &mut HouseID, map: Map) -> u32 {
+/// The given ID is set to the ID of the north tile and the `TileIndexDiff` to the north
+/// tile is returned. Shared by lifecycle and resolver queries.
+pub(super) fn get_house_north_part(
+    leaves: &Leaves,
+    house: &mut HouseID,
+    map: Map,
+) -> TileIndexDiff {
     // House id 0,1,2 MUST be single tile houses, or this code breaks.
     if *house >= 3 {
         let previous_flags = building_flags(leaves, *house - 1);
         if previous_flags.test(BuildingFlag::Size2x1) {
             *house -= 1;
-            return map.diff(-1, 0);
+            return map.diff(-1, 0).cast_signed();
         } else if previous_flags.any(BuildingFlags::BUILDING_2_TILES_Y) {
             *house -= 1;
-            return map.diff(0, -1);
+            return map.diff(0, -1).cast_signed();
         } else if building_flags(leaves, *house - 2).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 2;
-            return map.diff(-1, 0);
+            return map.diff(-1, 0).cast_signed();
         } else if building_flags(leaves, *house - 3).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 3;
-            return map.diff(-1, -1);
+            return map.diff(-1, -1).cast_signed();
         }
     }
-    map.diff(0, 0)
+    map.diff(0, 0).cast_signed()
 }
 impl<'a> House<'a> {
     fn map(&self) -> Map {
@@ -360,7 +365,7 @@ impl<'a> House<'a> {
     fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
         (self.s.mark_dirty)(tile.0);
     }
-    fn get_house_north_part(&self, house: &mut HouseID) -> u32 {
+    fn get_house_north_part(&self, house: &mut HouseID) -> TileIndexDiff {
         get_house_north_part(self.l, house, self.map())
     }
     /// `TriggerHouseAnimation_ConstructionStageChanged`.
@@ -466,7 +471,10 @@ impl<'a> House<'a> {
     /// `ClearTownHouse`: population, counts and flags precede the footprint.
     fn clear_town_house(&self, town: TownRef, tile: TileIndex, mut house: HouseID) {
         // The northernmost tile of the house is the main house.
-        let tile = TileIndex(tile.0.wrapping_add(self.get_house_north_part(&mut house)));
+        let tile = TileIndex(
+            tile.0
+                .wrapping_add_signed(self.get_house_north_part(&mut house)),
+        );
         let flags = self.building_flags(house);
         // Remove population from the town if the house is finished.
         if (self.h.completed)(tile.0) {
@@ -1401,7 +1409,10 @@ impl<'a> House<'a> {
         let r = self.s.random() as u16;
         let map = self.map();
         // Do the callback, start at northern tile.
-        let north = TileIndex(tile.0.wrapping_add(self.get_house_north_part(&mut id)));
+        let north = TileIndex(
+            tile.0
+                .wrapping_add_signed(self.get_house_north_part(&mut id)),
+        );
         let flags = self.building_flags(id);
         let town = (self.h.town)(tile.0);
         // `DoTriggerHouseAnimation_WatchedCargoAccepted`: run the callback for a single
@@ -1484,7 +1495,7 @@ impl<'a> House<'a> {
             }
             // Increase the number of houses for every house, but only once.
             let mut house_id = house_id;
-            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0) {
+            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0).cast_signed() {
                 // SAFETY: As above.
                 unsafe {
                     let fields = &raw mut (*town).simulation;
@@ -1536,7 +1547,7 @@ impl<'a> House<'a> {
             let mut house_type = (self.h.clean_type)(t.0);
             // Modifies 'house_type'!
             let north_tile =
-                TileIndex(t.0.wrapping_add(self.get_house_north_part(&mut house_type)));
+                TileIndex(t.0.wrapping_add_signed(self.get_house_north_part(&mut house_type)));
             let id = u32::from(house_type);
             if t == north_tile {
                 let flags = self.building_flags(house_type);
