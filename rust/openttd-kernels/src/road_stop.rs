@@ -132,17 +132,21 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
     let world = crate::map_func::World::new(s);
     while !stop.is_null() {
         let tile = TileIndex((stops.tile)(stop));
-        // The vehicle cannot go to this roadstop (different roadtype), and
-        // the vehicle is articulated and can therefore not go to a standard
-        // road stop; otherwise the vehicle can actually go to this road stop.
-        if crate::road_map::has_tile_any_road_type(&world, tile.0, (movement.road_compatible)(v))
-            && (!world.is_bay_road_stop_tile(tile) || !(ground.has_articulated)(v))
-        {
-            break;
+        // The vehicle cannot go to this roadstop (different roadtype)
+        if !crate::road_map::has_tile_any_road_type(&world, tile.0, (movement.road_compatible)(v)) {
+            stop = (stops.next)(stop);
+            continue;
         }
-        stop = (stops.next)(stop);
+        // The vehicle is articulated and can therefore not go to a standard road stop.
+        if world.is_bay_road_stop_tile(tile) && (ground.has_articulated)(v) {
+            stop = (stops.next)(stop);
+            continue;
+        }
+
+        // The vehicle can actually go to this road stop. So, return it!
+        return stop;
     }
-    stop
+    std::ptr::null_mut()
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
