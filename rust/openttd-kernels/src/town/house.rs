@@ -1047,16 +1047,18 @@ impl<'a> House<'a> {
         }
         // SAFETY: Static tables and live owner; the shell address keys scratch ratings.
         unsafe {
-            super::openttd_rust_town_change_rating(
+            super::change_town_rating(
                 self.l,
                 self.s,
-                t.state,
-                u32::from(t.id.0),
-                t.shell as usize,
-                company.0,
+                super::RatedTown {
+                    state: t.state,
+                    id: t.id,
+                    shell: t.shell,
+                },
+                company,
                 -rating,
                 RATING_HOUSE_MINIMUM,
-                flags.test(DoCommandFlag::NoModifyTownRating),
+                flags,
                 (authority.bulldozer)(),
             );
         }

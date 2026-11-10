@@ -464,16 +464,18 @@ impl<'a> Ctx<'a> {
         }
         // SAFETY: owner access resolves here and ends before the reentrant dirty-window service.
         unsafe {
-            crate::town::openttd_rust_town_change_rating(
-                self.s.town,
-                self.r.shared,
-                (self.shared.town_owner)(town),
-                u32::from((self.authority.town_index)(town)),
-                town as usize,
-                company,
+            crate::town::change_town_rating(
+                &*self.s.town,
+                &*self.r.shared,
+                crate::town::RatedTown {
+                    state: (self.shared.town_owner)(town),
+                    id: crate::town_type::TownId((self.authority.town_index)(town)),
+                    shell: town,
+                },
+                crate::company_type::CompanyID(company),
                 decrease,
                 RATING_ROAD_MINIMUM,
-                flags & 512 != 0,
+                crate::command_type::DoCommandFlags(flags),
                 (self.authority.bulldozer)(),
             );
         }

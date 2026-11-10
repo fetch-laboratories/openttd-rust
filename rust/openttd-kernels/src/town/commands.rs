@@ -396,16 +396,18 @@ impl<'a> Commands<'a> {
         } else {
             // SAFETY: The town owner is live; the rating owner keeps its scratch and cheat semantics.
             unsafe {
-                super::openttd_rust_town_change_rating(
-                    self.f.growth,
-                    self.f.shared,
-                    t.state,
-                    u32::from(t.id.0),
-                    t.shell as usize,
-                    company,
+                super::change_town_rating(
+                    &*self.f.growth,
+                    &*self.f.shared,
+                    super::RatedTown {
+                        state: t.state,
+                        id: t.id,
+                        shell: t.shell,
+                    },
+                    CompanyID(company),
                     RATING_BRIBE_UP_STEP,
                     RATING_BRIBE_MAXIMUM,
-                    false,
+                    DoCommandFlags::from_element(DoCommandFlag::Execute),
                     ((*(*self.f.growth).houses)
                         .authority
                         .as_ref()

@@ -215,24 +215,26 @@ impl<'a> World<'a> {
         // SAFETY: shell identity is source-live. The rating owner ends access
         // before its native invalidation callbacks; no caller owner is borrowed.
         unsafe {
-            crate::town::openttd_rust_town_change_rating(
-                self.road.town,
-                self.r.shared,
-                if town.is_null() {
-                    std::ptr::null_mut()
-                } else {
-                    (self.s.town_owner)(town)
+            crate::town::change_town_rating(
+                &*self.road.town,
+                &*self.r.shared,
+                crate::town::RatedTown {
+                    state: if town.is_null() {
+                        std::ptr::null_mut()
+                    } else {
+                        (self.s.town_owner)(town)
+                    },
+                    id: if town.is_null() {
+                        crate::town_type::TownId(u16::MAX)
+                    } else {
+                        crate::town_type::TownId((self.authority.town_index)(town))
+                    },
+                    shell: town,
                 },
-                if town.is_null() {
-                    u32::from(u16::MAX)
-                } else {
-                    u32::from((self.authority.town_index)(town))
-                },
-                town as usize,
-                (self.s.current_company)(),
+                crate::company_type::CompanyID((self.s.current_company)()),
                 delta,
                 minimum,
-                flags & DoCommandFlag::NO_MODIFY_TOWN_RATING != 0,
+                crate::command_type::DoCommandFlags(flags),
                 (self.authority.bulldozer)(),
             );
         }

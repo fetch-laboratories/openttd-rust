@@ -3165,28 +3165,39 @@ pub unsafe extern "C" fn openttd_rust_town_rating(
     // SAFETY: Original source invokes this only with live owner and valid company.
     unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_change_rating(
-    leaves: *const Leaves,
-    services: *const Services,
-    state: *mut State,
-    town: u32,
-    shell: usize,
-    company: u8,
+/// The town of a `ChangeTownRating` call: its owner (null for no town), its index and
+/// the shell address that keys the test-mode ratings.
+#[derive(Clone, Copy)]
+pub(crate) struct RatedTown {
+    pub state: *mut State,
+    pub id: TownId,
+    pub shell: *const crate::services::TownHandle,
+}
+/// `ChangeTownRating`: change the town rating of `company` by `add`, without passing
+/// `maximum`. `company` is `_current_company` and `bulldozer` the magic bulldozer cheat,
+/// both observed by the caller.
+/// # Safety
+/// `t.state` is null or a live owner; the tables are live for the call.
+pub(crate) unsafe fn change_town_rating(
+    leaves: &Leaves,
+    services: &Services,
+    t: RatedTown,
+    company: CompanyID,
     add: i32,
     maximum: i32,
-    no_modify: bool,
+    flags: DoCommandFlags,
     bulldozer: bool,
 ) {
+    let (state, shell) = (t.state, t.shell as usize);
     /* if magic_bulldozer cheat is active, town doesn't penalize for removing stuff */
-    if state.is_null() || no_modify {
+    if state.is_null()
+        || flags.test(DoCommandFlag::NoModifyTownRating)
+        || !(services.company_valid)(company.0)
+        || (bulldozer && add < 0)
+    {
         return;
     }
-    // SAFETY: Immutable call tables, live for invocation; no owner borrow.
-    let valid = (unsafe { (*services).company_valid })(company);
-    if !valid || (bulldozer && add < 0) {
-        return;
-    }
+    let company = company.0;
     // SAFETY: Valid company, immediate read through original scratch precedence.
     let mut rating = unsafe { openttd_rust_town_rating(state, shell, company) };
     if add < 0 {
@@ -3212,8 +3223,42 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
             (*state).simulation.have_ratings |= 1 << company;
             (*state).simulation.ratings[usize::from(company)] = rating as i16;
         }
-        // SAFETY: Live immutable typed service table.
-        (unsafe { (*leaves).dirty_authority })(town);
+        (leaves.dirty_authority)(u32::from(t.id.0));
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_change_rating(
+    leaves: *const Leaves,
+    services: *const Services,
+    state: *mut State,
+    town: u32,
+    shell: usize,
+    company: u8,
+    add: i32,
+    maximum: i32,
+    no_modify: bool,
+    bulldozer: bool,
+) {
+    let flags = if no_modify {
+        DoCommandFlags::from_element(DoCommandFlag::NoModifyTownRating)
+    } else {
+        DoCommandFlags(0)
+    };
+    unsafe {
+        change_town_rating(
+            &*leaves,
+            &*services,
+            RatedTown {
+                state,
+                id: TownId(town as u16),
+                shell: shell as *const crate::services::TownHandle,
+            },
+            CompanyID(company),
+            add,
+            maximum,
+            flags,
+            bulldozer,
+        );
     }
 }
 
