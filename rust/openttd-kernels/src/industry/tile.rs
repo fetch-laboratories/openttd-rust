@@ -111,9 +111,6 @@ impl TileServices {
         unsafe { (self.callback)(tile.0, gfx.0, callback.0, 0, 0) }
     }
 }
-fn chance16(s: &Services, a: u32, b: u32) -> bool {
-    crate::random_func::chance16_i(a, b, s.shared().random())
-}
 fn ambient(s: &Services) -> bool {
     unsafe { s.shared().settings().ambient.read() }
 }
@@ -234,7 +231,7 @@ fn animate_oil_well(
     cons: &ConstructionServices,
     tiles: &TileServices,
 ) {
-    let b = chance16(svc, 1, 7);
+    let b = crate::random_func::chance16(svc.shared(), 1, 7);
     let mut m = tiles.get_animation_frame(tile).wrapping_add(1);
     // `m == 4 && (m = 0, ++gfx) == GFX_OILWELL_ANIMATED_3 + 1 && (gfx = GFX_OILWELL_ANIMATED_1, b)`
     let last = m == 4
@@ -566,7 +563,8 @@ pub(crate) unsafe fn tile_loop(
         IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_COPPER_MINE_TOWER_NOT_ANIMATED
         | IndustryGfx::GFX_GOLD_MINE_TOWER_NOT_ANIMATED => {
-            if tick_counter(prod) & 0x400 == 0 && chance16(prod, 1, 2) {
+            if tick_counter(prod) & 0x400 == 0 && crate::random_func::chance16(prod.shared(), 1, 2)
+            {
                 gfx = match gfx {
                     IndustryGfx::GFX_COAL_MINE_TOWER_NOT_ANIMATED => {
                         IndustryGfx::GFX_COAL_MINE_TOWER_ANIMATED
@@ -582,7 +580,7 @@ pub(crate) unsafe fn tile_loop(
             }
         }
         IndustryGfx::GFX_OILWELL_NOT_ANIMATED => {
-            if chance16(prod, 1, 6) {
+            if crate::random_func::chance16(prod.shared(), 1, 6) {
                 tiles.set_industry_gfx(tile, IndustryGfx::GFX_OILWELL_ANIMATED_1);
                 tiles.set_animation_frame(tile, 0);
                 add_animated_tile(tile);
@@ -609,7 +607,7 @@ pub(crate) unsafe fn tile_loop(
             }
         }
         IndustryGfx::GFX_POWERPLANT_SPARKS => {
-            if chance16(prod, 1, 3) {
+            if crate::random_func::chance16(prod.shared(), 1, 3) {
                 ambient_sound(tile, SoundFx::SND_0C_POWER_STATION, prod);
                 add_animated_tile(tile);
             }
@@ -634,7 +632,9 @@ pub(crate) unsafe fn tile_loop(
         }
         IndustryGfx::GFX_BUBBLE_GENERATOR => tile_loop_industry_bubble_generator(tile, prod, map),
         IndustryGfx::GFX_TOFFEE_QUARRY => add_animated_tile(tile),
-        IndustryGfx::GFX_SUGAR_MINE_SIEVE if chance16(prod, 1, 3) => add_animated_tile(tile),
+        IndustryGfx::GFX_SUGAR_MINE_SIEVE if crate::random_func::chance16(prod.shared(), 1, 3) => {
+            add_animated_tile(tile);
+        }
         _ => {}
     }
 }

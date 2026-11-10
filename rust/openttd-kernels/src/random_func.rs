@@ -21,3 +21,10 @@ pub fn scale_to_limit(value: u32, limit: u32) -> u32 {
 pub fn chance16_i(a: u32, b: u32, r: u32) -> bool {
     (((r & 65535).wrapping_mul(b).wrapping_add(b / 2)) >> 16) < a
 }
+
+/// `Chance16`: flips a coin with a given probability. This function returns true with
+/// (a/b) probability, drawing one value from the shared random stream.
+#[must_use]
+pub fn chance16(shared: &crate::services::Services, a: u32, b: u32) -> bool {
+    chance16_i(a, b, shared.random())
+}

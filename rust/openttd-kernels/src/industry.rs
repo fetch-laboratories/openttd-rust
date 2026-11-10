@@ -578,10 +578,6 @@ fn random(s: &Services) -> u32 {
 fn random_range(s: &Services, limit: u32) -> u32 {
     s.shared().random_range(limit)
 }
-/// `Chance16(a, b)`.
-fn chance16(s: &Services, a: u32, b: u32) -> bool {
-    chance16_i(a, b, random(s))
-}
 fn fields(owner: *mut Industry) -> *mut Fields {
     unsafe { ptr::addr_of_mut!((*owner).fields) }
 }
@@ -794,7 +790,7 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
                 cb_res,
             )
         } else if parameter == 0 {
-            chance16(svc, 1, 8)
+            crate::random_func::chance16(svc.shared(), 1, 8)
         } else {
             unsafe { u32::from((*state).counter) % INDUSTRY_CUT_TREE_TICKS == 0 }
         };
@@ -1112,13 +1108,16 @@ fn change_industry_production(
         let only_decrease = obs.behaviour.test(IndustryBehaviour::DontIncrProd)
             && LandscapeType(unsafe { (svc.landscape)() }) == LandscapeType::Temperate;
         if original_economy {
-            if only_decrease || chance16(svc, 1, 3) {
+            if only_decrease || crate::random_func::chance16(svc.shared(), 1, 3) {
                 let pct = u32::from(unsafe {
                     (*get_produced(obs.owner, 0)).history[usize::from(LAST_MONTH)].pct_transported()
                 });
                 // If more than 60% transported, 66% chance of increase, else 33% chance of
                 // increase
-                if !only_decrease && (pct > PERCENT_TRANSPORTED_60) != chance16(svc, 1, 3) {
+                if !only_decrease
+                    && (pct > PERCENT_TRANSPORTED_60)
+                        != crate::random_func::chance16(svc.shared(), 1, 3)
+                {
                     // Increase production
                     mul = 1;
                 } else {
@@ -1227,7 +1226,7 @@ fn change_industry_production(
             (svc.economy_year)().wrapping_sub((*state).last_prod_year)
                 >= PROCESSING_INDUSTRY_ABANDONMENT_YEARS.0
         }
-        && chance16(svc, 1, if original_economy { 2 } else { 180 })
+        && crate::random_func::chance16(svc.shared(), 1, if original_economy { 2 } else { 180 })
     {
         closeit = true;
     }
@@ -1680,7 +1679,7 @@ pub(crate) unsafe fn economy_industries_daily(builder: *mut Builder, services: *
         perc = (perc + wanted - total(builder)).min(9);
     }
     for _ in 0..change_loop {
-        if chance16(s, perc, 100) {
+        if crate::random_func::chance16(s.shared(), perc, 100) {
             try_build_new_industry(builder, s);
         } else {
             let e = random_entry(s);
@@ -1805,7 +1804,7 @@ fn setup_farm_field_fence(
             // Add fence as long as neighbouring tile does not already have a fence in the
             // same position.
             let mut or = kind;
-            if or == 1 && chance16(s, 1, 7) {
+            if or == 1 && crate::random_func::chance16(s.shared(), 1, 7) {
                 or = 2;
             }
             (s.shared().set_fence)(tile.0, side, u32::from(or));
