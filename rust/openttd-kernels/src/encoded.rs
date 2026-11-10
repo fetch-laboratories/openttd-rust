@@ -262,19 +262,10 @@ pub(super) fn fix_scc_encoded(src: &[u8], fix_code: bool) -> Output {
     result
 }
 
-fn marker_length(src: &[u8], codepoint: u32) -> usize {
-    let decoded = utf8::decode(src);
-    if decoded.length > 0 && decoded.codepoint == codepoint {
-        decoded.length
-    } else {
-        0
-    }
-}
-
 /// `FixSCCEncodedNegative`: reencode negative numeric records as `uint64_t`.
 pub(super) fn fix_scc_encoded_negative(src: &[u8]) -> Output {
     /* Check whether this is an encoded string. */
-    let mut position = marker_length(src, SCC_ENCODED);
+    let mut position = consumer::read_utf8_if(src, SCC_ENCODED);
     if position == 0 {
         return Output::default();
     }
@@ -294,7 +285,7 @@ pub(super) fn fix_scc_encoded_negative(src: &[u8]) -> Output {
         result.append(&src[position..position + copied.result_length]);
         position += copied.consumed_length;
         /* Check whether this is a numeric parameter. */
-        let length = marker_length(&src[position..], SCC_ENCODED_NUMERIC);
+        let length = consumer::read_utf8_if(&src[position..], SCC_ENCODED_NUMERIC);
         if length == 0 {
             continue;
         }
@@ -330,7 +321,7 @@ pub(super) fn replace_param<'a>(
         apply: true,
         ..Output::default()
     };
-    let mut position = marker_length(src, SCC_ENCODED_INTERNAL);
+    let mut position = consumer::read_utf8_if(src, SCC_ENCODED_INTERNAL);
     if position == 0 {
         return result;
     }
@@ -340,7 +331,7 @@ pub(super) fn replace_param<'a>(
     }
     position += integer::skip(&src[position..], 16);
     if position < src.len() {
-        let length = marker_length(&src[position..], SCC_RECORD_SEPARATOR);
+        let length = consumer::read_utf8_if(&src[position..], SCC_RECORD_SEPARATOR);
         if length == 0 {
             return result;
         }
