@@ -133,7 +133,8 @@ pub unsafe extern "C" fn openttd_rust_override_reset_mapping(manager: *mut Manag
         (*manager).mappings.fill(Mapping::default());
     }
 }
-/// `OverrideManagerBase::ResetOverride`: reset the override mappings.
+/// `OverrideManagerBase::ResetOverride`: resets the override, which is used while
+/// initializing game.
 /// # Safety
 /// `manager` is a live override manager with no other borrow.
 pub(crate) unsafe fn reset_override(manager: *mut Manager) {

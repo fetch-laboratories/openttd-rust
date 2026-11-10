@@ -197,8 +197,6 @@ impl Services {
         });
     }
     /// Check whether a specific subsidy already exists.
-    ///
-    /// The original returns at the first match; the remaining visits only read.
     fn check_subsidy_duplicate(cargo: CargoType, src: Source, dst: Source) -> bool {
         let mut found = false;
         each(|_, state| {

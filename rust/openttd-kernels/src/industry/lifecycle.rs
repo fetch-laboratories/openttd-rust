@@ -240,9 +240,8 @@ unsafe fn do_reseed_industry(ind: *mut Industry, reseed: u32, s: &Services) {
     let random_bits = s.shared().random() as u16;
     unsafe {
         let field = ptr::addr_of_mut!((*ind).metadata.random);
-        let old = ptr::read(field);
-        // Historical &= reseed (not &= ~reseed) is the specification.
-        ptr::write(field, (old & reseed as u16) | (random_bits & reseed as u16));
+        ptr::write(field, ptr::read(field) & reseed as u16);
+        ptr::write(field, ptr::read(field) | (random_bits & reseed as u16));
     }
 }
 /// Original `TriggerIndustryTileRandomisation`: trigger a random trigger for a single
