@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -110,13 +111,23 @@ def clippy_command(*options: str) -> list[str]:
     ]
 
 
+# A rendered diagnostic or Cargo status line starts at column 0 with its level;
+# the lines that follow belong to it. Cargo puts no blank line between one
+# target's warning summary and the next target's first diagnostic.
+DIAGNOSTIC = re.compile(r"(warning|error)(\[\w:]+\])?: ")
+
+
 def failure_output(name: str, text: str) -> str:
     """The end of a failed command's output. Clippy's force-warned debt never
-    fails the gate, so its warnings are dropped to leave the errors."""
+    fails the gate, so each warning is dropped, up to the next diagnostic."""
     if name == "rust-clippy":
-        text = "\n\n".join(
-            block for block in text.split("\n\n") if not block.startswith("warning")
-        )
+        kept, warning = [], False
+        for line in text.splitlines(keepends=True):
+            if start := DIAGNOSTIC.match(line):
+                warning = start[1] == "warning"
+            if not warning:
+                kept.append(line)
+        text = "".join(kept)
     return text[-16000:]
 
 

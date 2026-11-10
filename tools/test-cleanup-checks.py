@@ -1353,13 +1353,21 @@ class OrdinaryRustTests(unittest.TestCase):
         import migration
 
         log = (
+            "    Checking x v0.1.0 (/x)\n"
             "warning: this function has too many arguments (8/7)\n  --> a.rs:1:1\n\n"
-            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n\n"
             "warning: `x` (lib) generated 1 warning\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n"
         )
         shown = migration.failure_output("rust-clippy", log)
-        self.assertIn("equal expressions", shown)
-        self.assertNotIn("too many arguments", shown)
+        self.assertEqual(
+            shown,
+            "    Checking x v0.1.0 (/x)\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n",
+        )
         self.assertEqual(migration.failure_output("rust-check", log), log)
 
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
@@ -1420,6 +1428,23 @@ class OrdinaryRustTests(unittest.TestCase):
             (root / "src/lib.rs").write_text("pub fn x() -> bool { true == true }\n")
             with self.assertRaisesRegex(ValueError, "equal expressions"):
                 LINT.collect("clippy", root)
+            # Cargo prints the library's warning summary directly above the test
+            # target's error, with no blank line: the error must survive.
+            (root / "src/lib.rs").write_text(
+                "pub unsafe fn undocumented() {}\n"
+                "#[cfg(test)]\npub fn bad() -> bool { true == true }\n"
+            )
+            gate = migration.clippy_command("-j1")
+            result = subprocess.run(
+                gate, cwd=root, env=env, capture_output=True, text=True
+            )
+            self.assertNotEqual(result.returncode, 0)
+            raw = result.stdout + result.stderr
+            self.assertRegex(raw, r"generated 1 warning\nerror: equal expressions")
+            shown = migration.failure_output("rust-clippy", raw)
+            self.assertIn("equal expressions", shown)
+            self.assertIn("could not compile", shown)
+            self.assertNotIn("unsafe function's docs", shown)
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"
