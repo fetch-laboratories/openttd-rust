@@ -1020,10 +1020,10 @@ impl VehicleServices {
     }
 }
 
-/// "Vehicle maintenance native scalar stores and cadence" from the retired
-/// `src/tests/vehicle_scheduler.cpp` (#736 F), with the fixture's own expected values. The
-/// services mirror the native glue in `src/rust/vehicle_services.cpp`: the record holds the
-/// counter, tick, speed, type and status; the rest are the native fields below.
+/// Maintenance scalar rules: age saturation, value decay, breakdown cadence and wrap,
+/// reacquisition after reentrant callbacks and the loading countdown. The services mirror the
+/// native glue in `src/rust/vehicle_services.cpp`: the record holds the counter, tick, speed,
+/// type and status; the rest are the native fields below.
 #[cfg(test)]
 mod scalar_tests {
     use super::*;
@@ -1038,8 +1038,8 @@ mod scalar_tests {
     /// The native `Vehicle` members the maintenance services read and write.
     #[derive(Clone, Copy)]
     struct Native {
-        age: i32,
-        economy_age: i32,
+        age: CalendarDate,
+        economy_age: EconomyDate,
         value: i64,
         delay: u8,
         since: u8,
@@ -1048,8 +1048,8 @@ mod scalar_tests {
     thread_local! {
         static NATIVE: Cell<Native> = const {
             Cell::new(Native {
-                age: 0,
-                economy_age: 0,
+                age: CalendarDate(0),
+                economy_age: EconomyDate(0),
                 value: 0,
                 delay: 0,
                 since: 0,
@@ -1072,19 +1072,19 @@ mod scalar_tests {
 
     extern "C" fn age(_: VehicleRef) -> Age {
         Age {
-            age: CalendarDate(native().age),
+            age: native().age,
             max_age: CalendarDate(0),
             decay: 0,
         }
     }
     extern "C" fn age_write(_: VehicleRef, age: CalendarDate) {
-        set(|n| n.age = age.0);
+        set(|n| n.age = age);
     }
     extern "C" fn economy_age(_: VehicleRef) -> EconomyDate {
-        EconomyDate(native().economy_age)
+        native().economy_age
     }
     extern "C" fn economy_age_write(_: VehicleRef, age: EconomyDate) {
-        set(|n| n.economy_age = age.0);
+        set(|n| n.economy_age = age);
     }
     extern "C" fn value(_: VehicleRef) -> i64 {
         native().value
@@ -1190,17 +1190,17 @@ mod scalar_tests {
     /// Ages and value: calendar and economy ages saturate at `MAX_DATE`; value loses
     /// `value >> 8`, rounding a negative value's loss downward.
     fn check_ages_and_value(v: VehicleRef, base: &VehicleServices) {
-        set(|n| n.age = MAX_DATE - 1);
+        set(|n| n.age = CalendarDate(MAX_DATE - 1));
         for _ in 0..2 {
             // SAFETY: The test's live record and tables.
             unsafe { age_vehicle(v, base) };
-            assert_eq!(native().age, MAX_DATE);
+            assert_eq!(native().age, CalendarDate(MAX_DATE));
         }
-        set(|n| n.economy_age = MAX_DATE - 1);
+        set(|n| n.economy_age = EconomyDate(MAX_DATE - 1));
         for _ in 0..2 {
             // SAFETY: As above.
             unsafe { economy_age_vehicle(v, base) };
-            assert_eq!(native().economy_age, MAX_DATE);
+            assert_eq!(native().economy_age, EconomyDate(MAX_DATE));
         }
         for (before, after) in [(65535, 65280), (-257, -255)] {
             set(|n| n.value = before);
