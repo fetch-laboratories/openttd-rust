@@ -37,7 +37,6 @@ static bool Ship_chain_depot(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicle
 
 static uint32_t Ship_servint(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return Company::Get(v->GetOwner())->settings.vehicle.servint_ships; }
 
-static uint32_t Ship_max_distance() noexcept { return RustMaximumDepotPenalty() / YAPF_TILE_LENGTH; }
 
 static bool Ship_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex(tile)); }
 
@@ -61,7 +60,6 @@ static bool Ship_dock_water(uint32_t tile) noexcept { return IsDockWaterPart(Til
 
 static uint32_t Ship_station(uint32_t tile) noexcept { return GetRustSharedServices().station_index(tile); }
 
-static bool Ship_station_dock(uint32_t station) noexcept { return Station::Get(StationID(station))->facilities.Test(StationFacility::Dock); }
 
 static uint32_t Ship_industry_station(uint32_t tile) noexcept
 {
@@ -246,8 +244,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.depot_dir = Ship_depot_dir, .depot_axis = OpenTTDMapQuery<uint32_t, RustShipDepotAxis, uint32_t>,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,
 		.wait_unbunch = Ship_wait_unbunch, .chain_depot = Ship_chain_depot,
-		.servint = Ship_servint,
-		.max_distance = Ship_max_distance, .tile_valid = Ship_tile_valid,
+		.servint = Ship_servint, .tile_valid = Ship_tile_valid,
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
 		.lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
@@ -257,7 +254,6 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig,
-		.station_dock = Ship_station_dock,
 		.arrival = Ship_arrival,
 		.leave_unbunch = Ship_leave_unbunch,
 		.path_result = Ship_path_result, .order_free = Ship_order_free,

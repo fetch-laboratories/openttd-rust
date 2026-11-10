@@ -377,7 +377,6 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
-    pub max_depot_penalty: extern "C" fn() -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -391,7 +390,7 @@ pub struct Leaves {
         extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
-    pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
+    pub arrival_news: extern "C" fn(VehicleRef, u16, u8),
     /// The road stop arrival randomisation and animation triggers.
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
     pub crash_news: extern "C" fn(VehicleRef, u32),
@@ -1411,9 +1410,11 @@ impl Game<'_> {
         };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
+        // Check if station was ever visited before
         if r.had_vehicle_of_type & bit == 0 {
             let headline = if bus { 0 } else { 2 } + u8::from(s.tram);
-            service!(self.l.arrival_news)(v.v, station, bit, headline);
+            service!(self.ss.station_add_vehicle_of_type)(station, bit);
+            service!(self.l.arrival_news)(v.v, station, headline);
         }
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
         crate::animated_tile::road_event(
@@ -2104,7 +2105,8 @@ impl Game<'_> {
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             return;
         }
-        let penalty = service!(self.l.max_depot_penalty)();
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        let penalty = unsafe { self.ss.settings().maximum_go_to_depot_penalty.read() };
         let depot = if depot_tile {
             DepotResult {
                 tile: r.tile,
@@ -2502,7 +2504,6 @@ crate::abi::layouts! {
         vehicle,
         ground,
         shared,
-        max_depot_penalty,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,

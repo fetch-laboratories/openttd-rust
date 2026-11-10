@@ -1219,16 +1219,18 @@ macro_rules! entry {
 pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: Vehicle) -> u8 {
     u8::from(entry!(s, w, { w.tick_vehicle(v) }))
 }
+/// The `_economy_disaster_daily` timer: count down the disaster delay, then start one.
 /// # Safety
 /// As `openttd_rust_disaster_tick`.
-pub(crate) unsafe fn openttd_rust_disaster_daily(s: *const Services) {
+pub(crate) unsafe fn economy_disaster_daily(s: *const Services) {
     entry!(s, w, {
         w.daily();
     });
 }
+/// `StartupDisasters`: reset the delay before the first disaster.
 /// # Safety
 /// As `openttd_rust_disaster_tick`.
-pub(crate) unsafe fn openttd_rust_disaster_startup(s: *const Services) {
+pub(crate) unsafe fn startup_disasters(s: *const Services) {
     entry!(s, w, {
         w.reset_delay();
     });

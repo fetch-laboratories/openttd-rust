@@ -163,7 +163,6 @@ pub struct Leaves {
     pub wait_unbunch: extern "C" fn(u32) -> bool,
     pub chain_depot: extern "C" fn(u32) -> bool,
     pub servint: extern "C" fn(u32) -> u32,
-    pub max_distance: extern "C" fn() -> u32,
     pub tile_valid: extern "C" fn(u32) -> bool,
     pub tile_type: extern "C" fn(u32) -> u32,
     pub water_class: extern "C" fn(u32) -> u32,
@@ -179,7 +178,6 @@ pub struct Leaves {
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
-    pub station_dock: extern "C" fn(u32) -> bool,
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
@@ -413,7 +411,9 @@ impl Game<'_> {
             unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
             return;
         }
-        let distance = (self.leaves.max_distance)();
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        let penalty = unsafe { self.services.settings().maximum_go_to_depot_penalty.read() };
+        let distance = penalty / crate::pathfinder_type::YAPF_TILE_LENGTH as u32;
         if let Some(depot) = self.depot(distance) {
             crate::witness::hit(crate::witness::SHIP_AUTO_SERVICE);
             (self.leaves.order_depot)(id, depot.id);
@@ -748,7 +748,10 @@ impl Game<'_> {
                                 }) && self.destination_station(new_tile, station)
                                 {
                                     self.vehicle().write_last_station(station as u16);
-                                    if (self.leaves.station_dock)(station) {
+                                    if (self.services.station_facilities)(station as u16)
+                                        & crate::station_type::FACILITY_DOCK
+                                        != 0
+                                    {
                                         crate::witness::hit(crate::witness::SHIP_LOADING);
                                         self.arrives(id, station);
                                         crate::vehicle::visits::begin_loading(
@@ -1152,7 +1155,6 @@ crate::abi::layouts! {
         wait_unbunch,
         chain_depot,
         servint,
-        max_distance,
         tile_valid,
         tile_type,
         water_class,
@@ -1168,7 +1170,6 @@ crate::abi::layouts! {
         station,
         industry_station,
         oilrig,
-        station_dock,
         arrival,
         leave_unbunch,
         path_result,

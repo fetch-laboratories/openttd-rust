@@ -578,7 +578,7 @@ impl World<'_> {
         }
         self.increase(GWP_GAME_INIT)?;
         unsafe {
-            crate::disaster::openttd_rust_disaster_startup(s.disasters);
+            crate::disaster::startup_disasters(s.disasters);
         }
         write_field!(INFO.get(), generating, false);
         native((s.script_start)(self.frame))?;
