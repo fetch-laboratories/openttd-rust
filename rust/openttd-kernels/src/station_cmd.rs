@@ -2214,10 +2214,10 @@ impl Ctx<'_> {
             return;
         }
         (self.s.set_train_area)(st, new_location);
-        crate::station_lifecycle::add_facility_raw(
+        crate::station_lifecycle::add_facility(
             st,
             StationFacility::Train,
-            new_location.tile,
+            TileIndex(new_location.tile),
             unsafe { &*self.s.lifecycle },
         );
         self.before_add_rect(
@@ -3508,14 +3508,14 @@ impl Ctx<'_> {
             self.find_road_stop_spot_insert(st, is_truck_stop, road_stop);
             self.area_add((self.s.stop_area)(st, is_truck_stop), cur_tile);
             /* Initialize an empty station. */
-            crate::station_lifecycle::add_facility_raw(
+            crate::station_lifecycle::add_facility(
                 st,
                 if is_truck_stop {
                     StationFacility::TruckStop
                 } else {
                     StationFacility::BusStop
                 },
-                cur_tile.0,
+                cur_tile,
                 unsafe { &*self.s.lifecycle },
             );
             self.before_add_tile(ret, st, cur_tile, StationRectMode::ADD_TRY);
@@ -4226,15 +4226,15 @@ impl Ctx<'_> {
             {
                 continue;
             }
-            let t = crate::town::spatial::calc_closest(
+            let t = crate::town::spatial::calc_closest_town_from_tile(
                 self.shared,
-                cur_tile.0,
+                cur_tile,
                 mindist.wrapping_add(1),
             );
             if t.is_null() {
                 continue;
             }
-            let xy = unsafe { crate::town::position_raw((self.shared.town_owner)(t)) };
+            let xy = unsafe { crate::town::position((self.shared.town_owner)(t)) }.0;
             let dist = map.distance_manhattan(xy, cur_tile.0);
             if dist == mindist && (authority.town_index)(t) < (authority.town_index)(nearest) {
                 nearest = t;
@@ -4561,7 +4561,7 @@ impl Ctx<'_> {
         unsafe {
             noise_reached.write(noise_reached.read().wrapping_add(newnoise_level as u16));
         }
-        crate::station_lifecycle::add_facility_raw(st, StationFacility::Airport, tile.0, unsafe {
+        crate::station_lifecycle::add_facility(st, StationFacility::Airport, tile, unsafe {
             &*self.s.lifecycle
         });
         (self.s.set_airport_details)(st, airport_type, layout, rotation.0);
@@ -4906,7 +4906,7 @@ impl Ctx<'_> {
         self.area_add((self.s.ship_station_area)(st), tile);
         let flat_tile = self.tile_add_by_diag_dir(tile, direction);
         self.area_add((self.s.ship_station_area)(st), flat_tile);
-        crate::station_lifecycle::add_facility_raw(st, StationFacility::Dock, tile.0, unsafe {
+        crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
             &*self.s.lifecycle
         });
         self.before_add_rect(ret, st, dock_area, StationRectMode::ADD_TRY);
