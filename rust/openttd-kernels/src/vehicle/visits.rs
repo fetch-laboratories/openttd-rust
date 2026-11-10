@@ -757,7 +757,8 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
             let p = (s.loading.part)(v);
             unloading = unloading.wrapping_add(i32::from(p.unloading));
             loading |= !order_no_load
-                && (order_full_load || has_rating((s.station.owner)(st), p.cargo))
+                && (order_full_load
+                    || has_rating((s.station.owner)(st), crate::cargo_type::CargoType(p.cargo)))
                 && o.flags(front) & VF_LOADING_FINISHED == 0
                 && o.flags(front) & VF_STOP_LOADING == 0;
             cars = cars.wrapping_add(1);
@@ -877,7 +878,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     cancel_reservation(v, INVALID_STATION, st.native, s);
     // SAFETY: the live station's queue owner; the vehicle shell is its key.
     unsafe {
-        crate::station_service::openttd_rust_station_queue_remove(st.state, v.shell().cast());
+        crate::station_service::loading_vehicles_remove(st.state, v.shell().cast());
     }
 
     (s.hide_filling)(v);

@@ -587,6 +587,18 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn has_articulated_part(self) -> bool {
         self.next().is_some_and(Self::is_articulated_part)
     }
+    /// `Vehicle::GetNextArticulatedPart`: get the next part of an articulated engine.
+    /// The vehicle is an articulated engine.
+    pub(crate) fn get_next_articulated_part(
+        self,
+        shared: &crate::services::Services,
+    ) -> Option<Self> {
+        let map = crate::map_func::World::new(shared);
+        if map.types.assertions() {
+            map.check(self.has_articulated_part());
+        }
+        self.next()
+    }
     /// `Vehicle::GetFirstEnginePart`: first part of an articulated engine.
     pub(crate) fn first_engine_part(self) -> Self {
         let mut v = self;

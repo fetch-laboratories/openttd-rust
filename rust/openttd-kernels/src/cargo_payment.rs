@@ -252,14 +252,14 @@ fn deliver_goods(
     unsafe { crate::station::for_each_industry_near(station_owner, visit) };
     // If this cargo type is always accepted, accept all.
     let accepted_total =
-        if unsafe { crate::station_service::always_accepts(station_owner, cargo_type.0) } {
+        if unsafe { crate::station_service::always_accepts(station_owner, cargo_type) } {
             num_pieces
         } else {
             accepted_ind
         };
     // Update station statistics.
     if accepted_total > 0 {
-        unsafe { crate::station_service::record_delivery(station_owner, cargo_type.0) };
+        unsafe { crate::station_service::record_delivery(station_owner, cargo_type) };
     }
     // Update company statistics.
     let finance = unsafe { &*s.finance };
