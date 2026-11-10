@@ -1178,18 +1178,6 @@ impl Ctx<'_> {
     }
 }
 
-/// # Safety
-/// Native tables and full station shell/owner are live under the game-state mutex.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_tiles_changed(
-    s: *const CommandServicesTable,
-    st: *mut BaseStation,
-    adding: bool,
-    kind: u8,
-) {
-    unsafe { Ctx::new(s) }.after_station_tile_set_change(st, adding, StationType(kind));
-}
-
 /// `CmdRenameStation`'s arguments.
 #[derive(Clone, Copy)]
 struct CmdRenameStation {

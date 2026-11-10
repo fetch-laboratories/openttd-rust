@@ -143,7 +143,6 @@ struct OpenTTDTrainServices {
 void openttd_rust_train_consist_changed(OpenTTDTrainHandle, uint8_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 uint16_t openttd_rust_train_curve_limit(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 int32_t openttd_rust_train_current_max_speed(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
-void openttd_rust_train_update_acceleration(OpenTTDTrainHandle);
 int32_t openttd_rust_train_update_speed(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_mark_dirty(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_train_tick(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);

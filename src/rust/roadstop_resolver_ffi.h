@@ -73,7 +73,6 @@ extern "C" {
 void openttd_rust_roadstop_init(OpenTTDRoadStopResolverState *, const OpenTTDRoadStopResolverServices *);
 uint32_t openttd_rust_roadstop_variable(const OpenTTDRoadStopResolverState *, ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *, const OpenTTDRoadStopResolverServices *);
 uint32_t openttd_rust_roadstop_random(const OpenTTDRoadStopResolverState *, bool, const OpenTTDRoadStopResolverServices *);
-TownScopeResolver *openttd_rust_roadstop_town(OpenTTDRoadStopResolverState *, ResolverObject *, const OpenTTDRoadStopResolverServices *);
 ScopeResolver *openttd_rust_roadstop_scope(OpenTTDRoadStopResolverState *, ResolverObject *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDRoadStopResolverServices *);
 uint16_t openttd_rust_roadstop_callback(uint16_t, uint32_t, uint32_t, const RoadStopSpec *, BaseStation *, uint32_t, uint8_t, uint8_t, uint8_t, int32_t *, size_t, const OpenTTDRoadStopResolverServices *);
 void openttd_rust_roadstop_randomise(BaseStation *, uint32_t, uint8_t, uint8_t, const OpenTTDRoadStopResolverServices *);

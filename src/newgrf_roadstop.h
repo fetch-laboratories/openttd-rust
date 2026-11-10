@@ -105,8 +105,6 @@ struct RoadStopResolverObject : public SpecializedResolverObject<StationRandomTr
 
 	RoadStopResolverObject(const OpenTTDRoadStopResolverState &state, CallbackID callback = CBID_NO_CALLBACK, uint32_t param1 = 0, uint32_t param2 = 0);
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override;
-
-	TownScopeResolver *GetTown();
 };
 
 /** Road stop specification. */

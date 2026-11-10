@@ -420,16 +420,6 @@ void UpdateStationAcceptance(Station *st, bool show_msg)
 }
 
 
-/**
- * After adding/removing tiles to station, update some station-related stuff.
- * @param adding True if adding tiles, false if removing them.
- * @param type StationType being modified.
- */
-void Station::AfterStationTileSetChange(bool adding, StationType type)
-{
-	openttd_rust_station_tiles_changed(&GetRustStationCommandServices(), this, adding, to_underlying(type));
-}
-
 CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
 
 /**

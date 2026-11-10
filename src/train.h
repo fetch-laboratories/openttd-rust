@@ -233,8 +233,6 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 
 	int UpdateSpeed();
 
-	void UpdateAcceleration();
-
 	int GetCurrentMaxSpeed() const override;
 
 	/**

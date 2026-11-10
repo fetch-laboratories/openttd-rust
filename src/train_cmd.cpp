@@ -155,12 +155,6 @@ int Train::GetCurrentMaxSpeed() const
 	return static_cast<int>(openttd_rust_train_current_max_speed(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices()));
 }
 
-/** Update acceleration of the train from the cached power and weight. */
-void Train::UpdateAcceleration()
-{
-	openttd_rust_train_update_acceleration(TrainHandle(this));
-}
-
 int Train::GetCursorImageOffset() const
 {
 	if (this->gcache.cached_veh_length != 8 && this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips)) {

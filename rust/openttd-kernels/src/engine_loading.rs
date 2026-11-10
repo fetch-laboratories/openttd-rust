@@ -86,8 +86,14 @@ pub unsafe extern "C" fn openttd_rust_engine_mapping_get(kind: u8, local: u16, g
         .filter(|m| m.key() == key(grfid, local))
         .map_or(INVALID_ENGINE, |m| m.engine)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_mapping_use(
+/// `EngineOverrideManager::UseUnreservedID`: look for an unreserved `EngineID` matching the
+/// local id, and reserve it if found. `grfid` is the scope of `local`: the ID of the
+/// overridden `NewGRF` when one overrides another's engines, or `INVALID_GRFID` when dynamic
+/// engines are disabled. `static_access` false actually reserves the `EngineID`. Returns the
+/// engine ID if present and now reserved, or `INVALID_ENGINE` if not.
+/// # Safety
+/// The serialized engine-loading thread owns `MAPPINGS` for the call.
+pub(crate) unsafe fn use_unreserved_id(
     kind: u8,
     local: u16,
     grfid: u32,
@@ -330,7 +336,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
             return engine.shell;
         }
     }
-    let id = unsafe { openttd_rust_engine_mapping_use(kind, local, scope, static_access) };
+    let id = unsafe { use_unreserved_id(kind, local, scope, static_access) };
     if id != INVALID_ENGINE {
         let engine = (s.resolve)(id);
         if crate::raw_field::read_field!(engine.shell, bindings.grf_prop.grffile).is_null() {

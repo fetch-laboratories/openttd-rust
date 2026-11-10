@@ -214,7 +214,6 @@ struct EngineOverrideManager {
 
 	void ResetToDefaultMapping();
 	EngineID GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid);
-	EngineID UseUnreservedID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, bool static_access);
 	void SetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, uint8_t substitute_id, EngineID engine);
 
 	static bool ResetToCurrentNewGRFConfig();

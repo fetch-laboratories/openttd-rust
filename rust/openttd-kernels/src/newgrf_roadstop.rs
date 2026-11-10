@@ -436,14 +436,6 @@ pub unsafe extern "C" fn openttd_rust_roadstop_random(
     bits
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_roadstop_town(
-    c: *mut State,
-    ro: *mut c_void,
-    s: *const Services,
-) -> *mut c_void {
-    unsafe { town_scope(c, ro, &*s) }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_roadstop_scope(
     c: *mut State,
     ro: *mut c_void,

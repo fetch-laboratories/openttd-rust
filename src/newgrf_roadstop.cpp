@@ -72,11 +72,6 @@ RoadStopResolverObject::RoadStopResolverObject(const RoadStopSpec *roadstopspec,
 	this->root_spritegroup = this->roadstop_scope.state.root;
 }
 
-TownScopeResolver *RoadStopResolverObject::GetTown()
-{
-	return openttd_rust_roadstop_town(&this->roadstop_scope.state, this, &GetRoadStopResolverServices());
-}
-
 uint16_t GetRoadStopCallback(CallbackID callback, uint32_t param1, uint32_t param2, const RoadStopSpec *roadstopspec, BaseStation *st, TileIndex tile, RoadType roadtype, StationType type, uint8_t view, std::span<int32_t> regs100)
 {
 	return openttd_rust_roadstop_callback(callback, param1, param2, roadstopspec, st, tile.base(), roadtype, to_underlying(type), view, regs100.data(), regs100.size(), &GetRoadStopResolverServices());

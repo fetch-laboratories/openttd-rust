@@ -436,9 +436,6 @@ public:
 
 	void UpdateVirtCoord() override;
 
-
-	void AfterStationTileSetChange(bool adding, StationType type);
-
 	static void RecomputeCatchmentForAll();
 
 	uint GetCatchmentRadius() const;
