@@ -574,7 +574,7 @@ impl World<'_> {
         (s.startup_companies)();
         self.increase(GWP_GAME_INIT)?;
         unsafe {
-            crate::engine::openttd_rust_engine_start_all(s.engines);
+            crate::engine::startup_engines(&*s.engines);
         }
         self.increase(GWP_GAME_INIT)?;
         unsafe {
