@@ -1527,13 +1527,13 @@ impl Ctx<'_> {
         flags: DoCommandFlags,
     ) {
         unsafe {
-            crate::town::openttd_rust_town_authority_station(
-                self.s.authority,
-                self.s.shared,
-                self.s.cost,
+            crate::town::check_if_authority_allows_new_station(
+                &*self.s.authority,
+                &*self.s.shared,
+                &*self.s.cost,
                 out.0,
-                tile.0,
-                flags.test(DoCommandFlag::NoTestTownRating),
+                tile,
+                flags,
             );
         }
     }

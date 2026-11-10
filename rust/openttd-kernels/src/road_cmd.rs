@@ -394,14 +394,14 @@ impl<'a> Ctx<'a> {
     fn rating(&self, c: Cost<'_>, town: *const TownHandle, flags: u16, kind: u8) {
         // SAFETY: live native town identity (or null), immutable tables and stack cost.
         unsafe {
-            crate::town::openttd_rust_town_authority_remove(
-                self.s.authority,
-                self.r.shared,
-                self.r.cost,
+            crate::town::check_for_town_rating(
+                &*self.s.authority,
+                &*self.r.shared,
+                &*self.r.cost,
                 c.0,
+                crate::command_type::DoCommandFlags(flags),
                 town,
-                flags & 16 != 0,
-                kind,
+                crate::town::TownRatingCheckType(kind),
             );
         }
     }

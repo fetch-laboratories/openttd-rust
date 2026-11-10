@@ -49,7 +49,7 @@ use crate::house::{
 use crate::house_type::{HouseClassID, HouseID};
 use crate::landscape_type::LandscapeType;
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
-use crate::math::round_div_su;
+use crate::math::{clamp_to_u8, round_div_su};
 use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
 use crate::random_func::chance16;
 use crate::road::{RoadTypeFlag, RoadTypeFlags};
@@ -161,6 +161,8 @@ pub struct TownRatingCheckType(pub u8);
     reason = "original town.h TownRatingCheckType enumerators"
 )]
 impl TownRatingCheckType {
+    /// Removal of a tunnel or bridge owned by the town.
+    pub const TunnelBridgeRemove: Self = Self(1);
     /// End marker.
     pub const End: Self = Self(2);
 }
@@ -359,7 +361,7 @@ unsafe fn supplied_history(
     if !is_valid_cargo_type(cargo.0) {
         return None;
     }
-    let index = unsafe { openttd_rust_town_supplied_find(state, cargo.0) };
+    let index = unsafe { find_supplied(state, cargo) };
     unsafe {
         let rows = &(*state).supplied;
         rows.get(index).map(|s| s.history[usize::from(period)])
@@ -539,10 +541,8 @@ pub(crate) fn iterate_refs(mut next: impl FnMut(u32) -> TownRef) -> impl Iterato
         Some(town)
     })
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
-    // SAFETY: Immutable table remains live; no owner access spans pool iteration.
-    let leaves = unsafe { &*leaves };
+/// `GetWorldPopulation`: the total population of the world.
+pub(crate) fn get_world_population(leaves: &Leaves) -> u32 {
     let mut total = 0_u32;
     for town in iterate(|from| (leaves.next_town)(from)) {
         let owner = (leaves.resolve_owner)(u32::from(town.0));
@@ -550,6 +550,11 @@ pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leave
         total = total.wrapping_add(unsafe { population(owner) });
     }
     total
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
+    // SAFETY: Immutable table remains live; no owner access spans pool iteration.
+    get_world_population(unsafe { &*leaves })
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_new() -> *mut State {
@@ -642,28 +647,41 @@ pub unsafe extern "C" fn openttd_rust_town_supplied_entry(
     // SAFETY: Native facade has ended every vector view before this call.
     unsafe { supplied_entry(state, CargoType(cargo)) }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_supplied_find(state: *const State, cargo: u8) -> usize {
+/// `Town::GetCargoSupplied`'s lookup: the index of the cargo's supplied row, or the
+/// row count when the town supplies none of it.
+/// SAFETY: Live serialized owner; no callback or mutation during the read.
+pub(crate) unsafe fn find_supplied(state: *const State, cargo: CargoType) -> usize {
     // SAFETY: Immediate shared owner access, with no callbacks or mutation.
     let rows = unsafe { &(*state).supplied };
-    let at = rows.partition_point(|row| row.cargo < cargo);
-    if at == rows.len() || rows[at].cargo != cargo {
+    let at = rows.partition_point(|row| row.cargo < cargo.0);
+    if at == rows.len() || rows[at].cargo != cargo.0 {
         rows.len()
     } else {
         at
     }
 }
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_supplied_find(state: *const State, cargo: u8) -> usize {
+    unsafe { find_supplied(state, CargoType(cargo)) }
+}
+impl SuppliedHistory {
+    /// `Town::SuppliedHistory::PercentTransported`.
+    pub(crate) fn percent_transported(self) -> u8 {
+        if self.production == 0 {
+            return 0;
+        }
+        // Original uint32 multiplication wraps before division and uint8 clamping.
+        clamp_to_u8(i64::from(
+            self.transported.wrapping_mul(256) / self.production,
+        ))
+    }
+}
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_percent_transported(
     history: *const SuppliedHistory,
 ) -> u8 {
-    // SAFETY: Native supplies one matching live history; both scalar reads end here.
-    let (production, transported) = unsafe { ((*history).production, (*history).transported) };
-    if production == 0 {
-        return 0;
-    }
-    // Original uint32 multiplication wraps before division and uint8 clamping.
-    (transported.wrapping_mul(256) / production).min(u32::from(u8::MAX)) as u8
+    // SAFETY: Native supplies one matching live history; the copy ends the reads.
+    unsafe { *history }.percent_transported()
 }
 #[derive(Default)]
 struct GlobalCounts {
@@ -806,19 +824,19 @@ pub struct AuthorityServices {
     pub refusal: u32,
 }
 
-/// Native stack result and immutable tables remain live through this invocation.
+/// `CheckIfAuthorityAllowsNewStation`: checks whether the local authority allows
+/// construction of a new station (rail, road, airport, dock) on the given tile.
 /// No Rust owner borrow crosses a service; errors retain full native parameters.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_authority_station(
-    authority: *const AuthorityServices,
-    services: *const Services,
-    costs: *const crate::services::CommandCostServices,
+/// # Safety
+/// `result` is live native result storage for the call.
+pub(crate) unsafe fn check_if_authority_allows_new_station(
+    a: &AuthorityServices,
+    s: &Services,
+    c: &crate::services::CommandCostServices,
     result: *mut crate::services::CommandCost,
-    tile: u32,
-    no_test: bool,
+    tile: TileIndex,
+    flags: DoCommandFlags,
 ) {
-    // SAFETY: Native immutable tables live for this synchronous invocation.
-    let (a, s, c) = unsafe { (&*authority, &*services, &*costs) };
     /* The required rating is hardcoded to RATING_VERYPOOR (see below), not the authority attitude setting, so we can bail out like this. */
     if TownCouncilAttitudes((a.council_tolerance)())
         == TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
@@ -827,12 +845,11 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         return;
     }
     let company = (s.current_company)();
-    if !(s.company_valid)(company) || no_test {
+    if !(s.company_valid)(company) || flags.test(DoCommandFlag::NoTestTownRating) {
         (c.zero)(result);
         return;
     }
-    let town =
-        spatial::closest_town_from_tile(s, TileIndex(tile), u32::from((a.authority_distance)()));
+    let town = spatial::closest_town_from_tile(s, tile, u32::from((a.authority_distance)()));
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -846,17 +863,49 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
     }
 }
-
-/// Original destructive-action rating check, including scratch-rating precedence.
+/// The command flags of a positional export's `NoTestTownRating` boolean.
+fn no_test_flags(no_test: bool) -> DoCommandFlags {
+    if no_test {
+        DoCommandFlags::from_element(DoCommandFlag::NoTestTownRating)
+    } else {
+        DoCommandFlags(0)
+    }
+}
+/// Native stack result and immutable tables remain live through this invocation.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_authority_remove(
+pub unsafe extern "C" fn openttd_rust_town_authority_station(
     authority: *const AuthorityServices,
     services: *const Services,
     costs: *const crate::services::CommandCostServices,
     result: *mut crate::services::CommandCost,
-    town: *const crate::services::TownHandle,
+    tile: u32,
     no_test: bool,
-    kind: u8,
+) {
+    // SAFETY: Native immutable tables live for this synchronous invocation.
+    unsafe {
+        check_if_authority_allows_new_station(
+            &*authority,
+            &*services,
+            &*costs,
+            result,
+            TileIndex(tile),
+            no_test_flags(no_test),
+        );
+    }
+}
+
+/// `CheckforTownRating`: does the town authority allow the (destructive) action of the
+/// current company? A null town always allows it.
+/// # Safety
+/// `town` is null or a live shell; `result` is live native result storage.
+pub(crate) unsafe fn check_for_town_rating(
+    a: &AuthorityServices,
+    s: &Services,
+    c: &crate::services::CommandCostServices,
+    result: *mut crate::services::CommandCost,
+    flags: DoCommandFlags,
+    town: *const crate::services::TownHandle,
+    kind: TownRatingCheckType,
 ) {
     /* minimum rating needed to be allowed to remove stuff */
     const NEEDED_RATING: [[i32; TownRatingCheckType::End.0 as usize]; 4] = [
@@ -878,16 +927,14 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
             RATING_TUNNEL_BRIDGE_NEEDED_PERMISSIVE,
         ], // Permissive
     ];
-    // SAFETY: Native immutable tables and stack-owned result outlive this call.
-    let (a, s, c) = unsafe { (&*authority, &*services, &*costs) };
-    let kind = TownRatingCheckType(kind);
     /* if magic_bulldozer cheat is active, town doesn't restrict your destructive actions */
     if town.is_null() {
         (c.zero)(result);
         return;
     }
     let company = (s.current_company)();
-    if !(s.company_valid)(company) || (a.bulldozer)() || no_test {
+    if !(s.company_valid)(company) || (a.bulldozer)() || flags.test(DoCommandFlag::NoTestTownRating)
+    {
         (c.zero)(result);
         return;
     }
@@ -898,11 +945,35 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
     let needed = NEEDED_RATING[usize::from((a.council_tolerance)())][usize::from(kind.0)];
     let owner = (s.town_owner)(town);
     // SAFETY: Live owner, valid company; scratch/native rating access ends here.
-    let rating = unsafe { openttd_rust_town_rating(owner, town as usize, company) };
+    let rating = unsafe { get_rating(owner, town, CompanyID(company)) };
     if rating < needed {
         (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
     } else {
         (c.zero)(result);
+    }
+}
+/// Original destructive-action rating check, including scratch-rating precedence.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_authority_remove(
+    authority: *const AuthorityServices,
+    services: *const Services,
+    costs: *const crate::services::CommandCostServices,
+    result: *mut crate::services::CommandCost,
+    town: *const crate::services::TownHandle,
+    no_test: bool,
+    kind: u8,
+) {
+    // SAFETY: Native immutable tables and stack-owned result outlive this call.
+    unsafe {
+        check_for_town_rating(
+            &*authority,
+            &*services,
+            &*costs,
+            result,
+            no_test_flags(no_test),
+            town,
+            TownRatingCheckType(kind),
+        );
     }
 }
 
@@ -3169,22 +3240,24 @@ pub(crate) fn set_town_rating_test_mode(shared: &Services, mode: bool) {
 pub unsafe extern "C" fn openttd_rust_town_rating_test(shared: *const Services, mode: bool) {
     set_town_rating_test_mode(unsafe { &*shared }, mode);
 }
-/// `GetRating`: the rating of a town for the current company.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_rating(
+/// `GetRating`: the rating of a town for the current company. `shell` keys the
+/// test-mode ratings, as the original's `Town *` does.
+/// # Safety
+/// `state` is the live owner of `shell` and `company` is valid.
+pub(crate) unsafe fn get_rating(
     state: *const State,
-    shell: usize,
-    company: u8,
+    shell: *const crate::services::TownHandle,
+    company: CompanyID,
 ) -> i32 {
     // SAFETY: Serialized immediate accesses; native shell address preserves source map keys and reuse.
     let test = unsafe { &*RATING_TEST.get() };
     if test.depth != 0 {
-        if let Some(rating) = test.ratings.get(&shell) {
+        if let Some(rating) = test.ratings.get(&(shell as usize)) {
             return *rating;
         }
     }
     // SAFETY: Original source invokes this only with live owner and valid company.
-    unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
+    unsafe { i32::from((*state).simulation.ratings[usize::from(company.0)]) }
 }
 /// The town of a `ChangeTownRating` call: its owner (null for no town), its index and
 /// the shell address that keys the test-mode ratings.
@@ -3232,7 +3305,7 @@ pub(crate) unsafe fn change_town_rating(
     }
     let company = company.0;
     // SAFETY: Valid company, immediate read through original scratch precedence.
-    let mut rating = unsafe { openttd_rust_town_rating(state, shell, company) };
+    let mut rating = unsafe { get_rating(state, t.shell, CompanyID(company)) };
     if add < 0 {
         if rating > maximum {
             rating = rating.wrapping_add(add).max(maximum);
@@ -3306,13 +3379,11 @@ pub(crate) unsafe fn get_percent_transported(state: *const State, cargo_type: Ca
         return 0;
     }
     let rows = unsafe { &(*state).supplied };
-    let at = unsafe { openttd_rust_town_supplied_find(state, cargo_type.0) };
+    let at = unsafe { find_supplied(state, cargo_type) };
     if at == rows.len() {
         return 0;
     }
-    unsafe {
-        openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
-    }
+    rows[at].history[usize::from(LAST_MONTH)].percent_transported()
 }
 
 crate::abi::layouts! {
@@ -3499,7 +3570,8 @@ pub(crate) mod tests {
                 test.ratings.insert(42, -99);
             };
             // SAFETY: The parent does not touch its live owner until this join.
-            let rating = unsafe { openttd_rust_town_rating(owner, 42, 0) };
+            let rating =
+                unsafe { get_rating(owner, std::ptr::without_provenance(42), CompanyID(0)) };
             (
                 openttd_rust_town_global_id_counts().data as usize,
                 // SAFETY: The parent does not touch the counts until this join.
@@ -3518,7 +3590,14 @@ pub(crate) mod tests {
         unsafe {
             assert_eq!(*ids.data.cast::<u32>().add(110), 1);
             assert_eq!(*classes.add(15), 1);
-            assert_eq!(openttd_rust_town_rating(&raw const owner, 42, 0), -99);
+            assert_eq!(
+                get_rating(
+                    &raw const owner,
+                    std::ptr::without_provenance(42),
+                    CompanyID(0)
+                ),
+                -99
+            );
             decrease_building(&raw mut owner, 110, 15);
             assert_eq!(*ids.data.cast::<u32>().add(110), 0);
             assert_eq!(*classes.add(15), 0);
@@ -3527,7 +3606,13 @@ pub(crate) mod tests {
         set_town_rating_test_mode(&fixture_shared(), false);
         // SAFETY: Test scratch is disabled; the live owner's rating is restored.
         assert_eq!(
-            unsafe { openttd_rust_town_rating(&raw const owner, 42, 0) },
+            unsafe {
+                get_rating(
+                    &raw const owner,
+                    std::ptr::without_provenance(42),
+                    CompanyID(0),
+                )
+            },
             77
         );
         // SAFETY: Serialized by the lock; the views above are no longer used.
@@ -3894,7 +3979,13 @@ mod policy_tests {
             }
             // SAFETY: Only the original fixture's two valid companies read ratings.
             let rating = if company == 0 || company == 4 {
-                unsafe { openttd_rust_town_rating(&raw const *self.town, 42, company) }
+                unsafe {
+                    get_rating(
+                        &raw const *self.town,
+                        std::ptr::without_provenance(42),
+                        CompanyID(company),
+                    )
+                }
             } else {
                 0
             };

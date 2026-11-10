@@ -245,14 +245,14 @@ impl<'a> World<'a> {
         w::hit(w::TB_TOWN_RATING);
         // SAFETY: source permits a null town and the native slot is live.
         unsafe {
-            crate::town::openttd_rust_town_authority_remove(
-                self.road.authority,
-                self.r.shared,
-                self.r.cost,
+            crate::town::check_for_town_rating(
+                &*self.road.authority,
+                &*self.r.shared,
+                &*self.r.cost,
                 out.0,
+                crate::command_type::DoCommandFlags(flags),
                 town,
-                flags & DoCommandFlag::NO_TEST_TOWN_RATING != 0,
-                1,
+                crate::town::TownRatingCheckType::TunnelBridgeRemove,
             );
         }
     }
