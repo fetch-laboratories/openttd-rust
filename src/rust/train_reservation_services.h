@@ -128,14 +128,6 @@ static void TrainReservationStartStop(void *, OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
 }
-static uint64_t TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	return Station::Get(StationID(static_cast<uint16_t>(a)))->facilities.Test(StationFacility::Train);
-}
-static uint64_t TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	return Station::Get(StationID(static_cast<uint16_t>(a)))->xy.base();
-}
 static void TrainReservationStuck(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));

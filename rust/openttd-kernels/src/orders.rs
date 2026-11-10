@@ -521,8 +521,6 @@ pub struct Leaves {
     pub needs_service: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub remaining_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub airport_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub base_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
-    pub station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub depot_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub distance: unsafe extern "C" fn(first: u32, second: u32, square: u8) -> u64,
     pub station_location: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
@@ -630,8 +628,6 @@ leaves! {
     fn needs_service(ctx: *mut c_void) -> u64;
     fn remaining_years(ctx: *mut c_void) -> u64;
     fn airport_tile(destination: u16) -> u64;
-    fn base_station_tile(destination: u16) -> u64;
-    fn station_tile(destination: u16) -> u64;
     fn depot_tile(destination: u16) -> u64;
     fn station_location(ctx: *mut c_void, destination: u16) -> u64;
     fn destination_tile(ctx: *mut c_void) -> u64;
@@ -729,6 +725,10 @@ impl Game {
         // SAFETY: The immutable maintenance table supplies the shared world services.
         let shared = unsafe { &*self.maintenance().shared };
         crate::road_stop::is_bus(shared, native_vehicle(vehicle, self.0.base))
+    }
+    fn shared(self) -> &'static crate::services::Services {
+        // SAFETY: The immutable maintenance table names the process-wide shared table.
+        unsafe { &*self.maintenance().shared }
     }
     fn maintenance(self) -> &'static maintenance::Services {
         // SAFETY: The immutable base table supplies its process-wide maintenance table.
@@ -3021,7 +3021,7 @@ impl Game {
                     (if airport && self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
                         self.airport_tile(order.destination)
                     } else {
-                        self.base_station_tile(order.destination)
+                        u64::from((self.shared().base_station_xy)(order.destination))
                     }) as u32,
                 )
             }
@@ -3031,7 +3031,7 @@ impl Game {
                 }
                 TileIndex(
                     (if self.vehicle_type(v) == u64::from(VehicleType::VEH_AIRCRAFT.0) {
-                        self.station_tile(order.destination)
+                        u64::from((self.shared().station_xy)(order.destination))
                     } else {
                         self.depot_tile(order.destination)
                     }) as u32,
@@ -4748,8 +4748,6 @@ crate::abi::layouts! {
         needs_service,
         remaining_years,
         airport_tile,
-        base_station_tile,
-        station_tile,
         depot_tile,
         distance,
         station_location,

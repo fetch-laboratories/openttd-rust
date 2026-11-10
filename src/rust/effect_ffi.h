@@ -32,10 +32,8 @@ struct OpenTTDEffectAllocation { void *shell; OpenTTDVehicle *record; OpenTTDEff
 struct OpenTTDEffectCreationServices {
 	const OpenTTDEffectLeaves *effect;
 	const OpenTTDSharedServices *shared;
-	bool (*can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	OpenTTDEffectAllocation (*allocate)() noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	OpenTTDEffectState *(*owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
-	void (*delta)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delta);
 };
 const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept;
 const OpenTTDEffectCreationServices *openttd_rust_effect_bind(const OpenTTDEffectCreationServices *);

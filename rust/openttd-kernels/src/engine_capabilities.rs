@@ -49,7 +49,6 @@ pub struct Services {
     pub(crate) loading: extern "C" fn() -> *const crate::engine_loading::Services,
     pub(crate) cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
-    pool_available: extern "C" fn(usize) -> bool,
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
     vehicle_engine_object: extern "C" fn(V) -> E,
@@ -325,7 +324,9 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
     purchase: bool,
 ) -> u32 {
     unsafe {
-        if openttd_rust_articulated_is_abi(s, engine) == 0 || !(s.pool_available)(1) {
+        // `Vehicle::CanAllocateItem()` through the shared table's canonical vehicle services.
+        let vehicles = &*(*s.shared.movement).vehicle;
+        if openttd_rust_articulated_is_abi(s, engine) == 0 || !(vehicles.can_allocate)(1) {
             return 0;
         }
         let v = if purchase {
@@ -548,7 +549,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, pool_available, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
+        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
     };
 }
 
@@ -706,7 +707,6 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         loading: crate::test_tables::unreachable0,
         cargo_classes: crate::test_tables::unreachable1,
         multiplier: crate::test_tables::unreachable1,
-        pool_available: crate::test_tables::unreachable1,
         new_temporary: crate::test_tables::unreachable0,
         destroy_temporary: crate::test_tables::unreachable1,
         vehicle_engine_object: crate::test_tables::unreachable1,

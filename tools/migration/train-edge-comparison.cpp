@@ -25,7 +25,7 @@ constexpr uint VEHICLE_LENGTH = 8;
 constexpr uint8_t TRACK_BIT_DEPOT = 0x80, TRACK_BIT_WORMHOLE = 0x40;
 constexpr int GVF_GOINGUP_BIT = 0, GVF_GOINGDOWN_BIT = 1, MP_TUNNELBRIDGE = 9;
 constexpr int AM_ORIGINAL = 0;
-struct { struct { int train_acceleration_model; } vehicle; } _settings_game;
+struct { struct { uint8_t train_acceleration_model; } vehicle; } _settings_game;
 struct RailTypeInfo { uint8_t curve_speed; } rail;
 static uint8_t GetRailType(TileIndex) { return 0; }
 static const RailTypeInfo *GetRailTypeInfo(uint8_t) { return &rail; }
@@ -77,10 +77,10 @@ static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std:
 static OpenTTDMovementServices movement;
 static OpenTTDVehicleServices vehicle;
 static uint32_t entered_tile;
+static const OpenTTDSettingAddresses _settings_catalog{.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model};
 static OpenTTDTrainServices Leaves()
 {
 	OpenTTDTrainServices leaves{};
-	leaves.acc_model = [](OpenTTDTrainHandle) noexcept { return uint64_t(_settings_game.vehicle.train_acceleration_model); };
 	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v->shell); part.UpdatePosition(); return &part.links; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{8}; };
@@ -92,7 +92,8 @@ static OpenTTDTrainServices Leaves()
 static uint16_t RustCurve()
 {
 	const auto leaves = Leaves();
-	const OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+	shared.settings = &_settings_catalog;
 	return openttd_rust_train_curve_limit(Handle(trains), &leaves, &shared);
 }
 static void RustReverse(int left, int right)
@@ -101,6 +102,7 @@ static void RustReverse(int left, int right)
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
 	movement.shared = &shared;
 	shared.movement = &movement;
+	shared.settings = &_settings_catalog;
 	// Plain rail on every tile of the 256 by 256 map: depot entry reads the map in place.
 	static OpenTTDFixtureMap map{8, 256 * 256};
 	for (uint32_t t = 0; t < map.size; ++t) map.base[t].type = 1 << 4; // MP_RAILWAY

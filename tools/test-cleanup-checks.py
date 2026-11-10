@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
+import cleanup_contract
 from baseline_ratchet import debt_errors
 from cleanup_contract import associated_pull, reviewed, source_reviews
 from rust_syntax import boundary_ids
@@ -560,6 +561,150 @@ class GrowthTests(unittest.TestCase):
         self.assertEqual(associated_pull([wrong, merged], "tested"), merged)
         self.assertIsNone(associated_pull([wrong], "tested"))
 
+    def pr_context(
+        self,
+        pulls: Mapping[str, list[dict[str, object]]],
+        unknown: frozenset[str] = frozenset(),
+        event: Mapping[str, object] | None = None,
+    ) -> str:
+        """Run `context` on a two-parent HEAD with no network.
+
+        GitHub's commit lookup fails for the `unknown` commits, as it does for an
+        unpushed local merge. Without an `event` payload there is no event file.
+        """
+        shas = {"HEAD": "merge", "HEAD^1": "first", "HEAD^2": "second"}
+
+        def fake_git(*args: str) -> str:
+            if args[:2] == ("rev-list", "--parents"):
+                return "merge first second\n"
+            assert args[0] == "rev-parse", args
+            return shas[args[1]] + "\n"
+
+        def fake_gh(*args: str, capture_stderr: bool = False) -> str:
+            route = args[1].removeprefix("repos/fork/")
+            if route.startswith("commits/"):
+                sha = route.split("/")[1]
+                if sha in unknown:
+                    raise subprocess.CalledProcessError(1, ["gh", *args])
+                return json.dumps(pulls.get(sha, []))
+            number = int(route.removeprefix("pulls/"))
+            head = next(
+                pull["head"]
+                for found in pulls.values()
+                for pull in found
+                if pull["number"] == number
+            )
+            return json.dumps({"head": head, "body": f"PR {number}"})
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict("os.environ", {"GITHUB_REPOSITORY": "fork"}) as environment,
+            patch.object(cleanup_contract, "git", fake_git),
+            patch.object(cleanup_contract, "gh", fake_gh),
+            patch.object(cleanup_contract, "discussion", return_value=[]),
+            patch.object(cleanup_contract, "source_reviews", return_value=[]),
+            patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
+        ):
+            environment.pop("GITHUB_EVENT_PATH", None)
+            if event is not None:
+                path = Path(directory) / "event.json"
+                path.write_text(json.dumps(event))
+                environment["GITHUB_EVENT_PATH"] = str(path)
+            _, bodies, _, head = cleanup_contract.context()
+        return f"{bodies[0] if bodies else None} at {head}"
+
+    def test_local_merge_head_reads_its_own_pr(self) -> None:
+        # A local `Update: Merge integration N` merge is the PR head; its second
+        # parent is the base branch, which has no associated PR head.
+        own: dict[str, object] = {
+            "number": 7,
+            "head": {"sha": "merge"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"merge": [own]}), "PR 7 at merge")
+
+    def test_ci_merge_checkout_reads_second_parent_pr(self) -> None:
+        # CI's synthetic merge commit has no PR; its second parent is the PR head.
+        pr: dict[str, object] = {
+            "number": 9,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"second": [pr]}), "PR 9 at second")
+        self.assertEqual(self.pr_context({}), "None at second")
+        # A push of the merge to the base branch reads the PR it merged.
+        merged: dict[str, object] = {
+            "number": 4,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "merge",
+        }
+        self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
+
+    def test_merge_group_reads_the_queued_pr(self) -> None:
+        # Full in the merge queue checks out the group commit: its first parent is
+        # the base or the group of the PR queued ahead, its second this PR's head.
+        # GitHub associates no PR with an unmerged group commit.
+        event = {"merge_group": {"head_sha": "merge", "base_ref": "refs/heads/x"}}
+        queued: dict[str, object] = {
+            "number": 12,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(
+            self.pr_context({"second": [queued]}, event=event), "PR 12 at second"
+        )
+        # A second queued entry: the PR ahead already merged as the first parent.
+        ahead: dict[str, object] = {
+            "number": 11,
+            "head": {"sha": "ahead"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "first",
+        }
+        pulls = {"first": [ahead], "second": [queued]}
+        self.assertEqual(self.pr_context(pulls, event=event), "PR 12 at second")
+        # The PR ahead still queued is never read in place of this one.
+        self.assertEqual(
+            self.pr_context(
+                {"first": [dict(ahead, state="open")], "second": [queued]}, event=event
+            ),
+            "PR 12 at second",
+        )
+
+    def test_unknown_head_lookup_is_no_pr(self) -> None:
+        # GitHub errors for an unpushed commit; that is no PR, not an abort.
+        self.assertEqual(
+            self.pr_context({}, unknown=frozenset({"merge"})), "None at second"
+        )
+
+    def test_unpushed_local_merge_reads_first_parent_pr(self) -> None:
+        # The first parent is the open PR's pushed head and the second is the base,
+        # whose own merged PR (merged by another commit) must never match.
+        own: dict[str, object] = {
+            "number": 5,
+            "head": {"sha": "first"},
+            "state": "open",
+        }
+        base: dict[str, object] = {
+            "number": 3,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "base-merge",
+        }
+        self.assertEqual(
+            self.pr_context(
+                {"first": [own], "second": [base]}, unknown=frozenset({"merge"})
+            ),
+            "PR 5 at first",
+        )
+        self.assertEqual(
+            self.pr_context({"second": [base]}, unknown=frozenset({"merge"})),
+            "None at second",
+        )
+
     def test_review_requires_head_payload_and_different_agent(self) -> None:
         delta = {"counter": "exports", "old": 1, "new": 2, "added": {"x": 1}}
         proposal = dict(
@@ -585,21 +730,72 @@ class GrowthTests(unittest.TestCase):
             [report("/review", "a" * 40)],
         ):
             self.assertFalse(
-                GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
+                GROWTH.accepted(
+                    delta, ("/implementation", [proposal], comments, "head")
+                )
             )
         self.assertTrue(
             GROWTH.accepted(
                 delta,
-                [proposal],
-                [report("/review", "head")],
-                "/implementation",
-                "head",
+                ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
         changed = dict(proposal, reason="different operation")
         self.assertFalse(
             reviewed(changed, [report("/review", "head")], "/implementation", "head")
         )
+
+    def test_growth_acceptance_holds_while_its_source_is_unchanged(self) -> None:
+        earlier, missing = "a" * 40, "b" * 40
+        records = {
+            earlier: {"abi-record-x.h": "struct X { int a; };"},
+            "HEAD": {"abi-record-x.h": "struct X { int a; };", "abi-record-y.h": ""},
+        }
+        files = {(earlier, "tools/x.cpp"): "int x;", ("HEAD", "tools/x.cpp"): "int x;"}
+
+        def check(counter: str, key: str, edits: Mapping[str, str]) -> bool:
+            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
+            proposal = dict(
+                delta,
+                kind="growth",
+                reason="source contract",
+                existing_alternatives="none available",
+                retiring_owner="owner",
+                retirement_condition="native shell removed",
+            )
+            comment = (
+                "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": edits.get("at", earlier), "accept": [proposal]})
+                + "\n```"
+            )
+            current = {rev: dict(rows) for rev, rows in records.items()}
+            current["HEAD"].update({k: v for k, v in edits.items() if k != "at"})
+            text = dict(files)
+            text.update({("HEAD", k): v for k, v in edits.items() if k != "at"})
+            with (
+                patch.object(GROWTH, "known", lambda rev: rev != missing),
+                patch.object(GROWTH.METRICS, "generated_records", current.__getitem__),
+                patch.object(GROWTH.METRICS, "show", lambda r, p: text.get((r, p), "")),
+            ):
+                return GROWTH.accepted(
+                    delta, ("/implementation", [proposal], [comment], "new-head")
+                )
+
+        self.assertTrue(check("generated_records", "abi-record-x.h", {}))
+        self.assertFalse(
+            check(
+                "generated_records",
+                "abi-record-x.h",
+                {"abi-record-x.h": "struct X { int b; };"},
+            )
+        )
+        self.assertFalse(check("generated_records", "abi-record-y.h", {}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": missing}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
+        self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
+        self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
+        self.assertFalse(check("exports", "tools/x.cpp", {}))
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:
@@ -1156,6 +1352,70 @@ class ArchiveTests(unittest.TestCase):
 
 
 class OrdinaryRustTests(unittest.TestCase):
+    def test_debt_collection_repeats_the_gate_clippy_command(self) -> None:
+        """Cargo replays the gate's run only for the same command, build
+        directory and configuration; a second check of the crate costs a pass."""
+        import migration
+
+        gate = migration.clippy_command()
+        for lint in LINT.CLIPPY:
+            self.assertIn("clippy::" + lint, gate)
+        self.assertEqual(gate[gate.index("--") + 1 :][:2], ["-D", "warnings"])
+        calls = []
+
+        def run(command: list[str], **options: object) -> object:
+            calls.append((command, options))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            patch.object(LINT.subprocess, "run", run),
+            patch.object(
+                LINT.subprocess, "check_output", lambda *a, **k: "rustc 1.99.0"
+            ),
+        ):
+            LINT.collect("clippy", migration.ROOT)
+        ((command, options),) = calls
+        self.assertEqual(command, migration.clippy_command("--message-format=json"))
+        self.assertEqual(
+            [part for part in command if part != "--message-format=json"], gate
+        )
+        env = options["env"]
+        assert isinstance(env, dict)
+        self.assertEqual(env["CARGO_TARGET_DIR"], str(migration.CARGO_TARGET_DIR))
+        self.assertEqual(
+            env["CLIPPY_CONF_DIR"], migration.environment()["CLIPPY_CONF_DIR"]
+        )
+
+    def test_a_failed_clippy_gate_shows_errors_without_debt_warnings(self) -> None:
+        import migration
+
+        log = (
+            "    Checking x v0.1.0 (/x)\n"
+            "warning: this function has too many arguments (8/7)\n  --> a.rs:1:1\n\n"
+            "warning: `x` (lib) generated 1 warning\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n"
+        )
+        shown = migration.failure_output("rust-clippy", log)
+        self.assertEqual(
+            shown,
+            "    Checking x v0.1.0 (/x)\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n",
+        )
+        self.assertEqual(migration.failure_output("rust-check", log), log)
+        # Every header form starts a diagnostic: with a code, a lint path, or neither.
+        for header in ("error[E0425]: ", "error: ", "error[clippy::eq_op]: "):
+            coded = (
+                "warning[W1]: debt\n  --> a.rs:1:1\n" + header + "cause\n  --> b.rs\n"
+            )
+            self.assertEqual(
+                migration.failure_output("rust-clippy", coded),
+                header + "cause\n  --> b.rs\n",
+            )
+
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
         import migration
 
@@ -1169,15 +1429,7 @@ class OrdinaryRustTests(unittest.TestCase):
                 "cannot find function `missing`",
             ),
             (
-                [
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
+                migration.clippy_command()[1:],
                 "pub fn x() -> bool { true == true }\n",
                 "equal expressions",
             ),
@@ -1217,6 +1469,42 @@ class OrdinaryRustTests(unittest.TestCase):
             )
             raw, _ = LINT.collect("clippy", root)
             self.assertIn("too_many_arguments", raw)
+            # A Clippy error stops the collection and is shown as rust-checks
+            # shows it, not as a count of debt.
+            (root / "src/lib.rs").write_text("pub fn x() -> bool { true == true }\n")
+            with self.assertRaisesRegex(ValueError, "equal expressions"):
+                LINT.collect("clippy", root)
+            # Cargo prints the library's warning summary directly above the test
+            # target's error, with no blank line: the error must survive.
+            # A lint error has no code; a compiler error has one (`error[E0425]`).
+            for body, header, cause in (
+                ("bool { true == true }", "error: ", "equal expressions"),
+                ("i32 { missing }", "error[E0425]: ", "cannot find value"),
+            ):
+                (root / "src/lib.rs").write_text(
+                    "pub unsafe fn undocumented() {}\n"
+                    f"#[cfg(test)]\npub fn bad() -> {body}\n"
+                )
+                result = subprocess.run(
+                    migration.clippy_command("-j1"),
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                raw = result.stdout + result.stderr
+                # Cargo checks the library and its test target in either order,
+                # so the error may sit directly below a warning summary, or no
+                # warning may print at all. Whatever the order, no error line
+                # may be lost; the synthetic case pins the adjacency itself.
+                errors = [line for line in raw.splitlines() if line.startswith("error")]
+                self.assertTrue(any(line.startswith(header + cause) for line in errors))
+                self.assertTrue(any("could not compile" in line for line in errors))
+                shown = migration.failure_output("rust-clippy", raw).splitlines()
+                for line in errors:
+                    self.assertIn(line, shown)
+                self.assertFalse([line for line in shown if line.startswith("warning")])
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"

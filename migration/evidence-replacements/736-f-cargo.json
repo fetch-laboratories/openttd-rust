@@ -1,0 +1,37 @@
+[
+  {
+    "retires": [
+      "source:tools/migration/cargo-income-gap.cpp",
+      "comparison:cargo-income-comparison.py"
+    ],
+    "oracle": "Original-only capture (#736 F): the probe's model types and nested input domain at 1b8b85c524 around GetTransportedGoodsIncome, BigMulS and CargoPayment::PayTransfer extracted unchanged from the pinned 14ec60f248547d4d062a1160f0fc26d742319888 src/economy.cpp (as the retired income_gap() did), with every candidate part removed, built against the pinned tree at -O0 and -O2 -DNDEBUG (GCC 13.3.0, GNU/Linux x86_64); both streams are identical, and the recipe and domain are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/cargo_payment/income-oracle.txt: 185220 income cases (2801 distinct outputs: income, profit-callback calls, the last callback's var18 argument), 64 PayTransfer saturation cases (profit, visual_transfer, calls, argument) and the invalid spec's zero income; 570424 bytes raw, 44977 gzip -9. No platform field: the observed arithmetic uses fixed-width integers and Money only, so its values do not depend on pointer width or platform. The probe's candidate-only invariants (a transfer leaves route_profit INT64_MIN and visual_profit INT64_MAX) stay as checks in the same test. Nothing crossed a C++ calling boundary, so nothing moves to core-boundary-comparison.cpp.",
+    "observations": {
+      "GetTransportedGoodsIncome over payment, both transit-period thresholds, pieces, distance, transit periods and every callback-result class (failed, 14-bit, 15-bit signed and out-of-range), including the 32-bit BigMulS narrowing and Money saturation; CargoPayment::PayTransfer feeder-share and visual_transfer saturation; an invalid spec's zero income without a callback": [
+        "rust:lib:cargo_payment::income_tests::income_and_transfer_match_original"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:src/tests/cargo_payment.cpp",
+      "source:src/tests/cargo_payment_stubs.hpp"
+    ],
+    "oracle": "Fork-only native test (#736 F), absent from the pinned original 14ec60f248547d4d062a1160f0fc26d742319888; its own checks, not regenerated, replayed on openttd_rust_cargo_payment_destroy: for the 32 cleanup, transfer, local-company, custom-sound and valid-company cases, cleanup settles nothing; settlement runs detach, current company, select owner, (invalidate company windows when the company is valid), write profit, local company, (vehicle sound, then the cash-till sound unless custom, when local), feeder or cost animation, restore company; money -INT64_MAX and train revenue INT64_MAX for a valid company, else 0; written profit 744 with a maximal transfer, else 1000; animated income INT64_MAX; the current company restored to 17. A payment with neither visual profit nor transfer only detaches. cargo_payment_stubs.hpp was the abort-by-default services table of this test and cargo-income-gap.cpp; crate::test_tables::CARGO replaces it. Record and finance layouts stay covered by the ABI layout probes.",
+    "observations": {
+      "CargoPayment destructor settlement order, company selection and restore, Money saturation of the route profit, vehicle profit and animation values, sound gating and cleanup": [
+        "rust:lib:cargo_payment::settlement_tests::settlement_order_money_boundaries_and_cleanup"
+      ]
+    }
+  },
+  {
+    "retires": [
+      "source:tools/simulation/cargo-list-scaling.cpp"
+    ],
+    "oracle": "Fork-only bounded witness (#736 F) for lists larger than the play corpus; its own checks, not regenerated, over its 1000, 4000, 16000 and 64000 packet lists: seven NoUnload stages keep packet identity and order; 1024 first-hit appends keep the snapshot with 4 packet reads each; the exported counts and keep action count become size + 1024; a reverse removal empties the list and zeroes count, keep count and periods; next-hop queries find the last key and miss key 1 1024 times each, and an invalid key makes any query succeed; 1024 station first-hit appends keep the snapshot with 4 reads each; a 1025-piece keyed load moves only the front packet with 4 reads and leaves the station count at size. Its timings and std::list comparison loop were informational, not observations, and are not carried; tools/cargo-storage-comparison.py keeps its pool-limit Split check.",
+    "observations": {
+      "Large cargo lists: NoUnload staging order, first-hit append merging and read bounds, reverse removal counts, next-hop key queries and keyed front-packet loads": [
+        "rust:lib:cargo_storage::scaling_tests::large_lists_keep_identity_order_and_bounded_reads"
+      ]
+    }
+  }
+]

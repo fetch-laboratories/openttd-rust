@@ -23,10 +23,10 @@ from code_lines import without_comments
 from rust_syntax import item_source, nodes, syntax_trees
 from vcs import git
 
+import migration
+
 ROOT = Path(__file__).resolve().parents[1]
-# Function length, nesting and cognitive complexity are not collected: a
-# faithful port keeps the original's function structure (steering 33).
-CLIPPY = ("too_many_arguments", "missing_safety_doc")
+CLIPPY = migration.CLIPPY_DEBT_LINTS
 ITEM = hashlib.sha256(b"item").hexdigest()[:20]
 RUFF = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 VERSIONS = {"clippy": "1.99.0", "ruff": "0.16.8"}
@@ -99,6 +99,18 @@ def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
     return {key: sorted(rows.values()) for key, rows in sorted(sites.items())}
 
 
+def clippy_errors(raw: str) -> list[str]:
+    """Rendered error diagnostics from Cargo's JSON messages."""
+    errors = []
+    for line in raw.splitlines():
+        if not line.startswith("{"):
+            continue
+        message = json.loads(line).get("message") or {}
+        if message.get("level") == "error" and message.get("rendered"):
+            errors.append(message["rendered"])
+    return errors
+
+
 def python_item(tree: ast.AST, row: int) -> str:
     names = []
     for node in ast.walk(tree):
@@ -146,37 +158,31 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
             text=True,
         )
     else:
-        # Reuse the migration driver's host toolchain discovery unchanged.
-        import migration
-
+        # The gate's own Clippy command, build directory and configuration
+        # (`migration.py rust-checks`): after a gate run Cargo replays its
+        # diagnostics here and checks nothing again.
         env = migration.environment()
-        env["CARGO_TARGET_DIR"] = str(root / "build-rust/cargo-lint-ratchet")
-        env["CLIPPY_CONF_DIR"] = str(root / "migration/lints")
+        env["CARGO_TARGET_DIR"] = str(
+            root / migration.CARGO_TARGET_DIR.relative_to(migration.ROOT)
+        )
+        env["CLIPPY_CONF_DIR"] = str(root / migration.CLIPPY_CONFIGURATION)
         version = subprocess.check_output(
             ["rustc", "--version"], env=env, text=True
         ).strip()
         run = subprocess.run(
-            [
-                "cargo",
-                "clippy",
-                "--workspace",
-                "--all-targets",
-                "--locked",
-                "--message-format=json",
-                "--",
-                "-A",
-                "warnings",
-                *[
-                    part
-                    for lint in CLIPPY
-                    for part in ("--force-warn", "clippy::" + lint)
-                ],
-            ],
+            migration.clippy_command("--message-format=json"),
             cwd=root,
             env=env,
             capture_output=True,
             text=True,
         )
+        if run.returncode:
+            raise ValueError(
+                "Clippy reports errors, which `python3 tools/migration.py "
+                "rust-checks` also fails on; fix them first:\n"
+                + "".join(clippy_errors(run.stdout))
+                + run.stderr[-4000:]
+            )
     if VERSIONS[kind] not in version or run.returncode not in (
         (0, 1) if kind == "ruff" else (0,)
     ):

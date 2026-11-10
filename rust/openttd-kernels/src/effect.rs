@@ -560,7 +560,7 @@ crate::abi::layouts! {
     };
 "OpenTTDEffectAllocation" ["probe"] => Allocation { shell, record, owner, };
     "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
-        effect, shared, can_allocate, allocate, owner, delta,
+        effect, shared, allocate, owner,
     };
 
 }
@@ -578,10 +578,8 @@ struct Allocation {
 pub struct CreationServices {
     effect: &'static Leaves,
     shared: &'static Services,
-    can_allocate: extern "C" fn(usize) -> bool,
     allocate: extern "C" fn() -> Allocation,
     owner: extern "C" fn(*mut c_void) -> *mut State,
-    delta: extern "C" fn(*mut c_void),
 }
 static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
@@ -604,7 +602,9 @@ fn creation() -> &'static CreationServices {
 #[allow(unsafe_code)]
 pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -> *mut c_void {
     let s = creation();
-    if !(s.can_allocate)(1) {
+    // SAFETY: The bound leaves name the process-wide canonical vehicle table.
+    let vehicles = unsafe { &*s.effect.vehicles };
+    if !(vehicles.can_allocate)(1) {
         return std::ptr::null_mut();
     }
     let v = (s.allocate)();
@@ -613,7 +613,7 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     v.record.write_y(y);
     v.record.write_z(z);
     v.record.write_tile(0);
-    (s.delta)(v.shell);
+    (vehicles.update_delta)(v.record);
     v.record.write_status(crate::vehicle_base::VS_UNCLICKABLE);
     unsafe {
         initialize(v.owner, v.record, kind, s.effect, s.shared);
