@@ -625,6 +625,7 @@ pub(crate) mod tests {
 mod release_search_tests {
     #[test]
     fn empty_pattern_after_disabled_native_assertion() {
+        extern "C" fn assertions_disabled(_: bool) {}
         const CHILD: &str = "OPENTTD_EMPTY_PATTERN_CHILD";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
@@ -638,7 +639,6 @@ mod release_search_tests {
             assert!(status.success());
             return;
         }
-        extern "C" fn assertions_disabled(_: bool) {}
         crate::services_assert::bind_test_check(assertions_disabled);
         assert_eq!(super::find(b"abc", b"", super::FIND_STRING), 0);
         assert_eq!(super::find(b"", b"", super::FIND_STRING), 0);
