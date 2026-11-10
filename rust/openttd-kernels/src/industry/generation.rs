@@ -258,24 +258,20 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             }
         }
     }
-    unsafe { super::openttd_rust_industry_build_reset(builder, s) };
+    super::industry_build_data_reset(builder);
     u8::from(true)
 }
 /// Original `CheckIndustries`: verify whether the generated industries are complete, and
-/// warn the user if not.
-///
-/// # Safety
-/// Tables and returned immutable specs remain live for this invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_check(
-    s: *const Services,
-    g: *const GenerationServices,
+/// warn the user if not. The builder, tables and returned immutable specs remain live for
+/// this invocation.
+pub(crate) fn check_industries(
+    builder: *const super::Builder,
+    s: &Services,
+    g: &GenerationServices,
 ) {
-    let s = unsafe { &*s };
-    let g = unsafe { &*g };
     let mut count = 0;
     for it in 0..IndustryType::NUM_INDUSTRYTYPES.0 {
-        if unsafe { (s.type_count)(it) } > 0 {
+        if super::get_industry_type_count(builder, IndustryType(it), s) > 0 {
             continue; // Types of existing industries can be skipped.
         }
         let mut force_at_least_one = false;
@@ -295,4 +291,16 @@ pub unsafe extern "C" fn openttd_rust_industry_check(
             break; // Don't swamp the user with errors.
         }
     }
+}
+/// `CheckIndustries`.
+///
+/// # Safety
+/// The live builder and tables remain live for this invocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_check(
+    builder: *mut super::Builder,
+    s: *const Services,
+    g: *const GenerationServices,
+) {
+    check_industries(builder, unsafe { &*s }, unsafe { &*g });
 }

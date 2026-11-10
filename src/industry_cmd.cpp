@@ -670,7 +670,7 @@ void InitializeIndustries()
 /** Verify whether the generated industries are complete, and warn the user if not. */
 void CheckIndustries()
 {
-	openttd_rust_industry_check(&GetIndustryRustServices(), &GetIndustryGenerationServices());
+	openttd_rust_industry_check(RustIndustryBuilderState(), &GetIndustryRustServices(), &GetIndustryGenerationServices());
 }
 
 /**
@@ -863,7 +863,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
 	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
-	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
 	.resolver = &GetIndustryResolverServices(),
 	.scale_by_map_size = OpenTTDMapScaleSize,
 	.company_none = []() noexcept -> uint8_t {

@@ -511,7 +511,6 @@ pub struct Services {
     pub create: unsafe extern "C" fn(u8, u8) -> *mut c_void,
     pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
-    pub type_count: unsafe extern "C" fn(u8) -> u16,
     pub resolver: *const resolver::ResolverServices,
     pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
     pub company_none: unsafe extern "C" fn() -> u8,
@@ -983,7 +982,11 @@ fn update_industry_statistics(owner: *mut Industry, s: &Services) {
 /// `CanCloseLastInstance` must be set (which, by default, it is not) and the count of
 /// industries of this type must one (or lower) in order to be protected against closure.
 /// Returns true if protection is on, false otherwise (except for oil wells).
-fn check_industry_close_down_protection(o: Observation, s: &Services) -> bool {
+fn check_industry_close_down_protection(
+    o: Observation,
+    builder: *const Builder,
+    s: &Services,
+) -> bool {
     // oil wells (or the industries with that flag set) are always allowed to closedown
     if o.behaviour.test(IndustryBehaviour::DontIncrProd)
         && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate
@@ -991,7 +994,7 @@ fn check_industry_close_down_protection(o: Observation, s: &Services) -> bool {
         return false;
     }
     !o.behaviour.test(IndustryBehaviour::CanCloseLastInstance)
-        && unsafe { (s.type_count)(o.kind.0) } <= 1
+        && get_industry_type_count(builder, o.kind, s) <= 1
 }
 const PERCENT_TRANSPORTED_60: u32 = 153;
 const PERCENT_TRANSPORTED_80: u32 = 204;
@@ -1008,7 +1011,13 @@ const PERCENT_TRANSPORTED_80: u32 = 204;
     clippy::too_many_lines,
     reason = "ChangeIndustryProduction is ported as the original's single body; its length is tracked in the Clippy debt ledger"
 )]
-fn change_industry_production(i: *mut c_void, owner: *mut Industry, svc: &Services, monthly: bool) {
+fn change_industry_production(
+    i: *mut c_void,
+    owner: *mut Industry,
+    builder: *const Builder,
+    svc: &Services,
+    monthly: bool,
+) {
     let obs = observe(owner);
     let state = fields(obs.owner);
     let mut str = StringID::STR_NULL;
@@ -1266,7 +1275,7 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, svc: &Servic
     }
     // Close if needed and allowed
     if closeit
-        && !check_industry_close_down_protection(obs, svc)
+        && !check_industry_close_down_protection(obs, builder, svc)
         && !ctlflags(state).test(IndustryControlFlag::NoClosure)
     {
         unsafe {
@@ -1482,8 +1491,18 @@ pub unsafe extern "C" fn openttd_rust_industry_build_targets(b: *mut Builder, s:
     setup_target_count(b, unsafe { &*s });
 }
 /// `Industry::GetIndustryTypeCount`.
-fn get_industry_type_count(s: &Services, it: IndustryType) -> i32 {
-    i32::from(unsafe { (s.type_count)(it.0) })
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "GetIndustryTypeCount's static_cast<uint16_t> of the registry size"
+)]
+pub(crate) fn get_industry_type_count(
+    builder: *const Builder,
+    it: IndustryType,
+    s: &Services,
+) -> u16 {
+    crate::movement::native_assert(s.shared(), it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
+    // SAFETY: The live builder owns the per-type registry; immediate length read.
+    unsafe { (&(*builder).registry)[usize::from(it.0)].len() as u16 }
 }
 /// Try to place the industry in the game. Since there is no feedback why placement fails,
 /// there is no other option than to try a few times before concluding it does not work.
@@ -1523,21 +1542,22 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
     let mut forced_build = IndustryType::NUM_INDUSTRYTYPES;
     for it in industry_types() {
         let f = builddata(b, it);
-        let difference = unsafe { i32::from((*f).target_count) } - get_industry_type_count(s, it);
+        let difference = unsafe { i32::from((*f).target_count) }
+            - i32::from(get_industry_type_count(builder, it, s));
         missing = missing.wrapping_add(difference);
         // This type may not be built now.
         if unsafe { (*f).wait_count > 0 } {
             continue;
         }
         if difference > 0 {
-            if get_industry_type_count(s, it) == 0
+            if i32::from(get_industry_type_count(builder, it, s)) == 0
                 && unsafe { (*f).min_number > 0 }
                 // An industry that should exist at least once, is not available. Force it,
                 // trying the most needed one first.
                 && (forced_build == IndustryType::NUM_INDUSTRYTYPES
                     || difference
                         > unsafe { i32::from((*builddata(b, forced_build)).target_count) }
-                            - get_industry_type_count(s, forced_build))
+                            - i32::from(get_industry_type_count(builder, forced_build, s)))
             {
                 forced_build = it;
             }
@@ -1566,8 +1586,8 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
                 let f = builddata(b, it);
                 // Type may not be built now; too many of this kind.
                 if unsafe { (*f).wait_count == 0 } {
-                    let difference =
-                        unsafe { i32::from((*f).target_count) } - get_industry_type_count(s, it);
+                    let difference = unsafe { i32::from((*f).target_count) }
+                        - i32::from(get_industry_type_count(builder, it, s));
                     if difference > 0 {
                         if count == 1 || r < difference as u32 {
                             break it;
@@ -1661,7 +1681,7 @@ pub(crate) unsafe fn economy_industries_daily(builder: *mut Builder, services: *
         } else {
             let e = random_entry(s);
             if !e.industry.is_null() {
-                change_industry_production(e.industry, e.owner, s, false);
+                change_industry_production(e.industry, e.owner, builder, s, false);
                 unsafe { (s.set_dirty)(e.industry) };
             }
         }
@@ -1692,7 +1712,7 @@ pub(crate) unsafe fn economy_industries_monthly(builder: *mut Builder, services:
         if unsafe { (*fields(e.owner)).prod_level == PRODLEVEL_CLOSURE } {
             unsafe { (s.destroy)(e.industry) };
         } else {
-            change_industry_production(e.industry, e.owner, s, true);
+            change_industry_production(e.industry, e.owner, builder, s, true);
             unsafe { (s.set_dirty)(e.industry) };
         }
     }
@@ -2701,7 +2721,6 @@ crate::abi::layouts! {
         create,
         num_items,
         get,
-        type_count,
         resolver,
         scale_by_map_size,
         company_none,
@@ -2993,9 +3012,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_get(_: u16) -> *mut c_void {
         unreachable!("unexpected Services::get")
     }
-    extern "C" fn unexpected_type_count(_: u8) -> u16 {
-        unreachable!("unexpected Services::type_count")
-    }
     extern "C" fn unexpected_scale_by_map_size(_: u32) -> u32 {
         unreachable!("unexpected Services::scale_by_map_size")
     }
@@ -3058,7 +3074,6 @@ mod production_policy_tests {
             create: unexpected_create,
             num_items: unexpected_num_items,
             get: unexpected_get,
-            type_count: unexpected_type_count,
             resolver: ptr::null(),
             scale_by_map_size: unexpected_scale_by_map_size,
             company_none: unexpected_company_none,

@@ -279,7 +279,6 @@ struct IndustryGenerationFixture {
 	{
 		auto world = GetIndustryRustServices();
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
-		world.type_count = [](uint8_t) noexcept -> uint16_t { return 0; };
 		static auto resolver = GetIndustryResolverServices();
 		world.resolver = &resolver;
 		world.scale_by_map_size = [](uint32_t n) noexcept -> uint32_t { return n; };

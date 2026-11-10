@@ -142,7 +142,6 @@ typedef struct OpenTTDIndustryServices {
 	void *(*create)(uint8_t type, uint8_t creation) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(create);
 	uint32_t (*num_items)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(num_items);
 	void *(*get)(uint16_t id) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
-	uint16_t (*type_count)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_count);
 	const struct OpenTTDIndustryResolverServices *resolver;
 	uint32_t (*scale_by_map_size)(uint32_t n) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_map_size);
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
@@ -230,7 +229,7 @@ typedef struct OpenTTDIndustryGenerationServices {
 } OpenTTDIndustryGenerationServices;
 uint8_t openttd_rust_industry_generate_abi(OpenTTDIndustryBuilder *, OpenTTDIndustryGenerationContext *, const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
 extern "C++" inline bool openttd_rust_industry_generate(OpenTTDIndustryBuilder *a0, OpenTTDIndustryGenerationContext *a1, const OpenTTDIndustryServices *a2, const OpenTTDIndustryGenerationServices *a3) { return openttd_rust_industry_generate_abi(a0, a1, a2, a3) != 0; }
-void openttd_rust_industry_check(const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
+void openttd_rust_industry_check(OpenTTDIndustryBuilder *, const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
 typedef struct OpenTTDTownHandle OpenTTDTownHandle;
 typedef struct OpenTTDIndustryLayoutHandle OpenTTDIndustryLayoutHandle;
 typedef struct OpenTTDIndustryCargoLists { uint8_t produced[16], accepted[16]; } OpenTTDIndustryCargoLists;
