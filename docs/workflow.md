@@ -40,7 +40,6 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 - Infrastructure reviews apply [cost decisions](planning.md#cost-decisions).
 - A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md) and reports as its [report](review-checklist.md#report) says. For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review. CI checks those commits. A simulation behavior fix found by CI needs a fresh scoped review, including arithmetic or assertion fixes.
-- A reviewed PR's base update that meets a condition under [integration](root-workflow.md#integration) needs only CI.
 
 ## Integration
 
