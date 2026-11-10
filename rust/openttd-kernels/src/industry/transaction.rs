@@ -994,15 +994,15 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     }
     if !e.editor()
         && unsafe {
-            super::resolver::openttd_rust_industry_probability(
-                it.0,
+            super::resolver::get_industry_probability_callback(
+                it,
                 if e.company() == Owner::DEITY {
-                    IndustryAvailabilityCallType::IACT_RANDOMCREATION.0
+                    IndustryAvailabilityCallType::IACT_RANDOMCREATION
                 } else {
-                    IndustryAvailabilityCallType::IACT_USERCREATION.0
+                    IndustryAvailabilityCallType::IACT_USERCREATION
                 },
                 1,
-                e.s.resolver,
+                &*e.s.resolver,
             )
         } == 0
     {

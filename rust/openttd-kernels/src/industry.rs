@@ -1151,12 +1151,11 @@ fn change_industry_production(i: *mut c_void, owner: *mut Industry, svc: &Servic
                 }
                 // Prevent production to overflow or Oil Rig passengers to be over-"produced"
                 new_prod = new_prod.clamp(1, i32::from(u8::MAX));
-                if unsafe {
-                    (*p).cargo
-                        == crate::cargo_registry::openttd_rust_cargo_by_label(
-                            crate::cargo_type::CT_PASSENGERS,
-                        )
-                } && !obs.behaviour.test(IndustryBehaviour::NoPaxProdClamp)
+                if crate::cargo_type::CargoType(unsafe { (*p).cargo })
+                    == crate::cargo_registry::get_cargo_type_by_label(
+                        crate::cargo_type::CargoLabel::CT_PASSENGERS,
+                    )
+                    && !obs.behaviour.test(IndustryBehaviour::NoPaxProdClamp)
                 {
                     new_prod = new_prod.clamp(0, 16);
                 }
