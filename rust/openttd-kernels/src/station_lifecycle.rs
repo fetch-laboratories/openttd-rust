@@ -153,12 +153,12 @@ fn cmsa_mine(tile: TileIndex, m: &TileTypeAccess, s: &Services) -> bool {
         return false;
     }
     let mut result = false;
-    crate::industry::for_each_produced_cargo(owner, |cargo| {
+    crate::industry::for_each_cargo_produced(owner, |cargo| {
         /* The industry extracts something non-liquid, i.e. no oil or plastic, so it is a mine.
          * Also the production of passengers and mail is ignored. */
         if !result
-            && is_valid_cargo_type(cargo)
-            && !CargoClasses(unsafe { (s.vehicle_resolver().cargo_classes)(cargo) }).any(
+            && is_valid_cargo_type(cargo.0)
+            && !CargoClasses(unsafe { (s.vehicle_resolver().cargo_classes)(cargo.0) }).any(
                 CargoClasses::from_element(CargoClass::Liquid)
                     .with(CargoClasses::from_element(CargoClass::Passengers))
                     .with(CargoClasses::from_element(CargoClass::Mail)),
@@ -230,7 +230,7 @@ pub(crate) fn generate_station_name(
 ) -> StringID {
     let m = s.map_access();
     let map = s.shared.map();
-    let size_y = (s.shared.map_max_y)() + 1;
+    let size_y = crate::map_func::World::new(s.shared).size_y();
     let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
     let n = &s.names;
     let town = (s.commands().station_town)(st);
@@ -615,9 +615,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         }
     }
     /* Remove station from industries and towns that reference it. */
-    unsafe {
-        crate::station::openttd_rust_station_remove_from_nearby_lists(st, s.catchment);
-    }
+    let catchment = unsafe { crate::station::Ctx::new(s.catchment) };
+    crate::station::remove_from_all_nearby_lists(st, (catchment.c.owner)(st), &catchment);
     /* Clear the persistent storage. */
     (c.delete_airport_storage)(st);
     if CompanyID((w.station_owner)(st)) == CompanyID::NONE {

@@ -233,11 +233,6 @@ pub(crate) fn for_each_cargo_produced(owner: *mut Industry, mut visit: impl FnMu
         visit(CargoType(unsafe { (*produced(owner, slot)).cargo }));
     }
 }
-/// Temporary raw adapter for [`for_each_cargo_produced`], used by `station.rs` and
-/// `station_lifecycle.rs`.
-pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMut(u8)) {
-    for_each_cargo_produced(owner, |cargo| visit(cargo.0));
-}
 /// `IndustryTypeBuildData`.
 #[repr(C)]
 #[derive(Default, Clone, Copy)]

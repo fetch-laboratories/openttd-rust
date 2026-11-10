@@ -478,7 +478,7 @@ impl<'a> Ctx<'a> {
             c,
             s,
             map: s.map(),
-            size_y: (s.map_max_y)().wrapping_add(1),
+            size_y: crate::map_func::World::new(s).size_y(),
         }
     }
     /// The catchment table reachable from the shared services.
@@ -833,13 +833,11 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
 }
 /// `Station::RecomputeCatchmentForAll`: towns, then industries, then stations in pool order.
 pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
-    // The fork's town iteration: the next live index at or after the
-    // argument, or `u32::MAX` past the last town.
-    let mut town = (c.s.town_next_id)(u32::from(TownID::BEGIN.0));
-    while town != u32::MAX {
+    for town in crate::town::iterate(|from| (c.s.town_next_id)(from)) {
         // SAFETY: Live town owner; immediate mutation.
-        unsafe { (*crate::town::stations_near((c.s.town_owner_by_id)(town))).clear() };
-        town = (c.s.town_next_id)(town + 1);
+        unsafe {
+            (*crate::town::stations_near((c.s.town_owner_by_id)(u32::from(town.0)))).clear();
+        };
     }
     let mut industry = (c.c.next_industry)(u32::from(IndustryID::BEGIN.0));
     while !industry.is_null() {
@@ -984,7 +982,7 @@ pub(crate) fn production_around_tiles(
         if TileType((c.s.tile_type)(tile.0)) == TileType::MP_INDUSTRY {
             flat_insert(&mut industries, c.industry_index(tile));
         }
-        crate::tile_cmd::add_produced_cargo_raw(tile.0, &mut produced, c);
+        crate::tile_cmd::add_produced_cargo(tile, &mut produced, c);
     }
     // Loop over the seen industries. They produce cargo for
     // anything that is within 'rad' of any one of their tiles.
@@ -994,9 +992,9 @@ pub(crate) fn production_around_tiles(
         if !(c.c.industry_neutral)(i).is_null() && !(c.s.station_serve_neutral)() {
             continue;
         }
-        crate::industry::for_each_produced_cargo((c.c.industry_owner)(i), |cargo| {
-            if crate::cargo_type::is_valid_cargo_type(cargo) {
-                let slot = &mut produced[usize::from(cargo)];
+        crate::industry::for_each_cargo_produced((c.c.industry_owner)(i), |cargo| {
+            if crate::cargo_type::is_valid_cargo_type(cargo.0) {
+                let slot = &mut produced[usize::from(cargo.0)];
                 *slot = slot.wrapping_add(1);
             }
         });
@@ -1033,7 +1031,7 @@ pub(crate) fn acceptance_around_tiles(
         {
             continue;
         }
-        crate::tile_cmd::add_accepted_cargo_raw(tile.0, &mut acceptance, always_accepted.cast(), c);
+        crate::tile_cmd::add_accepted_cargo(tile, &mut acceptance, always_accepted, c);
     }
     acceptance
 }
