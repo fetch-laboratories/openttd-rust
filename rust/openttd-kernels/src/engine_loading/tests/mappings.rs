@@ -33,7 +33,9 @@ fn reservation_replacement_and_serialized_threads_match_original() {
         // SAFETY: Every lookup runs before the next serialized registry mutation.
         let get = |local, grf| unsafe { openttd_rust_engine_mapping_get(kind, local, grf) };
         // SAFETY: Only this thread mutates MAPPINGS during reservation.
-        let reserve = |static_access| unsafe { use_unreserved_id(kind, 1, 17, static_access) };
+        let reserve = |static_access| unsafe {
+            use_unreserved_id(crate::vehicle_type::VehicleType(kind), 1, 17, static_access).0
+        };
         let size = mapping_snapshot(kind).len();
         let first = get(0, INVALID_GRFID);
         writeln!(observed, "default {kind} {size} {first}").unwrap();
