@@ -1,6 +1,7 @@
 """Pinned standard lexers for code-line metrics and boundary token scans."""
 
 import atexit
+import contextlib
 import hashlib
 import importlib
 import json
@@ -89,19 +90,32 @@ class Store:
         self.added: dict[str, list[int]] = {}
 
     def read(self) -> dict[str, list[int]]:
+        """The stored results, or none when the file is missing or not a
+        mapping of keys to line lists. Entries of that shape are trusted."""
         try:
-            return json.loads(self.path.read_text())
+            entries = json.loads(self.path.read_text())
         except (OSError, ValueError):
             return {}
+        well_formed = isinstance(entries, dict) and all(
+            isinstance(lines, list) and all(type(line) is int for line in lines)
+            for lines in entries.values()
+        )
+        return entries if well_formed else {}
 
     def save(self) -> None:
-        """Add this run's results to whatever another run saved meanwhile."""
+        """Add this run's results to what is on disk. Two saves that overlap
+        can drop one run's additions, which a later run lexes again. A store
+        that cannot be written costs time, never a result."""
         if not self.added:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(f"{self.path.name}.{os.getpid()}")
-        temporary.write_text(json.dumps(self.read() | self.added))
-        os.replace(temporary, self.path)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(json.dumps(self.read() | self.added))
+            os.replace(temporary, self.path)
+        except OSError:
+            with contextlib.suppress(OSError):
+                temporary.unlink()
         self.added = {}
 
 
@@ -118,18 +132,22 @@ def persist(directory: Path) -> None:
 
 @lru_cache(maxsize=None)
 def _code_lines(text: str, lexer: str) -> frozenset[int]:
-    key = hashlib.sha256(f"{lexer}\0{text}".encode()).hexdigest()
-    if STORE is not None and key in STORE.entries:
-        return frozenset(STORE.entries[key])
+    if STORE is None:
+        return frozenset(counted(text, lexer))
+    key = hashlib.sha256(f"{lexer}\0{text}".encode(errors="surrogatepass")).hexdigest()
+    if key not in STORE.entries:
+        STORE.added[key] = STORE.entries[key] = sorted(counted(text, lexer))
+    return frozenset(STORE.entries[key])
+
+
+def counted(text: str, lexer: str) -> set[int]:
     result, line = set(), 1
     for kind, value in lexed(text, lexer):
         for offset, part in enumerate(value.split("\n")):
             if kind not in Comment and kind not in String.Doc and part.strip():
                 result.add(line + offset)
         line += value.count("\n")
-    if STORE is not None:
-        STORE.added[key] = sorted(result)
-    return frozenset(result)
+    return result
 
 
 def code_lines(text: str, path: str) -> set[int]:

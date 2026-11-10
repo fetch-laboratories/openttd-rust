@@ -495,6 +495,36 @@ class CodeLineStoreTests(unittest.TestCase):
         self.fresh()
         self.assertEqual(self.lines.code_lines(self.SOURCE, "a.cpp"), {3, 5})
 
+    def test_a_store_of_another_shape_is_ignored(self) -> None:
+        store = self.fresh()
+        for other in (
+            '["list"]',
+            '{"key": "text"}',
+            '{"key": [1, "2"]}',
+            '{"key": [true]}',
+        ):
+            store.path.write_text(other)
+            self.assertEqual(self.lines.Store(self.directory).entries, {}, other)
+
+    def test_an_unwritable_store_costs_no_result(self) -> None:
+        occupied = self.directory / "file"
+        occupied.write_text("")
+        self.forget()
+        store = self.lines.Store(occupied / "below")
+        self.lines.STORE = store
+        self.assertEqual(self.lines.code_lines(self.SOURCE, "a.cpp"), {3, 5})
+        store.save()
+        self.assertEqual(store.added, {})
+        self.assertEqual(sorted(self.directory.iterdir()), [occupied])
+
+    def test_text_that_utf8_cannot_encode_is_counted_with_and_without_a_store(
+        self,
+    ) -> None:
+        text = "int x; // \udcff\n"
+        self.assertEqual(self.lines.code_lines(text, "a.cpp"), {1})
+        self.fresh()
+        self.assertEqual(self.lines.code_lines(text, "a.cpp"), {1})
+
     def test_a_module_or_pygments_change_starts_an_empty_store(self) -> None:
         name = self.lines.Store(self.directory).path.name
         with mock.patch.object(self.lines.pygments, "__version__", "0"):
