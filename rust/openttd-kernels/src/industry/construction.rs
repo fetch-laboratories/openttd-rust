@@ -108,8 +108,8 @@ fn populate(
         }
         return;
     }
-    crate::station::for_all_stations_around_tiles_raw(super::location(owner), &cc, |st, tile| {
-        if !unsafe { (l.belongs)(tile, id.0) } {
+    crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
+        if !unsafe { (l.belongs)(tile.0, id.0) } {
             return false;
         }
         // SAFETY: Live owner; immediate mutation.
@@ -118,7 +118,7 @@ fn populate(
             st.station,
             (cc.c.owner)(st.station),
             shell,
-            TileIndex(tile),
+            tile,
             &cc,
         );
         false

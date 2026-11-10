@@ -424,9 +424,16 @@ fn industries_get_variable(
             0x87 => return (s.shared().terrain_type)(c.tile().0),
             // Town zone
             0x88 => {
-                return u32::from(unsafe {
-                    crate::town::radius_from_shell(s.shared(), c.town, c.tile().0)
-                });
+                return u32::from(
+                    unsafe {
+                        crate::town::get_town_radius_group(
+                            (s.shared().town_owner)(c.town),
+                            c.tile(),
+                            s.shared().map(),
+                        )
+                    }
+                    .0,
+                );
             }
             // Manhattan distance of the closest town
             0x89 => {
@@ -562,7 +569,16 @@ fn industries_get_variable(
         // Get town zone and Manhattan distance of closest town
         0x65 if c.tile() != TileIndex::INVALID => {
             let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
-            (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile.0) }) << 16)
+            (u32::from(
+                unsafe {
+                    crate::town::get_town_radius_group(
+                        (s.shared().town_owner)(c.town),
+                        tile,
+                        s.shared().map(),
+                    )
+                }
+                .0,
+            ) << 16)
                 | s.map()
                     .distance_manhattan(tile.0, town_xy(c.town, s).0)
                     .min(u32::from(u16::MAX))
@@ -757,9 +773,16 @@ fn industry_tile_get_variable(
         // Current town zone of the tile in the nearest town
         0x42 => {
             let town = crate::town::spatial::closest_town_from_tile(s.shared(), c.tile(), u32::MAX);
-            u32::from(unsafe {
-                crate::town::radius_from_shell(s.shared(), town.cast(), c.tile().0)
-            })
+            u32::from(
+                unsafe {
+                    crate::town::get_town_radius_group(
+                        (s.shared().town_owner)(town),
+                        c.tile(),
+                        s.shared().map(),
+                    )
+                }
+                .0,
+            )
         }
         // Relative position
         0x43 => get_relative_position(c.tile(), location_tile(c.owner), s.map()),
