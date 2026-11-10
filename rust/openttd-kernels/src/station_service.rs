@@ -419,6 +419,8 @@ pub struct LoadingWait {
 pub struct OrderDestination {
     pub(crate) destination: u16,
     pub(crate) kind: crate::vehicle::OrderType,
+    /// `GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)`.
+    pub(crate) nearest_depot: bool,
 }
 #[repr(C)]
 pub struct TruncatedSource {
@@ -1786,17 +1788,19 @@ impl RefitContext {
             0,
             flags.0,
             |flags| unsafe {
-                crate::vehicle_transactions::refit::refit(
+                crate::vehicle_transactions::refit::cmd_refit_vehicle(
                     services,
                     self.out,
                     self.temporary,
-                    flags,
-                    id,
-                    cargo.0,
-                    0xFF,
-                    true,
-                    false,
-                    1,
+                    DoCommandFlags(flags),
+                    crate::vehicle_transactions::refit::CmdRefitVehicle {
+                        veh_id: crate::vehicle_type::VehicleID(id),
+                        new_cargo_type: cargo,
+                        new_subtype: 0xFF,
+                        auto_refit: true,
+                        only_this: false,
+                        num_vehicles: 1,
+                    },
                 )
             },
         )
@@ -2550,6 +2554,7 @@ crate::abi::layouts! {
     "OpenTTDOrderDestination" ["probe"] => OrderDestination {
         destination,
         kind,
+        nearest_depot,
     };
     "OpenTTDTruncatedSource" ["probe"] => TruncatedSource {
         amount,

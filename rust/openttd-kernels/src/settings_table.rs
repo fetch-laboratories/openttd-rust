@@ -193,7 +193,7 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
                 hit(witness::SETTINGS_SERVICE_VEHICLE);
                 // `SetServiceInterval` takes the `int` of `CompanyServiceInterval` as uint16_t.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let interval = s.transactions.interval_default(company.0, kind) as u16;
+                let interval = s.transactions.interval_default_raw(company.0, kind) as u16;
                 (s.set_service_interval)(id, interval);
                 (s.set_service_interval_percent)(id, new_value != 0);
             }
@@ -328,7 +328,7 @@ fn road_front_engines(s: &Services, mut each: impl FnMut(VehicleRef)) {
 }
 
 fn road_acceleration_model_changed(s: &Services) {
-    if s.refit.road_acceleration_model() != AM_ORIGINAL {
+    if s.refit.road_acceleration_model().0 != AM_ORIGINAL {
         road_front_engines(s, |v| {
             hit(witness::SETTINGS_ROAD_ACCELERATION);
             crate::ground_vehicle::cargo_changed(physics(s), v);
