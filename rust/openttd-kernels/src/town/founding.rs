@@ -735,10 +735,10 @@ pub(crate) unsafe fn cmd_found_town(
         observed!((f.s.set_result)(frame, town.id));
         if text.size != 0 {
             unsafe {
-                names::openttd_rust_town_set_name(town.state, text);
+                names::set_town_name(town.state, text);
             }
             observed!((f.s.name_changed)(town.shell, unsafe {
-                names::openttd_rust_town_name(town.state)
+                names::town_name(town.state)
             }));
             observed!((f.s.update_virt)(town.shell));
         }
@@ -813,7 +813,7 @@ pub(crate) unsafe fn generate_towns(
     }
     // Pre-populate the name list with the names of towns already on the map.
     for town in super::iterate_refs(|from| observed!((f.names.next)(from))) {
-        let custom = unsafe { names::openttd_rust_town_name(town.state) };
+        let custom = unsafe { names::town_name(town.state) };
         let name = if custom.size == 0 {
             observed!((f.s.cached_name)(town.shell))
         } else {
@@ -944,10 +944,10 @@ pub(crate) unsafe fn cmd_rename_town(
     if execute {
         observed!((f.s.prepare_rename)(town.shell));
         unsafe {
-            names::openttd_rust_town_set_name(town.state, text);
+            names::set_town_name(town.state, text);
         }
         observed!((f.s.name_changed)(town.shell, unsafe {
-            names::openttd_rust_town_name(town.state)
+            names::town_name(town.state)
         }));
         observed!((f.s.update_virt)(town.shell));
         observed!((f.s.directory_resort)());

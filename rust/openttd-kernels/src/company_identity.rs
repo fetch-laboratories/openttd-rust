@@ -225,7 +225,7 @@ pub(crate) fn generate_company_name(s: &Services, c: *mut OpenTTDCompany) {
     let mut names = Names::new(s, &mut slot);
     let mut str = StringID(s.strings.andco);
     let mut strp;
-    let town_name = unsafe { crate::town::names::openttd_rust_town_name(town).size == 0 }
+    let town_name = unsafe { crate::town::names::town_name(town).size == 0 }
         && crate::math::is_inside_mm(
             usize::from(read_field!(simulation, townnametype)),
             s.strings.town_begin as usize,

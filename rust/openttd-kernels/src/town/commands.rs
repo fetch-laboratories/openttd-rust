@@ -653,6 +653,12 @@ pub(crate) unsafe fn cmd_town_cargo_goal(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_text(state: *const State) -> ByteSpan {
+    unsafe { town_text(state) }
+}
+/// `Town::text`: the town's custom text, empty when it has none.
+/// # Safety
+/// Live owner; the bytes stay valid until the next text mutation.
+pub(crate) unsafe fn town_text(state: *const State) -> ByteSpan {
     let text = unsafe { &(*state).text };
     ByteSpan {
         data: text.as_ptr(),
@@ -661,6 +667,12 @@ pub unsafe extern "C" fn openttd_rust_town_text(state: *const State) -> ByteSpan
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_set_text(state: *mut State, text: ByteSpan) {
+    unsafe { set_town_text(state, text) };
+}
+/// `t->text = text`: set the town's custom text.
+/// # Safety
+/// Live, exclusively mutable owner; readable input bytes.
+pub(crate) unsafe fn set_town_text(state: *mut State, text: ByteSpan) {
     let target = unsafe { &mut (*state).text };
     target.clear();
     if text.size != 0 {
@@ -704,7 +716,7 @@ pub(crate) unsafe fn cmd_town_set_text(
     };
     if flags.test(DoCommandFlag::Execute) {
         unsafe {
-            openttd_rust_town_set_text(t.state, text);
+            set_town_text(t.state, text);
         }
         (s.invalidate_view)(id);
         w::hit(w::TOWN_COMMAND_TEXT);
