@@ -2699,10 +2699,8 @@ mod financial_command_tests {
     }
 }
 
-/// "Commands - road price saturation, rounding and independent type masks" from the retired
-/// part of `src/tests/company_economy.cpp` (#736 F), with the fixture's own expected values:
+/// Road build, clear and convert price saturation, rounding and independent type masks, with
 /// unclassified `NewGRF` masks and extreme prices that the default maps never load.
-/// It lives with the price table it writes, since `road_cost.rs` admits no unsafe code.
 #[cfg(test)]
 mod road_price_tests {
     use crate::economy_type::Price;
@@ -2776,11 +2774,9 @@ mod road_price_tests {
     }
 }
 
-/// Company control cases from the retired part of `src/tests/company_economy.cpp` (#736 F),
-/// with the fixture's own expected values: the first playable company, service intervals and
-/// ownership errors ("Company control - human preference, allocation credit, defaults and
-/// encoded owners"; its native string encodings stay a C++ case) and "Company ownership - both
-/// original assertions precede error selection".
+/// Company control: the first playable company and its allocation check, service intervals,
+/// ownership errors with both original assertions before error selection, and the
+/// special-owner takeover mask.
 #[cfg(test)]
 mod control_tests {
     use super::*;
@@ -3089,11 +3085,8 @@ mod control_tests {
     }
 }
 
-/// "Company economy - competitor posts return to the caller before each Post" from the retired
-/// part of `src/tests/company_economy.cpp` (#736 F), with the fixture's own expected values.
-/// The observation is `on_tick`'s return protocol, so the test calls the production function
-/// directly; the loop below replays the session caller (`while on_tick(..) { post_ai }`) as
-/// scaffolding.
+/// Competitor posts return to the caller before each post: `on_tick`'s return protocol, driven
+/// by a loop of the session caller's form (`while on_tick(..) { post_ai }`).
 #[cfg(test)]
 mod competitor_tests {
     use super::*;
@@ -3209,10 +3202,9 @@ mod competitor_tests {
     }
 }
 
-/// Company startup and control continuations from the retired part of
-/// `src/tests/company_economy.cpp` (#736 F), with the fixture's own traces: "Company economy -
-/// AI startup continuation and abandoned frames" and "Company control - network local switch
-/// precedes native settings continuation". Company 2 is the slot every allocation takes.
+/// Company startup and control continuations: the AI startup continuation and abandoned
+/// frames, and a network client's local switch before the settings continuation. Company 2 is
+/// the slot every allocation takes.
 #[cfg(test)]
 mod startup_tests {
     use super::*;
@@ -3711,12 +3703,8 @@ mod startup_tests {
     }
 }
 
-/// The network-client mode of "Company economy - network deferred deletion and synchronous
-/// pool iteration" from `src/tests/company_economy.cpp` (#736 F), with the fixture's own
-/// values: a client never deletes a company bankrupt for a tenth month; it updates each one's
-/// admin state, keeps both companies and restores the current company. The offline and server
-/// modes post the deletion through the native command and network service tables and stay a
-/// C++ case.
+/// A network client never deletes a company bankrupt for a tenth month; it updates each one's
+/// admin state, keeps both companies and restores the current company.
 #[cfg(test)]
 mod bankruptcy_tests {
     use super::*;

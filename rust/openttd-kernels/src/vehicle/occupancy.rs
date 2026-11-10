@@ -512,12 +512,10 @@ impl crate::services::CommandServices {
     }
 }
 
-/// The Rust parts of "Vehicle occupancy - canonical links, stale removal and copied cursors"
-/// from the retired `src/tests/vehicle_scheduler.cpp` (#736 F), with the fixture's own expected
-/// values: the ground check against the tile's highest pixel, head insertion links, removal
-/// that keeps the stale successor without reading the map size, and a reset that clears only
-/// current positions. The native `VehiclesOnTile` copied-iterator part stays a C++ case.
-/// No other test sets `tile_links`, so none shares the process-wide tile index.
+/// The occupancy index: the ground check against the tile's highest pixel, head insertion
+/// links, removal that keeps the stale successor without reading the map size, and a reset
+/// that clears only current positions. No other test sets `tile_links`, so none shares the
+/// process-wide tile index.
 #[cfg(test)]
 mod index_tests {
     use super::*;

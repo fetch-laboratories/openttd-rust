@@ -728,11 +728,8 @@ pub(crate) fn post(
     }
 }
 
-/// "Commands - pre-post money short circuits and local error encoding" from the retired part
-/// of `src/tests/company_economy.cpp` (#736 F), with the fixture's own expected values. Unread
-/// finance and money entries stay unreachable, so a skipped read fails. The native encoding of
-/// the cash error for the local company stays a C++ case; here the error service's call is
-/// observed.
+/// Command money short circuits, the cash-error call and executed subtraction. Unread finance
+/// and money entries stay unreachable, so a skipped read fails.
 #[cfg(test)]
 mod money_tests {
     use super::*;
