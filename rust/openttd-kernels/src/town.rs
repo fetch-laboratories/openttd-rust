@@ -413,16 +413,20 @@ pub(crate) unsafe fn radius_from_shell(
 ) -> u8 {
     unsafe { get_town_radius_group((s.town_owner)(town), TileIndex(tile), s.map()) }.0
 }
-/// Copied canonical road-work policy inputs; no owner reference spans a service.
+/// The road-work inputs of `TileLoop_Road` for a town: `road_build_months`, the
+/// tile's `GetTownRadiusGroup` and `DistanceManhattan(t->xy, tile)`, copied so that no
+/// owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
-pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -> (u8, u8, u32) {
+pub(crate) unsafe fn road_context(
+    state: *const State,
+    tile: TileIndex,
+    map: crate::map_func::Map,
+) -> (u8, HouseZone, u32) {
     // SAFETY: Immediate reads only, caller establishes owner lifetime.
     let state = unsafe { &*state };
-    // Native TileX/TileY operate on the power-of-two map dimensions.
-    let map = crate::map_func::Map::from_log_x(size_x.trailing_zeros());
-    let distance = map.distance_manhattan(tile, state.simulation.xy);
-    let zone = unsafe { get_town_radius_group(state, TileIndex(tile), map) };
-    (state.growth.road, zone.0, distance)
+    let distance = map.distance_manhattan(tile.0, state.simulation.xy);
+    let zone = unsafe { get_town_radius_group(state, tile, map) };
+    (state.growth.road, zone, distance)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange_abi(generating: bool) -> u8 {
