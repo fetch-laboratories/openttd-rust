@@ -39,13 +39,14 @@ use super::townname_data::{
     NAME_SWISS_REAL, NAME_TURKISH_MIDDLE, NAME_TURKISH_PREFIX, NAME_TURKISH_REAL,
     NAME_TURKISH_SUFFIX,
 };
+use crate::services::Services;
 
 /// Generates a number from given seed.
 /// `shift` is the number of bits seed is shifted to the right; the generated
-/// number is in interval 0...max-1. `GB(..., 16)` masks after shifting, and
-/// `ClampTo<uint16_t>` saturates the table size.
+/// number is in interval 0...max-1.
 fn seed_chance(shift: u8, max: usize, seed: u32) -> usize {
-    ((crate::bitmath_func::gb(seed, shift, 16) * max.min(u16::MAX as usize) as u32) >> 16) as usize
+    let max = crate::math::clamp_to_u16(i64::try_from(max).unwrap_or(i64::MAX));
+    ((crate::bitmath_func::gb(seed, shift, 16) * u32::from(max)) >> 16) as usize
 }
 /// Generates a number from given seed. Uses different algorithm than `SeedChance()`.
 /// `shift` is the number of bits seed is shifted to the right; the generated
@@ -100,7 +101,7 @@ fn replace_english_words(builder: &mut String, original: bool) {
 }
 
 /// Generates English (Original) town name from given seed.
-fn english_original(builder: &mut String, seed: u32) {
+fn english_original(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let mut i = seed_chance_bias(0, NAME_ORIGINAL_ENGLISH_1.len(), seed, 50);
     if i >= 0 {
@@ -123,7 +124,7 @@ fn english_original(builder: &mut String, seed: u32) {
 }
 
 /// Generates English (Additional) town name from given seed.
-fn english_additional(builder: &mut String, seed: u32) {
+fn english_additional(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let mut i = seed_chance_bias(0, NAME_ADDITIONAL_ENGLISH_PREFIX.len(), seed, 50);
     if i >= 0 {
@@ -168,7 +169,7 @@ fn english_additional(builder: &mut String, seed: u32) {
 }
 
 /// Generates Austrian town name from given seed.
-fn austrian(builder: &mut String, seed: u32) {
+fn austrian(builder: &mut String, seed: u32, _shared: &Services) {
     // Bad, Maria, Gross, ...
     let mut i = seed_chance_bias(0, NAME_AUSTRIAN_A1.len(), seed, 15);
     if i >= 0 {
@@ -205,7 +206,7 @@ fn austrian(builder: &mut String, seed: u32) {
 }
 
 /// Generates German town name from given seed.
-fn german(builder: &mut String, seed: u32) {
+fn german(builder: &mut String, seed: u32, _shared: &Services) {
     let seed_derivative = seed_chance(7, 28, seed);
 
     // Optional prefix.
@@ -239,23 +240,23 @@ fn german(builder: &mut String, seed: u32) {
 }
 
 /// Generates Latin-American town name from given seed.
-fn spanish(builder: &mut String, seed: u32) {
+fn spanish(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_SPANISH_REAL[seed_chance(0, NAME_SPANISH_REAL.len(), seed)]);
 }
 
 /// Generates French town name from given seed.
-fn french(builder: &mut String, seed: u32) {
+fn french(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_FRENCH_REAL[seed_chance(0, NAME_FRENCH_REAL.len(), seed)]);
 }
 
 /// Generates Silly town name from given seed.
-fn silly(builder: &mut String, seed: u32) {
+fn silly(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_SILLY_1[seed_chance(0, NAME_SILLY_1.len(), seed)]);
     builder.push_str(NAME_SILLY_2[seed_chance(16, NAME_SILLY_2.len(), seed)]);
 }
 
 /// Generates Swedish town name from given seed.
-fn swedish(builder: &mut String, seed: u32) {
+fn swedish(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let i = seed_chance_bias(0, NAME_SWEDISH_1.len(), seed, 50);
     if i >= 0 {
@@ -275,7 +276,7 @@ fn swedish(builder: &mut String, seed: u32) {
 }
 
 /// Generates Dutch town name from given seed.
-fn dutch(builder: &mut String, seed: u32) {
+fn dutch(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let i = seed_chance_bias(0, NAME_DUTCH_1.len(), seed, 50);
     if i >= 0 {
@@ -294,7 +295,7 @@ fn dutch(builder: &mut String, seed: u32) {
 }
 
 /// Generates Finnish town name from given seed.
-fn finnish(builder: &mut String, seed: u32) {
+fn finnish(builder: &mut String, seed: u32, _shared: &Services) {
     // Select randomly whether the name should consist of one or two parts.
     if seed_chance(0, 15, seed) >= 10 {
         builder.push_str(NAME_FINNISH_REAL[seed_chance(2, NAME_FINNISH_REAL.len(), seed)]);
@@ -333,7 +334,7 @@ fn finnish(builder: &mut String, seed: u32) {
 }
 
 /// Generates Polish town name from given seed.
-fn polish(builder: &mut String, seed: u32) {
+fn polish(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let i = seed_chance(
         0,
@@ -390,17 +391,17 @@ fn polish(builder: &mut String, seed: u32) {
 }
 
 /// Generates Romanian town name from given seed.
-fn romanian(builder: &mut String, seed: u32) {
+fn romanian(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_ROMANIAN_REAL[seed_chance(0, NAME_ROMANIAN_REAL.len(), seed)]);
 }
 
 /// Generates Slovak town name from given seed.
-fn slovak(builder: &mut String, seed: u32) {
+fn slovak(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_SLOVAK_REAL[seed_chance(0, NAME_SLOVAK_REAL.len(), seed)]);
 }
 
 /// Generates Norwegian town name from given seed.
-fn norwegian(builder: &mut String, seed: u32) {
+fn norwegian(builder: &mut String, seed: u32, _shared: &Services) {
     // First four seed bits decide whether to use a real name: 3/16 chance,
     // bits 0 to 3.
     if seed_chance(0, 15, seed) < 3 {
@@ -417,7 +418,7 @@ fn norwegian(builder: &mut String, seed: u32) {
 }
 
 /// Generates Hungarian town name from given seed.
-fn hungarian(builder: &mut String, seed: u32) {
+fn hungarian(builder: &mut String, seed: u32, _shared: &Services) {
     if seed_chance(12, 15, seed) < 3 {
         builder.push_str(NAME_HUNGARIAN_REAL[seed_chance(0, NAME_HUNGARIAN_REAL.len(), seed)]);
         return;
@@ -441,12 +442,12 @@ fn hungarian(builder: &mut String, seed: u32) {
 }
 
 /// Generates Swiss town name from given seed.
-fn swiss(builder: &mut String, seed: u32) {
+fn swiss(builder: &mut String, seed: u32, _shared: &Services) {
     builder.push_str(NAME_SWISS_REAL[seed_chance(0, NAME_SWISS_REAL.len(), seed)]);
 }
 
 /// Generates Danish town name from given seed.
-fn danish(builder: &mut String, seed: u32) {
+fn danish(builder: &mut String, seed: u32, _shared: &Services) {
     // Optional first segment.
     let i = seed_chance_bias(0, NAME_DANISH_1.len(), seed, 50);
     if i >= 0 {
@@ -459,7 +460,7 @@ fn danish(builder: &mut String, seed: u32) {
 }
 
 /// Generates Turkish town name from given seed.
-fn turkish(builder: &mut String, seed: u32) {
+fn turkish(builder: &mut String, seed: u32, _shared: &Services) {
     let i = seed_mod_chance(0, 5, seed);
 
     match i {
@@ -493,7 +494,7 @@ fn turkish(builder: &mut String, seed: u32) {
 }
 
 /// Generates Italian town name from given seed.
-fn italian(builder: &mut String, seed: u32) {
+fn italian(builder: &mut String, seed: u32, _shared: &Services) {
     if seed_mod_chance(0, 6, seed) == 0 {
         // Real city names.
         builder.push_str(NAME_ITALIAN_REAL[seed_mod_chance(4, NAME_ITALIAN_REAL.len(), seed)]);
@@ -539,7 +540,7 @@ fn italian(builder: &mut String, seed: u32) {
 }
 
 /// Generates Catalan town name from given seed.
-fn catalan(builder: &mut String, seed: u32) {
+fn catalan(builder: &mut String, seed: u32, _shared: &Services) {
     if seed_mod_chance(0, 3, seed) == 0 {
         // Real city names.
         builder.push_str(NAME_CATALAN_REAL[seed_mod_chance(4, NAME_CATALAN_REAL.len(), seed)]);
@@ -577,7 +578,7 @@ fn catalan(builder: &mut String, seed: u32) {
 // Czech generator and tables copyright Petr Baudis 2005 (GPL).
 /// Generates Czech town name from given seed.
 #[allow(clippy::too_many_lines, clippy::if_not_else)]
-fn czech(builder: &mut String, seed: u32) {
+fn czech(builder: &mut String, seed: u32, shared: &Services) {
     // 1:3 chance to use a real name.
     if seed_mod_chance(0, 4, seed) == 0 {
         builder.push_str(NAME_CZECH_REAL[seed_mod_chance(4, NAME_CZECH_REAL.len(), seed)]);
@@ -671,11 +672,15 @@ fn czech(builder: &mut String, seed: u32) {
                 count += 1;
             }
         }
-        // Load the ending. The unchanged tables guarantee a matching real gender for every stem/seed.
+        let world = crate::map_func::World::new(shared);
+        world.assert_with(|| count > 0);
+
+        // Load the ending
         ending = map[seed_mod_chance(16, count, seed)];
-        // Override possible CZG_*FREE: this must be a real gender, otherwise
-        // adjective modification would overflow the suffix table.
+        // Override possible CZG_*FREE; this must be a real gender,
+        // otherwise we get overflow when modifying the adjectivum.
         gender = NAME_CZECH_SUBST_ENDING[ending].gender;
+        world.assert_with(|| gender != CZG_FREE && gender != CZG_NFREE);
     }
     if do_prefix && !NAME_CZECH_ADJ[prefix].choose.all(choose) {
         // Throw away a non-matching prefix.
@@ -710,7 +715,7 @@ fn czech(builder: &mut String, seed: u32) {
 }
 
 /// Type for all town-name generators: the builder and the town-name seed.
-type TownNameGenerator = fn(&mut String, u32);
+type TownNameGenerator = fn(&mut String, u32, &Services);
 
 /// Town name generators.
 const GENERATORS: [TownNameGenerator; 21] = [
@@ -741,9 +746,17 @@ const GENERATORS: [TownNameGenerator; 21] = [
 /// Owns the complete immutable output; the C++ builder is accessed only after return.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_townname_generate(lang: usize, seed: u32) -> *mut String {
+pub unsafe extern "C" fn openttd_rust_townname_generate(
+    shared: *const Services,
+    lang: usize,
+    seed: u32,
+) -> *mut String {
+    // SAFETY: The caller passes the live shared services table.
+    let shared = unsafe { &*shared };
     let mut output = Box::new(String::new());
-    GENERATORS[lang](&mut output, seed);
+    let world = crate::map_func::World::new(shared);
+    world.assert_with(|| lang < GENERATORS.len());
+    GENERATORS[lang](&mut output, seed, shared);
     Box::into_raw(output)
 }
 
@@ -803,8 +816,15 @@ mod generator_tests {
     ];
 
     fn generate(lang: usize, seed: u32) -> String {
+        extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+            0
+        }
+        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
+            0
+        }
+        let shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
         let mut output = String::new();
-        GENERATORS[lang](&mut output, seed);
+        GENERATORS[lang](&mut output, seed, &shared);
         output
     }
 

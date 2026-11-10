@@ -206,7 +206,8 @@ fn get_industry_id_at_offset(
             0xFFFE
         }
     } else {
-        // The tile has no spritegroup, so just give it the substitute
+        // The tile has no spritegroup
+        // so just give it the substitute
         0xFF << 8 | u32::from(indtsp.subst_id)
     }
 }
@@ -424,9 +425,16 @@ fn industries_get_variable(
             0x87 => return (s.shared().terrain_type)(c.tile().0),
             // Town zone
             0x88 => {
-                return u32::from(unsafe {
-                    crate::town::radius_from_shell(s.shared(), c.town, c.tile().0)
-                });
+                return u32::from(
+                    unsafe {
+                        crate::town::get_town_radius_group(
+                            (s.shared().town_owner)(c.town),
+                            c.tile(),
+                            s.shared().map(),
+                        )
+                    }
+                    .0,
+                );
             }
             // Manhattan distance of the closest town
             0x89 => {
@@ -562,7 +570,16 @@ fn industries_get_variable(
         // Get town zone and Manhattan distance of closest town
         0x65 if c.tile() != TileIndex::INVALID => {
             let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
-            (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile.0) }) << 16)
+            (u32::from(
+                unsafe {
+                    crate::town::get_town_radius_group(
+                        (s.shared().town_owner)(c.town),
+                        tile,
+                        s.shared().map(),
+                    )
+                }
+                .0,
+            ) << 16)
                 | s.map()
                     .distance_manhattan(tile.0, town_xy(c.town, s).0)
                     .min(u32::from(u16::MAX))
@@ -757,9 +774,16 @@ fn industry_tile_get_variable(
         // Current town zone of the tile in the nearest town
         0x42 => {
             let town = crate::town::spatial::closest_town_from_tile(s.shared(), c.tile(), u32::MAX);
-            u32::from(unsafe {
-                crate::town::radius_from_shell(s.shared(), town.cast(), c.tile().0)
-            })
+            u32::from(
+                unsafe {
+                    crate::town::get_town_radius_group(
+                        (s.shared().town_owner)(town),
+                        c.tile(),
+                        s.shared().map(),
+                    )
+                }
+                .0,
+            )
         }
         // Relative position
         0x43 => get_relative_position(c.tile(), location_tile(c.owner), s.map()),
@@ -845,21 +869,53 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_variable(
     let c = unsafe { *c };
     industry_tile_get_variable(&c, ro, var, parameter, available, unsafe { &*s })
 }
-/// `IndustriesScopeResolver::GetRandomBits`.
-///
+impl ResolverContext {
+    /// `IndustriesScopeResolver::GetRandomBits`.
+    fn random_bits(&self) -> u32 {
+        if self.owner.is_null() {
+            0
+        } else {
+            // SAFETY: A non-null owner remains live through the immediate read.
+            u32::from(unsafe { (*self.owner).metadata.random })
+        }
+    }
+    /// `IndustryTileScopeResolver::GetRandomBits`.
+    fn tile_random_bits(&self, s: &ResolverServices) -> u32 {
+        if self.index() == IndustryID::INVALID {
+            0
+        } else {
+            u32::from(s.get_industry_random_bits(self.tile()))
+        }
+    }
+    /// `IndustryTileScopeResolver::GetRandomTriggers`.
+    fn tile_random_triggers(&self, s: &ResolverServices) -> u32 {
+        if self.index() == IndustryID::INVALID {
+            0
+        } else {
+            u32::from(unsafe { ((*s.lifecycle).random_triggers)(self.tile().0) })
+        }
+    }
+    /// The root sprite group of `IndustriesResolverObject`.
+    fn root(&self) -> *const c_void {
+        witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
+        // SAFETY: Native specs live for the resolver invocation.
+        let props = unsafe { (*get_industry_spec(self.industry_type())).grf_prop };
+        props.sprite_group(!self.owner.is_null() && self.index() != IndustryID::INVALID)
+    }
+    /// The root sprite group of `IndustryTileResolverObject`.
+    fn tile_root(&self, gfx: IndustryGfx) -> *const c_void {
+        witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
+        // SAFETY: Valid gfx precondition; stable native group.
+        let props = unsafe { (*get_industry_tile_spec(gfx)).grf_prop };
+        props.sprite_group(self.index() != IndustryID::INVALID)
+    }
+}
 /// # Safety
 /// Live context; a non-null owner remains live through the immediate read.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_resolver_random(c: *const ResolverContext) -> u32 {
-    let owner = unsafe { (*c).owner };
-    if owner.is_null() {
-        0
-    } else {
-        u32::from(unsafe { (*owner).metadata.random })
-    }
+    unsafe { (*c).random_bits() }
 }
-/// `IndustryTileScopeResolver::GetRandomBits`.
-///
 /// # Safety
 /// Original non-null industry/valid tile assertions are checked by the facade.
 #[unsafe(no_mangle)]
@@ -867,15 +923,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_random(
     c: *const ResolverContext,
     s: *const ResolverServices,
 ) -> u32 {
-    let c = unsafe { *c };
-    if c.index() == IndustryID::INVALID {
-        0
-    } else {
-        u32::from(unsafe { (*s).get_industry_random_bits(c.tile()) })
-    }
+    unsafe { (*c).tile_random_bits(&*s) }
 }
-/// `IndustryTileScopeResolver::GetRandomTriggers`.
-///
 /// # Safety
 /// Original non-null industry/valid tile assertions are checked by the facade.
 #[unsafe(no_mangle)]
@@ -883,28 +932,16 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_triggers(
     c: *const ResolverContext,
     s: *const ResolverServices,
 ) -> u32 {
-    let c = unsafe { *c };
-    if c.index() == IndustryID::INVALID {
-        0
-    } else {
-        u32::from(unsafe { ((*(*s).lifecycle).random_triggers)(c.tile().0) })
-    }
+    unsafe { (*c).tile_random_triggers(&*s) }
 }
-/// The root sprite group of `IndustriesResolverObject`.
-///
 /// # Safety
 /// Live context and native specs; root group lives for the resolver invocation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
     c: *const ResolverContext,
 ) -> *const c_void {
-    witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
-    let c = unsafe { *c };
-    let props = unsafe { (*get_industry_spec(c.industry_type())).grf_prop };
-    props.sprite_group(!c.owner.is_null() && c.index() != IndustryID::INVALID)
+    unsafe { (*c).root() }
 }
-/// The root sprite group of `IndustryTileResolverObject`.
-///
 /// # Safety
 /// Original non-null industry and valid gfx preconditions; stable native group.
 #[unsafe(no_mangle)]
@@ -912,9 +949,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_root(
     c: *const ResolverContext,
     gfx: u16,
 ) -> *const c_void {
-    witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
-    let props = unsafe { (*get_industry_tile_spec(IndustryGfx(gfx))).grf_prop };
-    props.sprite_group(unsafe { (*c).index() } != IndustryID::INVALID)
+    unsafe { (*c).tile_root(IndustryGfx(gfx)) }
 }
 /// Get or create the town scope object associated with the industry.
 /// @return The associated town scope, if it exists.
@@ -955,8 +990,6 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_town(
     let c = unsafe { *c };
     get_town(&c, ro, unsafe { &*s })
 }
-/// `IndustriesResolverObject::GetScope`.
-///
 /// # Safety
 /// All native scopes and resolver live for this synchronous resolution.
 #[unsafe(no_mangle)]
@@ -968,12 +1001,23 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_scope(
     relative: u8,
     s: *const ResolverServices,
 ) -> *mut c_void {
-    let s = unsafe { &*s };
+    unsafe { resolver_scope(&*c, ro, own, scope, relative, &*s) }
+}
+/// `IndustriesResolverObject::GetScope`.
+/// # Safety
+/// All native scopes and resolver live for this synchronous resolution.
+unsafe fn resolver_scope(
+    c: &ResolverContext,
+    ro: *mut c_void,
+    own: *mut c_void,
+    scope: u8,
+    relative: u8,
+    s: &ResolverServices,
+) -> *mut c_void {
     match scope {
         VSG_SCOPE_SELF => own,
         VSG_SCOPE_PARENT => {
-            let c = unsafe { *c };
-            let tsr = get_town(&c, ro, s);
+            let tsr = get_town(c, ro, s);
             if tsr.is_null() {
                 unsafe { (s.base_scope)(ro, scope, relative) }
             } else {
@@ -983,8 +1027,6 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_scope(
         _ => unsafe { (s.base_scope)(ro, scope, relative) },
     }
 }
-/// `IndustryTileResolverObject::GetScope`.
-///
 /// # Safety
 /// Live tile resolver and its two native virtual facades, valid table.
 #[unsafe(no_mangle)]
@@ -996,10 +1038,21 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_scope(
     relative: u8,
     s: *const ResolverServices,
 ) -> *mut c_void {
+    tile_scope(ro, own, parent, scope, relative, unsafe { &*s })
+}
+/// `IndustryTileResolverObject::GetScope`.
+fn tile_scope(
+    ro: *mut c_void,
+    own: *mut c_void,
+    parent: *mut c_void,
+    scope: u8,
+    relative: u8,
+    s: &ResolverServices,
+) -> *mut c_void {
     match scope {
         VSG_SCOPE_SELF => own,
         VSG_SCOPE_PARENT => parent,
-        _ => unsafe { ((*s).base_scope)(ro, scope, relative) },
+        _ => unsafe { (s.base_scope)(ro, scope, relative) },
     }
 }
 /// `GetIndustryProbabilityCallback`: check with callback `CBID_INDUSTRY_PROBABILITY` whether

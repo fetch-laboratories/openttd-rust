@@ -299,6 +299,10 @@ impl crate::map_func::World<'_> {
     pub(crate) fn tile_slope(&self, t: u32) -> u8 {
         self.tile_slope_z(t).0
     }
+    /// `IsValidTile`: checks if a tile is valid, i.e. inside the map and not a void tile.
+    pub(crate) fn is_valid_tile(&self, t: u32) -> bool {
+        self.asserted(|m| is_valid_tile(m, t, m.count()))
+    }
     /// `IsTileFlat` without the height output.
     #[allow(clippy::inline_always)]
     #[inline(always)]

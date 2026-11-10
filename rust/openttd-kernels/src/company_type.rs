@@ -54,6 +54,23 @@ impl CompanyID {
 
 /// Native `Owner` is the same type as `CompanyID`.
 pub type Owner = CompanyID;
+
+/// `CompanyMask`: a set of companies, one bit per `CompanyID`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CompanyMask(pub u16);
+impl CompanyMask {
+    /// `BaseBitSet::Test`.
+    #[must_use]
+    pub const fn test(self, company: CompanyID) -> bool {
+        self.0 & (1 << company.0) != 0
+    }
+    /// `BaseBitSet::Set`.
+    pub const fn set(&mut self, company: CompanyID) -> &mut Self {
+        self.0 |= 1 << company.0;
+        self
+    }
+}
 impl CompanyID {
     /// Native `OWNER_TOWN`.
     pub const TOWN: Self = Self(0x0F);

@@ -42,16 +42,6 @@ pub struct Industry {
     _private: [u8; 0],
 }
 
-/// `IndustryLifeType::Extractive` mask.
-pub use crate::industrytype::LIFE_EXTRACTIVE;
-
-/// `IndustryBehaviour::CutTrees` mask.
-pub use crate::industrytype::CUT_TREES;
-/// `IndustryLifeType::Organic` mask.
-pub use crate::industrytype::LIFE_ORGANIC;
-/// `IndustryLifeType::Processing` mask.
-pub use crate::industrytype::LIFE_PROCESSING;
-
 impl IndustryID {
     /// Native `PoolID::Begin()`.
     pub const BEGIN: Self = Self(0);

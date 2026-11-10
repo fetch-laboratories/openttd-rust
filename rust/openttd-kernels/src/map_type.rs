@@ -12,6 +12,9 @@ pub const LM_LOWER: u8 = 1;
 pub const LM_RAISE: u8 = 2;
 
 /// `TileIndexDiffC` coordinate pair.
+/// `TileIndexDiff`: an offset between two tile indices.
+pub type TileIndexDiff = i32;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TileIndexDiffC {

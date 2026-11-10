@@ -20,12 +20,6 @@ pub struct GenerationContext {
     _private: [u8; 0],
 }
 #[repr(C)]
-pub struct GenerationInfo {
-    pub appear: u8,
-    pub enabled: bool,
-    pub layouts: bool,
-}
-#[repr(C)]
 pub struct GenerationServices {
     pub environment: crate::services::EnvironmentServices,
     pub density: unsafe extern "C" fn() -> u8,
@@ -58,8 +52,8 @@ fn get_scaled_industry_generation_probability(
         return 0; // The original leaves `force_at_least_one` untouched here.
     }
     let (enabled, layouts) = unsafe { ((*ind_spc).enabled, !(*ind_spc).layouts.is_empty()) };
-    let landscape = unsafe { s.shared().settings().climate.read() };
-    let chance = unsafe { (*ind_spc).appear_creation[usize::from(landscape)] };
+    let landscape = s.landscape_type();
+    let chance = unsafe { (*ind_spc).appear_creation[usize::from(landscape.0)] };
     if !enabled
         || !layouts
         || (!(g.environment.editor)()
@@ -89,7 +83,7 @@ fn get_scaled_industry_generation_probability(
     ) {
         unsafe { (g.scale_by_size_1d)(chance) }
     } else {
-        unsafe { (s.scale_by_map_size)(chance) }
+        s.scale_by_map_size(chance)
     };
     *force_at_least_one = chance > 0
         && !behaviour
@@ -154,7 +148,7 @@ fn get_number_of_industries(s: &Services, g: &GenerationServices) -> u32 {
     if difficulty == IndustryDensity::ID_CUSTOM {
         unsafe { (g.custom_number)() }.min(u32::from(IndustryID::END.0))
     } else {
-        unsafe { (s.scale_by_map_size)(u32::from(NUMOF_INDUSTRY_TABLE[usize::from(difficulty.0)])) }
+        s.scale_by_map_size(u32::from(NUMOF_INDUSTRY_TABLE[usize::from(difficulty.0)]))
             .min(u32::from(IndustryID::END.0))
     }
 }
@@ -183,6 +177,17 @@ fn place_initial_industry(
     unsafe { (s.restore_company)(cur_company) };
     true
 }
+/// # Safety
+/// As `generate_industries`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
+    builder: *mut Builder,
+    context: *mut GenerationContext,
+    s: *const Services,
+    g: *const GenerationServices,
+) -> u8 {
+    u8::from(unsafe { generate_industries(builder, context, &*s, &*g) })
+}
 /// Original `GenerateIndustries`: this function will create random industries during game
 /// creation. It will scale the amount of industries by mapsize and difficulty level.
 ///
@@ -191,23 +196,20 @@ fn place_initial_industry(
 /// cancellation callbacks catch only the named ordinary generation abort signal.
 // Keep the wanted-number services inside the source nonzero-total branch.
 #[allow(clippy::manual_checked_ops)]
-#[unsafe(no_mangle)]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "GenerateIndustries keeps the original's implicit C++ integer conversions"
 )]
-pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
+pub(crate) unsafe fn generate_industries(
     builder: *mut Builder,
     context: *mut GenerationContext,
-    s: *const Services,
-    g: *const GenerationServices,
-) -> u8 {
-    let s = unsafe { &*s };
-    let g = unsafe { &*g };
+    s: &Services,
+    g: &GenerationServices,
+) -> bool {
     if !(g.environment.editor)()
         && IndustryDensity(unsafe { (g.density)() }) == IndustryDensity::ID_FUND_ONLY
     {
-        return u8::from(true); // No industries in the game.
+        return true; // No industries in the game.
     }
     // Get the probabilities for all industries. This is done first as we need the total of
     // both land and water for scaling later.
@@ -234,14 +236,15 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             total_amount = p.num_forced;
         }
         if !unsafe { (g.set_progress)(context, water, total_amount) } {
-            return u8::from(false);
+            return false;
         }
         // Try to build one industry per type independent of any probabilities
         for it in 0..IndustryType::NUM_INDUSTRYTYPES.0 {
             if p.force_one[usize::from(it)] {
+                s.assert_with(|| total_amount > 0);
                 total_amount = total_amount.wrapping_sub(1);
                 if !place_initial_industry(IndustryType(it), water, true, context, s, g) {
-                    return u8::from(false);
+                    return false;
                 }
             }
         }
@@ -252,30 +255,28 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
             while r >= p.probs[usize::from(it.0)] {
                 r = r.wrapping_sub(p.probs[usize::from(it.0)]);
                 it.0 += 1;
+                s.assert_with(|| it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
             }
+            s.assert_with(|| p.probs[usize::from(it.0)] > 0);
             if !place_initial_industry(it, water, false, context, s, g) {
-                return u8::from(false);
+                return false;
             }
         }
     }
-    unsafe { super::openttd_rust_industry_build_reset(builder, s) };
-    u8::from(true)
+    super::industry_build_data_reset(builder);
+    true
 }
 /// Original `CheckIndustries`: verify whether the generated industries are complete, and
-/// warn the user if not.
-///
-/// # Safety
-/// Tables and returned immutable specs remain live for this invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_check(
-    s: *const Services,
-    g: *const GenerationServices,
+/// warn the user if not. The builder, tables and returned immutable specs remain live for
+/// this invocation.
+pub(crate) fn check_industries(
+    builder: *const super::Builder,
+    s: &Services,
+    g: &GenerationServices,
 ) {
-    let s = unsafe { &*s };
-    let g = unsafe { &*g };
     let mut count = 0;
     for it in 0..IndustryType::NUM_INDUSTRYTYPES.0 {
-        if unsafe { (s.type_count)(it) } > 0 {
+        if super::get_industry_type_count(builder, IndustryType(it), s) > 0 {
             continue; // Types of existing industries can be skipped.
         }
         let mut force_at_least_one = false;
@@ -295,4 +296,16 @@ pub unsafe extern "C" fn openttd_rust_industry_check(
             break; // Don't swamp the user with errors.
         }
     }
+}
+/// `CheckIndustries`.
+///
+/// # Safety
+/// The live builder and tables remain live for this invocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_check(
+    builder: *mut super::Builder,
+    s: *const Services,
+    g: *const GenerationServices,
+) {
+    check_industries(builder, unsafe { &*s }, unsafe { &*g });
 }

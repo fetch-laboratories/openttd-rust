@@ -44,6 +44,12 @@ pub(super) unsafe fn bytes<'a>(value: ByteSpan) -> &'a [u8] {
 /// The owner is live and serialized by the game mutex. Returned bytes remain valid until its next name mutation or destruction.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_name(state: *const State) -> ByteSpan {
+    unsafe { town_name(state) }
+}
+/// `Town::name`: the town's custom name, empty when it has none.
+/// # Safety
+/// The owner is live and serialized by the game mutex. Returned bytes remain valid until its next name mutation or destruction.
+pub(crate) unsafe fn town_name(state: *const State) -> ByteSpan {
     // SAFETY: Native shell supplies its live owner, serialized by the game mutex.
     let name = unsafe { &(*state).name };
     ByteSpan {
@@ -55,6 +61,12 @@ pub unsafe extern "C" fn openttd_rust_town_name(state: *const State) -> ByteSpan
 /// The owner is live and exclusively mutable; input bytes are readable for this call and may alias the current name.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_set_name(state: *mut State, text: ByteSpan) {
+    unsafe { set_town_name(state, text) };
+}
+/// `t->name = text`: set the town's custom name.
+/// # Safety
+/// The owner is live and exclusively mutable; input bytes are readable for this call and may alias the current name.
+pub(crate) unsafe fn set_town_name(state: *mut State, text: ByteSpan) {
     // Copy before replacing: native assignment may pass a view of this same name.
     w::hit(w::TOWN_NAME_SET);
     let name = unsafe { bytes(text) }.to_vec();
@@ -97,14 +109,12 @@ pub unsafe extern "C" fn openttd_rust_town_names_clear(names: *mut Names) {
 /// Verifies this custom name is unique. Only custom names are checked
 /// (`town_cmd.cpp::IsUniqueTownName`). Return true if the name is unique.
 pub(super) unsafe fn is_unique_town_name(s: &NameServices, name: ByteSpan) -> bool {
-    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
-    while !town.shell.is_null() {
+    for town in super::iterate_refs(|from| observed!((s.next)(from))) {
         // SAFETY: Iteration supplies a live owner; borrow ends before next callback.
         let equal = unsafe { !(*town.state).name.is_empty() && (*town.state).name == bytes(name) };
         if equal {
             return false;
         }
-        town = observed!((s.next)(u32::from(town.id.0).wrapping_add(1)));
     }
     true
 }
@@ -166,11 +176,10 @@ pub(super) unsafe fn verify_town_name(
         }
         return true;
     }
-    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
-    while !town.shell.is_null() {
+    for town in super::iterate_refs(|from| observed!((s.next)(from))) {
         // We cannot just compare the numbers: several numbers may map to one name.
         // SAFETY: Short canonical name observation before resolver reentry.
-        let custom = unsafe { openttd_rust_town_name(town.state) };
+        let custom = unsafe { town_name(town.state) };
         let other = if custom.size == 0 {
             let params = unsafe { crate::townname_type::from_town(&*town.state) };
             let seed = unsafe { (*town.state).simulation.townnameparts };
@@ -183,7 +192,6 @@ pub(super) unsafe fn verify_town_name(
             w::hit(w::TOWN_NAME_DUPLICATE);
             return false;
         }
-        town = observed!((s.next)(u32::from(town.id.0).wrapping_add(1)));
     }
     true
 }
@@ -263,18 +271,18 @@ mod tests {
         let mut owner = State::default();
         let input: Vec<u8> = (0..=255).collect();
         unsafe {
-            openttd_rust_town_set_name(
+            set_town_name(
                 &raw mut owner,
                 ByteSpan {
                     data: input.as_ptr(),
                     size: input.len(),
                 },
             );
-            let view = openttd_rust_town_name(&raw const owner);
+            let view = town_name(&raw const owner);
             assert_eq!(bytes(view), input);
-            openttd_rust_town_set_name(&raw mut owner, view);
-            assert_eq!(bytes(openttd_rust_town_name(&raw const owner)), input);
-            openttd_rust_town_set_name(
+            set_town_name(&raw mut owner, view);
+            assert_eq!(bytes(town_name(&raw const owner)), input);
+            set_town_name(
                 &raw mut owner,
                 ByteSpan {
                     data: std::ptr::null(),

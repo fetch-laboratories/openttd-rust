@@ -29,12 +29,12 @@ use crate::services::{CommandCost, CommandCostServices, CommandServices};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::TILE_SIZE;
 
-pub(crate) fn before(_s: &CommandServices, top_level: bool, test: bool) {
+pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
     if top_level {
         crate::objects::clear_areas();
     }
     if test {
-        crate::town::openttd_rust_town_rating_test(true);
+        crate::town::set_town_rating_test_mode(s.shared, true);
     }
 }
 
@@ -82,7 +82,7 @@ pub(crate) unsafe fn after(
     test: bool,
 ) {
     if test {
-        crate::town::openttd_rust_town_rating_test(false);
+        crate::town::set_town_rating_test_mode(s.shared, false);
         if (c.success)(result)
             && top_level
             && flags & (DoCommandFlag::QUERY_COST | DoCommandFlag::BANKRUPT) == 0
@@ -424,7 +424,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
 ) -> Tested {
     let finance = s.finance;
     storage_mode(s, PSM_LEAVE_TESTMODE);
-    crate::town::openttd_rust_town_rating_test(false);
+    crate::town::set_town_rating_test_mode(s.shared, false);
     /* Make sure we're not messing things up here. */
     (s.signals.assert_condition)(verify_company(s, cmd_flags));
     /* Commands whose test and execution may cost differently skip the money check. */

@@ -31,10 +31,9 @@ pub struct Descriptor {
     pub child_division: u8,
 }
 
+/// `HasBit(mask, slot)`, whose C++ `uint8_t` parameter narrows the unsigned index.
 fn has_bit(mask: u64, slot: u32) -> bool {
-    // HasBit's C++ uint8 parameter narrows the unsigned index before shifting.
-    let slot = slot.to_le_bytes()[0];
-    mask & (1_u64 << slot) != 0
+    crate::bitmath_func::has_bit64(mask, slot.to_le_bytes()[0])
 }
 
 fn aggregate(d: Descriptor, age: u32) -> bool {
@@ -77,30 +76,11 @@ pub(crate) fn update(mask: u64, d: Descriptor, month: u32) -> u64 {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "HistoryRange" ["probe"] => HistoryRange {
+    "HistoryRange" ["probe"] => crate::history_type::HistoryRange {
         hr, periods, records, first, last, division, total_division,
     };
     "OpenTTDRustHistoryQuery" ["probe"] => HistoryQuery { is_valid, in_range };
 
-}
-
-/// Native immutable `HistoryRange` chain from `misc/history_type.hpp`.
-#[repr(C)]
-pub struct HistoryRange {
-    /// Previous subdivision, or null for the initial range.
-    pub hr: *const Self,
-    /// Number of periods for this range.
-    pub periods: u8,
-    /// Number of records needed for this range.
-    pub records: u8,
-    /// Index of first element in history data.
-    pub first: u8,
-    /// Index past the last element in history data.
-    pub last: u8,
-    /// Number of divisions of the previous history range.
-    pub division: u8,
-    /// Number of divisions of the initial history range.
-    pub total_division: u8,
 }
 
 /// Native fatal handling and data validity are separate query outcomes.
@@ -122,10 +102,10 @@ impl From<Option<bool>> for HistoryQuery {
     }
 }
 
-// Maximum subdivision among the original month, quarter and year ranges.
-const HISTORY_MAX_DIVISION: usize = 4;
-
-use crate::history_type::{HISTORY_PERIODS, HISTORY_RECORDS};
+use crate::history_type::{
+    HISTORY_MAX_DIVISION, HISTORY_MONTH, HISTORY_QUARTER, HISTORY_RECORDS, HISTORY_YEAR,
+    HistoryRange,
+};
 
 pub(crate) trait HistoryElement: Copy + Default {
     fn sum(history: &[Self]) -> Self;
@@ -147,23 +127,23 @@ impl HistoryElement for crate::town::SuppliedHistory {
 /// subdivision-first order of the original recursion over `HISTORY_YEAR`. Only the
 /// mask update and rotation fields are used; the query-only child fields stay zero.
 const HISTORY_YEAR_RANGES: [Descriptor; 3] = {
-    const fn range(first: u8, last: u8, division: u8, total_division: u8) -> Descriptor {
+    const fn range(hr: &HistoryRange) -> Descriptor {
         Descriptor {
             child: 0,
-            periods: HISTORY_PERIODS,
-            records: last - first,
-            first,
-            last,
-            division,
-            total_division,
+            periods: hr.periods,
+            records: hr.records,
+            first: hr.first,
+            last: hr.last,
+            division: hr.division,
+            total_division: hr.total_division,
             child_periods: 0,
             child_division: 0,
         }
     }
     [
-        range(1, 25, 1, 1),
-        range(25, 42, 3, 3),
-        range(42, 61, 4, 12),
+        range(&HISTORY_MONTH),
+        range(&HISTORY_QUARTER),
+        range(&HISTORY_YEAR),
     ]
 };
 
@@ -222,8 +202,7 @@ pub(crate) fn rotate_history_year<T: HistoryElement>(
 #[allow(unsafe_code)]
 impl HistoryRange {
     unsafe fn descriptor(&self) -> Descriptor {
-        // SAFETY: The native caller keeps the immutable range chain live.
-        let child = unsafe { self.hr.as_ref() };
+        let child = self.hr;
         Descriptor {
             child: usize::from(child.is_some()),
             periods: self.periods,
@@ -241,8 +220,8 @@ impl HistoryRange {
         // SAFETY: The immutable native range chain is live.
         let descriptor = unsafe { self.descriptor() };
         if aggregate(descriptor, age) {
-            // SAFETY: Aggregation requires the live previous subdivision.
-            let child = unsafe { &*self.hr };
+            // SAFETY: Aggregation requires the previous subdivision.
+            let child = unsafe { self.hr.unwrap_unchecked() };
             let month = u32::from(crate::timer_game_common::economy_month());
             // SAFETY: The child retains the enclosing chain's lifetime/preconditions.
             return unsafe { child.is_valid(mask, start(descriptor, age, month)) };
@@ -263,11 +242,11 @@ impl HistoryRange {
             let mut is_valid = false;
             // No need to clear as we fill every element we use. These concrete types
             // default-construct all four elements without callbacks or side effects.
-            let mut tmp_result = [T::default(); HISTORY_MAX_DIVISION];
+            let mut tmp_result = [T::default(); HISTORY_MAX_DIVISION as usize];
             let month = u32::from(crate::timer_game_common::economy_month());
             let start = start(descriptor, age, month);
-            // SAFETY: Aggregation requires the live previous subdivision.
-            let child = unsafe { &*self.hr };
+            // SAFETY: Aggregation requires the previous subdivision.
+            let child = unsafe { self.hr.unwrap_unchecked() };
             for i in 0..self.division {
                 // SAFETY: Each scratch target is distinct; original child ages and slots apply.
                 is_valid |= unsafe {
@@ -366,7 +345,7 @@ mod comparison_tests {
     use crate::town::SuppliedHistory;
 
     const ORACLE: &str = include_str!("history/comparison-oracle.txt");
-    const RECORDS: usize = 61;
+    const RECORDS: usize = crate::history_type::HISTORY_RECORDS;
     type Sections<'a> = std::collections::HashMap<&'a str, oracle::Section<'a>>;
 
     /// The probe's `SumHistory<uint16_t>`: `ClampTo<uint16_t>` of the plain total.
@@ -377,30 +356,14 @@ mod comparison_tests {
         }
     }
 
-    /// Original `HistoryRange` constructors, including their `uint8_t` narrowing.
-    fn initial(periods: u8) -> HistoryRange {
-        HistoryRange {
-            hr: std::ptr::null(),
-            periods,
-            records: periods,
-            first: 1,
-            last: 1_u8.wrapping_add(periods),
-            division: 1,
-            total_division: 1,
-        }
+    /// The production `HistoryRange` constructors, chained to their parent range.
+    /// Each range lives for the rest of the test process, as the original's static ranges do.
+    fn initial(periods: u8) -> &'static HistoryRange {
+        Box::leak(Box::new(HistoryRange::new(periods)))
     }
 
-    fn sub(hr: &HistoryRange, division: u8, periods: u8) -> HistoryRange {
-        let records = periods.wrapping_sub((hr.periods / division).wrapping_sub(1));
-        HistoryRange {
-            hr: std::ptr::from_ref(hr),
-            periods,
-            records,
-            first: hr.last,
-            last: hr.last.wrapping_add(records),
-            division,
-            total_division: division.wrapping_mul(hr.total_division),
-        }
+    fn sub(hr: &'static HistoryRange, division: u8, periods: u8) -> &'static HistoryRange {
+        Box::leak(Box::new(HistoryRange::subdividing(hr, division, periods)))
     }
 
     /// The test's only unsafe calls: the production chain queries, over range chains that
@@ -410,8 +373,7 @@ mod comparison_tests {
     #[allow(unsafe_code)]
     impl Live {
         fn child(hr: &HistoryRange) -> Option<&HistoryRange> {
-            // SAFETY: Every chain built here stays live for the test.
-            unsafe { hr.hr.as_ref() }
+            hr.hr
         }
 
         fn descriptor(hr: &HistoryRange) -> Descriptor {
@@ -478,11 +440,11 @@ mod comparison_tests {
     fn history_queries_match_original() {
         let o = oracle::parse(ORACLE);
         let month_range = initial(24);
-        let quarter = sub(&month_range, 3, 24);
-        let year = sub(&quarter, 4, 24);
+        let quarter = sub(month_range, 3, 24);
+        let year = sub(quarter, 4, 24);
         scalars(&o);
-        production(&o, &year);
-        fillers(&o, &quarter);
+        production(&o, year);
+        fillers(&o, quarter);
     }
 
     /// The probe's seven ages: `IsValidHistory`, then `GetHistory` or its fatal.
@@ -517,28 +479,28 @@ mod comparison_tests {
 
     fn scalars(o: &Sections<'_>) {
         let month_range = initial(24);
-        let quarter = sub(&month_range, 3, 24);
-        let year = sub(&quarter, 4, 24);
+        let quarter = sub(month_range, 3, 24);
+        let year = sub(quarter, 4, 24);
         let wide = initial(40);
         let small = initial(2);
-        let middle = sub(&small, 2, 4);
-        let upper = sub(&middle, 2, 5);
-        let fourth = sub(&upper, 1, 5);
+        let middle = sub(small, 2, 4);
+        let upper = sub(middle, 2, 5);
+        let fourth = sub(upper, 1, 5);
         let one = initial(4);
-        let two = sub(&one, 1, 4);
-        let three = sub(&two, 1, 4);
-        let four = sub(&three, 1, 4);
-        let five = sub(&four, 1, 4);
+        let two = sub(one, 1, 4);
+        let three = sub(two, 1, 4);
+        let four = sub(three, 1, 4);
+        let five = sub(four, 1, 4);
         let ranges: [&HistoryRange; 9] = [
-            &month_range,
-            &quarter,
-            &year,
-            &wide,
-            &small,
-            &middle,
-            &fourth,
-            &five,
-            &upper,
+            month_range,
+            quarter,
+            year,
+            wide,
+            small,
+            middle,
+            fourth,
+            five,
+            upper,
         ];
         let masks = [
             0,
@@ -579,7 +541,7 @@ mod comparison_tests {
         let wrapped = (0..12).map(|month| {
             set_month(month);
             let mut result = 999_u16;
-            let valid = Live::get(&plain, u64::MAX, &quarter, 0x5555_5556, &mut result);
+            let valid = Live::get(&plain, u64::MAX, quarter, 0x5555_5556, &mut result);
             let output = valid.map_or_else(
                 || "fatal".to_owned(),
                 |v| format!("{} {result}", u8::from(v)),

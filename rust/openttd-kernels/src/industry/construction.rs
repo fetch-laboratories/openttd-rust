@@ -108,8 +108,8 @@ fn populate(
         }
         return;
     }
-    crate::station::for_all_stations_around_tiles_raw(super::location(owner), &cc, |st, tile| {
-        if !unsafe { (l.belongs)(tile, id.0) } {
+    crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
+        if !unsafe { (l.belongs)(tile.0, id.0) } {
             return false;
         }
         // SAFETY: Live owner; immediate mutation.
@@ -118,7 +118,7 @@ fn populate(
             st.station,
             (cc.c.owner)(st.station),
             shell,
-            TileIndex(tile),
+            tile,
             &cc,
         );
         false
@@ -175,11 +175,11 @@ fn cargo_callbacks(
             unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }
-        let cargo = CargoType(crate::cargo_registry::openttd_rust_cargo_translate(
+        let cargo = crate::cargo_registry::get_cargo_translation(
             gb(u32::from(res), 0, 8) as u8,
             unsafe { (*indspec).grf_prop.grffile },
             false,
-        ));
+        );
         // Industries without "unlimited" cargo types support depend on the specific
         // order/slots of cargo types. They need to be able to blank out specific slots
         // without aborting the callback sequence, and solve this by returning undefined
@@ -279,7 +279,7 @@ pub(crate) unsafe fn do_create_new_industry(
         (*owner).metadata.width = 1;
         (*owner).metadata.height = 1;
         (*owner).metadata.kind = kind.0;
-        super::openttd_rust_industry_registry_insert(context.builder, kind.0, id.0);
+        super::industry_registry_insert(context.builder, kind, id);
     }
     let lists = unsafe {
         CargoLists {
@@ -499,9 +499,9 @@ pub(crate) unsafe fn do_create_new_industry(
         if (life.belongs)(cur_tile.0, id.0) {
             // There are no shared random bits, consistent with "MakeIndustryTileBigger"
             // in tile loop. So, trigger tiles individually; `first_call` adds 0x100.
-            super::openttd_rust_industry_animate_tile_abi(
-                cur_tile.0,
-                IndustryAnimationTrigger::ConstructionStageChanged.0,
+            super::trigger_industry_tile_animation(
+                cur_tile,
+                IndustryAnimationTrigger::ConstructionStageChanged,
                 0x100,
                 prod,
                 life,
@@ -519,7 +519,7 @@ pub(crate) unsafe fn do_create_new_industry(
         for _ in 0..50 {
             // Only the shared service table is borrowed across map/RNG calls.
             // Initialization observes landscape at the original plant branches.
-            super::plant_random_farm_field(industry, id, map, prod, &|| prod.landscape_type());
+            super::plant_random_farm_field(owner, id, map, prod, &|| prod.landscape_type());
         }
     }
     unsafe {
