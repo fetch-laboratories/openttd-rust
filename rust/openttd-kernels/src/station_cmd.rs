@@ -961,8 +961,7 @@ impl Ctx<'_> {
         let owner = (self.world().owner)(st);
         if !(self.world().in_use)(st) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
-            let fields =
-                unsafe { crate::station_service::openttd_rust_station_service_fields(owner) };
+            let fields = unsafe { crate::station_service::fields(owner) };
             unsafe { (&raw mut (*fields).delete_ctr).write(0) };
             (self.world().station_list_invalidation)(st, 0);
         }
@@ -990,7 +989,7 @@ impl Ctx<'_> {
         if adding {
             // `UpdateStationAcceptance(st, false)`, owned by `station_service.rs`.
             unsafe {
-                crate::station_service::openttd_rust_station_acceptance(st, self.s.station, 0);
+                crate::station_service::update_station_acceptance(st, false, &*self.s.station);
             };
             (self.s.select_invalidate)();
         } else {
@@ -5243,17 +5242,17 @@ impl Ctx<'_> {
             for near in nearby.entries() {
                 self.recompute_catchment(near.station, true);
                 unsafe {
-                    crate::station_service::openttd_rust_station_acceptance(
+                    crate::station_service::update_station_acceptance(
                         near.station,
-                        self.s.station,
-                        1,
+                        true,
+                        &*self.s.station,
                     );
                 }
             }
         }
         self.recompute_catchment(st, false);
         unsafe {
-            crate::station_service::openttd_rust_station_acceptance(st, self.s.station, 0);
+            crate::station_service::update_station_acceptance(st, false, &*self.s.station);
         }
     }
     /// `DeleteOilRig`.

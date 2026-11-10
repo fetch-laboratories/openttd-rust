@@ -1419,7 +1419,7 @@ pub(crate) fn control(
     if c.stage == 0 {
         (s.company_league_dirty)();
         match c.action {
-            0 => {
+            crate::company_type::CCA_NEW => {
                 if !(s.finance.networking)() {
                     c.result = error();
                     return false;
@@ -1450,7 +1450,7 @@ pub(crate) fn control(
                     }
                 }
             }
-            1 => {
+            crate::company_type::CCA_NEW_AI => {
                 let target = c.target;
                 if target != INVALID_OWNER && u32::from(target) >= u32::from(MAX_COMPANIES) {
                     c.result = error();
@@ -1476,7 +1476,7 @@ pub(crate) fn control(
                 };
                 c.stage = 1;
             }
-            2 => {
+            crate::company_type::CCA_DELETE => {
                 let target = c.target;
                 if c.reason >= 3 {
                     c.result = error();
@@ -2422,9 +2422,9 @@ mod financial_command_tests {
         i64::MAX,
     ];
     const VARIANTS: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255];
-    // This is the only Rust unit test accessing ECONOMY.max_loan. Hold this
-    // lock for its entire run and restore the prior process-wide value on drop.
-    static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
+    // Serializes Rust unit tests that access the process-wide economy state. A test
+    // that writes it holds this lock for its entire run and restores the prior value.
+    pub(super) static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
 
     struct Fixture {
         owners: [*mut Finances; 3],
@@ -2487,7 +2487,7 @@ mod financial_command_tests {
                 assert!(f.owners.iter().all(|p| p.is_null()));
                 f.owners = std::array::from_fn(|_| openttd_rust_company_state_create());
             });
-            // SAFETY: ECONOMY_LOCK serializes this sole test's global accesses.
+            // SAFETY: ECONOMY_LOCK serializes every test's economy accesses.
             // No finance callback accesses economy storage or retains a borrow.
             let old_max_loan = unsafe { (*openttd_rust_economy_state()).max_loan };
             unsafe { (*openttd_rust_economy_state()).max_loan = 300_000 };
@@ -2696,5 +2696,1165 @@ mod financial_command_tests {
         assert_eq!(cases, 40_320);
         assert_eq!(dictionary.len(), 4_219);
         assert!(used.iter().all(|seen| *seen));
+    }
+}
+
+/// Road build, clear and convert price saturation, rounding and independent type masks, with
+/// unclassified `NewGRF` masks and extreme prices that the default maps never load.
+#[cfg(test)]
+mod road_price_tests {
+    use crate::economy_type::Price;
+    use crate::road_cost::{build_cost, clear_cost, convert_cost};
+    use crate::road_type::{ROADTYPE_ROAD, ROADTYPE_TRAM};
+
+    const PR_BUILD_ROAD: Price = Price::PR_BUILD_ROAD;
+    const PR_CLEAR_ROAD: Price = Price::PR_CLEAR_ROAD;
+
+    extern "C" fn cost_multiplier(road_type: u8) -> u16 {
+        match road_type {
+            ROADTYPE_ROAD => 3,
+            ROADTYPE_TRAM => u16::MAX,
+            _ => unreachable!(),
+        }
+    }
+    fn set_price(index: usize, value: i64) {
+        // SAFETY: Process-wide price table, serialized by the game-state test lock.
+        unsafe {
+            crate::company::openttd_rust_economy_prices()
+                .add(index)
+                .write(value);
+        }
+    }
+
+    #[test]
+    fn road_price_saturation_rounding_and_type_masks() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let prices = crate::company::openttd_rust_economy_prices();
+        let (road_mask, tram_mask) = (
+            crate::type_registry::openttd_rust_road_mask(),
+            crate::type_registry::openttd_rust_tram_mask(),
+        );
+        // SAFETY: Process-wide scalars, serialized by the lock and restored below.
+        let saved = unsafe {
+            (
+                prices.add(PR_BUILD_ROAD.0 as usize).read(),
+                prices.add(PR_CLEAR_ROAD.0 as usize).read(),
+                road_mask.replace(1 << ROADTYPE_ROAD),
+                tram_mask.replace(1 << ROADTYPE_TRAM),
+            )
+        };
+        let mut s = crate::test_tables::SHARED;
+        s.road_cost_multiplier = cost_multiplier;
+        set_price(PR_BUILD_ROAD.0 as usize, 7);
+        set_price(PR_CLEAR_ROAD.0 as usize, -27);
+        assert_eq!(build_cost(&s, ROADTYPE_ROAD), 2);
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -27);
+        assert_eq!(convert_cost(&s, ROADTYPE_ROAD, ROADTYPE_ROAD), 0);
+        // Neither road nor tram: the source clear policy still earns removal value.
+        // SAFETY: As above.
+        unsafe { road_mask.write(0) };
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -28);
+        set_price(PR_BUILD_ROAD.0 as usize, -7);
+        assert_eq!(build_cost(&s, ROADTYPE_ROAD), -3);
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -25);
+        set_price(PR_BUILD_ROAD.0 as usize, i64::MAX);
+        assert_eq!(build_cost(&s, ROADTYPE_TRAM), 1_152_921_504_606_846_975);
+        assert_eq!(clear_cost(&s, ROADTYPE_TRAM), -864_691_128_455_135_258);
+        set_price(PR_BUILD_ROAD.0 as usize, i64::MIN);
+        assert_eq!(build_cost(&s, ROADTYPE_TRAM), -1_152_921_504_606_846_976);
+        assert_eq!(clear_cost(&s, ROADTYPE_TRAM), 864_691_128_455_135_205);
+        // SAFETY: As above.
+        unsafe {
+            prices.add(PR_BUILD_ROAD.0 as usize).write(saved.0);
+            prices.add(PR_CLEAR_ROAD.0 as usize).write(saved.1);
+            road_mask.write(saved.2);
+            tram_mask.write(saved.3);
+        }
+    }
+}
+
+/// Company control: the first playable company and its allocation check, service intervals,
+/// ownership errors with both original assertions before error selection, and the
+/// special-owner takeover mask.
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use crate::company_type::{COMPANY_SPECTATOR, CompanyID, OWNER_END, OpenTTDCompany, Owner};
+    use crate::settings_table::VehicleDefaults;
+    use crate::test_tables::{COMMAND_COSTS, COMPANY, COMPANY_IDENTITY, FINANCE, MOVEMENT, SHARED};
+    use crate::tile_type::TileIndex;
+    use std::cell::{Cell, RefCell};
+
+    /// Per company slot: `None` free, else whether it is an AI.
+    type Slots = [Option<bool>; MAX_COMPANIES as usize];
+    thread_local! {
+        static SLOTS: RefCell<Slots> = const { RefCell::new([None; MAX_COMPANIES as usize]) };
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+        static LOCAL: Cell<u8> = const { Cell::new(0) };
+        static ERRORS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static FAILED: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+        /// Calls to `Company::CanAllocateItem`, each of which grants the native pool's
+        /// allocation credit that the caller's next allocation consumes.
+        static ALLOCATION_CHECKS: Cell<u32> = const { Cell::new(0) };
+        /// What the next `Company::CanAllocateItem` returns, when set.
+        static ALLOCATION_ANSWER: Cell<Option<bool>> = const { Cell::new(None) };
+    }
+    fn handle(id: CompanyID) -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id.0) + 1)
+    }
+    extern "C" fn company(id: CompanyID) -> *mut OpenTTDCompany {
+        handle(id)
+    }
+    extern "C" fn company_id(c: *mut OpenTTDCompany) -> CompanyID {
+        CompanyID((c.addr() - 1) as u8)
+    }
+    extern "C" fn next_company(from: u32) -> *mut OpenTTDCompany {
+        SLOTS.with(|s| {
+            let s = s.borrow();
+            (from..u32::from(MAX_COMPANIES))
+                .find(|&id| s[id as usize].is_some())
+                .map_or(std::ptr::null_mut(), |id| handle(CompanyID(id as u8)))
+        })
+    }
+    extern "C" fn is_ai(c: *mut OpenTTDCompany) -> bool {
+        SLOTS.with(|s| s.borrow()[usize::from(company_id(c).0)].unwrap())
+    }
+    extern "C" fn company_valid(id: u8) -> bool {
+        SLOTS.with(|s| s.borrow().get(usize::from(id)).copied().flatten().is_some())
+    }
+    extern "C" fn can_allocate() -> bool {
+        ALLOCATION_CHECKS.set(ALLOCATION_CHECKS.get() + 1);
+        ALLOCATION_ANSWER
+            .get()
+            .unwrap_or_else(|| SLOTS.with(|s| s.borrow().iter().any(Option::is_none)))
+    }
+    extern "C" fn current_company() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn local_company() -> u8 {
+        LOCAL.get()
+    }
+    fn log(entry: String) {
+        ERRORS.with(|e| e.borrow_mut().push(entry));
+    }
+    extern "C" fn zero(_: *mut crate::services::CommandCost) {
+        log("zero".to_owned());
+    }
+    extern "C" fn error(_: *mut crate::services::CommandCost, message: u32) {
+        log(format!("error {message}"));
+    }
+    extern "C" fn encode_owned_by(
+        _: *mut crate::services::CommandCost,
+        owner: Owner,
+        tile: TileIndex,
+    ) {
+        log(format!("encode {} {}", owner.0, tile.0));
+    }
+    extern "C" fn error_owner(_: *mut crate::services::CommandCost, owner: Owner) {
+        log(format!("owner {}", owner.0));
+    }
+    extern "C" fn native_assert(condition: bool) {
+        FAILED.with(|f| f.borrow_mut().push(condition));
+    }
+
+    const OWNED_BY: u32 = 0x7001;
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn identity() -> crate::company_identity::Services {
+        let mut identity = COMPANY_IDENTITY;
+        identity.company = company;
+        identity.company_id = company_id;
+        identity.next_company = next_company;
+        identity.is_ai = is_ai;
+        identity
+    }
+    fn finance() -> FinanceServices {
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        finance
+    }
+    fn services() -> Services {
+        let identity = identity();
+        let mut movement = MOVEMENT;
+        movement.native_assert = native_assert;
+        let mut shared = SHARED;
+        shared.company_valid = company_valid;
+        shared.movement = leak(movement);
+        let finance = finance();
+        let mut costs = COMMAND_COSTS;
+        costs.zero = zero;
+        costs.error = error;
+        costs.encode_owned_by = encode_owned_by;
+        costs.error_owner = error_owner;
+        let mut s = COMPANY;
+        s.identity = leak(identity);
+        s.shared = leak(shared);
+        s.finance = leak(finance);
+        s.cost = leak(costs);
+        s.can_allocate_company = can_allocate;
+        s.local_company = local_company;
+        s.owned_by = OWNED_BY;
+        s
+    }
+    fn set(id: CompanyID, slot: Option<bool>) {
+        SLOTS.with(|s| s.borrow_mut()[usize::from(id.0)] = slot);
+    }
+    fn check(s: &Services, owner: Owner, tile: TileIndex) -> Vec<String> {
+        ERRORS.with(|e| e.borrow_mut().clear());
+        check_ownership(
+            s,
+            crate::services::Cost(std::ptr::null_mut(), s.cost),
+            owner,
+            tile,
+        );
+        ERRORS.with(|e| e.borrow().clone())
+    }
+
+    thread_local! {
+        static NETWORKING: Cell<bool> = const { Cell::new(false) };
+        static OFFERED: Cell<*mut Finances> = const { Cell::new(std::ptr::null_mut()) };
+    }
+    extern "C" fn networking() -> bool {
+        NETWORKING.get()
+    }
+    extern "C" fn offered_finances(id: u8) -> *mut Finances {
+        if id == 1 {
+            OFFERED.get()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn human(_: *mut OpenTTDCompany) -> bool {
+        false
+    }
+
+    /// "Company economy - special owners have no bankruptcy takeover offer": no current owner
+    /// at or above 16, which lies outside the 16-bit offer mask, can buy company 1, hostile or
+    /// not, whether no offer or every offer bit is set.
+    #[test]
+    fn special_owners_have_no_takeover_offer() {
+        let mut s = services();
+        let mut finance = finance();
+        finance.networking = networking;
+        finance.company_finances = offered_finances;
+        s.finance = leak(finance);
+        let mut identity = identity();
+        identity.is_ai = human;
+        s.identity = leak(identity);
+        NETWORKING.set(true);
+        // SAFETY: Plain integer record.
+        let mut offered: Box<Finances> = Box::new(unsafe { std::mem::zeroed() });
+        OFFERED.set(&raw mut *offered);
+        let ownership = crate::tile_owner::Context {
+            services: std::ptr::null(),
+            cost: std::ptr::null_mut(),
+            ret: std::ptr::null_mut(),
+            error: std::ptr::null_mut(),
+            road: std::ptr::null(),
+        };
+        for asked in [0, u16::MAX] {
+            offered.asked = asked;
+            for current in 16..=u8::MAX {
+                CURRENT.set(current);
+                for hostile in [false, true] {
+                    let result = buy(&s, &ownership, 1, hostile, false);
+                    assert_eq!(
+                        result.error, 1,
+                        "asked {asked:#x} current {current} hostile {hostile}"
+                    );
+                }
+            }
+        }
+        OFFERED.set(std::ptr::null_mut());
+    }
+
+    /// The first existing human company wins, then the first free slot, then the first ID.
+    #[test]
+    fn first_playable_prefers_humans_then_free_slots() {
+        let s = services();
+        SLOTS.with(|slots| *slots.borrow_mut() = [None; MAX_COMPANIES as usize]);
+        ALLOCATION_ANSWER.set(None);
+        // Each selection, with the number of `Company::CanAllocateItem` calls it makes: a
+        // human returns before the check; otherwise the check runs once and grants the
+        // allocation credit that the caller's `new (vacant) Company` consumes.
+        let select = |checks: u32| {
+            ALLOCATION_CHECKS.set(0);
+            let id = first_playable(&s).0;
+            assert_eq!(
+                ALLOCATION_CHECKS.get(),
+                checks,
+                "allocation checks for {id}"
+            );
+            id
+        };
+        set(CompanyID(3), Some(false));
+        assert_eq!(select(0), 3, "a human wins before the hole at 0");
+        set(CompanyID(3), Some(true));
+        assert_eq!(select(1), 0);
+        for id in (0..MAX_COMPANIES).filter(|&id| id != 3) {
+            set(CompanyID(id), Some(true));
+        }
+        assert_eq!(select(1), CompanyID::BEGIN.0, "a full AI pool");
+        set(CompanyID(9), Some(false));
+        set(CompanyID(12), Some(false));
+        assert_eq!(select(0), 9);
+        set(CompanyID(1), None);
+        assert_eq!(select(0), 9);
+        set(CompanyID(9), Some(true));
+        set(CompanyID(12), Some(true));
+        assert_eq!(select(1), 1);
+        // The free slot is taken only when the pool grants the allocation.
+        ALLOCATION_ANSWER.set(Some(false));
+        assert_eq!(select(1), CompanyID::BEGIN.0, "a refused allocation");
+        ALLOCATION_ANSWER.set(None);
+    }
+
+    /// Each vehicle type reads its own interval field, ignoring the percent flag.
+    #[test]
+    fn service_intervals_read_the_type_field() {
+        let s = services();
+        for percent in [false, true] {
+            let company = VehicleDefaults {
+                servint_ispercent: percent,
+                servint_trains: 0,
+                servint_roadveh: 121,
+                servint_aircraft: 65535,
+                servint_ships: 423,
+            };
+            let client = VehicleDefaults {
+                servint_ispercent: !percent,
+                servint_trains: 224,
+                servint_roadveh: 0,
+                servint_aircraft: 426,
+                servint_ships: 65535,
+            };
+            for (kind, company_interval, client_interval) in [
+                (crate::vehicle_type::VehicleType::VEH_TRAIN, 0, 224),
+                (crate::vehicle_type::VehicleType::VEH_ROAD, 121, 0),
+                (crate::vehicle_type::VehicleType::VEH_AIRCRAFT, 65535, 426),
+                (crate::vehicle_type::VehicleType::VEH_SHIP, 423, 65535),
+            ] {
+                assert_eq!(
+                    service_interval_from(s.shared, &raw const company, kind),
+                    company_interval
+                );
+                assert_eq!(
+                    service_interval_from(s.shared, &raw const client, kind),
+                    client_interval
+                );
+            }
+        }
+    }
+
+    /// The current company owns; another owner fails with the owned-by error, encoded with its
+    /// owner only for the local company.
+    #[test]
+    fn ownership_errors_and_assertions() {
+        let s = services();
+        CURRENT.set(0);
+        for observer in [0, COMPANY_SPECTATOR] {
+            LOCAL.set(observer);
+            assert_eq!(check(&s, CompanyID(0), TileIndex(0)), ["zero"]);
+            for owner in [CompanyID(3), Owner::NONE] {
+                let mut expected = vec![format!("error {OWNED_BY}")];
+                if observer == 0 {
+                    expected.extend([
+                        format!("encode {} 0", owner.0),
+                        format!("owner {}", owner.0),
+                    ]);
+                }
+                assert_eq!(
+                    check(&s, owner, TileIndex(0)),
+                    expected,
+                    "observer {observer} owner {}",
+                    owner.0
+                );
+            }
+        }
+        // Both original assertions precede error selection; a spectator gets no encoding.
+        LOCAL.set(COMPANY_SPECTATOR);
+        for (owner, tile) in [
+            (CompanyID(OWNER_END), TileIndex(1)),
+            (Owner::TOWN, TileIndex(0)),
+        ] {
+            FAILED.with(|f| f.borrow_mut().clear());
+            assert_eq!(check(&s, owner, tile), [format!("error {OWNED_BY}")]);
+            assert_eq!(
+                FAILED.with(|f| f.borrow().clone()),
+                [false],
+                "owner {}",
+                owner.0
+            );
+        }
+    }
+}
+
+/// Competitor posts return to the caller before each post: `on_tick`'s return protocol, driven
+/// by a loop of the session caller's form (`while on_tick(..) { post_ai }`).
+#[cfg(test)]
+mod competitor_tests {
+    use super::*;
+    use crate::openttd::GameMode;
+    use crate::test_tables::{COMPANY, FINANCE, SHARED};
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static MAX_COMPETITORS: Cell<u8> = const { Cell::new(0) };
+        static COMPANY_LIMIT: Cell<u8> = const { Cell::new(15) };
+        static INTERVAL: Cell<u16> = const { Cell::new(0) };
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn none(_: u8) -> *mut Finances {
+        std::ptr::null_mut()
+    }
+    extern "C" fn no_companies() -> usize {
+        0
+    }
+    extern "C" fn end(_: u32) -> CompanyRef {
+        CompanyRef {
+            finances: std::ptr::null_mut(),
+            id: INVALID,
+        }
+    }
+    extern "C" fn no_random(_: u32) -> u32 {
+        0
+    }
+    extern "C" fn reset_timeout(ticks: u32) {
+        TRACE.with(|t| t.borrow_mut().push(format!("timeout {ticks}")));
+    }
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn services() -> Services {
+        let mut shared = SHARED;
+        shared.settings = leak(crate::settings_type::SettingAddresses {
+            max_competitors: MAX_COMPETITORS.with(Cell::as_ptr),
+            max_companies: COMPANY_LIMIT.with(Cell::as_ptr),
+            competitor_interval: INTERVAL.with(Cell::as_ptr),
+            ..crate::settings_type::SettingAddresses::NULL
+        });
+        let mut finance = FINANCE;
+        finance.networking = no;
+        finance.company_finances = none;
+        let mut s = COMPANY;
+        s.shared = leak(shared);
+        s.finance = leak(finance);
+        s.competitor_fired = yes;
+        s.ai_can_start = yes;
+        s.company_count = no_companies;
+        s.company_next = end;
+        s.script_random_next = no_random;
+        s.reset_competitor_timeout = reset_timeout;
+        s
+    }
+    fn set_mode(mode: GameMode) -> GameMode {
+        // SAFETY: The canonical session state, serialized by the game-state test lock.
+        unsafe {
+            let state = crate::session::openttd_rust_session_storage();
+            std::mem::replace(&mut (*state).mode, mode)
+        }
+    }
+
+    #[test]
+    fn competitor_posts_return_before_each_post() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let s = services();
+        let saved_mode = set_mode(GameMode::NORMAL);
+        for change_limit in [false, true] {
+            TRACE.with(|t| t.borrow_mut().clear());
+            // SAFETY: The process-wide tick cursor, serialized by the lock.
+            let cursor = unsafe { *openttd_rust_company_tick() };
+            MAX_COMPETITORS.set(2);
+            INTERVAL.set(0);
+            let mut tick = Tick::default();
+            let mut posts = 0;
+            // SAFETY: The test's live services; posts run between calls, as natively.
+            while unsafe { on_tick(&s, &mut tick) } {
+                assert!(
+                    TRACE.with(|t| t.borrow().is_empty()),
+                    "the caller posts before the timeout"
+                );
+                posts += 1;
+                if change_limit {
+                    MAX_COMPETITORS.set(1);
+                }
+            }
+            assert_eq!(posts, if change_limit { 1 } else { 2 });
+            // The competitor timeout reads the same settings and game mode in place.
+            INTERVAL.set(1);
+            MAX_COMPETITORS.set(1);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 1);
+            MAX_COMPETITORS.set(0);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 0);
+            MAX_COMPETITORS.set(1);
+            INTERVAL.set(0);
+            assert_eq!(openttd_rust_company_competitor_timeout_abi(&s), 0);
+            assert_eq!(TRACE.with(|t| t.borrow().clone()), ["timeout 19425"]);
+            // SAFETY: As above.
+            assert_eq!(
+                unsafe { *openttd_rust_company_tick() },
+                (cursor + 1) % u32::from(MAX_COMPANIES)
+            );
+        }
+        set_mode(saved_mode);
+    }
+}
+
+/// Company startup and control continuations: the AI startup continuation and abandoned
+/// frames, and a network client's local switch before the settings continuation. Company 2 is
+/// the slot every allocation takes.
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+    use crate::company_type::{COMPANY_SPECTATOR, CompanyID, CompanyManagerFace, OpenTTDCompany};
+    use crate::livery::{Livery, LiveryScheme};
+    use crate::test_tables::{
+        COMMAND_COSTS, COMMAND_POST, COMPANY, COMPANY_IDENTITY, FACES, FINANCE, FLEET_GROUPS,
+        MOVEMENT, NETWORK_COMMAND, NETWORK_FRAME, OBJECTIVES, SHARED,
+    };
+    use std::cell::{Cell, RefCell};
+
+    const ID: u8 = 2;
+    /// Company 2's native record: colour, liveries, face bits and president.
+    struct Record {
+        colour: u8,
+        liveries: [Livery; LiveryScheme::LS_END.0 as usize],
+        face_bits: u32,
+        president: (u32, u32),
+    }
+    thread_local! {
+        static TRACE: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+        static RECORD: RefCell<Record> = RefCell::new(Record {
+            colour: 0,
+            liveries: [Livery::default(); LiveryScheme::LS_END.0 as usize],
+            face_bits: 0,
+            president: (0, 0),
+        });
+        static FINANCES: Cell<*mut Finances> = const { Cell::new(std::ptr::null_mut()) };
+        static NETWORKING: Cell<bool> = const { Cell::new(false) };
+        static SERVER: Cell<bool> = const { Cell::new(false) };
+        static CURRENT: Cell<u8> = const { Cell::new(18) };
+        static LOCAL: Cell<u8> = const { Cell::new(0) };
+        static OWN: Cell<bool> = const { Cell::new(false) };
+        static POST: Cell<*const crate::command_post::Services> = const { Cell::new(std::ptr::null()) };
+        static NETWORK: Cell<*const crate::network_command::Services> = const { Cell::new(std::ptr::null()) };
+        static FRAME: Cell<*const crate::network_frame::Services> = const { Cell::new(std::ptr::null()) };
+        static WINDOWS: Cell<*const crate::objectives::Services> = const { Cell::new(std::ptr::null()) };
+    }
+    fn trace(entry: &'static str) {
+        TRACE.with(|t| t.borrow_mut().push(entry));
+    }
+    fn traced() -> Vec<&'static str> {
+        TRACE.with(|t| t.borrow().clone())
+    }
+    fn handle() -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(ID) + 1)
+    }
+    extern "C" fn company(_: CompanyID) -> *mut OpenTTDCompany {
+        handle()
+    }
+    extern "C" fn company_id(_: *mut OpenTTDCompany) -> CompanyID {
+        CompanyID(ID)
+    }
+    extern "C" fn no_company(_: u32) -> *mut OpenTTDCompany {
+        std::ptr::null_mut()
+    }
+    extern "C" fn colour(_: *mut OpenTTDCompany) -> u8 {
+        RECORD.with(|r| r.borrow().colour)
+    }
+    extern "C" fn set_colour(_: *mut OpenTTDCompany, value: u8) {
+        RECORD.with(|r| r.borrow_mut().colour = value);
+    }
+    extern "C" fn livery(_: *mut OpenTTDCompany, scheme: u8) -> *mut Livery {
+        RECORD.with(|r| &raw mut r.borrow_mut().liveries[usize::from(scheme)])
+    }
+    extern "C" fn face(_: *mut OpenTTDCompany) -> *mut CompanyManagerFace {
+        std::ptr::without_provenance_mut(1)
+    }
+    extern "C" fn face_bits(_: *mut CompanyManagerFace) -> *mut u32 {
+        RECORD.with(|r| &raw mut r.borrow_mut().face_bits)
+    }
+    extern "C" fn set_president_id(_: *mut OpenTTDCompany, value: u32) {
+        RECORD.with(|r| r.borrow_mut().president.0 = value);
+    }
+    extern "C" fn set_president_parts(_: *mut OpenTTDCompany, value: u32) {
+        RECORD.with(|r| r.borrow_mut().president.1 = value);
+    }
+    extern "C" fn not_ai(_: *mut OpenTTDCompany) -> bool {
+        false
+    }
+    extern "C" fn name_frame(_: *mut crate::company_identity::NameStorage) {}
+    extern "C" fn render(
+        _: *mut crate::company_identity::NameStorage,
+        _: u32,
+        _: u32,
+    ) -> crate::services::ByteSpan {
+        crate::services::ByteSpan {
+            data: b"President".as_ptr(),
+            size: 9,
+        }
+    }
+    extern "C" fn utf8_length(_: *const u8, size: usize) -> usize {
+        size
+    }
+    extern "C" fn no_draw(_: *mut std::ffi::c_void) -> u32 {
+        0
+    }
+    extern "C" fn one_style() -> u32 {
+        1
+    }
+    extern "C" fn face_random(_: *mut crate::town::names::Randomizer) -> u32 {
+        0
+    }
+    extern "C" fn no_vars(_: u32) -> crate::company_manager_face::FaceVars {
+        crate::company_manager_face::FaceVars {
+            data: std::ptr::null(),
+            size: 0,
+        }
+    }
+    extern "C" fn face_spec(_: u32) -> *const crate::company_manager_face::FaceSpec {
+        std::ptr::without_provenance(1)
+    }
+    extern "C" fn set_style(_: *mut CompanyManagerFace, _: u32) {}
+    extern "C" fn set_label(
+        _: *mut CompanyManagerFace,
+        _: *const crate::company_manager_face::FaceSpec,
+    ) {
+    }
+    extern "C" fn style(_: *mut CompanyManagerFace) -> u32 {
+        0
+    }
+    extern "C" fn no_group(_: u32) -> u32 {
+        u32::MAX
+    }
+    extern "C" fn admin_update(_: CompanyID) {
+        trace("admin");
+    }
+    extern "C" fn reset_colourmap() {
+        trace("colourmap");
+    }
+    extern "C" fn screen_dirty() {
+        trace("screen");
+    }
+    extern "C" fn company_valid(id: u8) -> bool {
+        id == ID && !FINANCES.get().is_null()
+    }
+    extern "C" fn holds(condition: bool) {
+        assert!(condition);
+    }
+    extern "C" fn command_post() -> &'static crate::command_post::Services {
+        // SAFETY: Leaked by `services` for the test process.
+        unsafe { &*POST.get() }
+    }
+    extern "C" fn network_command() -> &'static crate::network_command::Services {
+        // SAFETY: As above.
+        unsafe { &*NETWORK.get() }
+    }
+    extern "C" fn network_frame() -> &'static crate::network_frame::Services {
+        // SAFETY: As above.
+        unsafe { &*FRAME.get() }
+    }
+    extern "C" fn objectives() -> &'static crate::objectives::Services {
+        // SAFETY: As above.
+        unsafe { &*WINDOWS.get() }
+    }
+    extern "C" fn no_client(_: u32) -> *mut std::ffi::c_void {
+        std::ptr::null_mut()
+    }
+
+    extern "C" fn networking() -> bool {
+        NETWORKING.get()
+    }
+    extern "C" fn server() -> bool {
+        SERVER.get()
+    }
+    extern "C" fn not_server() -> bool {
+        false
+    }
+    extern "C" fn current() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn set_current(id: u8) {
+        CURRENT.set(id);
+    }
+    extern "C" fn local() -> u8 {
+        LOCAL.get()
+    }
+    extern "C" fn finances(id: u8) -> *mut Finances {
+        if id == ID {
+            FINANCES.get()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn allocate(_: u8, _: bool) -> CompanyRef {
+        // SAFETY: Plain integer record, freed by `reset`.
+        let finances = Box::into_raw(Box::new(unsafe { std::mem::zeroed::<Finances>() }));
+        FINANCES.set(finances);
+        trace("allocate 2");
+        CompanyRef {
+            finances,
+            id: u32::from(ID),
+        }
+    }
+    extern "C" fn prepare(_: u8, _: bool) -> bool {
+        trace("setup 2");
+        true
+    }
+    extern "C" fn events(_: u8) {
+        trace("events 2");
+    }
+    extern "C" fn network_new(_: u8) {
+        trace("network 2");
+    }
+    extern "C" fn ignore(_: u8) {}
+    extern "C" fn nothing() {}
+    extern "C" fn own_company(_: u8, client: u32) -> *mut OpenTTDCompany {
+        assert_eq!(client, 7);
+        trace("request");
+        if OWN.get() {
+            handle()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn own_settings(_: *mut OpenTTDCompany) {
+        assert_eq!((LOCAL.get(), CURRENT.get()), (ID, ID));
+        trace("settings");
+    }
+    extern "C" fn window_data(class: u16, number: u32, data: i32) {
+        assert_eq!(
+            (class, number, data),
+            (
+                crate::window_type::WC_SEND_NETWORK_MSG,
+                crate::network_type::DESTTYPE_TEAM,
+                i32::from(COMPANY_SPECTATOR)
+            )
+        );
+        assert_eq!(
+            (LOCAL.get(), CURRENT.get()),
+            (COMPANY_SPECTATOR, COMPANY_SPECTATOR)
+        );
+        trace("chat");
+    }
+    extern "C" fn window_classes(_: u16, _: i32) {
+        trace("classes");
+    }
+    extern "C" fn assign(company: CompanyID) {
+        LOCAL.set(company.0);
+        CURRENT.set(company.0);
+        trace("assign");
+    }
+    extern "C" fn close_construction() {
+        trace("construction");
+    }
+
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn shared() -> &'static crate::services::Services {
+        let mut movement = MOVEMENT;
+        movement.native_assert = holds;
+        let mut shared = SHARED;
+        shared.random = no_draw;
+        shared.utf8_length = utf8_length;
+        shared.screen_dirty = screen_dirty;
+        shared.company_valid = company_valid;
+        shared.current_company = current;
+        shared.command_post = command_post;
+        shared.network_client_info = no_client;
+        shared.movement = leak(movement);
+        leak(shared)
+    }
+    fn identity(
+        shared: &'static crate::services::Services,
+    ) -> &'static crate::company_identity::Services {
+        let mut faces = FACES;
+        faces.count = one_style;
+        faces.random = face_random;
+        faces.vars = no_vars;
+        faces.spec = face_spec;
+        faces.set_style = set_style;
+        faces.set_label = set_label;
+        faces.style = style;
+        faces.bits = face_bits;
+        let mut groups = FLEET_GROUPS;
+        groups.next_group = no_group;
+        let mut identity = COMPANY_IDENTITY;
+        identity.shared = shared;
+        identity.faces = leak(faces);
+        identity.groups = leak(groups);
+        identity.company = company;
+        identity.next_company = no_company;
+        identity.company_id = company_id;
+        identity.colour = colour;
+        identity.set_colour = set_colour;
+        identity.livery = livery;
+        identity.face = face;
+        identity.set_president_id = set_president_id;
+        identity.set_president_parts = set_president_parts;
+        identity.is_ai = not_ai;
+        identity.name_frame_init = name_frame;
+        identity.name_frame_drop = name_frame;
+        identity.render = render;
+        identity.admin_update = admin_update;
+        identity.reset_colourmap = reset_colourmap;
+        leak(identity)
+    }
+    /// The fixture's `FixtureReset`: company services over company 2's record, with the
+    /// network leg (`network_new`) seeing a non-server company table.
+    fn services(network: bool, is_server: bool) -> &'static Services {
+        reset();
+        NETWORKING.set(network);
+        SERVER.set(is_server);
+        let shared = shared();
+        let mut finance = FINANCE;
+        finance.networking = networking;
+        finance.current_company = current;
+        finance.set_current_company = set_current;
+        finance.company_finances = finances;
+        let mut windows = OBJECTIVES;
+        windows.window_data = window_data;
+        windows.window_classes = window_classes;
+        WINDOWS.set(leak(windows));
+        let mut s = COMPANY;
+        s.identity = identity(shared);
+        s.shared = shared;
+        s.finance = leak(finance);
+        s.cost = &COMMAND_COSTS;
+        s.objectives = objectives;
+        s.local_company = local;
+        s.network_server = server;
+        s.can_allocate_company = yes;
+        s.allocate_company = allocate;
+        s.prepare_new_company = prepare;
+        s.company_defaults = ignore;
+        s.startup_windows = nothing;
+        s.new_company_events = events;
+        s.company_league_dirty = nothing;
+        s.company_ctrl_windows = nothing;
+        s.assert_new_ai_slot = ignore;
+        s.admin_company_new = network_new;
+        s.close_network_status = nothing;
+        s.network_own_company = own_company;
+        s.network_own_company_settings = own_settings;
+        s.assign_company_context = assign;
+        s.close_construction_windows = close_construction;
+        let s = leak(s);
+        // `network_new` reads the network command's own company table, which is no server.
+        let mut network_company = COMPANY;
+        network_company.shared = shared;
+        network_company.identity = s.identity;
+        network_company.network_server = not_server;
+        let mut command = NETWORK_COMMAND;
+        command.company = leak(network_company);
+        command.network = network_frame;
+        let command = leak(command);
+        NETWORK.set(command);
+        let mut frame = NETWORK_FRAME;
+        frame.command = command;
+        FRAME.set(leak(frame));
+        let mut post = COMMAND_POST;
+        post.network = network_command;
+        POST.set(leak(post));
+        s
+    }
+    fn reset() {
+        TRACE.with(|t| t.borrow_mut().clear());
+        CURRENT.set(18);
+        LOCAL.set(0);
+        let finances = FINANCES.replace(std::ptr::null_mut());
+        if !finances.is_null() {
+            // SAFETY: Allocated by `allocate`.
+            drop(unsafe { Box::from_raw(finances) });
+        }
+    }
+    fn ownership() -> crate::tile_owner::Context {
+        crate::tile_owner::Context {
+            services: std::ptr::null(),
+            cost: std::ptr::null_mut(),
+            ret: std::ptr::null_mut(),
+            error: std::ptr::null_mut(),
+            road: std::ptr::null(),
+        }
+    }
+    fn control_frame(action: u8, client: crate::network_type::ClientID) -> Control {
+        Control {
+            result: Cost {
+                cost: 0,
+                param: 0,
+                error: 0,
+                expense: 0,
+            },
+            startup: Startup {
+                company: 0,
+                requested: 0,
+                is_ai: false,
+                stage: 0,
+            },
+            client: client.0,
+            action,
+            target: INVALID_OWNER,
+            reason: 0,
+            execute: true,
+            stage: 0,
+        }
+    }
+    fn colour_scope<R>(f: impl FnOnce() -> R) -> R {
+        // SAFETY: The process-wide colour cache, serialized by the game-state test lock.
+        let slot =
+            unsafe { crate::company_identity::openttd_rust_company_colours().add(usize::from(ID)) };
+        // SAFETY: As above.
+        let saved = unsafe { slot.read() };
+        let result = f();
+        // SAFETY: As above.
+        unsafe { slot.write(saved) };
+        result
+    }
+
+    /// Rust returns before `AI::StartNew`; an abandoned frame keeps the allocated company
+    /// without new-company events or a network announcement, a resumed one completes once,
+    /// and a network client starts no AI.
+    #[test]
+    fn ai_startup_continuation_and_abandoned_frames() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        // Startup reads the economy's prices and maximum loan.
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
+        colour_scope(|| {
+            let ownership = ownership();
+            let s = services(false, false);
+            let mut abandoned = control_frame(
+                crate::company_type::CCA_NEW_AI,
+                crate::network_type::ClientID::INVALID_CLIENT_ID,
+            );
+            assert!(control(s, &ownership, &mut abandoned));
+            assert_eq!(abandoned.startup.company, u32::from(ID));
+            assert_eq!(traced(), ["allocate 2", "setup 2"]);
+            // SAFETY: Company 2's live finances.
+            let (money, loan) = unsafe { ((*FINANCES.get()).money, (*FINANCES.get()).loan) };
+            assert_eq!(money, loan);
+
+            let s = services(false, false);
+            let mut resumed = control_frame(
+                crate::company_type::CCA_NEW_AI,
+                crate::network_type::ClientID::INVALID_CLIENT_ID,
+            );
+            let mut starts = 0;
+            while control(s, &ownership, &mut resumed) {
+                starts += 1;
+            }
+            assert_eq!(starts, 1);
+            assert_eq!(traced(), ["allocate 2", "setup 2", "events 2", "network 2"]);
+            assert_eq!(resumed.result.error, 0);
+
+            let s = services(true, false);
+            let mut client = Startup {
+                company: u32::MAX,
+                requested: INVALID_OWNER,
+                is_ai: true,
+                stage: 0,
+            };
+            assert!(!startup(s, &mut client));
+            assert_eq!(traced(), ["allocate 2", "setup 2", "events 2"]);
+            reset();
+        });
+    }
+
+    /// A network client's new company switches the local company before the native settings
+    /// continuation, and only when the client owns it.
+    #[test]
+    fn network_local_switch_precedes_settings_continuation() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        // Startup reads the economy's prices and maximum loan.
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
+        colour_scope(|| {
+            let ownership = ownership();
+            for matching_client in [false, true] {
+                let s = services(true, false);
+                LOCAL.set(COMPANY_SPECTATOR);
+                CURRENT.set(COMPANY_SPECTATOR);
+                OWN.set(matching_client);
+                let mut call = control_frame(
+                    crate::company_type::CCA_NEW,
+                    crate::network_type::ClientID(7),
+                );
+                assert!(!control(s, &ownership, &mut call));
+                let mut expected =
+                    vec!["allocate 2", "setup 2", "events 2", "network 2", "request"];
+                if matching_client {
+                    expected.extend([
+                        "chat",
+                        "assign",
+                        "classes",
+                        "construction",
+                        "screen",
+                        "classes",
+                        "classes",
+                        "classes",
+                        "colourmap",
+                        "settings",
+                    ]);
+                }
+                assert_eq!(traced(), expected, "matching client {matching_client}");
+                assert_eq!(call.result.error, 0);
+                assert_eq!(
+                    LOCAL.get(),
+                    if matching_client {
+                        ID
+                    } else {
+                        COMPANY_SPECTATOR
+                    }
+                );
+            }
+            reset();
+        });
+    }
+}
+
+/// A network client never deletes a company bankrupt for a tenth month; it updates each one's
+/// admin state, keeps both companies and restores the current company.
+#[cfg(test)]
+mod bankruptcy_tests {
+    use super::*;
+    use crate::company_type::CompanyID;
+    use crate::test_tables::{COMPANY, COMPANY_IDENTITY, FINANCE, SHARED};
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static OWNERS: RefCell<Vec<*mut Finances>> = const { RefCell::new(Vec::new()) };
+        static CURRENT: Cell<u8> = const { Cell::new(18) };
+        static TRACE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+    extern "C" fn next(from: u32) -> CompanyRef {
+        OWNERS.with(|o| {
+            let o = o.borrow();
+            (from as usize..o.len()).find(|&i| !o[i].is_null()).map_or(
+                CompanyRef {
+                    finances: std::ptr::null_mut(),
+                    id: INVALID,
+                },
+                |i| CompanyRef {
+                    finances: o[i],
+                    id: i as u32,
+                },
+            )
+        })
+    }
+    extern "C" fn yes() -> bool {
+        true
+    }
+    extern "C" fn no() -> bool {
+        false
+    }
+    extern "C" fn local() -> u8 {
+        0
+    }
+    extern "C" fn current() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn set_current(id: u8) {
+        CURRENT.set(id);
+    }
+    extern "C" fn invalidate(_: u8) {}
+    extern "C" fn admin_update(id: CompanyID) {
+        TRACE.with(|t| t.borrow_mut().push(format!("admin {}", id.0)));
+    }
+    extern "C" fn month() -> Month {
+        Month {
+            month: 1,
+            infinite_money: false,
+            maintenance: false,
+            fluctuating: false,
+        }
+    }
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    fn owner(money: i64, loan: i64, months: u8) -> *mut Finances {
+        // SAFETY: Plain integer record; freed at the end of the test.
+        let mut p: Box<Finances> = Box::new(unsafe { std::mem::zeroed() });
+        p.money = money;
+        p.loan = loan;
+        p.bankruptcy = months;
+        p.max_loan = i64::MIN; // The native default: the economy's maximum loan.
+        Box::into_raw(p)
+    }
+
+    #[test]
+    fn network_client_never_deletes_bankrupt_companies() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
+        let economy = openttd_rust_economy_state();
+        // SAFETY: Process-wide economy, serialized by both locks and restored below.
+        let saved = unsafe { economy.read() };
+        // SAFETY: As above.
+        unsafe {
+            economy.write(std::mem::zeroed());
+            (*economy).max_loan = 300_000;
+            (*economy).fluct = 100;
+        }
+        OWNERS.with(|o| {
+            *o.borrow_mut() = vec![
+                owner(1_000_000, 0, 0),
+                owner(-500_000, 100_000, 9),
+                owner(-500_000, 100_000, 9),
+            ];
+        });
+        let mut identity = COMPANY_IDENTITY;
+        identity.admin_update = admin_update;
+        let mut finance = FINANCE;
+        finance.networking = yes;
+        finance.current_company = current;
+        finance.set_current_company = set_current;
+        finance.invalidate_company_windows = invalidate;
+        let mut s = COMPANY;
+        s.identity = leak(identity);
+        s.shared = &SHARED;
+        s.finance = leak(finance);
+        s.company_next = next;
+        s.local_company = local;
+        s.network_server = no;
+        let s = leak(s);
+        let clock = crate::timer_game_common::ClockCompany {
+            services: s,
+            settings: crate::test_tables::unreachable0,
+            month,
+            year: crate::test_tables::unreachable0,
+        };
+        CURRENT.set(18);
+        TRACE.with(|t| t.borrow_mut().clear());
+        // SAFETY: The clock context outlives the call; no exception slot is used.
+        let ok = unsafe {
+            crate::timer_game_common::openttd_rust_clock_economy_month_abi(
+                (&raw const clock).cast(),
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(ok, 1);
+        assert_eq!(CURRENT.get(), 18);
+        assert_eq!(TRACE.with(|t| t.borrow().clone()), ["admin 1", "admin 2"]);
+        OWNERS.with(|o| {
+            let o = o.borrow();
+            assert!(
+                o.iter().all(|p| !p.is_null()),
+                "a client keeps both companies"
+            );
+            for &p in o.iter() {
+                // SAFETY: Allocated by `owner`.
+                drop(unsafe { Box::from_raw(p) });
+            }
+        });
+        // SAFETY: As above.
+        unsafe { economy.write(saved) };
     }
 }

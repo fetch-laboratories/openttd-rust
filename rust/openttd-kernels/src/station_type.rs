@@ -374,6 +374,11 @@ impl StationFacilities {
     pub const fn with(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
+    /// Native `BaseBitSet::Any(other)`: whether any of the given elements are set.
+    #[must_use]
+    pub const fn any(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
 }
 
 impl StationRandomTriggers {

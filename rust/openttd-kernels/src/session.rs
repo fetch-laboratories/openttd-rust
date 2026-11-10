@@ -710,7 +710,7 @@ impl<'a> Session<'a> {
         (s.road_end)(self.frame);
         unsafe {
             crate::trees::tick(s.trees, s.shared);
-            crate::station_service::tick(s.station, s.links, s.visits);
+            crate::station_service::on_tick_station(&*s.station, &*s.links, &*s.visits);
             let world = self.world();
             crate::industry::on_tick_industry(s.industry_builder, world.industry);
         }
