@@ -73,6 +73,54 @@ class OrphanTests(unittest.TestCase):
                     },
                 )
 
+    def test_instantiation_only_member_is_no_production_user(self) -> None:
+        files = {
+            "rust/lib.rs": export("reassign"),
+            "src/rust/ffi.h": "uint32_t openttd_rust_reassign(List *, uint8_t, uint8_t);\n",
+            "src/cargopacket.h": "class VehicleCargoList {\n"
+            "\ttemplate <MoveToAction Tfrom, MoveToAction Tto> uint Reassign(uint amount);\n"
+            "};\n",
+            "src/rust/storage.hpp": "template <VehicleCargoList::MoveToAction Tfrom, "
+            "VehicleCargoList::MoveToAction Tto>\n"
+            "uint VehicleCargoList::Reassign(uint amount) "
+            "{ return openttd_rust_reassign(this->state, Tfrom, Tto); }\n"
+            "template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, "
+            "VehicleCargoList::MTA_KEEP>(uint);\n"
+            "template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_LOAD, "
+            "VehicleCargoList::MTA_KEEP>(uint);\n",
+            "src/tests/cargo.cpp": "void Test(VehicleCargoList &l) "
+            "{ l.Reassign<VehicleCargoList::MTA_LOAD, VehicleCargoList::MTA_KEEP>(1); }\n",
+        }
+        self.assertEqual(
+            ORPHANS.violations(files), {"no production user | openttd_rust_reassign"}
+        )
+        files["src/economy.cpp"] = (
+            "void Load(VehicleCargoList &l) "
+            "{ l.Reassign<VehicleCargoList::MTA_LOAD, VehicleCargoList::MTA_KEEP>(1); }\n"
+        )
+        self.assertEqual(ORPHANS.violations(files), set())
+
+    def test_uncalled_plain_member_is_reported_not_enforced(self) -> None:
+        files = {
+            "rust/lib.rs": export("age"),
+            "src/rust/ffi.h": "void openttd_rust_age(List *);\n",
+            "src/cargopacket.h": "class VehicleCargoList {\n\tvoid AgeCargo();\n};\n",
+            "src/rust/storage.hpp": "void VehicleCargoList::AgeCargo() "
+            "{ openttd_rust_age(this->state); }\n",
+            "src/script/api/script_list.cpp": "void ScriptList::Bound() "
+            "{ openttd_rust_age(nullptr); }\n",
+        }
+        self.assertEqual(ORPHANS.violations(files), set())
+        self.assertEqual(ORPHANS.violations(files, broad=True), set())
+        del files["src/script/api/script_list.cpp"]  # Generated bindings call these.
+        self.assertEqual(ORPHANS.violations(files), set())
+        self.assertEqual(
+            ORPHANS.scan(files, broad=True),
+            {"no production user | openttd_rust_age": {"VehicleCargoList::AgeCargo"}},
+        )
+        files["src/vehicle.cpp"] = "void Tick(Vehicle *v) { v->cargo.AgeCargo(); }\n"
+        self.assertEqual(ORPHANS.violations(files, broad=True), set())
+
     def test_cli_ratchet_and_stale_entries(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
