@@ -629,13 +629,15 @@ pub use encoded::{
 /// Tag is 0/1/2. A tag-2 nonempty byte span meets `utf8::borrow`'s contract.
 /// The returned borrow never escapes the enclosing operation.
 #[allow(unsafe_code)]
-unsafe fn encoded_parameter<'a>(descriptor: &EncodedDescriptor) -> encoded::Parameter<'a> {
+unsafe fn encoded_parameter<'a>(
+    descriptor: &EncodedDescriptor,
+) -> strings_type::StringParameterData<'a> {
     match descriptor.kind {
-        0 => encoded::Parameter::Empty,
-        1 => encoded::Parameter::Integer(descriptor.value),
-        2 => {
-            encoded::Parameter::String(unsafe { utf8::borrow(descriptor.bytes, descriptor.length) })
-        }
+        0 => strings_type::StringParameterData::Empty,
+        1 => strings_type::StringParameterData::Integer(descriptor.value),
+        2 => strings_type::StringParameterData::String(unsafe {
+            utf8::borrow(descriptor.bytes, descriptor.length)
+        }),
         _ => unreachable!("unknown encoded descriptor tag"),
     }
 }
@@ -670,8 +672,8 @@ pub unsafe extern "C" fn openttd_rust_encoded_serialize(
             unsafe { encoded_parameter(&descriptor) }
         })
         .collect();
-    Box::into_raw(Box::new(encoded::serialize(
-        id,
+    Box::into_raw(Box::new(encoded::get_encoded_string_with_args(
+        strings_type::StringID(id),
         &parameters,
         string_assertions != 0,
     )))
@@ -693,7 +695,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_legacy(
 ) -> *mut std::ffi::c_void {
     // SAFETY: Input is readable and remains immutable for this call.
     let bytes = unsafe { utf8::borrow(data, length) };
-    Box::into_raw(Box::new(encoded::legacy(bytes, fix_code != 0))).cast()
+    Box::into_raw(Box::new(encoded::fix_scc_encoded(bytes, fix_code != 0))).cast()
 }
 
 /// Canonicalize numeric records, trying unsigned hex before signed/default-zero.
@@ -709,7 +711,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_negatives(
 ) -> *mut std::ffi::c_void {
     // SAFETY: Input is readable and remains immutable for this call.
     let bytes = unsafe { utf8::borrow(data, length) };
-    Box::into_raw(Box::new(encoded::negatives(bytes))).cast()
+    Box::into_raw(Box::new(encoded::fix_scc_encoded_negative(bytes))).cast()
 }
 
 /// Parse, replace, and serialize an internal encoded string in a single operation.
@@ -732,7 +734,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_replace(
     let bytes = unsafe { utf8::borrow(data, length) };
     // SAFETY: The tag and nested replacement span obey the descriptor contract.
     let replacement = unsafe { encoded_parameter(&replacement) };
-    Box::into_raw(Box::new(encoded::replace(
+    Box::into_raw(Box::new(encoded::replace_param(
         bytes,
         index,
         replacement,

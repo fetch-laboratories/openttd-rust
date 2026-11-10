@@ -7,13 +7,16 @@
 
 //! Encoded-string compatibility and serialization; results own all returned storage.
 
+use crate::control_codes::{
+    SCC_ENCODED, SCC_ENCODED_INTERNAL, SCC_ENCODED_NUMERIC, SCC_ENCODED_STRING,
+    SCC_RECORD_SEPARATOR,
+};
+use crate::strings_type::{StringID, StringParameterData};
 use crate::{builder, consumer, integer, utf8};
 
-pub(super) const SEPARATOR: u32 = 0x1e;
-pub(super) const ENCODED: u32 = 0xe000;
-pub(super) const INTERNAL: u32 = 0xe001;
-pub(super) const NUMERIC: u32 = 0xe002;
-pub(super) const STRING: u32 = 0xe003;
+// Existing native result protocol, unwrapped only by `view`.
+const ASSERTION_NUMERIC_REMAINDER: u8 = 1;
+const ASSERTION_ENCODED_PREFIX: u8 = 2;
 
 /// Tagged scalar/borrowed-byte descriptor; never a C++ variant layout.
 #[repr(C)]
@@ -61,13 +64,6 @@ pub struct Diagnostic {
     pub tail_length: usize,
     /// Original integer error classification 1 invalid, 2 range, 3 negative hex.
     pub kind: u8,
-}
-
-#[derive(Clone, Copy)]
-pub(super) enum Parameter<'a> {
-    Empty,
-    Integer(u64),
-    String(&'a [u8]),
 }
 
 #[derive(Default)]
@@ -136,7 +132,7 @@ impl Output {
         self.diagnostics.push(Diagnostic {
             offset: base + result.error_offset,
             length: result.error_length,
-            tail_length: if result.error_kind == 3 {
+            tail_length: if result.error_kind == integer::INTEGER_NEGATIVE_HEX_OUT_OF_RANGE {
                 0
             } else {
                 (available - result.error_offset - result.error_length).min(4)
@@ -145,30 +141,39 @@ impl Output {
         });
     }
 
-    fn serialize(&mut self, id: u32, parameters: &[Parameter<'_>], assertions: bool) {
-        self.character(INTERNAL);
-        self.number(u64::from(id));
+    fn get_encoded_string_with_args(
+        &mut self,
+        id: StringID,
+        parameters: &[StringParameterData<'_>],
+        assertions: bool,
+    ) {
+        self.character(SCC_ENCODED_INTERNAL);
+        self.number(u64::from(id.0));
         for parameter in parameters {
-            self.character(SEPARATOR);
+            self.character(SCC_RECORD_SEPARATOR);
             match parameter {
-                Parameter::Empty => {}
-                Parameter::Integer(value) => {
-                    self.character(NUMERIC);
+                StringParameterData::Empty => {}
+                StringParameterData::Integer(value) => {
+                    self.character(SCC_ENCODED_NUMERIC);
                     self.number(*value);
                 }
-                Parameter::String(bytes) => {
+                StringParameterData::String(bytes) => {
                     if assertions {
+                        /* Don't allow an encoded string to contain another encoded string. */
                         let first = utf8::decode(bytes);
                         if first.length > 0
-                            && matches!(first.codepoint, ENCODED | INTERNAL | SEPARATOR)
+                            && matches!(
+                                first.codepoint,
+                                SCC_ENCODED | SCC_ENCODED_INTERNAL | SCC_RECORD_SEPARATOR
+                            )
                         {
-                            self.assertion_kind = 2;
+                            self.assertion_kind = ASSERTION_ENCODED_PREFIX;
                             self.assertion_length = first.length;
                             self.assertion_codepoint = first.codepoint;
                             return;
                         }
                     }
-                    self.character(STRING);
+                    self.character(SCC_ENCODED_STRING);
                     self.append(bytes);
                 }
             }
@@ -176,26 +181,43 @@ impl Output {
     }
 }
 
-pub(super) fn serialize(id: u32, parameters: &[Parameter<'_>], assertions: bool) -> Output {
+/// `GetEncodedStringWithArgs`: encode a string with its parameters, so it can
+/// be stored and decoded later without storing parameters separately.
+pub(super) fn get_encoded_string_with_args(
+    id: StringID,
+    parameters: &[StringParameterData<'_>],
+    assertions: bool,
+) -> Output {
     let mut result = Output {
         apply: true,
         ..Output::default()
     };
-    result.serialize(id, parameters, assertions);
+    result.get_encoded_string_with_args(id, parameters, assertions);
     result
 }
 
-pub(super) fn legacy(src: &[u8], fix_code: bool) -> Output {
+/// `FixSCCEncoded`: fix old encoded markers before string validation runs.
+/// Bail out on invalid input rather than continuing token replacement.
+pub(super) fn fix_scc_encoded(src: &[u8], fix_code: bool) -> Output {
     if src.is_empty() {
         return Output::default();
     }
+    /* Convert old escape-style encoding to record separator encoding.
+     * Initial <SCC_ENCODED><STRINGID> stays the same.
+     * :<SCC_ENCODED><STRINGID> becomes <RS><SCC_ENCODED><STRINGID>.
+     * :<HEX> becomes <RS><SCC_ENCODED_NUMERIC><HEX>.
+     * :"<STRING>" becomes <RS><SCC_ENCODED_STRING><STRING>.
+     */
     let mut result = Output {
         apply: true,
         ..Output::default()
     };
     let mut position = 0;
+    // Presence of SCC_ENCODED determines whether this is an encoded string.
     let mut is_encoded = false;
+    // Inside a string between double quotes.
     let mut in_string = false;
+    // A parameter type needs to be emitted.
     let mut need_type = true;
     while position < src.len() {
         let decoded = utf8::decode(&src[position..]);
@@ -204,30 +226,33 @@ pub(super) fn legacy(src: &[u8], fix_code: bool) -> Output {
         }
         position += decoded.length;
         let character = decoded.codepoint;
-        if character == ENCODED || (fix_code && matches!(character, 0xe028 | 0xe02a)) {
-            result.character(ENCODED);
+        if character == SCC_ENCODED || (fix_code && matches!(character, 0xe028 | 0xe02a)) {
+            result.character(SCC_ENCODED);
             need_type = false;
             is_encoded = true;
             continue;
         }
+        /* If the first character is not SCC_ENCODED then no conversion is needed. */
         if !is_encoded {
             return Output::default();
         }
         if character == u32::from(b'"') {
             in_string = !in_string;
             if in_string && need_type {
-                result.character(STRING);
+                /* Started a new string parameter. */
+                result.character(SCC_ENCODED_STRING);
                 need_type = false;
             }
             continue;
         }
         if !in_string && character == u32::from(b':') {
-            result.character(SEPARATOR);
+            result.character(SCC_RECORD_SEPARATOR);
             need_type = true;
             continue;
         }
         if need_type {
-            result.character(NUMERIC);
+            /* Started a new numeric parameter. */
+            result.character(SCC_ENCODED_NUMERIC);
             need_type = false;
         }
         result.character(character);
@@ -244,8 +269,10 @@ fn marker_length(src: &[u8], codepoint: u32) -> usize {
     }
 }
 
-pub(super) fn negatives(src: &[u8]) -> Output {
-    let mut position = marker_length(src, ENCODED);
+/// `FixSCCEncodedNegative`: reencode negative numeric records as `uint64_t`.
+pub(super) fn fix_scc_encoded_negative(src: &[u8]) -> Output {
+    /* Check whether this is an encoded string. */
+    let mut position = marker_length(src, SCC_ENCODED);
     if position == 0 {
         return Output::default();
     }
@@ -253,22 +280,26 @@ pub(super) fn negatives(src: &[u8]) -> Output {
         apply: true,
         ..Output::default()
     };
-    result.character(ENCODED);
-    let separator = utf8::encode(SEPARATOR);
+    result.character(SCC_ENCODED);
+    let separator = utf8::encode(SCC_RECORD_SEPARATOR);
     while position < src.len() {
+        /* Copy until next record. */
         let copied = consumer::separator(&src[position..], &separator.bytes[..separator.length], 1);
         result.append(&src[position..position + copied.result_length]);
         position += copied.consumed_length;
-        let length = marker_length(&src[position..], NUMERIC);
+        /* Check whether this is a numeric parameter. */
+        let length = marker_length(&src[position..], SCC_ENCODED_NUMERIC);
         if length == 0 {
             continue;
         }
         position += length;
-        result.character(NUMERIC);
+        result.character(SCC_ENCODED_NUMERIC);
+        /* First try unsigned. */
         let unsigned = integer::parse(&src[position..], 16, 64, false, false);
         let value = if unsigned.length > 0 {
             unsigned.value_bits
         } else {
+            /* Read as signed, store as unsigned. */
             let signed = integer::parse(&src[position..], 16, 64, true, false);
             if signed.error_kind != 0 {
                 result.error(&signed, position, src.len() - position);
@@ -281,10 +312,11 @@ pub(super) fn negatives(src: &[u8]) -> Output {
     result
 }
 
-pub(super) fn replace<'a>(
+/// `EncodedString::ReplaceParam`: return an empty result if decoding fails.
+pub(super) fn replace_param<'a>(
     src: &'a [u8],
     index: usize,
-    replacement: Parameter<'a>,
+    replacement: StringParameterData<'a>,
     numeric_assertions: bool,
     string_assertions: bool,
 ) -> Output {
@@ -292,7 +324,7 @@ pub(super) fn replace<'a>(
         apply: true,
         ..Output::default()
     };
-    let mut position = marker_length(src, INTERNAL);
+    let mut position = marker_length(src, SCC_ENCODED_INTERNAL);
     if position == 0 {
         return result;
     }
@@ -302,13 +334,13 @@ pub(super) fn replace<'a>(
     }
     position += integer::skip(&src[position..], 16);
     if position < src.len() {
-        let length = marker_length(&src[position..], SEPARATOR);
+        let length = marker_length(&src[position..], SCC_RECORD_SEPARATOR);
         if length == 0 {
             return result;
         }
         position += length;
     }
-    let separator = utf8::encode(SEPARATOR);
+    let separator = utf8::encode(SCC_RECORD_SEPARATOR);
     let mut parameters = Vec::new();
     while position < src.len() {
         let lengths =
@@ -317,9 +349,11 @@ pub(super) fn replace<'a>(
         let record = &src[start..start + lengths.result_length];
         position += lengths.consumed_length;
         if record.is_empty() {
-            parameters.push(Parameter::Empty);
+            /* This is an empty parameter. */
+            parameters.push(StringParameterData::Empty);
             continue;
         }
+        /* Get the parameter type. */
         let parameter_type = utf8::decode(record);
         let consumed = if parameter_type.length == 0 {
             1
@@ -328,22 +362,23 @@ pub(super) fn replace<'a>(
         };
         let payload = &record[consumed..];
         let parameter = match parameter_type.codepoint {
-            NUMERIC if parameter_type.length > 0 => {
+            SCC_ENCODED_NUMERIC if parameter_type.length > 0 => {
                 let parsed = integer::parse(payload, 16, 64, false, false);
                 if parsed.error_kind != 0 {
                     result.error(&parsed, start + consumed, payload.len());
                 }
                 let skipped = integer::skip(payload, 16);
                 if numeric_assertions && skipped < payload.len() {
-                    result.assertion_kind = 1;
+                    result.assertion_kind = ASSERTION_NUMERIC_REMAINDER;
                     result.assertion_offset = start + consumed + skipped;
                     result.assertion_length = payload.len() - skipped;
                     return result;
                 }
-                Parameter::Integer(parsed.value_bits)
+                StringParameterData::Integer(parsed.value_bits)
             }
-            STRING if parameter_type.length > 0 => Parameter::String(payload),
-            _ => Parameter::Empty,
+            SCC_ENCODED_STRING if parameter_type.length > 0 => StringParameterData::String(payload),
+            // Unknown parameter, make it blank.
+            _ => StringParameterData::Empty,
         };
         parameters.push(parameter);
     }
@@ -351,8 +386,8 @@ pub(super) fn replace<'a>(
         return result;
     }
     parameters[index] = replacement;
-    let id = u32::try_from(id.value_bits).unwrap();
-    result.serialize(id, &parameters, string_assertions);
+    let id = StringID(u32::try_from(id.value_bits).unwrap());
+    result.get_encoded_string_with_args(id, &parameters, string_assertions);
     result
 }
 
@@ -388,7 +423,10 @@ crate::abi::layouts! {
 /// facades) are reconstructed where they turn Rust results into logs, assertions and strings.
 #[cfg(test)]
 mod tests {
-    use super::{Output, Parameter, legacy, negatives, replace, serialize};
+    use super::{
+        Output, StringID, StringParameterData, fix_scc_encoded, fix_scc_encoded_negative,
+        get_encoded_string_with_args, replace_param,
+    };
     use crate::oracle;
     use std::collections::HashSet;
     use std::fmt::Write as _;
@@ -667,11 +705,11 @@ mod tests {
     struct Failed(&'static str);
 
     /// `StringParameter` from the probe's `Parameter(token)`; D<dec> converts int64 to uint64.
-    fn parameter(text: &str) -> Parameter<'_> {
+    fn parameter(text: &str) -> StringParameterData<'_> {
         match text.as_bytes()[0] {
-            b'E' => Parameter::Empty,
-            b'N' => Parameter::Integer(u64::from_str_radix(&text[1..], 16).unwrap()),
-            b'D' => Parameter::Integer(text[1..].parse::<i64>().unwrap().cast_unsigned()),
+            b'E' => StringParameterData::Empty,
+            b'N' => StringParameterData::Integer(u64::from_str_radix(&text[1..], 16).unwrap()),
+            b'D' => StringParameterData::Integer(text[1..].parse::<i64>().unwrap().cast_unsigned()),
             _ => unreachable!("string parameters are decoded by the caller"),
         }
     }
@@ -679,10 +717,10 @@ mod tests {
     /// `LogRustEncodedDiagnostic`: the integer message, replayed against the original input.
     fn log_message(diagnostic: &super::Diagnostic, input: &[u8]) -> Vec<u8> {
         let part = &input[diagnostic.offset..diagnostic.offset + diagnostic.length];
-        if diagnostic.kind == 3 {
+        if diagnostic.kind == crate::integer::INTEGER_NEGATIVE_HEX_OUT_OF_RANGE {
             return [&b"Integer out of range: '"[..], part, b"'"].concat();
         }
-        let label: &[u8] = if diagnostic.kind == 2 {
+        let label: &[u8] = if diagnostic.kind == crate::integer::INTEGER_OUT_OF_RANGE {
             b"Integer out of range"
         } else {
             b"Cannot parse integer"
@@ -710,12 +748,15 @@ mod tests {
             // The numeric check asserts that the trailing record text is empty.
             let start = view.assertion_offset.min(input.len());
             let record = &input[start..input.len().min(start + view.assertion_length)];
-            if self.numeric() && view.assertion_kind == 1 && !record.is_empty() {
+            if self.numeric()
+                && view.assertion_kind == super::ASSERTION_NUMERIC_REMAINDER
+                && !record.is_empty()
+            {
                 return Err(Failed(NUMERIC_ASSERTION));
             }
             // assert(len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && ...)).
             if self.mode.with_assert
-                && view.assertion_kind == 2
+                && view.assertion_kind == super::ASSERTION_ENCODED_PREFIX
                 && view.assertion_length != 0
                 && matches!(view.assertion_codepoint, 0xe000 | 0xe001 | 0x1e)
             {
@@ -744,9 +785,9 @@ mod tests {
                         .unwrap_or_default()
                 })
                 .collect();
-            let param = |index: usize| -> Parameter<'_> {
+            let param = |index: usize| -> StringParameterData<'_> {
                 if words[index].starts_with('S') {
-                    Parameter::String(&strings[index])
+                    StringParameterData::String(&strings[index])
                 } else {
                     parameter(words[index])
                 }
@@ -755,9 +796,9 @@ mod tests {
                 "legacy" | "negative" => {
                     let input = unhex(words[words.len() - 1]);
                     let result = if words[0] == "legacy" {
-                        legacy(&input, words[1] == "1")
+                        fix_scc_encoded(&input, words[1] == "1")
                     } else {
-                        negatives(&input)
+                        fix_scc_encoded_negative(&input)
                     };
                     // The facade leaves the string unchanged unless the result applies.
                     if result.apply {
@@ -771,30 +812,35 @@ mod tests {
                     let mut input = unhex(words[3]);
                     input.truncate(input.iter().position(|&b| b == 0).unwrap_or(input.len()));
                     let index = words[1].parse().unwrap();
-                    let result = replace(&input, index, param(2), self.numeric(), self.string());
+                    let result =
+                        replace_param(&input, index, param(2), self.numeric(), self.string());
                     self.copy(&result, &input)?
                 }
                 "default" => {
                     let index = words[1].parse().unwrap();
-                    let result = replace(&[], index, param(2), self.numeric(), self.string());
+                    let result = replace_param(&[], index, param(2), self.numeric(), self.string());
                     self.copy(&result, &[])?
                 }
                 mode => {
-                    let id: u32 = words[1].parse().unwrap();
+                    let id = StringID(words[1].parse().unwrap());
                     let first = if mode == "public-replace" { 4 } else { 2 };
                     let parameters: Vec<_> = (first..words.len()).map(param).collect();
-                    let encoded = self.copy(&serialize(id, &parameters, self.string()), &[])?;
+                    let encoded = self.copy(
+                        &get_encoded_string_with_args(id, &parameters, self.string()),
+                        &[],
+                    )?;
                     let (input, index, replacement) = match mode {
                         "serialize" => {
                             self.stdout.push(format!("out {}", hex(&encoded)));
                             return Ok(());
                         }
                         // EncodedString::clear(), then ReplaceParam(0, 42).
-                        "clear" => (Vec::new(), 0, Parameter::Integer(42)),
+                        "clear" => (Vec::new(), 0, StringParameterData::Integer(42)),
                         "public-replace" => (encoded, words[2].parse().unwrap(), param(3)),
                         _ => unreachable!("unknown probe command {command}"),
                     };
-                    let result = replace(&input, index, replacement, self.numeric(), self.string());
+                    let result =
+                        replace_param(&input, index, replacement, self.numeric(), self.string());
                     self.copy(&result, &input)?
                 }
             };
