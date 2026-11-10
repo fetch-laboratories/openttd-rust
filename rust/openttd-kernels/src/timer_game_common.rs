@@ -493,7 +493,7 @@ owner_callback!(
     crate::disaster::Services,
     s,
     {
-        crate::disaster::openttd_rust_disaster_daily(s);
+        crate::disaster::economy_disaster_daily(s);
     }
 );
 owner_callback!(openttd_rust_clock_economy_month_abi, ClockCompany, c, {
