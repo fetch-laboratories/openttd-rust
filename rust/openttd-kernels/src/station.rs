@@ -1046,17 +1046,6 @@ pub(crate) fn acceptance_around_tiles(
     }
     acceptance
 }
-/// Raw adapter for `station_service.rs`, outside this pass; delegates to
-/// `get_acceptance_around_station`.
-/// # Safety
-/// As `get_acceptance_around_station`.
-pub(crate) unsafe fn get_acceptance_around_station_raw(
-    state: *mut Service,
-    always_accepted: *mut u64,
-    c: &Ctx<'_>,
-) -> [u32; NUM_CARGO as usize] {
-    unsafe { get_acceptance_around_station(state, always_accepted.cast(), c) }
-}
 /// `GetAcceptanceAroundStation`: explicit bitmap iteration of the catchment.
 /// # Safety
 /// `state` is a live station owner whose catchment is not reset by the tile procs.

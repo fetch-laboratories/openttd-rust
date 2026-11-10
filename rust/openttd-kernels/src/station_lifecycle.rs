@@ -519,7 +519,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let links = unsafe { &*c.links };
     let state = (w.owner)(st);
     if (s.cleaning_pool)() {
-        for cargo in 0..NUM_CARGO {
+        for cargo in (0..NUM_CARGO).map(CargoType) {
             let list = links.station_cargo(st, cargo);
             if !list.is_null() {
                 unsafe {
@@ -638,7 +638,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     /* Remove all news items */
     (s.delete_news)(id);
-    for cargo in 0..NUM_CARGO {
+    for cargo in (0..NUM_CARGO).map(CargoType) {
         let list = links.station_cargo(st, cargo);
         if !list.is_null() {
             unsafe {

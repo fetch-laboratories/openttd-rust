@@ -604,9 +604,8 @@ pub(crate) unsafe fn update_station_acceptance(st: *mut BaseStation, show_msg: b
     // SAFETY: Live owner; the tile procs cannot reset this station's catchment.
     if !unsafe { crate::station::rect_is_empty(state) } {
         let c = crate::station::Ctx::from_shared(unsafe { &*w.shared });
-        let always = unsafe { &raw mut (*state).fields.always_accepted };
-        acceptance =
-            unsafe { crate::station::get_acceptance_around_station_raw(state, always, &c) };
+        let always: *mut CargoTypes = unsafe { &raw mut (*state).fields.always_accepted }.cast();
+        acceptance = unsafe { crate::station::get_acceptance_around_station(state, always, &c) };
     }
     /* Adjust in case our station only accepts fewer kinds of goods */
     let facilities = StationFacilities((w.facilities)(st));
@@ -691,12 +690,12 @@ unsafe fn trigger_watched_cargo_callbacks(st: *mut BaseStation, w: &World) {
     /* Loop over all houses in the catchment. */
     // SAFETY: Live owner; house animation triggers cannot reset its catchment.
     unsafe {
-        crate::station::for_each_catchment_tile_raw(state, &c, |tile| {
-            if (shared.tile_type)(tile) == crate::tile_type::MP_HOUSE {
+        crate::station::for_each_catchment_tile(state, &c, |tile| {
+            if (shared.tile_type)(tile.0) == crate::tile_type::MP_HOUSE {
                 crate::town::house::trigger_house_animation_watched_cargo_accepted(
                     c.c.town,
                     shared,
-                    crate::tile_type::TileIndex(tile),
+                    tile,
                     CargoTypes(cargoes),
                 );
             }
@@ -1177,9 +1176,9 @@ impl Links {
     pub(crate) fn station_cargo(
         &self,
         st: *mut BaseStation,
-        cargo: u8,
+        cargo: CargoType,
     ) -> *const crate::cargo_storage::List {
-        unsafe { ((*self.station_resolver).cargo_owner)(st, cargo) }
+        unsafe { ((*self.station_resolver).cargo_owner)(st, cargo.0) }
     }
     pub(crate) fn vehicle_cargo(&self, v: VehicleRef) -> *mut crate::cargo_storage::List {
         unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr()) }.cast_mut()
@@ -1198,7 +1197,7 @@ pub(crate) unsafe fn reroute_cargo(
     let storage = l.storage();
     let ge = (l.goods_entry)(st, cargo.0);
     /* Reroute cargo in station. */
-    let list = l.station_cargo(st, cargo.0);
+    let list = l.station_cargo(st, cargo);
     if !list.is_null() {
         unsafe {
             crate::cargo_storage::reroute_station(list.cast_mut(), storage, ge, avoid.0, avoid2.0);
