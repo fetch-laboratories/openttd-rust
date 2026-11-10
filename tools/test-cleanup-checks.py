@@ -565,11 +565,12 @@ class GrowthTests(unittest.TestCase):
         self,
         pulls: Mapping[str, list[dict[str, object]]],
         unknown: frozenset[str] = frozenset(),
+        event: Mapping[str, object] | None = None,
     ) -> str:
-        """Run `context` on a two-parent HEAD with no event payload or network.
+        """Run `context` on a two-parent HEAD with no network.
 
         GitHub's commit lookup fails for the `unknown` commits, as it does for an
-        unpushed local merge.
+        unpushed local merge. Without an `event` payload there is no event file.
         """
         shas = {"HEAD": "merge", "HEAD^1": "first", "HEAD^2": "second"}
 
@@ -596,6 +597,7 @@ class GrowthTests(unittest.TestCase):
             return json.dumps({"head": head, "body": f"PR {number}"})
 
         with (
+            tempfile.TemporaryDirectory() as directory,
             patch.dict("os.environ", {"GITHUB_REPOSITORY": "fork"}) as environment,
             patch.object(cleanup_contract, "git", fake_git),
             patch.object(cleanup_contract, "gh", fake_gh),
@@ -604,6 +606,10 @@ class GrowthTests(unittest.TestCase):
             patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
         ):
             environment.pop("GITHUB_EVENT_PATH", None)
+            if event is not None:
+                path = Path(directory) / "event.json"
+                path.write_text(json.dumps(event))
+                environment["GITHUB_EVENT_PATH"] = str(path)
             _, bodies, _, head = cleanup_contract.context()
         return f"{bodies[0] if bodies else None} at {head}"
 
@@ -635,6 +641,37 @@ class GrowthTests(unittest.TestCase):
             "merge_commit_sha": "merge",
         }
         self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
+
+    def test_merge_group_reads_the_queued_pr(self) -> None:
+        # Full in the merge queue checks out the group commit: its first parent is
+        # the base or the group of the PR queued ahead, its second this PR's head.
+        # GitHub associates no PR with an unmerged group commit.
+        event = {"merge_group": {"head_sha": "merge", "base_ref": "refs/heads/x"}}
+        queued: dict[str, object] = {
+            "number": 12,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(
+            self.pr_context({"second": [queued]}, event=event), "PR 12 at second"
+        )
+        # A second queued entry: the PR ahead already merged as the first parent.
+        ahead: dict[str, object] = {
+            "number": 11,
+            "head": {"sha": "ahead"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "first",
+        }
+        pulls = {"first": [ahead], "second": [queued]}
+        self.assertEqual(self.pr_context(pulls, event=event), "PR 12 at second")
+        # The PR ahead still queued is never read in place of this one.
+        self.assertEqual(
+            self.pr_context(
+                {"first": [dict(ahead, state="open")], "second": [queued]}, event=event
+            ),
+            "PR 12 at second",
+        )
 
     def test_unknown_head_lookup_is_no_pr(self) -> None:
         # GitHub errors for an unpushed commit; that is no PR, not an abort.

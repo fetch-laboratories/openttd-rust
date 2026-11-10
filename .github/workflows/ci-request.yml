@@ -1,5 +1,5 @@
 name: Requested validation
-run-name: CI ${{ inputs.profile || 'full' }} PR ${{ inputs.pr || github.event.pull_request.number }} ${{ inputs.request || format('bootstrap-{0}', github.run_id) }}
+run-name: CI ${{ inputs.profile || 'full' }} ${{ github.event_name == 'merge_group' && format('queue {0}', github.event.merge_group.head_ref) || format('PR {0} {1}', inputs.pr || github.event.pull_request.number, inputs.request || format('bootstrap-{0}', github.run_id)) }}
 
 on:
   workflow_dispatch:
@@ -25,6 +25,9 @@ on:
   pull_request:
     branches: [rust-migration]
     types: [labeled]
+  # Merge-queue mode: the queue tests each group commit, the base plus the PRs ahead plus this PR (#860).
+  merge_group:
+    branches: [rust-migration]
 
 permissions:
   contents: read
@@ -33,25 +36,29 @@ permissions:
   statuses: read
   pull-requests: read
 
+# A merge-group run is never cancelled: a group rebuilt on a new base adopts it.
 concurrency:
-  group: requested-ci-${{ inputs.pr || github.event.pull_request.number }}-${{ inputs.profile || 'full' }}
+  group: requested-ci-${{ github.event_name == 'merge_group' && format('queue-{0}', github.run_id) || inputs.pr || github.event.pull_request.number }}-${{ inputs.profile || 'full' }}
   cancel-in-progress: true
 
 jobs:
   plan:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/rust-migration') ||
+      (github.event_name == 'merge_group' && github.event.merge_group.base_ref == 'refs/heads/rust-migration') ||
       (github.event_name == 'pull_request' && vars.CI_ON_DEMAND != 'true' &&
        github.event.label.name == 'ci:full' &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     # Serialize status reads/writes with earlier publishers for this PR. Native
-    # and platform jobs remain independent across requested profiles.
+    # and platform jobs remain independent across requested profiles. A merge
+    # group writes only its own group commit, so it needs no shared lock.
     concurrency:
-      group: validation-status-${{ inputs.pr || github.event.pull_request.number }}
+      group: validation-status-${{ github.event_name == 'merge_group' && format('queue-{0}', github.run_id) || inputs.pr || github.event.pull_request.number }}
       cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       pull-requests: read
       statuses: write
     outputs:
@@ -62,6 +69,8 @@ jobs:
       profile: ${{ steps.plan.outputs.profile }}
       pr: ${{ steps.plan.outputs.pr }}
       checker: ${{ steps.plan.outputs.checker }}
+      carried: ${{ steps.plan.outputs.carried }}
+      carried-tree: ${{ steps.plan.outputs.carried-tree }}
     steps:
     # No checkout: this publisher executes only the reviewed workflow definition.
     - id: plan
@@ -70,13 +79,19 @@ jobs:
         PR: ${{ inputs.pr || github.event.pull_request.number }}
         HEAD: ${{ inputs.head || github.event.pull_request.head.sha }}
         PROFILE: ${{ inputs.profile || 'full' }}
+        CI_MERGE_QUEUE: ${{ vars.CI_MERGE_QUEUE }}
       with:
         script: |
-          const pr = Number(process.env.PR);
+          // A merge group tests its own commit, whose second parent is the queued PR's head.
+          const queue = context.eventName === 'merge_group';
+          const group = queue ? context.payload.merge_group : null;
+          const queued = /^refs\/heads\/gh-readonly-queue\/rust-migration\/pr-([1-9][0-9]*)-[0-9a-f]{40}$/
+            .exec(group?.head_ref || '');
+          const pr = Number(queue ? queued?.[1] : process.env.PR);
           const profile = process.env.PROFILE;
-          const head = process.env.HEAD;
-          if (!Number.isSafeInteger(pr) || pr <= 0 || !/^[0-9a-f]{40}$/.test(head) ||
-              !['rust', 'native', 'platform', 'full'].includes(profile)) {
+          let head = queue ? null : process.env.HEAD;
+          if (!Number.isSafeInteger(pr) || pr <= 0 || !/^[0-9a-f]{40}$/.test(queue ? group?.head_sha : head) ||
+              !['rust', 'native', 'platform', 'full'].includes(profile) || queue && profile !== 'full') {
             throw new Error('Invalid validation request');
           }
           const actor = await github.rest.repos.getCollaboratorPermissionLevel({
@@ -86,15 +101,37 @@ jobs:
             throw new Error('Validation requests require repository write permission');
           }
           const {data: pull} = await github.rest.pulls.get({...context.repo, pull_number: pr});
-          if (pull.state !== 'open' || pull.base.ref !== 'rust-migration' || pull.head.sha !== head) {
+          if (pull.state !== 'open' || pull.base.ref !== 'rust-migration' || !queue && pull.head.sha !== head) {
             throw new Error('Pull request is closed, targets another branch, or its head changed');
           }
-          if (pull.mergeable !== true || !/^[0-9a-f]{40}$/.test(pull.merge_commit_sha || '')) {
+          if (!queue && (pull.mergeable !== true || !/^[0-9a-f]{40}$/.test(pull.merge_commit_sha || ''))) {
             throw new Error('Pull request is unmergeable or mergeability is pending; retry after resolving it');
           }
-          const {data: tested} = await github.rest.repos.getCommit({
-            ...context.repo, ref: pull.merge_commit_sha
-          });
+          // The queue runs the group commit's own workflow definitions with write permissions, so in
+          // merge-queue mode only a reviewed bootstrap Full admits a PR that changes them. Any doubt
+          // counts as a change.
+          const definitionsUnchanged = async number => {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: number, per_page: 100
+            });
+            const definition = path => typeof path !== 'string' || path.startsWith('.github/workflows/');
+            // GitHub lists at most 3000 files: fail closed if the list may be truncated.
+            return Array.isArray(files) && files.length > 0 && files.length < 3000 && files.every(file =>
+              !definition(file?.filename) && (file.previous_filename == null || !definition(file.previous_filename)));
+          };
+          // An ordinary Full's success on such a head would admit it to the queue unreviewed.
+          if (context.eventName === 'workflow_dispatch' && profile === 'full' && process.env.CI_MERGE_QUEUE === 'true' &&
+              !await definitionsUnchanged(pr)) {
+            throw new Error('In merge-queue mode a PR changing .github/workflows/ needs the reviewed bootstrap Full');
+          }
+          const merge = queue ? group.head_sha : pull.merge_commit_sha;
+          const {data: tested} = await github.rest.repos.getCommit({...context.repo, ref: merge});
+          if (queue) {
+            head = pull.head.sha;
+            if (tested.parents?.length !== 2 || tested.parents[1]?.sha !== head) {
+              throw new Error('The merge group commit does not merge the current PR head');
+            }
+          }
           // Only Quick reads these checker scripts and debt records, and no build reads
           // inert Markdown. A full request whose merge changes nothing else runs Quick
           // alone. The base's post-merge run still builds the tree.
@@ -108,6 +145,18 @@ jobs:
             'symbol_server'];
           const inert = path => typeof path === 'string' && (path === 'AGENTS.md' || path.startsWith('docs/') &&
             path.endsWith('.md') && !builtDocs.some(name => path === `docs/${name}.md`));
+          const entries = async sha => {
+            const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
+            const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};
+            if (!data || data.sha !== sha || data.truncated !== false || !Array.isArray(data.tree) || !data.tree.length ||
+                data.tree.some(entry => !entry || typeof entry.path !== 'string' || entry.path.includes('\0') ||
+                  entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
+                  typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
+                  typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
+                new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
+            return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && inert(entry.path)))
+              .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
+          };
           const quickOnly = path => typeof path === 'string' && (checkerPaths.test(path) || inert(path));
           let checker = false;
           // Classify exactly what the captured merge changes against its own first parent,
@@ -115,7 +164,7 @@ jobs:
           const parent = tested.parents?.[0]?.sha;
           if (profile === 'full' && /^[0-9a-f]{40}$/.test(parent || '')) {
             const {data: comparison} = await github.rest.repos.compareCommitsWithBasehead({
-              ...context.repo, basehead: `${parent}...${pull.merge_commit_sha}`
+              ...context.repo, basehead: `${parent}...${merge}`
             });
             // GitHub caps comparison files at 300: fail closed if the list may be truncated.
             const files = comparison?.files;
@@ -123,20 +172,91 @@ jobs:
               files.length > 0 && files.length < 300 && files.every(file =>
                 quickOnly(file?.filename) && (file.previous_filename == null || quickOnly(file.previous_filename)));
           }
-          for (const [key, value] of Object.entries({head, base: pull.base.sha, merge: pull.merge_commit_sha,
-              tree: tested.commit.tree.sha, profile, pr, checker})) {
-            core.setOutput(key, String(value));
-          }
+          const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
           if (profile === 'full') {
+            // A merge group's result goes on the group commit, which the queue merges.
             await github.rest.repos.createCommitStatus({
-              ...context.repo, sha: head, context: 'Full validation', state: 'pending',
-              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              description: `Full validation requested for PR #${pr}`
+              ...context.repo, sha: queue ? merge : head, context: 'Full validation', state: 'pending',
+              target_url: `${runPrefix}${context.runId}`,
+              description: queue ? `Merge queue validation for PR #${pr}` : `Full validation requested for PR #${pr}`
             });
+          }
+          // Carried validation for merge groups: a direct push to the base rebuilds every queued
+          // group and starts a new run, while the earlier run keeps going. When an earlier group of
+          // this PR head has the same non-Markdown tree, wait for its run and publish its passing
+          // result instead of repeating it. Any doubt runs this group normally.
+          const adopted = async () => {
+            const current = await entries(tested.commit.tree.sha);
+            if (current === null) return null;
+            const {data: listed} = await github.rest.actions.listWorkflowRuns({
+              ...context.repo, workflow_id: 'ci-request.yml', event: 'merge_group', per_page: 100
+            });
+            const earlier = listed.workflow_runs.filter(run => run.id < context.runId && run.event === 'merge_group' &&
+                run.head_branch?.startsWith(`gh-readonly-queue/rust-migration/pr-${pr}-`) &&
+                /^[0-9a-f]{40}$/.test(run.head_sha) && (run.status !== 'completed' || run.conclusion === 'success'))
+              .sort((a, b) => a.id - b.id);
+            // The longest Full takes about 30 minutes; an earlier run still going after this runs here.
+            const deadline = Date.now() + 45 * 60 * 1000;
+            for (const candidate of earlier) {
+              const {data: commit} = await github.rest.repos.getCommit({...context.repo, ref: candidate.head_sha});
+              if (commit.parents?.length !== 2 || commit.parents[1]?.sha !== head) continue;
+              const same = await entries(commit.commit.tree.sha);
+              if (same === null || JSON.stringify(same) !== JSON.stringify(current)) continue;
+              let run = candidate;
+              while (run.status !== 'completed' && Date.now() < deadline) {
+                core.info(`Waiting for run ${run.id}, which tests the same non-Markdown tree`);
+                await new Promise(resolve => setTimeout(resolve, 30000));
+                ({data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: candidate.id}));
+              }
+              if (run.status !== 'completed' || run.conclusion !== 'success' || run.head_sha !== candidate.head_sha) continue;
+              // Combined statuses omit creators; only the publisher's own statuses qualify.
+              const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+                ...context.repo, ref: candidate.head_sha, per_page: 100
+              });
+              const full = statuses.find(status => status.context === 'Full validation');
+              const marker = statuses.find(status => status.context === 'Validated tree');
+              const url = full?.target_url;
+              if (![full, marker].every(status => status?.state === 'success' &&
+                    status.creator?.login === 'github-actions[bot]' && status.creator?.type === 'Bot') ||
+                  typeof url !== 'string' || !url.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(url.slice(runPrefix.length)) ||
+                  marker.target_url !== url || !/^[0-9a-f]{40}$/.test(marker.description)) continue;
+              // The result names the run that built its tree: this candidate, or, through a chain of
+              // carries, an older successful merge-group run of this workflow for the same PR head
+              // whose group tree is the marker's.
+              const origin = Number(url.slice(runPrefix.length));
+              if (!Number.isSafeInteger(origin) || origin > candidate.id) continue;
+              let source = run, built = commit;
+              if (origin !== candidate.id) {
+                ({data: source} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: origin}));
+                ({data: built} = await github.rest.repos.getCommit({...context.repo, ref: source.head_sha}));
+              }
+              if (source?.id !== origin || source.path !== '.github/workflows/ci-request.yml' ||
+                  source.event !== 'merge_group' || source.status !== 'completed' || source.conclusion !== 'success' ||
+                  !source.head_branch?.startsWith(`gh-readonly-queue/rust-migration/pr-${pr}-`) ||
+                  built?.parents?.length !== 2 || built.parents[1]?.sha !== head ||
+                  built.commit?.tree?.sha !== marker.description) continue;
+              const validated = await entries(marker.description);
+              if (validated === null || JSON.stringify(validated) !== JSON.stringify(current)) continue;
+              return {url, tree: marker.description};
+            }
+            return null;
+          };
+          let carry = null;
+          if (queue && !checker) {
+            try {
+              carry = await adopted();
+            } catch (error) {
+              core.info(`Carry lookup failed, so this group runs: ${error.message}`);
+            }
+          }
+          for (const [key, value] of Object.entries({head, base: queue ? tested.parents[0]?.sha : pull.base.sha, merge,
+              tree: tested.commit.tree.sha, profile, pr, checker, carried: carry?.url ?? '', 'carried-tree': carry?.tree ?? ''})) {
+            core.setOutput(key, String(value));
           }
 
   quick:
     needs: plan
+    if: needs.plan.outputs.carried == ''
     uses: ./.github/workflows/ci-quick.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
@@ -163,14 +283,16 @@ jobs:
     needs: plan
     if: >-
       (needs.plan.outputs.profile == 'native' || needs.plan.outputs.profile == 'full') &&
-      needs.plan.outputs.checker != 'true'
+      needs.plan.outputs.checker != 'true' && needs.plan.outputs.carried == ''
     uses: ./.github/workflows/rust-migration.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
 
   platform:
     needs: plan
-    if: needs.plan.outputs.profile != 'rust' && needs.plan.outputs.checker != 'true'
+    if: >-
+      needs.plan.outputs.profile != 'rust' && needs.plan.outputs.checker != 'true' &&
+      needs.plan.outputs.carried == ''
     uses: ./.github/workflows/ci-build.yml
     with:
       checkout-ref: ${{ needs.plan.outputs.merge }}
@@ -179,10 +301,13 @@ jobs:
   publish:
     name: Publish validation result
     needs: [plan, quick, native, platform]
-    if: always() && needs.plan.result == 'success' && needs.plan.outputs.profile == 'full'
+    # A merge group publishes even after a failed plan, so the queue removes the PR at once.
+    if: >-
+      always() && (needs.plan.result == 'success' && needs.plan.outputs.profile == 'full' ||
+      github.event_name == 'merge_group' && needs.plan.result != 'skipped')
     runs-on: ubuntu-latest
     concurrency:
-      group: validation-status-${{ inputs.pr || github.event.pull_request.number }}
+      group: validation-status-${{ github.event_name == 'merge_group' && format('queue-{0}', github.run_id) || inputs.pr || github.event.pull_request.number }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -196,37 +321,57 @@ jobs:
       with:
         script: |
           const needs = JSON.parse(process.env.RESULTS);
+          const planned = needs.plan.result === 'success';
           const head = needs.plan.outputs.head;
           const pr = Number(needs.plan.outputs.pr);
+          // A merge group's result goes on the group commit, which the queue merges.
+          const queue = context.eventName === 'merge_group';
+          const target = queue ? context.payload.merge_group.head_sha : head;
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-          const {data: combined} = await github.rest.repos.getCombinedStatusForRef({...context.repo, ref: head});
-          const latest = combined.statuses.find(status => status.context === 'Full validation');
-          if (latest?.target_url !== runUrl) {
+          // Combined statuses omit creators; only a status this workflow created with this run's URL
+          // marks the request as this run's own.
+          const listed = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+            ...context.repo, ref: target, per_page: 100
+          });
+          const latest = listed.find(status => status.context === 'Full validation');
+          const own = latest?.target_url === runUrl && latest.creator?.login === 'github-actions[bot]' &&
+            latest.creator?.type === 'Bot';
+          // Only this run writes its group commit, and a failed plan may not have marked it pending.
+          if (!own && !(queue && !latest)) {
             core.setFailed('This full request was superseded; preserve the newer request status');
             return;
           }
-          const {data: pull} = await github.rest.pulls.get({...context.repo, pull_number: pr});
-          // Head identity remains valid when another PR or docs advance the base.
-          // Post-merge policy checks the resulting tree to catch combined changes.
-          const current = pull.state === 'open' && pull.base.ref === 'rust-migration' && pull.head.sha === head;
+          let current = false;
+          if (planned) {
+            const {data: pull} = await github.rest.pulls.get({...context.repo, pull_number: pr});
+            // Head identity remains valid when another PR or docs advance the base.
+            // Post-merge policy checks the resulting tree to catch combined changes.
+            current = pull.state === 'open' && pull.base.ref === 'rust-migration' && pull.head.sha === head;
+          }
           // A checker-only request proves Quick alone. It publishes no Validated tree,
           // so nothing later treats its tree as built.
           const checker = needs.plan.outputs.checker === 'true';
-          const complete = ['plan', 'quick'].every(name => needs[name]?.result === 'success') && (checker ||
+          // A merge group carrying an earlier group's passing run republishes that run's result.
+          const carried = needs.plan.outputs.carried || '';
+          const complete = planned && carried !== '' ||
+            ['plan', 'quick'].every(name => needs[name]?.result === 'success') && (checker ||
             ['native', 'platform'].every(name => needs[name]?.result === 'success') &&
             needs.native?.outputs?.validated === 'true' && needs.platform?.outputs?.validated === 'true');
           const passed = current && complete;
+          const url = passed && carried ? carried : runUrl;
           await github.rest.repos.createCommitStatus({
-            ...context.repo, sha: head, context: 'Full validation', state: passed ? 'success' : 'failure',
-            target_url: runUrl,
-            description: passed ? (checker ? 'Checker-only PR: Quick passed; no build reads these files' :
+            ...context.repo, sha: target, context: 'Full validation', state: passed ? 'success' : 'failure',
+            target_url: url,
+            description: passed ? (carried ? `Carried from run ${carried.split('/').pop()}: non-Markdown tree unchanged` :
+              checker ? 'Checker-only PR: Quick passed; no build reads these files' :
               'All required validation passed for this PR head') :
-              current ? 'Required validation failed, skipped, or was cancelled' : 'PR head changed; request validation again'
+              current ? 'Required validation failed, skipped, or was cancelled' :
+              planned ? 'PR head changed; request validation again' : 'Merge group plan failed'
           });
           if (passed && !checker) {
             await github.rest.repos.createCommitStatus({
-              ...context.repo, sha: head, context: 'Validated tree', state: 'success',
-              target_url: runUrl, description: needs.plan.outputs.tree
+              ...context.repo, sha: target, context: 'Validated tree', state: 'success',
+              target_url: url, description: carried ? needs.plan.outputs['carried-tree'] : needs.plan.outputs.tree
             });
           }
           if (!passed) core.setFailed('Full validation did not pass for the current PR head');
