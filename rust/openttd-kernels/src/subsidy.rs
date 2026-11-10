@@ -402,7 +402,10 @@ impl Services {
             return false; // industry produces nothing
         }
         let cargo_num = self.shared().random_range(num_cargos);
-        let (cargo_type, total, trans) = unsafe { industry::subsidy_produced(state, cargo_num) };
+        let produced = unsafe { industry::subsidy_produced(state, cargo_num) };
+        let world = crate::map_func::World::new(self.shared());
+        world.assert_with(|| produced.is_some()); // indicates loop didn't end as intended
+        let (cargo_type, total, trans) = produced.expect("SubsidyIndustryCargoRoute cargo slot");
         // Quit if no production in this industry
         // or if the pct transported is already large enough
         // or if the cargo is automatically distributed

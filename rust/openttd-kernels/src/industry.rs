@@ -2435,15 +2435,18 @@ pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
 /// The cargo, last-month production and transported fraction of the valid produced slot
 /// with ordinal `number`.
 ///
-/// SAFETY: Original random cargo ordinal is less than the valid cargo count.
-pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (CargoType, u16, u8) {
+/// SAFETY: Live serialized owner. Returns `None` when `number` is not below the valid
+/// cargo count, where the original's loop ends without a match.
+pub(crate) unsafe fn subsidy_produced(
+    owner: *const Industry,
+    number: u32,
+) -> Option<(CargoType, u16, u8)> {
     let p = unsafe { &(*owner).produced }
         .iter()
         .filter(|p| is_valid_cargo_type(p.cargo))
-        .nth(number as usize)
-        .unwrap();
+        .nth(number as usize)?;
     let history = p.history[usize::from(LAST_MONTH)];
-    (CargoType(p.cargo), history.first, history.pct_transported())
+    Some((CargoType(p.cargo), history.first, history.pct_transported()))
 }
 /// `Industry::IsCargoAccepted(cargo)`.
 ///
