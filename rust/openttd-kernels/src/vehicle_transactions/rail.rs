@@ -271,14 +271,14 @@ unsafe fn build_wagon(
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.reverse_on_build(v);
-        unsafe { super::articulated::add(a, Ctx::sh(v)) };
+        unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         unsafe {
             a.position(Ctx::sh(v));
         }
         let first = x.first(v);
         x.consist_changed(first);
         x.update_group(x.first(v));
-        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
+        unsafe { super::articulated::check_consistency_of_articulated_vehicle(a, Ctx::sh(v)) };
         for vehicle in free_wagons(x, tile) {
             if vehicle == x.id(v) {
                 continue;
@@ -379,11 +379,11 @@ pub(crate) unsafe fn build(
             crate::witness::hit(crate::witness::VT_RAIL_MULTIHEAD);
             add_rear_engine(x, v);
         } else {
-            unsafe { super::articulated::add(a, Ctx::sh(v)) };
+            unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         }
         x.consist_changed(v);
         x.update_group(v);
-        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
+        unsafe { super::articulated::check_consistency_of_articulated_vehicle(a, Ctx::sh(v)) };
     }
     (x.t.cost.zero)(out);
     Ctx::sh(v)

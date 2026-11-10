@@ -34,11 +34,14 @@ impl Services {
         }
     }
 }
+/// `AddArticulatedParts`: add the remaining articulated parts to a newly built
+/// vehicle `first`.
+///
 /// # Safety
 /// A live head and immutable native specification/pool services. Every short
 /// train/road owner access ends before allocation, callback or position work.
 #[allow(clippy::too_many_lines)]
-pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
+pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
     let r = s.refit;
     let c = r.common;
     let g = c.base.groups;
@@ -66,10 +69,13 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if engine == crate::engine_type::INVALID_ENGINE {
             return;
         }
+        /* In the (very rare) case the GRF reported wrong number of articulated parts
+         * and we run out of available vehicles, bail out. */
         if !(s.refit.common.vehicles.can_allocate)(1) {
             return;
         }
         crate::witness::hit(crate::witness::VT_ARTICULATED);
+        // Sets the previous part's cached first engine: needs to be set before first callback.
         let cache = (s.prepare_previous)(previous);
         let e = (r.engine)(engine);
         let v = match kind {
@@ -127,7 +133,9 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         } else {
             unsafe { (c.transactions.cargo_type)(first) }
         };
-        // The road-only assertion remains in its native field-store leaf.
+        // The road-only assertion remains in its native field-store leaf. The cargo
+        // capacity callback (36) is called when the consist is finished; without
+        // cargo the part takes the front's cargo type, needed for livery selection.
         (s.set_part)(
             v,
             image,
@@ -140,6 +148,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         } else {
             (s.mark_road)(v);
         }
+        /* get common values from first engine */
         (s.copy_common)(v, first, engine);
         (s.random_bits)(v, c.base.shared.random() as u16);
         if unsafe { flip.assume_init() } {
@@ -169,9 +178,14 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         previous = v;
     }
 }
+/// `CheckConsistencyOfArticulatedVehicle`: checks whether the specs of
+/// freshly build articulated vehicles are consistent with the information
+/// specified in the purchase list. Only essential information is checked to
+/// leave room for magic tricks/workarounds to grfcoders.
+///
 /// # Safety
 /// A live freshly built articulated chain; callbacks keep its shells alive.
-pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
+pub(crate) unsafe fn check_consistency_of_articulated_vehicle(s: &Services, mut v: *mut ()) {
     let r = s.refit;
     let c = r.common;
     let e = r.vehicle_engine(
@@ -229,6 +243,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
             break;
         }
     }
+    /* Check whether the vehicle carries more cargoes than expected */
     let mut more = false;
     while real_cargo != 0 {
         let cargo = real_cargo.trailing_zeros() as usize;
@@ -239,23 +254,24 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         real_cargo &= real_cargo - 1;
     }
     if real_union != purchase_union || real_intersection != purchase_intersection || more {
+        /* show a warning once for each GRF after each game load */
         (s.warning)(e);
     }
 }
 /// # Safety
-/// Same synchronous live-chain contract as `add`.
+/// Same synchronous live-chain contract as `add_articulated_parts`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_add_articulated(s: &Services, first: *mut ()) {
-    unsafe { add(s, first) };
+    unsafe { add_articulated_parts(s, first) };
 }
 /// # Safety
-/// Same synchronous live-chain contract as `consistency`.
+/// Same synchronous live-chain contract as `check_consistency_of_articulated_vehicle`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
     s: &Services,
     first: *mut (),
 ) {
-    unsafe { consistency(s, first) };
+    unsafe { check_consistency_of_articulated_vehicle(s, first) };
 }
 
 crate::abi::layouts! {

@@ -106,7 +106,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         engine.exclusive_preview(),
         (b.interval_percent)(company.0),
     );
-    unsafe { articulated::add(a, v) };
+    unsafe { articulated::add_articulated_parts(a, v) };
     /* Call various callbacks after the whole consist has been constructed */
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
@@ -144,7 +144,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     unsafe {
         a.position(v);
     }
-    unsafe { articulated::consistency(a, v) };
+    unsafe { articulated::check_consistency_of_articulated_vehicle(a, v) };
     v
 }
 
