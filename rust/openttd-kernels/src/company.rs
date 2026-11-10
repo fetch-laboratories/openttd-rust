@@ -2422,8 +2422,8 @@ mod financial_command_tests {
         i64::MAX,
     ];
     const VARIANTS: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255];
-    // This is the only Rust unit test accessing ECONOMY.max_loan. Hold this
-    // lock for its entire run and restore the prior process-wide value on drop.
+    // Serializes Rust unit tests that access the process-wide economy state. A test
+    // that writes it holds this lock for its entire run and restores the prior value.
     pub(super) static ECONOMY_LOCK: Mutex<()> = Mutex::new(());
 
     struct Fixture {
@@ -2487,7 +2487,7 @@ mod financial_command_tests {
                 assert!(f.owners.iter().all(|p| p.is_null()));
                 f.owners = std::array::from_fn(|_| openttd_rust_company_state_create());
             });
-            // SAFETY: ECONOMY_LOCK serializes this sole test's global accesses.
+            // SAFETY: ECONOMY_LOCK serializes every test's economy accesses.
             // No finance callback accesses economy storage or retains a borrow.
             let old_max_loan = unsafe { (*openttd_rust_economy_state()).max_loan };
             unsafe { (*openttd_rust_economy_state()).max_loan = 300_000 };
@@ -3623,6 +3623,8 @@ mod startup_tests {
     #[test]
     fn ai_startup_continuation_and_abandoned_frames() {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        // Startup reads the economy's prices and maximum loan.
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
         colour_scope(|| {
             let ownership = ownership();
             let s = services(false, false);
@@ -3662,6 +3664,8 @@ mod startup_tests {
     #[test]
     fn network_local_switch_precedes_settings_continuation() {
         let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        // Startup reads the economy's prices and maximum loan.
+        let _economy = super::financial_command_tests::ECONOMY_LOCK.lock().unwrap();
         colour_scope(|| {
             let ownership = ownership();
             for matching_client in [false, true] {
