@@ -144,7 +144,8 @@ static void VehicleSchedulerBoundary()
 	status.Reset(VehState::Hidden);
 	CHECK(*address == 128);
 	/* Opaque shells are never dereferenced: this target tests the pointer/size_t
-	 * call ABI; the game target compares real pool mutations to PoolIterator. */
+	 * call ABI of the pool service through the production occupancy reset, which
+	 * clears the current position of each live record below first_unused. */
 	static RustPoolSlot slots[5];
 	static size_t live;
 	static size_t size;
@@ -153,25 +154,22 @@ static void VehicleSchedulerBoundary()
 	slots[1] = {};
 	slots[2].shell = &opaque[1];
 	slots[3] = slots[4] = {};
-	live = size = 2;
+	live = 3;
+	size = 5;
 	static OpenTTDVehicle records[2]{};
+	static OpenTTDVehicleTileLinks links[2]{};
+	static OpenTTDVehicle *position = nullptr;
+	links[0].current = links[1].current = &position;
 	OpenTTDVehicleServices base{};
+	base.tile_links = [](OpenTTDVehicle *v) noexcept { return &links[v - records]; };
 	slots[0].record = &records[0];
 	slots[2].record = &records[1];
 	OpenTTDVehicleSchedulerServices services{};
 	services.vehicle = &base;
 	services.pool = []() noexcept { return OpenTTDVehiclePoolCursor{.slots = slots, .slots_len = size, .first_unused = &live}; };
-	auto cursor = services.pool();
-	size_t from = 0;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[0]);
-	CHECK(from == 1);
-	live = 3;
-	size = 5;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[1]);
-	CHECK(cursor.slots_len == 5);
-	CHECK(cursor.first_unused == &live);
-	CHECK(from == 3);
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == nullptr);
+	openttd_rust_occupancy_reset(&services);
+	CHECK(links[0].current == nullptr);
+	CHECK(links[1].current == nullptr);
 }
 
 /* These initialize the maintenance table consumed by the road and aircraft probes. */
