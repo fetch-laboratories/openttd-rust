@@ -1432,6 +1432,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.set_last_station(id, i64::from(station));
         let hvot_aircraft = crate::station_type::StationHadVehicleOfType::HVOT_AIRCRAFT.0;
         if (self.ss.station_had_vehicle_of_type)(station as u16) & hvot_aircraft == 0 {
+            (self.ss.station_add_vehicle_of_type)(station as u16, hvot_aircraft);
             self.first_arrival(id, i64::from(station));
         }
         self.begin_loading(id);
