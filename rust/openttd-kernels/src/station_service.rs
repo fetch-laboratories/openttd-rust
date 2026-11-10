@@ -16,9 +16,9 @@
 )]
 use crate::bitmath_func::{clr_bit64, gb, has_bit, has_bit64, set_bit64};
 use crate::cargo_payment::NativePayment;
-use crate::cargo_type::{CargoType, CargoTypes, NUM_CARGO};
+use crate::cargo_type::{CargoArray, CargoType, CargoTypes, NUM_CARGO};
 use crate::cargopacket::MoveToAction;
-use crate::command_type::DoCommandFlag;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_END, Owner};
 use crate::linkgraph::live;
 use crate::math::{ceil_div, clamp_to_u8, clamp_to_u16};
@@ -32,6 +32,7 @@ use crate::station_base::{
     INITIAL_STATION_RATING, MAX_STATION_RATING, has_vehicle_ever_tried_loading,
 };
 use crate::station_type::{StationFacilities, StationFacility, StationID};
+use crate::strings_type::StringID;
 use crate::tile_type::TILE_SIZE;
 use crate::timer_game_common::INVALID_DATE;
 use crate::timer_game_tick::{
@@ -1641,7 +1642,7 @@ fn reserve_consist(
     st: LoadingStation,
     u: VehicleRef,
     control: &LoadingControl,
-    mut consist_capleft: Option<&mut [u32; NUM_CARGO as usize]>,
+    mut consist_capleft: Option<&mut CargoArray>,
     next_station: *mut c_void,
     w: &World,
     l: &Loading,
@@ -1771,7 +1772,7 @@ impl RefitContext {
         &self,
         v: VehicleRef,
         cargo: CargoType,
-        flags: u16,
+        flags: DoCommandFlags,
     ) -> crate::vehicle_transactions::refit::Capacity {
         // SAFETY: Loading entry owns native stack costs for this synchronous call;
         // immutable service-table borrows contain no world/vehicle owner borrow.
@@ -1783,7 +1784,7 @@ impl RefitContext {
             base.shared,
             self.cost(),
             0,
-            flags,
+            flags.0,
             |flags| unsafe {
                 crate::vehicle_transactions::refit::refit(
                     services,
@@ -1811,7 +1812,7 @@ struct LoadingContext<'a> {
 /// `HandleStationRefit`: refit a vehicle in a station.
 fn handle_station_refit(
     v: VehicleRef,
-    consist_capleft: &mut [u32; NUM_CARGO as usize],
+    consist_capleft: &mut CargoArray,
     st: LoadingStation,
     next_station: *mut c_void,
     mut new_cargo_type: CargoType,
@@ -1855,7 +1856,11 @@ fn handle_station_refit(
              * the returned refit capacity will be greater than zero. */
             let refit_capacity = c
                 .refit
-                .run(v_start, cargo_type, DoCommandFlag::QUERY_COST)
+                .run(
+                    v_start,
+                    cargo_type,
+                    DoCommandFlags::from_element(DoCommandFlag::QueryCost),
+                )
                 .total;
             /* Try to balance different loadable cargoes between parts of the consist, so that
              * all of them can be loaded. Avoid a situation where all vehicles suddenly switch
@@ -1885,7 +1890,11 @@ fn handle_station_refit(
             (l.return_cargo)(st.native, part, u32::MAX);
             true
         });
-        c.refit.run(v_start, new_cargo_type, DoCommandFlag::EXECUTE);
+        c.refit.run(
+            v_start,
+            new_cargo_type,
+            DoCommandFlags::from_element(DoCommandFlag::Execute),
+        );
         let cost = c.refit.cost().money();
         if c.refit.cost().ok() {
             (l.subtract_profit)(v.first(), cost.wrapping_shl(8));
@@ -1998,7 +2007,7 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         let control = (l.control)(front);
         let use_autorefit =
             control.refit && CargoType(control.refit_cargo) == CargoType::CARGO_AUTO_REFIT;
-        let mut consist_capleft = [0_u32; NUM_CARGO as usize];
+        let mut consist_capleft: CargoArray = [0; NUM_CARGO as usize];
         if if control.improved && use_autorefit {
             (l.get_payment)(front).is_null()
         } else {
@@ -2353,10 +2362,13 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
         }
         /* Calculate the loading indicator fill percent and display */
         if (l.indicator)(front) {
-            let mut percent_up_down = 0;
-            let percent =
-                crate::vehicle::visits::percent_filled(front, Some(&mut percent_up_down), c.visits);
-            (l.show_indicator)(front, percent, percent_up_down);
+            let mut percent_up_down = StringID::STR_NULL;
+            let percent = crate::vehicle::visits::percent_filled(
+                front,
+                Some(&mut percent_up_down.0),
+                c.visits,
+            );
+            (l.show_indicator)(front, percent, percent_up_down.0);
         }
         if completely_emptied {
             /* Make sure the vehicle is marked dirty, since we need to update the NewGRF
