@@ -299,7 +299,11 @@ impl Services {
             w: 1,
             h: 1,
         };
-        area.expand(SUBSIDY_TOWN_CARGO_RADIUS, map, (shared.map_max_y)() + 1);
+        area.expand(
+            SUBSIDY_TOWN_CARGO_RADIUS,
+            map,
+            crate::map_func::World::new(shared).size_y(),
+        );
         for tile in area.tiles(map) {
             if TileType((shared.tile_type)(tile)) != TileType::MP_HOUSE {
                 continue;
