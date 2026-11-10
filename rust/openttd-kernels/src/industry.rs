@@ -521,6 +521,10 @@ impl Services {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
+    /// `assert(condition)`: evaluates the condition only where the native build asserts.
+    pub(crate) fn assert_with(&self, condition: impl FnOnce() -> bool) {
+        crate::map_func::World::new(self.shared()).assert_with(condition);
+    }
     /// `_settings_game.game_creation.landscape`.
     pub(crate) fn landscape_type(&self) -> LandscapeType {
         LandscapeType(unsafe { self.shared().settings().climate.read() })
@@ -919,13 +923,12 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
 /// `Industry::RecomputeProductionMultipliers`, with its `UsesOriginalEconomy` assertion.
 fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services) {
     let indspec = spec_of(owner);
-    crate::movement::native_assert(
-        svc.shared(),
+    svc.assert_with(|| {
         uses_original_economy(
             crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*indspec).callback_mask }),
             EconomyType(unsafe { (svc.economy_type)() }),
-        ),
-    );
+        )
+    });
     recompute_production_multipliers(owner);
 }
 /// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
@@ -1513,7 +1516,7 @@ pub(crate) fn get_industry_type_count(
     it: IndustryType,
     s: &Services,
 ) -> u16 {
-    crate::movement::native_assert(s.shared(), it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
+    s.assert_with(|| it.0 < IndustryType::NUM_INDUSTRYTYPES.0);
     // SAFETY: The live builder owns the per-type registry; immediate length read.
     unsafe { (&(*builder).registry)[usize::from(it.0)].len() as u16 }
 }
