@@ -1888,8 +1888,9 @@ fn handle_station_refit(
     // `FinalizeRefitAction`.
     let do_reserve = is_auto_refit || v.first().current_order().is_full_load();
     iterate_vehicle_parts(v_start, |part| {
+        let part_cargo = l.cargo_list(part);
         if do_reserve {
-            let remaining = l.cargo_list(part).remaining_count();
+            let remaining = part_cargo.remaining_count();
             (l.reserve_cargo)(
                 st.native,
                 part,
@@ -1897,10 +1898,8 @@ fn handle_station_refit(
                 next_station,
             );
         }
-        // Reserve changes RemainingCount; observe again at the original point.
-        let observed = (l.cargo_capacity)(part);
-        let remaining = VehicleCargo(observed.owner.cast_mut()).remaining_count();
-        let cargo = usize::from(observed.cargo);
+        let remaining = part_cargo.remaining_count();
+        let cargo = usize::from((l.cargo_type)(part));
         consist_capleft[cargo] = consist_capleft[cargo]
             .wrapping_add(u32::from(part.cargo_cap()).wrapping_sub(remaining));
         true
