@@ -140,11 +140,11 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
     }
     let (x, y) = w.size();
     let (start_tileh, start_z) = w.asserted(|m| crate::tile_map::get_tile_slope_z(m, tile, x, y));
-    let direction = crate::slope_func::get_inclined_slope_direction(start_tileh);
+    let direction = crate::slope_func::get_inclined_slope_direction_raw(start_tileh);
     if direction == crate::direction_type::INVALID_DIAGDIR {
         return crate::tile_type::INVALID_TILE;
     }
-    let delta = w.dimensions.offs_by_diag_dir(direction);
+    let delta = w.dimensions.tile_offs_by_diag_dir_raw(direction);
     loop {
         tile = tile.wrapping_add(delta);
         if !valid(&w, tile) {
@@ -223,7 +223,7 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     let w = world(s);
     let check = |ok| w.check(ok);
     let dir_1 = w.dimensions.diagdir_between_tiles(end, start);
-    let dir_2 = crate::direction_func::reverse_diag_dir(dir_1, check);
+    let dir_2 = crate::direction_func::reverse_diag_dir_raw(dir_1, check);
     let (tile, dir, bits_dir) = if first != 0 {
         (start, dir_1, dir_2)
     } else {
@@ -231,8 +231,8 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     };
     check(dir < 4);
     RoadPiece {
-        tile: tile.wrapping_add(w.dimensions.offs_by_diag_dir(dir)),
-        bits: crate::road_func::diag_dir_to_road_bits(bits_dir, check),
+        tile: tile.wrapping_add(w.dimensions.tile_offs_by_diag_dir_raw(dir)),
+        bits: crate::road_func::diag_dir_to_road_bits_raw(bits_dir, check),
     }
 }
 

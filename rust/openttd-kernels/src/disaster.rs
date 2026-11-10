@@ -858,9 +858,9 @@ impl<'a> World<'a> {
             return true;
         }
         let dir = (v.vehicle()).direction();
-        let tile = self.map().add_diag(
+        let tile = self.map().tile_add_by_diag_dir_raw(
             Self::tile(v),
-            crate::direction_func::dir_to_diag_dir(dir, |valid| {
+            crate::direction_func::dir_to_diag_dir_raw(dir, |valid| {
                 if self.v.assertions {
                     assert!(valid);
                 }
@@ -883,7 +883,7 @@ impl<'a> World<'a> {
         } else {
             DIRDIFF_90LEFT
         };
-        (v.vehicle()).write_direction(crate::direction_func::change_dir(
+        (v.vehicle()).write_direction(crate::direction_func::change_dir_raw(
             (v.vehicle()).direction(),
             diff,
             |valid| {
@@ -1056,7 +1056,7 @@ impl<'a> World<'a> {
                                 );
                                 let mut tile = location.tile;
                                 let dir = (self.random() & 3) as u8;
-                                let step = self.map().offs_by_diag_dir(dir);
+                                let step = self.map().tile_offs_by_diag_dir_raw(dir);
                                 for _ in 0..30 {
                                     self.clear(tile);
                                     tile = tile.wrapping_add(step);

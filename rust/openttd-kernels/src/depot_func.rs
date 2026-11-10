@@ -10,7 +10,7 @@ pub(crate) fn can_build_depot_by_tileh(direction: DiagDirection, tileh: Slope) -
     let entrance_corners = crate::slope_func::inclined_slope(direction, || {});
     /* For steep slopes both entrance corners must be raised (i.e. neither of them is the lowest corner),
      * For non-steep slopes at least one corner must be raised. */
-    if crate::slope_func::is_steep_slope(tileh.0) {
+    if crate::slope_func::is_steep_slope_raw(tileh.0) {
         tileh & entrance_corners == entrance_corners
     } else {
         tileh & entrance_corners != Slope::SLOPE_FLAT

@@ -378,7 +378,7 @@ impl Search<'_> {
                 if !crate::road_stop::continuation(
                     shared,
                     tile,
-                    tile.wrapping_sub(map.offs_by_diag_dir(dir)),
+                    tile.wrapping_sub(map.tile_offs_by_diag_dir_raw(dir)),
                 ) {
                     let entry = crate::road_stop::entry_read_raw(rs, dir);
                     cost = cost.wrapping_add(

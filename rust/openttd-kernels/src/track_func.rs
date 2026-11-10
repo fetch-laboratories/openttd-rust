@@ -46,7 +46,7 @@ pub fn diag_dir_to_diag_track(direction: u8, check: impl Fn(bool) + Copy) -> u8 
 
 /// `CornerToTrackBits`, with a valid native corner.
 pub fn corner_to_track_bits(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if !crate::slope_func::is_valid_corner(c) {
+    if !crate::slope_func::is_valid_corner_raw(c) {
         check(false);
     }
     [

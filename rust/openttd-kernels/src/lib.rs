@@ -194,7 +194,6 @@ mod townname_type;
 mod track_func;
 pub mod track_type;
 pub mod transport_type;
-mod tree_cmd;
 mod trees;
 mod tunnelbridge;
 mod tunnelbridge_cmd;
@@ -1111,7 +1110,7 @@ pub(crate) mod clear_map;
 pub(crate) mod rail_map;
 mod subsidy;
 pub(crate) mod tile_map;
-pub(crate) mod tree_map;
+pub mod tree_map;
 pub(crate) mod water_map;
 
 mod cargo_registry;

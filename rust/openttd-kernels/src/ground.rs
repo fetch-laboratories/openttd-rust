@@ -20,7 +20,7 @@ use crate::services::{
     Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
     RailGroundType, RoadBits, RoadType, Roadside, Services, Slope, Track, TrackBits, WaterClass,
 };
-use crate::slope_func::{is_slope_with_three_corners_raised, is_steep_slope};
+use crate::slope_func::{is_slope_with_three_corners_raised_raw, is_steep_slope_raw};
 
 /// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
 pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
@@ -36,7 +36,7 @@ fn crossing_rail_axis(
     world: &crate::map_func::World<'_>,
     check: impl Fn(bool) + Copy,
 ) -> Axis {
-    Axis(crate::direction_func::other_axis(
+    Axis(crate::direction_func::other_axis_raw(
         world.crossing_road_axis(tile),
         check,
     ))
@@ -69,9 +69,9 @@ pub(crate) fn clear_tile(out: crate::services::Cost<'_>, tile: u32, flags: u16, 
     ];
     out.set(0);
     let world = crate::map_func::World::new(s);
-    let ground = world.asserted(|m| crate::clear_map::get_clear_ground(m, tile));
-    let density = world.asserted(|m| crate::clear_map::get_clear_density(m, tile));
-    if world.asserted(|m| crate::clear_map::is_snow_tile(m, tile)) {
+    let ground = world.asserted(|m| crate::clear_map::get_clear_ground_raw(m, tile));
+    let density = world.asserted(|m| crate::clear_map::get_clear_density_raw(m, tile));
+    if world.asserted(|m| crate::clear_map::is_snow_tile_raw(m, tile)) {
         out.add_money(crate::company::price(PRICES[usize::from(ground)]));
         // Money subtraction saturates before conversion to int64 for std::abs.
         let snow = crate::company::price(PR_CLEAR_ROUGH)
@@ -272,7 +272,7 @@ fn field_fence(
 ) -> bool {
     let neighbour = diagonal(tile, direction, size_x);
     if fence != 0
-        || crate::clear_map::is_field_tile(map, neighbour)
+        || crate::clear_map::is_field_tile_raw(map, neighbour)
             .unwrap_or_else(|| (c.field_tile)(neighbour))
     {
         return false;
@@ -302,14 +302,14 @@ pub(crate) unsafe fn clear_tile_loop(
             .unwrap_or_else(|| (s.tile_z)(tile))
             - i32::from(crate::snow_line::get(s))
             + 1;
-        if !crate::clear_map::is_snow_tile(map, tile).unwrap_or_else(|| (c.snow)(tile)) {
+        if !crate::clear_map::is_snow_tile_raw(map, tile).unwrap_or_else(|| (c.snow)(tile)) {
             if k >= 0 {
                 (s.make_snow)(tile, 0);
                 hit(Witness::SnowStart);
                 (s.mark_dirty)(tile);
             }
         } else {
-            let density = crate::clear_map::get_clear_density(map, tile)
+            let density = crate::clear_map::get_clear_density_raw(map, tile)
                 .map_or_else(|| (c.density)(tile), u32::from);
             let required = k.clamp(0, 3) as u32;
             if density == required {
@@ -332,11 +332,11 @@ pub(crate) unsafe fn clear_tile_loop(
             }
         }
     } else if climate == 2 {
-        let current = if crate::clear_map::get_clear_ground(map, tile)
+        let current = if crate::clear_map::get_clear_ground_raw(map, tile)
             .unwrap_or_else(|| (s.clear_ground)(tile).0)
             == 5
         {
-            crate::clear_map::get_clear_density(map, tile)
+            crate::clear_map::get_clear_density_raw(map, tile)
                 .map_or_else(|| (c.density)(tile), u32::from)
         } else {
             0
@@ -375,7 +375,7 @@ pub(crate) unsafe fn clear_tile_loop(
         let ground = if snow {
             0
         } else {
-            crate::clear_map::get_clear_ground_from_fields(&fields)
+            crate::clear_map::get_clear_ground_from_fields_raw(&fields)
         };
         let density = if !snow && ground == 0 {
             crate::clear_map::get_clear_density_from_fields(&fields)
@@ -405,7 +405,7 @@ pub(crate) unsafe fn clear_tile_loop(
                     3,
                 );
             } else {
-                let counter = crate::clear_map::get_clear_counter(map, tile)
+                let counter = crate::clear_map::get_clear_counter_raw(map, tile)
                     .map_or_else(|| (c.counter)(tile), u32::from);
                 if counter < 7 {
                     (c.set_counter)(tile, counter + 1);
@@ -420,13 +420,13 @@ pub(crate) unsafe fn clear_tile_loop(
             // SetFence's fields are disjoint; dirtying remains after all four.
             let fences = 'fences: {
                 let probe = map.without_native_assert();
-                let Some(fields) = crate::clear_map::require_field(&probe, tile) else {
+                let Some(fields) = crate::clear_map::require_field_raw(&probe, tile) else {
                     break 'fences None;
                 };
-                let ne = crate::clear_map::get_fence(&fields, 0);
-                let se = crate::clear_map::get_fence(&fields, 1);
-                let sw = crate::clear_map::get_fence(&fields, 2);
-                let nw = crate::clear_map::get_fence(&fields, 3);
+                let ne = crate::clear_map::get_fence_raw(&fields, 0);
+                let se = crate::clear_map::get_fence_raw(&fields, 1);
+                let sw = crate::clear_map::get_fence_raw(&fields, 2);
+                let nw = crate::clear_map::get_fence_raw(&fields, 3);
                 Some(FieldFences { ne, se, sw, nw })
             }
             .unwrap_or_else(|| (c.fences)(tile));
@@ -441,7 +441,7 @@ pub(crate) unsafe fn clear_tile_loop(
             if editor {
                 return;
             }
-            let counter = crate::clear_map::get_clear_counter(map, tile)
+            let counter = crate::clear_map::get_clear_counter_raw(map, tile)
                 .map_or_else(|| (c.counter)(tile), u32::from);
             if counter < 7 {
                 (c.set_counter)(tile, counter + 1);
@@ -450,10 +450,10 @@ pub(crate) unsafe fn clear_tile_loop(
             (c.set_counter)(tile, 0);
             let field = 'field: {
                 let probe = map.without_native_assert();
-                let Some(fields) = crate::clear_map::require_field(&probe, tile) else {
+                let Some(fields) = crate::clear_map::require_field_raw(&probe, tile) else {
                     break 'field None;
                 };
-                let industry = crate::clear_map::get_industry_index_of_field(&fields);
+                let industry = crate::clear_map::get_industry_index_of_field_raw(&fields);
                 let field_type = crate::clear_map::get_field_type(&fields);
                 Some(FieldGround {
                     industry,
@@ -519,18 +519,18 @@ pub(crate) unsafe fn rail_tile_loop(
                 });
             match foundation {
                 0 => {
-                    if is_slope_with_three_corners_raised(ground.slope.0) {
+                    if is_slope_with_three_corners_raised_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 2 | 3 => {
-                    if is_steep_slope(ground.slope.0) {
+                    if is_steep_slope_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 4 => ground.z += 1,
                 _ => {
-                    if is_steep_slope(ground.slope.0) {
+                    if is_steep_slope_raw(ground.slope.0) {
                         ground.z += 1;
                     }
                     ground.z += 1;

@@ -5,15 +5,15 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
+use crate::slope_func::{get_slope_max_pixel_z_raw, is_halftile_slope_raw};
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
 /// `GetSlopeZInCorner` (`landscape.cpp`); `check` is the native assertion.
 pub(crate) fn get_slope_z_in_corner(tileh: u8, corner: u8, check: impl Fn(bool) + Copy) -> i32 {
-    use crate::slope_func::{slope_with_one_corner_raised, steep_slope};
-    check(!is_halftile_slope(tileh));
-    i32::from(tileh & slope_with_one_corner_raised(corner, check) != 0)
-        + i32::from(tileh == steep_slope(corner, check))
+    use crate::slope_func::{slope_with_one_corner_raised_raw, steep_slope_raw};
+    check(!is_halftile_slope_raw(tileh));
+    i32::from(tileh & slope_with_one_corner_raised_raw(corner, check) != 0)
+        + i32::from(tileh == steep_slope_raw(corner, check))
 }
 
 /// Original ordered `IsMapSurroundedByWater` scan, including duplicate corners.
@@ -74,7 +74,7 @@ pub(crate) fn apply_pixel_foundation_to_slope(
 #[inline]
 pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
     let sum = x.wrapping_add(y);
-    if is_halftile_slope(corners) {
+    if is_halftile_slope_raw(corners) {
         let leveled = match (corners >> 6) & 3 {
             0 => x > y,
             1 => sum >= TILE_SIZE as i32,
@@ -83,7 +83,7 @@ pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
             _ => unreachable!(), // A two-bit value is always 0..=3.
         };
         if leveled {
-            return Some(get_slope_max_pixel_z(corners).cast_unsigned());
+            return Some(get_slope_max_pixel_z_raw(corners).cast_unsigned());
         }
     }
 
