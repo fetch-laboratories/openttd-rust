@@ -2800,6 +2800,11 @@ mod control_tests {
         static LOCAL: Cell<u8> = const { Cell::new(0) };
         static ERRORS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
         static FAILED: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+        /// Calls to `Company::CanAllocateItem`, each of which grants the native pool's
+        /// allocation credit that the caller's next allocation consumes.
+        static ALLOCATION_CHECKS: Cell<u32> = const { Cell::new(0) };
+        /// What the next `Company::CanAllocateItem` returns, when set.
+        static ALLOCATION_ANSWER: Cell<Option<bool>> = const { Cell::new(None) };
     }
     fn handle(id: u8) -> *mut OpenTTDCompany {
         std::ptr::without_provenance_mut(usize::from(id) + 1)
@@ -2825,7 +2830,10 @@ mod control_tests {
         SLOTS.with(|s| s.borrow().get(usize::from(id)).copied().flatten().is_some())
     }
     extern "C" fn can_allocate() -> bool {
-        SLOTS.with(|s| s.borrow().iter().any(Option::is_none))
+        ALLOCATION_CHECKS.set(ALLOCATION_CHECKS.get() + 1);
+        ALLOCATION_ANSWER
+            .get()
+            .unwrap_or_else(|| SLOTS.with(|s| s.borrow().iter().any(Option::is_none)))
     }
     extern "C" fn current_company() -> u8 {
         CURRENT.get()
@@ -2973,22 +2981,36 @@ mod control_tests {
     fn first_playable_prefers_humans_then_free_slots() {
         let s = services();
         SLOTS.with(|slots| *slots.borrow_mut() = [None; MAX_COMPANIES as usize]);
+        ALLOCATION_ANSWER.set(None);
+        // Each selection, with the number of `Company::CanAllocateItem` calls it makes: a
+        // human returns before the check; otherwise the check runs once and grants the
+        // allocation credit that the caller's `new (vacant) Company` consumes.
+        let select = |checks: u32| {
+            ALLOCATION_CHECKS.set(0);
+            let id = first_playable(&s).0;
+            assert_eq!(ALLOCATION_CHECKS.get(), checks, "allocation checks for {id}");
+            id
+        };
         set(3, Some(false));
-        assert_eq!(first_playable(&s).0, 3, "a human wins before the hole at 0");
+        assert_eq!(select(0), 3, "a human wins before the hole at 0");
         set(3, Some(true));
-        assert_eq!(first_playable(&s).0, 0);
+        assert_eq!(select(1), 0);
         for id in (0..MAX_COMPANIES).filter(|&id| id != 3) {
             set(id, Some(true));
         }
-        assert_eq!(first_playable(&s).0, CompanyID::BEGIN.0, "a full AI pool");
+        assert_eq!(select(1), CompanyID::BEGIN.0, "a full AI pool");
         set(9, Some(false));
         set(12, Some(false));
-        assert_eq!(first_playable(&s).0, 9);
+        assert_eq!(select(0), 9);
         set(1, None);
-        assert_eq!(first_playable(&s).0, 9);
+        assert_eq!(select(0), 9);
         set(9, Some(true));
         set(12, Some(true));
-        assert_eq!(first_playable(&s).0, 1);
+        assert_eq!(select(1), 1);
+        // The free slot is taken only when the pool grants the allocation.
+        ALLOCATION_ANSWER.set(Some(false));
+        assert_eq!(select(1), CompanyID::BEGIN.0, "a refused allocation");
+        ALLOCATION_ANSWER.set(None);
     }
 
     /// Each vehicle type reads its own interval field, ignoring the percent flag.
