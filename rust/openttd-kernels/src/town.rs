@@ -976,7 +976,7 @@ impl Engine<'_> {
     }
     /// `Map::SizeY()`, read at each original observation point.
     fn size_y(&self) -> u32 {
-        (self.services.map_max_y)().wrapping_add(1)
+        crate::map_func::World::new(self.services).size_y()
     }
     /// The native assertion handler for the shared header preconditions.
     fn check(&self) -> impl Fn(bool) + Copy + '_ {
