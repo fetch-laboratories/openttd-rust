@@ -180,20 +180,28 @@ pub unsafe extern "C" fn openttd_rust_station_service_destroy(state: *mut Servic
         drop(Box::from_raw(state));
     }
 }
+/// The station's Rust-owned scalar fields, for immediate field-sized access only.
+/// # Safety
+/// `state` is a live owner.
+pub(crate) unsafe fn fields(state: *mut Service) -> *mut Fields {
+    unsafe { &raw mut (*state).fields }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_service_fields(state: *mut Service) -> *mut Fields {
-    unsafe { &raw mut (*state).fields }
+    unsafe { fields(state) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_service_cargo(
     state: *mut Service,
     cargo: u8,
 ) -> *mut CargoFields {
-    unsafe {
-        (&raw mut (*state).cargo)
-            .cast::<CargoFields>()
-            .add(usize::from(cargo))
-    }
+    unsafe { cp(state, CargoType(cargo)) }
+}
+/// `st->goods[cargo]`'s Rust-owned fields, for immediate field-sized access only.
+/// # Safety
+/// `state` is a live owner and `cargo` is below `NUM_CARGO`.
+pub(crate) unsafe fn goods(state: *mut Service, cargo: CargoType) -> *mut CargoFields {
+    unsafe { cp(state, cargo) }
 }
 pub struct QueueEntry {
     vehicle: *mut c_void,
@@ -921,11 +929,6 @@ pub(crate) unsafe fn station_monthly_loop(w: &World) {
             unsafe { set_goods_status(ge, status) };
         }
     }
-}
-/// Temporary adapter for `timer_game_common.rs`, held by #837; delegates to
-/// `station_monthly_loop`.
-pub(crate) unsafe fn openttd_rust_station_monthly(world: *const World) {
-    unsafe { station_monthly_loop(&*world) };
 }
 
 /// `UpdateStationWaiting`.
