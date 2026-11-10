@@ -119,7 +119,7 @@ OpenTTDTownSlots openttd_rust_town_id_counts(OpenTTDTownState *);
 OpenTTDTownSlots openttd_rust_town_global_id_counts();
 OpenTTDTownSlots openttd_rust_town_class_counts(OpenTTDTownState *);
 OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppliedHistory *, size_t);
-void openttd_rust_town_rating_test(bool);
+void openttd_rust_town_rating_test(const OpenTTDSharedServices *, bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
 void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, uint32_t, uintptr_t, uint8_t, int32_t, int32_t, bool, bool);
 OpenTTDTownState *openttd_rust_town_new();

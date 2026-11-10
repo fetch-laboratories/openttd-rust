@@ -3133,8 +3133,7 @@ static RATING_TEST: GameState<RatingTest> = GameState::new(RatingTest {
 /// `SetTownRatingTestMode`: switch the town rating to test-mode, to allow commands
 /// to be tested without affecting current ratings. The function is safe to use
 /// in nested calls.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
+pub(crate) fn set_town_rating_test_mode(shared: &Services, mode: bool) {
     // SAFETY: Game-state-mutex serialized scratch; no callback.
     let test = unsafe { &mut *RATING_TEST.get() };
     if mode {
@@ -3143,9 +3142,19 @@ pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
         }
         test.depth = test.depth.wrapping_add(1);
     } else {
-        debug_assert!(test.depth > 0);
+        // assert(ref_count > 0); the assertion policy is read only when it fails.
+        if test.depth <= 0 {
+            let world = crate::map_func::World::new(shared);
+            world.assert_with(|| test.depth > 0);
+        }
         test.depth = test.depth.wrapping_sub(1);
     }
+}
+/// # Safety
+/// `shared` is the live shared services table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_rating_test(shared: *const Services, mode: bool) {
+    set_town_rating_test_mode(unsafe { &*shared }, mode);
 }
 /// `GetRating`: the rating of a town for the current company.
 #[unsafe(no_mangle)]
@@ -3364,6 +3373,17 @@ crate::abi::layouts! {
 pub(crate) mod tests {
     use super::*;
 
+    extern "C" fn fixture_random(_: *mut std::ffi::c_void) -> u32 {
+        0
+    }
+    extern "C" fn fixture_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        0
+    }
+    /// Shared services over the static fixture map, for the rating test mode.
+    fn fixture_shared() -> Services {
+        crate::services::fixture(std::ptr::null_mut(), fixture_random, fixture_industry)
+    }
+
     /// Serializes the tests that touch process-wide game state: the town owners and index,
     /// the road and tram masks, the price table and the rating-test flag.
     pub(crate) static GLOBAL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -3392,7 +3412,7 @@ pub(crate) mod tests {
         assert_eq!(openttd_rust_town_generating_exchange_abi(true), 0);
         clear_house_candidates();
         add_house_candidate(110, 1);
-        openttd_rust_town_rating_test(true);
+        set_town_rating_test_mode(&fixture_shared(), true);
         let (id_pointer, class_pointer, rating) = std::thread::spawn(move || {
             let owner = address as *mut State;
             assert!((openttd_rust_town_generating_exchange_abi(false) != 0));
@@ -3435,7 +3455,7 @@ pub(crate) mod tests {
             assert_eq!(*classes.add(15), 0);
         }
         assert_eq!(owner.id_counts[110], 0);
-        openttd_rust_town_rating_test(false);
+        set_town_rating_test_mode(&fixture_shared(), false);
         // SAFETY: Test scratch is disabled; the live owner's rating is restored.
         assert_eq!(
             unsafe { openttd_rust_town_rating(&raw const owner, 42, 0) },
@@ -3757,7 +3777,7 @@ mod policy_tests {
             self.town.simulation.have_ratings = 0;
         }
         fn mode(&mut self, enabled: bool) {
-            openttd_rust_town_rating_test(enabled);
+            set_town_rating_test_mode(&self.shared, enabled);
             if enabled {
                 self.depth += 1;
             } else {
@@ -4001,8 +4021,8 @@ mod policy_tests {
             (*town).simulation.ratings.fill(rating);
         }
         if testing {
-            openttd_rust_town_rating_test(true);
-            openttd_rust_town_rating_test(true);
+            set_town_rating_test_mode(&services, true);
+            set_town_rating_test_mode(&services, true);
             // SAFETY: Local owner/tables remain live, shell key is the owner address.
             unsafe {
                 openttd_rust_town_change_rating(
@@ -4043,8 +4063,8 @@ mod policy_tests {
             ));
         }
         if testing {
-            openttd_rust_town_rating_test(false);
-            openttd_rust_town_rating_test(false);
+            set_town_rating_test_mode(&services, false);
+            set_town_rating_test_mode(&services, false);
         }
     }
     #[test]
