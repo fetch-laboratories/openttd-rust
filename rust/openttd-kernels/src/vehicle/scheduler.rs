@@ -118,17 +118,6 @@ unsafe fn next<const COUNTED: bool>(
     }
     None
 }
-/// Native transient probe uses the same cursor as scheduler, with actual pool storage.
-/// # Safety
-/// As next; native test owns writable descriptor and numeric cursor for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_cursor_next(
-    s: *const SchedulerServices,
-    pool: *mut PoolCursor,
-    from: *mut usize,
-) -> Option<VehicleRef> {
-    unsafe { next::<false>(&*s, &mut *pool, &mut *from) }
-}
 unsafe fn day<const COUNTED: bool>(
     tables: &Tables,
     s: &SchedulerServices,
@@ -913,5 +902,420 @@ mod tests {
         c.run(TRAIN); // A coasting stopped train still increments its motion.
         assert_eq!(c.motion, 22);
         assert_eq!(c.running, Some(false));
+    }
+}
+
+/// Traversal on the real Rust pool owner: deletion, reuse and growth order; the live cursor;
+/// and Tick growth with a fresh type. Traces are checked against `scheduler/pool-oracle.txt`,
+/// captured from the unchanged original `PoolIterator`.
+#[cfg(test)]
+mod pool_tests {
+    use super::*;
+    use crate::oracle;
+    use crate::pool::{NativeOps, PoolConfig, PoolCore};
+    use crate::test_tables::{FLEET_GROUPS, FLEET_PENDING, FLEET_TRANSACTIONS, SCHEDULER, VEHICLE};
+    use std::cell::{Cell, RefCell};
+    use std::ffi::c_void;
+    use std::ptr::{null, null_mut};
+
+    const ORACLE: &str = include_str!("scheduler/pool-oracle.txt");
+
+    /// A test vehicle shell: its pool index and its chain successor.
+    #[repr(C)]
+    struct Shell {
+        index: usize,
+        next: *mut Shell,
+    }
+    const SIZE: usize = size_of::<Shell>();
+
+    thread_local! {
+        static POOL: Cell<*mut PoolCore> = const { Cell::new(null_mut()) };
+        static VISITS: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
+        static POOL_READS: Cell<u32> = const { Cell::new(0) };
+        static SURVIVORS: Cell<u32> = const { Cell::new(0) };
+        static MUTATE: Cell<bool> = const { Cell::new(false) };
+        static GROWTH: Cell<usize> = const { Cell::new(usize::MAX) };
+    }
+    fn pool() -> *mut PoolCore {
+        POOL.get()
+    }
+    fn view() -> *mut crate::pool::PoolDescriptor {
+        // SAFETY: The test's live pool owner.
+        unsafe { PoolCore::descriptor(pool()) }
+    }
+    fn slot(index: usize) -> crate::pool::PoolSlot {
+        // SAFETY: A slot index below the live slot length.
+        unsafe { (*view()).slots.as_slice()[index] }
+    }
+    fn valid(index: usize) -> bool {
+        // SAFETY: The test's live pool owner.
+        let len = unsafe { (*view()).slots.len() };
+        index < len && !slot(index).shell.is_null()
+    }
+
+    unsafe extern "C" fn allocate(_: *mut c_void, size: usize) -> *mut c_void {
+        assert_eq!(size, SIZE);
+        Box::into_raw(Box::new(Shell {
+            index: usize::MAX,
+            next: null_mut(),
+        }))
+        .cast()
+    }
+    unsafe extern "C" fn deallocate(_: *mut c_void, shell: *mut c_void, size: usize) {
+        assert_eq!(size, SIZE);
+        // SAFETY: Allocated by `allocate`.
+        drop(unsafe { Box::from_raw(shell.cast::<Shell>()) });
+    }
+    unsafe extern "C" fn set_index(_: *mut c_void, shell: *mut c_void, index: usize) {
+        // SAFETY: The shell being allocated.
+        unsafe { (&raw mut (*shell.cast::<Shell>()).index).write(index) };
+    }
+    /// `delete Vehicle *`: `~Vehicle` deletes the chain successor, then the record owner
+    /// retires and the sized delete frees the slot.
+    unsafe extern "C" fn destroy(_: *mut c_void, shell: *mut c_void) {
+        let shell = shell.cast::<Shell>();
+        // SAFETY: A live shell of this pool; its record is the slot's.
+        unsafe {
+            let next = std::mem::replace(&mut (*shell).next, null_mut());
+            if !next.is_null() {
+                destroy(null_mut(), next.cast());
+            }
+            let index = (*shell).index;
+            let record = slot(index)
+                .record
+                .cast::<crate::vehicle_base::VehicleRecord>();
+            PoolCore::retire_record(pool(), index);
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+            PoolCore::free_item(pool(), SIZE, index);
+        }
+    }
+    unsafe extern "C" fn post_destructor(_: *mut c_void, _: usize) {}
+    unsafe extern "C" fn assertion(_: *mut c_void, condition: bool) {
+        assert!(condition);
+    }
+
+    /// The test's pool owner, kept at the address `POOL` records.
+    struct TestPool {
+        _core: Box<PoolCore>,
+    }
+    /// The vehicle pool's parameters: `Pool<Vehicle, VehicleID, 512>`.
+    fn new_pool() -> TestPool {
+        let mut core = PoolCore::new(
+            PoolConfig {
+                max_size: 0xFF000,
+                growth_step: 512,
+                cache: false,
+                item_size: SIZE,
+                assertions: true,
+            },
+            NativeOps {
+                context: null_mut(),
+                allocate,
+                deallocate,
+                set_index,
+                destroy,
+                post_destructor,
+                assertion,
+            },
+        );
+        POOL.set(&raw mut *core);
+        TestPool { _core: core }
+    }
+    /// `new (VehicleID(index)) Vehicle(VEH_EFFECT)`: shell, then its fresh canonical record.
+    fn new_vehicle(index: usize) -> *mut Shell {
+        // SAFETY: The test's live pool owner; the index is free.
+        unsafe {
+            let shell = PoolCore::allocate_at(pool(), SIZE, index).unwrap();
+            let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+                shell.cast(),
+                VehicleType::EFFECT,
+            );
+            PoolCore::bind_record(pool(), index, record.cast());
+            shell.cast()
+        }
+    }
+    fn delete_vehicle(index: usize) {
+        // SAFETY: A live shell of this pool.
+        unsafe { destroy(null_mut(), slot(index).shell) };
+    }
+    fn record(index: usize) -> *mut crate::vehicle_base::VehicleRecord {
+        slot(index).record.cast()
+    }
+    fn clean() {
+        // SAFETY: The test's live pool owner; nothing traverses it during cleanup.
+        unsafe { PoolCore::clean(pool()) };
+    }
+    fn slots_len() -> usize {
+        // SAFETY: The test's live pool owner.
+        unsafe { (*view()).slots.len() }
+    }
+
+    extern "C" fn cursor() -> PoolCursor {
+        POOL_READS.set(POOL_READS.get() + 1);
+        let view = view();
+        // SAFETY: The test's live pool owner; the cursor is refreshed on growth.
+        unsafe {
+            PoolCursor {
+                slots: (*view).slots.as_mut_ptr(),
+                slots_len: (*view).slots.len(),
+                first_unused: &raw const (*view).first_unused,
+            }
+        }
+    }
+    fn index_of(vehicle: VehicleRef) -> usize {
+        // SAFETY: The live record's shell is this test's.
+        unsafe { (*(*vehicle.0.as_ptr()).shell.cast::<Shell>()).index }
+    }
+    fn trace(visits: &[usize]) -> String {
+        let growth = GROWTH.get();
+        visits
+            .iter()
+            .map(|&id| match id {
+                id if growth != usize::MAX && id == growth => "g".to_owned(),
+                id if growth != usize::MAX && id == growth + 1 => "g+1".to_owned(),
+                id => id.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// The fixture's `SchedulerLifetimeVehicle::Tick` script on the second visit to ID 2:
+    /// reuse behind and ahead, a fresh record for a reused slot, a hole ahead, and growth that
+    /// keeps the visiting vehicle's record and scalar addresses.
+    fn mutate_at_two(id: usize) {
+        new_vehicle(0); // Behind: waits one tick.
+        // SAFETY: Record 4 is live until deleted below.
+        unsafe {
+            (*record(4)).cargo_age_counter = u16::MAX;
+            (*record(4)).motion_counter = u32::MAX;
+        }
+        delete_vehicle(4);
+        new_vehicle(4); // Ahead: visited this tick.
+        // SAFETY: The reused slot's fresh record.
+        let fresh = unsafe { ((*record(4)).cargo_age_counter, (*record(4)).motion_counter) };
+        assert_eq!(fresh, (1, 0), "a reused slot gets a fresh record");
+        new_vehicle(3); // Inside initialized storage.
+        delete_vehicle(5); // Hole ahead must be skipped.
+        let growth = slots_len();
+        GROWTH.set(growth);
+        let own = record(id);
+        // SAFETY: The visiting vehicle's live record.
+        let (counter, motion) = unsafe {
+            (*own).cargo_age_counter = u16::MAX;
+            (*own).motion_counter = u32::MAX;
+            (
+                &raw mut (*own).cargo_age_counter,
+                &raw mut (*own).motion_counter,
+            )
+        };
+        new_vehicle(growth);
+        new_vehicle(growth + 1);
+        assert!(slots_len() > growth);
+        assert_eq!(record(id), own, "growth keeps the record");
+        // SAFETY: The unchanged live record.
+        unsafe {
+            assert_eq!(
+                (
+                    &raw mut (*own).cargo_age_counter,
+                    &raw mut (*own).motion_counter
+                ),
+                (counter, motion)
+            );
+            assert_eq!(
+                ((*own).cargo_age_counter, (*own).motion_counter),
+                (u16::MAX, u32::MAX)
+            );
+        }
+    }
+    extern "C" fn lifetime_tick(vehicle: VehicleRef) -> bool {
+        let id = index_of(vehicle);
+        VISITS.with(|v| v.borrow_mut().push(id));
+        if !MUTATE.get() {
+            return true;
+        }
+        if id == 0 {
+            delete_vehicle(0); // Also deletes the unvisited chain member at ID 1.
+            assert!(!valid(1));
+            return false;
+        }
+        if id == 2 {
+            mutate_at_two(id);
+        }
+        if id == GROWTH.get() {
+            delete_vehicle(id); // Newly discovered vehicle dies before the next slot is read.
+            return false;
+        }
+        true
+    }
+    extern "C" fn no_station_loading(
+        tables: *const Tables,
+        load: unsafe extern "C" fn(*const Tables),
+    ) {
+        // SAFETY: The caller's live tables.
+        unsafe { load(tables) };
+    }
+    extern "C" fn no_accumulators() {}
+    extern "C" fn keep_company(_: u8) {}
+
+    /// Run `CallVehicleTicks` (outside normal play: no day work) with `tick`. It clears and
+    /// drains the process-wide pending map, so it holds that map's test lock.
+    fn run_ticks(tick: extern "C" fn(VehicleRef) -> bool) {
+        let _guard = crate::fleet::pending::TEST_LOCK.lock().unwrap();
+        let shared = crate::services::fixture(null_mut(), draw, no_industry);
+        let mut scheduler = SCHEDULER;
+        scheduler.pool = cursor;
+        scheduler.assertions = true;
+        scheduler.tick = tick;
+        scheduler.vehicle = &VEHICLE;
+        scheduler.shared = &raw const shared;
+        scheduler.with_loading_timer = no_station_loading;
+        scheduler.reset_accumulators = no_accumulators;
+        let mut pending = FLEET_PENDING;
+        pending.set_current = keep_company;
+        let mut group = FLEET_GROUPS;
+        group.shared = &raw const shared;
+        let tables = Tables {
+            scheduler: &raw const scheduler,
+            cargo: null(),
+            station: null(),
+            loading: null(),
+            pending: &raw const pending,
+            transaction: &FLEET_TRANSACTIONS,
+            group: &raw const group,
+            visits: null(),
+            refit_cost: null_mut(),
+            refit_temporary: null_mut(),
+        };
+        // SAFETY: The tables and the pool outlive the synchronous pass.
+        unsafe { ticks(&raw const tables, false, 0, null_mut()) };
+    }
+    extern "C" fn draw(_: *mut c_void) -> u32 {
+        0
+    }
+    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        0
+    }
+
+    /// "Base vehicle scheduler - production deletion, reuse and growth order".
+    fn lifetime() -> (String, String) {
+        let _pool = new_pool();
+        VISITS.with(|v| v.borrow_mut().clear());
+        GROWTH.set(usize::MAX);
+        let head = new_vehicle(0);
+        // SAFETY: Both live shells; the chain models `head->SetNext(...)`.
+        unsafe { (*head).next = new_vehicle(1) };
+        for id in [2, 4, 5] {
+            new_vehicle(id);
+        }
+        for mutate in [true, false] {
+            MUTATE.set(mutate);
+            run_ticks(lifetime_tick);
+        }
+        // SAFETY: The live pool owner.
+        let items = unsafe { (*view()).items };
+        let visits = VISITS.with(|v| trace(&v.borrow()));
+        clean();
+        ("lifetime".to_owned(), format!("{items} | {visits}"))
+    }
+
+    /// "Base vehicle scheduler - live cursor equals unchanged PoolIterator": mutate the pool
+    /// after each visit of `next`.
+    fn live_cursor(indexing_growth: bool) -> (String, String) {
+        let _pool = new_pool();
+        GROWTH.set(usize::MAX);
+        for id in [0, 2, 4] {
+            new_vehicle(id);
+        }
+        let mut services = SCHEDULER;
+        services.pool = cursor;
+        let mut pool_cursor = cursor();
+        let mut visits = Vec::new();
+        let mut first_unused = 0;
+        let mut from = 0;
+        // SAFETY: The test's live pool; the cursor is refreshed by `next`.
+        while let Some(vehicle) = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) } {
+            let id = index_of(vehicle);
+            visits.push(id);
+            if id == 0 {
+                delete_vehicle(0); // Deleted-current and reuse behind the advancing cursor.
+                new_vehicle(0);
+                delete_vehicle(2);
+                new_vehicle(2); // Reuse ahead must still be visited.
+                new_vehicle(3);
+                new_vehicle(6); // Raise extent without indexing growth.
+                // SAFETY: The cursor's canonical extent.
+                first_unused = unsafe { *pool_cursor.first_unused };
+            } else if id == 2 {
+                delete_vehicle(4); // Hole ahead.
+                if indexing_growth {
+                    let growth = slots_len();
+                    GROWTH.set(growth);
+                    new_vehicle(growth); // Growth invalidates captured slots.
+                    new_vehicle(growth + 1);
+                }
+                // SAFETY: The test's live pool owner.
+                assert_eq!(pool_cursor.first_unused, unsafe {
+                    &raw const (*view()).first_unused
+                });
+            }
+        }
+        // SAFETY: The test's live pool owner.
+        unsafe {
+            assert_eq!(pool_cursor.slots, (*view()).slots.as_mut_ptr().cast_const());
+            assert_eq!(pool_cursor.slots_len, (*view()).slots.len());
+        }
+        clean();
+        pool_cursor = cursor(); // Fresh acquisition after reset; an empty pool ends.
+        from = 0;
+        // SAFETY: The cleaned live pool.
+        let empty = unsafe { next::<false>(&services, &mut pool_cursor, &mut from) }.is_none();
+        let inputs = format!("indexing growth {indexing_growth}");
+        (
+            inputs,
+            format!("{first_unused} | {} | {}", trace(&visits), u8::from(empty)),
+        )
+    }
+
+    #[test]
+    fn traversal_matches_original_pool_iterator() {
+        let sections = oracle::parse(ORACLE);
+        assert_eq!(oracle::check(&sections, "lifetime", [lifetime()]), 1);
+        assert_eq!(
+            oracle::check(&sections, "cursor", [live_cursor(true), live_cursor(false)]),
+            2
+        );
+    }
+
+    /// "Base vehicle scheduler - Tick growth, timing return and fresh type": ID 0 grows the
+    /// pool and changes its own type during Tick; the newly discovered vehicle deletes itself.
+    extern "C" fn growing_tick(vehicle: VehicleRef) -> bool {
+        if index_of(vehicle) == 0 {
+            new_vehicle(slots_len());
+            // SAFETY: The visiting vehicle's live record.
+            unsafe { (*vehicle.0.as_ptr()).r#type = VehicleType::DISASTER };
+            SURVIVORS.set(SURVIVORS.get() + 1);
+            return true;
+        }
+        delete_vehicle(index_of(vehicle));
+        false
+    }
+    #[test]
+    fn tick_growth_rereads_the_pool_and_the_fresh_type() {
+        let _pool = new_pool();
+        new_vehicle(0);
+        POOL_READS.set(0);
+        SURVIVORS.set(0);
+        run_ticks(growing_tick);
+        assert_eq!(POOL_READS.get(), 2, "pool reads: start and growth");
+        assert_eq!(
+            SURVIVORS.get(),
+            1,
+            "only the survivor reaches its post-Tick reads"
+        );
+        // SAFETY: The surviving record.
+        assert_eq!(unsafe { (*record(0)).r#type }.0, VehicleType::DISASTER.0);
+        // SAFETY: The live pool owner.
+        assert_eq!(unsafe { (*view()).items }, 1);
+        clean();
     }
 }
