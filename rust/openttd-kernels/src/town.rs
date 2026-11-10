@@ -1798,11 +1798,7 @@ impl Engine<'_> {
          * Well we check if the slope has an up bit set in the
          * reverse direction. */
         if slope != Slope::SLOPE_FLAT
-            && slope
-                & inclined_slope(bridge_dir, || {
-                    unreachable!("native inclined slope direction")
-                })
-                != Slope::SLOPE_FLAT
+            && slope & inclined_slope(bridge_dir, || self.not_reached()) != Slope::SLOPE_FLAT
         {
             return false;
         }
@@ -1901,7 +1897,7 @@ impl Engine<'_> {
                     && self.get_tunnel_bridge_transport_type(at) == TransportType::TRANSPORT_ROAD
                     && self.get_tile_slope(at)
                         & inclined_slope(reverse_diag_dir(bridge_dir, self.check()), || {
-                            unreachable!("native inclined slope direction")
+                            self.not_reached()
                         })
                         != Slope::SLOPE_FLAT
                 {
@@ -1926,11 +1922,7 @@ impl Engine<'_> {
     /// check if we are able to build it.
     fn grow_town_with_tunnel(&self, t: TownID, tile: TileIndex, tunnel_dir: DiagDirection) -> bool {
         /* Only consider building a tunnel if the starting tile is sloped properly. */
-        if self.get_tile_slope(tile)
-            != inclined_slope(tunnel_dir, || {
-                unreachable!("native inclined slope direction")
-            })
-        {
+        if self.get_tile_slope(tile) != inclined_slope(tunnel_dir, || self.not_reached()) {
             return false;
         }
         /* Assure that the tunnel is connectable to the start side */
@@ -1952,10 +1944,7 @@ impl Engine<'_> {
                     return false;
                 }
                 let slope = self.get_tile_slope(slope_tile);
-                if slope
-                    != inclined_slope(tunnel_dir, || {
-                        unreachable!("native inclined slope direction")
-                    })
+                if slope != inclined_slope(tunnel_dir, || self.not_reached())
                     && !is_steep_slope(slope)
                     && !is_slope_with_one_corner_raised(slope)
                 {
