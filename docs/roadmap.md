@@ -479,29 +479,22 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-09; ne
 
 ## Ready queue
 
-At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis lives on the stream issue: the fan-in, held callers and later passes for this queue, measured at `c12561671f`, are on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933).
+At most three undispatched work orders ([delegation](team.md#ready-queue-and-pipelining)). A dispatched entry leaves the queue. Refreshed on 2026-11-10 at `df91fdf1fc` (code `03613dd0ac`, merge 16), against #883, #884 and [W+O's reservation](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6772646463), including its unpushed scope. [Ranking, caller analysis and stream placement](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6779110729) live on #734. Use the existing two implementers and keep at most six unmerged component branches; earlier review fixes take priority.
 
-Agent: /root | Model: claude-fable-5-2 | Reasoning effort: xhigh
+Agent: /root/cleanup_ready_queue_refresh | Model: gpt-6-astra | Reasoning effort: high
 
-Refreshed by root on 2026-11-10 after the fifteenth merge, from the planner's measurements at `c12561671f`, and checked against #879, #883, #884 and #737's W branch. Entries 15 (vehicle transactions, #879 and #883) and 23r (workset 23 remainder, #884) are dispatched and have left the queue. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
+1. **22, #734/#735 workset 22 Text/GUI, next on the file-pass slot after #884.**
+   - **Files and size:** `byte_strings.rs`, `control_codes.rs`, `encoded.rs`, `sprites.rs`, `string_func.rs`, `string_services.rs`, `string_validation.rs`, `utf8.rs`, `viewport_func.rs`, `widget_parser.rs`: 2,854 current raw lines, one PR; prior estimate 980 to 1,767 changed lines.
+   - **Dependencies and overlaps:** adopt #884's `SeparatorUsage` in `encoded.rs`. No pass file is held by #883, #884 or W+O. Reserve any changed string API callers, including `packet.rs` and `auth.rs`; serialize with 20p. Leaf fallback while W and I block map core.
+2. **20p, #734/#735 workset 20 `packet.rs` single-file pass, fallback if 22 cannot start.**
+   - **Files and size:** `packet.rs`, 1,968 current raw lines; prior site-based estimate about 640 to 1,150 changed lines. Caller scope: `auth.rs`, `network_auth.rs`, `network_client.rs`, `network_command.rs`, `network_connection.rs`, `network_content.rs`, `network_dispatch.rs`, `network_frame.rs`, `network_socket.rs`, `network_tcp.rs`, `test_tables.rs`; reserve required typed-call edits and internal auth helpers together.
+   - **Dependencies and overlaps:** none of that set is held by the current PRs or W+O. Prefer 22 first when #884 merges, then adopt its string APIs. If 20p starts first, 22 waits for its merge because both can edit packet/auth callers. Keep upstream-test packet exports under #737's recorded exception. No map-core prerequisite; the other 17 network files follow their packet callee.
+3. **I, #737 company infrastructure counters, next on the boundary slot after W+O merges.**
+   - **Size:** one cross-table PR, nine callback slots; prior inventory about 30 to 35 gross counted C++ lines and 127 infrastructure calls including notifications that stay. Size replacement layout/access costs at the first checkpoint.
+   - **Files:** Rust `company.rs`, `company_type.rs`, `station_cmd.rs`, `station_cmd/waypoint.rs`, `road_cmd.rs`, `tunnelbridge_cmd.rs`, `rail_cmd.rs`, `objects.rs`, `water.rs`, `landscape_cmd.rs`, `water_cmd.rs`, `test_tables.rs`; C++ `src/rail_cmd.cpp`, `src/rust/company_services.h`, `company_adapter.cpp`, `company_ffi.h`, `rail_command_ffi.h`, `ground_ffi.h`, `station_command_ffi.h`, `station_command_services.hpp`, `services.cpp`, plus its generated layout declaration inputs and boundary baselines.
+   - **Dependencies and overlaps:** W+O holds station/world files and `services.cpp`; #883 holds `station_cmd.cpp` and `station_service.rs` also reserved by W. Resolve that existing collision before advancing overlapping edits. I is disjoint from 22; its potential `test_tables.rs` overlap with 20p must serialize if both need edits, with I taking priority. I must merge before map core 7a opens. Keep window-dirty notifications; obtain reviewer acceptance for any generated-layout growth.
 
-1. **22, #734 workset 22 Text/GUI.**
-   - **Files:** `byte_strings.rs`, `control_codes.rs`, `encoded.rs`, `sprites.rs`, `string_func.rs`, `string_services.rs`, `string_validation.rs`, `utf8.rs`, `viewport_func.rs` and `widget_parser.rs`: 2,854 lines, 114 sites, 980 to 1,767 changed lines. One PR.
-   - **Callers:** none in 7a's set except through `sprites.rs` and `viewport_func.rs`, which have no sites. `encoded.rs` adopts the `SeparatorUsage` form #884 adds.
-   - **Waits on:** #884, for that form. No file is in an open PR.
-   - **Rank:** a leaf in order (d). It is queued because it is free while #737's W and I hold the map-core pass back.
-2. **7a, #734 workset 13 map core.**
-   - **Files:** `map_func.rs` and `tile_map.rs`: 1,243 lines, 167 sites, 1,436 to 2,588 changed lines. One PR, one reviewer per function group.
-   - **Callers:** 93 files, the highest fan-in in the tree. The finished ones adopt the typed forms; the unfinished ones take one-token `_raw` renames. Among the finished callers, `town.rs` keeps six `Engine` map-reader wrappers that this pass converts ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6770371199)).
-   - **Waits on:** #737's W and I PRs, which cannot be open beside it ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767606869)). Root says when it opens.
-3. **9m, #734 workset 09 `movement.rs` single-file pass.**
-   - **Files:** `movement.rs`, `movement/tests.rs` and `signal_func.rs`: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
-   - **Callers:** 66 files.
-   - **Waits on:** 7a. The two share 50 files, `movement.rs` among them, and cannot be open together.
-
-After entry 22, the next pass free beside 7a is workset 20 Network: `packet.rs` as a single-file pass, and the other 17 files in two PRs ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)).
-
-Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
+When W and I finish, 7a immediately outranks the leaf fallbacks: `map_func.rs` and `tile_map.rs`, with finished callers adopting typed forms, including `town.rs`'s six map-reader wrappers. Refresh the queue then; 9m still follows 7a. The #736 session family follows I on the boundary slot, then NewGRF loading/storage and the remaining ranked families. Full phase-3 planning is not triggered: cleanup still has undispatched work outside this queue.
 
 ## Resume checkpoint
 
