@@ -63,9 +63,16 @@ pub fn reverse_diag_dir(d: DiagDirection, check: impl Fn(bool)) -> DiagDirection
     DiagDirection(2 ^ d.0)
 }
 /// `ChangeDiagDir`.
-pub const fn change_diag_dir(d: DiagDirection, delta: DiagDirDiff) -> DiagDirection {
+pub fn change_diag_dir(
+    d: DiagDirection,
+    delta: DiagDirDiff,
+    check: impl Fn(bool),
+) -> DiagDirection {
+    if !is_valid_diag_direction(d) {
+        check(false);
+    }
     /* Cast to uint so compiler can use bitmask. Result can never be negative. */
-    DiagDirection(((d.0 as u32 + delta.0 as u32) % 4) as u8)
+    DiagDirection(((u32::from(d.0) + u32::from(delta.0)) % 4) as u8)
 }
 /// `DirToDiagDir`.
 pub fn dir_to_diag_dir(dir: Direction, check: impl Fn(bool)) -> DiagDirection {
@@ -141,8 +148,8 @@ pub fn reverse_dir_raw(d: u8, check: impl Fn(bool)) -> u8 {
     reverse_dir(Direction(d), check).0
 }
 /// Raw adapter: `ChangeDiagDir` over base values.
-pub const fn change_diag_dir_raw(direction: u8, difference: u8) -> u8 {
-    change_diag_dir(DiagDirection(direction), DiagDirDiff(difference)).0
+pub fn change_diag_dir_raw(direction: u8, difference: u8, check: impl Fn(bool)) -> u8 {
+    change_diag_dir(DiagDirection(direction), DiagDirDiff(difference), check).0
 }
 /// Raw adapter: `IsValidAxis` over a base value.
 pub const fn is_valid_axis_raw(axis: u8) -> bool {

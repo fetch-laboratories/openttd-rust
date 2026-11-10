@@ -1100,9 +1100,13 @@ impl World<'_> {
                     if is_inclined_slope(slope)
                         && (self.s.tile_max_z)(tile) == (self.s.tile_max_z)(other)
                         && (get_inclined_slope_direction(slope)
-                            == change_diag_dir_raw(dir, DIAGDIRDIFF_90RIGHT)
+                            == change_diag_dir_raw(dir, DIAGDIRDIFF_90RIGHT, |ok| {
+                                crate::movement::native_assert(self.a.shared(), ok);
+                            })
                             || get_inclined_slope_direction(slope)
-                                == change_diag_dir_raw(dir, DIAGDIRDIFF_90LEFT))
+                                == change_diag_dir_raw(dir, DIAGDIRDIFF_90LEFT, |ok| {
+                                    crate::movement::native_assert(self.a.shared(), ok);
+                                }))
                     {
                         desired = slope;
                         sloped_river = true;
@@ -1138,9 +1142,12 @@ impl World<'_> {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
                     }
-                    let other = self
-                        .map
-                        .add_diag(tile, change_diag_dir_raw(direction, diff));
+                    let other = self.map.add_diag(
+                        tile,
+                        change_diag_dir_raw(direction, diff, |ok| {
+                            crate::movement::native_assert(self.a.shared(), ok);
+                        }),
+                    );
                     if self.water(other) && (self.a.river)(other) && self.flat(other) {
                         return;
                     }

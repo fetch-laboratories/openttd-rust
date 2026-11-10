@@ -1442,8 +1442,16 @@ impl Engine<'_> {
         }
         /* Lookup table for the used diff values */
         let tid_lt = [
-            self.tile_offs_by_diag_dir(change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT)),
-            self.tile_offs_by_diag_dir(change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT)),
+            self.tile_offs_by_diag_dir(change_diag_dir(
+                dir,
+                DiagDirDiff::DIAGDIRDIFF_90RIGHT,
+                self.check(),
+            )),
+            self.tile_offs_by_diag_dir(change_diag_dir(
+                dir,
+                DiagDirDiff::DIAGDIRDIFF_90LEFT,
+                self.check(),
+            )),
             self.tile_offs_by_diag_dir(self.reverse_diag_dir(dir)),
         ];
         let dist_multi = (dist_multi + 1) * 4;
@@ -2042,8 +2050,10 @@ impl Engine<'_> {
                         return TownGrowthResult::SearchStopped;
                     }
                     /* Return if neither side of the new road is a house */
-                    let right = change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
-                    let left = change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
+                    let right =
+                        change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT, self.check());
+                    let left =
+                        change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT, self.check());
                     if !self
                         .is_tile_type(self.tile_add_by_diag_dir(tile, right), TileType::MP_HOUSE)
                         && !self
