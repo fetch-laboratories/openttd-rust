@@ -194,9 +194,9 @@ static void Calls()
 	CHECK(openttd_rust_utf8_previous(utf8.bytes, utf8.length, 4) == 0);
 	CHECK(openttd_rust_utf8_at_byte(utf8.bytes, utf8.length, 2) == 0);
 	auto state = openttd_rust_alternating_initialize(SIZE_MAX - 1, 1);
-	CHECK(state.position == SIZE_MAX - 1 && state.current_after == 1);
+	CHECK(state.position == SIZE_MAX - 1 && state.state == 1);
 	auto step = openttd_rust_alternating_advance(state, SIZE_MAX);
-	CHECK(step.state.position == SIZE_MAX && step.movement == 0 && step.state.current_after == 1);
+	CHECK(step.state.position == SIZE_MAX && step.movement == 0 && step.state.state == 1);
 	CHECK(openttd_rust_alternating_compare(state, step.state) == -1);
 	auto bound = openttd_rust_consumer_bound(31, 7, SIZE_MAX);
 	CHECK(bound.length == 24 && bound.position == 31 && bound.shortfall == 0);

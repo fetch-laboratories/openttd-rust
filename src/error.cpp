@@ -23,7 +23,4 @@
 }
 
 /** Bind the canonical native assertion policy before ordinary game/tool entries. */
-static const bool _rust_assert_bound = [] {
-	openttd_rust_assert_bind(RustAssertCondition);
-	return true;
-}();
+static const bool _rust_assert_bound = (openttd_rust_assert_bind(RustAssertCondition, nullptr), true);

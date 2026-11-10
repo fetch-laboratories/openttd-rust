@@ -102,7 +102,7 @@ public:
 
 	inline Titer Base() const
 	{
-		return this->traversal.current_after ? this->after : this->before;
+		return this->traversal.state ? this->after : this->before;
 	}
 
 private:
