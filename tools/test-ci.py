@@ -260,10 +260,12 @@ def run_policy(
     statuses: Iterable[object] = (),
     pushed: Iterable[object] = (),
     compare: str | None = None,
+    queue: bool = False,
 ) -> dict[str, Any]:
     """Run the actual policy script; `trees` maps the base and pushed tree SHAs.
 
-    `statuses` are the merged PR head's and `pushed` the pushed commit's own.
+    `statuses` are the merged PR head's and `pushed` the pushed commit's own;
+    `queue` sets CI_MERGE_QUEUE.
     """
     script = script_for("ci-policy.yml", "policy")
     compare = compare or f"async () => ({{data: {{files: {json.dumps(files)}}}}})"
@@ -271,6 +273,7 @@ def run_policy(
         dict[str, Any],
         node(f"""
 process.env.CI_ON_DEMAND = {json.dumps(on_demand)};
+process.env.CI_MERGE_QUEUE = {json.dumps("true" if queue else "")};
 const outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
 let calls = 0;
 const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
@@ -286,6 +289,7 @@ const github = {{paginate: async (method, args) =>
   repos: {{
     getCommit: async args => ({{data: {{commit: {{tree: {{sha: args.ref === 'base' ? '{BASE}' : '{TREE}'}}}}}}}}),
     listPullRequestsAssociatedWithCommit: () => {{}}, listCommitStatusesForRef: () => {{}},
+    getCombinedStatusForRef: async args => ({{data: {{statuses: listed[args.ref].map(({{creator, ...status}}) => status)}}}}),
     compareCommitsWithBasehead: {compare}
   }}
 }}}};
@@ -1837,15 +1841,18 @@ class PolicyTests(unittest.TestCase):
             pull = dict(PULL, merged_at="date" if merged else None)
             files = [{"filename": "src/code.cpp"}]
             with self.subTest(full=full, marker=marker, run=run, merged=merged):
-                result = run_policy(files=files, pulls=[pull], statuses=statuses)
-                self.assertEqual(result["outputs"]["heavy"], expected)
+                for queue in (False, True):
+                    result = run_policy(
+                        files=files, pulls=[pull], statuses=statuses, queue=queue
+                    )
+                    self.assertEqual(result["outputs"]["heavy"], expected)
                 # A merge-queue merge pushes the tested group commit itself, which
                 # needs no merged PR.
                 if merged:
-                    result = run_policy(files=files, pushed=statuses)
+                    result = run_policy(files=files, pushed=statuses, queue=True)
                     self.assertEqual(result["outputs"]["heavy"], expected)
 
-    def test_coverage_trusts_only_the_publishers_statuses(self) -> None:
+    def test_queue_mode_coverage_trusts_only_the_publishers_statuses(self) -> None:
         files = [{"filename": "src/code.cpp"}]
         merged = [dict(PULL, merged_at="date")]
         trusted = validation()
@@ -1855,17 +1862,36 @@ class PolicyTests(unittest.TestCase):
                 forged[index]["creator"] = creator
                 with self.subTest(index=index, creator=creator):
                     for result in (
-                        run_policy(files=files, pushed=forged),
-                        run_policy(files=files, pulls=merged, statuses=forged),
+                        run_policy(files=files, pushed=forged, queue=True),
+                        run_policy(
+                            files=files, pulls=merged, statuses=forged, queue=True
+                        ),
                     ):
                         self.assertEqual(result["outputs"]["heavy"], "true")
                     # A newer untrusted status hides an older trusted one.
-                    result = run_policy(files=files, pushed=[forged[index], *trusted])
+                    result = run_policy(
+                        files=files, pushed=[forged[index], *trusted], queue=True
+                    )
                     self.assertEqual(result["outputs"]["heavy"], "true")
         # An untested pushed commit still finds the merged PR head's result.
         result = run_policy(
-            files=files, pushed=validation("failure"), pulls=merged, statuses=trusted
+            files=files,
+            pushed=validation("failure"),
+            pulls=merged,
+            statuses=trusted,
+            queue=True,
         )
+        self.assertEqual(result["outputs"], {"heavy": "false", "covered": "true"})
+
+    def test_coverage_is_unchanged_without_queue_mode(self) -> None:
+        files = [{"filename": "src/code.cpp"}]
+        merged = [dict(PULL, merged_at="date")]
+        # The pushed commit's own statuses count only in merge-queue mode.
+        result = run_policy(files=files, pushed=validation())
+        self.assertEqual(result["outputs"], {"heavy": "true"})
+        # Merged PR heads keep the combined-status rule, which sees no creator.
+        forged = [dict(status, creator=None) for status in validation()]
+        result = run_policy(files=files, pulls=merged, statuses=forged)
         self.assertEqual(result["outputs"], {"heavy": "false", "covered": "true"})
 
     def test_markdown_tree_differences_require_complete_inventories(self) -> None:
