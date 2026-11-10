@@ -5,15 +5,22 @@
 //! and the free-wagon order.
 #![allow(clippy::many_single_char_names, clippy::too_many_lines)]
 use super::{CommonServices, ERROR, TransactionServices, build, construct, refit};
-use crate::command_type::DoCommandFlag;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::CompanyID;
+use crate::engine_type::EngineID;
 use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
 use crate::ground_vehicle as gv;
+use crate::network_type::ClientID;
+use crate::newgrf_text_type::GRFStringID;
 use crate::raw_field::{read_field, write_field};
 use crate::services::{CommandCost, Cost};
+use crate::strings_type::StringID;
 use crate::tile_type::TILE_SIZE;
+use crate::tile_type::TileIndex;
 use crate::vehicle::OpenTTDVehicle;
 use crate::vehicle::{CALLBACK_FAILED, OpenTTDEngine, RailVehicleTypes, VehicleRef};
 use crate::vehicle_base::{is_articulated_part, is_front_engine};
+use crate::vehicle_type::VehicleID;
 use std::mem::MaybeUninit;
 use std::ptr;
 
@@ -36,7 +43,6 @@ pub struct Services {
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub engine_dates: extern "C" fn(*mut (), *const OpenTTDEngine),
     pub new_rear: extern "C" fn(*mut ()) -> *mut (),
-    pub link_multihead: extern "C" fn(*mut (), *mut ()),
     pub invalidate_grf: extern "C" fn(*mut ()),
     pub unit: extern "C" fn(*mut ()) -> u16,
     pub use_unit: extern "C" fn(*mut (), u16),
@@ -133,6 +139,16 @@ impl Ctx {
     fn last_engine_part(self, v: R) -> R {
         Self::vref(v).last_engine_part().0.as_ptr()
     }
+    /// `GroundVehicle::GetFirstEnginePart`.
+    fn first_engine_part(self, v: R) -> R {
+        Self::vref(v).first_engine_part().0.as_ptr()
+    }
+    /// `Train::other_multiheaded_part`.
+    fn other_multiheaded_part(self, v: R) -> R {
+        Self::vref(v)
+            .other_multiheaded_part()
+            .map_or(ptr::null_mut(), |v| v.0.as_ptr())
+    }
     /// A non-null live record.
     fn vref(v: R) -> VehicleRef {
         VehicleRef(ptr::NonNull::new(v).unwrap())
@@ -141,14 +157,14 @@ impl Ctx {
         // SAFETY: The transaction retains every linked record until explicit deletion.
         unsafe { self.c.vehicles.set_next_record(v, next) };
     }
-    fn id(self, v: R) -> u32 {
-        unsafe { (self.g.vehicle_id)(Self::sh(v)) }
+    fn id(self, v: R) -> VehicleID {
+        VehicleID(unsafe { (self.g.vehicle_id)(Self::sh(v)) })
     }
-    fn engine(self, v: R) -> u16 {
-        Self::vref(v).engine_id()
+    fn engine(self, v: R) -> EngineID {
+        EngineID(Self::vref(v).engine_id())
     }
-    fn tile(self, v: R) -> u32 {
-        Self::vref(v).tile()
+    fn tile(self, v: R) -> TileIndex {
+        TileIndex(Self::vref(v).tile())
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
@@ -156,8 +172,8 @@ impl Ctx {
         }
     }
     /// `Train::GetIfValid`.
-    fn train(self, id: u32) -> R {
-        self.rec((self.s.train_if_valid)(id))
+    fn train(self, id: VehicleID) -> R {
+        self.rec((self.s.train_if_valid)(id.0))
     }
     fn consist_changed(self, v: R) {
         unsafe {
@@ -181,7 +197,7 @@ impl Ctx {
             crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                 &*(self.c.vehicles.newgrf)(),
                 v,
-                self.engine(v),
+                self.engine(v).0,
                 crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
             )
         };
@@ -193,11 +209,11 @@ impl Ctx {
     }
 }
 
-/// Original `GetFreeWagonsInDepot`: IDs sorted for consistency across clients.
-fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
+/// `GetFreeWagonsInDepot`: get a list of free wagons in a depot.
+fn get_free_wagons_in_depot(x: Ctx, tile: TileIndex) -> Vec<VehicleID> {
     struct Visit {
         x: Ctx,
-        free: Vec<u32>,
+        free: Vec<VehicleID>,
     }
     unsafe extern "C" fn visit(ctx: *mut std::ffi::c_void, handle: VehicleRef) {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
@@ -220,13 +236,35 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
     };
     unsafe {
         x.c.vehicles
-            .for_each_on_tile(tile, |v| visit(ptr::from_mut(&mut ctx).cast(), v));
+            .for_each_on_tile(tile.0, |v| visit(ptr::from_mut(&mut ctx).cast(), v));
     }
+    /* Sort by vehicle index for consistency across clients. */
     ctx.free.sort_unstable();
     ctx.free
 }
 
-/// `Command<CMD_MOVE_RAIL_VEHICLE>::Do` from a Rust caller, by vehicle ID.
+/// `Command<CMD_MOVE_RAIL_VEHICLE>::Do` from a Rust caller; whether it succeeded.
+pub(crate) unsafe fn nested_move_rail_vehicle(
+    b: &'static build::Services,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdMoveRailVehicle,
+) -> bool {
+    let t = b.refit.common.base;
+    crate::command::nested(
+        t.commands,
+        t.shared,
+        Cost(out, t.cost),
+        0,
+        flags.0,
+        |f| unsafe {
+            cmd_move_rail_vehicle(b, out, DoCommandFlags(f), cmd);
+        },
+    );
+    (t.cost.success)(out)
+}
+/// Raw adapter: the nested `CmdMoveRailVehicle` over base values, for
+/// `fleet/transactions.rs` until its pass.
 pub(crate) unsafe fn nested_move(
     b: &'static build::Services,
     out: *mut CommandCost,
@@ -235,63 +273,90 @@ pub(crate) unsafe fn nested_move(
     dest: u32,
     chain: bool,
 ) -> bool {
-    let t = b.refit.common.base;
-    crate::command::nested(
-        t.commands,
-        t.shared,
-        Cost(out, t.cost),
-        0,
-        flags,
-        |f| unsafe {
-            move_vehicle(b, out, f, src, dest, chain);
-        },
-    );
-    (t.cost.success)(out)
+    unsafe {
+        nested_move_rail_vehicle(
+            b,
+            out,
+            DoCommandFlags(flags),
+            CmdMoveRailVehicle {
+                src_veh: VehicleID(src),
+                dest_veh: VehicleID(dest),
+                move_chain: chain,
+            },
+        )
+    }
 }
 
-/// Original `CmdBuildRailWagon`. `out` doubles as the scratch result of the
-/// nested free-chain moves; the original returns a fresh zero cost after them.
-unsafe fn build_wagon(
+/// Arguments of `CmdBuildRailWagon`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildRailWagon {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
+/// `CmdBuildRailWagon`: build a railroad wagon. `out` doubles as the scratch
+/// result of the nested free-chain moves; the original returns a fresh zero
+/// cost after them.
+unsafe fn cmd_build_rail_wagon(
     x: Ctx,
     out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    e: *const OpenTTDEngine,
+    flags: DoCommandFlags,
+    cmd: CmdBuildRailWagon,
 ) -> R {
+    let CmdBuildRailWagon { tile, e } = cmd;
+    /* Check that the wagon can drive on the track in question */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
-    let tiletype = (x.b.refit.train.physics.rail_type)(tile);
-    if (x.t.shared.all_compatible_railtypes)(railtypes) & (1 << tiletype.0) == 0 {
+    let tiletype =
+        crate::rail_type::RailType(crate::map_func::World::new(x.t.shared).rail_type(tile.0));
+    if !crate::rail::is_compatible_rail_types(
+        x.t.shared,
+        crate::rail_type::RailTypes(railtypes),
+        tiletype,
+    ) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
     let mut v = ptr::null_mut();
-    if flags & DoCommandFlag::EXECUTE != 0 {
+    if flags.test(DoCommandFlag::Execute) {
         let a = x.b.construct.articulated;
-        v = x.rec((x.s.new_wagon)(tile, e));
+        // The native allocation clears gcache.first_engine: needs to be set before first callback.
+        v = x.rec((x.s.new_wagon)(tile.0, e));
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.reverse_on_build(v);
-        unsafe { super::articulated::add(a, Ctx::sh(v)) };
+        unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         unsafe {
             a.position(Ctx::sh(v));
         }
         let first = x.first(v);
         x.consist_changed(first);
         x.update_group(x.first(v));
-        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
-        for vehicle in free_wagons(x, tile) {
+        unsafe { super::articulated::check_consistency_of_articulated_vehicle(a, Ctx::sh(v)) };
+        /* Try to connect the vehicle to one of free chains of wagons. */
+        for vehicle in get_free_wagons_in_depot(x, tile) {
             if vehicle == x.id(v) {
                 continue;
             }
-            let w = x.rec(unsafe { (x.g.vehicle)(vehicle) });
+            let w = x.rec(unsafe { (x.g.vehicle)(vehicle.0) });
             if x.engine(w) != x.engine(v) {
-                continue;
+                continue; // Must be same type
             }
             if x.first(w) == v {
-                continue;
+                continue; // Don't connect to ourself
             }
             let last = x.id(x.last(w));
-            if unsafe { nested_move(x.b, out, DoCommandFlag::EXECUTE, x.id(v), last, true) } {
+            if unsafe {
+                nested_move_rail_vehicle(
+                    x.b,
+                    out,
+                    DoCommandFlags::from_element(DoCommandFlag::Execute),
+                    CmdMoveRailVehicle {
+                        src_veh: x.id(v),
+                        dest_veh: last,
+                        move_chain: true,
+                    },
+                )
+            } {
                 crate::witness::hit(crate::witness::VT_RAIL_WAGON_JOIN);
                 break;
             }
@@ -301,21 +366,37 @@ unsafe fn build_wagon(
     v
 }
 
-/// Original `NormalizeTrainVehInDepot`; `out` is a free caller-owned result.
-pub(crate) unsafe fn normalize(b: &'static build::Services, out: *mut CommandCost, u: *mut ()) {
+/// `NormalizeTrainVehInDepot`: move all free vehicles in the depot to the
+/// train; `out` is a free caller-owned result.
+pub(crate) unsafe fn normalize_train_veh_in_depot(
+    b: &'static build::Services,
+    out: *mut CommandCost,
+    u: *mut (),
+) {
     let x = Ctx::new(b);
     let u = x.rec(u);
     x.assert(|| x.is_engine(u));
-    for vehicle in free_wagons(x, x.tile(u)) {
-        if !unsafe { nested_move(b, out, DoCommandFlag::EXECUTE, vehicle, x.id(u), true) } {
+    for vehicle in get_free_wagons_in_depot(x, x.tile(u)) {
+        if !unsafe {
+            nested_move_rail_vehicle(
+                b,
+                out,
+                DoCommandFlags::from_element(DoCommandFlag::Execute),
+                CmdMoveRailVehicle {
+                    src_veh: vehicle,
+                    dest_veh: x.id(u),
+                    move_chain: true,
+                },
+            )
+        } {
             break;
         }
         crate::witness::hit(crate::witness::VT_RAIL_NORMALIZE);
     }
 }
 
-/// Original `AddRearEngineToMultiheadedTrain`.
-fn add_rear_engine(x: Ctx, v: R) {
+/// `AddRearEngineToMultiheadedTrain`: build the rear engine of a multiheaded train.
+fn add_rear_engine_to_multiheaded_train(x: Ctx, v: R) {
     let a = x.b.construct.articulated;
     let u = x.rec((x.s.new_rear)(Ctx::sh(v)));
     (a.random_bits)(Ctx::sh(u), x.t.shared.random() as u16);
@@ -326,38 +407,55 @@ fn add_rear_engine(x: Ctx, v: R) {
     unsafe {
         a.position(Ctx::sh(u));
     }
-    (x.s.link_multihead)(Ctx::sh(v), Ctx::sh(u));
+    /* Now we need to link the front and rear engines together */
+    Ctx::vref(v).set_other_multiheaded_part(Some(Ctx::vref(u)));
+    Ctx::vref(u).set_other_multiheaded_part(Some(Ctx::vref(v)));
 }
 
-/// Original `CmdBuildRailVehicle`.
+/// Arguments of `CmdBuildRailVehicle`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildRailVehicle {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
+/// `CmdBuildRailVehicle`: build a railroad vehicle at the depot `tile`; returns
+/// the new vehicle, or null when only testing or on error.
+///
 /// # Safety
 /// Live native result and engine; new shells stay live and no shell access
 /// spans a callback.
-pub(crate) unsafe fn build(
+pub(crate) unsafe fn cmd_build_rail_vehicle(
     b: &'static build::Services,
     out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    e: *const OpenTTDEngine,
+    flags: DoCommandFlags,
+    cmd: CmdBuildRailVehicle,
 ) -> *mut () {
+    let CmdBuildRailVehicle { tile, e } = cmd;
     let x = Ctx::new(b);
     let s = x.s;
     let kind = crate::vehicle::EngineRef::of(e).rail_kind();
     if kind == RailVehicleTypes::WAGON {
-        return Ctx::sh(unsafe { build_wagon(x, out, flags, tile, e) });
+        return Ctx::sh(unsafe {
+            cmd_build_rail_wagon(x, out, flags, CmdBuildRailWagon { tile, e })
+        });
     }
+    /* Check if depot and new engine uses the same kind of tracks *
+     * We need to see if the engine got power on the tile to avoid electric engines in non-electric depots */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
-    let tiletype = (b.refit.train.physics.rail_type)(tile);
+    let tiletype =
+        crate::rail_type::RailType(crate::map_func::World::new(x.t.shared).rail_type(tile.0));
     if !(b.refit.train.physics.powered)(railtypes, tiletype) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
     let mut v = ptr::null_mut();
-    if flags & DoCommandFlag::EXECUTE != 0 {
+    if flags.test(DoCommandFlag::Execute) {
         let k: &construct::Services = x.b.construct;
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
-        v = x.rec((s.new_engine)(tile, e));
+        // The native allocation clears gcache.first_engine: needs to be set before first callback.
+        v = x.rec((s.new_engine)(tile.0, e));
         (x.c.vehicles.set_max_age)(Ctx::vref(v), unsafe {
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
         });
@@ -366,7 +464,7 @@ pub(crate) unsafe fn build(
         (k.service_flags)(
             Ctx::sh(v),
             crate::vehicle::EngineRef::of(e).exclusive_preview(),
-            (x.t.interval_percent)(company),
+            x.t.interval_is_percent(CompanyID(company)),
         );
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.set_subtype(v, gv::set_front_engine);
@@ -377,23 +475,25 @@ pub(crate) unsafe fn build(
         }
         if kind == RailVehicleTypes::MULTIHEAD {
             crate::witness::hit(crate::witness::VT_RAIL_MULTIHEAD);
-            add_rear_engine(x, v);
+            add_rear_engine_to_multiheaded_train(x, v);
         } else {
-            unsafe { super::articulated::add(a, Ctx::sh(v)) };
+            unsafe { super::articulated::add_articulated_parts(a, Ctx::sh(v)) };
         }
         x.consist_changed(v);
         x.update_group(v);
-        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
+        unsafe { super::articulated::check_consistency_of_articulated_vehicle(a, Ctx::sh(v)) };
     }
     (x.t.cost.zero)(out);
     Ctx::sh(v)
 }
 
-/// Original `FindGoodVehiclePos`.
-fn find_good_position(x: Ctx, src: R) -> R {
+/// `FindGoodVehiclePos`: find a free wagon chain in the depot whose engines
+/// match `src`'s, to drag it onto.
+fn find_good_vehicle_pos(x: Ctx, src: R) -> R {
     let eng = x.engine(src);
-    for vehicle in free_wagons(x, x.tile(src)) {
-        let dst = x.rec(unsafe { (x.g.vehicle)(vehicle) });
+    for vehicle in get_free_wagons_in_depot(x, x.tile(src)) {
+        let dst = x.rec(unsafe { (x.g.vehicle)(vehicle.0) });
+        /* check so all vehicles in the line have the same engine. */
         let mut t = dst;
         while x.engine(t) == eng {
             t = x.next(t);
@@ -405,8 +505,9 @@ fn find_good_position(x: Ctx, src: R) -> R {
     ptr::null_mut()
 }
 
-/// Original `MakeTrainBackup`: a local list, as the original's `TrainList`.
-fn backup(x: Ctx, mut t: R) -> Vec<R> {
+/// `MakeTrainBackup`: make a backup of a train into a train list; a local list,
+/// as the original's `TrainList`.
+fn make_train_backup(x: Ctx, mut t: R) -> Vec<R> {
     let mut list = Vec::new();
     while !t.is_null() {
         list.push(t);
@@ -414,15 +515,17 @@ fn backup(x: Ctx, mut t: R) -> Vec<R> {
     }
     list
 }
-/// Original `RestoreTrainBackup`.
-fn restore(x: Ctx, list: &[R]) {
+/// `RestoreTrainBackup`: restore the train from the backup list.
+fn restore_train_backup(x: Ctx, list: &[R]) {
+    /* No train, nothing to do. */
     if list.is_empty() {
         return;
     }
     let mut prev: R = ptr::null_mut();
+    /* Iterate over the list and rebuild it. */
     for &t in list {
         if prev.is_null() {
-            // Make sure the head of the train is always the first in the chain.
+            /* Make sure the head of the train is always the first in the chain. */
             let previous = x.previous(t);
             if !previous.is_null() {
                 x.set_next(previous, ptr::null_mut());
@@ -433,22 +536,25 @@ fn restore(x: Ctx, list: &[R]) {
         prev = t;
     }
 }
-/// Original `RemoveFromConsist`.
+/// `RemoveFromConsist`: unlink a part, or the chain from it, from its train.
 fn remove_from_consist(x: Ctx, part: R, chain: bool) {
     let tail = if chain {
         x.last(part)
     } else {
         x.last_engine_part(part)
     };
+    /* Unlink at the front, but make it point to the next
+     * vehicle after the to be remove part. */
     let previous = x.previous(part);
     if !previous.is_null() {
         x.set_next(previous, x.next(tail));
     }
+    /* Unlink at the back */
     x.set_next(tail, ptr::null_mut());
 }
-/// Original `InsertInConsist`.
+/// `InsertInConsist`: inserts a chain into the train at dst.
 fn insert_in_consist(x: Ctx, dst: R, chain: R) {
-    // We do not want to add something in the middle of an articulated part.
+    /* We do not want to add something in the middle of an articulated part. */
     x.assert(|| {
         !dst.is_null() && {
             let next = x.next(dst);
@@ -458,10 +564,12 @@ fn insert_in_consist(x: Ctx, dst: R, chain: R) {
     x.set_next(x.last(chain), x.next(dst));
     x.set_next(dst, chain);
 }
-/// Original `NormaliseDualHeads`.
+/// `NormaliseDualHeads`: normalise the dual heads in the train, i.e. if one is
+/// missing move that one to this train.
 fn normalise_dual_heads(x: Ctx, mut t: R) {
     while !t.is_null() {
         if x.is_multiheaded(t) && x.is_engine(t) {
+            /* Make sure that there are no free cars before next engine */
             let mut u = t;
             loop {
                 let next = x.next(u);
@@ -470,28 +578,34 @@ fn normalise_dual_heads(x: Ctx, mut t: R) {
                 }
                 u = next;
             }
-            let other = x.rec((x.r.selection.other_multihead)(Ctx::sh(t)));
+            let other = x.other_multiheaded_part(t);
             if u != other {
+                /* Remove the part from the 'wrong' train */
                 remove_from_consist(x, other, false);
                 crate::witness::hit(crate::witness::VT_RAIL_DUAL_HEADS);
+                /* And add it to the 'right' train */
                 insert_in_consist(x, u, other);
             }
         }
         t = x.next_vehicle(t);
     }
 }
-/// Original `NormaliseSubtypes`.
+/// `NormaliseSubtypes`: normalise the sub types of the parts in this chain.
 fn normalise_subtypes(x: Ctx, chain: R) {
+    /* Nothing to do */
     if chain.is_null() {
         return;
     }
+    /* We must be the first in the chain. */
     x.assert(|| x.previous(chain).is_null());
+    /* Set the appropriate bits for the first in the chain. */
     if gv::is_wagon(x.subtype(chain)) {
         x.set_subtype(chain, gv::set_free_wagon);
     } else {
         x.assert(|| x.is_engine(chain));
         x.set_subtype(chain, gv::set_front_engine);
     }
+    /* Now clear the bits for the rest of the chain */
     let mut t = x.next(chain);
     while !t.is_null() {
         x.set_subtype(t, gv::clear_free_wagon);
@@ -500,30 +614,42 @@ fn normalise_subtypes(x: Ctx, chain: R) {
     }
 }
 
-/// Original `CheckNewTrain`; `Some` is the `CommandCost(StringID)` error.
-fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> Option<u32> {
+/// `CheckNewTrain`: check/validate whether we may actually build a new train;
+/// `Some` is the `CommandCost(StringID)` error.
+/// All vehicles are/were heads of their chains.
+fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> Option<StringID> {
+    /* Just add 'new' engines and subtract the original ones.
+     * If that's less than or equal to 0 we can be sure we did
+     * not add any engines (read: trains) along the way. */
     let engine = |v: R| i32::from(!v.is_null() && x.is_engine(v));
     if engine(src) + engine(dst) - engine(original_src) - engine(original_dst) <= 0 {
         return None;
     }
+    /* Get a free unit number and check whether it's within the bounds.
+     * There will always be a maximum of one new train. */
     // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
     if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN)
         <= unsafe { x.t.shared.settings().max_trains.read() }
     {
         return None;
     }
-    Some(x.b.too_many)
+    Some(StringID(x.b.too_many))
 }
-/// Original `CheckTrainAttachment`. An error leaves the chain split, exactly
-/// as the original; every caller restores its backup.
-fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
+/// `CheckTrainAttachment`: check whether the train parts can be attached. An
+/// error leaves the chain split, exactly as the original; every caller
+/// restores its backup.
+fn check_train_attachment(x: Ctx, mut t: R) -> Option<StringID> {
+    /* No multi-part train, no need to check. */
     if t.is_null() || x.next(t).is_null() {
         return None;
     }
+    /* The maximum length for a train. For each part we decrease this by one
+     * and if the result is negative the train is simply too long. */
     // Unsigned `uint8_t * uint` arithmetic, then the original's `int` conversion.
     let mut allowed_len = (u32::from(x.w.max_train_length()) * TILE_SIZE)
         .wrapping_sub(u32::from(x.length(t)))
         .cast_signed();
+    /* For free-wagon chains, check if they are within the max_train_length limit. */
     if !x.is_engine(t) {
         t = x.next(t);
         while !t.is_null() {
@@ -531,31 +657,39 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
             t = x.next(t);
         }
         if allowed_len < 0 {
-            return Some(x.w.too_long);
+            return Some(StringID(x.w.too_long));
         }
         return None;
     }
     let head = t;
     let mut prev = t;
+    /* Break the prev -> t link so it always holds within the loop. */
     t = x.next(t);
     x.set_next(prev, ptr::null_mut());
+    /* Make sure the cache is cleared. */
     (x.s.invalidate_grf)(Ctx::sh(head));
     let strings = &x.c.strings;
     while !t.is_null() {
         allowed_len -= i32::from(x.length(t));
         let next = x.next(t);
+        /* Unlink the to-be-added piece; it is already unlinked from the previous
+         * part due to the fact that the prev -> t link is broken. */
         x.set_next(t, ptr::null_mut());
+        /* Don't check callback for articulated or rear dual headed parts */
         if !x.is_articulated(t) && !x.is_rear(t) {
+            /* Back up and clear the first_engine data to avoid using wagon override group */
             let cache = Ctx::vref(t).ground_cache();
             let first_engine = read_field!(cache, first_engine);
             write_field!(cache, first_engine, crate::engine_type::INVALID_ENGINE);
+            /* We don't want the cache to interfere. head's cache is cleared before
+             * the loop and after each callback does not need to be cleared here. */
             (x.s.invalidate_grf)(Ctx::sh(t));
             let mut regs100 = MaybeUninit::<i32>::uninit();
             let callback = unsafe {
                 crate::newgrf_vehicle::callback(
                     x.c.vehicles,
                     Some(Ctx::vref(t)),
-                    x.engine(head),
+                    x.engine(head).0,
                     crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
                     0,
                     head,
@@ -564,17 +698,24 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                     1,
                 )
             };
+            /* Restore original first_engine data */
             write_field!(Ctx::vref(t).ground_cache(), first_engine, first_engine);
+            /* We do not want to remember any cached variables from the test run */
             (x.s.invalidate_grf)(Ctx::sh(t));
             (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
-                let mut error = strings.null_string;
+                /* A failing callback means everything is okay */
+                let null_string = StringID(strings.null_string);
+                let mut error = null_string;
                 let grf_text = |n: u32| {
-                    x.c.grf_text_raw(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
+                    x.c.grf_text(
+                        Ctx::sh(head),
+                        GRFStringID(strings.grf_text.0.wrapping_add(n)),
+                    )
                 };
                 if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
-                        error = strings.incompatible_rail;
+                        error = StringID(strings.incompatible_rail);
                     }
                     if callback < 0xFD {
                         error = grf_text(u32::from(callback));
@@ -590,31 +731,36 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                     error = grf_text(u32::from(callback));
                 } else {
                     match callback {
+                        // 0x400: allow if railtypes match (always the case for OpenTTD); 0x401: allow
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error =
-                                x.c.grf_text_raw(Ctx::sh(head), unsafe { regs100.assume_init() }
-                                    as u32);
+                            error = x.c.grf_text(
+                                Ctx::sh(head),
+                                GRFStringID(unsafe { regs100.assume_init() } as u32),
+                            );
                         }
-                        _ => error = strings.incompatible_rail,
+                        // unknown reason, or 0x402: disallow attaching
+                        _ => error = StringID(strings.incompatible_rail),
                     }
                 }
-                if error != strings.null_string {
+                if error != null_string {
                     return Some(error);
                 }
             }
         }
+        /* And link it to the new part. */
         x.set_next(prev, t);
         prev = t;
         t = next;
     }
     if allowed_len < 0 {
-        return Some(x.w.too_long);
+        return Some(StringID(x.w.too_long));
     }
     None
 }
-/// Original `ValidateTrains`.
+/// `ValidateTrains`: validate whether we are going to create valid trains.
+/// All vehicles are/were heads of their chains.
 fn validate_trains(
     x: Ctx,
     original_dst: R,
@@ -622,8 +768,8 @@ fn validate_trains(
     original_src: R,
     src: R,
     check_limit: bool,
-) -> Option<u32> {
-    // Source attachment errors take precedence over destination errors.
+) -> Option<StringID> {
+    /* Check whether we may actually construct the trains. */
     let error = check_train_attachment(x, src);
     if error.is_some() {
         return error;
@@ -632,20 +778,32 @@ fn validate_trains(
     if error.is_some() {
         return error;
     }
+    /* Check whether we need to build a new train. */
     if check_limit {
         check_new_train(x, original_dst, dst, original_src, src)
     } else {
         None
     }
 }
-/// Original `ArrangeTrains`.
+/// `ArrangeTrains`: arrange the trains in the wanted way.
 fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, move_chain: bool) {
+    /* First determine the front of the two resulting trains */
     if *src_head == *dst_head {
+        /* If we aren't moving part(s) to a new train, we are just moving the
+         * front back and there is not destination head. */
         *dst_head = ptr::null_mut();
     } else if dst_head.is_null() {
+        /* If we are moving to a new train the head of the move train would become
+         * the head of the new vehicle. */
         *dst_head = src;
     }
     if src == *src_head {
+        /* If we are moving the front of a train then we are, in effect, creating
+         * a new head for the train. Point to that. Unless we are moving the whole
+         * train in which case there is not 'source' train anymore.
+         * In case we are a multiheaded part we want the complete thing to come
+         * with us, so src->GetNextUnit(), however... when we are e.g. a wagon
+         * that is followed by a rear multihead we do not want to include that. */
         *src_head = if move_chain {
             ptr::null_mut()
         } else if x.is_multiheaded(src) {
@@ -656,24 +814,35 @@ fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, mo
             x.next_vehicle(src)
         };
     }
+    /* Now it's just simply removing the part that we are going to move from the
+     * source train and *if* the destination is a not a new train add the chain
+     * at the destination location. */
     remove_from_consist(x, src, move_chain);
     if *dst_head != src {
         insert_in_consist(x, dst, src);
     }
+    /* Now normalise the dual heads, that is move the dual heads around in such
+     * a way that the head and rear of a dual head are in the same train */
     normalise_dual_heads(x, *src_head);
     normalise_dual_heads(x, *dst_head);
 }
-/// Original `NormaliseTrainHead`.
+/// `NormaliseTrainHead`: normalise the head of the train again, i.e. that is
+/// tell the world that we have changed and update all kinds of variables.
 fn normalise_train_head(x: Ctx, head: R) {
+    /* Not much to do! */
     if head.is_null() {
         return;
     }
+    /* Tell the 'world' the train changed. */
     x.consist_changed(head);
     x.update_group(head);
+    /* Not a front engine, i.e. a free wagon chain. No need to do more. */
     if !x.is_front(head) {
         return;
     }
+    /* Update the refit button and window */
     (x.s.head_windows)(Ctx::sh(head));
+    /* If we don't have a unit number yet, set one. */
     if (x.s.unit)(Ctx::sh(head)) != 0 {
         return;
     }
@@ -705,17 +874,33 @@ fn mark_dirty(x: Ctx, v: R) {
     }
 }
 
-/// Original `CmdMoveRailVehicle`.
+/// `CmdMoveRailVehicle`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdMoveRailVehicle {
+    /// Source vehicle index.
+    pub(crate) src_veh: VehicleID,
+    /// What wagon to put the source wagon AFTER, `INVALID_VEHICLE` to make a new line.
+    pub(crate) dest_veh: VehicleID,
+    /// Move all vehicles following the source vehicle.
+    pub(crate) move_chain: bool,
+}
+/// `CmdMoveRailVehicle`: move a rail vehicle around inside the depot.
+/// `DoCommandFlag::AutoReplace` is set when autoreplace tries to undo its
+/// modifications or moves vehicles to temporary locations inside the depot.
+///
 /// # Safety
 /// Live caller-owned native result; vehicles stay live through the command.
-pub(crate) unsafe fn move_vehicle(
+pub(crate) unsafe fn cmd_move_rail_vehicle(
     b: &'static build::Services,
     out: *mut CommandCost,
-    flags: u16,
-    src_veh: u32,
-    dest_veh: u32,
-    move_chain: bool,
+    flags: DoCommandFlags,
+    cmd: CmdMoveRailVehicle,
 ) {
+    let CmdMoveRailVehicle {
+        src_veh,
+        dest_veh,
+        move_chain,
+    } = cmd;
     let x = Ctx::new(b);
     let s = x.s;
     let cost = x.t.cost;
@@ -727,15 +912,17 @@ pub(crate) unsafe fn move_vehicle(
     if !(cost.success)(out) {
         return;
     }
+    /* Do not allow moving crashed vehicles inside the depot, it is likely to cause asserts later */
     if Ctx::vref(src).status() & crate::vehicle_base::VS_CRASHED != 0 {
         return (cost.error)(out, ERROR);
     }
+    /* if nothing is selected as destination, try and find a matching vehicle to drag to. */
     let mut dst;
-    if dest_veh == INVALID_VEHICLE {
-        dst = if x.is_engine(src) || flags & DoCommandFlag::AUTO_REPLACE != 0 {
+    if dest_veh.0 == INVALID_VEHICLE {
+        dst = if x.is_engine(src) || flags.test(DoCommandFlag::AutoReplace) {
             ptr::null_mut()
         } else {
-            find_good_position(x, src)
+            find_good_vehicle_pos(x, src)
         };
     } else {
         dst = x.train(dest_veh);
@@ -746,18 +933,21 @@ pub(crate) unsafe fn move_vehicle(
         if !(cost.success)(out) {
             return;
         }
+        /* Do not allow appending to crashed vehicles, too */
         if Ctx::vref(dst).status() & crate::vehicle_base::VS_CRASHED != 0 {
             return (cost.error)(out, ERROR);
         }
     }
-    let first_part = x.r.selection.first_engine_part;
-    src = x.rec(first_part(Ctx::sh(src)));
+    /* if an articulated part is being handled, deal with its parent vehicle */
+    src = x.first_engine_part(src);
     if !dst.is_null() {
-        dst = x.rec(first_part(Ctx::sh(dst)));
+        dst = x.first_engine_part(dst);
     }
+    /* don't move the same vehicle.. */
     if src == dst {
         return (cost.zero)(out);
     }
+    /* locate the head of the two chains */
     let mut src_head = x.first(src);
     let mut dst_head;
     if dst.is_null() {
@@ -767,41 +957,53 @@ pub(crate) unsafe fn move_vehicle(
         if x.tile(dst_head) != x.tile(src_head) {
             return (cost.error)(out, ERROR);
         }
+        /* Now deal with articulated part of destination wagon */
         dst = x.last_engine_part(dst);
     }
     if x.is_rear(src) {
         return (cost.error)(out, s.strings.rear_follow);
     }
+    /* When moving all wagons, we can't have the same src_head and dst_head */
     if move_chain && src_head == dst_head {
         return (cost.zero)(out);
     }
-    if !move_chain
-        && !dst.is_null()
-        && x.is_rear(dst)
-        && src == x.rec((x.r.selection.other_multihead)(Ctx::sh(dst)))
-    {
+    /* When moving a multiheaded part to be place after itself, bail out. */
+    if !move_chain && !dst.is_null() && x.is_rear(dst) && src == x.other_multiheaded_part(dst) {
         return (cost.zero)(out);
     }
+    /* Check if all vehicles in the source train are stopped inside a depot. */
     if !unsafe { (x.w.stopped_in_depot)(Ctx::sh(src_head)) } {
         return (cost.error)(out, s.strings.depot_only);
     }
+    /* Check if all vehicles in the destination train are stopped inside a depot. */
     if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(Ctx::sh(dst_head)) } {
         return (cost.error)(out, s.strings.depot_only);
     }
-    let original_src = backup(x, src_head);
-    let original_dst = backup(x, dst_head);
+    /* First make a backup of the order of the trains. That way we can do
+     * whatever we want with the order and later on easily revert. */
+    let original_src = make_train_backup(x, src_head);
+    let original_dst = make_train_backup(x, dst_head);
+    /* Also make backup of the original heads as ArrangeTrains can change them.
+     * For the destination head we do not care if it is the same as the source
+     * head because in that case it's just a copy. */
     let original_src_head = src_head;
     let original_dst_head = if dst_head == src_head {
         ptr::null_mut()
     } else {
         dst_head
     };
+    /* We want this information from before the rearrangement, but execute this after the validation.
+     * original_src_head can't be nullptr; src is by definition != nullptr, so src_head can't be nullptr as
+     * src->GetFirst() always yields non-nullptr, so eventually original_src_head != nullptr as well. */
     let original_src_head_front_engine = x.is_front(original_src_head);
     let original_dst_head_front_engine =
         !original_dst_head.is_null() && x.is_front(original_dst_head);
+    /* (Re)arrange the trains in the wanted arrangement. */
     arrange_trains(x, &mut dst_head, dst, &mut src_head, src, move_chain);
-    // Autoreplace reverts to the original, assumed valid, state.
-    if flags & DoCommandFlag::AUTO_REPLACE == 0
+    /* If the autoreplace flag is set we do not need to test for the validity
+     * because we are going to revert the train to its original state. As we
+     * assume the original state was correct autoreplace can skip this. */
+    if !flags.test(DoCommandFlag::AutoReplace)
         && let Some(error) = validate_trains(
             x,
             original_dst_head,
@@ -812,28 +1014,55 @@ pub(crate) unsafe fn move_vehicle(
         )
     {
         crate::witness::hit(crate::witness::VT_RAIL_MOVE_RESTORE);
-        restore(x, &original_src);
-        restore(x, &original_dst);
-        return (cost.error)(out, error);
+        /* Restore the train we had. */
+        restore_train_backup(x, &original_src);
+        restore_train_backup(x, &original_dst);
+        return (cost.error)(out, error.0);
     }
-    if flags & DoCommandFlag::EXECUTE == 0 {
-        restore(x, &original_src);
-        restore(x, &original_dst);
+    /* do it? */
+    if !flags.test(DoCommandFlag::Execute) {
+        /* We don't want to execute what we're just tried. */
+        restore_train_backup(x, &original_src);
+        restore_train_backup(x, &original_dst);
         return (cost.zero)(out);
     }
+    /* Remove old heads from the statistics */
     if original_src_head_front_engine {
         x.count_vehicle(original_src_head, -1);
     }
     if original_dst_head_front_engine {
         x.count_vehicle(original_dst_head, -1);
     }
+    /* First normalise the sub types of the chains. */
     normalise_subtypes(x, src_head);
     normalise_subtypes(x, dst_head);
+    /* There are 14 different cases:
+     *  1) front engine gets moved to a new train, it stays a front engine.
+     *     a) the 'next' part is a wagon that becomes a free wagon chain.
+     *     b) the 'next' part is an engine that becomes a front engine.
+     *     c) there is no 'next' part, nothing else happens
+     *  2) front engine gets moved to another train, it is not a front engine anymore
+     *     a) the 'next' part is a wagon that becomes a free wagon chain.
+     *     b) the 'next' part is an engine that becomes a front engine.
+     *     c) there is no 'next' part, nothing else happens
+     *  3) front engine gets moved to later in the current train, it is not a front engine anymore.
+     *     a) the 'next' part is a wagon that becomes a free wagon chain.
+     *     b) the 'next' part is an engine that becomes a front engine.
+     *  4) free wagon gets moved
+     *     a) the 'next' part is a wagon that becomes a free wagon chain.
+     *     b) the 'next' part is an engine that becomes a front engine.
+     *     c) there is no 'next' part, nothing else happens
+     *  5) non front engine gets moved and becomes a new train, nothing else happens
+     *  6) non front engine gets moved within a train / to another train, nothing happens
+     *  7) wagon gets moved, nothing happens
+     */
     if src == original_src_head && x.is_engine(src) && !x.is_front(src) {
-        // Cases #2 and #3: the front engine gets trashed.
+        /* Cases #2 and #3: the front engine gets trashed. */
         crate::witness::hit(crate::witness::VT_RAIL_FRONT_TRASHED);
         (s.front_windows)(Ctx::sh(src));
         if !src_head.is_null() && x.is_front(src_head) {
+            /* Cases #?b: Transfer order, unit number and other stuff
+             * to the new front engine. */
             crate::witness::hit(crate::witness::VT_RAIL_HEAD_TRANSFER);
             take_orders(src_head, src);
             if !crate::vehicle_base::order_list(src_head).is_null() {
@@ -841,10 +1070,13 @@ pub(crate) unsafe fn move_vehicle(
             }
             unsafe { (x.w.copy_configuration)(Ctx::sh(src), Ctx::sh(src_head)) };
         }
+        /* Remove stuff not valid anymore for non-front engines. */
         delete_orders(x, src);
         (s.release_unit)(Ctx::sh(src));
         (x.t.clear_name)(Ctx::sh(src));
     }
+    /* We weren't a front engine but are becoming one. So
+     * we should be put in the default group. */
     if original_src_head != src && dst_head == src {
         crate::witness::hit(crate::witness::VT_RAIL_NEW_FRONT);
         unsafe {
@@ -852,15 +1084,18 @@ pub(crate) unsafe fn move_vehicle(
         }
         (s.company_dirty)();
     }
+    /* Handle 'new engine' part of cases #1b, #2b, #3b, #4b and #5 in NormaliseTrainHead. */
     normalise_train_head(x, src_head);
     normalise_train_head(x, dst_head);
+    /* Add new heads to statistics.
+     * This should be done after NormaliseTrainHead due to engine total limit checks in GetFreeUnitNumber. */
     if !src_head.is_null() && x.is_front(src_head) {
         x.count_vehicle(src_head, 1);
     }
     if !dst_head.is_null() && x.is_front(dst_head) {
         x.count_vehicle(dst_head, 1);
     }
-    if flags & DoCommandFlag::NO_CARGO_CAPACITY_CHECK == 0 {
+    if !flags.test(DoCommandFlag::NoCargoCapacityCheck) {
         unsafe {
             crate::cargo_storage::cargo_capacity(
                 s.cargo_capacity,
@@ -884,34 +1119,56 @@ pub(crate) unsafe fn move_vehicle(
     if !dst_head.is_null() {
         mark_dirty(x, x.first(dst_head));
     }
-    (s.depot_changed)(x.tile(src));
+    /* We are undoubtedly changing something in the depot and train list. */
+    (s.depot_changed)(x.tile(src).0);
     (cost.zero)(out);
 }
 
-/// Original `CmdSellRailWagon`.
+/// Arguments of `CmdSellRailWagon`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdSellRailWagon {
+    pub t: *mut (),
+    /// False sells only the dragged wagon/engine and any belonging rear engines.
+    /// True sells the vehicle and all following vehicles; when dragging a wagon,
+    /// do not delete a rear engine belonging to a preceding front engine.
+    pub sell_chain: bool,
+    pub backup_order: bool,
+    pub user: ClientID,
+}
+
+/// `CmdSellRailWagon`: sell a (single) train wagon/engine, or the chain from
+/// it when `sell_chain`.
+///
 /// # Safety
 /// Live caller-owned native result and train shell; the sold chain is deleted
 /// last, after every shell access.
-pub(crate) unsafe fn sell(
+pub(crate) unsafe fn cmd_sell_rail_wagon(
     b: &'static build::Services,
     out: *mut CommandCost,
-    flags: u16,
-    t: *mut (),
-    sell_chain: bool,
-    backup_order: bool,
-    user: u32,
+    flags: DoCommandFlags,
+    cmd: CmdSellRailWagon,
 ) {
+    let CmdSellRailWagon {
+        t,
+        sell_chain,
+        backup_order,
+        user,
+    } = cmd;
     let x = Ctx::new(b);
     let s = x.s;
     let cost = x.t.cost;
-    let v = x.rec((x.r.selection.first_engine_part)(t));
+    let v = x.first_engine_part(x.rec(t));
     let first = x.first(v);
     if x.is_rear(v) {
         return (cost.error)(out, s.strings.rear_follow);
     }
-    let original = backup(x, first);
+    /* First make a backup of the order of the train. That way we can do
+     * whatever we want with the order and later on easily revert. */
+    let original = make_train_backup(x, first);
+    /* We need to keep track of the new head and the head of what we're going to sell. */
     let mut new_head = first;
     let mut sell_head = ptr::null_mut();
+    /* Split the train in the wanted way. */
     arrange_trains(
         x,
         &mut sell_head,
@@ -920,20 +1177,23 @@ pub(crate) unsafe fn sell(
         v,
         sell_chain,
     );
+    /* We don't need to validate the second train; it's going to be sold. */
     if let Some(error) = validate_trains(
         x,
         ptr::null_mut(),
         ptr::null_mut(),
         first,
         new_head,
-        flags & DoCommandFlag::AUTO_REPLACE == 0,
+        !flags.test(DoCommandFlag::AutoReplace),
     ) {
         crate::witness::hit(crate::witness::VT_RAIL_SELL_RESTORE);
-        restore(x, &original);
-        return (cost.error)(out, error);
+        /* Restore the train we had. */
+        restore_train_backup(x, &original);
+        return (cost.error)(out, error.0);
     }
     if crate::vehicle_base::order_list(first).is_null() && (x.c.orders.list_capacity)() == 0 {
-        restore(x, &original);
+        /* Restore the train we had. */
+        restore_train_backup(x, &original);
         return (cost.error)(out, s.strings.no_orders);
     }
     (cost.expense_money)(out, x.c.strings.new_vehicle_expense, 0);
@@ -942,32 +1202,43 @@ pub(crate) unsafe fn sell(
         (cost.amount)(out, (x.c.value)(Ctx::sh(part)).saturating_neg());
         part = x.next(part);
     }
-    if flags & DoCommandFlag::EXECUTE == 0 {
-        restore(x, &original);
+    /* do it? */
+    if !flags.test(DoCommandFlag::Execute) {
+        /* We don't want to execute what we're just tried. */
+        restore_train_backup(x, &original);
         return;
     }
+    /* First normalise the sub types of the chain. */
     normalise_subtypes(x, new_head);
     if v == first && !sell_chain && !new_head.is_null() && x.is_front(new_head) {
         if x.is_engine(v) {
+            /* We are selling the front engine. In this case we want to
+             * 'give' the order, unit number and such to the new head. */
             crate::witness::hit(crate::witness::VT_RAIL_SELL_TRANSFER);
             take_orders(new_head, first);
             add_to_shared(x, new_head, first);
             delete_orders(x, first);
+            /* Copy other important data from the front engine */
             unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };
         }
-        x.count_vehicle(new_head, 1);
+        x.count_vehicle(new_head, 1); // after copying over the profit, if required
     } else if unsafe { (x.g.primary)(Ctx::sh(v)) } && backup_order {
-        unsafe { crate::orders::openttd_rust_backup_create(Ctx::sh(v).cast(), user, x.c.orders) };
+        unsafe {
+            crate::orders::openttd_rust_backup_create(Ctx::sh(v).cast(), user.0, x.c.orders);
+        };
     }
+    /* We need to update the information about the train. */
     normalise_train_head(x, new_head);
-    (s.depot_changed)(x.tile(v));
+    /* We are undoubtedly changing something in the depot and train list. */
+    (s.depot_changed)(x.tile(v).0);
+    /* Actually delete the sold 'goods' */
     // No shell access follows the deleting callback.
     (x.c.vehicles.destroy)(Ctx::vref(sell_head));
 }
 
 /// Command entry for `CmdMoveRailVehicle`.
 /// # Safety
-/// As `move_vehicle`; the static table outlives the call. Panics abort.
+/// As `cmd_move_rail_vehicle`; the static table outlives the call. Panics abort.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_move(
     b: &'static build::Services,
@@ -977,13 +1248,24 @@ pub unsafe extern "C" fn openttd_rust_train_move(
     dest_veh: u32,
     move_chain: bool,
 ) {
-    unsafe { move_vehicle(b, out, flags, src_veh, dest_veh, move_chain) };
+    unsafe {
+        cmd_move_rail_vehicle(
+            b,
+            out,
+            DoCommandFlags(flags),
+            CmdMoveRailVehicle {
+                src_veh: VehicleID(src_veh),
+                dest_veh: VehicleID(dest_veh),
+                move_chain,
+            },
+        );
+    }
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
+        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear,
         invalidate_grf, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };

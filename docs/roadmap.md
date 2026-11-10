@@ -483,13 +483,12 @@ At most three undispatched work orders ([delegation](team.md#ready-queue-and-pip
 
 Agent: /root/cleanup_ready_queue_refresh | Model: gpt-6-astra | Reasoning effort: high
 
-1. **22, #734/#735 workset 22 Text/GUI, next on the file-pass slot after #884.**
-   - **Files and size:** `byte_strings.rs`, `control_codes.rs`, `encoded.rs`, `sprites.rs`, `string_func.rs`, `string_services.rs`, `string_validation.rs`, `utf8.rs`, `viewport_func.rs`, `widget_parser.rs`: 2,854 current raw lines, one PR; prior estimate 980 to 1,767 changed lines.
-   - **Dependencies and overlaps:** adopt #884's `SeparatorUsage` in `encoded.rs`. No pass file is held by #883, #884 or W+O. Reserve any changed string API callers, including `packet.rs` and `auth.rs`; serialize with 20p. Leaf fallback while W and I block map core.
-2. **20p, #734/#735 workset 20 `packet.rs` single-file pass, fallback if 22 cannot start.**
+Agent: /root | Model: gpt-6-astra | Reasoning effort: xhigh
+
+1. **20p, #734/#735 workset 20 `packet.rs` single-file pass, after selected entry 22 merges.**
    - **Files and size:** `packet.rs`, 1,968 current raw lines; prior site-based estimate about 640 to 1,150 changed lines. Caller scope: `auth.rs`, `network_auth.rs`, `network_client.rs`, `network_command.rs`, `network_connection.rs`, `network_content.rs`, `network_dispatch.rs`, `network_frame.rs`, `network_socket.rs`, `network_tcp.rs`, `test_tables.rs`; reserve required typed-call edits and internal auth helpers together.
-   - **Dependencies and overlaps:** none of that set is held by the current PRs or W+O. Prefer 22 first when #884 merges, then adopt its string APIs. If 20p starts first, 22 waits for its merge because both can edit packet/auth callers. Keep upstream-test packet exports under #737's recorded exception. No map-core prerequisite; the other 17 network files follow their packet callee.
-3. **I, #737 company infrastructure counters, next on the boundary slot after W+O merges.**
+   - **Dependencies and overlaps:** adopt 22's string APIs after its merge; both passes can edit packet/auth callers. W+O now holds `test_tables.rs` in #885 at `d709759410`, and I may need it next: serialize any required edits, with I taking priority. Keep upstream-test packet exports under #737's recorded exception. No map-core prerequisite; the other 17 network files follow their packet callee.
+2. **I, #737 company infrastructure counters, next on the boundary slot after W+O merges.**
    - **Size:** one cross-table PR, nine callback slots; prior inventory about 30 to 35 gross counted C++ lines and 127 infrastructure calls including notifications that stay. Size replacement layout/access costs at the first checkpoint.
    - **Files:** Rust `company.rs`, `company_type.rs`, `station_cmd.rs`, `station_cmd/waypoint.rs`, `road_cmd.rs`, `tunnelbridge_cmd.rs`, `rail_cmd.rs`, `objects.rs`, `water.rs`, `landscape_cmd.rs`, `water_cmd.rs`, `test_tables.rs`; C++ `src/rail_cmd.cpp`, `src/rust/company_services.h`, `company_adapter.cpp`, `company_ffi.h`, `rail_command_ffi.h`, `ground_ffi.h`, `station_command_ffi.h`, `station_command_services.hpp`, `services.cpp`, plus its generated layout declaration inputs and boundary baselines.
    - **Dependencies and overlaps:** W+O holds station/world files and `services.cpp`. After its clean base update to `a571ff2df6`, #883 no longer changes `station_cmd.cpp` or `station_service.rs`, so W has no collision with that PR (root, 2026-11-10). I is disjoint from 22; its potential `test_tables.rs` overlap with 20p must serialize if both need edits, with I taking priority. I must merge before map core 7a opens. Keep window-dirty notifications; obtain reviewer acceptance for any generated-layout growth.

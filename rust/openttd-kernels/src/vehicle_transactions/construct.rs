@@ -6,10 +6,12 @@
 use super::{ERROR, articulated, build, vehicle_ref};
 use crate::aircraft::{AIR_AIRCRAFT, AIR_HELICOPTER};
 use crate::airport::HANGAR;
-use crate::command_type::DoCommandFlag;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_type::CompanyID;
 use crate::engine_type::AIR_CTOL;
 use crate::services::CommandCost;
 use crate::station::Station;
+use crate::tile_type::TileIndex;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
 use std::ptr;
 
@@ -36,20 +38,31 @@ pub struct Services {
     pub service_flags: extern "C" fn(*mut (), bool, bool),
     pub wrong_depot: u32,
 }
-/// Original `CmdBuildRoadVehicle`.
+/// Arguments of `CmdBuildRoadVehicle`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildRoadVehicle {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
+/// `CmdBuildRoadVehicle`: build a road vehicle at the depot `tile`; returns the
+/// new vehicle, or null when only testing or on error.
+///
 /// # Safety
 /// Live native cost and engine; new shells stay live, and no owner access spans a callback.
-pub(crate) unsafe fn road(
+pub(crate) unsafe fn cmd_build_road_vehicle(
     s: &build::Services,
     out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    e: *const OpenTTDEngine,
+    flags: DoCommandFlags,
+    cmd: CmdBuildRoadVehicle,
 ) -> *mut () {
+    let CmdBuildRoadVehicle { tile, e } = cmd;
+    let tile = tile.0;
     let k = s.construct;
     let a = k.articulated;
     let r = s.refit;
     let b = r.common.base;
+    /* Check that the vehicle can drive on the road in question */
     if !crate::road_map::has_tile_any_road_type(
         &crate::map_func::World::new(b.shared),
         tile,
@@ -59,11 +72,12 @@ pub(crate) unsafe fn road(
         return ptr::null_mut();
     }
     (b.cost.zero)(out);
-    if flags & DoCommandFlag::EXECUTE == 0 {
+    if !flags.test(DoCommandFlag::Execute) {
         return ptr::null_mut();
     }
     crate::witness::hit(crate::witness::VT_ROAD);
-    let company = (b.shared.current_company)();
+    let company = CompanyID((b.shared.current_company)());
+    // The native allocation clears gcache.first_engine: needs to be set before first callback.
     let v = (k.new_road)(tile);
     unsafe {
         crate::road::set_depot_state((r.road_state)(
@@ -87,10 +101,7 @@ pub(crate) unsafe fn road(
     (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
         crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
     });
-    (k.service_dates)(
-        v,
-        b.interval_default_raw(company, VehicleType::ROAD.0) as u16,
-    );
+    (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD) as u16);
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
     (k.road_front)(
@@ -98,8 +109,13 @@ pub(crate) unsafe fn road(
         crate::services::RoadType(engine.roadtype()),
         engine.powered_roadtypes(b.shared),
     );
-    (k.service_flags)(v, engine.exclusive_preview(), (b.interval_percent)(company));
-    unsafe { articulated::add(a, v) };
+    (k.service_flags)(
+        v,
+        engine.exclusive_preview(),
+        b.interval_is_percent(company),
+    );
+    unsafe { articulated::add_articulated_parts(a, v) };
+    /* Call various callbacks after the whole consist has been constructed */
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
@@ -126,6 +142,7 @@ pub(crate) unsafe fn road(
             r.road,
         );
     }
+    /* Initialize cached values for realistic acceleration. */
     if r.road_acceleration_model() != crate::vehicle_type::AccelerationModel::AM_ORIGINAL {
         crate::ground_vehicle::cargo_changed(
             r.road_ground.physics,
@@ -135,27 +152,39 @@ pub(crate) unsafe fn road(
     unsafe {
         a.position(v);
     }
-    unsafe { articulated::consistency(a, v) };
+    unsafe { articulated::check_consistency_of_articulated_vehicle(a, v) };
     v
 }
 
-/// Original `CmdBuildAircraft`, including its shadow and helicopter rotor.
+/// Arguments of `CmdBuildAircraft`.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildAircraft {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
+/// `CmdBuildAircraft`: build an aircraft at the hangar `tile`, with its shadow
+/// and helicopter rotor; returns the new aircraft, or null when only testing or
+/// on error.
+///
 /// # Safety
-/// As `road`; the station of a hangar tile is live for the whole call.
+/// As `cmd_build_road_vehicle`; the station of a hangar tile is live for the whole call.
 #[allow(clippy::too_many_lines)]
-pub(crate) unsafe fn aircraft(
+pub(crate) unsafe fn cmd_build_aircraft(
     s: &build::Services,
     out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-    e: *const OpenTTDEngine,
+    flags: DoCommandFlags,
+    cmd: CmdBuildAircraft,
 ) -> *mut () {
+    let CmdBuildAircraft { tile, e } = cmd;
+    let tile = tile.0;
     let k = s.construct;
     let a = k.articulated;
     let r = s.refit;
     let c = r.common;
     let b = c.base;
     let st = (k.station)(tile);
+    /* Prevent building aircraft types at places which can't handle them */
     if !crate::vehicle_func::can_engine_use_station(
         (crate::newgrf_airport::runtime().engine_id)(e),
         st.cast(),
@@ -166,15 +195,16 @@ pub(crate) unsafe fn aircraft(
     }
     let spec =
         crate::newgrf_airport::station_spec(st.cast_mut().cast(), crate::newgrf_airport::runtime());
+    /* Make sure all aircraft end up in the first tile of the hangar. */
     let tile = (k.hangar_tile)(st, tile, spec);
     (b.cost.zero)(out);
-    if flags & DoCommandFlag::EXECUTE == 0 {
+    if !flags.test(DoCommandFlag::Execute) {
         return ptr::null_mut();
     }
     crate::witness::hit(crate::witness::VT_AIRCRAFT);
-    let company = (b.shared.current_company)();
-    let v = (k.new_aircraft)();
-    let u = (k.new_aircraft)();
+    let company = CompanyID((b.shared.current_company)());
+    let v = (k.new_aircraft)(); // aircraft
+    let u = (k.new_aircraft)(); // shadow
     (k.aircraft_place)(v, u, tile);
     let engine = crate::vehicle::EngineRef::of(e);
     (a.set_part)(
@@ -190,7 +220,8 @@ pub(crate) unsafe fn aircraft(
             .as_ptr(),
     )
     .write_refit_cap(0);
-    let mail = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
+    let mail =
+        crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL).0;
     if (c.valid_cargo)(mail) {
         (k.set_cargo_type)(
             unsafe { super::vehicle_ref(u, r.common.vehicles) }
@@ -249,15 +280,16 @@ pub(crate) unsafe fn aircraft(
         (*hv.state).previous_pos = pos;
         (*hv.state).targetairport = target;
     }
-    (k.service_dates)(
-        v,
-        b.interval_default_raw(company, VehicleType::AIRCRAFT.0) as u16,
-    );
+    (k.service_dates)(v, b.interval_default(company, VehicleType::AIRCRAFT) as u16);
     (k.build_stamp)(v);
     (k.build_stamp)(u);
     (a.random_bits)(v, b.shared.random() as u16);
     (a.random_bits)(u, b.shared.random() as u16);
-    (k.service_flags)(v, engine.exclusive_preview(), (b.interval_percent)(company));
+    (k.service_flags)(
+        v,
+        engine.exclusive_preview(),
+        b.interval_is_percent(company),
+    );
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
@@ -288,6 +320,7 @@ pub(crate) unsafe fn aircraft(
         a.position(v);
         a.position(u);
     }
+    /* Aircraft with 3 vehicles (chopper)? */
     if subtype == AIR_HELICOPTER {
         crate::witness::hit(crate::witness::VT_ROTOR);
         let w = (k.new_aircraft)();
@@ -301,6 +334,7 @@ pub(crate) unsafe fn aircraft(
         );
         // SAFETY: As above, for the new rotor's private owner.
         unsafe {
+            /* Use rotor's air.state to store the rotor animation frame */
             (*hw.state).state = HRS_ROTOR_STOPPED;
             (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hw.handle));
         }

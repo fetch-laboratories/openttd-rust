@@ -39,7 +39,6 @@ pub struct TransactionServices {
     pub clear_name: extern "C" fn(*mut ()),
     pub set_name: extern "C" fn(*mut (), ByteSpan),
     pub name_dirty: extern "C" fn(*mut ()),
-    pub interval_percent: extern "C" fn(u8) -> bool,
     pub interval_clamp: extern "C" fn(i32, bool) -> u16,
     pub set_interval: extern "C" fn(*mut (), u16, bool, bool),
     pub unique_name: u32,
@@ -243,8 +242,6 @@ pub struct SelectionServices {
     pub vehicles: &'static crate::vehicle::VehicleServices,
     pub links: &'static crate::station_service::Links,
     pub in_depot: extern "C" fn(*mut ()) -> bool,
-    pub first_engine_part: extern "C" fn(*mut ()) -> *mut (),
-    pub other_multihead: extern "C" fn(*mut ()) -> *mut (),
     pub list_clear: extern "C" fn(*mut ()),
     pub list_push: extern "C" fn(*mut (), *mut ()),
 }
@@ -678,14 +675,16 @@ pub(crate) unsafe fn cmd_sell_vehicle(
         // The build root is late-bound through the fleet table, as autoreplace does.
         let root = (s.transactions.build_services)();
         unsafe {
-            rail::sell(
+            rail::cmd_sell_rail_wagon(
                 root,
                 cost,
-                flags.0,
-                v,
-                sell_chain,
-                backup_order,
-                client_id.0,
+                flags,
+                rail::CmdSellRailWagon {
+                    t: v,
+                    sell_chain,
+                    backup_order,
+                    user: client_id,
+                },
             );
         };
         return;
@@ -920,12 +919,11 @@ crate::abi::layouts! {
         startstop_ui, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
-        groups, transactions, vehicles, links, in_depot, first_engine_part,
-        other_multihead, list_clear, list_push,
+        groups, transactions, vehicles, links, in_depot, list_clear, list_push,
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
         shared, commands, cost, groups, name, clear_name, set_name, name_dirty,
-        interval_percent, interval_clamp, set_interval, unique_name, max_name,
+        interval_clamp, set_interval, unique_name, max_name,
     };
 }
 
@@ -941,10 +939,6 @@ impl CommonServices {
             .as_ptr();
         let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
         StringID((self.grf_string)(grfid, string.0))
-    }
-    /// Raw adapter: `GetGRFStringID` over base values, for `rail.rs` until its pass.
-    pub(crate) fn grf_text_raw(&self, v: *mut (), string: u32) -> u32 {
-        self.grf_text(v, GRFStringID(string)).0
     }
 }
 

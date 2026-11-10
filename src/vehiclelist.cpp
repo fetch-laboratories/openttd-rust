@@ -26,8 +26,6 @@ const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcep
 		.vehicles = &GetRustVehicleServices(),
 		.links = &GetRustStationLinks(),
 		.in_depot = RustOpaqueVehicleRead<bool, RustVehicleInDepot>,
-		.first_engine_part = RustOpaqueVehicleRead<void *, RustTrainFirstEnginePart>,
-		.other_multihead = RustOpaqueVehicleRead<void *, RustTrainOtherMultihead>,
 		.list_clear = SelectionListClear,
 		.list_push = SelectionListPush,
 	};
