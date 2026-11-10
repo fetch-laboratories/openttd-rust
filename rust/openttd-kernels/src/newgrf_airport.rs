@@ -448,7 +448,16 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         0x42 => {
             let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             let owner = (s.shared().town_owner)(town);
-            u32::from(unsafe { crate::town::get_radius_group(owner, c.tile, s.map()) })
+            u32::from(
+                unsafe {
+                    crate::town::get_town_radius_group(
+                        owner,
+                        crate::tile_type::TileIndex(c.tile),
+                        s.map(),
+                    )
+                }
+                .0,
+            )
         }
         0x43 => crate::industry::resolver::get_relative_position(
             TileIndex(c.tile),

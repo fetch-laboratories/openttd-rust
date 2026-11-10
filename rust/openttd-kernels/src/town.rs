@@ -408,15 +408,6 @@ pub(crate) unsafe fn get_town_radius_group(
     }
     smallest
 }
-/// Raw adapter for callers outside workset 01 (`newgrf_airport.rs`,
-/// `station_lifecycle.rs`); delegates to `get_town_radius_group`.
-pub(crate) unsafe fn get_radius_group(
-    state: *const State,
-    tile: u32,
-    map: crate::map_func::Map,
-) -> u8 {
-    unsafe { get_town_radius_group(state, TileIndex(tile), map) }.0
-}
 /// `GetTownRadiusGroup` for a live native shell, resolving its canonical owner once.
 /// Raw for its callers outside workset 01 (`objects.rs`, `industry/resolver.rs`,
 /// `newgrf_roadstop.rs`).
@@ -3236,11 +3227,6 @@ pub(crate) unsafe fn get_percent_transported(state: *const State, cargo_type: Ca
     unsafe {
         openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
     }
-}
-/// Raw adapter for `subsidy.rs`, outside workset 01; delegates to `get_percent_transported`.
-/// SAFETY: As `get_percent_transported`.
-pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
-    unsafe { get_percent_transported(state, CargoType(cargo)) }
 }
 
 crate::abi::layouts! {

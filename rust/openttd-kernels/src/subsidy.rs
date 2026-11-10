@@ -257,7 +257,7 @@ impl Services {
         let src = town::spatial::get_random_town(unsafe { &*self.shared });
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
-                || town::subsidy_percent_transported(src.state, cargo_type.0)
+                || town::get_percent_transported(src.state, cargo_type)
                     > SUBSIDY_MAX_PCT_TRANSPORTED
         } {
             return false;
@@ -375,7 +375,7 @@ impl Services {
         }
         // Quit if the percentage transported is large enough.
         if unsafe {
-            town::subsidy_percent_transported(src.state, cargo_type.0) > SUBSIDY_MAX_PCT_TRANSPORTED
+            town::get_percent_transported(src.state, cargo_type) > SUBSIDY_MAX_PCT_TRANSPORTED
         } {
             return false;
         }
