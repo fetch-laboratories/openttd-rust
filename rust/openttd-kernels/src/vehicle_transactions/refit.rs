@@ -73,6 +73,11 @@ pub struct Services {
 }
 // Canonical vehicle-table slots for refit callers; no refit copy is bound.
 impl Services {
+    /// `NOT_REACHED()`: the native fatal error; it does not return.
+    fn not_reached(&self) -> ! {
+        (self.common.base.shared.not_reached)();
+        std::process::abort()
+    }
     /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
     pub(crate) fn road_acceleration_model(&self) -> u8 {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
@@ -211,7 +216,7 @@ unsafe fn get_refit_cost(
             factor = factor.wrapping_mul(2);
             (price, s.prices.train_run)
         }
-        _ => unreachable!("original NOT_REACHED vehicle type"),
+        _ => s.not_reached(),
     };
     let negative = factor < 0;
     let amount = get_price(
@@ -736,7 +741,7 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                     );
                 }
             }
-            _ => unreachable!("original NOT_REACHED vehicle type"),
+            _ => s.not_reached(),
         }
         (unsafe { &*c.vehicles.maintenance }.mark_dirty)(unsafe {
             vehicle_ref(front, s.common.vehicles)
