@@ -815,7 +815,8 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.zero)(result);
         return;
     }
-    let town = spatial::closest(s, tile, u32::from((a.authority_distance)()));
+    let town =
+        spatial::closest_town_from_tile(s, TileIndex(tile), u32::from((a.authority_distance)()));
     if town.is_null() {
         (c.zero)(result);
         return;
