@@ -15,7 +15,7 @@ use crate::bitmath_func::gb;
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::Owner;
-use crate::economy_type::EconomyType;
+
 use crate::history::update_valid_history_year;
 use crate::history_type::LAST_MONTH;
 use crate::industry_type::{
@@ -319,7 +319,7 @@ pub(crate) unsafe fn do_create_new_industry(
     let callbacks = IndustryCallbackMasks(unsafe { (*indspec).callback_mask });
     // Randomize initial production if non-original economy is used and there are no
     // production related callbacks.
-    if !super::uses_original_economy(callbacks, EconomyType(unsafe { (prod.economy_type)() })) {
+    if !super::uses_original_economy(callbacks, prod.economy_type()) {
         for slot in 0..super::produced_count(owner) {
             let random = prod.shared().random_range(256);
             let p = produced(owner, slot);
@@ -342,7 +342,7 @@ pub(crate) unsafe fn do_create_new_industry(
         (*owner).metadata.random = req.random_bits;
         (*state).was_cargo_delivered = 0;
     }
-    let year = unsafe { (prod.economy_year)() };
+    let year = crate::timer_game_common::economy_year().0;
     unsafe {
         (*state).last_prod_year = year;
         (*owner).metadata.founder = req.founder;
@@ -430,7 +430,7 @@ pub(crate) unsafe fn do_create_new_industry(
                 }
             }
         }
-        let month = unsafe { (prod.economy_month)() };
+        let month = crate::timer_game_common::economy_month();
         unsafe {
             (*state).valid_history =
                 update_valid_history_year((*state).valid_history, u32::from(month));

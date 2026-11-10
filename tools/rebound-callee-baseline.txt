@@ -21,8 +21,6 @@ rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraf
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context | 2
 rebound | GetRustSignalContext | src/water_cmd.cpp | signal_context
-rebound | IndustryCommandDeity | src/industry_cmd.cpp | deity
-rebound | IndustryCommandDeity | src/industry_cmd.cpp | deity | 2
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid

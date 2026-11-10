@@ -234,6 +234,7 @@ static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 
 static_assert(std::is_same_v<std::underlying_type_t<Colours>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<LandscapeType>, uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<EconomyType>, uint8_t>);
 static_assert(LS_DEFAULT == 0);
 static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.allow_town_level_crossings = &_settings_game.economy.allow_town_level_crossings,
@@ -242,14 +243,18 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.climate = reinterpret_cast<const uint8_t *>(&_settings_game.game_creation.landscape),
 	.competitor_interval = &_settings_game.difficulty.competitors_interval,
 	.construction_limits = &_settings_game.construction.limits,
+	.custom_industry_number = &_settings_game.game_creation.custom_industry_number,
 	.disable_elrails = &_settings_game.vehicle.disable_elrails,
 	.dist_local_authority = &_settings_game.economy.dist_local_authority,
+	.economy_type = reinterpret_cast<const uint8_t *>(&_settings_game.economy.type),
 	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
 	.freeform_edges = &_settings_game.construction.freeform_edges,
 	.generation_seed = &_settings_game.game_creation.generation_seed,
 	.height_limit = &_settings_game.construction.map_height_limit,
 	.heightmap_height = &_settings_game.game_creation.heightmap_height,
 	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
+	.industry_density = &_settings_game.difficulty.industry_density,
+	.industry_platform = &_settings_game.construction.industry_platform,
 	.land_generator = &_settings_game.game_creation.land_generator,
 	.line_reverse_mode = &_settings_game.difficulty.line_reverse_mode,
 	.lost_vehicle_warn = &_settings_client.gui.lost_vehicle_warn,
@@ -261,9 +266,12 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.max_train_length = &_settings_game.vehicle.max_train_length,
 	.max_trains = &_settings_game.vehicle.max_trains,
 	.maximum_go_to_depot_penalty = &_settings_game.pf.yapf.maximum_go_to_depot_penalty,
+	.multiple_industry_per_town = &_settings_game.economy.multiple_industry_per_town,
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
+	.oil_refinery_limit = &_settings_game.game_creation.oil_refinery_limit,
 	.order_review_system = &_settings_client.gui.order_review_system,
+	.raw_industry_construction = &_settings_game.construction.raw_industry_construction,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.reverse_at_signals = &_settings_game.pf.reverse_at_signals,
 	.roadveh_acceleration_model = &_settings_game.vehicle.roadveh_acceleration_model,

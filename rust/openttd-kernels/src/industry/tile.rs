@@ -753,7 +753,6 @@ pub(crate) unsafe fn add_accepted_cargo_industry(
 
 #[repr(C)]
 pub struct TilePolicyServices {
-    pub current_company: unsafe extern "C" fn() -> u8,
     pub magic_bulldozer: unsafe extern "C" fn() -> bool,
     pub object_in_way: unsafe extern "C" fn(*mut IndustryCost, *const SpecHandle),
     pub close_ai: unsafe extern "C" fn(*mut ShellHandle),
@@ -781,7 +780,8 @@ pub(crate) unsafe fn clear_tile_industry(
     let indspec = get_industry_spec(crate::industry_type::IndustryType(unsafe {
         (*i.owner).metadata.kind
     }));
-    let current_company = || CompanyID(unsafe { (policy.current_company)() });
+    // SAFETY: The shared table is immutable for the process lifetime.
+    let current_company = || CompanyID((unsafe { &*tiles.shared }.current_company)());
     // water can destroy industries
     // in editor you can bulldoze industries
     // with magic_bulldozer cheat you can destroy industries

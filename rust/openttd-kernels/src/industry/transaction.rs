@@ -10,7 +10,7 @@
 use super::{
     Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry,
     IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,
-    Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
+    Services, ShellHandle, SpecHandle, TileServices, TownHandle,
 };
 use crate::bitmath_func::{gb, has_bit};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
@@ -67,14 +67,11 @@ pub struct LocationResult {
 }
 #[repr(C)]
 pub struct TransactionServices {
-    pub raw_setting: unsafe extern "C" fn() -> u8,
-    pub multiple_per_town: unsafe extern "C" fn() -> bool,
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
-    pub refinery_limit: unsafe extern "C" fn() -> u8,
     pub tile_height: unsafe extern "C" fn(u32) -> u32,
     pub set_company: unsafe extern "C" fn(u8),
     pub temporary_shell: unsafe extern "C" fn(
@@ -89,9 +86,7 @@ pub struct TransactionServices {
         unsafe extern "C" fn(*mut IndustryCost, *const LocationResult, *const SpecHandle),
     pub shape_error:
         unsafe extern "C" fn(*mut IndustryCost, *const LocationResult, *const super::TileSpec),
-    pub terragenesis: unsafe extern "C" fn() -> bool,
     pub ignore_restrictions: unsafe extern "C" fn() -> bool,
-    pub platform: unsafe extern "C" fn() -> u8,
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u32) -> Allocation,
     pub local_company: unsafe extern "C" fn() -> bool,
@@ -107,7 +102,6 @@ pub struct TransactionContext {
     pub construction: *const ConstructionServices,
     pub lifecycle: *const LifecycleServices,
     pub tiles: *const TileServices,
-    pub tile_policy: *const TilePolicyServices,
     pub commands: *const IndustryCommandServices,
     pub command_checks: *const crate::services::CommandServices,
     pub costs: *const IndustryCostServices,
@@ -132,7 +126,6 @@ struct Engine<'a> {
     g: &'a GenerationServices,
     c: &'a ConstructionServices,
     t: &'a TileServices,
-    p: &'a TilePolicyServices,
     m: &'a IndustryCommandServices,
     cost: &'a IndustryCostServices,
     x: &'a TransactionServices,
@@ -152,7 +145,7 @@ impl Engine<'_> {
         unsafe { (self.cost.success)(self.out) }
     }
     fn company(&self) -> Owner {
-        CompanyID(unsafe { (self.p.current_company)() })
+        CompanyID((self.s.shared().current_company)())
     }
     fn swap_company(&self, company: Owner) -> Owner {
         let original = self.company();
@@ -217,7 +210,7 @@ impl Engine<'_> {
             || distance(DiagDirection::DIAGDIR_SE) < maxdist_y
     }
     fn oil_refinery_limit(&self) -> u32 {
-        u32::from(unsafe { (self.x.refinery_limit)() })
+        u32::from(self.s.oil_refinery_limit())
     }
     /// `_check_new_industry_procs[indspec->check_proc](tile)`.
     fn check_new_industry_proc(&self, tile: TileIndex, indspec: *const SpecHandle) -> bool {
@@ -343,7 +336,7 @@ impl Engine<'_> {
             tile,
             u32::MAX,
         );
-        if !unsafe { (self.x.multiple_per_town)() } {
+        if !self.s.multiple_industry_per_town() {
             for n in 0..self.registry_count(kind) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(kind, n).0) };
                 if unsafe { (self.x.town)(shell) } == town {
@@ -501,7 +494,7 @@ impl Engine<'_> {
         //  do is that we check if we can make the land flat later on. See
         //  CheckIfCanLevelIndustryPlatform().
         if !refused_slope
-            || (unsafe { (self.x.terragenesis)() }
+            || (self.s.terragenesis()
                 && unsafe { (self.c.generating)() }
                 && !custom_shape
                 && !unsafe { (self.x.ignore_restrictions)() })
@@ -588,7 +581,7 @@ impl Engine<'_> {
         // Remember level height.
         let h = self.tile_height(tile);
         let coordinates = self.map().coordinates();
-        let industry_platform = u32::from(unsafe { (self.x.platform)() });
+        let industry_platform = u32::from(self.s.industry_platform());
         if coordinates.tile_x(tile.0) <= industry_platform.wrapping_add(1)
             || coordinates.tile_y(tile.0) <= industry_platform.wrapping_add(1)
         {
@@ -765,7 +758,7 @@ impl Engine<'_> {
             return false;
         }
         if !custom_shape_check
-            && unsafe { (self.x.terragenesis)() }
+            && self.s.terragenesis()
             && unsafe { (self.c.generating)() }
             && !unsafe { (self.x.ignore_restrictions)() }
             && !self.check_if_can_level_industry_platform(
@@ -940,7 +933,6 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
             g: &*context.generation,
             c: &*context.construction,
             t: &*context.tiles,
-            p: &*context.tile_policy,
             m: &*context.commands,
             cost: &*context.costs,
             x: &*context.transaction,
@@ -1006,7 +998,7 @@ pub(crate) unsafe fn cmd_build_industry(
     // least for now).
     if !e.editor()
         && e.company() != Owner::DEITY
-        && unsafe { (e.x.raw_setting)() } == 0
+        && e.s.raw_industry_construction() == 0
         && unsafe { super::is_raw_industry(IndustryLifeTypes((*indspec).life_type)) }
     {
         e.fail(StringID::INVALID_STRING_ID);
@@ -1040,7 +1032,7 @@ pub(crate) unsafe fn cmd_build_industry(
     if deity_prospect
         || (!e.editor()
             && e.company() != Owner::DEITY
-            && unsafe { (e.x.raw_setting)() } == 2
+            && e.s.raw_industry_construction() == 2
             && unsafe { super::is_raw_industry(IndustryLifeTypes((*indspec).life_type)) })
     {
         if flags.test(DoCommandFlag::Execute) {
@@ -1142,7 +1134,7 @@ pub(crate) unsafe fn cmd_build_industry(
         super::get_construction_cost(
             (*indspec).cost_multiplier,
             IndustryLifeTypes((*indspec).life_type),
-            (e.x.raw_setting)(),
+            e.s.raw_industry_construction(),
         )
     };
     unsafe { (e.cost.expense_money)(out, ExpensesType::EXPENSES_OTHER.0, construction) };

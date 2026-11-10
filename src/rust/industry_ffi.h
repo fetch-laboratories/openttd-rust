@@ -145,12 +145,6 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
 	void (*restore_company)(uint8_t company) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(restore_company);
 	void (*directory_dirty)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(directory_dirty);
-	uint8_t (*economy_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_month);
-	int32_t (*economy_year)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_year);
-	uint32_t (*days_since_last_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(days_since_last_month);
-	uint8_t (*economy_type)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_type);
-	bool (*fund_only)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(fund_only);
-	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
 } OpenTTDIndustryServices;
 uint8_t openttd_rust_industry_forest_abi(uint32_t, const OpenTTDIndustryServices *);
 extern "C++" inline bool openttd_rust_industry_forest(uint32_t a0, const OpenTTDIndustryServices *a1) { return openttd_rust_industry_forest_abi(a0, a1) != 0; }
@@ -158,9 +152,9 @@ uint8_t openttd_rust_industry_spec_raw_abi(const IndustrySpec *);
 extern "C++" inline bool openttd_rust_industry_spec_raw(const IndustrySpec *a0) { return openttd_rust_industry_spec_raw_abi(a0) != 0; }
 uint8_t openttd_rust_industry_spec_processing_abi(const IndustrySpec *);
 extern "C++" inline bool openttd_rust_industry_spec_processing(const IndustrySpec *a0) { return openttd_rust_industry_spec_processing_abi(a0) != 0; }
-uint8_t openttd_rust_industry_original_economy_abi(const IndustrySpec *, uint8_t economy);
-extern "C++" inline bool openttd_rust_industry_original_economy(const IndustrySpec *a0, uint8_t a1) { return openttd_rust_industry_original_economy_abi(a0, a1) != 0; }
-int64_t openttd_rust_industry_construction_cost(const IndustrySpec *, uint8_t raw_setting);
+uint8_t openttd_rust_industry_original_economy_abi(const IndustrySpec *, const OpenTTDSharedServices *shared);
+extern "C++" inline bool openttd_rust_industry_original_economy(const IndustrySpec *a0, const OpenTTDSharedServices *a1) { return openttd_rust_industry_original_economy_abi(a0, a1) != 0; }
+int64_t openttd_rust_industry_construction_cost(const IndustrySpec *, const OpenTTDSharedServices *shared);
 IndustrySpec *openttd_rust_industry_specs();
 IndustryTileSpec *openttd_rust_industry_tile_specs();
 struct OpenTTDIndustryPair { uint16_t first, second; };
@@ -212,8 +206,6 @@ typedef struct OpenTTDIndustrySpecHandle OpenTTDIndustrySpecHandle;
 typedef struct OpenTTDIndustryGenerationContext OpenTTDIndustryGenerationContext;
 typedef struct OpenTTDIndustryGenerationServices {
 	OpenTTDEnvironmentServices environment;
-	uint8_t (*density)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(density);
-	uint32_t (*custom_number)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_number);
 	uint32_t (*scale_by_size_1d)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_size_1d);
 	uint32_t (*scale_by_land_proportion)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_land_proportion);
 	bool (*set_progress)(OpenTTDIndustryGenerationContext *, bool, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_progress);
@@ -269,7 +261,6 @@ typedef struct OpenTTDIndustryCostServices {
 	bool (*success)(const OpenTTDIndustryCost *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(success);
 } OpenTTDIndustryCostServices;
 typedef struct OpenTTDIndustryTilePolicyServices {
-	uint8_t (*current_company)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(current_company);
 	bool (*magic_bulldozer)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(magic_bulldozer);
 	void (*object_in_way)(OpenTTDIndustryCost *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(object_in_way);
 	void (*close_ai)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_ai);
@@ -279,7 +270,7 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	const OpenTTDCommandServices *command_checks;
 } OpenTTDIndustryTilePolicyServices;
 typedef struct OpenTTDIndustryCommandServices {
-	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
+	const OpenTTDSharedServices *shared;
 	OpenTTDIndustryShell * (*get)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
 	OpenTTDIndustry * (*owner)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(owner);
 	bool (*valid_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(valid_company);
@@ -363,14 +354,11 @@ OpenTTDIndustryLocationResult openttd_industry_resolve_shape(OpenTTDIndustryShel
 void openttd_industry_location_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;
 void openttd_industry_shape_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT;
 typedef struct OpenTTDIndustryTransactionServices {
-	uint8_t (*raw_setting)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(raw_setting);
-	bool (*multiple_per_town)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(multiple_per_town);
 	const OpenTTDTownHandle * (*town)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town);
 	uint32_t (*population)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(population);
 	uint32_t (*town_position)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town_position);
 	OpenTTDIndustryShell * (*industry)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry);
 	uint32_t (*edge_distance)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(edge_distance);
-	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(refinery_limit);
 	uint32_t (*tile_height)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_height);
 	void (*set_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_company);
 	/* Owner/context live on the Rust stack; visit and resolver cannot retain them. */
@@ -379,9 +367,7 @@ typedef struct OpenTTDIndustryTransactionServices {
 	OpenTTDIndustryLocationResult (*resolve_shape)(OpenTTDIndustryShell *, uint32_t, uint16_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(resolve_shape);
 	void (*location_error)(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(location_error);
 	void (*shape_error)(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(shape_error);
-	bool (*terragenesis)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(terragenesis);
 	bool (*ignore_restrictions)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(ignore_restrictions);
-	uint8_t (*platform)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(platform);
 	bool (*can_allocate)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(can_allocate);
 	OpenTTDIndustryAllocation (*allocate)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(allocate);
 	bool (*local_company)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(local_company);
@@ -397,7 +383,6 @@ typedef struct OpenTTDIndustryTransactionContext {
 	const OpenTTDIndustryConstructionServices *construction;
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tiles;
-	const OpenTTDIndustryTilePolicyServices *tile_policy;
 	const OpenTTDIndustryCommandServices *commands;
 	const OpenTTDCommandServices *command_checks;
 	const OpenTTDIndustryCostServices *costs;
