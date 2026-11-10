@@ -112,18 +112,6 @@ static bool OPENTTD_RUST_CALL Aircraft_chain_in_depot(OpenTTDAircraftVehicle veh
 	return Aircraft::From(v)->IsChainInDepot();
 }
 
-static bool OPENTTD_RUST_CALL Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot);
-}
-
-static bool OPENTTD_RUST_CALL Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return v->current_order.GetDepotOrderType().Test(OrderDepotTypeFlag::PartOfOrders);
-}
-
 static OpenTTDAircraftVehicle OPENTTD_RUST_CALL Aircraft_next_aircraft(uint32_t last) noexcept
 {
 	for (Aircraft *v : Aircraft::Iterate(last == VehicleID::Invalid().base() ? 0 : last + 1)) return RustAircraftVehicle(v);
@@ -336,8 +324,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.hangar_exit = Aircraft_hangar_exit,
 	.service_interval = Aircraft_service_interval,
 	.chain_in_depot = Aircraft_chain_in_depot,
-	.nearest_depot_order = Aircraft_nearest_depot_order,
-	.part_of_orders = Aircraft_part_of_orders,
 	.next_aircraft = Aircraft_next_aircraft,
 	.viewport = Aircraft_viewport,
 	.rotor_image = Aircraft_rotor_image,
