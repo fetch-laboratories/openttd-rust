@@ -539,6 +539,59 @@ fn version() -> SaveLoadVersion {
     SaveLoadVersion(unsafe { *shared(|s| s.version) })
 }
 
+/// `std::make_unique<ReadBuffer>(filter)`.
+fn reader_open(filter: *mut c_void) {
+    codec(|c| {
+        c.read_buffer = Some(vec![0u8; MEMORY_CHUNK_SIZE].into_boxed_slice());
+        c.read_filter = filter;
+        c.read = 0;
+        c.shared.read_cursor = std::ptr::null_mut();
+        c.shared.read_end = std::ptr::null_mut();
+    });
+}
+
+/// `_sl.reader = nullptr`.
+fn reader_close() {
+    codec(|c| {
+        c.read_buffer = None;
+        c.read_filter = std::ptr::null_mut();
+        c.read = 0;
+        c.shared.read_cursor = std::ptr::null_mut();
+        c.shared.read_end = std::ptr::null_mut();
+    });
+}
+
+/// `std::make_unique<MemoryDumper>()`: an empty dumper replaces the previous one.
+fn dumper_open() {
+    dumper_close();
+}
+
+/// `_sl.dumper = nullptr`.
+fn dumper_close() {
+    codec(|c| {
+        c.blocks = Vec::new();
+        c.shared.write_cursor = std::ptr::null_mut();
+        c.shared.write_end = std::ptr::null_mut();
+    });
+}
+
+/// `SlCalcRefLen`: return the size in bytes of a reference (pointer).
+fn calc_ref_len() -> usize {
+    if version_before(SaveLoadVersion::SLV_69) {
+        2
+    } else {
+        4
+    }
+}
+
+/// `SlSetArrayIndex`.
+fn set_array_index(index: u32) {
+    shared(|s| {
+        s.need_length = NeedLength::NL_WANTLENGTH.0;
+        s.array_index = index as i32;
+    });
+}
+
 /// `SlReadSimpleGamma`: read in the header descriptor of an object or an array. If the
 /// highest bit is set (7), then the index is bigger than 127 elements, so use the next byte
 /// to read in the real value. The actual value is then both bytes added with the first
@@ -1489,25 +1542,13 @@ pub unsafe extern "C" fn openttd_rust_saveload_error_message(length: *mut usize)
 /// [`openttd_rust_saveload_reader_close`].
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_reader_open(filter: *mut c_void) {
-    codec(|c| {
-        c.read_buffer = Some(vec![0u8; MEMORY_CHUNK_SIZE].into_boxed_slice());
-        c.read_filter = filter;
-        c.read = 0;
-        c.shared.read_cursor = std::ptr::null_mut();
-        c.shared.read_end = std::ptr::null_mut();
-    });
+    reader_open(filter);
 }
 
 /// `_sl.reader = nullptr`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_reader_close() {
-    codec(|c| {
-        c.read_buffer = None;
-        c.read_filter = std::ptr::null_mut();
-        c.read = 0;
-        c.shared.read_cursor = std::ptr::null_mut();
-        c.shared.read_end = std::ptr::null_mut();
-    });
+    reader_close();
 }
 
 /// `ReadBuffer::ReadByte`'s refill, for native `SlReadByte` at an empty buffer.
@@ -1527,17 +1568,13 @@ pub extern "C" fn openttd_rust_saveload_read_size() -> usize {
 /// `std::make_unique<MemoryDumper>()`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_dumper_open() {
-    openttd_rust_saveload_dumper_close();
+    dumper_open();
 }
 
 /// `_sl.dumper = nullptr`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_dumper_close() {
-    codec(|c| {
-        c.blocks = Vec::new();
-        c.shared.write_cursor = std::ptr::null_mut();
-        c.shared.write_end = std::ptr::null_mut();
-    });
+    dumper_close();
 }
 
 /// `MemoryDumper::WriteByte`'s new block, for native `SlWriteByte` at a full block.
@@ -1773,11 +1810,7 @@ pub unsafe extern "C" fn openttd_rust_saveload_ref(
 /// `SlCalcRefLen`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_ref_len() -> usize {
-    if version_before(SaveLoadVersion::SLV_69) {
-        2
-    } else {
-        4
-    }
+    calc_ref_len()
 }
 
 /// `SlStdString`.
@@ -1846,10 +1879,7 @@ pub unsafe extern "C" fn openttd_rust_saveload_get_struct_list_length(
 /// `SlSetArrayIndex`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_set_array_index(index: u32) {
-    shared(|s| {
-        s.need_length = NeedLength::NL_WANTLENGTH.0;
-        s.array_index = index as i32;
-    });
+    set_array_index(index);
 }
 
 /// `SlAutolength`; `proc_` is an `AutolengthProc *` that `services.autolength` calls.
