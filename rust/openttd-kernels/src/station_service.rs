@@ -2360,7 +2360,12 @@ unsafe fn load_unload_vehicle(front: VehicleRef, c: &LoadingContext<'_>) {
             }
             (l.set_loading_finished)(front, finished_loading);
         }
-        /* Calculate the loading indicator fill percent and display */
+        /* Calculate the loading indicator fill percent and display
+         * In the Game Menu do not display indicators
+         * If _settings_client.gui.loading_indicators == 2, show indicators (bool can be promoted to int as 0 or 1 - results in 2 > 0,1 )
+         * if _settings_client.gui.loading_indicators == 1, _local_company must be the owner or must be a spectator to show ind., so 1 > 0
+         * if _settings_client.gui.loading_indicators == 0, do not display indicators ... 0 is never greater than anything
+         */
         if (l.indicator)(front) {
             let mut percent_up_down = StringID::STR_NULL;
             let percent = crate::vehicle::visits::percent_filled(
