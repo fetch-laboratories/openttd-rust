@@ -42,10 +42,6 @@ static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) no
 
 static void TrainWriteColourmap(OpenTTDTrainHandle id, uint64_t value) noexcept
 {Train *v=static_cast<Train *>(VehicleFromRecord(id.record)); v->colourmap = static_cast<PaletteID>(value);}
-static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.vehicle.train_acceleration_model;
-}
 static uint64_t TrainAdvanceDistance(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -225,14 +221,6 @@ static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 {
 	return _local_company.base();
 }
-static uint64_t TrainLostWarn(OpenTTDTrainHandle) noexcept
-{
-	return _settings_client.gui.lost_vehicle_warn;
-}
-static uint64_t TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept
-{
-	return RustMaximumDepotPenalty();
-}
 
 static void TrainOrderDepotService(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
@@ -270,10 +258,6 @@ static void TrainResetUnbunch(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	v->ResetDepotUnbunching();
-}
-static uint64_t TrainReverseAtSignals(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.reverse_at_signals;
 }
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
@@ -365,10 +349,6 @@ static void TrainTrainList(OpenTTDTrainHandle) noexcept
 {
 	SetWindowClassesDirty(WC_TRAINS_LIST);
 }
-static uint64_t TrainTrainVisit(OpenTTDTrainHandle) noexcept
-{
-	return HVOT_TRAIN;
-}
 static void TrainTruncateCargo(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -385,23 +365,7 @@ static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	RustVehicleUpdateViewport(v, a != 0, b != 0);
 }
-static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	return Station::Get(StationID(a))->had_vehicle_of_type;
-}
 
-static uint64_t TrainWaitOneway(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.wait_oneway_signal;
-}
-static uint64_t TrainWaitPbs(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.wait_for_pbs_path;
-}
-static uint64_t TrainWaitTwoway(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.wait_twoway_signal;
-}
 static uint64_t TrainWaitUnbunch(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -410,8 +374,4 @@ static uint64_t TrainWaitUnbunch(OpenTTDTrainHandle id) noexcept
 static void TrainWriteCrossingBar(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetCrossingBarred(TileIndex(a), b != 0);
-}
-static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
-{
-	Station::Get(StationID(a))->had_vehicle_of_type |= HVOT_TRAIN;
 }

@@ -1407,11 +1407,7 @@ impl Game<'_> {
     /// `RoadVehArrivesAt`, `BeginLoading` and the road stop arrival triggers.
     fn arrive_load(&self, v: Part, s: &Step, station: u16) {
         let r = ArrivalRead {
-            had_vehicle_of_type: {
-                // SAFETY: The process-wide station command table names the shared aircraft station leaves.
-                let aircraft = unsafe { &*((*((self.ss.station_commands)())).aircraft) };
-                unsafe { (aircraft.had_vehicle)((aircraft.station)(station)) }
-            },
+            had_vehicle_of_type: service!(self.ss.station_had_vehicle_of_type)(station),
         };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };

@@ -124,7 +124,7 @@ static void Disasters()
 	CHECK(probe.news == 3 && probe.tile_types == 2 && probe.clears == 2 && probe.clear_owner == 0x11 && probe.signals == 1);
 	CHECK(probe.deletes == 1 && probe.viewports == 1);
 
-	services.can_allocate = [](size_t count) noexcept { CHECK(count >= 1 && count <= 3); return false; };
+	vehicles.can_allocate = [](size_t count) noexcept { CHECK(count >= 1 && count <= 3); return false; };
 	struct CapacityCase { int32_t (*year)() noexcept; uint32_t random; };
 	const CapacityCase cases[] = {
 		{[]() noexcept { return 1930; }, 0},

@@ -157,6 +157,11 @@ struct OpenTTDSharedServices {
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
 	OpenTTDSnowLineSupport snow_line_support;
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
+	uint8_t (*station_had_vehicle_of_type)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_had_vehicle_of_type);
+	void (*station_add_vehicle_of_type)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_add_vehicle_of_type);
+	uint32_t (*station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
+	uint32_t (*base_station_xy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_station_xy);
+	uint8_t (*station_facilities)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_facilities);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	size_t (*kdtree_partition)(OpenTTDKdtreeKey *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(kdtree_partition);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);

@@ -144,7 +144,7 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 	static const OpenTTDVehicleBuildServices services{
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
 		.depot_kind = VehicleBuildDepotKind,
-		.pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
+		.free_unit = VehicleBuildFreeUnit,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
 

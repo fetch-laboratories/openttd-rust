@@ -227,6 +227,8 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.orders = VehicleOrders,
 	.ship_get = RustShipGet,
 	.first_sprite = RustVehicleRead<uint32_t, RustVehicleFirstSprite>,
+	.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
+	.can_allocate = RustVehicleCanAllocate,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

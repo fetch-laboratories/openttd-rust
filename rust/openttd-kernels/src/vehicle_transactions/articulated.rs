@@ -7,7 +7,6 @@ use std::mem::MaybeUninit;
 #[repr(C)]
 pub struct Services {
     pub refit: &'static refit::Services,
-    pub pool_available: extern "C" fn(usize) -> bool,
     pub prepare_previous: extern "C" fn(*mut ()) -> *mut (),
     pub new_train: extern "C" fn() -> *mut (),
     pub new_road: extern "C" fn() -> *mut (),
@@ -67,7 +66,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if engine == crate::engine_type::INVALID_ENGINE {
             return;
         }
-        if !(s.pool_available)(1) {
+        if !(s.refit.common.vehicles.can_allocate)(1) {
             return;
         }
         crate::witness::hit(crate::witness::VT_ARTICULATED);
@@ -262,7 +261,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
-        refit, pool_available, prepare_previous,
+        refit, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, set_part, mark_train,
         mark_road, copy_common, random_bits, flip_image, warning,
         has_articulated, next_articulated,
