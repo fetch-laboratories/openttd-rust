@@ -143,6 +143,24 @@ def run_shard(bundle: Path, index: int, jobs: int, output: Path) -> int:
     return completed.returncode
 
 
+def latest_reports(directory: Path) -> list[dict[str, Any]]:
+    """Each shard's report from its latest run attempt, `shard-<index>-<attempt>.json`.
+
+    Reruns keep earlier attempts' artifacts, so one shard can have several reports.
+    A CI request runs the base branch's workflow, which may still write
+    `shard-<index>.json`; that name counts as attempt 0.
+    """
+    latest: dict[int, tuple[int, Path]] = {}
+    for path in directory.glob("shard-*.json"):
+        match = re.fullmatch(r"shard-(\d+)(?:-(\d+))?\.json", path.name)
+        if match is None:
+            raise ValueError(f"Unexpected shard report name: {path.name}")
+        shard, attempt = int(match[1]), int(match[2] or 0)
+        if shard not in latest or attempt > latest[shard][0]:
+            latest[shard] = (attempt, path)
+    return [json.loads(latest[shard][1].read_text()) for shard in sorted(latest)]
+
+
 def aggregate(value: ShardPlan, reports: list[dict[str, Any]]) -> Summary:
     validate_plan(value)
     expected = {s["id"]: s["names"] for s in value["shards"]}
@@ -345,11 +363,7 @@ def main() -> int:
         return run_shard(args.bundle, args.index, args.jobs, args.output)
     elif args.command == "report":
         value = json.loads((args.bundle / "shard-plan.json").read_text())
-        reports = [
-            json.loads(p.read_text())
-            for p in sorted(args.directory.glob("shard-*.json"))
-        ]
-        print(json.dumps(aggregate(value, reports)))
+        print(json.dumps(aggregate(value, latest_reports(args.directory))))
     else:
         collect_evidence(args.destination)
     return 0

@@ -82,6 +82,28 @@ class ShardTests(unittest.TestCase):
             with self.subTest(change=index), self.assertRaises(ValueError):
                 self.check(mutate=change)
 
+    def test_rerun_attempt_supersedes_the_failed_shard_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for shard, attempt, passed in ((0, 1, True), (1, 1, False), (1, 2, True)):
+                report = {"shard": shard, "attempt": attempt, "passed": passed}
+                path = folder / f"shard-{shard}-{attempt}.json"
+                path.write_text(json.dumps(report))
+            reports = ci_native.latest_reports(folder)
+            self.assertEqual(
+                [(r["shard"], r["attempt"], r["passed"]) for r in reports],
+                [(0, 1, True), (1, 2, True)],
+            )
+            # The base branch's workflow may still write the unversioned name.
+            (folder / "shard-2.json").write_text('{"shard": 2, "attempt": 0}')
+            self.assertEqual(
+                [(r["shard"], r["attempt"]) for r in ci_native.latest_reports(folder)],
+                [(0, 1), (1, 2), (2, 0)],
+            )
+            (folder / "shard-3-a.json").write_text("{}")
+            with self.assertRaises(ValueError):
+                ci_native.latest_reports(folder)
+
     def test_plan_cannot_omit_scenarios_or_shards(self) -> None:
         changes: tuple[Callable[[ci_native.ShardPlan], object], ...] = (
             lambda v: v.update(inventory=["a"]),
