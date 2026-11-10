@@ -1506,7 +1506,7 @@ impl<'a> House<'a> {
             if !self.is_house_tile(t) {
                 continue;
             }
-            crate::town_map::increment_house_age(self.h, t);
+            crate::town_map::increment_house_age(self.s, self.h, t);
         }
     }
     /// `IsTileType(tile, MP_HOUSE) && GetCleanHouseType(tile) == house_type`.
