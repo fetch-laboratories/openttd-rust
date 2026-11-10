@@ -49,7 +49,6 @@ pub struct Services {
     pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) max_length: unsafe extern "C" fn() -> u8,
     pub(crate) needs_renew: unsafe extern "C" fn(*mut (), bool) -> bool,
     pub(crate) engine_valid: unsafe extern "C" fn(u16) -> bool,
     pub(crate) company_valid: unsafe extern "C" fn(u8) -> bool,
@@ -81,6 +80,12 @@ impl Services {
     /// An original `assert` site, through the shared native assertion.
     pub(crate) fn check(&self, condition: bool) {
         crate::movement::native_assert((self.common)().base.shared, condition);
+    }
+    /// `IsLocalCompany`, through the command layer's company and finance owners.
+    /// `_settings_game.vehicle.max_train_length`, from the settings catalog.
+    pub(crate) fn max_train_length(&self) -> u8 {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { (self.common)().base.shared.settings().max_train_length.read() }
     }
     /// `IsLocalCompany`, through the command layer's company and finance owners.
     pub(crate) fn is_local_company(&self) -> bool {
@@ -911,7 +916,7 @@ unsafe fn replace_chain(
                     u32::from(read_field!(
                         record(w, new_head).ground_cache(),
                         cached_total_length
-                    )) <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
+                    )) <= u32::from(w.max_train_length()) * TILE_SIZE
                 );
                 for item in replacements.iter_mut().skip(1) {
                     let wagon = item.new;
@@ -1305,7 +1310,6 @@ crate::abi::layouts! {
         cargo_type,
         capabilities,
         stopped_in_depot,
-        max_length,
         needs_renew,
         engine_valid,
         company_valid,

@@ -555,7 +555,6 @@ pub struct Leaves {
     pub default_group: extern "C" fn() -> u64,
     pub vehicle_group: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub review_setting: extern "C" fn() -> u64,
     pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
@@ -4222,7 +4221,8 @@ impl Control {
     }
     fn check_orders(&self, v: *mut c_void) {
         let g = self.g;
-        let review = (g.0.review_setting)();
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        let review = unsafe { g.shared().settings().order_review_system.read() };
         if review == 0
             || {
                 let status = native_vehicle(v, g.0.base).status();
@@ -4638,7 +4638,6 @@ crate::abi::layouts! {
         default_group,
         vehicle_group,
         unique_backup_name,
-        review_setting,
         local_owner,
         no_jet_crash,
         append_station,

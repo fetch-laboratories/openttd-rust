@@ -164,7 +164,7 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 		return result;
 	};
 	auto services = GetRustEngineCapabilitiesServices();
-	services.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	static auto vehicles = GetRustVehicleServices(); vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; }; services.vehicles = &vehicles;
 	struct Case { VehicleType type; Price build, running; uint8_t build_prop, run_prop; };
 	for (const Case c : {
 		Case{VEH_TRAIN, PR_BUILD_VEHICLE_TRAIN, PR_RUNNING_TRAIN_DIESEL, PROP_TRAIN_COST_FACTOR, PROP_TRAIN_RUNNING_COST_FACTOR},

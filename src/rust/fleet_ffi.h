@@ -98,7 +98,6 @@ struct OpenTTDFleetTransactionServices {
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
-	uint8_t (*max_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_length);
 	bool (*needs_renew)(void *shell, bool settings) noexcept OPENTTD_SERVICE_DEFAULT(needs_renew);
 	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
 	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);

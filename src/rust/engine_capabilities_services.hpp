@@ -8,7 +8,7 @@ static OpenTTDVehicle *EngineTemporaryNew() noexcept { return RustVehicle(new Ve
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept
 {
 	static const OpenTTDEngineCapabilitiesServices services{
-		.resolver = GetRustVehicleServices().newgrf,
+		.vehicles = &GetRustVehicleServices(),
 		.engine = RustEngineByID,
 		.engine_if_valid = RustEngineByIDIfValid,
 		.id = RustEngineID,
@@ -16,7 +16,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.cargo_classes = RustCargoClasses,
 		.multiplier = RustCargoMultiplier,
 		.new_temporary = EngineTemporaryNew,
-		.destroy_temporary = GetRustVehicleServices().destroy,
 		.vehicle_engine_object = RustVehicleGetEngine,
 		.vehicle_cargo = RustVehicleCargoType,
 		.vehicle_subtype = RustVehicleRead<uint8_t, RustVehicleCargoSubtype>,

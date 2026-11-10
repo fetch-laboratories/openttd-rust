@@ -1099,7 +1099,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.is_plain = OpenTTDLegacyContextMapQuery<uint64_t, RustMovementPlainRail, OpenTTDTrainHandle, uint32_t>,
 		.is_station = OpenTTDLegacyContextMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,
 		.is_waypoint = TrainReservationIsWaypoint,
-		.line_reverse = TrainReservationLineReverse,
 		.oneway = OpenTTDLegacyContextMapQuery<uint64_t, RustRailOnewaySignal, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.order_service = TrainReservationOrderService,
 		.order_type = TrainReservationOrderType,

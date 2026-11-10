@@ -97,7 +97,6 @@ pub struct Leaves {
     pub is_plain: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub line_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -1047,7 +1046,8 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
     context: *mut std::ffi::c_void,
 ) -> u8 {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
-    if (g.leaves.line_reverse)(g.context, id) == 0
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    if !unsafe { g.shared().settings().line_reverse_mode.read() }
         && id.get_track() != u64::from(DEPOT)
         && id.get_track() != u64::from(WORMHOLE)
         && id.vehicle().direction() & 1 != 0
@@ -1138,7 +1138,6 @@ crate::abi::layouts! {
         is_plain,
         is_station,
         is_waypoint,
-        line_reverse,
         oneway,
         order_service,
         order_type,
@@ -1246,7 +1245,6 @@ pub(crate) mod tests {
             is_plain: unused(),
             is_station: unused(),
             is_waypoint: unused(),
-            line_reverse: unused(),
             oneway: unused(),
             order_service: unused(),
             order_type: unused(),
@@ -1796,11 +1794,18 @@ pub(crate) mod tests {
     #[test]
     fn direct_station_reservation_can_reenter_the_same_owner() {
         extern "C" fn nested(_: u32, _: u8) -> bool {
-            extern "C" fn line_reverse(_: *mut c_void, _: Handle) -> u64 {
-                0
-            }
+            static LINE_REVERSE: bool = false;
+            static SETTINGS: crate::settings_type::SettingAddresses =
+                crate::settings_type::SettingAddresses {
+                    line_reverse_mode: &LINE_REVERSE,
+                    ..crate::settings_type::SettingAddresses::NULL
+                };
+            let shared = crate::services::Services {
+                settings: &SETTINGS,
+                ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+            };
             let ls = Leaves {
-                line_reverse,
+                shared: &raw const shared,
                 ..leaves()
             };
             let h = TRAIN.get();

@@ -301,7 +301,6 @@ static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *typ
 	}
 	return UINT32_MAX;
 }
-static bool Co_aircraft_is_normal(uint32_t id) noexcept { return Aircraft::From(Vehicle::Get(id))->IsNormalAircraft(); }
 static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
@@ -350,11 +349,9 @@ static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_own
 	old_company->settings.vehicle.servint_ispercent = new_company->settings.vehicle.servint_ispercent;
 }
 static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
-static uint32_t Co_map_size() noexcept { return Map::Size(); }
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
 static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
-static uint32_t Co_station_facility_count(uint32_t id) noexcept { return Station::Get(id)->facilities.Count(); }
 static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
 {
 	const Station *st = Station::Get(id);
@@ -448,7 +445,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.subsidies = RustSubsidyServices,
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
-		.vehicle_next_owned = Co_vehicle_next_owned, .aircraft_is_normal = Co_aircraft_is_normal,
+		.vehicle_next_owned = Co_vehicle_next_owned,
 		.vehicle_value = RustIndexedVehicleRead<int64_t, RustVehicleValue>, .vehicle_is_primary = RustIndexedVehicleRead<bool, RustVehiclePrimary>,
 		.vehicle_profit = Co_vehicle_profit, .vehicle_previous = RustIndexedVehicleRead<uint32_t, RustVehiclePreviousID>,
 		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
@@ -458,10 +455,9 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
-		.map_size = Co_map_size,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
-		.station_next_owned = Co_station_next_owned, .station_facility_count = Co_station_facility_count,
+		.station_next_owned = Co_station_next_owned,
 		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
 		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,
 		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,

@@ -6,8 +6,9 @@
 #include "engine_ffi.h"
 struct OpenTTDEngineLoadingServices;
 struct OpenTTDSharedServices;
+struct OpenTTDVehicleServices;
 struct OpenTTDEngineCapabilitiesServices {
-	const OpenTTDVehicleResolverServices *(*resolver)() noexcept OPENTTD_SERVICE_DEFAULT(resolver);
+	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);
 	uint16_t (*id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(id);
@@ -15,7 +16,6 @@ struct OpenTTDEngineCapabilitiesServices {
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint16_t (*multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(multiplier);
 	OpenTTDVehicle *(*new_temporary)() noexcept OPENTTD_SERVICE_DEFAULT(new_temporary);
-	void (*destroy_temporary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy_temporary);
 	const OpenTTDEngine *(*vehicle_engine_object)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine_object);
 	uint8_t (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	uint8_t (*vehicle_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_subtype);

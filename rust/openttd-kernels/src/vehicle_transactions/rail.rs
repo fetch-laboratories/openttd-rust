@@ -521,7 +521,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
         return None;
     }
     // Unsigned `uint8_t * uint` arithmetic, then the original's `int` conversion.
-    let mut allowed_len = (u32::from(unsafe { (x.w.max_length)() }) * TILE_SIZE)
+    let mut allowed_len = (u32::from(x.w.max_train_length()) * TILE_SIZE)
         .wrapping_sub(u32::from(x.length(t)))
         .cast_signed();
     if !x.is_engine(t) {

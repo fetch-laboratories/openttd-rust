@@ -80,7 +80,7 @@ static void VehicleMaintenanceBoundary()
 		infinite = after_infinite;
 		return factor;
 	};
-	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	static OpenTTDVehicleServices vehicles{}; vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; }; capabilities.vehicles = &vehicles;
 	capabilities.engine = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine_record; };
 	capabilities.id = [](const OpenTTDEngine *) noexcept -> uint16_t { return 123; };
 	capabilities.shared = &tables.shared;

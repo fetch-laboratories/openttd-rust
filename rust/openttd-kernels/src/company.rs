@@ -297,7 +297,6 @@ pub struct Services {
     pub set_town_rating: extern "C" fn(u32, u8, i16, bool),
     pub set_town_exclusivity: extern "C" fn(u32, u8, u8),
     pub vehicle_next_owned: extern "C" fn(u8, u32, *mut u8) -> u32,
-    pub aircraft_is_normal: extern "C" fn(u32) -> bool,
     pub vehicle_value: extern "C" fn(u32) -> i64,
     pub vehicle_is_primary: extern "C" fn(u32) -> bool,
     pub vehicle_profit: extern "C" fn(u32) -> VehicleProfit,
@@ -316,12 +315,10 @@ pub struct Services {
     pub transfer_group: extern "C" fn(u32, u8),
     pub copy_service_interval_defaults: extern "C" fn(u8, u8),
     pub update_autoreplace: extern "C" fn(u8),
-    pub map_size: extern "C" fn() -> u32,
     pub add_track_to_signal_buffer: extern "C" fn(u32, u8, u8),
     pub update_signals_in_buffer: extern "C" fn(),
     pub add_airport_infrastructure: extern "C" fn(u8, u8),
     pub station_next_owned: extern "C" fn(u8, u32) -> u32,
-    pub station_facility_count: extern "C" fn(u32) -> u32,
     pub station_times: extern "C" fn(u32) -> StationTimes,
     pub set_station_owner: extern "C" fn(u32, u8),
     pub waypoint_next_owned: extern "C" fn(u8, u32) -> u32,
@@ -725,11 +722,25 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         subtract(f, p, id, cost, expense);
     }
 }
+/// `Station::Get(id)->facilities.Count()`, through the shared facility reader.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "StationID is the original uint16_t pool index that NextOwned yields"
+)]
+fn station_facility_count(s: &Services, id: u32) -> u32 {
+    (s.shared.station_facilities)(id as u16).count_ones()
+}
+/// `Aircraft::From(Vehicle::Get(id))->IsNormalAircraft()`. For a valid ID, the first
+/// vehicle at or after it is that vehicle.
+fn aircraft_is_normal(s: &Services, id: u32) -> bool {
+    (s.shared.vehicle_next)(id)
+        .is_some_and(|v| crate::aircraft::is_normal_aircraft(v.subtype()))
+}
 fn assets(s: &Services, id: u8) -> i64 {
     let mut num = 0_u32;
     each(
         |from| (s.station_next_owned)(id, from),
-        |st| num = num.wrapping_add((s.station_facility_count)(st)),
+        |st| num = num.wrapping_add(station_facility_count(s, st)),
     );
     let price = unsafe { (&raw const PRICES).cast::<i64>().read() };
     let mut value = price.saturating_mul(i64::from(num)).saturating_mul(25);
@@ -741,7 +752,7 @@ fn assets(s: &Services, id: u8) -> i64 {
             break;
         }
         from = v.wrapping_add(1);
-        if kind == 0 || kind == 1 || (kind == 3 && (s.aircraft_is_normal)(v)) || kind == 2 {
+        if kind == 0 || kind == 1 || (kind == 3 && aircraft_is_normal(s, v)) || kind == 2 {
             value = value.saturating_add((s.vehicle_value)(v).saturating_mul(3) >> 1);
         }
     }
@@ -802,7 +813,7 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
         |st| {
             let t = (s.station_times)(st);
             if t.since_load <= 20 || t.since_unload <= 20 {
-                count = count.wrapping_add((s.station_facility_count)(st));
+                count = count.wrapping_add(station_facility_count(s, st));
             }
         },
     );
@@ -1326,7 +1337,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if new != INVALID_OWNER {
         (s.update_autoreplace)(new);
     }
-    let map_size = (s.map_size)();
+    let map_size = s.shared.map_size();
     for tile in 0..map_size {
         // SAFETY: The outer C++ frame owns live scratch across this traversal.
         unsafe { change_tile_owner(ownership, TileIndex(tile), CompanyID(old), CompanyID(new)) };
@@ -2267,7 +2278,6 @@ crate::abi::layouts! {
         set_town_rating,
         set_town_exclusivity,
         vehicle_next_owned,
-        aircraft_is_normal,
         vehicle_value,
         vehicle_is_primary,
         vehicle_profit,
@@ -2286,12 +2296,10 @@ crate::abi::layouts! {
         transfer_group,
         copy_service_interval_defaults,
         update_autoreplace,
-        map_size,
         add_track_to_signal_buffer,
         update_signals_in_buffer,
         add_airport_infrastructure,
         station_next_owned,
-        station_facility_count,
         station_times,
         set_station_owner,
         waypoint_next_owned,

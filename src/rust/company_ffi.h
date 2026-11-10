@@ -156,7 +156,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *set_town_rating)(uint32_t, uint8_t, int16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_town_rating);
 	void (OPENTTD_RUST_CALL *set_town_exclusivity)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town_exclusivity);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_next_owned)(uint8_t, uint32_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next_owned);
-	bool (OPENTTD_RUST_CALL *aircraft_is_normal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_is_normal);
 	int64_t (OPENTTD_RUST_CALL *vehicle_value)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_value);
 	bool (OPENTTD_RUST_CALL *vehicle_is_primary)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_is_primary);
 	OpenTTDCompanyVehicleProfit (OPENTTD_RUST_CALL *vehicle_profit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_profit);
@@ -175,12 +174,10 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *transfer_group)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(transfer_group);
 	void (OPENTTD_RUST_CALL *copy_service_interval_defaults)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_service_interval_defaults);
 	void (OPENTTD_RUST_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
-	uint32_t (OPENTTD_RUST_CALL *map_size)() noexcept OPENTTD_SERVICE_DEFAULT(map_size);
 	void (OPENTTD_RUST_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
 	void (OPENTTD_RUST_CALL *update_signals_in_buffer)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals_in_buffer);
 	void (OPENTTD_RUST_CALL *add_airport_infrastructure)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_airport_infrastructure);
 	uint32_t (OPENTTD_RUST_CALL *station_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_next_owned);
-	uint32_t (OPENTTD_RUST_CALL *station_facility_count)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_facility_count);
 	OpenTTDCompanyStationTimes (OPENTTD_RUST_CALL *station_times)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_times);
 	void (OPENTTD_RUST_CALL *set_station_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
 	uint32_t (OPENTTD_RUST_CALL *waypoint_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_next_owned);

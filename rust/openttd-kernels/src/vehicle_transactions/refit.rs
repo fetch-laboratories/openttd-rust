@@ -65,12 +65,16 @@ pub struct Services {
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
-    pub road_acceleration: extern "C" fn() -> u8,
     pub details_ui: extern "C" fn(*mut OpenTTDVehicle),
     pub lists_ui: extern "C" fn(u8),
 }
 // Canonical vehicle-table slots for refit callers; no refit copy is bound.
 impl Services {
+    /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
+    pub(crate) fn road_acceleration_model(&self) -> u8 {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { self.common.base.shared.settings().roadveh_acceleration_model.read() }
+    }
     /// `v->GetEngine()`.
     pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
         (self.common.vehicles.engine)(crate::vehicle::VehicleRef::of(v))
@@ -552,7 +556,7 @@ pub(crate) unsafe fn refit(
                         s.road,
                     );
                 }
-                if (s.road_acceleration)() != 0 {
+                if s.road_acceleration_model() != 0 {
                     crate::ground_vehicle::cargo_changed(
                         s.road_ground.physics,
                         unsafe { vehicle_ref(front, s.common.vehicles) }.first(),
@@ -648,6 +652,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, capabilities, cargo_kind, set_cargo_kind, expense, invalidate_chain, road_state, aircraft_handle, details_ui, lists_ui,
     };
 }

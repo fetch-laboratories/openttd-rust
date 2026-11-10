@@ -42,7 +42,8 @@ type V = *mut OpenTTDVehicle;
 pub(crate) const MAX_ARTICULATED_PARTS: u32 = 100;
 #[repr(C)]
 pub struct Services {
-    pub(crate) resolver: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
+    /// The vehicle owner's table: its `NewGRF` resolver and `TEMP` shell destruction.
+    pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
     pub(crate) engine: extern "C" fn(u16) -> E,
     engine_if_valid: extern "C" fn(u16) -> E,
     pub(crate) id: extern "C" fn(E) -> u16,
@@ -50,7 +51,6 @@ pub struct Services {
     pub(crate) cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
     new_temporary: extern "C" fn() -> V,
-    destroy_temporary: extern "C" fn(V),
     vehicle_engine_object: extern "C" fn(V) -> E,
     pub(crate) vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
@@ -62,7 +62,7 @@ pub struct Services {
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
     unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_callback(
-            &*(s.resolver)(),
+            &*(s.vehicles.newgrf)(),
             cb,
             p1,
             0,
@@ -78,7 +78,7 @@ unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
 unsafe fn property(s: &Services, engine: u16, prop: u8, fallback: u32, v: V) -> u32 {
     unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_property(
-            &*(s.resolver)(),
+            &*(s.vehicles.newgrf)(),
             engine,
             prop,
             fallback as i32,
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
             i += 1;
         }
         if !v.is_null() {
-            (s.destroy_temporary)(v);
+            (s.vehicles.destroy)(crate::vehicle::VehicleRef::of(v));
         }
         i - 1
     }
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
+        vehicles, engine, engine_if_valid, id, loading, cargo_classes, multiplier, new_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
     };
 }
 
@@ -700,7 +700,7 @@ pub(crate) unsafe fn unknown_callback(
 #[cfg(test)]
 pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
     crate::engine_capabilities::Services {
-        resolver: crate::test_tables::unreachable0,
+        vehicles: &crate::test_tables::VEHICLE,
         engine: crate::test_tables::unreachable1,
         engine_if_valid: crate::test_tables::unreachable1,
         id: crate::test_tables::unreachable1,
@@ -708,7 +708,6 @@ pub(crate) const TEST_TABLE: crate::engine_capabilities::Services =
         cargo_classes: crate::test_tables::unreachable1,
         multiplier: crate::test_tables::unreachable1,
         new_temporary: crate::test_tables::unreachable0,
-        destroy_temporary: crate::test_tables::unreachable1,
         vehicle_engine_object: crate::test_tables::unreachable1,
         vehicle_cargo: crate::test_tables::unreachable1,
         vehicle_subtype: crate::test_tables::unreachable1,

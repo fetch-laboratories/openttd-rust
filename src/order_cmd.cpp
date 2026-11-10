@@ -292,11 +292,6 @@ extern "C" uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept
 }
 
 
-extern "C" uint64_t openttd_orders_review_setting() noexcept
-{
-	return _settings_client.gui.order_review_system;
-}
-
 extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -518,7 +513,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.default_group = openttd_orders_default_group,
 	.vehicle_group = openttd_orders_vehicle_group,
 	.unique_backup_name = openttd_orders_unique_backup_name,
-	.review_setting = openttd_orders_review_setting,
 	.local_owner = openttd_orders_local_owner,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
