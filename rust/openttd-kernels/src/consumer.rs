@@ -5,7 +5,32 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Byte algorithms; C++ retains borrowed views, diagnostics, and cursor commit.
+//! `StringConsumer`'s byte algorithms (`core/string_consumer.hpp`/`.cpp`); C++
+//! retains the borrowed views, the diagnostics and the cursor commit.
+
+/// `StringConsumer::SeparatorUsage`.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SeparatorUsage(pub i32);
+impl SeparatorUsage {
+    /// Read all consecutive separators, and include them all in the result
+    pub const READ_ALL_SEPARATORS: Self = Self(0);
+    /// Read one separator, and include it in the result
+    pub const READ_ONE_SEPARATOR: Self = Self(1);
+    /// Keep the separator in the data as next value to be read.
+    pub const KEEP_SEPARATOR: Self = Self(2);
+    /// Read and discard one separator, do not include it in the result.
+    pub const SKIP_ONE_SEPARATOR: Self = Self(3);
+    /// Read and discard all consecutive separators, do not include any in the result.
+    pub const SKIP_ALL_SEPARATORS: Self = Self(4);
+}
+
+/// [`find`]'s `StringConsumer::Find`: the first occurrence of the pattern.
+pub const FIND_STRING: u8 = 0;
+/// [`find`]'s `StringConsumer::FindCharIn`: the first byte in the pattern.
+pub const FIND_CHAR_IN: u8 = 1;
+/// [`find`]'s `StringConsumer::FindCharNotIn`: the first byte not in the pattern.
+pub const FIND_CHAR_NOT_IN: u8 = 2;
 
 /// Bounded read/skip decision with a cursor commit performed only after logging.
 #[repr(C)]
@@ -45,6 +70,9 @@ pub struct SeparatorResult {
     pub consumed_length: usize,
 }
 
+/// `Peek`, `Skip` and `Read`'s clamping: `requested` is `npos` (`usize::MAX`) for
+/// all remaining bytes; a longer request is a shortfall, which `Skip` and `Read`
+/// log as "Source buffer too short" before moving to the end.
 pub fn bound(size: usize, position: usize, requested: usize) -> BoundResult {
     let remaining = size - position;
     let all = requested == usize::MAX;
@@ -60,8 +88,12 @@ pub fn bound(size: usize, position: usize, requested: usize) -> BoundResult {
     }
 }
 
+/// `PeekUint8`, `PeekUint16LE`, `PeekUint32LE` and `PeekUint64LE`: `std::nullopt`
+/// (a zero length) if not enough data.
 pub fn little_endian(bytes: &[u8], width: u8) -> ByteResult {
-    assert!(matches!(width, 1 | 2 | 4 | 8));
+    if !matches!(width, 1 | 2 | 4 | 8) {
+        crate::services_assert::check(false);
+    }
     let width = usize::from(width);
     if bytes.len() < width {
         return ByteResult {
@@ -79,6 +111,7 @@ pub fn little_endian(bytes: &[u8], width: u8) -> ByteResult {
     }
 }
 
+/// `PeekIf`, `ReadIf` and `SkipIf`'s check: whether the data starts with `pattern`.
 pub fn prefix(bytes: &[u8], pattern: &[u8]) -> MatchResult {
     let matched = bytes.starts_with(pattern);
     MatchResult {
@@ -87,21 +120,32 @@ pub fn prefix(bytes: &[u8], pattern: &[u8]) -> MatchResult {
     }
 }
 
+/// `Find`, `FindCharIn` or `FindCharNotIn`, by `mode`; `npos` (`usize::MAX`) if
+/// not found.
 pub fn find(bytes: &[u8], pattern: &[u8], mode: u8) -> usize {
-    assert_ne!(pattern, []);
+    if pattern.is_empty() {
+        crate::services_assert::check(false);
+    }
     let found = match mode {
-        0 => bytes
+        FIND_STRING => bytes
             .windows(pattern.len())
             .position(|window| window == pattern),
-        1 => bytes.iter().position(|byte| pattern.contains(byte)),
-        2 => bytes.iter().position(|byte| !pattern.contains(byte)),
-        _ => unreachable!(),
+        FIND_CHAR_IN => bytes.iter().position(|byte| pattern.contains(byte)),
+        FIND_CHAR_NOT_IN => bytes.iter().position(|byte| !pattern.contains(byte)),
+        _ => {
+            crate::services_assert::check(false);
+            None
+        }
     };
     found.unwrap_or(usize::MAX)
 }
 
+/// `PeekCharIfIn` (`member`) or `PeekCharIfNotIn`: the first byte if it is (or is
+/// not) in `pattern`.
 pub fn character(bytes: &[u8], pattern: &[u8], member: bool) -> ByteResult {
-    assert_ne!(pattern, []);
+    if pattern.is_empty() {
+        crate::services_assert::check(false);
+    }
     match bytes.first() {
         Some(byte) if pattern.contains(byte) == member => ByteResult {
             value_bits: u64::from(*byte),
@@ -114,8 +158,10 @@ pub fn character(bytes: &[u8], pattern: &[u8], member: bool) -> ByteResult {
     }
 }
 
-pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
-    let start = find(bytes, pattern, 0);
+/// `PeekUntil`'s result and `ReadUntil` and `SkipUntil`'s consumed length for the
+/// separator `str` and usage `sep`.
+pub fn until(bytes: &[u8], str: &[u8], sep: SeparatorUsage) -> SeparatorResult {
+    let start = find(bytes, str, FIND_STRING);
     if start == usize::MAX {
         return SeparatorResult {
             result_length: bytes.len(),
@@ -123,19 +169,35 @@ pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
         };
     }
     let mut end = start;
-    match policy {
-        0 | 4 => {
-            while bytes[end..].starts_with(pattern) {
-                end += pattern.len();
+    match sep {
+        SeparatorUsage::READ_ALL_SEPARATORS | SeparatorUsage::SKIP_ALL_SEPARATORS => {
+            while bytes[end..].starts_with(str) {
+                end += str.len();
             }
         }
-        1 | 3 => end += pattern.len(),
-        _ => {} // KEEP and unknown enum values retain the original default.
+        SeparatorUsage::READ_ONE_SEPARATOR | SeparatorUsage::SKIP_ONE_SEPARATOR => {
+            end += str.len();
+        }
+        // KEEP_SEPARATOR, and any other value, take the original `default`.
+        SeparatorUsage::KEEP_SEPARATOR | SeparatorUsage(_) => {}
     }
     SeparatorResult {
-        result_length: if matches!(policy, 0 | 1) { end } else { start },
+        result_length: if matches!(
+            sep,
+            SeparatorUsage::READ_ALL_SEPARATORS | SeparatorUsage::READ_ONE_SEPARATOR
+        ) {
+            end
+        } else {
+            start
+        },
         consumed_length: end,
     }
+}
+
+/// Raw adapter: [`until`] over a base `SeparatorUsage`, for the export and
+/// `encoded.rs` until its pass.
+pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
+    until(bytes, pattern, SeparatorUsage(policy))
 }
 
 crate::abi::layouts! {
@@ -307,7 +369,7 @@ pub(crate) mod tests {
 
         /// `SkipUntilCharNotIn` through `FindBytes` mode 2; not found is `npos`.
         pub(crate) fn skip_until_char_not_in(&mut self, chars: &[u8]) {
-            let len = find(self.left(), chars, 2);
+            let len = find(self.left(), chars, super::FIND_CHAR_NOT_IN);
             self.skip(len);
         }
 
@@ -384,14 +446,14 @@ pub(crate) mod tests {
         let part = &src[result.error_offset..];
         let head = &part[..result.error_length.min(part.len())];
         let mut message = Vec::new();
-        if result.error_kind == 3 {
+        if result.error_kind == integer::INTEGER_NEGATIVE_HEX_OUT_OF_RANGE {
             message.extend_from_slice(b"Integer out of range: '");
             message.extend_from_slice(head);
             message.push(b'\'');
             return message;
         }
         let tail = &part[result.error_length..];
-        message.extend_from_slice(if result.error_kind == 2 {
+        message.extend_from_slice(if result.error_kind == integer::INTEGER_OUT_OF_RANGE {
             b"Integer out of range: '"
         } else {
             b"Cannot parse integer: '"
