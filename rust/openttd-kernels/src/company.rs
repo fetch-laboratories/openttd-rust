@@ -2521,7 +2521,7 @@ mod financial_command_tests {
         fn from_index(index: usize) -> Self {
             Self {
                 op: 21 + (index / 504) as u8,
-                execute: (index / 252) % 2 != 0,
+                execute: !(index / 252).is_multiple_of(2),
                 money: MONEY[(index / 36) % 7],
                 loan: LOANS[(index / 9) % 4],
                 amount: AMOUNTS[index % 9],
