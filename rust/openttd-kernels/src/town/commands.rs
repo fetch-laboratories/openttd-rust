@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Town commands, authority actions and ordered deletion. Post-destruction code never
 //! resolves an ID.
-use super::founding::{AcceptanceEffect, FoundingServices};
+use super::founding::FoundingServices;
 use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, OWNER_NONE, OWNER_TOWN};
@@ -589,14 +589,21 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
     out: *mut CommandCost,
     flags: u16,
     id: u16,
-    effect: AcceptanceEffect,
+    effect: u8,
     goal: u32,
 ) {
-    let (flags, town_id) = (DoCommandFlags(flags), TownId(id));
+    use crate::cargotype::TownAcceptanceEffect;
+    let (flags, town_id, effect) = (
+        DoCommandFlags(flags),
+        TownId(id),
+        TownAcceptanceEffect(effect),
+    );
     let c = unsafe { Commands::new(s) };
-    if c.current_company() != CompanyID::DEITY
-        || effect.0 >= crate::cargotype::TownAcceptanceEffect::NUM_TAE.0
-    {
+    if c.current_company() != CompanyID::DEITY {
+        c.error(out);
+        return;
+    }
+    if effect < TownAcceptanceEffect::TAE_BEGIN || effect >= TownAcceptanceEffect::TAE_END {
         c.error(out);
         return;
     }

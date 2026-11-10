@@ -32,14 +32,6 @@ macro_rules! observed {
 }
 pub(super) use observed;
 
-macro_rules! native_byte {
-    ($($name:ident),+) => { $(
-        #[repr(transparent)]
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        pub struct $name(pub u8);
-    )+ };
-}
-native_byte!(AcceptanceEffect);
 pub use crate::tile_type::TileIndex as Tile;
 pub use crate::town_type::{TownFounding, TownLayout, TownSize};
 #[repr(C)]
