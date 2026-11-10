@@ -32,12 +32,12 @@ Do not commit, push, request Full or merge. The PR's Opus implementer fixes each
   - partial effects on early return.
 
   Cover every point the spawn lists.
-- **Every line of the files.** A file pass applies the code standards to every line left in its files, not only to changed lines. Every other PR applies them to every line it changes or adds. Each of these is a finding:
+- **Every line of the files.** A file pass applies the code standards to every line left in its files, not only to changed lines. Every other PR applies them to every line it changes or adds. `python3 tools/code-standards-inventory.py FILE...` lists candidate missing comments, bare integers and literals per file; it estimates and gates nothing, so judge each site. Each of these is a finding:
   - a literal for a named value;
   - a raw internal signature where an original type exists (FFI exports, `repr(C)` records and service tables keep base integers, per #355);
   - a missing original comment at a matching branch, or a comment that records history or defends the change;
   - a hand-written copy of a shared helper, or of an original helper with no Rust port yet (add the port in its header module);
-  - a non-command helper above seven parameters;
+  - a non-command helper above seven parameters (the Clippy ratchet already rejects a new or longer one);
   - a command or helper body written inside an FFI export, or a Rust-internal `Cmd*` body without one argument struct;
   - a Rust call to a `_raw` adapter or an `openttd_rust_*` export where a typed Rust form exists;
   - a [boundary design fault](review-checklist.md#code-standards): a Rust-to-C++-to-Rust bounce, a moved field behind a service, per-call allocation the original lacks, or an owner resolved once per field instead of once per entry.
@@ -45,7 +45,6 @@ Do not commit, push, request Full or merge. The PR's Opus implementer fixes each
   Literals the original itself writes as literals stay. Operators and control flow follow the original's: a `switch` with `NOT_REACHED` stays a match with the native unreachable path, not an ordering comparison.
 - **Adapters and boundary.** Each raw adapter delegates to one typed definition and serves only callers in files no pass has finished. A pass converts callers in finished files to the typed form. Each touched orphan export is a finding; tests and the orphan baseline do not keep an export alive.
 - **Evidence.** The changed paths stay reached by the scenarios and tests the PR cites. A branch the PR newly leaves unreached or unobserved is a finding. Oracles come from the unchanged original only.
-- **Lint records.** Each declared carry keeps the same lint and scope, and its head magnitude is not above the `from` magnitude. The ratchets pair unambiguous renames themselves; a lint exception names the original behaviour that needs it ([quick cleanup checks](rust-migration.md#quick-cleanup-checks)).
 
 ## Policy questions
 
