@@ -1222,11 +1222,9 @@ pub(crate) const COMPANY_IDENTITY: crate::company_identity::Services =
         colour_windows: unreachable0,
         object_colours: unreachable1,
         reset_colourmap: unreachable0,
-        engine: unreachable1,
-        vehicle_cargo: unreachable1,
+        capabilities: &crate::engine_capabilities::TEST_TABLE,
         wagon_override: unreachable1,
         cargo_freight: unreachable1,
-        cargo_classes: unreachable1,
         vehicle_id: unreachable1,
         invalidate_vehicle: unreachable1,
     };

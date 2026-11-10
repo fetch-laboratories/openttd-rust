@@ -110,11 +110,9 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.colour_windows = Identity_colour_windows,
 	.object_colours = Identity_object_colours,
 	.reset_colourmap = Identity_reset_colourmap,
-	.engine = GetRustEngineCapabilitiesServices().engine,
-	.vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo,
+	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.wagon_override = RustVehicleRead<bool, RustVehicleUsesWagonOverride>,
 	.cargo_freight = Identity_cargo_freight,
-	.cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes,
 	.vehicle_id = RustVehicleRead<uint32_t, RustVehicleIndexOpaque>,
 	.invalidate_vehicle = RustVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 	};

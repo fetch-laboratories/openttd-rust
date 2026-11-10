@@ -52,7 +52,7 @@ pub struct Services {
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
     vehicle_engine_object: extern "C" fn(V) -> E,
-    vehicle_cargo: extern "C" fn(V) -> u8,
+    pub(crate) vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
