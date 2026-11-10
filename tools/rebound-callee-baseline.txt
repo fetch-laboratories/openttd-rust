@@ -167,8 +167,6 @@ rebound | RustResolverBaseScope | src/newgrf_roadstop.cpp | base_scope
 rebound | RustResolverTownScope | src/newgrf_airport.cpp | town_scope
 rebound | RustResolverTownScope | src/newgrf_object.cpp | town_scope
 rebound | RustResolverTownScope | src/newgrf_station.cpp | town_scope
-rebound | RustRoadAccelerationModel | src/rust/vehicle_refit_services.hpp | road_acceleration
-rebound | RustRoadAccelerationModel | src/rust/vehicle_services_newgrf.h | road_acceleration
 rebound | RustRoadStopAnimationFrame | src/animated_tile.cpp | road_frame
 rebound | RustRoadStopAnimationFrame | src/newgrf_roadstop.cpp | frame
 rebound | RustRoadStopDataTile | src/animated_tile.cpp | road_tile
@@ -244,8 +242,6 @@ rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
 rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
 rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
-rebound | RustTrainLimit | src/rust/engine_adapter.hpp | train_limit
-rebound | RustTrainLimit | src/rust/rail_construction_services.hpp | train_limit
 rebound | RustTrainPathBackoffInterval | src/train_cmd.cpp | backoff
 rebound | RustTrainPathBackoffInterval | src/train_cmd.cpp | backoff | 2
 rebound | RustTrainReservePaths | src/train_cmd.cpp | reserve_paths
