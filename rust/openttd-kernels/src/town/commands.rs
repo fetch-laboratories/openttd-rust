@@ -82,7 +82,6 @@ struct Commands<'a> {
     cost: &'a CommandCostServices,
     map: OnceCell<Map>,
     world: OnceCell<crate::map_func::World<'a>>,
-    size_y: OnceCell<u32>,
 }
 impl<'a> Commands<'a> {
     unsafe fn new(s: &'a CommandServices) -> Self {
@@ -95,7 +94,6 @@ impl<'a> Commands<'a> {
             cost: unsafe { &*f.cost },
             map: OnceCell::new(),
             world: OnceCell::new(),
-            size_y: OnceCell::new(),
         }
     }
     fn objects(&self) -> &ObjectServices {
@@ -125,12 +123,12 @@ impl<'a> Commands<'a> {
         crate::road_map::has_town_owned_road(world, tile.0)
     }
     fn size_y(&self) -> u32 {
-        *self
-            .size_y
-            .get_or_init(|| (self.shared.map_max_y)().wrapping_add(1))
+        self.world
+            .get_or_init(|| crate::map_func::World::new(self.shared))
+            .size_y()
     }
     fn map_size(&self) -> u32 {
-        self.map().size_x() * self.size_y()
+        self.shared.map_size()
     }
     fn growth(&self, town: TownRef) -> Engine<'a> {
         let mut e = engine(self.f.growth, self.f.shared);

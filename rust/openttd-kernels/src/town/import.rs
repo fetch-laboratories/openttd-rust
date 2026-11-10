@@ -118,7 +118,7 @@ impl ImportServices {
         let s = unsafe { &*self.shared };
         let layout = (unsafe { &*self.founding }.layout_setting)();
         let map = s.map();
-        let size_y = (s.map_max_y)().wrapping_add(1);
+        let size_y = crate::map_func::World::new(s).size_y();
         let mut spiral = crate::spiral::hole(
             map.tile_x(target_tile.0),
             map.tile_y(target_tile.0),

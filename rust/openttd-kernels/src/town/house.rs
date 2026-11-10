@@ -1435,11 +1435,7 @@ impl<'a> House<'a> {
     }
     /// `Map::Iterate`, over `Map::Size()`.
     fn map_iterate(&self) -> impl Iterator<Item = TileIndex> {
-        let size = self
-            .map()
-            .size_x()
-            .wrapping_mul((self.s.map_max_y)().wrapping_add(1));
-        Map::iterate(size).map(TileIndex)
+        Map::iterate(self.s.map_size()).map(TileIndex)
     }
     /// `Town::Iterate`.
     fn towns(&self, mut visit: impl FnMut(*mut State)) {

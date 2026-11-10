@@ -113,7 +113,6 @@ struct Founding<'a> {
     names: &'a names::NameServices,
     cost: &'a CommandCostServices,
     map: OnceCell<crate::services::Map>,
-    size_y: OnceCell<u32>,
 }
 impl<'a> Founding<'a> {
     unsafe fn new(s: &'a FoundingServices) -> Self {
@@ -128,16 +127,13 @@ impl<'a> Founding<'a> {
             names,
             cost,
             map: OnceCell::new(),
-            size_y: OnceCell::new(),
         }
     }
     fn map(&self) -> crate::services::Map {
         *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
-        *self
-            .size_y
-            .get_or_init(|| observed!((self.shared.map_max_y)()).wrapping_add(1))
+        crate::map_func::World::new(self.shared).size_y()
     }
     fn engine(&self, town: TownRef) -> Engine<'a> {
         let map = OnceCell::new();

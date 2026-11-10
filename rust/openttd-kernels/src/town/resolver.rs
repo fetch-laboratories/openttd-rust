@@ -425,7 +425,7 @@ unsafe fn get_distance_from_nearby_house(
         start_tile
             .0
             .wrapping_add(house::get_house_north_part(leaves, &mut start_house, map));
-    let size_y = (unsafe { &*s.shared }.map_max_y)() + 1;
+    let size_y = crate::map_func::World::new(unsafe { &*s.shared }).size_y();
     let mut spiral = crate::spiral::square(
         map.tile_x(start_tile.0),
         map.tile_y(start_tile.0),
@@ -685,7 +685,10 @@ unsafe fn acceptance_history(
     let y_offs = gb(register, 8, 8) as i8;
     let offset = map.diff(i32::from(x_offs), i32::from(y_offs));
     let shared = unsafe { &*s.shared };
-    let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
+    let tile = map.wrap_to_map(
+        scope.tile.wrapping_add(offset),
+        crate::map_func::World::new(shared).size_y(),
+    );
     let c = crate::station::Ctx::from_shared(shared);
     let mut stations =
         crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });
