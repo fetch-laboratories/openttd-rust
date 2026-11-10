@@ -62,7 +62,6 @@ struct OpenTTDVehicleResolverServices {
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	const OpenTTDTrainServices *(*train_services)() noexcept OPENTTD_SERVICE_DEFAULT(train_services);
-	uint8_t (*road_acceleration)() noexcept OPENTTD_SERVICE_DEFAULT(road_acceleration);
 	uint16_t (*order_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);
 	uint32_t (*id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	uint16_t (*old_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(old_order);

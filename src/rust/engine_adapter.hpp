@@ -113,7 +113,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.display_variant = Engine_display_variant,
 		.engine_id = RustEngineID,
 		.start_settings = Engine_start_settings,
-		.train_limit = RustTrainLimit,
 		.road_limit = RustRoadVehicleLimit,
 		.ship_limit = RustShipLimit,
 		.aircraft_limit = RustAircraftLimit,

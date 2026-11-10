@@ -166,7 +166,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.new_rear = RailNewRear,
 		.link_multihead = RailLinkMultihead,
 		.invalidate_grf = RustOpaqueVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-		.train_limit = RustTrainLimit,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,
 		.release_unit = RustOpaqueVehicleInvoke<RustVehicleReleaseUnitNumber>,
