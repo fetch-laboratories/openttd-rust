@@ -59,7 +59,6 @@ pub struct TileServices {
     pub gfx: unsafe extern "C" fn(u32) -> u16,
     pub set_gfx: unsafe extern "C" fn(u32, u16),
     pub frame: unsafe extern "C" fn(u32) -> u8,
-    pub set_frame: unsafe extern "C" fn(u32, u8),
     pub animation_loop: unsafe extern "C" fn(u32) -> u8,
     pub set_animation_loop: unsafe extern "C" fn(u32, u8),
 
@@ -92,7 +91,7 @@ impl TileServices {
     }
     /// `SetAnimationFrame`.
     fn set_animation_frame(&self, tile: TileIndex, frame: u8) {
-        unsafe { (self.set_frame)(tile.0, frame) };
+        unsafe { ((*self.shared).tile_animation_set_frame)(tile.0, frame) };
     }
     /// `SetIndustryCompleted`.
     fn set_industry_completed(&self, tile: TileIndex) {
@@ -753,7 +752,6 @@ pub(crate) unsafe fn add_accepted_cargo_industry(
 
 #[repr(C)]
 pub struct TilePolicyServices {
-    pub magic_bulldozer: unsafe extern "C" fn() -> bool,
     pub object_in_way: unsafe extern "C" fn(*mut IndustryCost, *const SpecHandle),
     pub close_ai: unsafe extern "C" fn(*mut ShellHandle),
     pub close_game: unsafe extern "C" fn(*mut ShellHandle),
@@ -788,7 +786,10 @@ pub(crate) unsafe fn clear_tile_industry(
     // (area around OILRIG is water, so water shouldn't flood it
     if (current_company() != Owner::WATER
         && !(generation.environment.editor)()
-        && !unsafe { (policy.magic_bulldozer)() })
+        && !unsafe {
+            let commands = &*((*tiles.shared).station_commands)();
+            ((*commands.authority).bulldozer)()
+        })
         || flags.test(DoCommandFlag::Auto)
         || (current_company() == Owner::WATER
             && (IndustryBehaviours(unsafe { (*indspec).behaviour })

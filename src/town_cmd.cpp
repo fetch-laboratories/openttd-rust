@@ -496,9 +496,9 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
+		.shared = &GetRustSharedServices(),
 		.map_log_x = OpenTTDMapLogX,
 		.environment = GetRustEnvironmentServices(),
-		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
 		.climate = OpenTTDLandscapeValue,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
@@ -527,7 +527,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 				ShowErrorMessage(GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL), GetEncodedString(STR_ERROR_NO_TOWN_ROADTYPES_AVAILABLE_AT_ALL_EXPLANATION), WL_CRITICAL);
 			}
 		},
-		.next_town = GetRustSharedServices().town_next_id,
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
 		.assert_clear_house = RustTown_assert_clear_house,

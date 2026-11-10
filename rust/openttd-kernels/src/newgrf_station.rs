@@ -535,8 +535,7 @@ fn cargo_variable(
 }
 /// Complete station/waypoint virtual variable policy, also used by other native
 /// resolver shells. Cargo/state/list owners are acquired at the original points.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_base_variable(
+pub(crate) unsafe fn station_base_variable(
     st: *mut BaseStation,
     file: *const c_void,
     variable: u8,
@@ -798,16 +797,10 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x86 => 0,
         0xf0 => u32::from((native.world().facilities)(st)),
         0xfa => build_date((native.build_date)(st)),
-        _ => unsafe {
-            openttd_rust_station_base_variable(st, file, variable, parameter as u8, available)
-        },
+        _ => unsafe { station_base_variable(st, file, variable, parameter as u8, available) },
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_resolve_real(
-    state: *const State,
-    group: *const c_void,
-) -> *const c_void {
+pub(crate) unsafe fn resolve_real(state: *const State, group: *const c_void) -> *const c_void {
     let native = services();
     let st = unsafe { (*state).station };
     let loading = (native.loading_count)(group);

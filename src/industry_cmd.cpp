@@ -358,15 +358,16 @@ static bool TransportIndustryGoods(TileIndex tile)
 }
 
 
-OpenTTDIndustryLoopServices GetRustIndustryLoopServices() noexcept
+const OpenTTDIndustryLoopServices &GetRustIndustryLoopServices() noexcept
 {
-	return {
+	static const OpenTTDIndustryLoopServices services{
 		.production = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(),
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tiles = &GetIndustryTileServices(),
 		.generation = &GetIndustryGenerationServices(),
 	};
+	return services;
 }
 
 
@@ -529,12 +530,6 @@ void IndustryBuildData::Reset()
 	openttd_rust_industry_build_reset(this->owner.get(), &GetIndustryRustServices());
 }
 
-/** Monthly update of industry build data. */
-void IndustryBuildData::EconomyMonthlyLoop()
-{
-	openttd_rust_industry_build_monthly(this->owner.get(), &GetIndustryRustServices());
-}
-
 
 /**
  * This function will create random industries during game creation.
@@ -582,30 +577,6 @@ void ClearAllIndustryCachedNames()
 	for (Industry *ind : Industry::Iterate()) {
 		ind->cached_name.clear();
 	}
-}
-
-/**
- * Set the #probability and #min_number fields for the industry type \a it for a running game.
- * @param it Industry type.
- * @return At least one of the fields has changed value.
- */
-bool IndustryTypeBuildData::GetIndustryTypeData(IndustryType it)
-{
-	return openttd_rust_industry_build_type(reinterpret_cast<OpenTTDIndustryBuildFields *>(this), it, &GetIndustryRustServices()) != 0;
-}
-
-/** Decide how many industries of each type are needed. */
-void IndustryBuildData::SetupTargetCount()
-{
-	openttd_rust_industry_build_targets(this->owner.get(), &GetIndustryRustServices());
-}
-
-/**
- * Try to create a random industry, during gameplay
- */
-void IndustryBuildData::TryBuildNewIndustry()
-{
-	openttd_rust_industry_build_try(this->owner.get(), &GetIndustryRustServices());
 }
 
 /**
@@ -930,7 +901,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
-		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);
 			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);
@@ -943,7 +913,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
-		.serve_neutral = GetRustSharedServices().station_serve_neutral,
 	};
 	return services;
 }
@@ -955,7 +924,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 		.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(TileIndex(tile), gfx); },
 		.frame = OpenTTDAnimationFrame,
-		.set_frame = GetRustSharedServices().tile_animation_set_frame,
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },
 		.set_animation_loop = [](uint32_t tile, uint8_t value) noexcept { SetIndustryAnimationLoop(TileIndex(tile), value); },
 
@@ -1001,7 +969,6 @@ const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept
 {
 	static const OpenTTDIndustryTilePolicyServices services = {
-		.magic_bulldozer = GetRustTownAuthorityServices().bulldozer,
 		.object_in_way = [](OpenTTDIndustryCost *out, const OpenTTDIndustrySpecHandle *spec) noexcept { *out = CommandCostWithParam(STR_ERROR_GENERIC_OBJECT_IN_THE_WAY, reinterpret_cast<const IndustrySpec *>(spec)->name); },
 		.close_ai = [](Industry *industry) noexcept { AI::BroadcastNewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.close_game = [](Industry *industry) noexcept { Game::NewEvent(new ScriptEventIndustryClose(industry->index)); },

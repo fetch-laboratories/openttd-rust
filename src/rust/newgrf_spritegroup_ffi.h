@@ -90,7 +90,6 @@ struct OpenTTDSpriteGroupServices {
 };
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept;
 extern "C" {
-const SpriteGroup *openttd_rust_resolver_default_real(const OpenTTDSpriteGroupServices *, const struct RealSpriteGroup *);
 uint32_t openttd_rust_resolver_reseed_sum(const OpenTTDResolverState *);
 uint32_t openttd_rust_scope_default_random();
 uint32_t openttd_rust_scope_default_variable(uint8_t, bool *);

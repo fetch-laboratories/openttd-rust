@@ -439,7 +439,6 @@ public:
 	static void RecomputeCatchmentForAll();
 
 	uint GetCatchmentRadius() const;
-	void RemoveFromAllNearbyLists();
 
 	inline bool TileIsInCatchment(TileIndex tile) const
 	{
@@ -461,7 +460,6 @@ public:
 		return IsAirportTile(tile) && GetStationIndex(tile) == this->index;
 	}
 
-	uint32_t GetNewGRFVariable(const ResolverObject &object, uint8_t variable, uint8_t parameter, bool &available) const override;
 
 	TileArea GetTileArea(StationType type) const override;
 };

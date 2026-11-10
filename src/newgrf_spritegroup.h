@@ -387,7 +387,6 @@ public:
 		return openttd_rust_resolver_callback(&GetRustSpriteGroupServices(), this->root_spritegroup, this, &this->common_state, this->grffile, regs100.data(), regs100.size());
 	}
 
-	virtual const SpriteGroup *ResolveReal(const RealSpriteGroup &group) const;
 
 	virtual ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0);
 

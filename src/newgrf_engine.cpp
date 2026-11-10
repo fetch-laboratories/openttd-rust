@@ -66,10 +66,6 @@ void VehicleScopeResolver::SetVehicle(const Vehicle *v) { openttd_rust_vehicle_s
 }
 
 
-/* virtual */ const SpriteGroup *VehicleResolverObject::ResolveReal(const RealSpriteGroup &group) const
-{
-	return openttd_rust_vehicle_resolve_real(&GetRustVehicleResolverServices(), &this->state, &group);
-}
 
 GrfSpecFeature VehicleResolverObject::GetFeature() const
 {

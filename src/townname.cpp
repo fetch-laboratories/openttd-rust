@@ -106,7 +106,6 @@ const OpenTTDTownNameServices &GetRustTownNameServices() noexcept
 			return {reinterpret_cast<const uint8_t *>(text.data()), text.size()};
 		},
 		.shared = &GetRustSharedServices(),
-		.utf8_length = GetRustSharedServices().utf8_length,
 		.random_next = [](Randomizer *randomizer) noexcept -> uint32_t { return randomizer->Next(); },
 	};
 	return services;

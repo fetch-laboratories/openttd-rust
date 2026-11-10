@@ -25,7 +25,6 @@ struct OpenTTDTownNameServices {
 	OpenTTDTownRef (*next)(uint) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	OpenTTDByteSpan (*render)(OpenTTDTownNameFrame *, const TownNameParams *, uint32_t, bool other) noexcept OPENTTD_SERVICE_DEFAULT(render);
 	const OpenTTDSharedServices *shared;
-	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	uint32_t (*random_next)(Randomizer *) noexcept OPENTTD_SERVICE_DEFAULT(random_next);
 };
 const OpenTTDTownNameServices &GetRustTownNameServices() noexcept;

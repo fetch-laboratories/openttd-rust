@@ -74,7 +74,6 @@ pub struct ConstructionRequest {
 #[repr(C)]
 pub struct ConstructionServices {
     pub set_town: unsafe extern "C" fn(*mut c_void, *const TownHandle),
-    pub generating: unsafe extern "C" fn() -> bool,
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
     pub water_class: unsafe extern "C" fn(u32) -> u8,
@@ -84,7 +83,6 @@ pub struct ConstructionServices {
     pub set_construction_stage: unsafe extern "C" fn(u32, u8),
     pub translated_gfx: unsafe extern "C" fn(u16) -> u16,
     pub build_window_dirty: unsafe extern "C" fn(),
-    pub serve_neutral: unsafe extern "C" fn() -> bool,
 }
 /// `PopulateStationsNearby`: populate an industry's list of nearby stations, and the
 /// stations' lists of nearby industries.
@@ -94,12 +92,11 @@ fn populate(
     owner: *mut Industry,
     s: &Services,
     l: &LifecycleServices,
-    c: &ConstructionServices,
 ) {
     let cc = crate::station::Ctx::from_shared(s.shared());
     let shell = industry.cast::<crate::industry::tile::ShellHandle>();
     let neutral = (cc.c.industry_neutral)(shell);
-    if !neutral.is_null() && !unsafe { (c.serve_neutral)() } {
+    if !neutral.is_null() && !(s.shared().station_serve_neutral)() {
         // Industry has a neutral station. Use it and ignore any other nearby stations.
         // SAFETY: Live owners; immediate mutations.
         unsafe {
@@ -352,7 +349,7 @@ pub(crate) unsafe fn do_create_new_industry(
     unsafe { (*owner).metadata.construction_date = date };
     let construction_type = if (generation.environment.editor)() {
         IndustryConstructionType::ICT_SCENARIO_EDITOR
-    } else if unsafe { (cons.generating)() } {
+    } else if (prod.shared().clear_square_services.generating_world)() {
         IndustryConstructionType::ICT_MAP_GENERATION
     } else {
         IndustryConstructionType::ICT_NORMAL_GAMEPLAY
@@ -396,7 +393,7 @@ pub(crate) unsafe fn do_create_new_industry(
             }
         }
     }
-    if unsafe { (cons.generating)() } {
+    if (prod.shared().clear_square_services.generating_world)() {
         if callbacks.test(IndustryCallbackMask::Production256Ticks) {
             unsafe {
                 (prod.production_callback)(industry, 1);
@@ -479,7 +476,7 @@ pub(crate) unsafe fn do_create_new_industry(
             unsafe {
                 (cons.make_industry)(cur_tile.0, id.0, it.gfx, random, wc);
             }
-            if unsafe { (cons.generating)() } {
+            if (prod.shared().clear_square_services.generating_world)() {
                 unsafe {
                     (cons.set_construction_counter)(cur_tile.0, 3);
                     (cons.set_construction_stage)(cur_tile.0, 2);
@@ -526,8 +523,8 @@ pub(crate) unsafe fn do_create_new_industry(
         (prod.directory_dirty)(super::IndustryDirectoryInvalidateWindowData::IDIWD_FORCE_REBUILD.0);
         (cons.build_window_dirty)();
     }
-    if !unsafe { (cons.generating)() } {
-        populate(industry, id, owner, prod, life, cons);
+    if !(prod.shared().clear_square_services.generating_world)() {
+        populate(industry, id, owner, prod, life);
     }
 }
 /// Write `location` back to `Industry::location`.

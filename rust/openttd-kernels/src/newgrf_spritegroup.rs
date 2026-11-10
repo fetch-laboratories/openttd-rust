@@ -555,15 +555,12 @@ impl<'a> Invocation<'a> {
     unsafe fn real(self, group: Handle) -> Handle {
         unsafe {
             match self.binding.kind {
-                1 => crate::newgrf_vehicle::openttd_rust_vehicle_resolve_real(
+                1 => crate::newgrf_vehicle::resolve_real(
                     &*self.s.vehicle,
                     self.binding.state.cast(),
                     group,
                 ),
-                2 => crate::newgrf_station::openttd_rust_station_resolve_real(
-                    self.binding.state.cast(),
-                    group,
-                ),
+                2 => crate::newgrf_station::resolve_real(self.binding.state.cast(), group),
                 // Native features without a ResolveReal override use the common policy.
                 _ => default_real(self.s, group),
             }
@@ -860,10 +857,6 @@ unsafe fn default_real(s: &Services, group: Handle) -> Handle {
         }
         ptr::null()
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_resolver_default_real(s: &Services, group: Handle) -> Handle {
-    unsafe { default_real(s, group) }
 }
 /// Native facades pass the availability output; frame addresses stay native.
 #[unsafe(no_mangle)]

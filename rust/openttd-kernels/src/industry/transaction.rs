@@ -495,7 +495,7 @@ impl Engine<'_> {
         //  CheckIfCanLevelIndustryPlatform().
         if !refused_slope
             || (self.s.terragenesis()
-                && unsafe { (self.c.generating)() }
+                && (self.s.shared().clear_square_services.generating_world)()
                 && !custom_shape
                 && !unsafe { (self.x.ignore_restrictions)() })
         {
@@ -759,7 +759,7 @@ impl Engine<'_> {
         }
         if !custom_shape_check
             && self.s.terragenesis()
-            && unsafe { (self.c.generating)() }
+            && (self.s.shared().clear_square_services.generating_world)()
             && !unsafe { (self.x.ignore_restrictions)() }
             && !self.check_if_can_level_industry_platform(
                 tile,

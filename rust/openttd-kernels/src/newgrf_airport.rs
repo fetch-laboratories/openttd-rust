@@ -384,7 +384,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
             .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
         _ => unsafe {
-            crate::newgrf_station::openttd_rust_station_base_variable(
+            crate::newgrf_station::station_base_variable(
                 c.station,
                 file,
                 variable,

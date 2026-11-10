@@ -544,7 +544,7 @@ pub(crate) fn iterate_refs(mut next: impl FnMut(u32) -> TownRef) -> impl Iterato
 /// `GetWorldPopulation`: the total population of the world.
 pub(crate) fn get_world_population(leaves: &Leaves) -> u32 {
     let mut total = 0_u32;
-    for town in iterate(|from| (leaves.next_town)(from)) {
+    for town in iterate(|from| leaves.next_town(from)) {
         let owner = (leaves.resolve_owner)(u32::from(town.0));
         // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
         total = total.wrapping_add(unsafe { population(owner) });
@@ -987,9 +987,9 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
+    pub shared: *const Services,
     pub map_log_x: extern "C" fn() -> u32,
     pub environment: crate::services::EnvironmentServices,
-    pub generating_world: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
@@ -1011,11 +1011,22 @@ pub struct Leaves {
     pub population_changed: extern "C" fn(u32),
     pub house_count: extern "C" fn() -> u32,
     pub road_type_error: extern "C" fn(i32),
-    pub next_town: extern "C" fn(u32) -> u32,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
     pub houses: *const house::HouseServices,
+}
+impl Leaves {
+    pub(crate) fn shared(&self) -> &Services {
+        // SAFETY: Every town table points at its live immutable shared services.
+        unsafe { &*self.shared }
+    }
+    pub(crate) fn generating_world(&self) -> bool {
+        (self.shared().clear_square_services.generating_world)()
+    }
+    pub(crate) fn next_town(&self, from: u32) -> u32 {
+        (self.shared().town_next_id)(from)
+    }
 }
 pub type StationActivity = crate::station_service::StationActivity;
 #[derive(Clone, Copy)]
@@ -1606,7 +1617,7 @@ impl Engine<'_> {
         {
             if chance16(self.services, 1, 8) {
                 let mut res = false;
-                if !(self.leaves.generating_world)() && chance16(self.services, 1, 10) {
+                if !self.leaves.generating_world() && chance16(self.services, 1, 10) {
                     /* Note: Do not replace "^ SLOPE_ELEVATED" with ComplementSlope(). The slope might be steep. */
                     let edges = if chance16(self.services, 1, 16) {
                         cur_slope
@@ -2759,11 +2770,10 @@ impl Engine<'_> {
         self.set_num_houses(self.num_houses().wrapping_add(1));
         let mut construction_counter = 0;
         let mut construction_stage = 0;
-        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || house_completed
-        {
+        if self.leaves.generating_world() || (self.leaves.environment.editor)() || house_completed {
             let construction_random = self.services.random();
             construction_stage = TOWN_HOUSE_COMPLETED;
-            if (self.leaves.generating_world)()
+            if self.leaves.generating_world()
                 && !HouseExtraFlags((self.leaves.house_extra_flags)(house))
                     .test(HouseExtraFlag::BuildingIsHistorical)
                 && chance16(self.services, 1, 7)
@@ -2926,7 +2936,7 @@ impl Engine<'_> {
             probability_max -= probability;
             let hs = (self.leaves.house_placement)(house);
             let extra_flags = || HouseExtraFlags((self.leaves.house_extra_flags)(house));
-            if !(self.leaves.generating_world)()
+            if !self.leaves.generating_world()
                 && !(self.leaves.environment.editor)()
                 && extra_flags().test(HouseExtraFlag::BuildingIsHistorical)
             {
@@ -3061,7 +3071,7 @@ impl Engine<'_> {
         if (self.leaves.environment.editor)() {
             return;
         }
-        for id in iterate(|from| (self.leaves.next_town)(from)) {
+        for id in iterate(|from| self.leaves.next_town(from)) {
             // Each town starts with an empty map and shell cache.
             self.map.take();
             self.house_shell.take();
@@ -3253,7 +3263,7 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
     month: u8,
 ) {
     let engine = engine(leaves, services);
-    for t in iterate(|from| (engine.leaves.next_town)(from)) {
+    for t in iterate(|from| engine.leaves.next_town(from)) {
         let owner = engine.clone().bind(t);
         owner.monthly_statistics(month);
         owner.update_town_growth(t);
@@ -3545,10 +3555,10 @@ crate::abi::layouts! {
     };
 
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
+        shared,
         map_log_x,
 
         environment,
-        generating_world,
         climate,
 
         road_flags,
@@ -3571,7 +3581,6 @@ crate::abi::layouts! {
         population_changed,
         house_count,
         road_type_error,
-        next_town,
         build_bridge,
         build_tunnel,
         assert_clear_house,
@@ -3845,9 +3854,6 @@ mod policy_tests {
     extern "C" fn unexpected_road_type_error(_: i32) {
         unreachable!("unexpected Leaves::road_type_error")
     }
-    extern "C" fn unexpected_next_town(_: u32) -> u32 {
-        unreachable!("unexpected Leaves::next_town")
-    }
     extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
         unreachable!("unexpected Leaves::build_bridge")
     }
@@ -3859,12 +3865,12 @@ mod policy_tests {
     }
     fn leaves() -> Leaves {
         Leaves {
+            shared: std::ptr::null(),
             map_log_x: unexpected_map_log_x,
             environment: crate::services::EnvironmentServices {
                 editor: unexpected_generating_world,
                 freeform_edges: unexpected_generating_world,
             },
-            generating_world: unexpected_generating_world,
             climate: unexpected_climate,
             road_flags: unexpected_road_flags,
             house_availability: unexpected_house_availability,
@@ -3885,7 +3891,6 @@ mod policy_tests {
             population_changed: unexpected_population_changed,
             house_count: unexpected_house_count,
             road_type_error: unexpected_road_type_error,
-            next_town: unexpected_next_town,
             build_bridge: unexpected_build_bridge,
             build_tunnel: unexpected_build_tunnel,
             assert_clear_house: unexpected_assert_clear_house,
@@ -5230,6 +5235,7 @@ mod protocol_tests {
         services.map_max_x = map_max;
         services.map_max_y = map_max;
         services.town_count = no_towns;
+        services.town_next_id = next_town;
         services.tile_valid = yes_tile;
         services.road_type = no_road_type;
         let services = Box::into_raw(Box::new(services));
@@ -5290,10 +5296,10 @@ mod protocol_tests {
         houses.cargogen_mode = cargogen_mode;
         houses.place_houses = place_houses;
         let mut leaves = TOWN_LEAVES;
+        leaves.shared = services;
         leaves.map_log_x = map_log_x;
         leaves.environment.editor = no;
         leaves.environment.freeform_edges = no;
-        leaves.generating_world = no;
         leaves.climate = zero_byte;
         leaves.road_flags = zero_flags;
         leaves.house_availability = house_availability;
@@ -5313,7 +5319,6 @@ mod protocol_tests {
         leaves.make_house = make_house;
         leaves.population_changed = population_changed;
         leaves.house_count = house_count;
-        leaves.next_town = next_town;
         leaves.build_bridge = no_bridge;
         leaves.build_tunnel = no_tunnel;
         leaves.assert_clear_house = assert_clear_house;

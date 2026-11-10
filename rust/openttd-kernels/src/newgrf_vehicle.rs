@@ -536,12 +536,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
         scope
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_resolve_real(
-    s: &Services,
-    state: *const State,
-    group: Group,
-) -> Group {
+pub(crate) unsafe fn resolve_real(s: &Services, state: *const State, group: Group) -> Group {
     unsafe {
         let v = (*state).self_scope.v;
         if v.is_null() {

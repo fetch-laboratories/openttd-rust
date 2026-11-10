@@ -1417,18 +1417,6 @@ fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u
         u8::from(behaviour.test(IndustryBehaviour::CanCloseLastInstance)),
     )
 }
-/// # Safety
-/// Live build record; no reference is retained across the resolver service.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_type(
-    f: *mut BuildFields,
-    kind: u8,
-    s: *const Services,
-) -> u8 {
-    u8::from(get_industry_type_data(f, IndustryType(kind), unsafe {
-        &*s
-    }))
-}
 fn build_fields(builder: *mut Builder) -> *mut BuilderFields {
     unsafe { ptr::addr_of_mut!((*builder).fields) }
 }
@@ -1487,12 +1475,6 @@ fn industry_build_data_economy_monthly_loop(builder: *mut Builder, s: &Services)
         }
     }
 }
-/// # Safety
-/// Live builder; direct total/map observations preserve the original order.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_monthly(b: *mut Builder, s: *const Services) {
-    industry_build_data_economy_monthly_loop(b, unsafe { &*s });
-}
 /// `IndustryBuildData::SetupTargetCount`: decide how many industries of each type are needed.
 fn setup_target_count(builder: *mut Builder, s: &Services) {
     let b = build_fields(builder);
@@ -1546,12 +1528,6 @@ fn setup_target_count(builder: *mut Builder, s: &Services) {
         }
         total_amount -= 1;
     }
-}
-/// # Safety
-/// Live builder; slot fields are read/written only between source services.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_targets(b: *mut Builder, s: *const Services) {
-    setup_target_count(b, unsafe { &*s });
 }
 /// `Industry::GetIndustryTypeCount`.
 #[allow(
@@ -1701,13 +1677,6 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
             }
         }
     }
-}
-/// # Safety
-/// Live builder. Construction and news services run with raw owner fields only;
-/// recursive industry calls cannot alias a borrowed Rust owner or vector.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_try(b: *mut Builder, s: *const Services) {
-    try_build_new_industry(b, unsafe { &*s });
 }
 /// Every economy day handler for the industry changes (`_economy_industries_daily`).
 /// Taking the original map size of 256*256, the number of random changes was always of just
@@ -2611,7 +2580,6 @@ crate::abi::layouts! {
         errors,
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
-        magic_bulldozer,
         object_in_way,
         close_ai,
         close_game,
@@ -2648,7 +2616,6 @@ crate::abi::layouts! {
         gfx,
         set_gfx,
         frame,
-        set_frame,
         animation_loop,
         set_animation_loop,
         construction_counter,
@@ -2691,7 +2658,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryConstructionServices" ["industry"] => crate::industry::ConstructionServices {
         set_town,
-        generating,
         callback,
         callback_error,
         water_class,
@@ -2701,7 +2667,6 @@ crate::abi::layouts! {
         set_construction_stage,
         translated_gfx,
         build_window_dirty,
-        serve_neutral,
     };
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
         environment,
