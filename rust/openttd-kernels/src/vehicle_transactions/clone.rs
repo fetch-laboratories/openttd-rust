@@ -310,6 +310,7 @@ unsafe fn cmd_clone_vehicle(
                             sell(s, temporary, flags, front);
                             sell(s, temporary, flags, w);
                         }
+                        // return error and the message returned from CMD_MOVE_RAIL_VEHICLE
                         total.take(Cost(part, b.cost));
                         return invalid;
                     }
