@@ -7,9 +7,6 @@ inputs:
   recommends:
     description: Also install recommended packages
     default: 'false'
-  last-bound:
-    description: Seconds each command of the last attempt may take
-    default: '240'
 runs:
   using: composite
   steps:
@@ -18,18 +15,17 @@ runs:
       DEBIAN_FRONTEND: noninteractive
       PACKAGES: ${{ inputs.packages }}
       RECOMMENDS: ${{ inputs.recommends }}
-      LAST_BOUND: ${{ inputs.last-bound }}
     run: |
       # Each mirror fails at times. Azure trickled at about 40 kB/s without timing out
       # (#858's Full spent 6 minutes on 46 MB), and Canonical's archive timed out three
       # times in 30 minutes (#833, #841). The first two attempts get 60 seconds per
-      # command, and a failed one retries without Azure. The last attempt gets longer,
-      # because a slow install beats a failed job: #862's first Full lost its Emscripten
-      # job when both mirrors ran at about 1 MB/s and three tight bounds cut it off each
-      # time. apt keeps what an interrupted attempt downloaded.
-      #
-      # Worst case: 2 * (60 + 60) + 2 * last-bound seconds, 12 minutes by default. The
-      # native comparison and simulation jobs have 20 minutes for setup and work.
+      # command, and a failed one retries without Azure. The last attempt has no bound
+      # of its own, as the plain install had none: a slow install beats a failed job.
+      # #862's first two Fulls lost their Emscripten job to bounded last attempts, with
+      # security.ubuntu.com timing out and the index arriving at 159 kB/s. So the two
+      # bounded attempts can cost four minutes, and nothing else is lost against the
+      # plain install; the calling job's own limit still applies. apt keeps what an
+      # interrupted attempt downloaded.
       sudo=$(command -v sudo || true)
       read -r -a packages <<< "$PACKAGES"
       options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
@@ -42,15 +38,17 @@ runs:
         { cat /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; } | sha256sum
       }
       $sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
-      bounds=(60 60 "$LAST_BOUND")
       updated=false
       for attempt in 1 2 3; do
-        bound=${bounds[attempt - 1]}
-        if [ "$updated" = false ] && $sudo timeout "$bound" apt-get "${options[@]}" update; then
+        bounded=($sudo timeout 60)
+        if [ "$attempt" = 3 ]; then
+          bounded=($sudo)
+        fi
+        if [ "$updated" = false ] && "${bounded[@]}" apt-get "${options[@]}" update; then
           updated=true
         fi
         if [ "$updated" = true ] &&
-           $sudo timeout "$bound" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
+           "${bounded[@]}" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
           break
         fi
         if [ "$attempt" = 3 ]; then
