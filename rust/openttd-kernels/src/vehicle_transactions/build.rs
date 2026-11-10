@@ -171,7 +171,10 @@ pub(crate) unsafe fn cmd_build_vehicle(
                 3
             }
         }
-        _ => unreachable!("depot kind is a buildable vehicle type"),
+        _ => {
+            (b.shared.not_reached)(); // Safe due to IsDepotTile()
+            std::process::abort()
+        }
     };
     if !(s.refit.common.vehicles.can_allocate)(count as usize) {
         value.error(s.too_many);
@@ -230,7 +233,10 @@ pub(crate) unsafe fn cmd_build_vehicle(
             v
         }
         VehicleType::AIRCRAFT => unsafe { construct::aircraft(s, temporary, subflags.0, tile, e) },
-        _ => unreachable!("depot kind is a buildable vehicle type"),
+        _ => {
+            (b.shared.not_reached)(); // Safe due to IsDepotTile()
+            std::process::abort()
+        }
     };
     value.add(Cost(temporary, b.cost));
     let mut result = Result::default();
