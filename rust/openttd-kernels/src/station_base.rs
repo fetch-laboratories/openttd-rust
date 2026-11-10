@@ -71,22 +71,21 @@ pub mod goods_entry {
     /// `GoodsEntry::ConvertState`: convert the `GoodsEntry` status to the
     /// format used by `NewGRF` variable 0x69.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)] // Only bits 0 to 3 are set.
     pub fn convert_state(status: States) -> u8 {
-        let mut res = 0_u32;
+        let mut res = 0_u8;
         if status.test(State::EverAccepted) {
-            crate::bitmath_func::set_bit(&mut res, 0);
+            crate::bitmath_func::set_bit8(&mut res, 0);
         }
         if status.test(State::LastMonth) {
-            crate::bitmath_func::set_bit(&mut res, 1);
+            crate::bitmath_func::set_bit8(&mut res, 1);
         }
         if status.test(State::CurrentMonth) {
-            crate::bitmath_func::set_bit(&mut res, 2);
+            crate::bitmath_func::set_bit8(&mut res, 2);
         }
         if status.test(State::AcceptedBigtick) {
-            crate::bitmath_func::set_bit(&mut res, 3);
+            crate::bitmath_func::set_bit8(&mut res, 3);
         }
-        res as u8
+        res
     }
 
     /// `GoodsEntry::HasRating`: does this cargo have a rating at this station?
