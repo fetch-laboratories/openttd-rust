@@ -973,14 +973,13 @@ impl<'a> House<'a> {
             return;
         }
         let rec = (self.h.lift)(tile.0);
-        let mut destination = rec.destination;
         if !rec.has_destination {
             witness::hit(W_LIFT_START);
             let mut i;
             // Building has 6 floors, number 0 .. 6, where 1 is illegal.
             // This is due to the fact that the first floor is, in the graphics,
-            // the height of 2 'normal' floors.
-            // Furthermore, there are 6 lift positions from floor N (incl) to floor N + 1 (excl).
+            //  the height of 2 'normal' floors.
+            // Furthermore, there are 6 lift positions from floor N (incl) to floor N + 1 (excl)
             loop {
                 i = self.s.random_range(7);
                 if !(i == 1 || i * 6 == u32::from(rec.position)) {
@@ -988,11 +987,10 @@ impl<'a> House<'a> {
                 }
             }
             (self.h.set_lift_destination)(tile.0, i as u8);
-            // `GetLiftDestination` reads the stored three-bit field.
-            destination = i as u8 & 7;
         }
-        let mut pos = i32::from(rec.position);
-        let dest = i32::from(destination) * 6;
+        let lift = (self.h.lift)(tile.0);
+        let mut pos = i32::from(lift.position);
+        let dest = i32::from(lift.destination) * 6;
         pos += if pos < dest { 1 } else { -1 };
         (self.h.set_lift_position)(tile.0, pos as u8);
         if pos == dest {
