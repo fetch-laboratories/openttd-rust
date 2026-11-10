@@ -295,10 +295,16 @@ jobs:
           const queue = context.eventName === 'merge_group';
           const target = queue ? context.payload.merge_group.head_sha : head;
           const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-          const {data: combined} = await github.rest.repos.getCombinedStatusForRef({...context.repo, ref: target});
-          const latest = combined.statuses.find(status => status.context === 'Full validation');
+          // Combined statuses omit creators; only a status this workflow created with this run's URL
+          // marks the request as this run's own.
+          const listed = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+            ...context.repo, ref: target, per_page: 100
+          });
+          const latest = listed.find(status => status.context === 'Full validation');
+          const own = latest?.target_url === runUrl && latest.creator?.login === 'github-actions[bot]' &&
+            latest.creator?.type === 'Bot';
           // Only this run writes its group commit, and a failed plan may not have marked it pending.
-          if (latest?.target_url !== runUrl && !(queue && !latest)) {
+          if (!own && !(queue && !latest)) {
             core.setFailed('This full request was superseded; preserve the newer request status');
             return;
           }

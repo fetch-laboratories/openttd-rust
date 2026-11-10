@@ -198,18 +198,23 @@ def execute_publisher(
     superseded: bool = False,
     queue: bool = False,
     latest: object = True,
+    creator: object = ACTIONS,
 ) -> dict[str, Any]:
+    """Publish with `latest` the newest Full validation status on the target,
+    which the plan marked pending unless it is superseded or None."""
     if latest is True:
         latest = {
             "context": ci.CONTEXT,
             "target_url": RUN.replace("123", "999") if superseded else RUN,
+            "creator": creator,
         }
+    target = MERGE if queue else HEAD
     return execute_script(
         "ci-request.yml",
         "publish",
         pull,
         env={"RESULTS": json.dumps(needs)},
-        latest=latest,
+        statuses={target: [latest] if latest else []},
         **cast(dict[str, Any], QUEUE if queue else {}),
     )
 
@@ -587,6 +592,12 @@ class GateTests(unittest.TestCase):
     def test_publisher_requires_every_job_and_the_unchanged_head(self) -> None:
         cases = [("success", good_needs(), PULL, False, "success")]
         cases.append(("superseded", good_needs(), PULL, True, None))
+        for creator in (None, {}, {"login": "writer", "type": "User"}):
+            # A writer's status naming this run does not make the request this run's.
+            with self.subTest(creator=creator):
+                result = execute_publisher(good_needs(), PULL, creator=creator)
+                self.assertEqual(result["statuses"], [])
+                self.assertTrue(result["failures"])
         for name in good_needs():
             for outcome in ("failure", "skipped", "cancelled", "timed_out", ""):
                 needs = good_needs()
@@ -1148,6 +1159,13 @@ class MergeQueueTests(unittest.TestCase):
         self.assertTrue(result["failures"])
         superseded = execute_publisher(good_needs(), PULL, superseded=True, queue=True)
         self.assertEqual(superseded["statuses"], [])
+        for creator in (None, {}, {"login": "writer", "type": "User"}):
+            with self.subTest(creator=creator):
+                forged = execute_publisher(
+                    good_needs(), PULL, queue=True, creator=creator
+                )
+                self.assertEqual(forged["statuses"], [])
+                self.assertTrue(forged["failures"])
         # Outside the queue an unmarked head is still a superseded request.
         self.assertEqual(
             execute_publisher(good_needs(), PULL, latest=None)["statuses"], []
