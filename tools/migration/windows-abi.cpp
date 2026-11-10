@@ -128,7 +128,7 @@ static void Calls()
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };
 		founding.can_allocate = []() noexcept { return true; };
 		/* TileXY(32, 32) on a 64x64 map is 32 tiles from every edge. */
-		const OpenTTDFixtureMap map{6};
+		const OpenTTDFixtureMap map{6, 64 * 64};
 		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
 		openttd_rust_town_simulation(owner)->xy = 2080;
