@@ -12,8 +12,11 @@
 #include "../vehicle_func.h"
 #include "../openttd.h"
 #include "../map_func.h"
+#include "../tile_map.h"
+#include "../landscape.h"
 #include "../rust/vehicle_services.h"
 #include "../rust/vehicle_maintenance_ffi.h"
+#include "../newgrf_sound.h"
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
 #include "../../tools/simulation/session-fixture.hpp"
@@ -175,10 +178,59 @@ TEST_CASE("Vehicle maintenance consumed native ABI")
 #include "abi-layout-maintenance.inc"
 }
 
+/* Each native maintenance read and store reaches the Vehicle field it names, once; the
+ * saturation, rounding, cadence and wrap rules are vehicle::maintenance::scalar_tests
+ * (#736 F). Retires with the native maintenance services. */
+TEST_CASE("Vehicle maintenance - native scalar reads and stores")
+{
+	REQUIRE(Vehicle::GetNumItems() == 0);
+	REQUIRE(Vehicle::CanAllocateItem());
+	Vehicle *v = new Vehicle(VEH_EFFECT);
+	v->age = CalendarTime::MAX_DATE - 1;
+	AgeVehicle(v);
+	CHECK(v->age == CalendarTime::MAX_DATE);
+	v->economy_age = EconomyTime::MAX_DATE - 1;
+	EconomyAgeVehicle(v);
+	CHECK(v->economy_age == EconomyTime::MAX_DATE);
+	v->value = Money{65535};
+	DecreaseVehicleValue(v);
+	CHECK(v->value == 65280);
+	v->Record().breakdown_ctr = 3;
+	v->current_order.MakeLoading(false);
+	CHECK_FALSE(v->HandleBreakdown());
+	CHECK(v->Record().breakdown_ctr == 3);
+	v->current_order.MakeDummy();
+	CHECK_FALSE(v->HandleBreakdown());
+	CHECK(v->Record().breakdown_ctr == 2);
+	auto maintenance = _rust_vehicle_maintenance_services;
+	auto base = GetRustVehicleServices();
+	base.maintenance = &maintenance;
+	base.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent) noexcept { return true; };
+	maintenance.mark_dirty = [](OpenTTDVehicle *) noexcept {};
+	v->SetType(VEH_TRAIN);
+	v->SetVehStatus(v->GetVehStatus().Set(VehState::Hidden));
+	v->Record().cur_speed = 10;
+	v->breakdowns_since_last_service = 254;
+	v->breakdown_delay = 3;
+	v->Record().tick_counter = 4;
+	CHECK(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+	CHECK(v->Record().breakdown_ctr == 1);
+	CHECK(v->breakdowns_since_last_service == 255);
+	CHECK(v->Record().cur_speed == 0);
+	CHECK(v->breakdown_delay == 2);
+	v->breakdown_delay = 1;
+	CHECK(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+	CHECK(v->breakdown_delay == 0);
+	CHECK(v->Record().breakdown_ctr == 0);
+	_vehicle_pool.CleanPool();
+	CHECK(Vehicle::GetNumItems() == 0);
+}
 
-/* The native VehiclesOnTile iterator copies its cursor; the index rules (ground check, links,
- * stale removal, reset) are vehicle::occupancy::index_tests (#736 F). Retires with the native
- * iterator and the native tile_links member. */
+
+/* The native VehiclesOnTile iterator copies its cursor, and the ground check reads the real map
+ * height; the index rules (ground comparison, links, stale removal, reset) are
+ * vehicle::occupancy::index_tests (#736 F). Retires with the native iterator, the native
+ * tile_links member and the native map height. */
 TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 {
 	Map::Allocate(64, 64);
@@ -186,7 +238,14 @@ TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 	auto *a = new Vehicle(VEH_ROAD), *b = new Vehicle(VEH_ROAD);
 	a->SetTile(TileXY(1, 1));
 	b->SetTile(TileXY(1, 1));
+	for (auto t : {TileXY(1, 1), TileXY(2, 1), TileXY(1, 2), TileXY(2, 2)}) SetTileHeight(t, 1);
+	a->Record().z_pos = b->Record().z_pos = 8;
 	a->UpdatePosition(); b->UpdatePosition();
+	/* The ground check reads the real map height. */
+	REQUIRE(GetTileMaxPixelZ(a->GetTile()) == 8);
+	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Failed());
+	a->Record().z_pos = b->Record().z_pos = 9;
+	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Succeeded());
 	const auto &s = GetRustVehicleServices();
 	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
 	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
