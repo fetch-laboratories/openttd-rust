@@ -80,7 +80,7 @@ pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bo
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_airport(tile: TileIndex, s: &Services) -> bool {
-    (s.station_type)(tile.0) == StationType::Airport
+    crate::map_func::World::new(s).is_airport(tile)
 }
 /// Temporary raw adapter for `animated_tile.rs` and `newgrf_airport.rs`.
 #[inline]
@@ -273,6 +273,44 @@ impl crate::map_func::World<'_> {
     /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
     pub(crate) fn is_buoy(&self, t: TileIndex) -> bool {
         self.asserted(|m| is_buoy(m, t))
+    }
+    /// `IsBuoyTile`: is tile `t` a buoy tile?
+    pub(crate) fn is_buoy_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION && self.is_buoy(t)
+    }
+    /// `IsAirport`: is this station tile an airport? Keeps `GetStationType`'s
+    /// tile-type assertion.
+    pub(crate) fn is_airport(&self, t: TileIndex) -> bool {
+        self.asserted(|m| get_station_type(m, t)) == StationType::Airport
+    }
+    /// `IsAirportTile`: is this tile a station tile and an airport tile?
+    pub(crate) fn is_airport_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION && self.is_airport(t)
+    }
+    /// `IsOilRig`: is tile `t` part of an oilrig? Keeps `GetStationType`'s
+    /// tile-type assertion.
+    pub(crate) fn is_oil_rig(&self, t: TileIndex) -> bool {
+        self.asserted(|m| get_station_type(m, t)) == StationType::Oilrig
+    }
+    /// `IsDock`, with `GetStationType`'s tile-type assertion.
+    pub(crate) fn is_dock(&self, t: TileIndex) -> bool {
+        self.asserted(|m| is_dock(m, t))
+    }
+    /// `IsDockTile`: is tile `t` a dock tile?
+    pub(crate) fn is_dock_tile(&self, t: TileIndex) -> bool {
+        self.kind(t.0) == MP_STATION && self.is_dock(t)
+    }
+    /// `GetDockDirection`: get the direction of a dock.
+    pub(crate) fn get_dock_direction(&self, t: TileIndex) -> DiagDirection {
+        let gfx = self.get_station_gfx(t);
+        self.check(self.is_dock(t) && gfx.0 < GFX_DOCK_BASE_WATER_PART);
+        DiagDirection(gfx.0)
+    }
+    /// `IsDockWaterPart`: check whether a dock tile is the tile on water.
+    pub(crate) fn is_dock_water_part(&self, t: TileIndex) -> bool {
+        self.check(self.is_dock_tile(t));
+        let gfx = self.get_station_gfx(t);
+        gfx.0 >= GFX_DOCK_BASE_WATER_PART
     }
     /// `IsAnyRoadStopTile`: is tile `t` a road stop station?
     pub(crate) fn is_any_road_stop_tile(&self, t: TileIndex) -> bool {

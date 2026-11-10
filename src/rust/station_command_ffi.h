@@ -104,11 +104,9 @@ struct OpenTTDStationCommandServices {
 	bool (*rail_boolean)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_boolean);
 	void (*rail_callback_error)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_callback_error);
 	void (*set_train_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_train_area);
-	bool (*reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved);
 	Train *(*last_train)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(last_train);
 	const OpenTTDTrainServices *train;
 	const OpenTTDTrainReservationLeaves *reservation;
-	bool (*compatible_tiles)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_tiles);
 	uint32_t (*custom_rail_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom_rail_index);
 	void (*make_rail_station)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_station);
 	void (*close_station_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_station_inspect);
@@ -229,7 +227,7 @@ extern "C" {
 void openttd_rust_station_check_buildable(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, int32_t *, bool, bool);
 void openttd_rust_station_road_bridge_ok(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, const RoadStopSpec *, uint8_t, uint8_t);
 void openttd_rust_station_build_above(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, int32_t);
-uint8_t openttd_rust_station_airport_noise(const OpenTTDStationCommandServices *, uint8_t, uint32_t);
+uint8_t openttd_rust_station_airport_noise(const OpenTTDStationCommandServices *, const AirportSpec *, uint32_t);
 void openttd_rust_station_tiles_changed(const OpenTTDStationCommandServices *, BaseStation *, bool, uint8_t);
 void openttd_rust_station_rename(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, const uint8_t *, size_t);
 uint16_t openttd_rust_station_move_name(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);

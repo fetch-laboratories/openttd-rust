@@ -10,10 +10,8 @@ struct OpenTTDVisualServices {
 	const OpenTTDSharedServices *shared;
 	uint8_t (*smoke)() noexcept OPENTTD_SERVICE_DEFAULT(smoke);
 	void (*power_error)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(power_error);
-	bool (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	bool (*depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
 	bool (*tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
-	RailType (*tile_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail);
 	bool (*powered)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 };
 const OpenTTDVisualServices &GetRustVisualServices();

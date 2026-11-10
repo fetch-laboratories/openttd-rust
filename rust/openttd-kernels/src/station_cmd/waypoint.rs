@@ -16,13 +16,13 @@ use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::CompanyID;
 use crate::direction_type::Axis;
 use crate::economy_type::{
-    PR_BUILD_STATION_TRUCK, PR_BUILD_WAYPOINT_BUOY, PR_BUILD_WAYPOINT_RAIL, PR_CLEAR_WAYPOINT_BUOY,
+    PR_BUILD_WAYPOINT_BUOY, PR_BUILD_WAYPOINT_RAIL, PR_CLEAR_WAYPOINT_BUOY,
     ROAD_STOP_TRACKBIT_FACTOR,
 };
 use crate::newgrf_roadstop::RoadStopClassID;
 use crate::newgrf_station::StationClassID;
 use crate::rail_map::RAIL_TILE_NORMAL;
-use crate::road_type::{RoadBits, RoadType};
+use crate::road_type::{RoadBits, RoadTramType, RoadType};
 use crate::slope_type::Slope;
 use crate::station_map::StationGfx;
 use crate::station_type::{
@@ -161,7 +161,7 @@ impl Ctx<'_> {
     fn cmd_rename_waypoint(&self, call: WaypointCall<'_>, args: CmdRenameWaypoint) {
         w::hit(w::WAYPOINT_RENAME);
         let (out, flags) = (call.cost, call.flags);
-        let wp = self.waypoint(args.waypoint_id.0);
+        let wp = self.waypoint(args.waypoint_id);
         if wp.is_null() {
             return out.error(StringID::INVALID_STRING_ID.0);
         }
@@ -179,7 +179,7 @@ impl Ctx<'_> {
             }
             // `IsUniqueWaypointName`: check whether the name is unique amongst the waypoints.
             for index in 0..(self.world().pool_size)() {
-                let candidate = self.waypoint(index as u16);
+                let candidate = self.waypoint(StationID(index as u16));
                 if !candidate.is_null() && (self.s.name_equals)(candidate, args.text, args.length) {
                     return out.error(self.s.strings.name_unique);
                 }
@@ -204,7 +204,7 @@ impl Ctx<'_> {
         w::hit(w::WAYPOINT_MOVE_NAME);
         let (out, flags) = (call.cost, call.flags);
         let tile = args.tile;
-        let wp = self.waypoint(args.waypoint_id.0);
+        let wp = self.waypoint(args.waypoint_id);
         if wp.is_null() {
             out.error(StringID::INVALID_STRING_ID.0);
             return StationID::INVALID;
@@ -216,7 +216,7 @@ impl Ctx<'_> {
                 return StationID::INVALID;
             }
         }
-        if !self.rect_contains(wp, tile.0) {
+        if !self.rect_contains(wp, tile) {
             out.error(self.s.strings.unsuitable);
             return StationID::INVALID;
         }
@@ -224,7 +224,7 @@ impl Ctx<'_> {
         let mut search = SignSearch {
             c: self,
             station: wp,
-            tile: tile.0,
+            tile,
             other: false,
         };
         crate::station::spatial::for_all_stations_radius(self.shared, tile, 0, |st| unsafe {
@@ -336,7 +336,7 @@ impl Ctx<'_> {
         // Pool ID order is Waypoint::Iterate order. Equal distances never replace
         // the earlier candidate, including deleted waypoints outside the kdtree.
         for id in 0..(self.world().pool_size)() {
-            let wp = self.waypoint(id as u16);
+            let wp = self.waypoint(StationID(id as u16));
             if wp.is_null()
                 || (self.world().in_use)(wp)
                 || StringID((self.s.string_id)(wp)) != str
@@ -376,7 +376,7 @@ impl Ctx<'_> {
          * Or it points to a waypoint if we're only allowed to build on exactly that waypoint. */
         if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_STATION {
             if !crate::map_func::World::new(self.shared).is_rail_waypoint(tile) {
-                return self.auto_clear(out, tile.0); // get error message
+                return self.auto_clear(out, tile); // get error message
             }
             let wp = StationID((self.shared.station_index)(tile.0));
             if *waypoint == StationID::INVALID {
@@ -388,8 +388,8 @@ impl Ctx<'_> {
         if self.get_axis_for_new_rail_waypoint(tile) != axis {
             return out.error(self.rail().strings.no_suitable_track);
         }
-        let owner = (self.shared.tile_owner)(tile.0);
-        unsafe { self.command.ownership(out.0, owner, 0) };
+        let owner = CompanyID((self.shared.tile_owner)(tile.0));
+        unsafe { self.command.ownership(out.0, owner.0, 0) };
         if out.ok() {
             unsafe { self.command.no_vehicle(out.0, tile.0) };
         }
@@ -445,8 +445,7 @@ impl Ctx<'_> {
             station_to_join = StationID::INVALID;
         }
         let distant_join = station_to_join != StationID::INVALID;
-        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join.0).is_null())
-        {
+        if distant_join && (!(self.s.distant_join)() || self.waypoint(station_to_join).is_null()) {
             return None;
         }
         Some((count, reuse, station_to_join))
@@ -506,11 +505,11 @@ impl Ctx<'_> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-            self.rail_bridge(
+            self.is_rail_station_bridge_above_ok(
                 ret,
-                tile.0,
+                tile,
                 spec,
-                StationType::RailWaypoint.0,
+                StationType::RailWaypoint,
                 StationGfx(gfx.wrapping_add(axis.0)),
             );
             if !ret.ok() {
@@ -518,15 +517,15 @@ impl Ctx<'_> {
             }
             tile = TileIndex(tile.0.wrapping_add(offset));
         }
-        let mut wp = self.join(JoiningStation {
+        let mut wp = self.find_joining_base_station(JoiningStation {
             out: ret,
-            existing: est.0,
-            target: station_to_join.0,
+            existing_station: est,
+            station_to_join,
             adjacent: args.adjacent,
-            area: new_location,
+            ta: new_location,
             waypoint: true,
             road: false,
-            overbuild_error: self.s.strings.remove_rail_waypoint,
+            error_message: StringID(self.s.strings.remove_rail_waypoint),
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -552,7 +551,7 @@ impl Ctx<'_> {
             }
             /* Check if we want to expand an already existing waypoint. */
             if TileIndex(self.s.rail_area(wp).tile) != TileIndex::INVALID {
-                new_location = self.expand_rail(ret, wp, new_location);
+                new_location = self.can_expand_rail_station(ret, wp, new_location);
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -588,8 +587,8 @@ impl Ctx<'_> {
             /* Move existing (recently deleted) waypoint to the new location */
             (self.s.set_location)(wp, start_tile.0);
         }
-        let owner = (self.shared.tile_owner)(start_tile.0);
-        (self.s.set_station_owner)(wp, owner);
+        let owner = CompanyID((self.shared.tile_owner)(start_tile.0));
+        (self.s.set_station_owner)(wp, owner.0);
         self.before_add_rect(
             ret,
             wp,
@@ -624,7 +623,7 @@ impl Ctx<'_> {
                 0
             };
             if !world().has_station_tile_rail(tile) {
-                (self.s.station_infrastructure)(owner, 1);
+                (self.s.station_infrastructure)(owner.0, 1);
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis.0), |ok| {
                 crate::movement::native_assert(self.shared, ok);
@@ -637,14 +636,14 @@ impl Ctx<'_> {
             };
             (self.s.make_rail_waypoint)(
                 tile.0,
-                owner,
+                owner.0,
                 id,
                 axis.0,
                 gfx,
                 crate::services::RailType(world().rail_type(tile.0)),
             );
             (self.s.set_custom_rail_index)(tile.0, specindex.value);
-            self.set_rail_flags(tile.0, spec);
+            self.set_rail_station_tile_flags(tile, spec);
             (self.s.set_rail_station_reservation)(tile.0, reserved);
             (self.shared.mark_dirty)(tile.0);
             crate::station_association::deallocate(self.s.rail_association, wp, old_specindex);
@@ -654,7 +653,7 @@ impl Ctx<'_> {
             (self.rail().layout_changed)(tile.0, track);
             tile = TileIndex(tile.0.wrapping_add(offset));
         }
-        (self.command.infrastructure_dirty)(owner);
+        (self.command.infrastructure_dirty)(owner.0);
     }
     /// `CmdBuildRoadWaypoint`: build a road waypoint on an existing road.
     fn cmd_build_road_waypoint(&self, call: WaypointCall<'_>, args: CmdBuildRoadWaypoint) {
@@ -689,45 +688,47 @@ impl Ctx<'_> {
         };
         /* Total road stop cost. */
         let unit_cost = if roadstopspec.is_null() {
-            crate::company::price(PR_BUILD_STATION_TRUCK)
+            crate::company::price(usize::from(
+                crate::economy_type::Price::PR_BUILD_STATION_TRUCK.0,
+            ))
         } else {
-            let factor = (self.s.road_spec_build_cost)(roadstopspec, PR_BUILD_STATION_TRUCK as u8);
-            crate::economy_func::get_price(
-                PR_BUILD_STATION_TRUCK as u32,
-                u32::from(factor.multiplier),
-                factor.shift,
-                -4,
+            crate::newgrf_roadstop::get_build_cost(
+                self.s,
+                roadstopspec,
+                crate::economy_type::Price::PR_BUILD_STATION_TRUCK,
             )
         };
-        let mut est = StationID::INVALID.0;
-        self.road_cost(RoadStopCost {
+        let ddir = crate::direction_type::DiagDirection(crate::direction_func::axis_to_diag_dir(
+            axis.0,
+            |ok| crate::movement::native_assert(self.shared, ok),
+        ));
+        let mut est = StationID::INVALID;
+        self.calculate_road_stop_cost(RoadStopCost {
             cost,
             ret,
-            area: roadstop_area,
-            flags: flags.0,
-            drive: true,
-            kind: StationType::RoadWaypoint.0,
-            spec: roadstopspec,
-            axis: axis.0,
-            dir: crate::direction_func::axis_to_diag_dir(axis.0, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            }),
+            tile_area: roadstop_area,
+            flags,
+            is_drive_through: true,
+            station_type: StationType::RoadWaypoint,
+            roadstopspec,
+            axis,
+            ddir,
             est: &mut est,
-            rt: RoadType::INVALID_ROADTYPE.0,
-            unit: unit_cost,
+            rt: RoadType::INVALID_ROADTYPE,
+            unit_cost,
         });
         if !cost.ok() {
             return;
         }
-        let mut wp = self.join(JoiningStation {
+        let mut wp = self.find_joining_base_station(JoiningStation {
             out: ret,
-            existing: est,
-            target: station_to_join.0,
+            existing_station: est,
+            station_to_join,
             adjacent: args.adjacent,
-            area: roadstop_area,
+            ta: roadstop_area,
             waypoint: true,
             road: true,
-            overbuild_error: self.s.strings.remove_road_waypoint,
+            error_message: StringID(self.s.strings.remove_road_waypoint),
         });
         if !ret.ok() {
             return cost.take(ret);
@@ -788,8 +789,8 @@ impl Ctx<'_> {
             /* Move existing (recently deleted) waypoint to the new location */
             (self.s.set_location)(wp, start_tile.0);
         }
-        let owner = (self.shared.current_company)();
-        (self.s.set_station_owner)(wp, owner);
+        let owner = CompanyID((self.shared.current_company)());
+        (self.s.set_station_owner)(wp, owner.0);
         self.before_add_rect(ret, wp, roadstop_area, StationRectMode::ADD_TRY);
         unsafe {
             crate::newgrf_roadstop::openttd_rust_roadstop_assign(
@@ -819,65 +820,66 @@ impl Ctx<'_> {
         let replacement_spec_index = i32::from(specindex.value);
         /* Check every tile in the area. */
         for cur_tile in roadstop_area.tiles(self.map()) {
+            let tile = TileIndex(cur_tile);
             /* Get existing road types and owners before any tile clearing */
-            let road_rt = if self.may_have_road(cur_tile) {
-                self.road_type(cur_tile, false)
+            let road_rt = if self.may_have_road(tile) {
+                self.get_road_type(tile, RoadTramType::RTT_ROAD)
             } else {
-                RoadType::INVALID_ROADTYPE.0
+                RoadType::INVALID_ROADTYPE
             };
-            let tram_rt = if self.may_have_road(cur_tile) {
-                self.road_type(cur_tile, true)
+            let tram_rt = if self.may_have_road(tile) {
+                self.get_road_type(tile, RoadTramType::RTT_TRAM)
             } else {
-                RoadType::INVALID_ROADTYPE.0
+                RoadType::INVALID_ROADTYPE
             };
-            let road_owner = if road_rt == RoadType::INVALID_ROADTYPE.0 {
+            let road_owner = if road_rt == RoadType::INVALID_ROADTYPE {
                 owner
             } else {
-                self.road_owner(cur_tile, false)
+                self.get_road_owner(tile, RoadTramType::RTT_ROAD)
             };
-            let tram_owner = if tram_rt == RoadType::INVALID_ROADTYPE.0 {
+            let tram_owner = if tram_rt == RoadType::INVALID_ROADTYPE {
                 owner
             } else {
-                self.road_owner(cur_tile, true)
+                self.get_road_owner(tile, RoadTramType::RTT_TRAM)
             };
-            if crate::station_map::is_road_waypoint_tile(TileIndex(cur_tile), self.shared) {
-                self.remove_road_tile(ret, ret, cur_tile, flags.0, replacement_spec_index, true);
+            if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
+                self.remove_road_waypoint_stop(ret, tile, flags, replacement_spec_index);
             }
-            self.area_add((self.s.road_waypoint_tile_area)(wp), cur_tile);
-            self.before_add_tile(ret, wp, cur_tile, StationRectMode::ADD_TRY);
-            let update = |rt, company, count| unsafe {
-                crate::road_cmd::update_company_road_infrastructure(
-                    (self.shared.road_commands)(),
-                    rt,
-                    company,
-                    count,
-                );
-            };
+            self.area_add((self.s.road_waypoint_tile_area)(wp), TileIndex(cur_tile));
+            self.before_add_tile(ret, wp, TileIndex(cur_tile), StationRectMode::ADD_TRY);
             /* Update company infrastructure counts. If the current tile is a normal road tile, remove the old
              * bits first. */
             if world().is_normal_road_tile(cur_tile) {
-                update(
+                self.update_company_road_infrastructure(
                     road_rt,
                     road_owner,
                     -(world().road_bits(cur_tile, false).count_ones() as i32),
                 );
-                update(
+                self.update_company_road_infrastructure(
                     tram_rt,
                     tram_owner,
                     -(world().road_bits(cur_tile, true).count_ones() as i32),
                 );
             }
-            update(road_rt, road_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
-            update(tram_rt, tram_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
+            self.update_company_road_infrastructure(
+                road_rt,
+                road_owner,
+                ROAD_STOP_TRACKBIT_FACTOR as i32,
+            );
+            self.update_company_road_infrastructure(
+                tram_rt,
+                tram_owner,
+                ROAD_STOP_TRACKBIT_FACTOR as i32,
+            );
             (self.s.make_drive_stop)(
                 cur_tile,
-                owner,
-                road_owner,
-                tram_owner,
+                owner.0,
+                road_owner.0,
+                tram_owner.0,
                 id,
                 StationType::RoadWaypoint.0,
-                road_rt,
-                tram_rt,
+                road_rt.0,
+                tram_rt.0,
                 axis.0,
             );
             (self.s.set_custom_road_index)(cur_tile, specindex.value);
@@ -886,10 +888,10 @@ impl Ctx<'_> {
                     ((*self.s.roadstop_resolver).set_tile_random)(wp, cur_tile, 0);
                 }
             }
-            (self.s.station_infrastructure)(owner, 1);
+            (self.s.station_infrastructure)(owner.0, 1);
             (self.shared.mark_dirty)(cur_tile);
         }
-        (self.command.infrastructure_dirty)(owner);
+        (self.command.infrastructure_dirty)(owner.0);
     }
     /// `CmdBuildBuoy`: build a buoy.
     fn cmd_build_buoy(&self, call: WaypointCall<'_>, args: CmdBuildBuoy) {
@@ -899,7 +901,7 @@ impl Ctx<'_> {
             return cost.error(self.s.strings.unsuitable);
         }
         // `IsBuoyBridgeAboveOk`.
-        self.default_bridge_ok(ret, tile.0, StationType::Buoy.0, 0);
+        self.default_bridge_above_ok(ret, tile, StationType::Buoy, StationGfx(0));
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -939,7 +941,7 @@ impl Ctx<'_> {
             (self.s.set_location)(wp, tile.0);
             (self.s.waypoint_view_invalidate)(wp);
         }
-        self.before_add_tile(ret, wp, tile.0, StationRectMode::ADD_TRY);
+        self.before_add_tile(ret, wp, tile, StationRectMode::ADD_TRY);
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
         (self.s.set_facility_bits)(wp, StationFacilities::from_element(StationFacility::Dock).0);
         (self.s.set_station_owner)(wp, CompanyID::NONE.0);
@@ -954,7 +956,7 @@ impl Ctx<'_> {
                 crate::map_func::World::new(self.shared).water_class(tile.0),
             ),
         );
-        self.check_docking(tile.0);
+        self.check_for_docking_tile(tile);
         (self.shared.mark_dirty)(tile.0);
         unsafe {
             crate::water::openttd_rust_clear_neighbour_flooding(
@@ -968,12 +970,8 @@ impl Ctx<'_> {
         (self.s.virtual_coord)(wp);
         (self.s.waypoint_view_invalidate)(wp);
     }
-    /// Raw adapter for `station_cmd.rs`, outside this pass; delegates to `remove_buoy`.
-    pub(super) fn remove_buoy_raw(&self, cost: Cost<'_>, tile: u32, flags: u16) {
-        self.remove_buoy(cost, TileIndex(tile), DoCommandFlags(flags));
-    }
     /// `RemoveBuoy`: remove a buoy. The tile is a buoy tile.
-    fn remove_buoy(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
+    pub(super) fn remove_buoy(&self, cost: Cost<'_>, tile: TileIndex, flags: DoCommandFlags) {
         w::hit(w::WAYPOINT_REMOVE_BUOY);
         /* XXX: strange stuff, allow clearing as invalid company when clearing landscape */
         if !(self.shared.company_valid)((self.shared.current_company)())
@@ -982,10 +980,10 @@ impl Ctx<'_> {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let wp = (self.world().get)((self.shared.station_index)(tile.0));
-        if self.in_orders(
-            (self.links().graphs.station_id)(wp),
+        if self.has_station_in_use(
+            StationID((self.links().graphs.station_id)(wp)),
             false,
-            (self.shared.current_company)(),
+            CompanyID((self.shared.current_company)()),
         ) {
             return cost.error(self.s.strings.buoy_in_use);
         }
@@ -1014,7 +1012,7 @@ impl Ctx<'_> {
                     self.s.restoration,
                 );
             }
-            self.after_remove_tile(wp, tile.0);
+            self.after_remove_tile(wp, tile);
             (self.s.virtual_coord)(wp);
             self.reset_delete_counter(wp);
         }

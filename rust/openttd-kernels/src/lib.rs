@@ -207,6 +207,7 @@ pub use vehicle_type::{
     DepotCommandFlag, DepotCommandFlags, VehicleRandomTrigger, VehicleRandomTriggers, VehicleType,
 };
 pub mod vehiclelist;
+pub mod vehiclelist_func;
 mod viewport_func;
 mod water;
 mod water_cmd;
@@ -1179,6 +1180,7 @@ pub use vehicle_type::VehicleID;
 mod tunnel_map;
 
 mod depot_cmd;
+mod depot_func;
 mod depot_map;
 pub mod depot_type;
 mod session;

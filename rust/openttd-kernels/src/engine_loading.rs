@@ -237,7 +237,7 @@ pub struct Services {
     identity: &'static crate::company_identity::Services,
     pub(crate) shared: *const Shared,
     pub(crate) resolver: *const crate::newgrf_vehicle::Services,
-    next: extern "C" fn(u32) -> EngineRef,
+    types: *const crate::type_availability::Services,
     resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
     pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
@@ -251,7 +251,6 @@ pub struct Services {
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_list_size: extern "C" fn(File) -> usize,
     pub(crate) unknown_refit: extern "C" fn(u32, u16, u16),
-    climate: extern "C" fn() -> u8,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
     override_log: extern "C" fn(u32, u32),
@@ -260,6 +259,16 @@ pub struct Services {
     default_counts: extern "C" fn() -> *const u8,
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
+}
+/// `Engine::Iterate(from)`, through the engine table's type-availability owner.
+fn next(s: &Services, from: u32) -> EngineRef {
+    // SAFETY: The immutable table names the process-lifetime type-availability table.
+    unsafe { ((*s.types).next)(from) }
+}
+/// `_settings_game.game_creation.landscape`, loaded in place from the shared catalog.
+fn climate(s: &Services) -> crate::landscape_type::LandscapeType {
+    // SAFETY: The immutable shared table names the process-wide settings catalog.
+    crate::landscape_type::LandscapeType(unsafe { (*s.shared).settings().climate.read() })
 }
 fn default_count(s: &Services, kind: u8) -> u8 {
     unsafe { *(s.default_counts)().add(usize::from(kind)) }
@@ -402,7 +411,7 @@ pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let engine = (s.next)(from);
+        let engine = next(s, from);
         if engine.shell.is_null() {
             break;
         }
@@ -422,7 +431,7 @@ crate::abi::layouts! {
         identity,
         shared,
         resolver,
-        next,
+        types,
         resolve,
         dynamic,
         find_file,
@@ -436,7 +445,6 @@ crate::abi::layouts! {
         cargo_next,
         cargo_list_size,
         unknown_refit,
-        climate,
         use_livery,
         variant_flags,
         override_log,
@@ -492,9 +500,13 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
         (PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS, CC_LIQUID)
     } else if kind == VEH_SHIP {
         match label {
+            // Ferries
             CT_PASSENGERS => (PASSENGERS, 0),
+            // Tankers
             CT_OIL => (CC_LIQUID, 0),
-            _ if (s.climate)() == crate::services::LandscapeType::TOYLAND.0 => (
+            // Cargo ships
+            // No tanker in toyland :(
+            _ if climate(s) == crate::landscape_type::LandscapeType::Toyland => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
                 PASSENGERS,
             ),
@@ -541,7 +553,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 CC_LIQUID | PASSENGERS,
             ),
         ];
-        let climate = (s.climate)();
+        let climate = climate(s).0;
         DEFAULTS
             .iter()
             .find(|&&(climates, cargo, _, _)| climates & (1 << climate) != 0 && cargo == label)
@@ -563,7 +575,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -781,7 +793,7 @@ pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file
 pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -817,7 +829,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                 crate::engine_type::EngineID(id)
             );
         }
-        if !crate::vehicle::EngineRef::of(e.shell).climate((s.climate)()) {
+        if !crate::vehicle::EngineRef::of(e.shell).climate(climate(s).0) {
             continue;
         }
         match e.kind.0 {
@@ -871,7 +883,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -913,7 +925,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
 pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -957,7 +969,7 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
     }
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -1065,10 +1077,20 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
     file: File,
     badge: u32,
 ) -> u32 {
-    let mut features = 0;
+    finalise_file_badges(s, file, crate::newgrf_badge_type::BadgeID(badge)).0
+}
+/// `FinaliseBadges`' engine loop for one GRF file's badge: append the badge to every engine
+/// from `file`, returning the features of those engines' types.
+fn finalise_file_badges(
+    s: &Services,
+    file: File,
+    badge: crate::newgrf_badge_type::BadgeID,
+) -> crate::newgrf::GrfSpecFeatures {
+    use crate::newgrf::{GrfSpecFeature, GrfSpecFeatures};
+    let mut features = GrfSpecFeatures::EMPTY;
     let mut from = 0;
     loop {
-        let e = (s.next)(from);
+        let e = next(s, from);
         if e.shell.is_null() {
             break;
         }
@@ -1077,9 +1099,9 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
             continue;
         }
         unsafe {
-            (*e.shell.cast_mut()).bindings.badges.push(badge);
+            (*e.shell.cast_mut()).bindings.badges.push(badge.0);
         }
-        features |= 1 << e.kind.0;
+        features.set(GrfSpecFeature(GrfSpecFeature::GSF_TRAINS.0 + e.kind.0));
     }
     features
 }

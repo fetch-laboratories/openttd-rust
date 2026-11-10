@@ -684,7 +684,7 @@ impl<'a> Ctx<'a> {
                     );
                     let stations = (self.shared.station_commands)();
                     // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
-                    unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
+                    unsafe { crate::station_cmd::check_possible_docking_raw(stations, tile) };
                 }
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());

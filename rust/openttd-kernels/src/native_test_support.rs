@@ -418,7 +418,11 @@ pub unsafe extern "C" fn openttd_test_station_move_sign(
     st: *mut crate::station::BaseStation,
     tile: u32,
 ) {
-    crate::station::spatial::move_sign(unsafe { &*s }, st, tile);
+    crate::station::spatial::station_move_sign(
+        unsafe { &*s },
+        st,
+        crate::tile_type::TileIndex(tile),
+    );
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_radius(
@@ -428,7 +432,14 @@ pub unsafe extern "C" fn openttd_test_station_radius(
     context: *mut std::ffi::c_void,
     visit: extern "C" fn(*mut std::ffi::c_void, *mut crate::station::BaseStation),
 ) {
-    crate::station::spatial::radius(unsafe { &*s }, center, distance, |st| visit(context, st));
+    crate::station::spatial::for_all_stations_radius(
+        unsafe { &*s },
+        crate::tile_type::TileIndex(center),
+        distance,
+        |st| {
+            visit(context, st);
+        },
+    );
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_rating_around(
