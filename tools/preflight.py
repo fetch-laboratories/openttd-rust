@@ -253,6 +253,8 @@ def main() -> int:
             for number, step in enumerate(chosen, 1)
             if not run(step, env, logs / f"{number:02}.log")
         ]
+        # A step can change tracked files; the summary describes the end state too.
+        warning = warning or uncommitted()
     except (
         OSError,
         ValueError,

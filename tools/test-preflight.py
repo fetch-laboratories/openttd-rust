@@ -129,10 +129,17 @@ class RunTests(unittest.TestCase):
 
     def test_changed_tracked_files_warn_at_start_and_in_summary(self) -> None:
         quick = workflow({"name": "Only", "run": "true"})
-        for status, warnings in (("", 0), (" M tools/preflight.py", 2)):
+        changed = " M tools/preflight.py"
+        for statuses, warnings in (
+            (["", ""], 0),
+            ([changed, changed], 2),
+            (["", changed], 1),
+        ):
 
-            def git(_repo: Path, *arguments: str, status: str = status) -> str:
-                return status if arguments[0] == "status" else "sha"
+            def git(
+                _repo: Path, *arguments: str, statuses: list[str] = statuses
+            ) -> str:
+                return statuses.pop(0) if arguments[0] == "status" else "sha"
 
             with (
                 tempfile.TemporaryDirectory() as directory,
