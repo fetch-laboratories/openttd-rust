@@ -1,0 +1,49 @@
+name: Install apt packages
+description: Install system packages with bounded downloads and a second mirror
+inputs:
+  packages:
+    description: Space-separated package names
+    required: true
+  recommends:
+    description: Also install recommended packages
+    default: 'false'
+runs:
+  using: composite
+  steps:
+  - shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      PACKAGES: ${{ inputs.packages }}
+      RECOMMENDS: ${{ inputs.recommends }}
+    run: |
+      # Each mirror fails at times. Azure trickled at about 40 kB/s without timing out
+      # (#858's Full spent 6 minutes on 46 MB), and Canonical's archive timed out three
+      # times in 30 minutes (#833, #841). Bound each attempt, then retry without Azure.
+      sudo=$(command -v sudo || true)
+      read -r -a packages <<< "$PACKAGES"
+      options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+      install=(install -y)
+      if [ "$RECOMMENDS" != true ]; then
+        # Recommended desktop packages (GTK, Vulkan drivers) only slow every job.
+        install+=(--no-install-recommends)
+      fi
+      $sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
+      for attempt in 1 2 3; do
+        if $sudo timeout 120 apt-get "${options[@]}" update &&
+           $sudo timeout 90 apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
+          break
+        fi
+        if [ "$attempt" = 3 ]; then
+          exit 1
+        fi
+        echo "::warning::apt attempt $attempt failed or stalled; retrying without the Azure mirror"
+        if [ -f /etc/apt/apt-mirrors.txt ]; then
+          $sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+        fi
+        for sources in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+          if [ -f "$sources" ]; then
+            $sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' "$sources"
+          fi
+        done
+      done
+      $sudo apt-get "${options[@]}" "${install[@]}" "${packages[@]}"

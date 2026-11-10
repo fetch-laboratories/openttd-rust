@@ -82,55 +82,23 @@ jobs:
 
     - name: Install dependencies
       timeout-minutes: 10
+      uses: ./.github/actions/apt-install
+      with:
+        packages: >-
+          ccache liballegro4-dev libcurl4-openssl-dev libfontconfig-dev libharfbuzz-dev
+          libicu-dev liblzma-dev liblzo2-dev libogg-dev libopus-dev libopusfile-dev
+          ${{ inputs.libraries }} zlib1g-dev
+
+    - name: Install vcpkg dependencies
+      timeout-minutes: 10
       run: |
-        echo "::group::Update apt"
-        sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
-        sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-        echo "::endgroup::"
-
-        echo "::group::Install dependencies"
-        apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-        packages=(
-          ccache
-          liballegro4-dev
-          libcurl4-openssl-dev
-          libfontconfig-dev
-          libharfbuzz-dev
-          libicu-dev
-          liblzma-dev
-          liblzo2-dev
-          libogg-dev
-          libopus-dev
-          libopusfile-dev
-          ${{ inputs.libraries }}
-          zlib1g-dev
-        )
-        # The Azure mirror sometimes trickles at about 40 kB/s without timing out, where
-        # the 31 MB set normally takes seconds: bound the download and retry elsewhere.
-        for attempt in 1 2 3; do
-          if sudo timeout 90 apt-get "${apt_options[@]}" install -y --no-install-recommends --download-only "${packages[@]}"; then
-            break
-          fi
-          if [ "$attempt" = 3 ]; then
-            exit 1
-          fi
-          echo "::warning::apt download attempt $attempt failed or stalled; retrying without the Azure mirror"
-          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-        done
-        sudo apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"
-
-        echo "::group::Install vcpkg dependencies"
-
         # Disable vcpkg integration, as we mostly use system libraries.
         mv vcpkg.json vcpkg-disabled.json
 
         # We only use breakpad from vcpkg, as its CMake files
         # are a bit special. So the Ubuntu's variant doesn't work.
         "$RUNNER_TEMP/vcpkg/vcpkg" install breakpad
-
-        echo "::endgroup::"
       env:
-        DEBIAN_FRONTEND: noninteractive
         VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
 
     - name: Save vcpkg binary cache
