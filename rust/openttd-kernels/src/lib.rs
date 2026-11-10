@@ -213,6 +213,7 @@ mod water;
 mod water_cmd;
 mod water_type;
 mod widget_parser;
+mod widget_type;
 mod witness;
 mod yapf_node;
 
@@ -348,7 +349,7 @@ pub extern "C" fn openttd_rust_encode_utf8(codepoint: u32) -> Utf8Encoded {
 #[allow(unsafe_code)] // Export attribute only.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_is_utf8_part(byte: u8) -> u8 {
-    u8::from(utf8::is_part(byte))
+    u8::from(utf8::is_utf8_part(byte))
 }
 
 /// Decode the first sequence, without examining trailing bytes or rejecting surrogates.
@@ -870,7 +871,11 @@ pub unsafe extern "C" fn openttd_rust_admin_conversion_destroy(handle: *mut std:
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_widget_part_classify(kind: u8) -> u8 {
-    u8::from(widget_parser::attribute(kind)) | (u8::from(widget_parser::container(kind)) << 1)
+    u8::from(widget_parser::is_attribute_widget_part_type(
+        widget_type::WidgetType(kind),
+    )) | (u8::from(widget_parser::is_container_widget_type(
+        widget_type::WidgetType(kind),
+    )) << 1)
 }
 
 /// Create widget-only traversal state; descriptor/widget pointers stay in C++.

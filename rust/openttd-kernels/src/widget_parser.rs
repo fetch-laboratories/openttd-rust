@@ -7,12 +7,27 @@
 
 //! Descriptor traversal only; all polymorphic widget operations run after return.
 
-pub fn attribute(kind: u8) -> bool {
-    kind > 36 && kind < 50
+use crate::widget_type::WidgetType;
+
+/// `IsAttributeWidgetPartType`: test an `NWidgetPart`'s type.
+pub(crate) fn is_attribute_widget_part_type(kind: WidgetType) -> bool {
+    kind > WidgetType::WPT_ATTRIBUTE_BEGIN && kind < WidgetType::WPT_ATTRIBUTE_END
 }
 
-pub fn container(kind: u8) -> bool {
-    matches!(kind, 24 | 25 | 26 | 27 | 1 | 13 | 2 | 29 | 30)
+/// `IsContainerWidgetType`: whether this widget type contains child widgets.
+pub(crate) fn is_container_widget_type(kind: WidgetType) -> bool {
+    matches!(
+        kind,
+        WidgetType::NWID_HORIZONTAL
+            | WidgetType::NWID_HORIZONTAL_LTR
+            | WidgetType::NWID_VERTICAL
+            | WidgetType::NWID_MATRIX
+            | WidgetType::WWT_PANEL
+            | WidgetType::WWT_FRAME
+            | WidgetType::WWT_INSET
+            | WidgetType::NWID_SELECTION
+            | WidgetType::NWID_LAYER
+    )
 }
 
 /// Widget-only instruction pinned by `widget_parser_ffi.h`.
@@ -29,27 +44,30 @@ pub struct Action {
     pub kind: u8,
 }
 
-const DONE: u8 = 0;
-const CHECK_NONNULL: u8 = 1;
-const CREATE_VERTICAL: u8 = 2;
-const OBSERVE_PARENT: u8 = 3;
-const READ_PART: u8 = 4;
-const CREATE_NODE: u8 = 5;
-const APPLY_ATTRIBUTE: u8 = 6;
-const OBSERVE_TYPE: u8 = 7;
-const ADD_CONTAINER: u8 = 8;
-const ADD_BACKGROUND: u8 = 9;
-const ASSIGN_PARENT: u8 = 10;
-const RELEASE: u8 = 11;
-const ASSERT_END: u8 = 12;
-const ERROR_ATTRIBUTE: u8 = 13;
-const ERROR_TRAILING: u8 = 14;
-const ASSERT_FIRST: u8 = 15;
-const OBSERVE_HORIZONTAL: u8 = 16;
-const QUERY_CAPTION: u8 = 17;
-const QUERY_SHADE: u8 = 18;
-const CREATE_SHADE: u8 = 19;
-const WRITE_SHADE: u8 = 20;
+/// Internal typed form of the native `OpenTTDRustWidgetOperation` tag.
+#[derive(Clone, Copy)]
+struct WidgetOperation(u8);
+const DONE: WidgetOperation = WidgetOperation(0);
+const CHECK_NONNULL: WidgetOperation = WidgetOperation(1);
+const CREATE_VERTICAL: WidgetOperation = WidgetOperation(2);
+const OBSERVE_PARENT: WidgetOperation = WidgetOperation(3);
+const READ_PART: WidgetOperation = WidgetOperation(4);
+const CREATE_NODE: WidgetOperation = WidgetOperation(5);
+const APPLY_ATTRIBUTE: WidgetOperation = WidgetOperation(6);
+const OBSERVE_TYPE: WidgetOperation = WidgetOperation(7);
+const ADD_CONTAINER: WidgetOperation = WidgetOperation(8);
+const ADD_BACKGROUND: WidgetOperation = WidgetOperation(9);
+const ASSIGN_PARENT: WidgetOperation = WidgetOperation(10);
+const RELEASE: WidgetOperation = WidgetOperation(11);
+const ASSERT_END: WidgetOperation = WidgetOperation(12);
+const ERROR_ATTRIBUTE: WidgetOperation = WidgetOperation(13);
+const ERROR_TRAILING: WidgetOperation = WidgetOperation(14);
+const ASSERT_FIRST: WidgetOperation = WidgetOperation(15);
+const OBSERVE_HORIZONTAL: WidgetOperation = WidgetOperation(16);
+const QUERY_CAPTION: WidgetOperation = WidgetOperation(17);
+const QUERY_SHADE: WidgetOperation = WidgetOperation(18);
+const CREATE_SHADE: WidgetOperation = WidgetOperation(19);
+const WRITE_SHADE: WidgetOperation = WidgetOperation(20);
 
 #[derive(Clone, Copy)]
 enum Stage {
@@ -72,6 +90,10 @@ enum Stage {
     Return,
     EndChecked,
 }
+
+// Capability bits returned by the native pull-parser protocol.
+const PARENT_CONTAINER: u8 = 2;
+const PARENT_BACKGROUND: u8 = 4;
 
 struct Frame {
     slot: u64,
@@ -144,12 +166,12 @@ impl Engine {
         }
     }
 
-    fn action(&self, kind: u8, slot: u64, other: u64) -> Action {
+    fn action(&self, kind: WidgetOperation, slot: u64, other: u64) -> Action {
         Action {
             part: self.position,
             slot,
             other,
-            kind,
+            kind: kind.0,
         }
     }
 
@@ -192,6 +214,7 @@ impl Engine {
         }
     }
 
+    /// Load the remaining parts into root.
     fn start_body(&mut self) {
         self.role = Role::Body;
         self.start_tree(self.root);
@@ -207,6 +230,7 @@ impl Engine {
                 self.control = Control::DefaultMade;
                 return Some(self.action(CREATE_VERTICAL, 0, 0));
             }
+            // MakeWindowNWidgetTree reads the first widget recursively from the array.
             Control::Init | Control::InitialChecked | Control::DefaultMade => self.start_tree(0),
             Control::Parsed if !matches!(self.role, Role::First) => return self.finish_body(),
             Control::Parsed => {
@@ -231,6 +255,7 @@ impl Engine {
                 self.control = Control::FirstReleased;
                 return Some(self.action(RELEASE, 0, 0));
             }
+            // There is no body at all.
             Control::FirstReleased if self.position == self.length => self.control = Control::Done,
             Control::FirstReleased if self.horizontal => {
                 self.control = Control::CaptionChecked;
@@ -241,6 +266,7 @@ impl Engine {
                 return Some(self.action(QUERY_SHADE, 0, 0));
             }
             Control::ShadeChecked if response != 0 => {
+                /* If the first widget has a title bar and a shade box, silently add a shade selection widget in the tree. */
                 self.shade = self.allocate_slot();
                 self.control = Control::ShadeMade;
                 return Some(self.action(CREATE_SHADE, self.shade, 0));
@@ -258,6 +284,7 @@ impl Engine {
                 return Some(self.action(CREATE_VERTICAL, self.body, 0));
             }
             Control::BodyMade => {
+                /* Load the remaining parts into the shade stack. */
                 self.role = Role::ShadeBody;
                 self.start_tree(self.body);
             }
@@ -288,6 +315,8 @@ impl Engine {
                 return Some(self.action(OBSERVE_PARENT, slot, 0));
             }
             Stage::Parent => {
+                /* If parent is null, only the first widget is read and returned.
+                 * Otherwise it is a container or background, and parts are added as much as possible. */
                 self.frames[top].capabilities = response;
                 self.frames[top].stage = Stage::Loop;
             }
@@ -296,15 +325,15 @@ impl Engine {
                 self.frames[top].stage = Stage::Node;
                 return Some(self.action(READ_PART, slot, 0));
             }
-            Stage::Node if attribute(response) => {
+            Stage::Node if is_attribute_widget_part_type(WidgetType(response)) => {
                 return Some(self.action(ERROR_ATTRIBUTE, slot, 0));
             }
-            Stage::Node if response == 52 => {
+            Stage::Node if WidgetType(response) == WidgetType::WPT_ENDCONTAINER => {
                 self.frames[top].stage = Stage::EndChecked;
                 return Some(self.action(ASSERT_END, slot, 0));
             }
             Stage::Node => {
-                self.frames[top].fill = container(response);
+                self.frames[top].fill = is_container_widget_type(WidgetType(response));
                 let child = self.allocate_slot();
                 self.frames[top].child = child;
                 self.frames[top].stage = Stage::Created;
@@ -318,10 +347,12 @@ impl Engine {
                 self.position += 1;
                 self.frames[top].stage = Stage::Attributes;
             }
+            /* Break out of loop when end reached. */
             Stage::NullChild => {
                 self.frames[top].stage = Stage::EndChecked;
                 return Some(self.action(ASSERT_END, slot, 0));
             }
+            /* Once a widget is created, we're now looking for attributes. */
             Stage::Attributes if self.position == self.length => {
                 self.frames[top].stage = Stage::Descend;
             }
@@ -329,7 +360,7 @@ impl Engine {
                 self.frames[top].stage = Stage::AttributeType;
                 return Some(self.action(READ_PART, slot, 0));
             }
-            Stage::AttributeType if attribute(response) => {
+            Stage::AttributeType if is_attribute_widget_part_type(WidgetType(response)) => {
                 self.frames[top].stage = Stage::AttributeApplied;
                 return Some(self.action(APPLY_ATTRIBUTE, self.frames[top].child, 0));
             }
@@ -348,26 +379,30 @@ impl Engine {
                 self.frames[top].stage = Stage::ObjectType;
                 return Some(self.action(OBSERVE_TYPE, child, 0));
             }
-            Stage::ObjectType if container(response) => {
+            /* If sub-widget is a container, recursively fill that container. */
+            Stage::ObjectType if is_container_widget_type(WidgetType(response)) => {
                 self.frames[top].stage = Stage::ChildFinished;
                 self.start_tree(child);
             }
             Stage::Descend | Stage::ObjectType | Stage::ChildFinished => {
                 self.frames[top].stage = Stage::Attach;
             }
+            /* Add sub_widget to parent container if available, otherwise return the widget to the caller. */
             Stage::Attach => {
                 self.frames[top].stage = Stage::ContainerAdded;
-                if capabilities & 2 != 0 {
+                if capabilities & PARENT_CONTAINER != 0 {
                     return Some(self.action(ADD_CONTAINER, slot, child));
                 }
             }
             Stage::ContainerAdded => {
                 self.frames[top].stage = Stage::BackgroundAdded;
-                if capabilities & 4 != 0 {
+                if capabilities & PARENT_BACKGROUND != 0 {
                     return Some(self.action(ADD_BACKGROUND, slot, child));
                 }
             }
-            Stage::BackgroundAdded if capabilities & 6 == 0 => {
+            Stage::BackgroundAdded
+                if capabilities & (PARENT_CONTAINER | PARENT_BACKGROUND) == 0 =>
+            {
                 self.frames[top].stage = Stage::Assigned;
                 return Some(self.action(ASSIGN_PARENT, slot, child));
             }
@@ -381,6 +416,7 @@ impl Engine {
             }
             Stage::Return => self.finish_tree(),
             Stage::EndChecked => {
+                // The end-container part is also used.
                 self.position += 1;
                 self.finish_tree();
             }
