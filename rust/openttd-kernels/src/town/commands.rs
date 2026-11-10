@@ -1064,6 +1064,12 @@ impl Commands<'_> {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: TownRef) {
+    unsafe { town_destruct(s, t) };
+}
+/// `Town::~Town`: clean up a town and everything that refers to it.
+/// # Safety
+/// `t` is the live town being destroyed; the command tables are live.
+unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
     if (s.cleaning_pool)() {
         return;
     }
@@ -1134,6 +1140,12 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
+    unsafe { town_post_destructor(s) };
+}
+/// `Town::PostDestructor`: invalidate the caches that refer to the removed town.
+/// # Safety
+/// The command tables are live; the town has left the pool.
+unsafe fn town_post_destructor(s: &CommandServices) {
     // Invalidating the nearest town cache has to be done after removing the item from the pool.
     let c = unsafe { Commands::new(s) };
     (c.f.directory_rebuild)();
