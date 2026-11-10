@@ -50,9 +50,7 @@ public:
 	explicit CargoPacket(const OpenTTDCargoPacket &fields);
 	~CargoPacket();
 	OpenTTDCargoPacket *RustOwner() const { return this->state; }
-	CargoPacket *Split(uint size);
 	void Merge(CargoPacket *cp);
-	void Reduce(uint count);
 	void SetNextHop(StationID next) { this->state->next_hop = next.base(); }
 	void UpdateLoadingTile(TileIndex tile);
 	void UpdateUnloadingTile(TileIndex tile);
@@ -111,7 +109,6 @@ public:
 	uint UnloadCount() const { return openttd_rust_cargo_list_unload(this->state); }
 	uint RemainingCount() const { return openttd_rust_cargo_list_remaining(this->state); }
 	void Append(CargoPacket *cp, MoveToAction action = MTA_KEEP);
-	void AgeCargo();
 	bool Stage(bool accepted, StationID station, std::span<const StationID> next, OrderUnloadType unload, const GoodsEntry *ge, CargoType cargo, CargoPayment *payment, TileIndex tile);
 	void KeepAll();
 	uint Return(uint amount, StationCargoList *dest, StationID next, TileIndex tile);

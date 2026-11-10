@@ -58,7 +58,6 @@ OpenTTDEngineMappingView openttd_rust_engine_mappings(uint8_t);
 void openttd_rust_engine_mapping_clear();
 void openttd_rust_engine_mapping_defaults(const uint8_t *);
 uint16_t openttd_rust_engine_mapping_get(uint8_t, uint16_t, uint32_t);
-uint16_t openttd_rust_engine_mapping_use(uint8_t, uint16_t, uint32_t, bool);
 void openttd_rust_engine_mapping_set(uint8_t, uint16_t, uint32_t, uint8_t, uint16_t);
 uint8_t openttd_rust_engine_override_get_abi(uint32_t, uint32_t *);
 extern "C++" inline bool openttd_rust_engine_override_get(uint32_t a0, uint32_t *a1) { return openttd_rust_engine_override_get_abi(a0, a1) != 0; }

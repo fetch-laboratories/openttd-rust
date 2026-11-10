@@ -298,17 +298,6 @@ uint64_t Packet::Recv_uint64()
 }
 
 /**
- * Extract a sized byte buffer from the packet.
- * @return The extracted buffer.
- */
-std::vector<uint8_t> Packet::Recv_buffer()
-{
-	std::vector<uint8_t> result(openttd_rust_packet_recv_buffer_size(&this->state, &Services()));
-	openttd_rust_packet_recv_buffer_data(&this->state, result.data(), result.size());
-	return result;
-}
-
-/**
  * Extract at most the length of the span bytes from the packet into the span.
  * @param destination The span to write the bytes to.
  * @return The number of bytes that were actually read.

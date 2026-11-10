@@ -52,8 +52,6 @@ extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_frame(uint16_t a0
 void OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_send(OpenTTDPacketState *, const OpenTTDPacketServices *, void (*)(bool) noexcept);
 uint8_t OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_read_abi(OpenTTDPacketState *, const OpenTTDPacketServices *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_read(OpenTTDPacketState *a0, const OpenTTDPacketServices *a1) { return openttd_rust_packet_prepare_to_read_abi(a0, a1) != 0; }
-size_t OPENTTD_RUST_CALL openttd_rust_packet_recv_buffer_size(OpenTTDPacketState *, const OpenTTDPacketServices *);
-void OPENTTD_RUST_CALL openttd_rust_packet_recv_buffer_data(OpenTTDPacketState *, uint8_t *, size_t);
 size_t OPENTTD_RUST_CALL openttd_rust_packet_recv_bytes(OpenTTDPacketState *, uint8_t *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_packet_send_string(OpenTTDPacketState *, void (*)(bool) noexcept, const uint8_t *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_packet_send_buffer(OpenTTDPacketState *, void (*)(bool) noexcept, const uint8_t *, size_t);

@@ -744,22 +744,6 @@ void OrderList::FreeChain(bool keep_orderlist)
 }
 
 /**
- * Get the next order which will make the given vehicle stop at a station
- * or refit at a depot or evaluate a non-trivial condition.
- * @param next The order to start looking at.
- * @param hops The number of orders we have already looked at.
- * @return Either of
- *         \li a station order
- *         \li a refitting depot order
- *         \li a non-trivial conditional order
- *         \li INVALID_VEH_ORDER_ID if the vehicle won't stop anymore.
- */
-VehicleOrderID OrderList::GetNextDecisionNode(VehicleOrderID next, uint hops) const
-{
-	return openttd_rust_list_decision(const_cast<OrderList *>(this), next, hops, &_rust_orders_leaves);
-}
-
-/**
  * Recursively determine the next deterministic station to stop at.
  * @param v The vehicle we're looking at.
  * @param first Order to start searching at or INVALID_VEH_ORDER_ID to start at cur_implicit_order_index + 1.
@@ -783,35 +767,6 @@ void OrderList::InsertOrderAt(Order &&order, VehicleOrderID index)
 	openttd_rust_list_insert(this, index, &order, &_rust_orders_leaves);
 }
 
-
-/**
- * Remove an order from the order list and delete it.
- * @param index is the position of the order which is to be deleted.
- */
-void OrderList::DeleteOrderAt(VehicleOrderID index)
-{
-	openttd_rust_list_delete(this, index, &_rust_orders_leaves);
-}
-
-/**
- * Move an order to another position within the order list.
- * @param from is the zero-based position of the order to move.
- * @param to is the zero-based position where the order is moved to.
- */
-void OrderList::MoveOrder(VehicleOrderID from, VehicleOrderID to)
-{
-	openttd_rust_list_move(this, from, to, &_rust_orders_leaves);
-}
-
-/**
- * Removes the vehicle from the shared order list.
- * @note This is supposed to be called when the vehicle is still in the chain
- * @param v vehicle to remove from the list
- */
-void OrderList::RemoveVehicle(Vehicle *v)
-{
-	openttd_rust_list_remove_vehicle(this, v, &_rust_orders_leaves);
-}
 
 /**
  * Checks whether all orders of the list have a filled timetable.
@@ -1116,22 +1071,6 @@ bool ProcessOrders(Vehicle *v)
 bool Order::ShouldStopAtStation(const Vehicle *v, StationID station) const
 {
 	return openttd_rust_order_should_stop(const_cast<Order *>(this), v->GetLastStationVisited().base(), station.base()) != 0;
-}
-
-bool Order::CanLoadOrUnload() const
-{
-	return openttd_rust_order_can_load_unload(const_cast<Order *>(this)) != 0;
-}
-
-/**
- * A vehicle can leave the current station with cargo if:
- * 1. it can load cargo here OR
- * 2a. it could leave the last station with cargo AND
- * 2b. it doesn't have to unload all cargo here.
- */
-bool Order::CanLeaveWithCargo(bool has_cargo) const
-{
-	return openttd_rust_order_can_leave(const_cast<Order *>(this), has_cargo) != 0;
 }
 
 #include "rust/service_table_check.hpp"

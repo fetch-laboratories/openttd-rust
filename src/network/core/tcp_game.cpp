@@ -67,11 +67,6 @@ NetworkRecvStatus NetworkGameSocketHandler::ReceivePackets()
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_actions_result(&frame.network_actions));
 }
 
-void NetworkGameSocketHandler::DeferDeletion()
-{
-	openttd_rust_network_defer(this);
-}
-
 /* static */ void NetworkGameSocketHandler::ProcessDeferredDeletions()
 {
 	openttd_rust_network_process_deferred(&GetRustNetworkFrameServices());

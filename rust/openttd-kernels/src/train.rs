@@ -359,6 +359,15 @@ macro_rules! entry_game {
         Game::new(unsafe { &*$leaves }, unsafe { &*$services })
     };
 }
+/// `Train::UpdateAcceleration`: update acceleration of the train from the cached power and
+/// weight.
+pub(crate) fn update_acceleration(id: Handle) {
+    let power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
+    let weight: u32 = read_field!(id.vehicle().ground_cache(), cached_weight);
+    // Clamp(int, int, int): the uint product converts to int first.
+    let accel = ((power / weight).wrapping_mul(4) as i32).clamp(1, 255);
+    write_field!((id).record, acceleration, accel as u8);
+}
 #[derive(Clone)]
 struct Game<'a> {
     leaves: &'a Leaves,
@@ -681,7 +690,7 @@ impl Game<'_> {
         id.set_cached_max_curve_speed(u64::from(self.get_curve_speed_limit(id)));
         crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
         if (id).front() != 0 {
-            Self::update_acceleration(id);
+            update_acceleration(id);
             (self.leaves.consist_windows)(id);
         }
     }
@@ -869,14 +878,6 @@ impl Game<'_> {
             cached_max_track_speed
         )))
     }
-    /// Update acceleration of the train from the cached power and weight.
-    fn update_acceleration(id: Handle) {
-        let power: u32 = read_field!(id.vehicle().ground_cache(), cached_power);
-        let weight: u32 = read_field!(id.vehicle().ground_cache(), cached_weight);
-        // Clamp(int, int, int): the uint product converts to int first.
-        let accel = ((power / weight).wrapping_mul(4) as i32).clamp(1, 255);
-        write_field!((id).record, acceleration, accel as u8);
-    }
     fn update_speed(&self, id: Handle) -> i32 {
         let v_status: u8 = id.vehicle().status();
         let v_acceleration: u8 = id.vehicle().acceleration();
@@ -911,7 +912,7 @@ impl Game<'_> {
             }
         }
         crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
-        Self::update_acceleration(id);
+        update_acceleration(id);
     }
     fn trackdir(&self, id: Handle) -> u8 {
         let v_tile: u32 = id.vehicle().tile();
@@ -2299,7 +2300,7 @@ impl Game<'_> {
         (self.leaves.viewport)(id, 1, 1);
         self.update_occupancy(id);
         self.signal_segment(id, (id).vehicle().tile(), u8::MAX);
-        Self::update_acceleration(id);
+        update_acceleration(id);
         (self.leaves.depot_dirty)(id);
         false
     }
@@ -2717,13 +2718,6 @@ pub unsafe extern "C" fn openttd_rust_train_current_max_speed(
 ) -> i32 {
     let g = entry_game!(leaves, services);
     g.get_current_max_speed(id)
-}
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_update_acceleration(id: Handle) {
-    Game::update_acceleration(id);
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety

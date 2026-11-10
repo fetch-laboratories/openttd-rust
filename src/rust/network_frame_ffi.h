@@ -66,7 +66,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);
 extern "C" {
 uint8_t openttd_rust_network_game_close(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDNetworkActionsStorage *);
-void openttd_rust_network_defer(OpenTTDNetworkGameSocket *);
 void openttd_rust_network_process_deferred(const OpenTTDNetworkFrameServices *);
 void RustDeleteNetworkSocket(void *) noexcept;
 void openttd_rust_network_deferred_shutdown(void (*)(void *) noexcept);

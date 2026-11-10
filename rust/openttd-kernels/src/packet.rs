@@ -849,38 +849,6 @@ pub unsafe extern "C" fn openttd_rust_packet_prepare_to_read_abi(
     u8::from(unsafe { prepare_to_read(state, &*services) })
 }
 
-/// Native facade for `recv_buffer_size`.
-/// # Safety
-/// Record and service pointers follow this module's ownership and byte-span contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_recv_buffer_size(
-    state: *mut State,
-    services: *const Services,
-) -> usize {
-    unsafe { recv_buffer_size(state, &*services) }
-}
-
-/// Native facade for `recv_buffer_data`.
-/// # Safety
-/// Record and service pointers follow this module's ownership and byte-span contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_recv_buffer_data(
-    state: *mut State,
-    output: *mut u8,
-    length: usize,
-) {
-    unsafe {
-        (&mut *state).read_buffer_data(std::slice::from_raw_parts_mut(
-            if length == 0 {
-                ptr::NonNull::<u8>::dangling().as_ptr()
-            } else {
-                output
-            },
-            length,
-        ));
-    }
-}
-
 /// Native facade for `recv_bytes`.
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
@@ -1309,11 +1277,12 @@ mod comparison_tests {
         packet
     }
 
-    /// `Packet::Recv_buffer`'s C++ result allocation around the two Rust exports.
+    /// `Packet::Recv_buffer`: the size, then that many bytes, as the command reader reads
+    /// a buffer.
     unsafe fn recv_buffer(packet: *mut State) -> Vec<u8> {
         unsafe {
-            let mut result = vec![0; openttd_rust_packet_recv_buffer_size(packet, services())];
-            openttd_rust_packet_recv_buffer_data(packet, result.as_mut_ptr(), result.len());
+            let mut result = vec![0; recv_buffer_size(packet, &*services())];
+            (*packet).read_buffer_data(&mut result);
             result
         }
     }

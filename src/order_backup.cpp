@@ -127,16 +127,3 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
 {
 	assert(v != nullptr); openttd_rust_backup_vehicle_clear(const_cast<Vehicle *>(v), &GetRustOrdersLeaves());
 }
-
-/**
- * Removes an order from all vehicles. Triggers when, say, a station is removed.
- * @param type The type of the order (OT_GOTO_[STATION|DEPOT|WAYPOINT]).
- * @param destination The destination. Can be a StationID, DepotID or WaypointID.
- * @param hangar Only used for airports in the destination.
- *               When false, remove airport and hangar orders.
- *               When true, remove either airport or hangar order.
- */
-/* static */ void OrderBackup::RemoveOrder(OrderType type, DestinationID destination, bool hangar)
-{
-	openttd_rust_backup_destination_clear(type, destination.base(), hangar, &GetRustOrdersLeaves());
-}
