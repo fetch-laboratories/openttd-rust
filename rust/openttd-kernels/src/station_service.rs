@@ -1589,7 +1589,11 @@ fn has_orders(v: VehicleRef) -> bool {
 /// `IterateVehicleParts`: iterate the articulated parts of a vehicle, also considering the
 /// special cases of "normal" aircraft and double headed trains. Apply an action to each
 /// vehicle and immediately return false if that action does so. Otherwise return true.
-fn iterate_vehicle_parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
+fn iterate_vehicle_parts(
+    v: VehicleRef,
+    shared: &crate::services::Services,
+    mut action: impl FnMut(VehicleRef) -> bool,
+) -> bool {
     let mut w = Some(v);
     while let Some(part) = w {
         if !action(part) {
@@ -1602,7 +1606,7 @@ fn iterate_vehicle_parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bo
             return false;
         }
         w = if part.has_articulated_part() {
-            part.next()
+            part.get_next_articulated_part(shared)
         } else {
             None
         };
@@ -1662,7 +1666,7 @@ fn reserve_consist(
         };
         if reserve {
             // `ReserveCargoAction`.
-            iterate_vehicle_parts(v, |part| {
+            iterate_vehicle_parts(v, unsafe { &*w.shared }, |part| {
                 let cap = u32::from(part.cargo_cap());
                 let remaining = l.cargo_list(part).remaining_count();
                 if cap > remaining && may_load_under_exclusive_rights(st, part, w) {
@@ -1816,7 +1820,10 @@ fn handle_station_refit(
     let (w, l) = (c.w, c.l);
     let v_start = v.first_engine_part();
     // `IsEmptyAction`: the vehicle is either empty or has only reserved cargo.
-    if !iterate_vehicle_parts(v_start, |part| l.cargo_list(part).stored_count() == 0) {
+    let shared = unsafe { &*w.shared };
+    if !iterate_vehicle_parts(v_start, shared, |part| {
+        l.cargo_list(part).stored_count() == 0
+    }) {
         return;
     }
     let cur_company = (l.current_company)();
@@ -1824,7 +1831,7 @@ fn handle_station_refit(
     let mut refit_mask = (unsafe { &*l.vehicle }.engine)(v).refit_mask();
     /* Remove old capacity from consist capacity and collect refit mask. */
     // `PrepareRefitAction`.
-    iterate_vehicle_parts(v_start, |part| {
+    iterate_vehicle_parts(v_start, shared, |part| {
         let observed = (l.cargo_capacity)(part);
         let reserved = VehicleCargo(observed.owner.cast_mut()).reserved_count();
         let cargo = usize::from(observed.cargo);
@@ -1874,7 +1881,7 @@ fn handle_station_refit(
          * "via any station" before reserving. We rather produce some more "any station" cargo than
          * misrouting it. */
         // `ReturnCargoAction`.
-        iterate_vehicle_parts(v_start, |part| {
+        iterate_vehicle_parts(v_start, shared, |part| {
             (l.return_cargo)(st.native, part, u32::MAX);
             true
         });
@@ -1887,7 +1894,7 @@ fn handle_station_refit(
     /* Add new capacity to consist capacity and reserve cargo */
     // `FinalizeRefitAction`.
     let do_reserve = is_auto_refit || v.first().current_order().is_full_load();
-    iterate_vehicle_parts(v_start, |part| {
+    iterate_vehicle_parts(v_start, shared, |part| {
         let part_cargo = l.cargo_list(part);
         if do_reserve {
             let remaining = part_cargo.remaining_count();
