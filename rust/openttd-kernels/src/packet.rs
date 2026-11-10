@@ -5,6 +5,15 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+//! Basic functions to create, fill and read packets (`network/core/packet.h`/`.cpp`).
+//! All network communication uses packets with a constructor-supplied byte limit.
+//! Exceeding the limit while sending asserts; reading past the size returns zero
+//! values or an empty string. Multibyte integers are little endian unless specified
+//! otherwise: 0x01234567 is sent as 67 45 23 01. Strings have variable length and a
+//! NUL terminator; their length is not sent. The original packet header also notes
+//! that leap years in days-to-date calculations satisfy `(year % 4 == 0)` and
+//! `((year % 100 != 0) || (year % 400 == 0))`.
+//!
 //! Shared packet ownership and direct typed packet operations.
 //!
 //! Calls are serialized. Native pointers identify live records; data spans expire before growth,
@@ -13,8 +22,25 @@
 //! Panics and allocation failures abort; no C++ exception may cross a Rust frame.
 #![allow(unsafe_code)]
 
+use crate::bitmath_func::{gb, gb_u64, gb_usize};
+use crate::string_type::StringValidationSettings;
 use std::mem::ManuallyDrop;
 use std::ptr;
+
+/// Size of the whole packet (`packet.h`).
+pub type PacketSize = u16;
+/// Identifier for the packet (`packet.h`).
+pub type PacketType = u8;
+
+/// `Packet::EncodedLengthOfPacketSize`.
+pub const fn encoded_length_of_packet_size() -> usize {
+    size_of::<PacketSize>()
+}
+
+/// `Packet::EncodedLengthOfPacketType`.
+pub const fn encoded_length_of_packet_type() -> usize {
+    size_of::<PacketType>()
+}
 
 /// Native socket identity; Rust accesses it only through the shared services.
 pub struct NetworkSocketHandler {
@@ -42,7 +68,8 @@ crate::abi::shared_records! {
     "OpenTTDPacketState" ["packet"] => pub struct State {
         /// Initialized bytes, null only when capacity is zero.
         pub data: *mut u8,
-        /// Initialized byte count.
+        /// Packet byte count: bytes written so far when sending, allocated read size
+        /// before PrepareToRead, and the full packet size after PrepareToRead.
         pub size: usize,
         /// Rust allocation capacity.
         pub capacity: usize,
@@ -74,6 +101,15 @@ pub struct Services {
     pub stream: unsafe extern "C" fn(*const NetworkEncryptionHandler) -> *mut OpenTTDAuthStream,
 }
 
+/// Native leaves shared by packet construction, string receive and send operations.
+#[derive(Clone, Copy)]
+pub struct Context<'a> {
+    /// Live nonthrowing socket/encryption operations.
+    pub services: &'a Services,
+    /// Assertion callback selected by the native build policy.
+    pub check: extern "C" fn(bool),
+}
+
 impl State {
     /// Empty packet allocation with the original limit and cursor defaults.
     #[must_use]
@@ -88,7 +124,11 @@ impl State {
         }
     }
 
-    /// Receive storage for a stream header or an entire datagram.
+    /// Create a packet used to read from the associated network socket.
+    /// `limit` is the maximum accepted packet size. `initial` defaults in the native
+    /// facade to the bytes needed to determine the packet size: TCP streams must not
+    /// read bytes belonging to the next packet. UDP instead needs the whole datagram
+    /// at once, or some data may be lost, so it passes the maximum expected packet size.
     #[must_use]
     pub fn new_receive(
         limit: usize,
@@ -102,36 +142,46 @@ impl State {
         result
     }
 
-    /// Outgoing framing after querying the send handler's MAC size.
+    /// Create a packet to send; `socket` may be null and `packet_type` identifies it.
+    /// `limit` defaults in the native facade to COMPAT_MTU. Changing it requires care:
+    /// older clients/servers may not expect substantially larger packets.
+    /// The send handler's MAC size is queried before constructing this framing.
     #[must_use]
     pub fn new_send(
         limit: usize,
-        packet_type: u8,
+        packet_type: PacketType,
         mac: usize,
         socket: *mut NetworkSocketHandler,
         check: extern "C" fn(bool),
     ) -> Self {
         let mut result = Self::new(limit, socket);
-        let initial = 2_usize.wrapping_add(mac);
+        /* Allocate space for the size so we can write it just before sending,
+         * and space for the message authentication code of the encryption. */
+        let initial = encoded_length_of_packet_size().wrapping_add(mac);
         check(result.can_write(initial));
         result.resize(initial);
         result.send_uint8(packet_type, check);
         result
     }
 
-    /// Native unsigned capacity decision.
+    /// `CanWriteToPacket`: is writing the requested amount safe within the limit?
     #[must_use]
     pub fn can_write(&self, amount: usize) -> bool {
         self.size.wrapping_add(amount) <= self.limit
     }
 
-    /// Untransferred bytes, preserving native unsigned subtraction.
+    /// `RemainingBytesToTransfer`: bytes still available for the transfer functions,
+    /// preserving native unsigned subtraction.
     #[must_use]
     pub fn remaining(&self) -> usize {
         self.size.wrapping_sub(usize::from(self.position))
     }
 
-    /// Plan a transfer before a callback; commit only after its normal return.
+    /// `TransferOutWithLimit`: transfer from the last stopped position, up to `limit`.
+    /// Transfer functions such as TCP send/recv or UDP sendto/recvfrom access packet
+    /// storage directly without an intermediate buffer. They may process less data
+    /// than requested, so only their returned positive count advances the position.
+    /// Plan before the callback; commit only after its normal return.
     #[must_use]
     pub fn transfer_amount(&self, limit: usize) -> usize {
         self.remaining().min(limit)
@@ -141,7 +191,7 @@ impl State {
     pub fn transfer_commit(&mut self, amount: isize) {
         if amount > 0 {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let narrowed = amount as u16;
+            let narrowed = amount as PacketSize;
             self.position = self.position.wrapping_add(narrowed);
         }
     }
@@ -173,7 +223,11 @@ impl State {
         self.append(&data);
     }
 
-    /// Send a canonical boolean byte.
+    /* Send uint8_t, uint16_t, uint32_t and uint64_t endian-safe over the network.
+     * The least significant bytes go first: 0x01234567 becomes 67 45 23 01.
+     * A bool is sent as uint8_t: zero means false and nonzero means true. */
+
+    /// Package a boolean in the packet as its canonical zero or one byte.
     pub fn send_bool(&mut self, value: bool, check: extern "C" fn(bool)) {
         self.send_uint8(u8::from(value), check);
     }
@@ -183,18 +237,44 @@ impl State {
     }
     /// Send a little-endian 16-bit integer.
     pub fn send_uint16(&mut self, value: u16, check: extern "C" fn(bool)) {
-        self.send_integer(value.to_le_bytes(), check);
+        self.send_integer(
+            [
+                gb(u32::from(value), 0, 8).to_le_bytes()[0],
+                gb(u32::from(value), 8, 8).to_le_bytes()[0],
+            ],
+            check,
+        );
     }
     /// Send a little-endian 32-bit integer.
     pub fn send_uint32(&mut self, value: u32, check: extern "C" fn(bool)) {
-        self.send_integer(value.to_le_bytes(), check);
+        self.send_integer(
+            [
+                gb(value, 0, 8).to_le_bytes()[0],
+                gb(value, 8, 8).to_le_bytes()[0],
+                gb(value, 16, 8).to_le_bytes()[0],
+                gb(value, 24, 8).to_le_bytes()[0],
+            ],
+            check,
+        );
     }
     /// Send a little-endian 64-bit integer.
     pub fn send_uint64(&mut self, value: u64, check: extern "C" fn(bool)) {
-        self.send_integer(value.to_le_bytes(), check);
+        self.send_integer(
+            [
+                gb_u64(value, 0, 8).to_le_bytes()[0],
+                gb_u64(value, 8, 8).to_le_bytes()[0],
+                gb_u64(value, 16, 8).to_le_bytes()[0],
+                gb_u64(value, 24, 8).to_le_bytes()[0],
+                gb_u64(value, 32, 8).to_le_bytes()[0],
+                gb_u64(value, 40, 8).to_le_bytes()[0],
+                gb_u64(value, 48, 8).to_le_bytes()[0],
+                gb_u64(value, 56, 8).to_le_bytes()[0],
+            ],
+            check,
+        );
     }
 
-    /// Send the original bytes and a NUL terminator.
+    /// Send the original string bytes plus a NUL terminator; no size byte is sent.
     pub fn send_string(&mut self, value: &[u8], check: extern "C" fn(bool)) {
         check(self.can_write(value.len().wrapping_add(1)));
         self.append(value);
@@ -203,7 +283,7 @@ impl State {
 
     /// Send a narrowed 16-bit size prefix followed by all input bytes.
     pub fn send_buffer(&mut self, value: &[u8], check: extern "C" fn(bool)) {
-        check(self.can_write(value.len().wrapping_add(2)));
+        check(self.can_write(value.len().wrapping_add(size_of::<u16>())));
         self.send_uint16(prefix(value.len()), check);
         self.append(value);
     }
@@ -215,37 +295,49 @@ impl State {
         &value[amount..]
     }
 
-    /// Validate the wire size, resize and commit the read cursor.
+    /// `HasPacketSizeData`: has the write position reached enough data for the size?
+    #[must_use]
+    pub fn has_packet_size_data(&self) -> bool {
+        usize::from(self.position) >= encoded_length_of_packet_size()
+    }
+
+    /// `ParsePacketSize`: read the wire size and accept only plausible packet sizes.
     pub fn parse_size(&mut self) -> bool {
         // SAFETY: The original requires both size-header bytes to be initialized.
         let size = unsafe { usize::from(*self.data) | (usize::from(*self.data.add(1)) << 8) };
-        if size < 3 || size > self.limit {
+        /* A size smaller than the bytes required for size and type, or greater than
+         * the allowed limit, means something is wrong: regard the packet as garbage. */
+        if size < encoded_length_of_packet_size() + encoded_length_of_packet_type()
+            || size > self.limit
+        {
             return false;
         }
         self.resize(size);
-        self.position = 2;
+        self.position = prefix(encoded_length_of_packet_size());
         true
     }
 
-    /// Write the low 16 bits of size before any encryption-handler call.
+    /// Write the packet's size into its reserved raw header before encryption.
     pub fn begin_send(&mut self, check: extern "C" fn(bool)) {
         // SAFETY: Sending requires the original two reserved header bytes.
         unsafe {
+            /* Prevent this being called twice or for packets that have been received. */
             check(*self.data == 0 && *self.data.add(1) == 0);
-            let header = prefix(self.size).to_le_bytes();
-            ptr::copy_nonoverlapping(header.as_ptr(), self.data, 2);
+            *self.data = gb_usize(self.size, 0, 8).to_le_bytes()[0];
+            *self.data.add(1) = gb_usize(self.size, 8, 8).to_le_bytes()[0];
         }
     }
 
     /// Reset the cursor and release spare capacity after normal encryption return.
     pub fn finish_send(&mut self) {
-        self.position = 0;
+        self.position = 0; // We start reading from here.
         self.edit_buffer(Vec::shrink_to_fit);
     }
 
     /// Reset before the original receive-handler lookup.
     pub fn begin_read(&mut self) {
-        self.position = 2;
+        /* Put the position in the right place. */
+        self.position = prefix(encoded_length_of_packet_size());
     }
 
     /// Consume the MAC after normal decryption return, including false.
@@ -253,11 +345,15 @@ impl State {
         self.position = self.position.wrapping_add(prefix(mac));
     }
 
-    /// Read the type using the send handler's MAC size, as in packet.cpp.
+    /// `GetPacketType`: read the type using the send handler's MAC size.
     #[must_use]
-    pub fn packet_type(&self, mac: usize) -> u8 {
+    pub fn packet_type(&self, mac: usize) -> PacketType {
         // SAFETY: Original packet-type and handler-offset preconditions apply.
-        unsafe { *self.data.add(2_usize.wrapping_add(mac)) }
+        unsafe {
+            *self
+                .data
+                .add(encoded_length_of_packet_size().wrapping_add(mac))
+        }
     }
 
     fn read_integer<const N: usize>(&mut self) -> [u8; N] {
@@ -333,16 +429,16 @@ impl Drop for State {
     }
 }
 
-fn prefix(size: usize) -> u16 {
+fn prefix(size: usize) -> PacketSize {
     #[allow(clippy::cast_possible_truncation)]
     {
-        size as u16
+        size as PacketSize
     }
 }
 
 /// Packet framing with original native unsigned arithmetic.
 #[must_use]
-pub fn frame(position: u16, size: usize, mac: usize) -> Frame {
+pub fn frame(position: PacketSize, size: usize, mac: usize) -> Frame {
     let message = usize::from(position).wrapping_add(mac);
     Frame {
         message,
@@ -355,9 +451,11 @@ pub fn frame(position: u16, size: usize, mac: usize) -> Frame {
 /// State and socket are live. Services are valid and nonthrowing; no borrowed state spans them.
 pub unsafe fn can_read(state: *mut State, services: &Services, amount: usize, close: bool) -> bool {
     unsafe {
+        /* Don't allow reading from a quit client/client who sent bad data. */
         if (services.has_quit)((*state).socket) {
             return false;
         }
+        /* Check if the variable is within the packet size. */
         if usize::from((*state).position).wrapping_add(amount) > (*state).size {
             if close {
                 (services.mark_closed)((*state).socket);
@@ -367,6 +465,8 @@ pub unsafe fn can_read(state: *mut State, services: &Services, amount: usize, cl
     }
     true
 }
+
+/* Receiving commands are endian-safe like the sending functions above. */
 
 /// Direct Rust receive operations; failed mandatory reads close the socket and return zero.
 /// # Safety
@@ -422,45 +522,32 @@ pub unsafe fn recv_buffer_size(state: *mut State, services: &Services) -> usize 
     size
 }
 
-fn validate_string(input: &[u8], settings: u8, mut append: impl FnMut(&[u8])) {
-    let mut position = 0;
-    while position < input.len() {
-        let step = crate::string_validation::step(
-            &input[position..],
-            crate::string_type::StringValidationSettings(settings),
-        );
-        position += step.consumed;
-        if step.stopped != 0 {
-            break;
-        }
-        if step.output.length != 0 {
-            append(&step.output.bytes[..step.output.length]);
-        }
-    }
-}
-
-/// Collect up to length - 1 bytes, consume through NUL, then use the shared sanitation owner.
+/// `Recv_string`: read bytes until NUL or at most `length` characters.
+/// If no NUL was reached in that range, read and discard through the terminator.
+/// Return at most `length - 1` bytes, validated with `settings`.
+/// `length` includes the NUL terminator.
 /// # Safety
 /// Same contract as `recv_uint8`. The output callback is nonthrowing and retains no byte pointer.
 pub unsafe fn recv_string_into(
     state: *mut State,
-    services: &Services,
-    check: extern "C" fn(bool),
+    context: Context<'_>,
     mut length: usize,
-    settings: u8,
+    settings: StringValidationSettings,
     append: impl FnMut(&[u8]),
 ) {
-    check(length > 1);
+    (context.check)(length > 1);
     // Packet::Recv_string uses native small-string storage for short input.
     let mut inline = [0; 64];
     let mut inline_size = 0;
     let mut overflow = Vec::new();
+    /* Both Recv_uint8 loops terminate past the packet end because Recv_uint8
+     * then closes the connection and returns zero. */
     loop {
         length = length.wrapping_sub(1);
         if length == 0 {
             break;
         }
-        let byte = unsafe { recv_uint8(state, services) };
+        let byte = unsafe { recv_uint8(state, context.services) };
         if byte == 0 {
             break;
         }
@@ -476,14 +563,15 @@ pub unsafe fn recv_string_into(
         }
     }
     if length == 0 {
-        while unsafe { recv_uint8(state, services) } != 0 {}
+        /* The string in the packet was longer. Read until the termination. */
+        while unsafe { recv_uint8(state, context.services) } != 0 {}
     }
     let raw = if overflow.is_empty() {
         &inline[..inline_size]
     } else {
         &overflow
     };
-    validate_string(raw, settings, append);
+    crate::string_validation::make_valid_into(raw, settings, append);
 }
 
 /// Construct an outgoing packet after resolving the live send handler.
@@ -491,22 +579,21 @@ pub unsafe fn recv_string_into(
 /// Socket may be null; otherwise it and the nonthrowing services are live.
 pub unsafe fn new_outgoing(
     socket: *mut NetworkSocketHandler,
-    services: &Services,
-    check: extern "C" fn(bool),
-    packet_type: u8,
+    context: Context<'_>,
+    packet_type: PacketType,
     limit: usize,
 ) -> State {
     let handler = if socket.is_null() {
         ptr::null_mut()
     } else {
-        unsafe { (services.send_handler)(socket) }
+        unsafe { (context.services.send_handler)(socket) }
     };
     let mac = if handler.is_null() {
         0
     } else {
-        unsafe { (services.mac_size)(handler) }
+        unsafe { (context.services.mac_size)(handler) }
     };
-    State::new_send(limit, packet_type, mac, socket, check)
+    State::new_send(limit, packet_type, mac, socket, context.check)
 }
 
 unsafe fn crypt(
@@ -517,7 +604,11 @@ unsafe fn crypt(
     sending: bool,
 ) -> bool {
     unsafe {
-        let position = if sending { 2 } else { (*state).position };
+        let position = if sending {
+            prefix(encoded_length_of_packet_size())
+        } else {
+            (*state).position
+        };
         let frame = frame(position, (*state).size, mac_size);
         if !sending && (*state).size <= frame.message {
             return false;
@@ -527,20 +618,16 @@ unsafe fn crypt(
         let stream = (services.stream)(handler);
         // Native virtual implementations execute on the caller's C++ frame.
         let valid = if sending {
-            crate::auth::openttd_rust_auth_stream_encrypt(
-                stream.cast(),
-                mac,
-                message,
-                frame.payload,
-            );
+            assert!(isize::try_from(frame.payload).is_ok());
+            (*stream.cast::<crate::auth::Stream>())
+                .encrypt(mac, std::slice::from_raw_parts_mut(message, frame.payload));
             true
         } else {
-            crate::auth::openttd_rust_auth_stream_decrypt(
-                stream.cast(),
-                mac,
-                message,
-                frame.payload,
-            ) != 0
+            assert!(isize::try_from(frame.payload).is_ok());
+            (*stream.cast::<crate::auth::Stream>()).decrypt(
+                &*mac.cast::<[u8; 16]>(),
+                std::slice::from_raw_parts_mut(message, frame.payload),
+            )
         };
         if !sending {
             (&mut *state).finish_read(mac_size);
@@ -552,19 +639,21 @@ unsafe fn crypt(
 /// Read the packet type after the original size assertion and send-handler query.
 /// # Safety
 /// Same live record and service contract as `prepare_to_send`.
-pub unsafe fn get_type(state: *const State, services: &Services, check: extern "C" fn(bool)) -> u8 {
+pub unsafe fn get_type(state: *const State, context: Context<'_>) -> PacketType {
     unsafe {
-        check((*state).size >= 3);
+        (context.check)(
+            (*state).size >= encoded_length_of_packet_size() + encoded_length_of_packet_type(),
+        );
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (services.send_handler)(socket)
+            (context.services.send_handler)(socket)
         };
         let mac = if handler.is_null() {
             0
         } else {
-            (services.mac_size)(handler)
+            (context.services.mac_size)(handler)
         };
         (&*state).packet_type(mac)
     }
@@ -574,18 +663,18 @@ pub unsafe fn get_type(state: *const State, services: &Services, check: extern "
 /// # Safety
 /// State, socket and nonthrowing services are live. Handlers expose a live Rust stream.
 /// No state borrow spans a service call.
-pub unsafe fn prepare_to_send(state: *mut State, services: &Services, check: extern "C" fn(bool)) {
+pub unsafe fn prepare_to_send(state: *mut State, context: Context<'_>) {
     unsafe {
-        (&mut *state).begin_send(check);
+        (&mut *state).begin_send(context.check);
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (services.send_handler)(socket)
+            (context.services.send_handler)(socket)
         };
         if !handler.is_null() {
-            let mac = (services.mac_size)(handler);
-            crypt(state, services, handler, mac, true);
+            let mac = (context.services.mac_size)(handler);
+            crypt(state, context.services, handler, mac, true);
         }
         (&mut *state).finish_send();
     }
@@ -620,7 +709,15 @@ pub unsafe extern "C" fn openttd_rust_packet_get_type(
     services: *const Services,
     check: extern "C" fn(bool),
 ) -> u8 {
-    unsafe { get_type(state, &*services, check) }
+    unsafe {
+        get_type(
+            state,
+            Context {
+                services: &*services,
+                check,
+            },
+        )
+    }
 }
 
 /// Native constructor using the same direct Rust entry as network callers.
@@ -636,7 +733,15 @@ pub unsafe extern "C" fn openttd_rust_packet_init_outgoing(
     limit: usize,
 ) {
     unsafe {
-        state.write(new_outgoing(socket, &*services, check, packet_type, limit));
+        state.write(new_outgoing(
+            socket,
+            Context {
+                services: &*services,
+                check,
+            },
+            packet_type,
+            limit,
+        ));
     }
 }
 
@@ -837,7 +942,13 @@ pub unsafe extern "C" fn openttd_rust_packet_prepare_to_send(
     check: extern "C" fn(bool),
 ) {
     unsafe {
-        prepare_to_send(state, &*services, check);
+        prepare_to_send(
+            state,
+            Context {
+                services: &*services,
+                check,
+            },
+        );
     }
 }
 
@@ -934,9 +1045,18 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_string(
     append: unsafe extern "C" fn(*mut std::ffi::c_void, *const u8, usize),
 ) {
     unsafe {
-        recv_string_into(state, &*services, check, length, settings, |bytes| {
-            append(output, bytes.as_ptr(), bytes.len());
-        });
+        recv_string_into(
+            state,
+            Context {
+                services: &*services,
+                check,
+            },
+            length,
+            StringValidationSettings(settings),
+            |bytes| {
+                append(output, bytes.as_ptr(), bytes.len());
+            },
+        );
     }
 }
 
@@ -1250,7 +1370,7 @@ mod comparison_tests {
                 "{} {} {} {}",
                 (*packet).size,
                 (*packet).remaining(),
-                u8::from((*packet).position >= 2),
+                u8::from((*packet).has_packet_size_data()),
                 u8::from(socket.quit.get())
             );
             let mut copy = MaybeUninit::uninit();
@@ -1734,12 +1854,17 @@ mod comparison_tests {
             openttd_rust_packet_begin_send(packet, asserts);
             let mac = handler.mac_size()?;
             let mut frame = MaybeUninit::uninit();
-            openttd_rust_packet_frame_abi(2, (*packet).size, mac, frame.as_mut_ptr());
+            openttd_rust_packet_frame_abi(
+                prefix(encoded_length_of_packet_size()),
+                (*packet).size,
+                mac,
+                frame.as_mut_ptr(),
+            );
             let frame = frame.assume_init();
             let data = (*packet).data;
             handler.crypt(
                 "encrypt",
-                (data.add(2), mac),
+                (data.add(encoded_length_of_packet_size()), mac),
                 (data.add(frame.message), frame.payload),
                 (0xA1, 0xB2),
             )?;
@@ -1783,7 +1908,9 @@ mod comparison_tests {
     /// packet.cpp's `GetPacketType` with a native send handler.
     unsafe fn native_packet_type(packet: *mut State, handler: &mut Handler) -> Result<u8, Thrown> {
         unsafe {
-            asserts((*packet).size >= 3);
+            asserts(
+                (*packet).size >= encoded_length_of_packet_size() + encoded_length_of_packet_type(),
+            );
             let mac = handler.mac_size()?;
             Ok(openttd_rust_packet_packet_type(packet, mac))
         }

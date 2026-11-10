@@ -197,7 +197,7 @@ pub unsafe extern "C" fn openttd_rust_tcp_receive(
         );
         p = (s.receive_create)(socket, &raw mut value);
     }
-    if unsafe { (*p).position } < 2 {
+    if !unsafe { (*p).has_packet_size_data() } {
         let result = unsafe { read_bytes(s, socket, p, check) };
         if result != Receive::Ready {
             return result;

@@ -211,18 +211,45 @@ fn on_download_complete(s: &Services, cid: u32) {
 }
 
 fn new_packet(s: &Services, kind: u8, limit: usize) -> PacketState {
-    unsafe { packet::new_outgoing(socket(s), s.tcp.packet, check, kind, limit) }
+    unsafe {
+        packet::new_outgoing(
+            socket(s),
+            packet::Context {
+                services: s.tcp.packet,
+                check,
+            },
+            kind,
+            limit,
+        )
+    }
 }
 fn send_packet(s: &Services, mut p: PacketState) {
-    unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, check) };
+    unsafe {
+        packet::prepare_to_send(
+            &raw mut p,
+            packet::Context {
+                services: s.tcp.packet,
+                check,
+            },
+        )
+    };
     (s.tcp.packet_enqueue)(s.client, &raw mut p);
 }
 
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
     unsafe {
-        packet::recv_string_into(p, s.tcp.packet, check, length, settings, |bytes| {
-            append(text, bytes);
-        });
+        packet::recv_string_into(
+            p,
+            packet::Context {
+                services: s.tcp.packet,
+                check,
+            },
+            length,
+            crate::string_type::StringValidationSettings(settings),
+            |bytes| {
+                append(text, bytes);
+            },
+        );
     }
 }
 
