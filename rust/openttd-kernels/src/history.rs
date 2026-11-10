@@ -31,10 +31,9 @@ pub struct Descriptor {
     pub child_division: u8,
 }
 
+/// `HasBit(mask, slot)`, whose C++ `uint8_t` parameter narrows the unsigned index.
 fn has_bit(mask: u64, slot: u32) -> bool {
-    // HasBit's C++ uint8 parameter narrows the unsigned index before shifting.
-    let slot = slot.to_le_bytes()[0];
-    mask & (1_u64 << slot) != 0
+    crate::bitmath_func::has_bit64(mask, slot.to_le_bytes()[0])
 }
 
 fn aggregate(d: Descriptor, age: u32) -> bool {
