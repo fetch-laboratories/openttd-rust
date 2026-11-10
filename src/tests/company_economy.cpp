@@ -90,9 +90,10 @@ TEST_CASE("Company control - native owned-by error encodings")
 	CHECK(tile_error.GetErrorOwner() == CompanyID(3));
 }
 
-/* The company-or-client defaults choice goes through the native settings services; each
- * type's interval field is company::control_tests (#736 F). Retires with the native
- * settings-table services. */
+/* The company-or-client defaults choice goes through the native settings services, and each
+ * type's interval is read from the native VehicleDefaultSettings record they return; the
+ * per-type field selection and the ignored percent flag are company::control_tests (#736 F).
+ * Retires with the native settings-table services. */
 TEST_CASE("Company control - company or client service-interval defaults")
 {
 	REQUIRE(Company::GetNumItems() == 0);
@@ -100,14 +101,11 @@ TEST_CASE("Company control - company or client service-interval defaults")
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
 	REQUIRE(Company::CanAllocateItem());
 	std::unique_ptr<Company> company(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
-	auto &supplied = company->settings.vehicle;
-	for (bool percent : {false, true}) {
-		supplied = {.servint_ispercent = percent, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
-		_settings_client.company.vehicle = {.servint_ispercent = !percent, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
-		for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
-			CHECK(CompanyServiceInterval(company.get(), type) == company_interval);
-			CHECK(CompanyServiceInterval(nullptr, type) == client_interval);
-		}
+	company->settings.vehicle = {.servint_ispercent = false, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
+	_settings_client.company.vehicle = {.servint_ispercent = true, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
+	for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
+		CHECK(CompanyServiceInterval(company.get(), type) == company_interval);
+		CHECK(CompanyServiceInterval(nullptr, type) == client_interval);
 	}
 }
 
