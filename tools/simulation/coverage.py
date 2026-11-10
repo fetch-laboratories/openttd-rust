@@ -98,9 +98,10 @@ def counts(lines: list[Line]) -> Counts:
 
 def source_filters(inventory: list[str], root: Path) -> list[str]:
     # gcovr detects absolute filters by their leading slash, before parsing regex.
+    # It reports resolved source paths, so the filter names the resolved root.
     return [
         "--filter",
-        re.escape(str(root))
+        re.escape(str(root.resolve()))
         + "/(?:"
         + "|".join(re.escape(path) for path in inventory)
         + ")$",

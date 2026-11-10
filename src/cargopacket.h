@@ -114,7 +114,6 @@ public:
 	void AgeCargo();
 	bool Stage(bool accepted, StationID station, std::span<const StationID> next, OrderUnloadType unload, const GoodsEntry *ge, CargoType cargo, CargoPayment *payment, TileIndex tile);
 	void KeepAll();
-	template <MoveToAction Tfrom, MoveToAction Tto> uint Reassign(uint amount);
 	uint Return(uint amount, StationCargoList *dest, StationID next, TileIndex tile);
 	uint Unload(uint amount, StationCargoList *dest, CargoType cargo, CargoPayment *payment, TileIndex tile);
 	uint Shift(uint amount, VehicleCargoList *dest);
