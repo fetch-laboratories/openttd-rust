@@ -203,8 +203,7 @@ pub(crate) fn rotate_history_year<T: HistoryElement>(
 #[allow(unsafe_code)]
 impl HistoryRange {
     unsafe fn descriptor(&self) -> Descriptor {
-        // SAFETY: The native caller keeps the immutable range chain live.
-        let child = unsafe { self.hr.as_ref() };
+        let child = self.hr;
         Descriptor {
             child: usize::from(child.is_some()),
             periods: self.periods,
@@ -222,8 +221,8 @@ impl HistoryRange {
         // SAFETY: The immutable native range chain is live.
         let descriptor = unsafe { self.descriptor() };
         if aggregate(descriptor, age) {
-            // SAFETY: Aggregation requires the live previous subdivision.
-            let child = unsafe { &*self.hr };
+            // SAFETY: Aggregation requires the previous subdivision.
+            let child = unsafe { self.hr.unwrap_unchecked() };
             let month = u32::from(crate::timer_game_common::economy_month());
             // SAFETY: The child retains the enclosing chain's lifetime/preconditions.
             return unsafe { child.is_valid(mask, start(descriptor, age, month)) };
@@ -247,8 +246,8 @@ impl HistoryRange {
             let mut tmp_result = [T::default(); HISTORY_MAX_DIVISION as usize];
             let month = u32::from(crate::timer_game_common::economy_month());
             let start = start(descriptor, age, month);
-            // SAFETY: Aggregation requires the live previous subdivision.
-            let child = unsafe { &*self.hr };
+            // SAFETY: Aggregation requires the previous subdivision.
+            let child = unsafe { self.hr.unwrap_unchecked() };
             for i in 0..self.division {
                 // SAFETY: Each scratch target is distinct; original child ages and slots apply.
                 is_valid |= unsafe {
@@ -359,15 +358,13 @@ mod comparison_tests {
     }
 
     /// The production `HistoryRange` constructors, chained to their parent range.
-    fn initial(periods: u8) -> HistoryRange {
-        HistoryRange::new(periods)
+    /// Each range lives for the rest of the test process, as the original's static ranges do.
+    fn initial(periods: u8) -> &'static HistoryRange {
+        Box::leak(Box::new(HistoryRange::new(periods)))
     }
 
-    fn sub(hr: &HistoryRange, division: u8, periods: u8) -> HistoryRange {
-        HistoryRange {
-            hr: std::ptr::from_ref(hr),
-            ..HistoryRange::subdividing(hr, division, periods)
-        }
+    fn sub(hr: &'static HistoryRange, division: u8, periods: u8) -> &'static HistoryRange {
+        Box::leak(Box::new(HistoryRange::subdividing(hr, division, periods)))
     }
 
     /// The test's only unsafe calls: the production chain queries, over range chains that
@@ -377,8 +374,7 @@ mod comparison_tests {
     #[allow(unsafe_code)]
     impl Live {
         fn child(hr: &HistoryRange) -> Option<&HistoryRange> {
-            // SAFETY: Every chain built here stays live for the test.
-            unsafe { hr.hr.as_ref() }
+            hr.hr
         }
 
         fn descriptor(hr: &HistoryRange) -> Descriptor {
@@ -445,11 +441,11 @@ mod comparison_tests {
     fn history_queries_match_original() {
         let o = oracle::parse(ORACLE);
         let month_range = initial(24);
-        let quarter = sub(&month_range, 3, 24);
-        let year = sub(&quarter, 4, 24);
+        let quarter = sub(month_range, 3, 24);
+        let year = sub(quarter, 4, 24);
         scalars(&o);
-        production(&o, &year);
-        fillers(&o, &quarter);
+        production(&o, year);
+        fillers(&o, quarter);
     }
 
     /// The probe's seven ages: `IsValidHistory`, then `GetHistory` or its fatal.
@@ -484,28 +480,28 @@ mod comparison_tests {
 
     fn scalars(o: &Sections<'_>) {
         let month_range = initial(24);
-        let quarter = sub(&month_range, 3, 24);
-        let year = sub(&quarter, 4, 24);
+        let quarter = sub(month_range, 3, 24);
+        let year = sub(quarter, 4, 24);
         let wide = initial(40);
         let small = initial(2);
-        let middle = sub(&small, 2, 4);
-        let upper = sub(&middle, 2, 5);
-        let fourth = sub(&upper, 1, 5);
+        let middle = sub(small, 2, 4);
+        let upper = sub(middle, 2, 5);
+        let fourth = sub(upper, 1, 5);
         let one = initial(4);
-        let two = sub(&one, 1, 4);
-        let three = sub(&two, 1, 4);
-        let four = sub(&three, 1, 4);
-        let five = sub(&four, 1, 4);
+        let two = sub(one, 1, 4);
+        let three = sub(two, 1, 4);
+        let four = sub(three, 1, 4);
+        let five = sub(four, 1, 4);
         let ranges: [&HistoryRange; 9] = [
-            &month_range,
-            &quarter,
-            &year,
-            &wide,
-            &small,
-            &middle,
-            &fourth,
-            &five,
-            &upper,
+            month_range,
+            quarter,
+            year,
+            wide,
+            small,
+            middle,
+            fourth,
+            five,
+            upper,
         ];
         let masks = [
             0,
@@ -546,7 +542,7 @@ mod comparison_tests {
         let wrapped = (0..12).map(|month| {
             set_month(month);
             let mut result = 999_u16;
-            let valid = Live::get(&plain, u64::MAX, &quarter, 0x5555_5556, &mut result);
+            let valid = Live::get(&plain, u64::MAX, quarter, 0x5555_5556, &mut result);
             let output = valid.map_or_else(
                 || "fatal".to_owned(),
                 |v| format!("{} {result}", u8::from(v)),

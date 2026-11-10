@@ -11,7 +11,7 @@
 #[repr(C)]
 pub struct HistoryRange {
     /// Previous subdivision, or null for the initial range.
-    pub hr: *const Self,
+    pub hr: Option<&'static Self>,
     /// Number of periods for this range.
     pub periods: u8,
     /// Number of records needed for this range.
@@ -30,7 +30,7 @@ impl HistoryRange {
     #[must_use]
     pub const fn new(periods: u8) -> Self {
         Self {
-            hr: std::ptr::null(),
+            hr: None,
             periods,
             records: periods,
             first: 1,
@@ -40,13 +40,12 @@ impl HistoryRange {
         }
     }
     /// `HistoryRange(hr, division, periods)`: a range subdividing `hr`, including the
-    /// original's `uint8_t` narrowing. A constant built here carries only the scalar
-    /// fields; native ranges supply the `hr` chain.
+    /// original's `uint8_t` narrowing. The range keeps `&hr`, so `hr` must outlive it.
     #[must_use]
-    pub const fn subdividing(hr: &Self, division: u8, periods: u8) -> Self {
+    pub const fn subdividing(hr: &'static Self, division: u8, periods: u8) -> Self {
         let records = periods.wrapping_sub((hr.periods / division).wrapping_sub(1));
         Self {
-            hr: std::ptr::null(),
+            hr: Some(hr),
             periods,
             records,
             first: hr.last,
@@ -60,12 +59,12 @@ impl HistoryRange {
 /// Native `HISTORY_PERIODS`: the number of periods each history range reports.
 pub const HISTORY_PERIODS: u8 = 24;
 /// Native `HISTORY_MONTH`.
-pub const HISTORY_MONTH: HistoryRange = HistoryRange::new(HISTORY_PERIODS);
+pub static HISTORY_MONTH: HistoryRange = HistoryRange::new(HISTORY_PERIODS);
 /// Native `HISTORY_QUARTER`.
-pub const HISTORY_QUARTER: HistoryRange =
+pub static HISTORY_QUARTER: HistoryRange =
     HistoryRange::subdividing(&HISTORY_MONTH, 3, HISTORY_PERIODS);
 /// Native `HISTORY_YEAR`.
-pub const HISTORY_YEAR: HistoryRange =
+pub static HISTORY_YEAR: HistoryRange =
     HistoryRange::subdividing(&HISTORY_QUARTER, 4, HISTORY_PERIODS);
 /// Native `HISTORY_MAX_DIVISION`: maximum number of divisions from previous history range.
 pub const HISTORY_MAX_DIVISION: u8 = {
