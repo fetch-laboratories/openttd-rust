@@ -156,7 +156,6 @@ pub struct Services {
     pub write_sprite: extern "C" fn(VehicleRef, u32),
     pub write_first_sprite: extern "C" fn(VehicleRef, u32),
     pub owner: extern "C" fn(VehicleRef) -> *mut State,
-    pub update_delta: extern "C" fn(VehicleRef),
     pub toward: extern "C" fn(VehicleRef, i32, i32) -> u8,
     pub create: extern "C" fn(i32, i32, u8, u8, u32) -> Vehicle,
     pub resolve: extern "C" fn(u32) -> Vehicle,
@@ -191,7 +190,6 @@ pub struct Services {
     pub clear: extern "C" fn(u32, u8),
     pub update_signals: extern "C" fn(),
     pub disasters_enabled: extern "C" fn() -> bool,
-    pub can_allocate: extern "C" fn(usize) -> bool,
     pub town_index: extern "C" fn(*const crate::services::TownHandle) -> u16,
 }
 struct World<'a> {
@@ -729,7 +727,7 @@ impl<'a> World<'a> {
             }
             let town = crate::town::spatial::closest(self.shared, Self::dest(v), u32::MAX);
             (self.s.big_ufo_news)(Self::tile(v), (self.s.town_index)(town));
-            if !(self.s.can_allocate)(2) {
+            if !(unsafe { &*self.s.vehicles }.can_allocate)(2) {
                 return self.delete(v);
             }
             let destroyer = (self.s.create)(
@@ -917,7 +915,7 @@ impl<'a> World<'a> {
         } else {
             2
         };
-        if kind != 7 && !(self.s.can_allocate)(count) {
+        if kind != 7 && !(unsafe { &*self.s.vehicles }.can_allocate)(count) {
             return;
         }
         match kind {
@@ -1137,7 +1135,7 @@ impl<'a> World<'a> {
         (v.vehicle()).write_direction(dir);
         (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         crate::raw_field::write_field!(v.handle, subtype, subtype);
-        (self.s.update_delta)(v.vehicle());
+        (unsafe { &*self.s.vehicles }.update_delta)(v.vehicle());
         crate::raw_field::write_field!(
             v.handle,
             owner,
@@ -1275,7 +1273,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, kind, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, town_index, };
 }
 
 #[cfg(test)]

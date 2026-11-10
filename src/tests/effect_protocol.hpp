@@ -50,6 +50,8 @@ static inline OpenTTDEffectLeaves EffectTestLeaves()
 	static OpenTTDVehicleServices vehicles{};
 	vehicles.first_sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.sprite; };
 	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	vehicles.can_allocate = [](size_t) noexcept { return true; };
+	vehicles.update_delta = [](OpenTTDVehicle *) noexcept {};
 	return {
 		.vehicles = &vehicles,
 		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
@@ -100,9 +102,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	const OpenTTDEffectCreationServices creation{
 		.effect = &leaves,
 		.shared = &services,
-		.can_allocate = [](size_t) noexcept { return true; },
 		.allocate = []() noexcept { auto &w = *effect_test_world; return OpenTTDEffectAllocation{&w, &w.record, w.owner}; },
-		.delta = [](void *) noexcept {},
 	};
 	const auto *previous_creation = openttd_rust_effect_bind(&creation);
 	check(openttd_rust_effect_get_animation(owner.get()) == 0 && openttd_rust_effect_get_substate(owner.get()) == 0);

@@ -33,7 +33,6 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 {
 	static const OpenTTDVehicleArticulatedServices services{
 		.refit = &GetRustVehicleRefitServices(),
-		.pool_available = RustVehicleCanAllocate,
 		.prepare_previous = VehicleArticPreparePrevious, .new_train = VehicleArticNew<Train>, .new_road = VehicleArticNew<RoadVehicle>,
 		.road_length = VehicleArticRoadLength, .copy_roadtype = VehicleArticCopyRoadtype,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,

@@ -12,9 +12,9 @@
   },
   {
     "retires": [
-      "source:src/tests/townname.cpp"
+      "ctest:Town names - dispatch, prefixes, repeated appends and company formatting"
     ],
-    "oracle": "PARTIAL SOURCE TRANSFER ONLY (#736 W). The fixture's expected names from the unchanged pinned generators, not regenerated: all 21 built-in generators at seeds 0 and UINT32_MAX, and Finnish seed 3797316664. townname::generator_tests checks the production Rust generators. townname.cpp keeps the C++ GenerateTownNameString append after existing bytes, repeated appends and the company-name dispatch, at generators 0 and 20 and for the Finnish stem case; these retire with the C++ string-builder facade.",
+    "oracle": "PARTIAL TRANSFER of src/tests/townname.cpp (#736 W), which stays in the build; the retired identity is its reduced test case, now \"Town names - builder append and company formatting\". The fixture's expected names from the unchanged pinned generators, not regenerated: all 21 built-in generators at seeds 0 and UINT32_MAX, and Finnish seed 3797316664. townname::generator_tests checks the production Rust generators. townname.cpp keeps the C++ GenerateTownNameString append after existing bytes, repeated appends and the company-name dispatch, at generators 0 and 20 and for the Finnish stem case; these retire with the C++ string-builder facade.",
     "observations": {
       "Built-in town-name generators: every language at both seed endpoints and the Finnish stem-vowel suffix": [
         "rust:lib:townname::generator_tests::generators_match_original_names"

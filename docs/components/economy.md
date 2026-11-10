@@ -91,7 +91,7 @@
 
 - Rust owns: pickup/delivery maps, bit helpers, activation/query/reset/stop, cleanup and delivery accounting.
 - C++ keeps: script validation, stations/pools, assertions and CMDL/CMPU save/load.
-- Checks: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`, `python3 tools/cargo-income-comparison.py` and native company/payment/ABI tests.
+- Checks: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`, the Rust `cargo_payment::income_tests` and `cargo_payment::settlement_tests` and native company/ABI tests.
 - Limits: Gaps remain in historical monitor-key conversion and external GameScript callers (#156).
 - PRs: #388, integrated in #391.
 

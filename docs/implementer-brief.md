@@ -14,7 +14,7 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 - Write with the original's vocabulary. Each enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`). Use that name wherever the original does; when it is missing, add it there.
 - Carry the original's explanatory comments with every ported body, at the matching branch or operation.
 - Pass a command's arguments as its argument struct, and a helper's shared state as a context struct.
-- Port each original helper once, in the module named after its original file, and call it everywhere.
+- Port each original helper once, in the module named after its original file, and call it everywhere. Rust code calls the typed Rust function, never a `_raw` adapter or an `openttd_rust_*` export that has one ([code standards](porting.md#code-standards)).
 - Cross the C++ boundary through typed `noexcept` services with synchronous calls, allocating only where the original allocates. End Rust borrows before a callback that can reenter Rust.
 - A C++ global or static becomes a process-wide Rust static.
 - Delete the C++ you replace in the same change, with its exports, declarations and service fields.
@@ -26,7 +26,17 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 ## Checks and commits
 
-- Before pushing, run your work order's focused checks, `python3 tools/migration.py rust-checks` and `python3 tools/preflight.py --base origin/rust-migration`. Follow [quick cleanup checks](rust-migration.md#quick-cleanup-checks) for lint/growth ratchets, refactor proof and reviewed exception contracts. Fix failures while preserving the original's operations.
+- Before pushing, run your work order's focused checks and `python3 tools/preflight.py --base origin/rust-migration`, which runs every gate Quick runs. [Quick cleanup checks](rust-migration.md#quick-cleanup-checks) explains each gate and its reviewed exception contracts. Fix failures while preserving the original's operations.
+- Take scenario evidence from CI, not from this host: push, then run `python3 tools/ci.py request PR --profile native` and wait on it in the background ([checks](workflow.md#checks)). Run a scenario locally, by name, only to diagnose a failure.
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
 - Commit coherent steps under titles the preflight commit checker accepts ([commits](workflow.md#commits-and-pushes)). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
 - Finish with what you delivered, what stays in C++, exact commands, limits and the next action.
+
+## Review
+
+Each reviewer tells you in one line when its report is posted, and gives its thread ID. Root relays nothing ([review loop](team.md#review-loop)).
+
+- Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
+- Ask each finding's reviewer to verify, in one line naming the fixing commits, with `t3_thread_send` to its thread ID.
+- When every reviewer accepts, queue the PR under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
+- Ask root only for a fresh reviewer after a substantive rewrite or a base update that needs one, or when you and a reviewer disagree.

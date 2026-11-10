@@ -5,6 +5,9 @@ on:
     branches: [rust-migration]
   push:
     branches: [rust-migration]
+  # A required check must report on each merge group too; Full calls this workflow there.
+  merge_group:
+    branches: [rust-migration]
   workflow_call:
     inputs:
       checkout-ref:
@@ -25,6 +28,7 @@ concurrency:
 jobs:
   quick:
     name: Quick validation
+    if: inputs.checkout-ref != '' || github.event_name != 'merge_group'
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v6
@@ -46,8 +50,70 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/lint-ratchet.py clippy --base-ref "$BASE_REF"
+    # The shared apt-install action's script, inline: on a pull request this job checks
+    # out the PR head, and a branch older than a local action does not contain it. #862
+    # used the action here, and Quick then failed on every such branch (#863).
+    # tools/test-ci.py keeps this script identical to the action's.
     - name: Install nested collection probe dependency
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends valgrind
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        PACKAGES: valgrind
+        RECOMMENDS: 'false'
+      run: |
+        # Each mirror fails at times. Azure trickled at about 40 kB/s without timing out
+        # (#858's Full spent 6 minutes on 46 MB), and Canonical's archive timed out three
+        # times in 30 minutes (#833, #841). The first two attempts get 60 seconds per
+        # command, and a failed one retries without Azure. The last attempt has no bound
+        # of its own, as the plain install had none: a slow install beats a failed job.
+        # #862's first two Fulls lost their Emscripten job to bounded last attempts, with
+        # security.ubuntu.com timing out and the index arriving at 159 kB/s. So the two
+        # bounded attempts can cost four minutes, and nothing else is lost against the
+        # plain install; the calling job's own limit still applies. apt keeps what an
+        # interrupted attempt downloaded.
+        sudo=$(command -v sudo || true)
+        read -r -a packages <<< "$PACKAGES"
+        options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+        install=(install -y)
+        if [ "$RECOMMENDS" != true ]; then
+          # Recommended desktop packages (GTK, Vulkan drivers) only slow every job.
+          install+=(--no-install-recommends)
+        fi
+        sources() {
+          { cat /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; } | sha256sum
+        }
+        $sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
+        updated=false
+        for attempt in 1 2 3; do
+          bounded=($sudo timeout 60)
+          if [ "$attempt" = 3 ]; then
+            bounded=($sudo)
+          fi
+          if [ "$updated" = false ] && "${bounded[@]}" apt-get "${options[@]}" update; then
+            updated=true
+          fi
+          if [ "$updated" = true ] &&
+             "${bounded[@]}" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
+            break
+          fi
+          if [ "$attempt" = 3 ]; then
+            exit 1
+          fi
+          echo "::warning::apt attempt $attempt failed or stalled; retrying without the Azure mirror"
+          before=$(sources)
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            $sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          fi
+          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$file" ]; then
+              $sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' "$file"
+            fi
+          done
+          # An index fetched from the sources still in use stays valid.
+          if [ "$(sources)" != "$before" ]; then
+            updated=false
+          fi
+        done
+        $sudo apt-get "${options[@]}" "${install[@]}" "${packages[@]}"
     - name: Python formatting, lint and maintenance regression checks
       run: |
         uvx --from ruff==0.16.8 ruff check tools/

@@ -129,8 +129,11 @@ def destination_errors(
 
 
 def errors(
-    records: Sequence[Replacement], default: Sequence[str] | None, root: Path = ROOT
+    records: Sequence[Replacement],
+    default: Sequence[str] | None,
+    root: Path | None = None,
 ) -> list[str]:
+    root = ROOT if root is None else root
     found = []
     owners: set[str] = set()
     for record in records:
@@ -142,6 +145,14 @@ def errors(
             if retired in owners:
                 found.append(f"duplicate replacement owner: {retired}")
             owners.add(retired)
+            # CMake drops every retired source from its target, so a partial
+            # transfer that names a kept file would silently stop building
+            # its remaining cases; partial transfers retire ctest: names.
+            if (
+                retired.startswith("source:")
+                and (root / retired.removeprefix("source:")).exists()
+            ):
+                found.append(f"retired source still exists: {retired}")
     for check in sorted(destinations(records)):
         found.extend(destination_errors(check, default, root))
     # Reference CTest verification runs before simulation: its replacement must

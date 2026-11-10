@@ -54,7 +54,6 @@ struct OpenTTDDisasterServices {
 	void (OPENTTD_RUST_CALL *write_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_sprite);
 	void (OPENTTD_RUST_CALL *write_first_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_sprite);
 	OpenTTDDisasterState *(OPENTTD_RUST_CALL *owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
-	void (OPENTTD_RUST_CALL *update_delta)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	uint8_t (OPENTTD_RUST_CALL *toward)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(toward);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *create)(int32_t, int32_t, uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(create);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *resolve)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
@@ -89,7 +88,6 @@ struct OpenTTDDisasterServices {
 	void (OPENTTD_RUST_CALL *clear)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (OPENTTD_RUST_CALL *update_signals)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals);
 	bool (OPENTTD_RUST_CALL *disasters_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(disasters_enabled);
-	bool (OPENTTD_RUST_CALL *can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (OPENTTD_RUST_CALL *town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 };
 /* Tables are immutable and live through each synchronous entry and reentry.

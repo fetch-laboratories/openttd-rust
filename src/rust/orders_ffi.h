@@ -75,8 +75,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*needs_service)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(needs_service);
 	uint64_t (*remaining_years)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(remaining_years);
 	uint64_t (*airport_tile)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	uint64_t (*base_station_tile)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(base_station_tile);
-	uint64_t (*station_tile)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
 	uint64_t (*depot_tile)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(depot_tile);
 	uint64_t (*distance)(uint32_t first, uint32_t second, uint8_t square) noexcept OPENTTD_SERVICE_DEFAULT(distance);
 	uint64_t (*station_location)(void *ctx, uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(station_location);
@@ -234,8 +232,6 @@ uint64_t openttd_orders_age_years(void *ctx) noexcept;
 uint64_t openttd_orders_needs_service(void *ctx) noexcept;
 uint64_t openttd_orders_remaining_years(void *ctx) noexcept;
 uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept;
-uint64_t openttd_orders_base_station_tile(uint16_t destination) noexcept;
-uint64_t openttd_orders_station_tile(uint16_t destination) noexcept;
 uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept;
 uint64_t openttd_orders_destination_tile(void *ctx) noexcept;
 uint64_t openttd_orders_aircraft_flying(void *ctx) noexcept;

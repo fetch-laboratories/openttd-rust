@@ -15,7 +15,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.loading = []() noexcept { return &GetRustEngineLoadingServices(); },
 		.cargo_classes = RustCargoClasses,
 		.multiplier = RustCargoMultiplier,
-		.pool_available = RustVehicleCanAllocate,
 		.new_temporary = EngineTemporaryNew,
 		.destroy_temporary = GetRustVehicleServices().destroy,
 		.vehicle_engine_object = RustVehicleGetEngine,

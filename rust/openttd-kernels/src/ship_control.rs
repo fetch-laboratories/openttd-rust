@@ -179,10 +179,7 @@ pub struct Leaves {
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
-    pub station_xy: extern "C" fn(u32) -> u32,
     pub station_dock: extern "C" fn(u32) -> bool,
-    pub station_visits: extern "C" fn(u32) -> u32,
-    pub visit_set: extern "C" fn(u32, u32),
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
@@ -621,9 +618,9 @@ impl Game<'_> {
         false
     }
     fn arrives(&self, id: u32, station: u32) {
-        let visits = (self.leaves.station_visits)(station);
-        if visits & 32 == 0 {
-            (self.leaves.visit_set)(station, 32);
+        let hvot_ship = crate::station_type::StationHadVehicleOfType::HVOT_SHIP.0;
+        if (self.services.station_had_vehicle_of_type)(station as u16) & hvot_ship == 0 {
+            (self.services.station_add_vehicle_of_type)(station as u16, hvot_ship);
             (self.leaves.arrival)(id, station);
         }
     }
@@ -1049,7 +1046,7 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
                 crate::newgrf_airport::runtime(),
             )
         } {
-            (game.leaves.station_xy)(station)
+            (game.services.station_xy)(station as u16)
         } else {
             (game.leaves.order_increment)(id);
             0
@@ -1171,10 +1168,7 @@ crate::abi::layouts! {
         station,
         industry_station,
         oilrig,
-        station_xy,
         station_dock,
-        station_visits,
-        visit_set,
         arrival,
         leave_unbunch,
         path_result,

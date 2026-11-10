@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
+import cleanup_contract
 from baseline_ratchet import debt_errors
 from cleanup_contract import associated_pull, reviewed, source_reviews
 from rust_syntax import boundary_ids
@@ -40,20 +41,24 @@ PROOF = load("refactor-proof")
 
 
 class DebtTests(unittest.TestCase):
-    def test_new_grown_stale_and_baseline_growth(self) -> None:
+    def test_only_growth_fails(self) -> None:
         baseline = {"one item/site": [101, 102]}
         self.assertFalse(debt_errors(baseline, baseline, baseline))
-        for changed in (
+        for grown in (
             {"other site": [101]},
             {"one item/site": [101, 103]},
             {"one item/site": [101, 102, 102]},
-            {},
         ):
-            self.assertTrue(debt_errors(changed, baseline, baseline))
+            self.assertTrue(debt_errors(grown, baseline, baseline))
+        # Improvements and retired rows pass whether or not they are recorded.
+        for improved in ({}, {"one item/site": [101]}, {"one item/site": [100, 101]}):
+            self.assertFalse(debt_errors(improved, baseline, baseline))
+            self.assertFalse(debt_errors(improved, improved, baseline))
+        # The recorded file may not grow past what base allows.
         self.assertTrue(debt_errors({"new": [1]}, {"new": [1]}, {}))
         self.assertTrue(
             debt_errors(
-                {"one item/site": [101]},
+                {"one item/site": [100]},
                 {"one item/site": [101]},
                 {"one item/site": [100]},
             )
@@ -94,46 +99,15 @@ class DebtTests(unittest.TestCase):
 
     def test_rust_identity_survives_lines_and_qualifies_impl(self) -> None:
         text = "impl A { unsafe fn run() { use_it(); } }\nimpl B { fn run() {} }"
-        start = text.index("fn run")
-        key, _ = LINT.rust_site("x.rs", text, start, start + 8, "missing_safety_doc")
-        moved = "// extra line\n\n" + text
-        key2, _ = LINT.rust_site(
-            "x.rs",
-            moved,
-            moved.index("fn run"),
-            moved.index("fn run") + 8,
-            "missing_safety_doc",
+        key = LINT.rust_site("x.rs", text, text.index("fn run"), "missing_safety_doc")
+        moved = "// extra line\n\n" + text.replace("use_it();", "use_it(); more();")
+        key2 = LINT.rust_site(
+            "x.rs", moved, moved.index("fn run"), "missing_safety_doc"
         )
         self.assertEqual(key, key2)
-        a = LINT.rust_site(
-            "x.rs",
-            text,
-            text.index("fn run"),
-            text.index("fn run") + 6,
-            "too_many_lines",
-        )[0]
-        b = LINT.rust_site(
-            "x.rs",
-            text,
-            text.rindex("fn run"),
-            text.rindex("fn run") + 6,
-            "too_many_lines",
-        )[0]
+        a = LINT.rust_site("x.rs", text, text.index("fn run"), "too_many_arguments")
+        b = LINT.rust_site("x.rs", text, text.rindex("fn run"), "too_many_arguments")
         self.assertNotEqual(a, b)
-
-    def test_nesting_magnitude_ignores_earlier_deeper_blocks(self) -> None:
-        old = "fn work() { if a { if b { if c { deeper(); } } } if d { work(); } }"
-        start = old.index("{ work();")
-        key, magnitude = LINT.rust_site(
-            "x.rs", old, start, start + 11, "excessive_nesting"
-        )
-        new = old.replace("if d { work(); }", "if d { if e { work(); } }")
-        other = new.index("{ work();")
-        key2, grown = LINT.rust_site(
-            "x.rs", new, other, other + 11, "excessive_nesting"
-        )
-        self.assertEqual(key, key2)
-        self.assertEqual(grown, magnitude + 1)
 
     def test_clippy_deduplicates_targets_but_preserves_two_sites(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -157,26 +131,23 @@ class DebtTests(unittest.TestCase):
                         {
                             "reason": "compiler-message",
                             "message": {
-                                "code": {"code": "clippy::excessive_nesting"},
-                                "message": "this block is too deeply nested",
+                                "code": {"code": "clippy::too_many_arguments"},
+                                "message": "this function has too many arguments (8/7)",
                                 "spans": [span],
                             },
                         }
                     )
                 )
             rows = LINT.clippy_rows("\n".join(records * 2), root)
-            self.assertEqual(list(rows.values()), [[2, 2]])
-            self.assertTrue(debt_errors(LINT.clippy_rows(records[0], root), rows, rows))
+            self.assertEqual(list(rows.values()), [[8, 8]])
+            self.assertTrue(debt_errors(rows, rows, LINT.clippy_rows(records[0], root)))
 
     def test_only_retained_clippy_families_are_collected_and_ratcheted(self) -> None:
-        retained = {
-            "too_many_lines": 101,
-            "too_many_arguments": 8,
-            "cognitive_complexity": 26,
-            "excessive_nesting": 6,
-            "missing_safety_doc": 1,
-        }
+        retained = {"too_many_arguments": 8, "missing_safety_doc": 1}
         removed = (
+            "too_many_lines",
+            "cognitive_complexity",
+            "excessive_nesting",
             "cast_possible_truncation",
             "cast_sign_loss",
             "cast_possible_wrap",
@@ -213,7 +184,7 @@ class DebtTests(unittest.TestCase):
                         continue
                     self.assertEqual(list(rows.values()), [[magnitude]])
                     self.assertFalse(debt_errors(rows, rows, rows))
-                    self.assertTrue(debt_errors({}, rows, rows))
+                    self.assertFalse(debt_errors({}, rows, rows))
                     key = next(iter(rows))
                     self.assertTrue(debt_errors({key: [magnitude + 1]}, rows, rows))
 
@@ -590,6 +561,150 @@ class GrowthTests(unittest.TestCase):
         self.assertEqual(associated_pull([wrong, merged], "tested"), merged)
         self.assertIsNone(associated_pull([wrong], "tested"))
 
+    def pr_context(
+        self,
+        pulls: Mapping[str, list[dict[str, object]]],
+        unknown: frozenset[str] = frozenset(),
+        event: Mapping[str, object] | None = None,
+    ) -> str:
+        """Run `context` on a two-parent HEAD with no network.
+
+        GitHub's commit lookup fails for the `unknown` commits, as it does for an
+        unpushed local merge. Without an `event` payload there is no event file.
+        """
+        shas = {"HEAD": "merge", "HEAD^1": "first", "HEAD^2": "second"}
+
+        def fake_git(*args: str) -> str:
+            if args[:2] == ("rev-list", "--parents"):
+                return "merge first second\n"
+            assert args[0] == "rev-parse", args
+            return shas[args[1]] + "\n"
+
+        def fake_gh(*args: str, capture_stderr: bool = False) -> str:
+            route = args[1].removeprefix("repos/fork/")
+            if route.startswith("commits/"):
+                sha = route.split("/")[1]
+                if sha in unknown:
+                    raise subprocess.CalledProcessError(1, ["gh", *args])
+                return json.dumps(pulls.get(sha, []))
+            number = int(route.removeprefix("pulls/"))
+            head = next(
+                pull["head"]
+                for found in pulls.values()
+                for pull in found
+                if pull["number"] == number
+            )
+            return json.dumps({"head": head, "body": f"PR {number}"})
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict("os.environ", {"GITHUB_REPOSITORY": "fork"}) as environment,
+            patch.object(cleanup_contract, "git", fake_git),
+            patch.object(cleanup_contract, "gh", fake_gh),
+            patch.object(cleanup_contract, "discussion", return_value=[]),
+            patch.object(cleanup_contract, "source_reviews", return_value=[]),
+            patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
+        ):
+            environment.pop("GITHUB_EVENT_PATH", None)
+            if event is not None:
+                path = Path(directory) / "event.json"
+                path.write_text(json.dumps(event))
+                environment["GITHUB_EVENT_PATH"] = str(path)
+            _, bodies, _, head = cleanup_contract.context()
+        return f"{bodies[0] if bodies else None} at {head}"
+
+    def test_local_merge_head_reads_its_own_pr(self) -> None:
+        # A local `Update: Merge integration N` merge is the PR head; its second
+        # parent is the base branch, which has no associated PR head.
+        own: dict[str, object] = {
+            "number": 7,
+            "head": {"sha": "merge"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"merge": [own]}), "PR 7 at merge")
+
+    def test_ci_merge_checkout_reads_second_parent_pr(self) -> None:
+        # CI's synthetic merge commit has no PR; its second parent is the PR head.
+        pr: dict[str, object] = {
+            "number": 9,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(self.pr_context({"second": [pr]}), "PR 9 at second")
+        self.assertEqual(self.pr_context({}), "None at second")
+        # A push of the merge to the base branch reads the PR it merged.
+        merged: dict[str, object] = {
+            "number": 4,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "merge",
+        }
+        self.assertEqual(self.pr_context({"second": [merged]}), "PR 4 at second")
+
+    def test_merge_group_reads_the_queued_pr(self) -> None:
+        # Full in the merge queue checks out the group commit: its first parent is
+        # the base or the group of the PR queued ahead, its second this PR's head.
+        # GitHub associates no PR with an unmerged group commit.
+        event = {"merge_group": {"head_sha": "merge", "base_ref": "refs/heads/x"}}
+        queued: dict[str, object] = {
+            "number": 12,
+            "head": {"sha": "second"},
+            "state": "open",
+        }
+        self.assertEqual(
+            self.pr_context({"second": [queued]}, event=event), "PR 12 at second"
+        )
+        # A second queued entry: the PR ahead already merged as the first parent.
+        ahead: dict[str, object] = {
+            "number": 11,
+            "head": {"sha": "ahead"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "first",
+        }
+        pulls = {"first": [ahead], "second": [queued]}
+        self.assertEqual(self.pr_context(pulls, event=event), "PR 12 at second")
+        # The PR ahead still queued is never read in place of this one.
+        self.assertEqual(
+            self.pr_context(
+                {"first": [dict(ahead, state="open")], "second": [queued]}, event=event
+            ),
+            "PR 12 at second",
+        )
+
+    def test_unknown_head_lookup_is_no_pr(self) -> None:
+        # GitHub errors for an unpushed commit; that is no PR, not an abort.
+        self.assertEqual(
+            self.pr_context({}, unknown=frozenset({"merge"})), "None at second"
+        )
+
+    def test_unpushed_local_merge_reads_first_parent_pr(self) -> None:
+        # The first parent is the open PR's pushed head and the second is the base,
+        # whose own merged PR (merged by another commit) must never match.
+        own: dict[str, object] = {
+            "number": 5,
+            "head": {"sha": "first"},
+            "state": "open",
+        }
+        base: dict[str, object] = {
+            "number": 3,
+            "head": {"sha": "second"},
+            "state": "closed",
+            "merged_at": "date",
+            "merge_commit_sha": "base-merge",
+        }
+        self.assertEqual(
+            self.pr_context(
+                {"first": [own], "second": [base]}, unknown=frozenset({"merge"})
+            ),
+            "PR 5 at first",
+        )
+        self.assertEqual(
+            self.pr_context({"second": [base]}, unknown=frozenset({"merge"})),
+            "None at second",
+        )
+
     def test_review_requires_head_payload_and_different_agent(self) -> None:
         delta = {"counter": "exports", "old": 1, "new": 2, "added": {"x": 1}}
         proposal = dict(
@@ -615,21 +730,72 @@ class GrowthTests(unittest.TestCase):
             [report("/review", "a" * 40)],
         ):
             self.assertFalse(
-                GROWTH.accepted(delta, [proposal], comments, "/implementation", "head")
+                GROWTH.accepted(
+                    delta, ("/implementation", [proposal], comments, "head")
+                )
             )
         self.assertTrue(
             GROWTH.accepted(
                 delta,
-                [proposal],
-                [report("/review", "head")],
-                "/implementation",
-                "head",
+                ("/implementation", [proposal], [report("/review", "head")], "head"),
             )
         )
         changed = dict(proposal, reason="different operation")
         self.assertFalse(
             reviewed(changed, [report("/review", "head")], "/implementation", "head")
         )
+
+    def test_growth_acceptance_holds_while_its_source_is_unchanged(self) -> None:
+        earlier, missing = "a" * 40, "b" * 40
+        records = {
+            earlier: {"abi-record-x.h": "struct X { int a; };"},
+            "HEAD": {"abi-record-x.h": "struct X { int a; };", "abi-record-y.h": ""},
+        }
+        files = {(earlier, "tools/x.cpp"): "int x;", ("HEAD", "tools/x.cpp"): "int x;"}
+
+        def check(counter: str, key: str, edits: Mapping[str, str]) -> bool:
+            delta = {"counter": counter, "old": 1, "new": 2, "added": {key: 1}}
+            proposal = dict(
+                delta,
+                kind="growth",
+                reason="source contract",
+                existing_alternatives="none available",
+                retiring_owner="owner",
+                retirement_condition="native shell removed",
+            )
+            comment = (
+                "Agent: /review | Model: gpt-6.1-sol | Reasoning effort: high\n"
+                "```cleanup-acceptance\n"
+                + json.dumps({"head": edits.get("at", earlier), "accept": [proposal]})
+                + "\n```"
+            )
+            current = {rev: dict(rows) for rev, rows in records.items()}
+            current["HEAD"].update({k: v for k, v in edits.items() if k != "at"})
+            text = dict(files)
+            text.update({("HEAD", k): v for k, v in edits.items() if k != "at"})
+            with (
+                patch.object(GROWTH, "known", lambda rev: rev != missing),
+                patch.object(GROWTH.METRICS, "generated_records", current.__getitem__),
+                patch.object(GROWTH.METRICS, "show", lambda r, p: text.get((r, p), "")),
+            ):
+                return GROWTH.accepted(
+                    delta, ("/implementation", [proposal], [comment], "new-head")
+                )
+
+        self.assertTrue(check("generated_records", "abi-record-x.h", {}))
+        self.assertFalse(
+            check(
+                "generated_records",
+                "abi-record-x.h",
+                {"abi-record-x.h": "struct X { int b; };"},
+            )
+        )
+        self.assertFalse(check("generated_records", "abi-record-y.h", {}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": missing}))
+        self.assertFalse(check("generated_records", "abi-record-x.h", {"at": "short"}))
+        self.assertTrue(check("tools_cpp", "tools/x.cpp", {}))
+        self.assertFalse(check("tools_cpp", "tools/x.cpp", {"tools/x.cpp": "int y;"}))
+        self.assertFalse(check("exports", "tools/x.cpp", {}))
 
 
 def acceptance_comment(head: str, proposal: Mapping[str, object]) -> str:
@@ -655,84 +821,232 @@ def commit(root: Path) -> str:
     return git("rev-parse", "HEAD", cwd=root).strip()
 
 
+Item = tuple[str, ...]
+
+
+def items(keys: Mapping[str, object]) -> set[Item]:
+    return {tuple(key.split(" | ")[:2]) for key in keys}
+
+
 class CarryTests(unittest.TestCase):
-    OLD = "rust/a.rs | fn curve_limit | too_many_lines | 4a33eacd5fa65f2b2e28"
-    NEW = "rust/a.rs | fn get_curve_speed_limit | too_many_lines | 4a33eacd5fa65f2b2e28"
+    OLD = "rust/a.rs | fn curve_limit | too_many_arguments | 4a33eacd5fa65f2b2e28"
+    NEW = "rust/a.rs | fn get_curve_speed_limit | too_many_arguments | 4a33eacd5fa65f2b2e28"
 
     def ratchet(
-        self, previous: dict[str, list[int]], head: dict[str, list[int]], *carries: dict
+        self,
+        previous: dict[str, list[int]],
+        head: dict[str, list[int]],
+        *carries: dict,
+        recorded: dict[str, list[int]] | None = None,
+        at_base: set[Item] | None = None,
+        at_head: set[Item] | None = None,
     ) -> tuple[list[str], str]:
+        """Run the check; items default to those the debt rows name."""
+        base_items = items(previous) if at_base is None else at_base
+        head_items = items(head) if at_head is None else at_head
+
+        def exists(kind: str, key: str, revision: str | None) -> bool:
+            item = tuple(key.split(" | ")[:2])
+            return item in (base_items if revision else head_items)
+
         output = io.StringIO()
         with (
             patch.object(
                 LINT, "context", return_value=("/impl", list(carries), [], "h")
             ),
+            patch.object(LINT, "item_exists", exists),
             contextlib.redirect_stdout(output),
         ):
-            allowed = LINT.reviewed_debt("clippy", head, previous, head)
-        return debt_errors(head, head, allowed), output.getvalue()
+            measured, stored = LINT.check(
+                "clippy", head, head if recorded is None else recorded, previous, "b"
+            )
+        return measured + stored, output.getvalue()
 
     @staticmethod
     def carry(old: str, new: str, tool: str = "clippy") -> dict[str, str]:
         return {"kind": "carry", "tool": tool, "from": old, "to": new}
 
-    def test_rename_move_and_changed_nesting_fingerprint_carry(self) -> None:
-        moved = self.NEW.replace("rust/a.rs", "rust/curve.rs")
-        nest = "rust/a.rs | fn curve_limit | excessive_nesting | 2839a77535b6b381d6fa"
-        renamed = "rust/a.rs | fn model | excessive_nesting | 0000000000aaaaaaaaaa"
-        for old, new, values in (
-            (self.OLD, self.NEW, [281]),
-            (self.OLD, moved, [281]),
-            (nest, renamed, [6]),
-        ):
-            with self.subTest(new=new):
-                errors, _ = self.ratchet(
-                    {old: values}, {new: values}, self.carry(old, new)
-                )
+    def test_unambiguous_rename_and_move_need_no_carry(self) -> None:
+        moved = self.OLD.replace("rust/a.rs", "rust/curve.rs")
+        for new, values in ((self.NEW, [9]), (moved, [9]), (self.NEW, [8])):
+            with self.subTest(new=new, values=values):
+                errors, printed = self.ratchet({self.OLD: [9]}, {new: values})
                 self.assertEqual(errors, [])
-        # The check prints a ready record for a one-to-one same-lint pair.
-        errors, printed = self.ratchet({self.OLD: [281]}, {self.NEW: [281]})
-        self.assertTrue(errors)
-        self.assertIn(
-            "ready carry: " + json.dumps(self.carry(self.OLD, self.NEW)), printed
-        )
+                self.assertIn(f"carried: {self.OLD} -> {new}", printed)
 
-    def test_invalid_ratchet_carries_fail(self) -> None:
-        other = self.NEW.replace("too_many_lines", "too_many_arguments")
+    def test_pairing_needs_a_real_rename(self) -> None:
+        # Both functions exist at base and head; one improves and the other grows.
+        both = items({self.OLD: 0, self.NEW: 0})
+        errors, _ = self.ratchet(
+            {self.OLD: [8]}, {self.NEW: [8]}, at_base=both, at_head=both
+        )
+        self.assertTrue(errors)
+        # The new item existed at base: an existing function grew.
+        errors, _ = self.ratchet({self.OLD: [8]}, {self.NEW: [8]}, at_base=both)
+        self.assertTrue(errors)
+        # The old item still exists at head: it improved, and something else grew.
+        errors, _ = self.ratchet({self.OLD: [8]}, {self.NEW: [8]}, at_head=both)
+        self.assertTrue(errors)
+        # A different file and a different name never pair without a carry.
+        far = self.NEW.replace("rust/a.rs", "rust/b.rs")
+        errors, printed = self.ratchet({self.OLD: [8]}, {far: [8]})
+        self.assertTrue(errors)
+        errors, _ = self.ratchet({self.OLD: [8]}, {far: [8]}, self.carry(self.OLD, far))
+        self.assertEqual(errors, [])
+
+    def test_rename_is_recorded_once(self) -> None:
+        # Recorded under its new key only: passes.
+        self.assertEqual(self.ratchet({self.OLD: [9]}, {self.NEW: [9]})[0], [])
+        # Old row left behind: the next change could restore the old item.
+        for recorded in ({self.OLD: [9]}, {self.OLD: [9], self.NEW: [9]}):
+            with self.subTest(recorded=recorded):
+                errors, _ = self.ratchet(
+                    {self.OLD: [9]}, {self.NEW: [9]}, recorded=recorded
+                )
+                self.assertIn(
+                    f"rename not recorded: {self.OLD}; run with --write", errors
+                )
+
+    def test_stale_rows_allow_nothing_new(self) -> None:
+        # The base file still lists an item that no longer exists at base.
+        errors, _ = self.ratchet(
+            {self.OLD: [9]}, {}, recorded={self.OLD: [9]}, at_base=set()
+        )
+        self.assertEqual(errors, [])
+        errors, _ = self.ratchet({self.OLD: [9]}, {self.OLD: [9]}, at_base=set())
+        self.assertTrue(errors)
+        # An improvement left unrecorded keeps its row and still passes.
+        errors, _ = self.ratchet(
+            {self.OLD: [9]}, {self.OLD: [8]}, recorded={self.OLD: [9]}
+        )
+        self.assertEqual(errors, [])
+
+    def test_ambiguous_renames_pair_by_item_then_file_or_need_a_carry(self) -> None:
+        other_old = self.OLD.replace("curve_limit", "brake_limit")
+        other_new = self.NEW.replace("get_curve_speed_limit", "get_brake_limit")
+        moved = other_old.replace("rust/a.rs", "rust/b.rs")
+        # A move keeps its item name, so it pairs even beside a rename.
+        errors, _ = self.ratchet(
+            {self.OLD: [9], other_old: [10]}, {self.NEW: [9], moved: [10]}
+        )
+        self.assertEqual(errors, [])
+        # Two renames in one file are ambiguous and need declared carries.
+        previous = {self.OLD: [9], other_old: [9]}
+        head = {self.NEW: [9], other_new: [9]}
+        errors, printed = self.ratchet(previous, head)
+        self.assertTrue(errors)
+        self.assertIn("carry candidates", printed)
+        errors, _ = self.ratchet(
+            previous,
+            head,
+            self.carry(self.OLD, self.NEW),
+            self.carry(other_old, other_new),
+        )
+        self.assertEqual(errors, [])
+
+    def test_growth_and_invalid_carries_fail(self) -> None:
+        other = self.NEW.replace("too_many_arguments", "missing_safety_doc")
         for previous, head, carry in (
-            ({self.OLD: [281]}, {self.NEW: [292]}, self.carry(self.OLD, self.NEW)),
+            ({self.OLD: [9]}, {self.NEW: [10]}, self.carry(self.OLD, self.NEW)),
             (
-                {self.OLD: [281]},
-                {self.OLD: [281], self.NEW: [281]},
+                {self.OLD: [9]},
+                {self.OLD: [9], self.NEW: [9]},
                 self.carry(self.OLD, self.NEW),
             ),
             (
-                {self.OLD: [281], self.NEW: [120]},
-                {self.NEW: [281]},
+                {self.OLD: [9], self.NEW: [8]},
+                {self.NEW: [9]},
                 self.carry(self.OLD, self.NEW),
             ),
-            ({self.OLD: [8]}, {other: [8]}, self.carry(self.OLD, other)),
-            (
-                {self.OLD: [281]},
-                {self.NEW: [281]},
-                self.carry(self.OLD, self.NEW, "ruff"),
-            ),
+            ({self.OLD: [1]}, {other: [1]}, self.carry(self.OLD, other)),
         ):
             with self.subTest(head=head, carry=carry):
                 errors, printed = self.ratchet(previous, head, carry)
                 self.assertTrue(errors)
-                self.assertEqual(carry["tool"] == "clippy", "invalid carry" in printed)
+                self.assertIn("invalid carry", printed)
 
     def test_carries_cannot_multiply_retired_debt(self) -> None:
         other = self.NEW.replace("get_curve_speed_limit", "another")
         for head, carries in (
-            ({self.NEW: [281, 281]}, [self.carry(self.OLD, self.NEW)]),
+            ({self.NEW: [9, 9]}, [self.carry(self.OLD, self.NEW)]),
+            ({self.NEW: [9], other: [9]}, []),
             (
-                {self.NEW: [281], other: [281]},
+                {self.NEW: [9], other: [9]},
                 [self.carry(self.OLD, self.NEW), self.carry(self.OLD, other)],
             ),
         ):
-            self.assertTrue(self.ratchet({self.OLD: [281]}, head, *carries)[0])
+            self.assertTrue(self.ratchet({self.OLD: [9]}, head, *carries)[0])
+
+    def test_merge_base_needs_common_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"a.txt": "a\n"})
+            first = git("rev-parse", "HEAD", cwd=root).strip()
+            git("checkout", "-q", "--orphan", "unrelated", cwd=root)
+            (root / "a.txt").write_text("b\n")
+            git("add", "-A", cwd=root)
+            commit(root)
+            git("checkout", "-q", "--detach", first, cwd=root)
+            with patch.object(LINT, "git", partial(git, cwd=root)):
+                self.assertEqual(LINT.merge_base(first), first)
+                with self.assertRaises(SystemExit):
+                    LINT.merge_base("unrelated")
+
+    def test_write_records_a_rename_found_by_the_check(self) -> None:
+        signature = "(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}\n"
+        old = "rust/a.rs | fn curve_limit | too_many_arguments | " + LINT.ITEM
+        new = old.replace("curve_limit", "get_curve_speed_limit")
+        debt = {"schema": 1, "version": "1.99.0", "inventory_head": "x"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(
+                root,
+                {
+                    "rust/a.rs": "fn curve_limit" + signature,
+                    "migration/clippy-debt.json": json.dumps(
+                        {**debt, "sites": {old: [8]}}
+                    ),
+                },
+            )
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            text = "fn get_curve_speed_limit" + signature
+            (root / "rust/a.rs").write_text(text)
+            commit(root)
+            span = {
+                "is_primary": True,
+                "file_name": "rust/a.rs",
+                "byte_start": 0,
+                "byte_end": len(text.encode()),
+            }
+            replay = root / "clippy.json"
+            replay.write_text(
+                json.dumps(
+                    {
+                        "reason": "compiler-message",
+                        "message": {
+                            "code": {"code": "clippy::too_many_arguments"},
+                            "message": "this function has too many arguments (8/7)",
+                            "spans": [span],
+                        },
+                    }
+                )
+            )
+            argv = ["lint-ratchet.py", "clippy", "--base-ref", base, "--input"]
+            results = []
+            for extra in ([], ["--write"], []):
+                LINT.item_names.cache_clear()
+                with (
+                    patch.object(LINT, "ROOT", root),
+                    patch.object(LINT, "git", partial(git, cwd=root)),
+                    patch.object(LINT, "context", return_value=("", [], [], "h")),
+                    patch("sys.argv", [*argv, str(replay), *extra]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    results.append(LINT.main())
+            LINT.item_names.cache_clear()
+            self.assertEqual(results, [1, 0, 0])
+            recorded = json.loads((root / "migration/clippy-debt.json").read_text())
+            self.assertEqual(recorded["sites"], {new: [8]})
 
     def test_component_reviews_use_agent_paths_under_shared_login(self) -> None:
         proposal = {"kind": "lint"}
@@ -755,7 +1069,7 @@ class CarryTests(unittest.TestCase):
             initialize(root, {"rust/x.rs": original})
             accepted = git("rev-parse", "HEAD", cwd=root).strip()
             site = "rust/x.rs | fn work | allow dead_code"
-            row = "rust/x.rs | fn work | too_many_lines | item"
+            row = "rust/x.rs | fn work | too_many_arguments | item"
             proposal = {"kind": "suppression"}
             comment = acceptance_comment(accepted, proposal)
             for changed in (
@@ -907,12 +1221,12 @@ class CarryTests(unittest.TestCase):
                     self.assertEqual(POLICY.main(), expected)
             # The same binding holds for a reviewed lint row: `fn other` differs
             # from the reviewed head at `unchanged` and matches it at `changed`.
-            row = "rust/x.rs | fn other | too_many_lines | 4a33eacd5fa65f2b2e28"
+            row = "rust/x.rs | fn other | too_many_arguments | 4a33eacd5fa65f2b2e28"
             lint = dict(
-                proposal, kind="lint", tool="clippy", site=row, before=[], after=[120]
+                proposal, kind="lint", tool="clippy", site=row, before=[], after=[9]
             )
             comment = acceptance_comment(reviewed_head, lint)
-            for head, expected in ((unchanged, {}), (changed, {row: [120]})):
+            for head, expected in ((unchanged, {}), (changed, {row: [9]})):
                 git("checkout", "-q", head, cwd=root)
                 with (
                     patch.object(LINT, "ROOT", root),
@@ -923,8 +1237,21 @@ class CarryTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()),
                 ):
                     self.assertEqual(
-                        LINT.reviewed_debt("clippy", {row: [120]}, {}), expected
+                        LINT.reviewed_debt("clippy", {row: [9]}, {}), expected
                     )
+
+
+class RetiredThresholdTests(unittest.TestCase):
+    def test_only_the_three_retired_thresholds_may_be_removed(self) -> None:
+        for key, before in (
+            ("too-many-lines-threshold", 100),
+            ("cognitive-complexity-threshold", 25),
+            ("excessive-nesting-threshold", 5),
+        ):
+            self.assertTrue(POLICY.permitted_change(key, before, None))
+            self.assertFalse(POLICY.permitted_change(key, before, before + 1))
+        for key, before in (("too-many-arguments-threshold", 7), ("max-args", 5)):
+            self.assertFalse(POLICY.permitted_change(key, before, None))
 
 
 class ArchiveTests(unittest.TestCase):
@@ -1025,6 +1352,70 @@ class ArchiveTests(unittest.TestCase):
 
 
 class OrdinaryRustTests(unittest.TestCase):
+    def test_debt_collection_repeats_the_gate_clippy_command(self) -> None:
+        """Cargo replays the gate's run only for the same command, build
+        directory and configuration; a second check of the crate costs a pass."""
+        import migration
+
+        gate = migration.clippy_command()
+        for lint in LINT.CLIPPY:
+            self.assertIn("clippy::" + lint, gate)
+        self.assertEqual(gate[gate.index("--") + 1 :][:2], ["-D", "warnings"])
+        calls = []
+
+        def run(command: list[str], **options: object) -> object:
+            calls.append((command, options))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with (
+            patch.object(LINT.subprocess, "run", run),
+            patch.object(
+                LINT.subprocess, "check_output", lambda *a, **k: "rustc 1.99.0"
+            ),
+        ):
+            LINT.collect("clippy", migration.ROOT)
+        ((command, options),) = calls
+        self.assertEqual(command, migration.clippy_command("--message-format=json"))
+        self.assertEqual(
+            [part for part in command if part != "--message-format=json"], gate
+        )
+        env = options["env"]
+        assert isinstance(env, dict)
+        self.assertEqual(env["CARGO_TARGET_DIR"], str(migration.CARGO_TARGET_DIR))
+        self.assertEqual(
+            env["CLIPPY_CONF_DIR"], migration.environment()["CLIPPY_CONF_DIR"]
+        )
+
+    def test_a_failed_clippy_gate_shows_errors_without_debt_warnings(self) -> None:
+        import migration
+
+        log = (
+            "    Checking x v0.1.0 (/x)\n"
+            "warning: this function has too many arguments (8/7)\n  --> a.rs:1:1\n\n"
+            "warning: `x` (lib) generated 1 warning\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n"
+        )
+        shown = migration.failure_output("rust-clippy", log)
+        self.assertEqual(
+            shown,
+            "    Checking x v0.1.0 (/x)\n"
+            "error: equal expressions as operands to `==`\n  --> b.rs:2:2\n"
+            "1 | true == true\n\n"
+            "error: could not compile `x` (lib test) due to 1 previous error\n",
+        )
+        self.assertEqual(migration.failure_output("rust-check", log), log)
+        # Every header form starts a diagnostic: with a code, a lint path, or neither.
+        for header in ("error[E0425]: ", "error: ", "error[clippy::eq_op]: "):
+            coded = (
+                "warning[W1]: debt\n  --> a.rs:1:1\n" + header + "cause\n  --> b.rs\n"
+            )
+            self.assertEqual(
+                migration.failure_output("rust-clippy", coded),
+                header + "cause\n  --> b.rs\n",
+            )
+
     def test_four_rust_checks_fail_on_distinct_seeded_violations(self) -> None:
         import migration
 
@@ -1038,15 +1429,7 @@ class OrdinaryRustTests(unittest.TestCase):
                 "cannot find function `missing`",
             ),
             (
-                [
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
+                migration.clippy_command()[1:],
                 "pub fn x() -> bool { true == true }\n",
                 "equal expressions",
             ),
@@ -1086,6 +1469,42 @@ class OrdinaryRustTests(unittest.TestCase):
             )
             raw, _ = LINT.collect("clippy", root)
             self.assertIn("too_many_arguments", raw)
+            # A Clippy error stops the collection and is shown as rust-checks
+            # shows it, not as a count of debt.
+            (root / "src/lib.rs").write_text("pub fn x() -> bool { true == true }\n")
+            with self.assertRaisesRegex(ValueError, "equal expressions"):
+                LINT.collect("clippy", root)
+            # Cargo prints the library's warning summary directly above the test
+            # target's error, with no blank line: the error must survive.
+            # A lint error has no code; a compiler error has one (`error[E0425]`).
+            for body, header, cause in (
+                ("bool { true == true }", "error: ", "equal expressions"),
+                ("i32 { missing }", "error[E0425]: ", "cannot find value"),
+            ):
+                (root / "src/lib.rs").write_text(
+                    "pub unsafe fn undocumented() {}\n"
+                    f"#[cfg(test)]\npub fn bad() -> {body}\n"
+                )
+                result = subprocess.run(
+                    migration.clippy_command("-j1"),
+                    cwd=root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                raw = result.stdout + result.stderr
+                # Cargo checks the library and its test target in either order,
+                # so the error may sit directly below a warning summary, or no
+                # warning may print at all. Whatever the order, no error line
+                # may be lost; the synthetic case pins the adjacency itself.
+                errors = [line for line in raw.splitlines() if line.startswith("error")]
+                self.assertTrue(any(line.startswith(header + cause) for line in errors))
+                self.assertTrue(any("could not compile" in line for line in errors))
+                shown = migration.failure_output("rust-clippy", raw).splitlines()
+                for line in errors:
+                    self.assertIn(line, shown)
+                self.assertFalse([line for line in shown if line.startswith("warning")])
             (root / "tools").mkdir()
             (root / "tools/x.py").write_text(
                 "def many(x):  # noqa: C901\n"

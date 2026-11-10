@@ -264,9 +264,7 @@ static void RoadBoundary()
 	current_emission_owner = emission_owner;
 	OpenTTDEffectCreationServices creation{
 		.effect = &emission_leaves, .shared = &t.shared,
-		.can_allocate = [](size_t) noexcept { return true; },
 		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {effect_test_world, &effect_test_world->record, current_emission_owner}; },
-		.delta = [](void *) noexcept {},
 	};
 	auto previous_creation = openttd_rust_effect_bind(&creation);
 	auto emission_vehicle = t.vehicle;
