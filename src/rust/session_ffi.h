@@ -56,14 +56,11 @@ struct OpenTTDSessionServices {
 	void (*window_tick)() noexcept OPENTTD_SERVICE_DEFAULT(window_tick);
 	void (*check_caches)() noexcept OPENTTD_SERVICE_DEFAULT(check_caches);
 	void (*reset_engine_overrides)() noexcept OPENTTD_SERVICE_DEFAULT(reset_engine_overrides);
-	bool (*reload_config)() noexcept OPENTTD_SERVICE_DEFAULT(reload_config);
 	void (*reset_grf)(bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_grf);
 	void (*autosave_frequency)(bool) noexcept OPENTTD_SERVICE_DEFAULT(autosave_frequency);
 	void (*leave_survey)() noexcept OPENTTD_SERVICE_DEFAULT(leave_survey);
 	AbstractFileType (*file_kind)() noexcept OPENTTD_SERVICE_DEFAULT(file_kind);
 	bool (*has_gui)() noexcept OPENTTD_SERVICE_DEFAULT(has_gui);
-	bool (*pause_on_newgame)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_newgame);
-	Colours (*starting_colour)() noexcept OPENTTD_SERVICE_DEFAULT(starting_colour);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
 	void (*reset_ai_config)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_ai_config);
@@ -73,7 +70,6 @@ struct OpenTTDSessionServices {
 	void (*newgame_year)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(newgame_year);
 	bool (*fallback_sound_warning)() noexcept OPENTTD_SERVICE_DEFAULT(fallback_sound_warning);
 	void (*show_sound_warning)() noexcept OPENTTD_SERVICE_DEFAULT(show_sound_warning);
-	bool (*survey_ask)() noexcept OPENTTD_SERVICE_DEFAULT(survey_ask);
 	void (*show_load_error)(bool) noexcept OPENTTD_SERVICE_DEFAULT(show_load_error);
 	void (*social_mode)(GameMode) noexcept OPENTTD_SERVICE_DEFAULT(social_mode);
 	void (*pause_query)() noexcept OPENTTD_SERVICE_DEFAULT(pause_query);

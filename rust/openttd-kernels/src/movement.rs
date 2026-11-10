@@ -170,7 +170,6 @@ pub struct MovementServices {
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
-    pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
     pub industry_foundation: extern "C" fn(u32) -> CallbackFoundation,
@@ -310,7 +309,13 @@ impl Context<'_> {
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
             || (kind == MP_RAILWAY && !self.world.is_plain_rail(tile))
             || (kind == MP_ROAD && !self.world.is_normal_road(tile))
-            || (kind == MP_OBJECT && !(self.owned_land)(tile))
+            || (kind == MP_OBJECT
+                && !unsafe {
+                    ((*(*(*(self.shared().station_commands)()).command)
+                        .rail_map
+                        .ground)
+                        .owned_land)(tile)
+                })
         {
             return self.world.tile_max_pixel_z(tile);
         }
@@ -1553,7 +1558,6 @@ crate::abi::layouts! {
         resolve,
         depot_invalidate,
         native_assert,
-        owned_land,
         object_foundation,
         house_foundation,
         industry_foundation,

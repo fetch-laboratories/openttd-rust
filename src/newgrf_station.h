@@ -60,7 +60,6 @@ struct StationResolverObject : public SpecializedResolverObject<StationRandomTri
 		return openttd_rust_station_scope(&this->station_scope.state, this, &this->station_scope, scope, relative);
 	}
 
-	const SpriteGroup *ResolveReal(const RealSpriteGroup &group) const override;
 
 	GrfSpecFeature GetFeature() const override;
 	uint32_t GetDebugID() const override;

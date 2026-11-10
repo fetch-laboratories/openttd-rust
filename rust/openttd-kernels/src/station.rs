@@ -1217,17 +1217,6 @@ pub unsafe extern "C" fn openttd_rust_station_recompute_catchment_for_all(
 ) {
     recompute_catchment_for_all(&unsafe { Ctx::new(c) });
 }
-/// Native `Station::RemoveFromAllNearbyLists`, from the station destructor.
-/// # Safety
-/// `st` is a live station; `c` is the live catchment table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_remove_from_nearby_lists(
-    st: *mut BaseStation,
-    c: *const CatchmentServices,
-) {
-    let c = unsafe { Ctx::new(c) };
-    remove_from_all_nearby_lists(st, (c.c.owner)(st), &c);
-}
 /// Native `Station::GetCatchmentRadius`.
 /// # Safety
 /// `st` is a live station; `c` is the live catchment table.

@@ -959,7 +959,7 @@ impl Ctx<'_> {
     /// station will be deleted after a little while.
     fn delete_station_if_empty(&self, st: *mut BaseStation) {
         let owner = (self.world().owner)(st);
-        if !(self.world().in_use)(st) {
+        if !self.world().in_use(st) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
             let fields = unsafe { crate::station_service::fields(owner) };
             unsafe { (&raw mut (*fields).delete_ctr).write(0) };
@@ -1091,7 +1091,7 @@ impl Ctx<'_> {
         let mut threshold = 8;
         let mut best_station: *mut BaseStation = std::ptr::null_mut();
         crate::station::spatial::for_all_stations_radius(self.shared, tile, threshold, |st| {
-            if (self.world().in_use)(st)
+            if self.world().in_use(st)
                 || CompanyID((self.world().station_owner)(st))
                     != CompanyID((self.shared.current_company)())
             {
@@ -4247,13 +4247,13 @@ impl Ctx<'_> {
         if noise_level < 2 {
             return noise_level;
         }
-        let authority = unsafe { &*self.s.authority };
         /* The steps for measuring noise reduction are based on the "magical" (and arbitrary) 8 base distance
          * adding the town_council_tolerance 4 times, as a way to graduate, depending of the tolerance.
          * Basically, it says that the less tolerant a town is, the bigger the distance before
          * an actual decrease can be granted */
-        let town_tolerance_distance =
-            8_u8.wrapping_add((authority.council_tolerance)().wrapping_mul(4));
+        let town_tolerance_distance = 8_u8.wrapping_add(
+            crate::town::council_tolerance(unsafe { &*self.s.shared }).wrapping_mul(4),
+        );
         /* now, we want to have the distance segmented using the distance judged bareable by town
          * This will give us the coefficient of reduction the distance provides. */
         let noise_reduction = distance / u32::from(town_tolerance_distance);
@@ -4316,7 +4316,6 @@ impl Ctx<'_> {
         newnoise_level: u32,
     ) -> (StringID, *const crate::services::TownHandle) {
         let mut authority_refuse_message = StringID::STR_NULL;
-        let authority = unsafe { &*self.s.authority };
         let mut authority_refuse_town = std::ptr::null();
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
@@ -4326,7 +4325,7 @@ impl Ctx<'_> {
                 authority_refuse_message = StringID(self.s.strings.refuse_noise);
                 authority_refuse_town = nearest;
             }
-        } else if TownCouncilAttitudes((authority.council_tolerance)())
+        } else if TownCouncilAttitudes(crate::town::council_tolerance(unsafe { &*self.s.shared }))
             != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
         {
             let t = crate::town::spatial::closest_town_from_tile(self.shared, tile, u32::MAX);

@@ -544,7 +544,7 @@ pub(crate) fn iterate_refs(mut next: impl FnMut(u32) -> TownRef) -> impl Iterato
 /// `GetWorldPopulation`: the total population of the world.
 pub(crate) fn get_world_population(leaves: &Leaves) -> u32 {
     let mut total = 0_u32;
-    for town in iterate(|from| (leaves.next_town)(from)) {
+    for town in iterate(|from| leaves.next_town(from)) {
         let owner = (leaves.resolve_owner)(u32::from(town.0));
         // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
         total = total.wrapping_add(unsafe { population(owner) });
@@ -817,11 +817,20 @@ pub struct HousePlacement {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct AuthorityServices {
-    pub council_tolerance: extern "C" fn() -> u8,
     pub bulldozer: extern "C" fn() -> bool,
-    pub authority_distance: extern "C" fn() -> u8,
     pub town_index: extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub refusal: u32,
+}
+
+/// `_settings_game.difficulty.town_council_tolerance`, from the settings catalog.
+pub(crate) fn council_tolerance(s: &Services) -> u8 {
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    unsafe { s.settings().town_council_tolerance.read() }
+}
+/// `_settings_game.economy.dist_local_authority`, from the settings catalog.
+pub(crate) fn authority_distance(s: &Services) -> u8 {
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    unsafe { s.settings().dist_local_authority.read() }
 }
 
 /// `CheckIfAuthorityAllowsNewStation`: checks whether the local authority allows
@@ -838,9 +847,7 @@ pub(crate) unsafe fn check_if_authority_allows_new_station(
     flags: DoCommandFlags,
 ) {
     /* The required rating is hardcoded to RATING_VERYPOOR (see below), not the authority attitude setting, so we can bail out like this. */
-    if TownCouncilAttitudes((a.council_tolerance)())
-        == TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
-    {
+    if TownCouncilAttitudes(council_tolerance(s)) == TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE {
         (c.zero)(result);
         return;
     }
@@ -849,7 +856,7 @@ pub(crate) unsafe fn check_if_authority_allows_new_station(
         (c.zero)(result);
         return;
     }
-    let town = spatial::closest_town_from_tile(s, tile, u32::from((a.authority_distance)()));
+    let town = spatial::closest_town_from_tile(s, tile, u32::from(authority_distance(s)));
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -942,7 +949,7 @@ pub(crate) unsafe fn check_for_town_rating(
      * owned by a town no removal if rating is lower than ... depends now on
      * difficulty setting. Minimum town rating selected by difficulty level
      */
-    let needed = NEEDED_RATING[usize::from((a.council_tolerance)())][usize::from(kind.0)];
+    let needed = NEEDED_RATING[usize::from(council_tolerance(s))][usize::from(kind.0)];
     let owner = (s.town_owner)(town);
     // SAFETY: Live owner, valid company; scratch/native rating access ends here.
     let rating = unsafe { get_rating(owner, town, CompanyID(company)) };
@@ -980,11 +987,9 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
+    pub shared: *const Services,
     pub map_log_x: extern "C" fn() -> u32,
-    pub growth_rate: extern "C" fn() -> u8,
     pub environment: crate::services::EnvironmentServices,
-    pub generating_world: extern "C" fn() -> bool,
-    pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
@@ -1006,11 +1011,22 @@ pub struct Leaves {
     pub population_changed: extern "C" fn(u32),
     pub house_count: extern "C" fn() -> u32,
     pub road_type_error: extern "C" fn(i32),
-    pub next_town: extern "C" fn(u32) -> u32,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
     pub houses: *const house::HouseServices,
+}
+impl Leaves {
+    pub(crate) fn shared(&self) -> &Services {
+        // SAFETY: Every town table points at its live immutable shared services.
+        unsafe { &*self.shared }
+    }
+    pub(crate) fn generating_world(&self) -> bool {
+        (self.shared().clear_square_services.generating_world)()
+    }
+    pub(crate) fn next_town(&self, from: u32) -> u32 {
+        (self.shared().town_next_id)(from)
+    }
 }
 pub type StationActivity = crate::station_service::StationActivity;
 #[derive(Clone, Copy)]
@@ -1056,6 +1072,16 @@ struct Engine<'a> {
 /// Map geometry and tile accessors in the original vocabulary. Each delegates to
 /// the shared map arithmetic or one native tile service.
 impl Engine<'_> {
+    /// `_settings_game.economy.town_growth_rate`, from the settings catalog.
+    fn growth_rate_setting(&self) -> u8 {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { self.services.settings().town_growth_rate.read() }
+    }
+    /// `_settings_game.economy.allow_town_level_crossings`, from the settings catalog.
+    fn allow_town_level_crossings(&self) -> bool {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { self.services.settings().allow_town_level_crossings.read() }
+    }
     fn map(&self) -> Map {
         *self
             .map
@@ -1360,10 +1386,10 @@ impl Engine<'_> {
         let n = self.count_active_stations();
         let mut m =
             GROW_COUNT_VALUES[usize::from(self.fund_buildings_months() == 0)][n.min(5) as usize];
-        let growth_multiplier = if u32::from((self.leaves.growth_rate)()) == 0 {
+        let growth_multiplier = if u32::from(self.growth_rate_setting()) == 0 {
             1
         } else {
-            u32::from((self.leaves.growth_rate)()) - 1
+            u32::from(self.growth_rate_setting()) - 1
         };
         m >>= growth_multiplier;
         if self.larger_town() {
@@ -1386,7 +1412,7 @@ impl Engine<'_> {
         self.update_town_growth_rate(t);
         self.flags_reset(TownFlag::IsGrowing);
         (self.leaves.dirty_town)(u32::from(t.0));
-        if u32::from((self.leaves.growth_rate)()) == 0 && self.fund_buildings_months() == 0 {
+        if u32::from(self.growth_rate_setting()) == 0 && self.fund_buildings_months() == 0 {
             return;
         }
         if self.fund_buildings_months() == 0 {
@@ -1591,7 +1617,7 @@ impl Engine<'_> {
         {
             if chance16(self.services, 1, 8) {
                 let mut res = false;
-                if !(self.leaves.generating_world)() && chance16(self.services, 1, 10) {
+                if !self.leaves.generating_world() && chance16(self.services, 1, 10) {
                     /* Note: Do not replace "^ SLOPE_ELEVATED" with ComplementSlope(). The slope might be steep. */
                     let edges = if chance16(self.services, 1, 16) {
                         cur_slope
@@ -1779,7 +1805,7 @@ impl Engine<'_> {
             /* If the next tile is a railroad track, check if towns are allowed to build level crossings.
              * If level crossing are not allowed, reject the construction. Else allow DoCommand to determine if the rail track is buildable. */
             TileType::MP_RAILWAY => {
-                if !(self.leaves.allow_crossings)() {
+                if !self.allow_town_level_crossings() {
                     return false;
                 }
             }
@@ -2105,7 +2131,7 @@ impl Engine<'_> {
             if !town_allowed_to_build_roads(modes) {
                 return TownGrowthResult::SearchStopped;
             }
-            if !(self.leaves.allow_crossings)() && self.is_tile_type(tile, TileType::MP_RAILWAY) {
+            if !self.allow_town_level_crossings() && self.is_tile_type(tile, TileType::MP_RAILWAY) {
                 return TownGrowthResult::SearchStopped;
             }
             /* Remove hills etc */
@@ -2744,11 +2770,10 @@ impl Engine<'_> {
         self.set_num_houses(self.num_houses().wrapping_add(1));
         let mut construction_counter = 0;
         let mut construction_stage = 0;
-        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || house_completed
-        {
+        if self.leaves.generating_world() || (self.leaves.environment.editor)() || house_completed {
             let construction_random = self.services.random();
             construction_stage = TOWN_HOUSE_COMPLETED;
-            if (self.leaves.generating_world)()
+            if self.leaves.generating_world()
                 && !HouseExtraFlags((self.leaves.house_extra_flags)(house))
                     .test(HouseExtraFlag::BuildingIsHistorical)
                 && chance16(self.services, 1, 7)
@@ -2911,7 +2936,7 @@ impl Engine<'_> {
             probability_max -= probability;
             let hs = (self.leaves.house_placement)(house);
             let extra_flags = || HouseExtraFlags((self.leaves.house_extra_flags)(house));
-            if !(self.leaves.generating_world)()
+            if !self.leaves.generating_world()
                 && !(self.leaves.environment.editor)()
                 && extra_flags().test(HouseExtraFlag::BuildingIsHistorical)
             {
@@ -3046,7 +3071,7 @@ impl Engine<'_> {
         if (self.leaves.environment.editor)() {
             return;
         }
-        for id in iterate(|from| (self.leaves.next_town)(from)) {
+        for id in iterate(|from| self.leaves.next_town(from)) {
             // Each town starts with an empty map and shell cache.
             self.map.take();
             self.house_shell.take();
@@ -3238,7 +3263,7 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
     month: u8,
 ) {
     let engine = engine(leaves, services);
-    for t in iterate(|from| (engine.leaves.next_town)(from)) {
+    for t in iterate(|from| engine.leaves.next_town(from)) {
         let owner = engine.clone().bind(t);
         owner.monthly_statistics(month);
         owner.update_town_growth(t);
@@ -3452,9 +3477,7 @@ crate::abi::layouts! {
         created,
     };
     "OpenTTDTownAuthorityServices" ["probe"] => AuthorityServices {
-        council_tolerance,
         bulldozer,
-        authority_distance,
         town_index,
         refusal,
     };
@@ -3532,12 +3555,10 @@ crate::abi::layouts! {
     };
 
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
+        shared,
         map_log_x,
-        growth_rate,
 
         environment,
-        generating_world,
-        allow_crossings,
         climate,
 
         road_flags,
@@ -3560,7 +3581,6 @@ crate::abi::layouts! {
         population_changed,
         house_count,
         road_type_error,
-        next_town,
         build_bridge,
         build_tunnel,
         assert_clear_house,
@@ -3721,14 +3741,8 @@ mod policy_tests {
     extern "C" fn company() -> u8 {
         COMPANY.get()
     }
-    extern "C" fn council_tolerance() -> u8 {
-        COUNCIL.get()
-    }
     extern "C" fn bulldozer() -> bool {
         CHEAT.get()
-    }
-    extern "C" fn distance() -> u8 {
-        20
     }
     extern "C" fn town_index(_: *const crate::services::TownHandle) -> u16 {
         17
@@ -3769,19 +3783,19 @@ mod policy_tests {
         services.town_by_id = by_id;
         services.town_owner = owner;
         services.map = crate::map_func::fixture::statics();
+        // The authority cases' tolerance cell and the default 20-tile authority distance.
+        services.settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            town_council_tolerance: COUNCIL.with(Cell::as_ptr),
+            dist_local_authority: Box::leak(Box::new(20_u8)),
+            ..crate::settings_type::SettingAddresses::NULL
+        }));
         services
     }
     extern "C" fn unexpected_map_log_x() -> u32 {
         unreachable!("unexpected Leaves::map_log_x")
     }
-    extern "C" fn unexpected_growth_rate() -> u8 {
-        unreachable!("unexpected Leaves::growth_rate")
-    }
     extern "C" fn unexpected_generating_world() -> bool {
         unreachable!("unexpected Leaves::generating_world")
-    }
-    extern "C" fn unexpected_allow_crossings() -> bool {
-        unreachable!("unexpected Leaves::allow_crossings")
     }
     extern "C" fn unexpected_climate() -> u8 {
         unreachable!("unexpected Leaves::climate")
@@ -3840,9 +3854,6 @@ mod policy_tests {
     extern "C" fn unexpected_road_type_error(_: i32) {
         unreachable!("unexpected Leaves::road_type_error")
     }
-    extern "C" fn unexpected_next_town(_: u32) -> u32 {
-        unreachable!("unexpected Leaves::next_town")
-    }
     extern "C" fn unexpected_build_bridge(_: u32, _: u32, _: u32, _: u32, _: u32) -> bool {
         unreachable!("unexpected Leaves::build_bridge")
     }
@@ -3854,14 +3865,12 @@ mod policy_tests {
     }
     fn leaves() -> Leaves {
         Leaves {
+            shared: std::ptr::null(),
             map_log_x: unexpected_map_log_x,
-            growth_rate: unexpected_growth_rate,
             environment: crate::services::EnvironmentServices {
                 editor: unexpected_generating_world,
                 freeform_edges: unexpected_generating_world,
             },
-            generating_world: unexpected_generating_world,
-            allow_crossings: unexpected_allow_crossings,
             climate: unexpected_climate,
             road_flags: unexpected_road_flags,
             house_availability: unexpected_house_availability,
@@ -3882,7 +3891,6 @@ mod policy_tests {
             population_changed: unexpected_population_changed,
             house_count: unexpected_house_count,
             road_type_error: unexpected_road_type_error,
-            next_town: unexpected_next_town,
             build_bridge: unexpected_build_bridge,
             build_tunnel: unexpected_build_tunnel,
             assert_clear_house: unexpected_assert_clear_house,
@@ -4235,9 +4243,7 @@ mod policy_tests {
         let leaves = leaves();
         let costs = costs();
         let authority = AuthorityServices {
-            council_tolerance,
             bulldozer,
-            authority_distance: distance,
             town_index,
             refusal: 19,
         };
@@ -4427,9 +4433,6 @@ mod tunnel_tests {
         assert_eq!(id, TOWN);
         OWNER.with(RefCell::as_ptr)
     }
-    extern "C" fn allow_crossings() -> bool {
-        with(|w| w.allow_crossings)
-    }
     extern "C" fn build_tunnel(tile: u32, road_type: u32, execute: u32) -> bool {
         trace([5, 0, tile, road_type, execute, 0, 0]);
         with(|w| {
@@ -4522,9 +4525,12 @@ mod tunnel_tests {
         leaves.map_log_x = map_log_x;
         leaves.road_info = road_info;
         leaves.resolve_owner = resolve_owner;
-        leaves.allow_crossings = allow_crossings;
         leaves.build_tunnel = build_tunnel;
         let mut services = SHARED;
+        services.settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
+            allow_town_level_crossings: Box::leak(Box::new(with(|w| w.allow_crossings))),
+            ..crate::settings_type::SettingAddresses::NULL
+        }));
         services.random = random;
         services.town_by_id = town_by_id;
         services.tile_type = tile_type;
@@ -4771,9 +4777,6 @@ mod protocol_tests {
     extern "C" fn map_log_x() -> u32 {
         with(|w| w.map_reads += 1);
         6
-    }
-    extern "C" fn growth_rate() -> u8 {
-        2
     }
     extern "C" fn no() -> bool {
         false
@@ -5200,9 +5203,11 @@ mod protocol_tests {
     fn fixture_services() -> *mut Services {
         let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
         services.company_human = human;
-        // The removed allow_roads fixture leaf returned false; the catalog keeps that setting.
+        // Town roads and level crossings are disabled; growth uses the normal rate.
         services.settings = leak(crate::settings_type::SettingAddresses {
             allow_town_roads: leak(false),
+            town_growth_rate: leak(2),
+            allow_town_level_crossings: leak(false),
             ..crate::settings_type::SettingAddresses::NULL
         });
         services.town_by_id = no_town_shell;
@@ -5229,6 +5234,7 @@ mod protocol_tests {
         services.map_max_x = map_max;
         services.map_max_y = map_max;
         services.town_count = no_towns;
+        services.town_next_id = next_town;
         services.tile_valid = yes_tile;
         services.road_type = no_road_type;
         let services = Box::into_raw(Box::new(services));
@@ -5275,9 +5281,7 @@ mod protocol_tests {
         houses.cost = costs;
         houses.commands = commands;
         houses.authority = leak(AuthorityServices {
-            council_tolerance: unreachable0,
             bulldozer: unreachable0,
-            authority_distance: unreachable0,
             town_index,
             refusal: 0,
         });
@@ -5291,12 +5295,10 @@ mod protocol_tests {
         houses.cargogen_mode = cargogen_mode;
         houses.place_houses = place_houses;
         let mut leaves = TOWN_LEAVES;
+        leaves.shared = services;
         leaves.map_log_x = map_log_x;
-        leaves.growth_rate = growth_rate;
         leaves.environment.editor = no;
         leaves.environment.freeform_edges = no;
-        leaves.generating_world = no;
-        leaves.allow_crossings = no;
         leaves.climate = zero_byte;
         leaves.road_flags = zero_flags;
         leaves.house_availability = house_availability;
@@ -5316,7 +5318,6 @@ mod protocol_tests {
         leaves.make_house = make_house;
         leaves.population_changed = population_changed;
         leaves.house_count = house_count;
-        leaves.next_town = next_town;
         leaves.build_bridge = no_bridge;
         leaves.build_tunnel = no_tunnel;
         leaves.assert_clear_house = assert_clear_house;

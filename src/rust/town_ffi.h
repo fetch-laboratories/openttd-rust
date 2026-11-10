@@ -45,18 +45,14 @@ struct OpenTTDTownRoadChoice { int32_t introduction_date; uint16_t max_speed; bo
 struct OpenTTDTownHouseAvailability { uint16_t zones; uint16_t override_id; uint16_t class_id; uint8_t probability; bool enabled; };
 struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; };
 struct OpenTTDTownAuthorityServices {
-	uint8_t (*council_tolerance)() noexcept OPENTTD_SERVICE_DEFAULT(council_tolerance);
 	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
-	uint8_t (*authority_distance)() noexcept OPENTTD_SERVICE_DEFAULT(authority_distance);
 	uint16_t (*town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 	uint32_t refusal;
 };
 struct OpenTTDTownLeaves {
+	const OpenTTDSharedServices *shared;
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
-	uint8_t (*growth_rate)() noexcept OPENTTD_SERVICE_DEFAULT(growth_rate);
 	OpenTTDEnvironmentServices environment;
-	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
-	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	uint8_t (*road_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_availability);
@@ -78,7 +74,6 @@ struct OpenTTDTownLeaves {
 	void (*population_changed)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(population_changed);
 	uint32_t (*house_count)() noexcept OPENTTD_SERVICE_DEFAULT(house_count);
 	void (*road_type_error)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_error);
-	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
 	void (*assert_clear_house)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_clear_house);

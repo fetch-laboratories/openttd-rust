@@ -13,6 +13,7 @@ use crate::game_state::GameState;
 use crate::network_action::{Actions, Resume};
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
+use crate::settings_type::ParticipateSurvey;
 #[repr(C)]
 pub struct Frame {
     _opaque: [u8; 0],
@@ -76,14 +77,11 @@ pub struct Services {
     pub window_tick: extern "C" fn(),
     pub check_caches: extern "C" fn(),
     pub reset_engine_overrides: extern "C" fn(),
-    pub reload_config: extern "C" fn() -> bool,
     pub reset_grf: extern "C" fn(bool),
     pub autosave_frequency: extern "C" fn(bool),
     pub leave_survey: extern "C" fn(),
     pub file_kind: extern "C" fn() -> FileKind,
     pub has_gui: extern "C" fn() -> bool,
-    pub pause_on_newgame: extern "C" fn() -> bool,
-    pub starting_colour: extern "C" fn() -> u8,
     pub settings_elrail: extern "C" fn(bool),
     pub company_settings: extern "C" fn(),
     pub reset_ai_config: extern "C" fn(CompanyID),
@@ -93,7 +91,6 @@ pub struct Services {
     pub newgame_year: extern "C" fn(i32),
     pub fallback_sound_warning: extern "C" fn() -> bool,
     pub show_sound_warning: extern "C" fn(),
-    pub survey_ask: extern "C" fn() -> bool,
     pub show_load_error: extern "C" fn(bool),
     pub social_mode: extern "C" fn(GameMode),
     pub pause_query: extern "C" fn(),
@@ -148,6 +145,17 @@ pub struct Services {
     pub landscape_end: extern "C" fn(*mut Frame),
     pub schedule_measurement: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
     pub schedule_end: extern "C" fn(*mut Frame),
+}
+impl Services {
+    /// One client or game setting from the shared catalog, loaded at its observation point.
+    fn setting<T: Copy>(
+        &self,
+        field: impl FnOnce(&crate::settings_type::SettingAddresses) -> *const T,
+    ) -> T {
+        // SAFETY: The shared table and catalog are immutable for the process lifetime; one
+        // field-sized load of a process-wide setting.
+        unsafe { field((*self.shared).settings()).read() }
+    }
 }
 
 /// Canonical native aliases occupy only these three one-byte subobjects.
@@ -338,7 +346,7 @@ impl<'a> Session<'a> {
         (s.settings_elrail)(unsafe { (&*s.shared).settings().disable_elrails.read() });
         if !(s.has_gui)() {
             self.start_game(true)?;
-            if (s.pause_on_newgame)() {
+            if s.setting(|c| c.pause_on_newgame) {
                 crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
             }
             return Ok(());
@@ -346,7 +354,7 @@ impl<'a> Session<'a> {
         complete((s.startup_company)(self.frame))?;
         (s.company_settings)();
         // COLOUR_END selects the original random colour.
-        let colour = (s.starting_colour)();
+        let colour = s.setting(|c| c.starting_colour);
         if colour != COLOUR_END {
             crate::command_post::colour(unsafe { &*s.shared }, true, colour);
         }
@@ -360,7 +368,7 @@ impl<'a> Session<'a> {
         self.start_game(false)?;
         (s.rail_gui)();
         (s.road_gui)();
-        if (s.pause_on_newgame)() {
+        if s.setting(|c| c.pause_on_newgame) {
             crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
         }
         (s.check_engines)();
@@ -471,7 +479,7 @@ impl<'a> Session<'a> {
         let s = self.s;
         if new_mode != SwitchMode::SAVE_GAME && (s.server_requested)() {
             if new_mode != SwitchMode::MENU {
-                if (s.reload_config)() {
+                if s.setting(|c| c.reload_cfg) {
                     (s.load_config)();
                     openttd_rust_session_settings(s);
                     (s.reset_grf)(false);
@@ -600,7 +608,10 @@ impl<'a> Session<'a> {
                 if (s.fallback_sound_warning)() {
                     (s.show_sound_warning)();
                 }
-                if (s.survey_ask)() && !unsafe { *ASKED_SURVEY.get() } {
+                if ParticipateSurvey(s.setting(|c| c.participate_survey))
+                    == ParticipateSurvey::PS_ASK
+                    && !unsafe { *ASKED_SURVEY.get() }
+                {
                     unsafe {
                         *ASKED_SURVEY.get() = true;
                     }
@@ -1034,14 +1045,11 @@ crate::abi::layouts! {
         window_tick,
         check_caches,
         reset_engine_overrides,
-        reload_config,
         reset_grf,
         autosave_frequency,
         leave_survey,
         file_kind,
         has_gui,
-        pause_on_newgame,
-        starting_colour,
         settings_elrail,
         company_settings,
         reset_ai_config,
@@ -1051,7 +1059,6 @@ crate::abi::layouts! {
         newgame_year,
         fallback_sound_warning,
         show_sound_warning,
-        survey_ask,
         show_load_error,
         social_mode,
         pause_query,

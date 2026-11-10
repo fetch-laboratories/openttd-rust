@@ -82,7 +82,6 @@ impl WaterServices {
 #[repr(C)]
 pub struct RestorationServices {
     pub infrastructure: extern "C" fn(u8, u32),
-    pub infrastructure_dirty: extern "C" fn(u8),
     pub make_canal: extern "C" fn(u32, u8, u8),
     pub make_river: extern "C" fn(u32, u8),
 }
@@ -102,7 +101,8 @@ pub(crate) unsafe fn restore(
         if class == 1 {
             if (s.company_valid)(owner) {
                 (r.infrastructure)(owner, u32::MAX);
-                (r.infrastructure_dirty)(owner);
+                // SAFETY: Shared command tables are immutable and live for this call.
+                unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
             }
             class = 3;
         }
@@ -113,7 +113,8 @@ pub(crate) unsafe fn restore(
     if class == 0 && z > 0 {
         if (s.company_valid)(owner) {
             (r.infrastructure)(owner, 1);
-            (r.infrastructure_dirty)(owner);
+            // SAFETY: Shared command tables are immutable and live for this call.
+            unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
         }
         class = 1;
     }
@@ -802,7 +803,6 @@ crate::abi::layouts! {
     };
     "OpenTTDWaterRestorationServices" ["common"] => RestorationServices {
         infrastructure,
-        infrastructure_dirty,
         make_canal,
         make_river,
     };

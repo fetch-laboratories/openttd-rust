@@ -21,18 +21,24 @@ crate::abi::shared_records! {
     }
     /// Process-lifetime addresses of canonical settings, shared by simulation owners.
     "OpenTTDSettingAddresses" ["settings"] => pub struct SettingAddresses {
+        pub allow_town_level_crossings: *const bool,
         pub allow_town_roads: *const bool,
         pub ambient: *const bool,
         pub climate: *const u8,
         pub competitor_interval: *const u16,
         pub construction_limits: *const ConstructionLimits,
+        pub custom_industry_number: *const u16,
         pub disable_elrails: *const bool,
+        pub dist_local_authority: *const u8,
+        pub economy_type: *const u8,
         pub extra_tree_placement: *const u8,
         pub freeform_edges: *const bool,
         pub generation_seed: *const u32,
         pub height_limit: *const u8,
         pub heightmap_height: *const u8,
         pub industry_cargo_scale: *const u16,
+        pub industry_density: *const u8,
+        pub industry_platform: *const u8,
         pub land_generator: *const u8,
         pub line_reverse_mode: *const bool,
         pub lost_vehicle_warn: *const bool,
@@ -44,15 +50,25 @@ crate::abi::shared_records! {
         pub max_train_length: *const u8,
         pub max_trains: *const u16,
         pub maximum_go_to_depot_penalty: *const u32,
+        pub multiple_industry_per_town: *const bool,
         pub never_expire_airports: *const bool,
         pub never_expire_vehicles: *const bool,
+        pub oil_refinery_limit: *const u8,
         pub order_review_system: *const u8,
+        pub participate_survey: *const u8,
+        pub pause_on_newgame: *const bool,
+        pub raw_industry_construction: *const u8,
         pub recalc_interval: *const u16,
+        pub reload_cfg: *const bool,
         pub reverse_at_signals: *const bool,
         pub roadveh_acceleration_model: *const u8,
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
+        pub select_goods: *const bool,
+        pub starting_colour: *const u8,
         pub station_noise: *const bool,
+        pub town_council_tolerance: *const u8,
+        pub town_growth_rate: *const u8,
         pub train_acceleration_model: *const u8,
         pub tree_placer: *const u8,
         pub used_liveries: *const u64,
@@ -67,18 +83,24 @@ crate::abi::shared_records! {
 impl SettingAddresses {
     /// A catalog with every address null; tests fill the fields their entry reads.
     pub(crate) const NULL: Self = Self {
+        allow_town_level_crossings: std::ptr::null(),
         allow_town_roads: std::ptr::null(),
         ambient: std::ptr::null(),
         climate: std::ptr::null(),
         competitor_interval: std::ptr::null(),
         construction_limits: std::ptr::null(),
+        custom_industry_number: std::ptr::null(),
         disable_elrails: std::ptr::null(),
+        dist_local_authority: std::ptr::null(),
+        economy_type: std::ptr::null(),
         extra_tree_placement: std::ptr::null(),
         freeform_edges: std::ptr::null(),
         generation_seed: std::ptr::null(),
         height_limit: std::ptr::null(),
         heightmap_height: std::ptr::null(),
         industry_cargo_scale: std::ptr::null(),
+        industry_density: std::ptr::null(),
+        industry_platform: std::ptr::null(),
         land_generator: std::ptr::null(),
         line_reverse_mode: std::ptr::null(),
         lost_vehicle_warn: std::ptr::null(),
@@ -90,15 +112,25 @@ impl SettingAddresses {
         max_train_length: std::ptr::null(),
         max_trains: std::ptr::null(),
         maximum_go_to_depot_penalty: std::ptr::null(),
+        multiple_industry_per_town: std::ptr::null(),
         never_expire_airports: std::ptr::null(),
         never_expire_vehicles: std::ptr::null(),
+        oil_refinery_limit: std::ptr::null(),
         order_review_system: std::ptr::null(),
+        participate_survey: std::ptr::null(),
+        pause_on_newgame: std::ptr::null(),
+        raw_industry_construction: std::ptr::null(),
         recalc_interval: std::ptr::null(),
+        reload_cfg: std::ptr::null(),
         reverse_at_signals: std::ptr::null(),
         roadveh_acceleration_model: std::ptr::null(),
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
+        select_goods: std::ptr::null(),
+        starting_colour: std::ptr::null(),
         station_noise: std::ptr::null(),
+        town_council_tolerance: std::ptr::null(),
+        town_growth_rate: std::ptr::null(),
         train_acceleration_model: std::ptr::null(),
         tree_placer: std::ptr::null(),
         used_liveries: std::ptr::null(),
@@ -164,4 +196,25 @@ impl IndustryDensity {
     pub const ID_CUSTOM: Self = Self(6);
     /// Number of industry density settings.
     pub const ID_END: Self = Self(7);
+}
+
+/// Possible values for the `participate_survey` setting.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParticipateSurvey(pub u8);
+impl ParticipateSurvey {
+    /// Ask whether the user wants to participate.
+    pub const PS_ASK: Self = Self(0);
+    /// Do not participate.
+    #[allow(
+        dead_code,
+        reason = "Retain the canonical PS_NO setting value while ParticipateSurvey is reproduced."
+    )]
+    pub const PS_NO: Self = Self(1);
+    /// Participate in the survey.
+    #[allow(
+        dead_code,
+        reason = "Retain the canonical PS_YES setting value while ParticipateSurvey is reproduced."
+    )]
+    pub const PS_YES: Self = Self(2);
 }

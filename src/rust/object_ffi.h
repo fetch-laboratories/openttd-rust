@@ -23,6 +23,7 @@ struct OpenTTDObjectPrice { uint32_t factor; int32_t shift; };
 struct OpenTTDGroundCall;
 struct OpenTTDTownFoundingServices;
 struct OpenTTDIndustryTileServices;
+struct OpenTTDIndustryLoopServices;
 struct OpenTTDWaterRestorationServices;
 struct ObjectSpec;
 struct Object;
@@ -78,7 +79,7 @@ struct OpenTTDObjectServices {
 	const OpenTTDCargoStorageServices *cargo;
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTownFoundingServices *founding;
-	const OpenTTDIndustryTileServices *industry_tiles;
+	const OpenTTDIndustryLoopServices *industry;
 	OpenTTDObjectStrings strings;
 	size_t (*spec_count)() noexcept OPENTTD_SERVICE_DEFAULT(spec_count);
 	const ObjectSpec * (*spec)(uint16_t type) noexcept OPENTTD_SERVICE_DEFAULT(spec);
@@ -113,10 +114,7 @@ struct OpenTTDObjectServices {
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);
 	bool (*progress_increase)(OpenTTDObjectGenerationFrame *frame) noexcept OPENTTD_SERVICE_DEFAULT(progress_increase);
 	bool (*normal)() noexcept OPENTTD_SERVICE_DEFAULT(normal);
-	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
 	const OpenTTDWaterRestorationServices *restoration;
-	void (*set_owner)(uint32_t tile, uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(set_owner);
-	uint32_t (*scale_size_1d)(uint32_t n) noexcept OPENTTD_SERVICE_DEFAULT(scale_size_1d);
 	uint32_t (*scale_cargo)(uint32_t amount) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 };
 /* All calls are serialized by the game-state mutex, including across the GUI and

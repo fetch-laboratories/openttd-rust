@@ -202,10 +202,6 @@ uint32_t ScopeResolver::GetVariable(uint8_t variable, uint32_t, bool &available)
 	return openttd_rust_scope_default_variable(variable, &available);
 }
 void ScopeResolver::StorePSA(uint, int32_t) {}
-const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) const
-{
-	return openttd_rust_resolver_default_real(&GetRustSpriteGroupServices(), &group);
-}
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDSpriteGroupServices.hpp"
 #include "abi-visit-OpenTTDGlobalVariableServices.hpp"

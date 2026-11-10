@@ -665,8 +665,9 @@ pub(crate) unsafe fn cmd_found_town(
         }
     } else {
         // If name is not empty, it has to be unique custom name.
-        if observed!((f.names.utf8_length)(text.data, text.size))
-            >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+        if observed!((unsafe { &*f.names.shared }.utf8_length)(
+            text.data, text.size
+        )) >= MAX_LENGTH_TOWN_NAME_CHARS as usize
         {
             return;
         }
@@ -930,8 +931,9 @@ pub(crate) unsafe fn cmd_rename_town(
         return;
     }
     if text.size != 0 {
-        if observed!((f.names.utf8_length)(text.data, text.size))
-            >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+        if observed!((unsafe { &*f.names.shared }.utf8_length)(
+            text.data, text.size
+        )) >= MAX_LENGTH_TOWN_NAME_CHARS as usize
         {
             return;
         }

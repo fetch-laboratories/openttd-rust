@@ -276,7 +276,7 @@ pub struct ObjectServices {
     pub cargo: *const crate::cargo_storage::Services,
     pub town: *const crate::town::Leaves,
     pub founding: *const crate::town::founding::FoundingServices,
-    pub industry_tiles: *const crate::industry::TileServices,
+    pub industry: *const crate::tile_loop::IndustryServices,
     pub strings: Strings,
     pub spec_count: unsafe extern "C" fn() -> usize,
     pub spec: unsafe extern "C" fn(u16) -> *const Spec,
@@ -311,10 +311,7 @@ pub struct ObjectServices {
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
     pub normal: unsafe extern "C" fn() -> bool,
-    pub bulldozer: unsafe extern "C" fn() -> bool,
     pub restoration: *const crate::water::RestorationServices,
-    pub set_owner: unsafe extern "C" fn(u32, u8) -> (),
-    pub scale_size_1d: unsafe extern "C" fn(u32) -> u32,
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
 }
 
@@ -532,7 +529,7 @@ impl<'a> World<'a> {
                         | (self.shared.terrain_type)(tile)
                 }
                 0x42 => (q.date)(obj) as u32,
-                0x43 => u32::from(((*self.s.industry_tiles).frame)(tile)),
+                0x43 => u32::from(((*(*self.s.industry).tiles).frame)(tile)),
                 0x44 => u32::from((self.shared.tile_owner)(tile)),
                 0x45 => {
                     u32::from(crate::town::radius_from_shell(self.shared, town, tile)) << 16
@@ -551,7 +548,7 @@ impl<'a> World<'a> {
                         if variable == 0x61 {
                             u32::from((q.random_bits)(near))
                         } else {
-                            u32::from(((*self.s.industry_tiles).frame)(near))
+                            u32::from(((*(*self.s.industry).tiles).frame)(near))
                         }
                     } else {
                         0
@@ -766,7 +763,7 @@ impl<'a> World<'a> {
                         || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
                 {
                     ((*self.s.restoration).infrastructure)(owner, 1);
-                    ((*self.s.restoration).infrastructure_dirty)(owner);
+                    ((*self.s.command).infrastructure_dirty)(owner);
                 }
                 let remove = (self.shared.clear_square_services.docking)(t);
                 (self.s.make)(t, owner, object.id, wc, self.shared.random());
@@ -787,16 +784,16 @@ impl<'a> World<'a> {
     }
     /// Original `GetCompanyHQSize`: the size is stored in the animation frame.
     fn get_company_hq_size(&self, tile: u32) -> u8 {
-        unsafe { ((*self.s.industry_tiles).frame)(tile) }
+        unsafe { ((*(*self.s.industry).tiles).frame)(tile) }
     }
     /// Original `IncreaseCompanyHQSize`, including each frame write and redraw.
     fn increase_company_hq_size(&self, tile: u32) {
         unsafe {
             let area = (self.s.location)((self.query().by_tile)(tile));
             for t in self.tiles(area) {
-                ((*self.s.industry_tiles).set_frame)(
+                (self.shared.tile_animation_set_frame)(
                     t,
-                    ((*self.s.industry_tiles).frame)(t).wrapping_add(1),
+                    ((*(*self.s.industry).tiles).frame)(t).wrapping_add(1),
                 );
                 (self.shared.mark_dirty)(t);
             }
@@ -853,7 +850,8 @@ impl<'a> World<'a> {
                 return;
             }
             if company != OWNER_WATER {
-                if flags & DoCommandFlag::NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile)
+                if flags & DoCommandFlag::NO_WATER != 0
+                    && ((*(*self.s.industry).tiles).on_water)(tile)
                 {
                     out.error(self.s.strings.water);
                     return;
@@ -868,7 +866,13 @@ impl<'a> World<'a> {
                 }
                 if ((*self.s.town).environment.editor)() {
                 } else if self.owner(tile) == OWNER_NONE {
-                    if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
+                    if !((*(*self.s.town).houses)
+                        .authority
+                        .as_ref()
+                        .unwrap()
+                        .bulldozer)()
+                        && flags_spec & CANNOT_REMOVE != 0
+                    {
                         out.error(INVALID_STRING_ID);
                         return;
                     }
@@ -879,7 +883,12 @@ impl<'a> World<'a> {
                         return;
                     }
                     if flags_spec & CANNOT_REMOVE != 0 && flags_spec & AUTOREMOVE == 0 {
-                        if !(self.s.bulldozer)() {
+                        if !((*(*self.s.town).houses)
+                            .authority
+                            .as_ref()
+                            .unwrap()
+                            .bulldozer)()
+                        {
                             if object.kind == HQ {
                                 out.error(self.s.strings.hq);
                             } else {
@@ -948,12 +957,11 @@ impl<'a> World<'a> {
             }
             let spec = (self.s.spec)(kind);
             let admission = (self.s.admission)(spec);
-            if (self.s.normal)() && !available(self.s, spec) && !((*self.s.town).generating_world)()
-            {
+            if (self.s.normal)() && !available(self.s, spec) && !(*self.s.town).generating_world() {
                 out.error(INVALID_STRING_ID);
                 return;
             }
-            if (((*self.s.town).environment.editor)() || ((*self.s.town).generating_world)())
+            if (((*self.s.town).environment.editor)() || (*self.s.town).generating_world())
                 && !was_available(self.s, spec)
             {
                 out.error(INVALID_STRING_ID);
@@ -961,15 +969,14 @@ impl<'a> World<'a> {
             }
             let shape = (self.s.footprint)(spec);
             if shape.flags & SCENEDIT != 0
-                && ((!((*self.s.town).generating_world)()
-                    && !((*self.s.town).environment.editor)())
+                && ((!(*self.s.town).generating_world() && !((*self.s.town).environment.editor)())
                     || self.current() != OWNER_NONE)
             {
                 out.error(INVALID_STRING_ID);
                 return;
             }
             if shape.flags & IN_GAME != 0
-                && (((*self.s.town).generating_world)()
+                && ((*self.s.town).generating_world()
                     || !(self.s.normal)()
                     || self.current() > MAX_COMPANIES)
             {
@@ -1387,7 +1394,7 @@ impl World<'_> {
             let kind = (self.s.object_type)(tile);
             let mut clear = false;
             if (kind == OWNED || kind >= NEW_OBJECT_OFFSET) && new != INVALID_OWNER {
-                (self.s.set_owner)(tile, new);
+                (self.shared.set_tile_owner)(tile, new);
                 if crate::map_func::World::new(self.shared).water_class(tile) == 1 {
                     ((*self.s.restoration).infrastructure)(old, u32::MAX);
                     ((*self.s.restoration).infrastructure)(new, 1);
@@ -1398,7 +1405,7 @@ impl World<'_> {
                 (*fields).statues &= !((1_u64 << old) as u16);
                 if new != INVALID_OWNER && (*fields).statues & ((1_u64 << new) as u16) == 0 {
                     (*fields).statues |= (1_u64 << new) as u16;
-                    (self.s.set_owner)(tile, new);
+                    (self.shared.set_tile_owner)(tile, new);
                 } else {
                     clear = true;
                 }
@@ -1492,7 +1499,7 @@ impl World<'_> {
                     );
                 }
             }
-            let water = ((*self.s.industry_tiles).on_water)(tile);
+            let water = ((*(*self.s.industry).tiles).on_water)(tile);
             if water {
                 self.water_loop(tile, call);
             }
@@ -1681,10 +1688,13 @@ impl World<'_> {
                 let mut amount = if generation.flags & SCALE_WATER != 0
                     && ((*self.s.town).environment.freeform_edges)()
                 {
-                    (self.s.scale_size_1d)(u32::from(generation.amount) * water_tiles)
-                        / (2 * maxy + 2 * maxx - 6)
+                    ((*(*self.s.industry).generation).scale_by_size_1d)(
+                        u32::from(generation.amount) * water_tiles,
+                    ) / (2 * maxy + 2 * maxx - 6)
                 } else if generation.flags & SCALE_WATER != 0 {
-                    (self.s.scale_size_1d)(u32::from(generation.amount))
+                    ((*(*self.s.industry).generation).scale_by_size_1d)(u32::from(
+                        generation.amount,
+                    ))
                 } else {
                     ((*self.s.founding).scale_size)(u32::from(generation.amount))
                 } as u16;
@@ -2047,7 +2057,7 @@ fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
         && policy.climate & (1 << (unsafe { &*s.town }.climate)()) != 0
         && policy.flags
             & if !(unsafe { &*s.town }.environment.editor)()
-                && !(unsafe { &*s.town }.generating_world)()
+                && !unsafe { &*s.town }.generating_world()
             {
                 SCENEDIT
             } else {
@@ -2500,7 +2510,7 @@ crate::abi::layouts! {
         cargo,
         town,
         founding,
-        industry_tiles,
+        industry,
         strings,
         spec_count,
         spec,
@@ -2535,10 +2545,7 @@ crate::abi::layouts! {
         progress_set,
         progress_increase,
         normal,
-        bulldozer,
         restoration,
-        set_owner,
-        scale_size_1d,
         scale_cargo,
     };
 }

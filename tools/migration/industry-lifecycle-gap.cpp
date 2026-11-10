@@ -189,11 +189,10 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 {
 	OpenTTDIndustryConstructionServices construction{};
 	construction.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(tile, stage); };
-	OpenTTDIndustryTileServices tileservice{};
+	OpenTTDIndustryTileServices tileservice{.shared = services.shared};
 	tileservice.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
 	tileservice.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(tile, gfx); };
 	tileservice.frame = [](uint32_t tile) noexcept -> uint8_t { return GetAnimationFrame(tile); };
-	tileservice.set_frame = [](uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(tile, frame); };
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
@@ -247,6 +246,7 @@ static void Run()
 	OpenTTDIndustryServices services{};
 	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); });
 	shared.mark_dirty = [](uint32_t tile) noexcept { MarkTileDirtyByTile(tile); };
+	shared.tile_animation_set_frame = [](uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(tile, frame); };
 	shared.tick_counter = []() noexcept -> uint64_t { return TimerGameTick::counter; };
 	static OpenTTDSettingAddresses tile_settings{};
 	tile_settings.ambient = &_settings_client.sound.ambient;

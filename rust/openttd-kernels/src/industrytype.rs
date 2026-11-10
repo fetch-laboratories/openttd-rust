@@ -598,8 +598,10 @@ pub unsafe extern "C" fn openttd_rust_industry_spec_processing_abi(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_original_economy_abi(
     spec: *const IndustrySpec,
-    economy: u8,
+    shared: *const crate::services::Services,
 ) -> u8 {
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    let economy = unsafe { (*shared).settings().economy_type.read() };
     u8::from(crate::industry::uses_original_economy(
         crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*spec).callback_mask }),
         crate::economy_type::EconomyType(economy),
@@ -609,8 +611,10 @@ pub unsafe extern "C" fn openttd_rust_industry_original_economy_abi(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_construction_cost(
     spec: *const IndustrySpec,
-    raw_setting: u8,
+    shared: *const crate::services::Services,
 ) -> i64 {
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    let raw_setting = unsafe { (*shared).settings().raw_industry_construction.read() };
     let (cost_multiplier, life_type) = unsafe { ((*spec).cost_multiplier, (*spec).life_type) };
     crate::industry::get_construction_cost(
         cost_multiplier,

@@ -117,7 +117,6 @@ uint8_t openttd_rust_vehicle_resolver_scope(const OpenTTDVehicleResolverServices
 void openttd_rust_vehicle_scope_set(OpenTTDVehicleScopeState *, const OpenTTDVehicle *);
 uint32_t openttd_rust_vehicle_scope_variable(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, const ResolverObject *, const GRFFile *, uint16_t, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_vehicle_scope_random(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, bool);
-const SpriteGroup *openttd_rust_vehicle_resolve_real(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleResolverState *, const RealSpriteGroup *);
 const SpriteGroup *openttd_rust_vehicle_wagon_override(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, uint16_t);
 uint16_t openttd_rust_vehicle_callback(const OpenTTDVehicleResolverServices *, uint16_t, uint32_t, uint32_t, uint16_t, const OpenTTDVehicle *, const OpenTTDVehicle *, bool, int32_t *, size_t);
 int32_t openttd_rust_vehicle_property(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, int32_t, const OpenTTDVehicle *, bool);

@@ -194,20 +194,8 @@ TownScopeResolver *StationResolverObject::GetTown()
 	return openttd_rust_station_variable(&this->state, &this->ro, this->ro.grffile, variable, parameter, &available);
 }
 
-uint32_t Station::GetNewGRFVariable(const ResolverObject &object, uint8_t variable, uint8_t parameter, bool &available) const
-{
-	return openttd_rust_station_base_variable(const_cast<Station *>(this), object.grffile, variable, parameter, &available);
-}
 
-uint32_t Waypoint::GetNewGRFVariable(const ResolverObject &, uint8_t variable, [[maybe_unused]] uint8_t parameter, bool &available) const
-{
-	return openttd_rust_station_base_variable(const_cast<Waypoint *>(this), nullptr, variable, parameter, &available);
-}
 
-/* virtual */ const SpriteGroup *StationResolverObject::ResolveReal(const RealSpriteGroup &group) const
-{
-	return openttd_rust_station_resolve_real(&this->station_scope.state, &group);
-}
 
 GrfSpecFeature StationResolverObject::GetFeature() const
 {
