@@ -124,6 +124,11 @@ pub fn clr_bit_size(value: &mut usize, bit: u8) -> usize {
     *value
 }
 
+/// `HasBit` for native 64-bit cargo masks.
+pub fn has_bit64(value: u64, bit: u8) -> bool {
+    value & 1_u64.wrapping_shl(u32::from(bit)) != 0
+}
+
 /// `SetBit` for native 64-bit cargo masks, preserving the original return value.
 pub fn set_bit64(value: &mut u64, bit: u8) -> u64 {
     *value |= 1_u64.wrapping_shl(u32::from(bit));

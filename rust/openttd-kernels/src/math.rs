@@ -33,6 +33,36 @@ pub(crate) const fn align(x: usize, n: usize) -> usize {
     x.wrapping_add(n) & !n
 }
 
+/// `CeilDiv`: computes ceil(a / b) for non-negative a and b. The addition wraps as the
+/// original's `uint` arithmetic does.
+pub(crate) const fn ceil_div(a: u32, b: u32) -> u32 {
+    a.wrapping_add(b).wrapping_sub(1) / b
+}
+
+/// `ClampTo<uint8_t>`: clamp the given value down to lie within the `uint8_t` range.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // In range after the tests.
+pub(crate) const fn clamp_to_u8(a: i64) -> u8 {
+    if a < 0 {
+        0
+    } else if a > u8::MAX as i64 {
+        u8::MAX
+    } else {
+        a as u8
+    }
+}
+
+/// `ClampTo<uint16_t>`: clamp the given value down to lie within the `uint16_t` range.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // In range after the tests.
+pub(crate) const fn clamp_to_u16(a: i64) -> u16 {
+    if a < 0 {
+        0
+    } else if a > u16::MAX as i64 {
+        u16::MAX
+    } else {
+        a as u16
+    }
+}
+
 /// The value mask of a `width`-bit integer, for the template's integer types.
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));

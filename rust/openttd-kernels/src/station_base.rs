@@ -6,6 +6,8 @@ use crate::tile_type::TileIndex;
 
 /// `INITIAL_STATION_RATING`: the initial rating of a cargo at a station.
 pub const INITIAL_STATION_RATING: u8 = 175;
+/// `MAX_STATION_RATING`: the maximum rating of a cargo at a station.
+pub const MAX_STATION_RATING: u8 = 255;
 
 /// Original nested `GoodsEntry` status vocabulary.
 pub mod goods_entry {
@@ -43,6 +45,48 @@ pub mod goods_entry {
         pub const fn test(self, element: State) -> bool {
             self.0 & (1 << element.0) != 0
         }
+        /// Native `EnumBitSet::Any`.
+        #[must_use]
+        pub const fn any(self) -> bool {
+            self.0 != 0
+        }
+        /// Native `EnumBitSet::Set(element)`.
+        pub const fn set(&mut self, element: State) {
+            self.0 |= 1 << element.0;
+        }
+        /// Native `EnumBitSet::Set(element, value)`.
+        pub const fn set_to(&mut self, element: State, value: bool) {
+            if value {
+                self.set(element);
+            } else {
+                self.reset(element);
+            }
+        }
+        /// Native `EnumBitSet::Reset(element)`.
+        pub const fn reset(&mut self, element: State) {
+            self.0 &= !(1 << element.0);
+        }
+    }
+
+    /// `GoodsEntry::ConvertState`: convert the `GoodsEntry` status to the
+    /// format used by `NewGRF` variable 0x69.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)] // Only bits 0 to 3 are set.
+    pub fn convert_state(status: States) -> u8 {
+        let mut res = 0_u32;
+        if status.test(State::EverAccepted) {
+            crate::bitmath_func::set_bit(&mut res, 0);
+        }
+        if status.test(State::LastMonth) {
+            crate::bitmath_func::set_bit(&mut res, 1);
+        }
+        if status.test(State::CurrentMonth) {
+            crate::bitmath_func::set_bit(&mut res, 2);
+        }
+        if status.test(State::AcceptedBigtick) {
+            crate::bitmath_func::set_bit(&mut res, 3);
+        }
+        res as u8
     }
 
     /// `GoodsEntry::HasRating`: does this cargo have a rating at this station?
@@ -53,10 +97,6 @@ pub mod goods_entry {
     }
 }
 
-/// Temporary raw adapter for `station_service.rs`; delegates to [`goods_entry::has_rating`].
-pub(crate) fn has_rating(status: u8) -> bool {
-    goods_entry::has_rating(goods_entry::States(status))
-}
 /// `GoodsEntry::HasVehicleEverTriedLoading`: reports whether a vehicle has
 /// ever tried to load the cargo at this station.
 pub(crate) fn has_vehicle_ever_tried_loading(last_speed: u8) -> bool {
