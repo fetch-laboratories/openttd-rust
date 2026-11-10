@@ -17,11 +17,11 @@
 extern "C" {
 #endif
 
-/** Selectors are 0 (before-middle) or 1 (after-middle). Copies are independent. */
+/** State flags are 0 (before the middle) or 1 (after the middle). Copies are independent. */
 typedef struct OpenTTDRustAlternatingState {
-	size_t position; ///< Logical position, independent of the selected Base iterator.
-	uint8_t next_after;
-	uint8_t current_after;
+	size_t position; ///< Position within the entire range.
+	uint8_t next_state; ///< Next state for advancing iterator. If true take from after middle, otherwise take from before middle.
+	uint8_t state; ///< Current state for reading iterator. If true take from after middle, otherwise take from before middle.
 } OpenTTDRustAlternatingState;
 
 /** A movement request accompanying the updated scalar state. */
@@ -41,7 +41,7 @@ OpenTTDRustAlternatingState openttd_rust_alternating_initialize(size_t end_posit
  * Choose movement from the current range distance; position < live_size.
  * Distance and typed movement satisfy the original valid iterator preconditions.
  * No cached length or random-access requirement. At logical end there is no
- * movement or completion: retain current_after and the last selected Base().
+ * movement or completion: retain state and the last selected Base().
  */
 OpenTTDRustAlternatingStep openttd_rust_alternating_advance(OpenTTDRustAlternatingState state, size_t live_size);
 
