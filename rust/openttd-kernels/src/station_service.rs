@@ -1460,10 +1460,6 @@ pub(crate) unsafe fn on_tick_station(w: &World, l: &Links, visits: &Visits) {
         id += 1;
     }
 }
-/// Temporary adapter for `session.rs`, held by #852; delegates to `on_tick_station`.
-pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *const Visits) {
-    unsafe { on_tick_station(&*world, &*links, &*visits) };
-}
 
 #[repr(C)]
 pub struct Loading {
