@@ -3109,9 +3109,13 @@ pub unsafe extern "C" fn openttd_test_town_stations(
     e.update_town_rating(t);
     count
 }
+/// `_town_rating_test` and `_town_test_ratings`; the town rating is in test-mode
+/// while `depth` is not zero.
 #[derive(Default)]
 struct RatingTest {
+    /// Number of times test-mode is switched on.
     depth: i32,
+    /// Map of towns to modified ratings, while in town rating test-mode.
     ratings: std::collections::BTreeMap<usize, i32>,
 }
 static RATING_TEST: GameState<RatingTest> = GameState::new(RatingTest {
