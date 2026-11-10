@@ -42,10 +42,10 @@ use super::townname_data::{
 
 /// Generates a number from given seed.
 /// `shift` is the number of bits seed is shifted to the right; the generated
-/// number is in interval 0...max-1. `GB(..., 16)` masks after shifting, and
-/// `ClampTo<uint16_t>` saturates the table size.
+/// number is in interval 0...max-1.
 fn seed_chance(shift: u8, max: usize, seed: u32) -> usize {
-    ((crate::bitmath_func::gb(seed, shift, 16) * max.min(u16::MAX as usize) as u32) >> 16) as usize
+    let max = crate::math::clamp_to_u16(i64::try_from(max).unwrap_or(i64::MAX));
+    ((crate::bitmath_func::gb(seed, shift, 16) * u32::from(max)) >> 16) as usize
 }
 /// Generates a number from given seed. Uses different algorithm than `SeedChance()`.
 /// `shift` is the number of bits seed is shifted to the right; the generated
