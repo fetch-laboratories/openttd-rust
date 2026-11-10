@@ -49,7 +49,7 @@ use crate::house::{
 use crate::house_type::{HouseClassID, HouseID};
 use crate::landscape_type::LandscapeType;
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
-use crate::math::{clamp_to_u8, round_div_su};
+use crate::math::{clamp_to_u8, clamp_to_u16, clamp_to_u32, round_div_su};
 use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
 use crate::random_func::chance16;
 use crate::road::{RoadTypeFlag, RoadTypeFlags};
@@ -2955,7 +2955,7 @@ impl Engine<'_> {
         if grow_amount == 0 {
             let amount = self
                 .services
-                .random_range((self.num_houses() / 10).min(u32::from(u16::MAX)))
+                .random_range(u32::from(clamp_to_u16(i64::from(self.num_houses() / 10))))
                 + 3;
             self.set_num_houses(self.num_houses().wrapping_add(amount));
             // SAFETY: Pure immediate owner mutation, without native callbacks.
@@ -3063,8 +3063,8 @@ pub(crate) fn sum_history(history: &[SuppliedHistory]) -> SuppliedHistory {
         (sum as u64).wrapping_add(u64::from(h.transported)) as i32
     }) as u64;
     SuppliedHistory {
-        production: (production / history.len() as u64).min(u64::from(u32::MAX)) as u32,
-        transported: (transported / history.len() as u64).min(u64::from(u32::MAX)) as u32,
+        production: clamp_to_u32(production / history.len() as u64),
+        transported: clamp_to_u32(transported / history.len() as u64),
     }
 }
 #[unsafe(no_mangle)]
