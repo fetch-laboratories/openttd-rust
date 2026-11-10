@@ -175,11 +175,11 @@ fn cargo_callbacks(
             unsafe { (c.callback_error)(indspec, callback.0, res) };
             break;
         }
-        let cargo = CargoType(crate::cargo_registry::openttd_rust_cargo_translate(
+        let cargo = crate::cargo_registry::get_cargo_translation(
             gb(u32::from(res), 0, 8) as u8,
             unsafe { (*indspec).grf_prop.grffile },
             false,
-        ));
+        );
         // Industries without "unlimited" cargo types support depend on the specific
         // order/slots of cargo types. They need to be able to blank out specific slots
         // without aborting the callback sequence, and solve this by returning undefined
@@ -279,7 +279,7 @@ pub(crate) unsafe fn do_create_new_industry(
         (*owner).metadata.width = 1;
         (*owner).metadata.height = 1;
         (*owner).metadata.kind = kind.0;
-        super::openttd_rust_industry_registry_insert(context.builder, kind.0, id.0);
+        super::industry_registry_insert(context.builder, kind, id);
     }
     let lists = unsafe {
         CargoLists {

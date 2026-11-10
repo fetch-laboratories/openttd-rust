@@ -2395,8 +2395,18 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_insert(
     kind: u8,
     id: u16,
 ) {
-    let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
-    let id = IndustryID(id);
+    unsafe { industry_registry_insert(owner, IndustryType(kind), IndustryID(id)) };
+}
+/// `Industry::industries[type].insert(index)`: add the industry to its type's sorted
+/// registry.
+/// # Safety
+/// Live builder and valid original type. No registry view survives this call.
+pub(crate) unsafe fn industry_registry_insert(
+    owner: *mut Builder,
+    kind: IndustryType,
+    id: IndustryID,
+) {
+    let registry = unsafe { &mut (*owner).registry[usize::from(kind.0)] };
     if let Err(index) = registry.binary_search(&id) {
         registry.insert(index, id);
     }
@@ -2409,8 +2419,19 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_erase(
     kind: u8,
     id: u16,
 ) {
-    let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
-    if let Ok(index) = registry.binary_search(&IndustryID(id)) {
+    unsafe { industry_registry_erase(owner, IndustryType(kind), IndustryID(id)) };
+}
+/// `Industry::industries[type].erase(index)`: remove the industry from its type's
+/// registry.
+/// # Safety
+/// Live builder and valid original type. No registry view survives this call.
+pub(crate) unsafe fn industry_registry_erase(
+    owner: *mut Builder,
+    kind: IndustryType,
+    id: IndustryID,
+) {
+    let registry = unsafe { &mut (*owner).registry[usize::from(kind.0)] };
+    if let Ok(index) = registry.binary_search(&id) {
         registry.remove(index);
     }
 }

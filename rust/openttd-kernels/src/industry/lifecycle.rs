@@ -205,7 +205,7 @@ pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &Li
         // Clear the persistent storage.
         (w.delete_storage)(industry);
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
-        super::openttd_rust_industry_registry_erase(builder, kind, id.0);
+        super::industry_registry_erase(builder, crate::industry_type::IndustryType(kind), id);
         (w.delete_news)(id.0);
         (w.close_view)(id.0);
         (w.close_production)(id.0);
