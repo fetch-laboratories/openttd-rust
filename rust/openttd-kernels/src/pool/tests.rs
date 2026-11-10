@@ -55,8 +55,8 @@ unsafe extern "C" fn set_index(context: *mut c_void, shell: *mut c_void, index: 
         assert_eq!((*slot).shell, shell);
         assert!((*slot).record.is_null());
         assert_eq!(
-            (*view).used_bitmap.as_slice()[index / usize::BITS as usize]
-                >> (index % usize::BITS as usize)
+            (*view).used_bitmap.as_slice()[index / BITMAP_SIZE]
+                >> (index % BITMAP_SIZE)
                 & 1,
             1
         );
@@ -89,8 +89,8 @@ unsafe extern "C" fn destroy(context: *mut c_void, shell: *mut c_void) {
             (*c).events.push((
                 'F',
                 index,
-                (*view).used_bitmap.as_slice()[index / usize::BITS as usize]
-                    >> (index % usize::BITS as usize)
+                (*view).used_bitmap.as_slice()[index / BITMAP_SIZE]
+                    >> (index % BITMAP_SIZE)
                     & 1,
             ));
         }
@@ -220,7 +220,7 @@ fn indexed_growth_holes_and_live_typed_lookup() {
 #[test]
 fn maximum_tail_growth_capacity_and_credit() {
     unsafe {
-        for maximum in [10, usize::BITS as usize + 3] {
+        for maximum in [10, BITMAP_SIZE + 3] {
             let mut f = Fixture::new(maximum, false, true);
             let p = f.raw();
             let v = PoolCore::descriptor(p);
@@ -231,10 +231,10 @@ fn maximum_tail_growth_capacity_and_credit() {
                 assert_eq!((*shell.cast::<Shell>()).index, expected);
                 let len = (*v).slots.len();
                 assert_eq!(len, ((expected + 4) & !3).min(maximum));
-                if !len.is_multiple_of(usize::BITS as usize) {
+                if !len.is_multiple_of(BITMAP_SIZE) {
                     assert_eq!(
-                        (*v).used_bitmap.as_slice().last().unwrap() >> (len % usize::BITS as usize),
-                        usize::MAX >> (len % usize::BITS as usize)
+                        (*v).used_bitmap.as_slice().last().unwrap() >> (len % BITMAP_SIZE),
+                        usize::MAX >> (len % BITMAP_SIZE)
                     );
                 }
             }
