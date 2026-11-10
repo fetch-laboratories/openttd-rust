@@ -277,6 +277,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.roadveh_acceleration_model = &_settings_game.vehicle.roadveh_acceleration_model,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
+	.select_goods = &_settings_game.order.selectgoods,
 	.station_noise = &_settings_game.economy.station_noise_level,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
 	.town_growth_rate = &_settings_game.economy.town_growth_rate,

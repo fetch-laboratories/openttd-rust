@@ -959,7 +959,7 @@ impl Ctx<'_> {
     /// station will be deleted after a little while.
     fn delete_station_if_empty(&self, st: *mut BaseStation) {
         let owner = (self.world().owner)(st);
-        if !(self.world().in_use)(st) {
+        if !self.world().in_use(st) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
             let fields = unsafe { crate::station_service::fields(owner) };
             unsafe { (&raw mut (*fields).delete_ctr).write(0) };
@@ -1091,7 +1091,7 @@ impl Ctx<'_> {
         let mut threshold = 8;
         let mut best_station: *mut BaseStation = std::ptr::null_mut();
         crate::station::spatial::for_all_stations_radius(self.shared, tile, threshold, |st| {
-            if (self.world().in_use)(st)
+            if self.world().in_use(st)
                 || CompanyID((self.world().station_owner)(st))
                     != CompanyID((self.shared.current_company)())
             {

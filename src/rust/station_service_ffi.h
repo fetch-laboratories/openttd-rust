@@ -96,11 +96,8 @@ struct OpenTTDStationServices {
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	OpenTTDEnvironmentServices environment;
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
-	bool (*in_use)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(in_use);
 	bool (*is_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
-	bool (*local_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(local_owner);
 	bool (*town_statue)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town_statue);
-	bool (*select_goods)() noexcept OPENTTD_SERVICE_DEFAULT(select_goods);
 	bool (*rating_cheat)() noexcept OPENTTD_SERVICE_DEFAULT(rating_cheat);
 	uint32_t (*available)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(available);
 	bool (*cargo_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
@@ -109,7 +106,6 @@ struct OpenTTDStationServices {
 	bool (*packet_available)() noexcept OPENTTD_SERVICE_DEFAULT(packet_available);
 	void (*rating_redraw)(OpenTTDBaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(rating_redraw);
 	void (*acceptance_news)(OpenTTDBaseStation *, uint64_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_news);
-	void (*acceptance_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_redraw);
 	void (*delete_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_station);
 
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);

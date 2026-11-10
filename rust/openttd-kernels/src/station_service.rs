@@ -438,11 +438,8 @@ pub struct World {
     pub(crate) pool_size: extern "C" fn() -> usize,
     pub(crate) environment: crate::services::EnvironmentServices,
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
-    pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
-    pub(crate) local_owner: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) town_statue: extern "C" fn(*mut BaseStation) -> bool,
-    pub(crate) select_goods: extern "C" fn() -> bool,
     pub(crate) rating_cheat: extern "C" fn() -> bool,
     pub(crate) available: extern "C" fn(*mut BaseStation, u8) -> u32,
     pub(crate) cargo_valid: extern "C" fn(u8) -> bool,
@@ -451,7 +448,6 @@ pub struct World {
     pub(crate) packet_available: extern "C" fn() -> bool,
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
     pub(crate) acceptance_news: extern "C" fn(*mut BaseStation, u64, bool),
-    pub(crate) acceptance_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
 
     pub(crate) append_packet:
@@ -469,6 +465,34 @@ impl World {
         // SAFETY: the immutable shared table outlives this synchronous entry.
         let shared = unsafe { &*self.shared };
         (shared.random)(shared.context)
+    }
+    /// `BaseStation::IsInUse`: any facility other than a waypoint.
+    pub(crate) fn in_use(&self, st: *mut BaseStation) -> bool {
+        let facilities = StationFacilities((self.facilities)(st));
+        [
+            StationFacility::Train,
+            StationFacility::TruckStop,
+            StationFacility::BusStop,
+            StationFacility::Airport,
+            StationFacility::Dock,
+        ]
+        .into_iter()
+        .any(|facility| facilities.test(facility))
+    }
+    /// `st->owner == _local_company`.
+    fn local_owner(&self, st: *mut BaseStation) -> bool {
+        // SAFETY: The shared, station command, command and company tables are immutable
+        // for the process lifetime.
+        let local = unsafe {
+            let commands = &*(*((*self.shared).station_commands)()).command;
+            ((*(commands.company)()).local_company)()
+        };
+        (self.station_owner)(st) == local
+    }
+    /// `_settings_game.order.selectgoods`, from the settings catalog.
+    fn select_goods(&self) -> bool {
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        unsafe { (*self.shared).settings().select_goods.read() }
     }
 }
 // Native iterator/container frames live on the C++ caller's stack. This private
@@ -644,7 +668,7 @@ pub(crate) unsafe fn update_station_acceptance(st: *mut BaseStation, show_msg: b
         return;
     }
     /* show a message to report that the acceptance was changed? */
-    if show_msg && (w.local_owner)(st) && (w.in_use)(st) {
+    if show_msg && w.local_owner(st) && w.in_use(st) {
         /* Combine old and new masks to get changes */
         let accepts = new_acc.0 & !old_acc.0;
         let rejects = !new_acc.0 & old_acc.0;
@@ -657,7 +681,8 @@ pub(crate) unsafe fn update_station_acceptance(st: *mut BaseStation, show_msg: b
         }
     }
     /* redraw the station view since acceptance changed */
-    (w.acceptance_redraw)(st);
+    // `SetWindowWidgetDirty` of the ratings list; the same redraw as unchanged waiting.
+    (w.rating_redraw)(st, false);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_acceptance(
@@ -746,7 +771,7 @@ unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
         }
         byte_inc_sat(unsafe { &raw mut (*ge).time_since_pickup });
         /* If this cargo hasn't been picked up in a long time, get rid of it. */
-        if unsafe { (*ge).time_since_pickup } == 255 && (w.select_goods)() {
+        if unsafe { (*ge).time_since_pickup } == 255 && w.select_goods() {
             unsafe {
                 let mut status = goods_status(ge);
                 status.reset(GoodsState::Rating);
@@ -1015,7 +1040,7 @@ fn can_move_goods_to_station(
         return false;
     }
     /* Selectively servicing stations, and not this one. */
-    if (w.select_goods)() && !has_vehicle_ever_tried_loading(unsafe { (*ge).last_speed }) {
+    if w.select_goods() && !has_vehicle_ever_tried_loading(unsafe { (*ge).last_speed }) {
         return false;
     }
     let facilities = StationFacilities((w.facilities)(st));
@@ -1410,7 +1435,7 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
 }
 /// `StationHandleSmallTick`: called for every station each tick.
 unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World) {
-    if StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint) || !(w.in_use)(st) {
+    if StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint) || !w.in_use(st) {
         return;
     }
     let state = (w.owner)(st);
@@ -1430,7 +1455,7 @@ unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World) {
 /// deleted).
 unsafe fn station_handle_big_tick(st: *mut BaseStation, w: &World) -> bool {
     let state = (w.owner)(st);
-    if !(w.in_use)(st) {
+    if !w.in_use(st) {
         let delete_ctr = unsafe { (*state).fields.delete_ctr }.wrapping_add(1);
         unsafe {
             (&raw mut (*state).fields.delete_ctr).write(delete_ctr);
@@ -2598,11 +2623,8 @@ crate::abi::layouts! {
         pool_size,
         environment,
         facilities,
-        in_use,
         is_station,
-        local_owner,
         town_statue,
-        select_goods,
         rating_cheat,
         available,
         cargo_valid,
@@ -2611,7 +2633,6 @@ crate::abi::layouts! {
         packet_available,
         rating_redraw,
         acceptance_news,
-        acceptance_redraw,
         delete_station,
 
         append_packet,

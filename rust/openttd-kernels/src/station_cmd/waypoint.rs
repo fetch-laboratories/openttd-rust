@@ -338,7 +338,7 @@ impl Ctx<'_> {
         for id in 0..(self.world().pool_size)() {
             let wp = self.waypoint(StationID(id as u16));
             if wp.is_null()
-                || (self.world().in_use)(wp)
+                || self.world().in_use(wp)
                 || StringID((self.s.string_id)(wp)) != str
                 || CompanyID((self.world().station_owner)(wp)) != cid
                 || (self.s.road_waypoint)(wp) != is_road
@@ -585,7 +585,7 @@ impl Ctx<'_> {
         }
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start_tile.0);
-        } else if !(self.world().in_use)(wp) {
+        } else if !self.world().in_use(wp) {
             /* Move existing (recently deleted) waypoint to the new location */
             (self.s.set_location)(wp, start_tile.0);
         }
@@ -786,7 +786,7 @@ impl Ctx<'_> {
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start_tile.0);
             (self.s.set_road_waypoint)(wp);
-        } else if !(self.world().in_use)(wp) {
+        } else if !self.world().in_use(wp) {
             /* Move existing (recently deleted) waypoint to the new location */
             (self.s.set_location)(wp, start_tile.0);
         }
