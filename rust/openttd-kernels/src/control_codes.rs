@@ -49,6 +49,8 @@ impl StringControlCode {
     pub const SCC_LTBLUE: Self = Self(0xe04f);
     /// `SCC_LTBROWN` from `table/control_codes.h`.
     pub const SCC_LTBROWN: Self = Self(0xe047);
+    /* The next variables are part of a NewGRF subsystem for creating text strings.
+     * It uses a "stack" of bytes and reads from there. */
     /// 85: Discard the next two bytes
     pub const SCC_NEWGRF_DISCARD_WORD: Self = Self(0xe072);
     /// 9A 06: Read 1 byte from the stack and print it as hex

@@ -109,17 +109,17 @@ pub fn valid(bytes: &[u8]) -> bool {
     while position < bytes.len() {
         let decoded = utf8::decode(&bytes[position..]);
         if decoded.length == 0 {
-            return false;
+            return false; // invalid codepoint
         }
         if decoded.codepoint == 0 {
-            return true;
+            return true; // NUL termination
         }
         if !crate::string_func::is_printable(decoded.codepoint) || sprite(decoded.codepoint) {
             return false;
         }
         position += decoded.length;
     }
-    false
+    false // missing NUL termination
 }
 
 /// Capacity uses the current external consumer, including native unsigned wrap.
