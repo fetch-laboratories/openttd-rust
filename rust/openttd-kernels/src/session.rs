@@ -13,6 +13,7 @@ use crate::game_state::GameState;
 use crate::network_action::{Actions, Resume};
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
+use crate::settings_type::ParticipateSurvey;
 #[repr(C)]
 pub struct Frame {
     _opaque: [u8; 0],
@@ -145,8 +146,6 @@ pub struct Services {
     pub schedule_measurement: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
     pub schedule_end: extern "C" fn(*mut Frame),
 }
-/// `ParticipateSurvey::PS_ASK`.
-const PS_ASK: u8 = 0;
 impl Services {
     /// One client or game setting from the shared catalog, loaded at its observation point.
     fn setting<T: Copy>(
@@ -609,7 +608,9 @@ impl<'a> Session<'a> {
                 if (s.fallback_sound_warning)() {
                     (s.show_sound_warning)();
                 }
-                if s.setting(|c| c.participate_survey) == PS_ASK && !unsafe { *ASKED_SURVEY.get() }
+                if ParticipateSurvey(s.setting(|c| c.participate_survey))
+                    == ParticipateSurvey::PS_ASK
+                    && !unsafe { *ASKED_SURVEY.get() }
                 {
                     unsafe {
                         *ASKED_SURVEY.get() = true;

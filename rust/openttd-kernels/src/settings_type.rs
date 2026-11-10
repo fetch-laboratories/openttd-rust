@@ -197,3 +197,16 @@ impl IndustryDensity {
     /// Number of industry density settings.
     pub const ID_END: Self = Self(7);
 }
+
+/// Possible values for the `participate_survey` setting.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParticipateSurvey(pub u8);
+impl ParticipateSurvey {
+    /// Ask whether the user wants to participate.
+    pub const PS_ASK: Self = Self(0);
+    /// Do not participate.
+    pub const PS_NO: Self = Self(1);
+    /// Participate in the survey.
+    pub const PS_YES: Self = Self(2);
+}
