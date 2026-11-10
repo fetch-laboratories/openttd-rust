@@ -55,9 +55,7 @@ unsafe extern "C" fn set_index(context: *mut c_void, shell: *mut c_void, index: 
         assert_eq!((*slot).shell, shell);
         assert!((*slot).record.is_null());
         assert_eq!(
-            (*view).used_bitmap.as_slice()[index / BITMAP_SIZE]
-                >> (index % BITMAP_SIZE)
-                & 1,
+            (*view).used_bitmap.as_slice()[index / BITMAP_SIZE] >> (index % BITMAP_SIZE) & 1,
             1
         );
         ptr::addr_of_mut!((*shell.cast::<Shell>()).index).write(index);
@@ -89,9 +87,7 @@ unsafe extern "C" fn destroy(context: *mut c_void, shell: *mut c_void) {
             (*c).events.push((
                 'F',
                 index,
-                (*view).used_bitmap.as_slice()[index / BITMAP_SIZE]
-                    >> (index % BITMAP_SIZE)
-                    & 1,
+                (*view).used_bitmap.as_slice()[index / BITMAP_SIZE] >> (index % BITMAP_SIZE) & 1,
             ));
         }
     }
