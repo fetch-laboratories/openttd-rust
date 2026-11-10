@@ -5554,7 +5554,8 @@ impl Ctx<'_> {
         if self.get_road_type(tile, RoadTramType::RTT_ROAD) != RoadType::INVALID_ROADTYPE {
             let road_owner = self.get_road_owner(tile, RoadTramType::RTT_ROAD);
             if road_owner == CompanyID::TOWN {
-                let bits = (self.shared.road_bits)(tile.0, 0, false);
+                let bits =
+                    (self.shared.road_bits)(tile.0, u8::from(RoadTramType::RTT_ROAD.0), false);
                 unsafe {
                     crate::road_cmd::openttd_rust_road_allow_remove(
                         (self.shared.road_commands)(),
@@ -5562,7 +5563,7 @@ impl Ctx<'_> {
                         tile.0,
                         bits,
                         CompanyID::TOWN.0,
-                        0,
+                        u8::from(RoadTramType::RTT_ROAD.0),
                         flags.0,
                         true,
                     );
