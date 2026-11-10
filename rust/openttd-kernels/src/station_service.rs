@@ -100,7 +100,7 @@ pub struct Fields {
 }
 pub struct Service {
     fields: Fields,
-    cargo: [CargoFields; 64],
+    cargo: [CargoFields; NUM_CARGO as usize],
     // Each entry is raw-owned: native iterators retain raw pointers, so even a
     // temporary Box/&mut reborrow on a surviving entry would invalidate them.
     queue: Vec<*mut QueueEntry>,
@@ -159,26 +159,42 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
         }
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
-    Box::into_raw(Box::new(Service {
-        fields: Fields {
-            always_accepted: 0,
-            delete_ctr: 0,
-            time_since_load: 255,
-            time_since_unload: 255,
-            last_vehicle_type: VehicleType::VEH_INVALID.0,
-        },
-        cargo: [CargoFields::default(); 64],
-        queue: Vec::new(),
-        catchment: crate::station::Catchment::default(),
-    }))
+impl Service {
+    /// The Rust-owned part of `Station::Station`, with the members' defaults.
+    fn new() -> Self {
+        Self {
+            fields: Fields {
+                always_accepted: 0,
+                delete_ctr: 0,
+                time_since_load: 255,
+                time_since_unload: 255,
+                last_vehicle_type: VehicleType::VEH_INVALID.0,
+            },
+            cargo: [CargoFields::default(); NUM_CARGO as usize],
+            queue: Vec::new(),
+            catchment: crate::station::Catchment::default(),
+        }
+    }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_service_destroy(state: *mut Service) {
+/// Allocate the Rust-owned part of a new station.
+fn create() -> *mut Service {
+    Box::into_raw(Box::new(Service::new()))
+}
+/// Release the Rust-owned part of a destroyed station.
+/// # Safety
+/// `state` came from `create` and is not used afterwards.
+unsafe fn destroy(state: *mut Service) {
     unsafe {
         drop(Box::from_raw(state));
     }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
+    create()
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_service_destroy(state: *mut Service) {
+    unsafe { destroy(state) };
 }
 /// The station's Rust-owned scalar fields, for immediate field-sized access only.
 /// # Safety
