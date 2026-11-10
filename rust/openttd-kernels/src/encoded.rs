@@ -159,6 +159,7 @@ impl Output {
                 }
                 StringParameterData::String(bytes) => {
                     if assertions {
+                        // The facade supplies the native WITH_ASSERT policy.
                         /* Don't allow an encoded string to contain another encoded string. */
                         let first = utf8::decode(bytes);
                         if first.length > 0
