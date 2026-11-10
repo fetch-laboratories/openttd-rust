@@ -62,7 +62,7 @@ cargo test --workspace --locked
 
 ### Quick cleanup checks
 
-Ordinary PR pushes and protected-branch pushes run the four Cargo checks above in `ci-quick.yml`, followed by the cleanup gates below. `python3 tools/preflight.py --base origin/rust-migration` runs all of them locally; the table says what each distinguishes. These checks preserve the original's casts and control flow; a faithful truncation must not become a checked conversion to reduce debt.
+Ordinary PR pushes and protected-branch pushes run the four Cargo checks above in `ci-quick.yml`, followed by the cleanup gates below. `python3 tools/preflight.py --base origin/rust-migration` runs all of them locally; skip invoking it for the [inert-Markdown exception](workflow.md#commits-and-pushes). The table says what each distinguishes. These checks preserve the original's casts and control flow; a faithful truncation must not become a checked conversion to reduce debt.
 
 | Command | Failure distinguished |
 | --- | --- |

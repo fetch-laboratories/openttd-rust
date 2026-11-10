@@ -134,5 +134,52 @@ fn f() {
         self.assertFalse(INVENTORY.homonym("cargo", "u8"))
 
 
+class LongFunctionTests(unittest.TestCase):
+    SOURCE = """
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_a(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}
+pub unsafe extern "C" fn openttd_rust_b(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}
+impl X {
+    fn build(&mut self, tile: u32, flags: u16, a: u8, b: u8, c: u8, d: u8, e: u8) {}
+    fn walk(&self, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, flags: u32) {}
+    fn seven(&self, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) {}
+}
+#[cfg(test)]
+mod tests {
+    fn stub(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}
+}
+"""
+
+    def test_each_class_counts_its_seeded_functions(self) -> None:
+        found = [
+            (site.kind, site.detail)
+            for site in INVENTORY.long_functions(RUST, self.SOURCE)
+        ]
+        self.assertEqual(
+            found,
+            [
+                ("ffi export", "openttd_rust_a: 8 parameters"),
+                ("ffi export", "openttd_rust_b: 8 parameters"),
+                ("command", "build: 8 parameters"),
+                ("helper", "walk: 8 parameters"),
+            ],
+        )
+
+    def test_cfg_test_module_files_are_test_code(self) -> None:
+        rust = {
+            "src/lib.rs": "#[cfg(test)]\nmod test_tables;\nmod live;",
+            "src/a/mod.rs": "#[cfg(test)]\npub(crate) mod stubs;",
+        }
+        self.assertEqual(
+            INVENTORY.test_modules(rust),
+            {
+                "src/test_tables.rs",
+                "src/test_tables/mod.rs",
+                "src/a/stubs.rs",
+                "src/a/stubs/mod.rs",
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

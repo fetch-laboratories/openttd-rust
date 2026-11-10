@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import cleanup_contract
 from baseline_ratchet import debt_errors
-from cleanup_contract import associated_pull, reviewed, source_reviews
+from cleanup_contract import associated_pull, reviewed
 from rust_syntax import boundary_ids
 from source_fixture import initialize
 from vcs import git
@@ -602,7 +602,6 @@ class GrowthTests(unittest.TestCase):
             patch.object(cleanup_contract, "git", fake_git),
             patch.object(cleanup_contract, "gh", fake_gh),
             patch.object(cleanup_contract, "discussion", return_value=[]),
-            patch.object(cleanup_contract, "source_reviews", return_value=[]),
             patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
         ):
             environment.pop("GITHUB_EVENT_PATH", None)
@@ -1047,20 +1046,6 @@ class CarryTests(unittest.TestCase):
             self.assertEqual(results, [1, 0, 0])
             recorded = json.loads((root / "migration/clippy-debt.json").read_text())
             self.assertEqual(recorded["sites"], {new: [8]})
-
-    def test_component_reviews_use_agent_paths_under_shared_login(self) -> None:
-        proposal = {"kind": "lint"}
-        owner = acceptance_comment("h", proposal).replace("/review", "/impl")
-        independent = acceptance_comment("h", proposal)
-        body = '```cleanup-acceptance\n{"kind":"reviews","pulls":[12]}\n```'
-        with (
-            patch("cleanup_contract.gh", return_value=json.dumps({"body": owner})),
-            patch("cleanup_contract.discussion", return_value=[owner, independent]),
-        ):
-            comments = source_reviews("repos/shared/account", body, 13)
-        self.assertEqual(comments, [independent])
-        self.assertTrue(reviewed(proposal, comments, "/integration", "h"))
-        self.assertFalse(reviewed(proposal, [owner], "/impl", "h"))
 
     def test_attribute_and_signature_changes_invalidate_acceptance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

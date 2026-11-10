@@ -190,32 +190,8 @@ def context() -> tuple[str, list[dict[str, Any]], list[str], str]:
         raise ValueError("PR head changed since the captured checkout")
     body = current["body"] or ""
     author = ATTRIBUTION.search(body)
-    comments = discussion(prefix, number) + source_reviews(prefix, body, number)
+    comments = discussion(prefix, number)
     return author[1] if author else "", records(body), comments, head
-
-
-def source_reviews(prefix: str, body: str, number: int) -> list[str]:
-    """Comments on the component PRs an integration PR names.
-
-    Each component's own author still cannot accept its contract.
-    """
-    comments: list[str] = []
-    for record in records(body):
-        if record.get("kind") != "reviews":
-            continue
-        for source in record.get("pulls", []):
-            if not isinstance(source, int) or source == number:
-                continue
-            owner = ATTRIBUTION.search(
-                json.loads(gh("api", f"{prefix}/pulls/{source}"))["body"] or ""
-            )
-            if owner:
-                comments.extend(
-                    text
-                    for text in discussion(prefix, source)
-                    if (match := ATTRIBUTION.search(text)) and match[1] != owner[1]
-                )
-    return comments
 
 
 def discussion(prefix: str, number: int) -> list[str]:
