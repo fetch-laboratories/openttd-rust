@@ -68,7 +68,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.last_service = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleCalendarService(VehicleOf(v)).base(); },
 		.primary = RustVehicleRead<bool, RustVehiclePrimary>,
 		.train_services = []() noexcept { return &GetTrainServices(); },
-		.road_acceleration = RustRoadAccelerationModel,
 		.order_max_speed = RustVehicleRead<uint16_t, RustVehicleOrderMaxSpeed>,
 		.id = RustVehicleIndex<OpenTTDVehicle *>,
 		.old_order = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->current_order.MapOldOrder(); },

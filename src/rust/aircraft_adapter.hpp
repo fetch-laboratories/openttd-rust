@@ -163,7 +163,8 @@ static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicl
 
 static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station); st->had_vehicle_of_type |= HVOT_AIRCRAFT;
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station);
+	/* show newsitem of celebrating citizens */
 	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->GetOwner() == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
 	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }

@@ -1,6 +1,6 @@
 # Review checklist
 
-Readers: reviewers. Reviewers enforce the standards implementers no longer read in full. Commit fixes to the PR branch and report under [review](workflow.md#review), starting with `Reviewed commit: <sha>` in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md) skeleton.
+Readers: reviewers. Reviewers enforce the standards implementers no longer read in full, and report as [report](#report) says.
 
 ## Fidelity first
 
@@ -21,14 +21,13 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 ## Evidence
 
 - Each claim traces to production code and an expectation taken from the original.
-- Each new scenario, test or checker names behaviour existing checks cannot distinguish; one that names none is deleted.
-- Changed fixtures and expectations are explained. Growth or lint exceptions name the original behaviour that requires them and what retires them.
-- Each declared carry pairs the same item before and after a rename or move, and each fidelity suppression's reason names the original definition or cast it preserves.
+- Each new scenario, fixture, test or checker names behaviour existing checks cannot distinguish ([cost decisions](planning.md#cost-decisions)); one that names none, or compares an operation with itself, is a finding, and the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
+- Changed fixtures and expectations are explained. Each growth or lint exception names the original behaviour that requires it and what retires it; each declared carry pairs the same item before and after a rename or move; each fidelity suppression's reason names the original definition or cast it preserves. The [cleanup checks](rust-migration.md#quick-cleanup-checks) enforce these records' form, not their truth.
 
 ## Cleanup PRs
 
-- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or, where code differs, a source review showing each changed function performs the same operations in the same order, and exact-head Full.
+- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or, where code differs, a source review showing each changed function performs the same operations in the same order, and the merge queue's Full.
 
 ## Report
 
-List each finding, its fixing commit and the check that found it, then the disposition. Under a Claude Code root, list each finding with its location and the original it departs from, and leave the fix to the implementer ([team](team.md#claude-code-root)). Send scope or policy questions to root unfixed. Record branches no scenario reaches on #156.
+Use the review skeleton in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md), starting with `Reviewed commit: <sha>`. Name the functions or files compared with original bodies and duplicate callbacks, and cite Quick's [orphan-export check](rust-migration.md#shared-code-checks-and-port-metrics) for exports and declarations. Under a Claude Code root, report only, as the [review brief](review-brief.md#report) says. Otherwise commit each fix to the PR branch and rerun only the checks it affects; list each finding, its fixing commit and the check that found it. End with the disposition, with no narration when there are no findings. Send scope or policy questions to root unfixed; under a Claude Code root, rule on those a recorded decision answers ([policy questions](review-brief.md#policy-questions)). Record branches no scenario reaches on #156, not only in the disposition.

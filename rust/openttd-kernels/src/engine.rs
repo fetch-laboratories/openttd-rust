@@ -196,7 +196,6 @@ pub struct Services {
     pub display_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     pub engine_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     pub start_settings: unsafe extern "C" fn() -> StartSettings,
-    pub train_limit: unsafe extern "C" fn() -> u16,
     pub road_limit: unsafe extern "C" fn() -> u16,
     pub ship_limit: unsafe extern "C" fn() -> u16,
     pub aircraft_limit: unsafe extern "C" fn() -> u16,
@@ -539,7 +538,7 @@ unsafe fn wagon(e: EngineRef) -> bool {
 unsafe fn disabled(s: &Services, kind: VehicleType, ai: bool) -> bool {
     match kind {
         VehicleType::TRAIN => unsafe {
-            call!(s, train_limit) == 0 || (ai && call!(s, ai_train_disabled))
+            (*s.shared).settings().max_trains.read() == 0 || (ai && call!(s, ai_train_disabled))
         },
         VehicleType::ROAD => unsafe {
             call!(s, road_limit) == 0 || (ai && call!(s, ai_road_disabled))
@@ -1254,7 +1253,6 @@ crate::abi::layouts! {
         display_variant,
         engine_id,
         start_settings,
-        train_limit,
         road_limit,
         ship_limit,
         aircraft_limit,

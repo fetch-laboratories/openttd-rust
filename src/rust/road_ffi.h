@@ -44,7 +44,6 @@ struct OpenTTDRoadLeaves {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
-	uint32_t (OPENTTD_RUST_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
 	uint8_t (OPENTTD_RUST_CALL *any_road_bits)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(any_road_bits);
 	bool (OPENTTD_RUST_CALL *is_road_depot_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot_tile);
 	uint8_t (OPENTTD_RUST_CALL *depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_direction);
@@ -57,7 +56,7 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadTramBuildRead (OPENTTD_RUST_CALL *tram_build_read)(OpenTTDVehicle *, OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(tram_build_read);
 	void (OPENTTD_RUST_CALL *disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	bool (OPENTTD_RUST_CALL *should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
-	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
+	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 
 	void (OPENTTD_RUST_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);
 	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);

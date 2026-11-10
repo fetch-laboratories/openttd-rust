@@ -472,12 +472,6 @@ unsafe fn run_ticks<const COUNTED: bool>(
                 }
                 continue;
             }
-            if COUNTED {
-                crate::witness::add(
-                    crate::witness::VEHICLE_OBSERVED_BYTES,
-                    std::mem::size_of::<PostTick>() as u64,
-                );
-            }
             // The survivor's type and front are read after the source assertion.
             let bundle = PostTick::after_tick(vehicle);
             unsafe { post_tick::<COUNTED>(&post, vehicle, &bundle) };

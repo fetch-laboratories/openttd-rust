@@ -33,26 +33,17 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 - Iterate locally with the build and Cargo checks. Scenario comparison runs on CI, not on this host (user, 2026-11-10): once the local checks pass, push and run `python3 tools/ci.py request PR --profile native`, which runs the whole simulation tier, then wait on it in the background. A CI shard ran 186 scenarios in 3 minutes. On this host, idle, the default set was unfinished after 25 minutes and had written 55 GB to the hard disk. Run a scenario locally, by name, only to diagnose a failure. Add no local suite or pre-merge local build gate.
 - A passing `native` request at the reviewed head is the scenario evidence a review needs. The queue's Full repeats the tier on the merged tree.
 - Ordinary PR pushes run cheap checks; do not use `[skip ci]` on code pushes. An implementer requests `--profile rust` or `native` for its own PR; a new request replaces that PR's running one. Request `platform` only for a suspected macOS failure or once before queueing a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/` (#642's new crate dependency turned the cadence red after it merged): it adds macOS, the one platform Full leaves to the cadence. Docs-only pushes to `rust-migration` remain allowed. Each makes the queue rebuild the queued PRs, which reuse the earlier run of the same code ([carried validation](rust-migration.md#continuous-integration)) and cost seconds; still, push no docs only to record a merge.
-- Before queueing a PR that removes a name, grep `tools/simulation/` and `src/tests/` for it: fixtures for scenarios not run locally compile only in Full.
 - See [continuous integration](rust-migration.md#continuous-integration) for Full jobs and profiles.
 
 ## Review
 
 - Infrastructure reviews apply [cost decisions](planning.md#cost-decisions).
-- A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md). For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
-- For each new scenario, fixture or checker, the reviewer names the behavior it distinguishes that existing checks cannot ([cost decisions](planning.md#cost-decisions)). One that names none, or compares an operation with itself, is a finding; the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
-- The reviewer commits each fix to the PR branch; under a Claude Code root the reviewer reports findings and the implementer commits the fixes ([team](team.md#claude-code-root)). Rerun only checks affected by those fixes; a review without fixes reruns nothing. List each finding, its fixing commit and the check that found it. Send findings that need a scope or policy decision to root unfixed.
-- Use the review report skeleton in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md), starting with `Reviewed commit: <sha>`. Name the functions or files compared with original bodies and duplicate callbacks; cite the quick-CI orphan-export check for exports and declarations. Name touched `WITH_RUST` bodies and their production callers. Each orphan is a finding. Add no narration when there are no findings. Put branches the harness does not reach in #156, not only in the disposition.
+- A separate reviewer examines the final commit and evidence under the [review checklist](review-checklist.md) and reports as its [report](review-checklist.md#report) says. For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review. CI checks those commits. A simulation behavior fix found by CI needs a fresh scoped review, including arithmetic or assertion fixes.
-- A reviewed PR's base update that meets a condition under [integration](root-workflow.md#integration) needs only CI.
 
 ## Integration
 
 When every reviewer accepts, the implementer queues the PR in the merge queue under [integration](root-workflow.md#integration).
-
-## Cleanup
-
-Root follows [cleanup and housekeeping](root-workflow.md#cleanup).
 
 ## Automatic rollback and wind-down
 

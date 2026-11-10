@@ -38,7 +38,6 @@ pub struct Services {
     pub new_rear: extern "C" fn(*mut ()) -> *mut (),
     pub link_multihead: extern "C" fn(*mut (), *mut ()),
     pub invalidate_grf: extern "C" fn(*mut ()),
-    pub train_limit: extern "C" fn() -> u16,
     pub unit: extern "C" fn(*mut ()) -> u16,
     pub use_unit: extern "C" fn(*mut (), u16),
     pub release_unit: extern "C" fn(*mut ()),
@@ -507,7 +506,10 @@ fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> 
     if engine(src) + engine(dst) - engine(original_src) - engine(original_dst) <= 0 {
         return None;
     }
-    if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN) <= (x.s.train_limit)() {
+    // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+    if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN)
+        <= unsafe { x.t.shared.settings().max_trains.read() }
+    {
         return None;
     }
     Some(x.b.too_many)
@@ -982,7 +984,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
         cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
-        invalidate_grf, train_limit, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
+        invalidate_grf, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }
