@@ -752,10 +752,8 @@ pub(crate) unsafe fn cmd_found_town(
         }
     }
 }
-/// Generate towns for the Scenario Editor Random Towns button or world generation.
-/// `has_number == false` uses the game settings (`town_cmd.cpp::GenerateTowns`).
 /// # Safety
-/// Tables and native stack frames remain live; result is writable. Only named progress services report cancellation; scratch drops before native rethrow.
+/// As `generate_towns`; `result` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     s: *const FoundingServices,
@@ -767,10 +765,35 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     number: u32,
     result: *mut bool,
 ) -> u8 {
+    let context = FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    };
+    let number = has_number.then_some(number);
+    u8::from(unsafe { generate_towns(context, layout, number, &mut *result) })
+}
+/// Generate towns for the Scenario Editor Random Towns button or world generation.
+/// `number == None` uses the game settings (`town_cmd.cpp::GenerateTowns`).
+/// # Safety
+/// Tables and native stack frames remain live; Only named progress services report cancellation; scratch drops before native rethrow.
+pub(crate) unsafe fn generate_towns(
+    context: FoundTownContext,
+    layout: TownLayout,
+    number: Option<u32>,
+    result: &mut bool,
+) -> bool {
+    let FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    } = context;
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     let mut current_number = 0_u32;
-    let mut total = if has_number {
+    let mut total = if let Some(number) = number {
         number
     } else if u32::from(observed!((f.s.town_density)())) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
         f.get_default_towns_for_map_size()
@@ -786,7 +809,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     w::hit(w::TOWN_ENTRIES);
     if !observed!((f.s.set_progress)(frame, total)) {
         w::hit(w::TOWN_CANCELLED);
-        return u8::from(false);
+        return false;
     }
     // Pre-populate the name list with the names of towns already on the map.
     for town in super::iterate_refs(|from| observed!((f.names.next)(from))) {
@@ -816,7 +839,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
             && city_random_offset.wrapping_add(current_number) % u32::from(larger_towns) == 0;
         if !observed!((f.s.increase_progress)(frame)) {
             w::hit(w::TOWN_CANCELLED);
-            return u8::from(false);
+            return false;
         }
         // Get a unique name for the town.
         if unsafe { f.generate_town_name(name_frame, &raw mut town_names, &raw mut townnameparts) }
@@ -838,10 +861,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     // Build the town k-d tree again to make sure it's well balanced
     observed!(crate::town::spatial::rebuild_town_kdtree(f.shared));
     if current_number != 0 {
-        unsafe {
-            result.write(true);
-        }
-        return u8::from(true);
+        *result = true;
+        return true;
     }
     // If current_number is still zero at this point, it means that not a single town has been created.
     // So give it a last try, but now more aggressive
@@ -866,10 +887,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         observed!((f.s.no_town_error)());
     }
     // we are still without a town? we failed, simply
-    unsafe {
-        result.write(success);
-    }
-    u8::from(true)
+    *result = success;
+    true
 }
 /// Rename a town (server-only; `town_cmd.cpp::CmdRenameTown`).
 /// # Safety

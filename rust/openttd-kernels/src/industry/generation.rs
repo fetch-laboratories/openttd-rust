@@ -200,7 +200,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
     clippy::cast_possible_truncation,
     reason = "GenerateIndustries keeps the original's implicit C++ integer conversions"
 )]
-unsafe fn generate_industries(
+pub(crate) unsafe fn generate_industries(
     builder: *mut Builder,
     context: *mut GenerationContext,
     s: &Services,
