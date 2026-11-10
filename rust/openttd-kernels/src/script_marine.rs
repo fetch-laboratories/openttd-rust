@@ -74,7 +74,7 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     let check = |ok| w.check(ok);
     let water = crate::transport_type::TRANSPORT_WATER;
     let reachable = |tile, to_other: u8| {
-        let side = crate::direction_func::reverse_diag_dir(to_other, check);
+        let side = crate::direction_func::reverse_diag_dir_raw(to_other, check);
         let status = crate::movement::track_status(s.command.shared, tile, water, 0, side);
         track_status_to_track_bits(status) & diagdir_reaches_tracks(to_other)
     };
@@ -83,7 +83,7 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     if reachable(t1, to_other_tile) == crate::track_type::TRACK_BIT_NONE {
         return false;
     }
-    let to_other_tile = crate::direction_func::reverse_diag_dir(to_other_tile, check);
+    let to_other_tile = crate::direction_func::reverse_diag_dir_raw(to_other_tile, check);
     reachable(t2, to_other_tile) != crate::track_type::TRACK_BIT_NONE
 }
 

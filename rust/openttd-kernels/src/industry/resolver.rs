@@ -467,7 +467,7 @@ fn industries_get_variable(
             0x8D => {
                 return s
                     .map()
-                    .distance_square(town_xy(c.town, s).0, c.tile().0)
+                    .distance_square(town_xy(c.town, s), c.tile())
                     .min(u32::from(u16::MAX));
             }
             // 32 random bits
@@ -587,7 +587,7 @@ fn industries_get_variable(
         // Get square of Euclidean distance of closest town
         0x66 if c.tile() != TileIndex::INVALID => {
             let tile = s.get_nearby_tile(parameter as u8, c.tile(), true);
-            s.map().distance_square(tile.0, town_xy(c.town, s).0)
+            s.map().distance_square(tile, town_xy(c.town, s))
         }
         // Count of industry, distance of closest instance
         // 68 is the same as 67, but with a filtering on selected layout

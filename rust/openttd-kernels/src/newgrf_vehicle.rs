@@ -1000,7 +1000,7 @@ unsafe fn variable(
     parameter: u32,
     available: *mut bool,
 ) -> u32 {
-    use crate::direction_func::{change_dir_diff, dir_difference};
+    use crate::direction_func::{change_dir_diff_raw, dir_difference_raw};
     use crate::direction_type::{DIR_W, DIRDIFF_REVERSE, DIRDIFF_SAME};
     use crate::newgrf_callbacks::{
         CBID_NO_CALLBACK, CBID_RANDOM_TRIGGER, CBID_TRAIN_ALLOW_WAGON_ATTACH,
@@ -1056,14 +1056,14 @@ unsafe fn variable(
                 let f = if p.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference((handle(p)).direction(), direction, check)
+                    dir_difference_raw((handle(p)).direction(), direction, check)
                 };
                 let b = if n.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference(direction, (handle(n)).direction(), check)
+                    dir_difference_raw(direction, (handle(n)).direction(), check)
                 };
-                let t = change_dir_diff(f, b);
+                let t = change_dir_diff_raw(f, b);
                 let encode = |d| u32::from(if d > DIRDIFF_REVERSE { d | 8 } else { d });
                 return encode(t) << 16 | encode(b) << 8 | encode(f);
             }
@@ -1184,9 +1184,9 @@ unsafe fn variable(
                 let a = (h).direction();
                 let b = (handle(u)).direction();
                 let mut result = u32::from(if prev {
-                    dir_difference(b, a, check)
+                    dir_difference_raw(b, a, check)
                 } else {
-                    dir_difference(a, b, check)
+                    dir_difference_raw(a, b, check)
                 });
                 if result > u32::from(DIRDIFF_REVERSE) {
                     result |= 8;

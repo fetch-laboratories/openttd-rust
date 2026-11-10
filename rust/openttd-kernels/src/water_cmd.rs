@@ -23,7 +23,7 @@ use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Cost, Map, Services, WaterClass,
 };
 use crate::slope_func::{
-    get_inclined_slope_direction, is_inclined_slope, is_slope_with_one_corner_raised,
+    get_inclined_slope_direction_raw, is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_WATER};
@@ -331,7 +331,7 @@ impl World<'_> {
         dir: u8,
     ) {
         self.expense(out, 0);
-        let delta = self.map.offs_by_diag_dir(dir);
+        let delta = self.map.tile_offs_by_diag_dir_raw(dir);
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
@@ -427,12 +427,12 @@ impl World<'_> {
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         let dir =
-            get_inclined_slope_direction(crate::map_func::World::new(self.s).tile_slope(tile));
+            get_inclined_slope_direction_raw(crate::map_func::World::new(self.s).tile_slope(tile));
         if dir == INVALID_DIAGDIR {
             self.error(out, self.a.strings.sloped_wrong);
             return;
         }
-        let lower = tile.wrapping_sub(self.map.offs_by_diag_dir(dir));
+        let lower = tile.wrapping_sub(self.map.tile_offs_by_diag_dir_raw(dir));
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;
@@ -446,7 +446,9 @@ impl World<'_> {
                 return;
             }
         }
-        let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
+        let delta = self
+            .map
+            .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
@@ -517,7 +519,7 @@ impl World<'_> {
         while iter.tile() != INVALID_TILE {
             let tile = iter.tile();
             let slope = crate::map_func::World::new(self.s).tile_slope(tile);
-            if slope != 0 && (wc.0 != 2 || !is_inclined_slope(slope)) {
+            if slope != 0 && (wc.0 != 2 || !is_inclined_slope_raw(slope)) {
                 self.error(out, self.a.strings.flat);
                 return;
             }
@@ -630,7 +632,7 @@ impl World<'_> {
                 }
                 self.expense(
                     out,
-                    if is_slope_with_one_corner_raised(slope) {
+                    if is_slope_with_one_corner_raised_raw(slope) {
                         crate::company::price(34)
                     } else {
                         crate::company::price(23)
@@ -647,7 +649,9 @@ impl World<'_> {
                     return;
                 }
                 let part = (self.a.lock_part)(tile).0;
-                let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
+                let delta = self
+                    .map
+                    .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
                 let middle = match part {
                     0 => tile,
                     1 => tile.wrapping_add(delta),

@@ -301,7 +301,7 @@ fn lookup_with_build_on_slopes(
     mut end: Part,
 ) -> i32 {
     use crate::slope_func::{
-        get_highest_slope_corner, is_steep_slope, slope_with_one_corner_raised,
+        get_highest_slope_corner_raw, is_steep_slope_raw, slope_with_one_corner_raised_raw,
     };
     const BASE_SLOPES: [u8; 15] = [
         SLOPE_FLAT, SLOPE_W, SLOPE_W, SLOPE_SW, SLOPE_W, SLOPE_EW, SLOPE_SW, SLOPE_WSE, SLOPE_W,
@@ -309,10 +309,10 @@ fn lookup_with_build_on_slopes(
     ];
     const BASE_ROTATES: [u8; 15] = [0, 0, 1, 0, 2, 0, 1, 0, 3, 3, 2, 3, 2, 2, 1];
     /* Steep slopes behave the same as slopes with one corner raised. */
-    if is_steep_slope(slope) {
+    if is_steep_slope_raw(slope) {
         let assert = |ok| crate::movement::native_assert(s.command.shared, ok);
-        slope = slope_with_one_corner_raised(
-            get_highest_slope_corner(slope, || (s.command.shared.not_reached)()),
+        slope = slope_with_one_corner_raised_raw(
+            get_highest_slope_corner_raw(slope, || (s.command.shared.not_reached)()),
             assert,
         );
     }
@@ -494,7 +494,7 @@ pub extern "C" fn openttd_rust_script_road_can_build_parts_here(
 
 /// `NeighbourHasReachableRoad`.
 fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbour: u8) -> bool {
-    let neighbour_tile = w.dimensions.add_diag(start_tile, neighbour);
+    let neighbour_tile = w.dimensions.tile_add_by_diag_dir_raw(start_tile, neighbour);
     if !has_present(w, neighbour_tile, rt) {
         return false;
     }
@@ -504,7 +504,7 @@ fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbou
         }
         crate::tile_type::MP_STATION => {
             w.drive_through_stop_tile(neighbour_tile)
-                && crate::direction_func::diag_dir_to_axis(neighbour, check(w))
+                && crate::direction_func::diag_dir_to_axis_raw(neighbour, check(w))
                     == w.drive_through_axis(neighbour_tile)
         }
         _ => false,
@@ -548,7 +548,8 @@ pub extern "C" fn openttd_rust_script_road_depot_front_tile(s: &Services, depot:
         return crate::tile_type::INVALID_TILE;
     }
     let w = world(s);
-    w.dimensions.add_diag(depot, w.road_depot_dir(depot))
+    w.dimensions
+        .tile_add_by_diag_dir_raw(depot, w.road_depot_dir(depot))
 }
 
 /// `ScriptRoad::GetRoadStationFrontTile`.
@@ -559,7 +560,9 @@ pub extern "C" fn openttd_rust_script_road_station_front_tile(s: &Services, stat
     }
     let w = world(s);
     if w.bay_stop(station) {
-        return w.dimensions.add_diag(station, w.bay_dir(station));
+        return w
+            .dimensions
+            .tile_add_by_diag_dir_raw(station, w.bay_dir(station));
     }
     station.wrapping_sub(w.dimensions.offs_by_axis(w.drive_through_axis(station)))
 }

@@ -279,7 +279,9 @@ impl<'a> Commands<'a> {
             spiral = spiral.advance(self.map().size_x(), self.size_y());
             tile_count += 1;
             // Statues can be build on slopes, just like houses. Only the steep slopes is a no go.
-            if is_steep_slope(crate::map_func::World::new(self.shared).tile_slope(tile.0)) {
+            if is_steep_slope(crate::slope_type::Slope(
+                crate::map_func::World::new(self.shared).tile_slope(tile.0),
+            )) {
                 continue;
             }
             // Don't build statues under bridges.
@@ -438,12 +440,14 @@ impl<'a> Commands<'a> {
         if !crate::tile_map::is_tile_owner(self.shared, tile.0, OWNER_TOWN) {
             return false;
         }
-        let adjacent = TileIndex(tile.0.wrapping_add(self.map().offs_by_diag_dir(
+        let adjacent = self.map().tile_add_by_diag_dir(
+            tile,
             crate::direction_func::reverse_diag_dir(
-                (self.shared.tunnel_bridge_direction)(tile.0),
+                crate::direction_type::DiagDirection((self.shared.tunnel_bridge_direction)(tile.0)),
                 |ok| crate::movement::native_assert(self.shared, ok),
             ),
-        )));
+            |ok| crate::movement::native_assert(self.shared, ok),
+        );
         let owns = |at: TileIndex| {
             self.tile_type(at) == TileType::MP_ROAD
                 && crate::tile_map::is_tile_owner(self.shared, at.0, OWNER_TOWN)
@@ -455,12 +459,14 @@ impl<'a> Commands<'a> {
         // Or other adjacent road.
         let end = (unsafe { &*self.s.rail }.other_tunnel_bridge_end)(tile.0);
         // The other end's direction is added to this tile, not to the other end.
-        owns(TileIndex(tile.0.wrapping_add(self.map().offs_by_diag_dir(
+        owns(self.map().tile_add_by_diag_dir(
+            tile,
             crate::direction_func::reverse_diag_dir(
-                (self.shared.tunnel_bridge_direction)(end),
+                crate::direction_type::DiagDirection((self.shared.tunnel_bridge_direction)(end)),
                 |ok| crate::movement::native_assert(self.shared, ok),
             ),
-        ))))
+            |ok| crate::movement::native_assert(self.shared, ok),
+        ))
     }
     /// Delete a town (`CmdDeleteTown`, scenario editor or worldgen only).
     fn delete_town(&self, out: *mut CommandCost, flags: DoCommandFlags, t: TownRef) {

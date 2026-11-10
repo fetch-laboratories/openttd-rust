@@ -7,7 +7,7 @@
 
 //! Bridge height helpers from `bridge_map.h`/`bridge_map.cpp`.
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
-use crate::direction_func::diag_dir_to_axis;
+use crate::direction_func::diag_dir_to_axis_raw;
 use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
 #[inline]
@@ -15,7 +15,7 @@ pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
     let (slope, z) = crate::map_func::World::new(s).tile_slope_z(tile);
     let foundation = crate::bridge::get_bridge_foundation(
         slope,
-        diag_dir_to_axis((s.tunnel_bridge_direction)(tile), |ok| {
+        diag_dir_to_axis_raw((s.tunnel_bridge_direction)(tile), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
