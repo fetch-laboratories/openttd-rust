@@ -470,16 +470,7 @@ impl World {
     }
     /// `BaseStation::IsInUse`: any facility other than a waypoint.
     pub(crate) fn in_use(&self, st: *mut BaseStation) -> bool {
-        let facilities = StationFacilities((self.facilities)(st));
-        [
-            StationFacility::Train,
-            StationFacility::TruckStop,
-            StationFacility::BusStop,
-            StationFacility::Airport,
-            StationFacility::Dock,
-        ]
-        .into_iter()
-        .any(|facility| facilities.test(facility))
+        crate::base_station_base::is_in_use(StationFacilities((self.facilities)(st)))
     }
     /// `st->owner == _local_company`.
     fn local_owner(&self, st: *mut BaseStation) -> bool {
