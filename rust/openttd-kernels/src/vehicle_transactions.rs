@@ -420,25 +420,31 @@ pub unsafe extern "C" fn openttd_rust_vehicle_depot_list(
     }
 }
 
-/// `FindVehiclesWithOrder` for `GenerateVehicleSortList`'s station and depot
-/// lists: each vehicle of `vehicle_type` with an order to `destination`.
+/// `FindVehiclesWithOrder`: find vehicles matching an order. This can be used,
+/// e.g. to find all vehicles that stop at a particular station. Here: each
+/// vehicle of `vehicle_type` with a station or depot order to `destination`,
+/// for `GenerateVehicleSortList`'s station and depot lists.
 fn find_vehicles_with_order<F: FnMut(*mut ())>(
     s: &SelectionServices,
-    vehicle_type: u8,
+    vehicle_type: VehicleType,
     depot: bool,
     destination: u16,
     mut emit: F,
 ) {
     struct Find<'a, F> {
         s: &'a SelectionServices,
-        vehicle_type: u8,
+        vehicle_type: VehicleType,
         depot: bool,
         destination: u16,
         emit: F,
     }
     unsafe extern "C" fn vehicle<F>(ctx: *mut (), v: *const ()) -> u8 {
         let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
-        u8::from(crate::fleet::record(c.s.groups, v.cast_mut()).vehicle_type() == c.vehicle_type)
+        /* We assume all vehicles sharing an order list match the condition. */
+        u8::from(
+            VehicleType(crate::fleet::record(c.s.groups, v.cast_mut()).vehicle_type())
+                == c.vehicle_type,
+        )
     }
     unsafe extern "C" fn order<F>(ctx: *mut (), o: *const ()) -> u8 {
         let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
@@ -459,6 +465,7 @@ fn find_vehicles_with_order<F: FnMut(*mut ())>(
     }
     unsafe extern "C" fn visit<F: FnMut(*mut ())>(ctx: *mut (), v: *const ()) {
         let c = unsafe { &mut *ctx.cast::<Find<'_, F>>() };
+        /* An order matches, we can add all shared vehicles to the list. */
         (c.emit)(v.cast_mut());
     }
     let mut ctx = Find {
@@ -487,7 +494,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     if kind == VehicleListType::VL_STATION_LIST || kind == VehicleListType::VL_DEPOT_LIST {
         find_vehicles_with_order(
             s,
-            vehicle_type,
+            vli.vtype,
             kind == VehicleListType::VL_DEPOT_LIST,
             vli.index as u16,
             emit,
