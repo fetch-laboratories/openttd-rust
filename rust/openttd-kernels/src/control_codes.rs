@@ -72,7 +72,7 @@ pub const SCC_NEWGRF_PRINT_WORD_WEIGHT_LONG: u32 = 0xe060;
 pub const SCC_NEWGRF_PUSH_WORD: u32 = 0xe071;
 /// 86: Rotate the top 4 words of the stack (W4 W1 W2 W3)
 pub const SCC_NEWGRF_ROTATE_TOP_4_WORDS: u32 = 0xe073;
-/// Inline another string at the current position, StringID is encoded in the string
+/// Inline another string at the current position, `StringID` is encoded in the string
 pub const SCC_NEWGRF_STRINL: u32 = 0xe074;
 /// `SCC_ORANGE` from `table/control_codes.h`.
 pub const SCC_ORANGE: u32 = 0xe048;
@@ -132,7 +132,7 @@ pub const SCC_SPRITE_END: u32 = SCC_SPRITE_START + 0xff;
 // strings that are saved in savegames.
 /// Encoded string marker and sub-string parameter.
 pub const SCC_ENCODED: u32 = SCC_CONTROL_START;
-/// Encoded text from OpenTTD.
+/// Encoded text from `OpenTTD`.
 pub const SCC_ENCODED_INTERNAL: u32 = SCC_ENCODED + 1;
 /// Encoded numeric parameter.
 pub const SCC_ENCODED_NUMERIC: u32 = SCC_ENCODED + 2;
