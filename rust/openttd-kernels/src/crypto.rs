@@ -205,3 +205,27 @@ pub(crate) fn ed25519_check(signature: &[u8; 64], public: &[u8; 32], message: &[
 mod tests;
 
 mod ffi;
+
+/// `GenerateUid`'s digest: hash the random bytes, then the coding string.
+pub(crate) fn generate_uid_hash(out: &mut [u8; 16], random: &[u8; 32], text: &[u8]) {
+    let mut hash = Hash::new(out.len());
+    hash.update(random);
+    hash.update(text);
+    hash.finish(out);
+}
+
+/// `CalculateHashV1`: read through `feof`/`fread`, preserving the EOF test,
+/// read and hash-update order, including a final zero-byte read.
+pub(crate) fn calculate_hash_v1(
+    out: &mut [u8; 32],
+    mut eof: impl FnMut() -> bool,
+    mut read: impl FnMut(&mut [u8]) -> usize,
+) {
+    let mut hash = Hash::new(out.len());
+    while !eof() {
+        let mut buf = [0; 1024];
+        let len = read(&mut buf);
+        hash.update(&buf[..len]);
+    }
+    hash.finish(out);
+}

@@ -12,7 +12,7 @@
 //! Panics abort; no exception may cross a Rust frame.
 #![allow(unsafe_code)]
 
-use super::{Hash, ed25519_check, public_key};
+use super::{calculate_hash_v1, ed25519_check, generate_uid_hash, public_key};
 use std::{ffi::c_void, ptr, slice};
 use zeroize::Zeroize;
 
@@ -69,11 +69,11 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_uid(
     length: usize,
 ) {
     unsafe {
-        let digest = slice::from_raw_parts_mut(out, 16);
-        let mut hash = Hash::new(digest.len());
-        hash.update(slice::from_raw_parts(random, 32));
-        hash.update(bytes(text, length));
-        hash.finish(digest);
+        generate_uid_hash(
+            &mut *out.cast::<[u8; 16]>(),
+            &*random.cast::<[u8; 32]>(),
+            bytes(text, length),
+        );
     }
 }
 
@@ -87,13 +87,10 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_file(
     read: unsafe extern "C" fn(*mut c_void, *mut u8, usize) -> usize,
 ) {
     unsafe {
-        let digest = slice::from_raw_parts_mut(out, 32);
-        let mut hash = Hash::new(digest.len());
-        while eof(file) == 0 {
-            let mut buf = [0; 1024];
-            let len = read(file, buf.as_mut_ptr(), buf.len());
-            hash.update(&buf[..len]);
-        }
-        hash.finish(digest);
+        calculate_hash_v1(
+            &mut *out.cast::<[u8; 32]>(),
+            || eof(file) != 0,
+            |buf| read(file, buf.as_mut_ptr(), buf.len()),
+        );
     }
 }

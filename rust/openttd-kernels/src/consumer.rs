@@ -127,9 +127,15 @@ pub fn find(bytes: &[u8], pattern: &[u8], mode: u8) -> usize {
         crate::services_assert::check(false);
     }
     let found = match mode {
-        FIND_STRING => bytes
-            .windows(pattern.len())
-            .position(|window| window == pattern),
+        FIND_STRING => {
+            if pattern.is_empty() {
+                Some(0)
+            } else {
+                bytes
+                    .windows(pattern.len())
+                    .position(|window| window == pattern)
+            }
+        }
         FIND_CHAR_IN => bytes.iter().position(|byte| pattern.contains(byte)),
         FIND_CHAR_NOT_IN => bytes.iter().position(|byte| !pattern.contains(byte)),
         _ => {
@@ -612,5 +618,37 @@ pub(crate) mod tests {
                 }),
         );
         assert_eq!(count, 103);
+    }
+}
+
+#[cfg(test)]
+mod release_search_tests {
+    #[test]
+    fn empty_pattern_after_disabled_native_assertion() {
+        const CHILD: &str = "OPENTTD_EMPTY_PATTERN_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "consumer::release_search_tests::empty_pattern_after_disabled_native_assertion",
+                ])
+                .env(CHILD, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        extern "C" fn assertions_disabled(_: bool) {}
+        crate::services_assert::openttd_rust_assert_bind(assertions_disabled);
+        assert_eq!(super::find(b"abc", b"", super::FIND_STRING), 0);
+        assert_eq!(super::find(b"", b"", super::FIND_STRING), 0);
+        for policy in [
+            super::SeparatorUsage::KEEP_SEPARATOR,
+            super::SeparatorUsage::READ_ONE_SEPARATOR,
+            super::SeparatorUsage::SKIP_ONE_SEPARATOR,
+        ] {
+            let result = super::until(b"abc", b"", policy);
+            assert_eq!((result.result_length, result.consumed_length), (0, 0));
+        }
     }
 }

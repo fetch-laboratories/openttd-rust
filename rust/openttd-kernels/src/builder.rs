@@ -38,7 +38,7 @@ pub fn little_endian(value: u64) -> LittleEndian {
 /// which appends nothing.
 pub fn integer(bits: u64, negative: bool, base: i32) -> FormattedInteger {
     const DIGITS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    // std::to_chars requires this range too; unsupported bases are not an API extension.
+    // std::to_chars requires a base in the range 2 through 36.
     if !(2..=36).contains(&base) {
         crate::services_assert::check(false);
     }
