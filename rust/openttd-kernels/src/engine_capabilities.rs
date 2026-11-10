@@ -60,14 +60,15 @@ pub struct Services {
     pub(crate) invalid_string_id: u32,
 }
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
+    // A null vehicle is the purchase context.
+    let v = std::ptr::NonNull::new(v).map(crate::vehicle::VehicleRef);
     unsafe {
-        crate::newgrf_vehicle::openttd_rust_vehicle_callback(
-            &*(s.vehicles.newgrf)(),
+        crate::newgrf_vehicle::callback(
+            s.vehicles,
+            v,
+            engine,
             cb,
             p1,
-            0,
-            engine,
-            v,
             null_mut(),
             false,
             null_mut(),
@@ -323,10 +324,20 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
     engine: u16,
     purchase: bool,
 ) -> u32 {
+    unsafe { count_articulated_parts(s, engine, purchase) }
+}
+/// `CountArticulatedParts`: count the number of articulated parts of an engine, outside
+/// (`purchase` false) or inside the purchase window's scope.
+unsafe fn count_articulated_parts(s: &Services, engine: u16, purchase: bool) -> u32 {
     unsafe {
+        if openttd_rust_articulated_is_abi(s, engine) == 0 {
+            return 0;
+        }
+        // If we can't allocate a vehicle now, we can't allocate it in the command
+        // either, so it doesn't matter how many articulated parts there are.
         // `Vehicle::CanAllocateItem()` through the shared table's canonical vehicle services.
         let vehicles = &*(*s.shared.movement).vehicle;
-        if openttd_rust_articulated_is_abi(s, engine) == 0 || !(vehicles.can_allocate)(1) {
+        if !(vehicles.can_allocate)(1) {
             return 0;
         }
         let v = if purchase {
