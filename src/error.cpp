@@ -10,7 +10,6 @@
 #include "stdafx.h"
 #include "error_func.h"
 #include "rust/services_assert.h"
-#include "rust/services_ffi.h"
 #include "safeguards.h"
 
 [[noreturn]] void NOT_REACHED(const std::source_location location)
@@ -24,4 +23,4 @@
 }
 
 /** Bind the canonical native assertion policy before ordinary game/tool entries. */
-static const bool _rust_assert_bound = (openttd_rust_assert_bind(RustAssertCondition, &GetRustSharedServices()), true);
+static const bool _rust_assert_bound = (openttd_rust_assert_bind(RustAssertCondition, nullptr), true);
