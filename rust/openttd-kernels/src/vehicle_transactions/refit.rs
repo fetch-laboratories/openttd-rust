@@ -73,7 +73,14 @@ impl Services {
     /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
     pub(crate) fn road_acceleration_model(&self) -> u8 {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        unsafe { self.common.base.shared.settings().roadveh_acceleration_model.read() }
+        unsafe {
+            self.common
+                .base
+                .shared
+                .settings()
+                .roadveh_acceleration_model
+                .read()
+        }
     }
     /// `v->GetEngine()`.
     pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {

@@ -733,8 +733,7 @@ fn station_facility_count(s: &Services, id: u32) -> u32 {
 /// `Aircraft::From(Vehicle::Get(id))->IsNormalAircraft()`. For a valid ID, the first
 /// vehicle at or after it is that vehicle.
 fn aircraft_is_normal(s: &Services, id: u32) -> bool {
-    (s.shared.vehicle_next)(id)
-        .is_some_and(|v| crate::aircraft::is_normal_aircraft(v.subtype()))
+    (s.shared.vehicle_next)(id).is_some_and(|v| crate::aircraft::is_normal_aircraft(v.subtype()))
 }
 fn assets(s: &Services, id: u8) -> i64 {
     let mut num = 0_u32;

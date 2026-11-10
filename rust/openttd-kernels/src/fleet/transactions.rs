@@ -85,7 +85,14 @@ impl Services {
     /// `_settings_game.vehicle.max_train_length`, from the settings catalog.
     pub(crate) fn max_train_length(&self) -> u8 {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        unsafe { (self.common)().base.shared.settings().max_train_length.read() }
+        unsafe {
+            (self.common)()
+                .base
+                .shared
+                .settings()
+                .max_train_length
+                .read()
+        }
     }
     /// `IsLocalCompany`, through the command layer's company and finance owners.
     pub(crate) fn is_local_company(&self) -> bool {

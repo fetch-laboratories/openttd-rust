@@ -1794,14 +1794,13 @@ pub(crate) mod tests {
     #[test]
     fn direct_station_reservation_can_reenter_the_same_owner() {
         extern "C" fn nested(_: u32, _: u8) -> bool {
-            static LINE_REVERSE: bool = false;
-            static SETTINGS: crate::settings_type::SettingAddresses =
-                crate::settings_type::SettingAddresses {
-                    line_reverse_mode: &LINE_REVERSE,
-                    ..crate::settings_type::SettingAddresses::NULL
-                };
+            let line_reverse = false;
+            let settings = crate::settings_type::SettingAddresses {
+                line_reverse_mode: &raw const line_reverse,
+                ..crate::settings_type::SettingAddresses::NULL
+            };
             let shared = crate::services::Services {
-                settings: &SETTINGS,
+                settings: &raw const settings,
                 ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
             };
             let ls = Leaves {
