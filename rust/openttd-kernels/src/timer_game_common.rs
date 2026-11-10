@@ -465,7 +465,7 @@ owner_callback!(
     crate::station_service::World,
     s,
     {
-        crate::station_service::openttd_rust_station_monthly(s);
+        crate::station_service::station_monthly_loop(s);
     }
 );
 owner_callback!(

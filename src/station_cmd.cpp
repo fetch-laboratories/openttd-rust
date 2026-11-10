@@ -1398,19 +1398,6 @@ void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid
 	openttd_rust_station_reroute(st, cargo, avoid.base(), avoid2.base(), &_rust_station_services, &_rust_station_links);
 }
 
-/**
- * Check all next hops of cargo packets in this station for existence of a
- * a valid link they may use to travel on. Reroute any cargo not having a valid
- * link and remove timed out links found like this from the linkgraph. We're
- * not all links here as that is expensive and useless. A link no one is using
- * doesn't hurt either.
- * @param from Station to check.
- */
-void DeleteStaleLinks(Station *from)
-{
-	openttd_rust_station_stale(from, &_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
-}
-
 
 /** Economy monthly loop for stations. */
 static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::STATION}, RustClockCallback{openttd_rust_clock_station_monthly, &_rust_station_services});

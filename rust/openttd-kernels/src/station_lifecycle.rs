@@ -519,7 +519,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let links = unsafe { &*c.links };
     let state = (w.owner)(st);
     if (s.cleaning_pool)() {
-        for cargo in 0..NUM_CARGO {
+        for cargo in (0..NUM_CARGO).map(CargoType) {
             let list = links.station_cargo(st, cargo);
             if !list.is_null() {
                 unsafe {
@@ -532,13 +532,13 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let visits = unsafe { &*s.catchment.visits };
     // Every loading vehicle leaves the station.
     loop {
-        let front = unsafe { crate::station_service::openttd_rust_station_queue_first(state) };
+        let front = unsafe { crate::station_service::loading_vehicles_begin(state) };
         if front.is_null() {
             break;
         }
         let vehicle = unsafe {
             VehicleRef::from_shell(
-                crate::station_service::openttd_rust_station_queue_value(front),
+                crate::station_service::loading_vehicles_value(front).cast(),
                 visits.vehicles(),
             )
         };
@@ -576,8 +576,13 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
                 if edge_live {
                     unsafe {
                         (&mut *flows).deleted(id.0);
-                        crate::station_service::openttd_rust_station_reroute(
-                            other, cargo, id.0, other_id, w, c.links,
+                        crate::station_service::reroute_cargo(
+                            other,
+                            CargoType(cargo),
+                            id,
+                            StationID(other_id),
+                            w,
+                            &*c.links,
                         );
                     }
                 }
@@ -633,7 +638,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     /* Remove all news items */
     (s.delete_news)(id);
-    for cargo in 0..NUM_CARGO {
+    for cargo in (0..NUM_CARGO).map(CargoType) {
         let list = links.station_cargo(st, cargo);
         if !list.is_null() {
             unsafe {

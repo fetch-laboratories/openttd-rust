@@ -12,7 +12,7 @@
     clippy::if_not_else, // retain source branch order
     clippy::too_many_arguments
 )]
-use crate::cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
+use crate::cargo_type::{CargoType, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
 use crate::game_state::GameState;
@@ -528,7 +528,9 @@ fn cargo_variable(
                 }
             }
         }
-        _ => unsafe { crate::station_service::newgrf_cargo_variable(owner, c, var, legacy) },
+        _ => unsafe {
+            crate::station_service::newgrf_cargo_variable(owner, CargoType(c), var, legacy)
+        },
     }
 }
 /// Complete station/waypoint virtual variable policy, also used by other native
@@ -557,7 +559,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
     match variable {
         0x48 => {
             return unsafe {
-                crate::station_service::acceptance_mask((native.world().owner)(st)) as u32
+                crate::station_service::acceptance_mask((native.world().owner)(st)).0 as u32
             };
         }
         0x8a => {
@@ -623,7 +625,12 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             1 => {
                 native.count(st, c).min(4095) & 15
                     | (unsafe {
-                        crate::station_service::newgrf_cargo_variable(owner, c, 0x65, true)
+                        crate::station_service::newgrf_cargo_variable(
+                            owner,
+                            CargoType(c),
+                            0x65,
+                            true,
+                        )
                     } << 4)
             }
             2 => cargo_variable(native, st, owner, c, 0x61, true),
