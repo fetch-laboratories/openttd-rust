@@ -335,11 +335,6 @@ pub(crate) unsafe fn add_received(owner: *mut State, effect: TownAcceptanceEffec
         *count = count.wrapping_add(amount as u16);
     }
 }
-/// Raw adapter for `cargo_payment.rs`, outside workset 01; delegates to `add_received`.
-/// SAFETY: As `add_received`.
-pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
-    unsafe { add_received(owner, TownAcceptanceEffect(effect), amount) }
-}
 /// The town's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
     // SAFETY: Live owner supplied by the caller's resolved town.
