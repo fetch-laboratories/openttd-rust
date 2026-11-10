@@ -178,21 +178,10 @@ unsafe fn get_refit_cost_factor(
     let changed = v.is_null() || unsafe { (s.common.transactions.cargo_type)(v) } != cargo;
     (if changed { i32::from(factor) } else { 0 }, factor == 0)
 }
-/// Raw adapter: `GetRefitCost` over base values, for `clone.rs` until its pass.
-pub(super) unsafe fn get_cost(
-    s: &Services,
-    out: *mut CommandCost,
-    v: *mut (),
-    engine: u16,
-    cargo: u8,
-    subtype: u8,
-) -> bool {
-    unsafe { get_refit_cost(s, out, v, EngineID(engine), CargoType(cargo), subtype) }
-}
 /// `GetRefitCost`: learn the price of refitting a certain engine. `v` can be
 /// null. The price is added to `out`; returns whether the refit is allowed as
 /// an auto-refit.
-unsafe fn get_refit_cost(
+pub(super) unsafe fn get_refit_cost(
     s: &Services,
     out: *mut CommandCost,
     v: *mut (),
