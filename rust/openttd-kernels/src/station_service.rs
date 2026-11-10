@@ -1107,6 +1107,11 @@ pub(crate) unsafe fn move_goods_to_station(
     /* If there is some cargo left due to rounding issues distribute it among the best rated stations. */
     if amount > moving {
         used_stations.sort_by_key(|&(_, state, _, _)| std::cmp::Reverse(rating(state)));
+
+        let map = crate::map_func::World::new(unsafe { &*w.shared });
+        if map.types.assertions() {
+            map.check((amount - moving) as usize <= used_stations.len());
+        }
         for i in 0..amount - moving {
             used_stations[i as usize].3 = used_stations[i as usize].3.wrapping_add(1);
         }
