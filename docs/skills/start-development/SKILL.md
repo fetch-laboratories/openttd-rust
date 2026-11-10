@@ -52,7 +52,7 @@ Done when each finished change is merged and cleaned up, or has its next action 
 Plan when the queue or issue placement needs attention.
 
 - During the cleanup stage, plan when its stream issues run out of ready batches, and plan phase 3 in full once every remaining cleanup item is dispatched or in the ready queue ([goal and phases](../../planning.md#goal-and-phases)). Otherwise trigger planning at a phase exit, when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or merge), the next phase has no ready owner, or `issues.py` shows unplaced issues. At exit, account for every remaining body and candidate C++ dependency and plan the newly adjacent phase. A completed phase gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
-- Spawn a fresh high-effort planning agent (Astra in Codex). Name no preferred candidate.
+- Spawn a fresh high-effort planning agent ([team](../../team.md#claude-code-root); Astra in Codex). Name no preferred candidate.
 - Have it size remaining code and rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
 - Never fall back to `deferred-improvement` issues. Have it reread `issues.py` and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral).
 
