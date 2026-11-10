@@ -1376,15 +1376,6 @@ unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visit
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_stale(
-    st: *mut BaseStation,
-    world: *const World,
-    links: *const Links,
-    visits: *const Visits,
-) {
-    unsafe { delete_stale_links(st, &*world, &*links, &*visits) };
-}
 /// `StationHandleSmallTick`: called for every station each tick.
 unsafe fn station_handle_small_tick(st: *mut BaseStation, w: &World) {
     if StationFacilities((w.facilities)(st)).test(StationFacility::Waypoint) || !(w.in_use)(st) {
