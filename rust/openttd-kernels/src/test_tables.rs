@@ -1019,7 +1019,6 @@ pub(crate) const FLEET_TRANSACTIONS: crate::fleet::transactions::Services =
         engine_valid: unreachable1,
         company_valid: unreachable1,
         engine_buildable: unreachable3,
-        orders: unreachable1,
         order_count: unreachable1,
         order_count_id: unreachable1,
         order_at: unreachable2,
