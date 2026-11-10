@@ -1410,6 +1410,7 @@ impl Game<'_> {
         };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
+        // Check if station was ever visited before
         if r.had_vehicle_of_type & bit == 0 {
             let headline = if bus { 0 } else { 2 } + u8::from(s.tram);
             service!(self.ss.station_add_vehicle_of_type)(station, bit);
