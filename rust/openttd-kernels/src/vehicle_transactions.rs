@@ -203,8 +203,10 @@ pub(crate) unsafe fn cmd_change_service_int(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        serv_int =
-            s.interval_default(owner.0, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
+        serv_int = s.interval_default(
+            owner,
+            VehicleType(crate::fleet::record(s.groups, v).vehicle_type()),
+        ) as u16;
     }
     if flags.test(DoCommandFlag::Execute) {
         (s.set_interval)(v, serv_int, is_custom, is_percent);
@@ -988,13 +990,16 @@ impl CommonServices {
 }
 
 impl TransactionServices {
-    pub(crate) fn interval_default(&self, owner: u8, kind: u8) -> i32 {
+    /// `GetServiceIntervalForType`'s default: the owner's service interval for
+    /// vehicles of `kind`.
+    pub(crate) fn interval_default(&self, owner: CompanyID, kind: VehicleType) -> i32 {
         let company = unsafe { &*(self.commands.company)() };
-        crate::company::service_interval(
-            (company.settings)(),
-            Some(crate::company_type::CompanyID(owner)),
-            crate::vehicle_type::VehicleType(kind),
-        )
+        crate::company::service_interval((company.settings)(), Some(owner), kind)
+    }
+    /// Raw adapter: the service interval default over base values, for
+    /// `settings_table.rs` until its pass.
+    pub(crate) fn interval_default_raw(&self, owner: u8, kind: u8) -> i32 {
+        self.interval_default(CompanyID(owner), VehicleType(kind))
     }
 }
 
