@@ -377,7 +377,6 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
-    pub max_depot_penalty: extern "C" fn() -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -2105,7 +2104,8 @@ impl Game<'_> {
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             return;
         }
-        let penalty = service!(self.l.max_depot_penalty)();
+        // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
+        let penalty = unsafe { self.ss.settings().maximum_go_to_depot_penalty.read() };
         let depot = if depot_tile {
             DepotResult {
                 tile: r.tile,
@@ -2503,7 +2503,6 @@ crate::abi::layouts! {
         vehicle,
         ground,
         shared,
-        max_depot_penalty,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,

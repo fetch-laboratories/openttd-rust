@@ -234,7 +234,6 @@ pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
     vehicle: ptr::null(),
     ground: ptr::null(),
     shared: ptr::null(),
-    max_depot_penalty: unreachable0,
     any_road_bits: unreachable3,
     is_road_depot_tile: unreachable1,
     depot_direction: unreachable1,

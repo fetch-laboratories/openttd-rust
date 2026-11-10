@@ -104,7 +104,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
-	.max_depot_penalty = RustMaximumDepotPenalty,
 
 	.any_road_bits = RoadSvcAnyRoadBits,
 	.is_road_depot_tile = Shared_is_road_depot,
