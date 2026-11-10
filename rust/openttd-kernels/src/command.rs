@@ -727,3 +727,234 @@ pub(crate) fn post(
         })
     }
 }
+
+/// Command money short circuits, the cash-error call and executed subtraction. Unread finance
+/// and money entries stay unreachable, so a skipped read fails.
+#[cfg(test)]
+mod money_tests {
+    use super::*;
+    use crate::company::Finances;
+    use crate::economy_type::ExpensesType;
+    use crate::test_tables::{COMMAND_COSTS, COMMANDS, FINANCE};
+    use std::cell::Cell;
+
+    /// The fixture's `CommandCost`: success, money and expense type.
+    #[derive(Clone, Copy)]
+    struct Result {
+        ok: bool,
+        money: i64,
+        expense: ExpensesType,
+    }
+    fn cost(result: &mut Result) -> *mut CommandCost {
+        std::ptr::from_mut(result).cast()
+    }
+    fn of(cost: *const CommandCost) -> Result {
+        // SAFETY: Every fixture cost is a `Result`.
+        unsafe { cost.cast::<Result>().read() }
+    }
+    extern "C" fn success(cost: *const CommandCost) -> bool {
+        of(cost).ok
+    }
+    extern "C" fn money(cost: *const CommandCost) -> i64 {
+        of(cost).money
+    }
+    extern "C" fn expense(cost: *const CommandCost) -> ExpensesType {
+        of(cost).expense
+    }
+    extern "C" fn finite() -> bool {
+        false
+    }
+    extern "C" fn infinite() -> bool {
+        true
+    }
+
+    thread_local! {
+        static CURRENT: Cell<u8> = const { Cell::new(0) };
+        static OWNER: Cell<*mut Finances> = const { Cell::new(std::ptr::null_mut()) };
+        static CASH_ERROR: Cell<Option<i64>> = const { Cell::new(None) };
+    }
+    extern "C" fn current_company() -> u8 {
+        CURRENT.get()
+    }
+    extern "C" fn company_finances(id: u8) -> *mut Finances {
+        if id == 0 {
+            OWNER.get()
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+    extern "C" fn invalidate(_: u8) {}
+    unsafe extern "C" fn money_error(_: *mut CommandCost, amount: i64) {
+        CASH_ERROR.set(Some(amount));
+    }
+
+    fn leak<T>(value: T) -> &'static T {
+        Box::leak(Box::new(value))
+    }
+    /// Commands whose finance and infinite-money entries are never read.
+    fn unread(costs: &'static CommandCostServices) -> CommandServices {
+        let mut command = COMMANDS;
+        command.cost = costs;
+        command
+    }
+    /// `Do`'s steps: entry into test or execution, then reconciliation of that result.
+    fn run(
+        command: &CommandServices,
+        result: &mut Result,
+        flags: crate::command_type::DoCommandFlags,
+        top: bool,
+        test: bool,
+    ) {
+        let entry = openttd_rust_command_do_test(
+            command,
+            false,
+            if test { 0 } else { DoCommandFlag::EXECUTE },
+        );
+        assert_eq!(entry != 0, test);
+        // SAFETY: The fixture's live result.
+        unsafe {
+            if test {
+                assert_eq!(
+                    openttd_rust_command_do_tested(command, cost(result), flags.0, top),
+                    0
+                );
+            } else {
+                openttd_rust_command_do_executed(command, cost(result), flags.0, top);
+            }
+        }
+    }
+
+    /// A failed result, a nested call, bankruptcy and a cost query read no money.
+    fn check_short_circuits(costs: &CommandCostServices) {
+        let mut skipped = *costs;
+        skipped.money = crate::test_tables::unreachable1;
+        let command = unread(leak(skipped));
+        for test in [false, true] {
+            let mut failed = Result {
+                ok: false,
+                money: 0,
+                expense: ExpensesType::EXPENSES_CONSTRUCTION,
+            };
+            run(
+                &command,
+                &mut failed,
+                crate::command_type::DoCommandFlags::EMPTY,
+                true,
+                test,
+            );
+            assert!(!failed.ok);
+            for flags in [
+                crate::command_type::DoCommandFlags::EMPTY,
+                crate::command_type::DoCommandFlags(DoCommandFlag::BANKRUPT),
+                crate::command_type::DoCommandFlags(DoCommandFlag::QUERY_COST),
+            ] {
+                if !test && flags.0 == DoCommandFlag::QUERY_COST {
+                    continue;
+                }
+                let mut result = Result {
+                    ok: true,
+                    money: 50,
+                    expense: ExpensesType::EXPENSES_CONSTRUCTION,
+                };
+                run(&command, &mut result, flags, flags.0 != 0, test);
+                assert!(result.ok, "flags {:#x} test {test}", flags.0);
+            }
+        }
+    }
+
+    #[test]
+    fn money_short_circuits_and_cash_error() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        let mut costs_table = COMMAND_COSTS;
+        costs_table.success = success;
+        costs_table.money = money;
+        costs_table.expense = expense;
+        let costs = leak(costs_table);
+        check_short_circuits(costs);
+
+        // Non-positive amounts pass before any finance read; infinite money passes.
+        let mut command = unread(costs);
+        for amount in [-5, 0] {
+            let mut result = Result {
+                ok: true,
+                money: amount,
+                expense: ExpensesType::EXPENSES_CONSTRUCTION,
+            };
+            // SAFETY: The fixture's live result.
+            assert!(unsafe { check_money(&command, costs, cost(&mut result)) });
+        }
+        command.infinite_money = infinite;
+        let mut huge = Result {
+            ok: true,
+            money: i64::MAX,
+            expense: ExpensesType::EXPENSES_CONSTRUCTION,
+        };
+        // SAFETY: As above.
+        assert!(unsafe { check_money(&command, costs, cost(&mut huge)) });
+
+        // Company 0 holds 20: a cost of 21 fails once through the cash error, unchanged.
+        command.infinite_money = finite;
+        command.money_error = money_error;
+        let mut finance = FINANCE;
+        finance.current_company = current_company;
+        finance.company_finances = company_finances;
+        finance.invalidate_company_windows = invalidate;
+        command.finance = leak(finance);
+        // SAFETY: Plain integer record.
+        let mut owner: Box<Finances> = Box::new(unsafe { std::mem::zeroed() });
+        owner.money = 20;
+        OWNER.set(&raw mut *owner);
+        CURRENT.set(0);
+        CASH_ERROR.set(None);
+        let mut short = Result {
+            ok: true,
+            money: 21,
+            expense: ExpensesType::EXPENSES_CONSTRUCTION,
+        };
+        // SAFETY: As above.
+        assert!(!unsafe { check_money(&command, costs, cost(&mut short)) });
+        assert_eq!((short.money, CASH_ERROR.get()), (21, Some(21)));
+
+        // A zero cost subtracts nothing and reads no expense type.
+        let mut no_expense = *costs;
+        no_expense.expense = crate::test_tables::unreachable1;
+        let mut zero = Result {
+            ok: true,
+            money: 0,
+            expense: ExpensesType::EXPENSES_CONSTRUCTION,
+        };
+        // SAFETY: As above.
+        unsafe { subtract_money(&command, &no_expense, cost(&mut zero)) };
+        // Executed top-level commands subtract construction, revenue and running costs.
+        for (amount, kind) in [
+            (5, ExpensesType::EXPENSES_CONSTRUCTION),
+            (-3, ExpensesType::EXPENSES_ROADVEH_REVENUE),
+            (2, ExpensesType::EXPENSES_ROADVEH_RUN),
+        ] {
+            let mut result = Result {
+                ok: true,
+                money: amount,
+                expense: kind,
+            };
+            run(
+                &command,
+                &mut result,
+                crate::command_type::DoCommandFlags::EMPTY,
+                true,
+                false,
+            );
+        }
+        assert_eq!(owner.money, 16);
+        assert_eq!(
+            owner.expenses[0][usize::from(ExpensesType::EXPENSES_CONSTRUCTION.0)],
+            5
+        );
+        assert_eq!((owner.current.income, owner.current.expenses), (3, -2));
+        // An invalid current company subtracts nothing.
+        CURRENT.set(18);
+        // SAFETY: As above.
+        unsafe { subtract_money(&command, &no_expense, cost(&mut huge)) };
+        assert_eq!(owner.money, 16);
+        OWNER.set(std::ptr::null_mut());
+    }
+}

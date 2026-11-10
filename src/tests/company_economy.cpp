@@ -61,50 +61,21 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 	CHECK(original.Finances().money == Money(17));
 }
 
-/* These entries read real pool/settings storage and preserve native error objects. */
-TEST_CASE("Company control - human preference, allocation credit, defaults and encoded owners")
+/* Native owned-by error encodings; the first playable company, service intervals and the
+ * owned-by error and owner selection are company::control_tests (#736 F). Retires with the
+ * native CommandCost string encoding. */
+TEST_CASE("Company control - native owned-by error encodings")
 {
 	REQUIRE(Company::GetNumItems() == 0);
 	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
 	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
-	AutoRestoreBackup<VehicleDefaultSettings> client(_settings_client.company.vehicle, {});
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
-	std::array<std::unique_ptr<Company>, MAX_COMPANIES> companies;
 	REQUIRE(Company::CanAllocateItem());
-	companies[3].reset(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
-	CHECK(GetFirstPlayableCompanyID() == CompanyID(3)); // human wins before hole zero
-	companies[3]->is_ai = true;
-	auto vacant = GetFirstPlayableCompanyID();
-	CHECK(vacant == CompanyID(0));
-	companies[0].reset(new (vacant) Company(STR_SV_UNNAMED, true)); // consumes the selector's allocation credit
-	for (uint8_t i = 1; i < MAX_COMPANIES; ++i) if (i != 3) {
-		REQUIRE(Company::CanAllocateItem());
-		companies[i].reset(new (CompanyID(i)) Company(STR_SV_UNNAMED, true));
-	}
-	CHECK(GetFirstPlayableCompanyID() == CompanyID::Begin()); // full AI pool
-	companies[9]->is_ai = false; companies[12]->is_ai = false;
-	CHECK(GetFirstPlayableCompanyID() == CompanyID(9));
-	companies[1].reset();
-	CHECK(GetFirstPlayableCompanyID() == CompanyID(9));
-	companies[9]->is_ai = true; companies[12]->is_ai = true;
-	CHECK(GetFirstPlayableCompanyID() == CompanyID(1));
-
-	auto &supplied = companies[3]->settings.vehicle;
-	for (bool percent : {false, true}) {
-		supplied = {.servint_ispercent = percent, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
-		_settings_client.company.vehicle = {.servint_ispercent = !percent, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
-		for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
-			CHECK(CompanyServiceInterval(companies[3].get(), type) == company_interval);
-			CHECK(CompanyServiceInterval(nullptr, type) == client_interval);
-		}
-	}
+	std::unique_ptr<Company> company(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
 	for (CompanyID observer : {CompanyID(0), COMPANY_SPECTATOR}) {
 		_local_company = observer;
-		CHECK(CheckOwnership(CompanyID(0)).Succeeded());
 		for (Owner owner : {CompanyID(3), OWNER_NONE}) {
 			auto error = CheckOwnership(owner);
-			CHECK(error.GetErrorMessage() == STR_ERROR_OWNED_BY);
-			CHECK(error.GetErrorOwner() == (observer == 0 ? owner : INVALID_OWNER));
 			EncodedString expected;
 			if (observer == 0) expected = owner == 3 ? GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_NAME, CompanyID(3)) : GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_SOMEONE, std::monostate{});
 			CHECK(error.GetEncodedMessage() == expected);
@@ -119,23 +90,22 @@ TEST_CASE("Company control - human preference, allocation credit, defaults and e
 	CHECK(tile_error.GetErrorOwner() == CompanyID(3));
 }
 
-/* The native fatal operation is replaced only to observe both failed preconditions. */
-TEST_CASE("Company ownership - both original assertions precede error selection")
+/* The company-or-client defaults choice goes through the native settings services, and each
+ * type's interval is read from the native VehicleDefaultSettings record they return; the
+ * per-type field selection and the ignored percent flag are company::control_tests (#736 F).
+ * Retires with the native settings-table services. */
+TEST_CASE("Company control - company or client service-interval defaults")
 {
-	static std::vector<bool> failed;
-	static OpenTTDMovementServices movement;
-	movement = GetRustMovementServices();
-	movement.native_assert = [](bool condition) noexcept { failed.push_back(condition); };
-	auto shared = GetRustSharedServices();
-	shared.movement = &movement;
-	auto services = GetRustCompanyServices(); services.shared = &shared;
-	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0)), local(_local_company, COMPANY_SPECTATOR);
-	for (auto [owner, tile] : {std::pair{OWNER_END, TileIndex(1)}, {OWNER_TOWN, TileIndex(0)}}) {
-		failed.clear(); CommandCost cost;
-		openttd_rust_company_check_ownership(&services, RustCommandCost(&cost), owner.base(), tile.base());
-		CHECK(failed == std::vector<bool>{false});
-		CHECK(cost.GetErrorMessage() == STR_ERROR_OWNED_BY);
-		CHECK(cost.GetEncodedMessage().empty());
+	REQUIRE(Company::GetNumItems() == 0);
+	AutoRestoreBackup<VehicleDefaultSettings> client(_settings_client.company.vehicle, {});
+	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
+	REQUIRE(Company::CanAllocateItem());
+	std::unique_ptr<Company> company(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
+	company->settings.vehicle = {.servint_ispercent = false, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
+	_settings_client.company.vehicle = {.servint_ispercent = true, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
+	for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
+		CHECK(CompanyServiceInterval(company.get(), type) == company_interval);
+		CHECK(CompanyServiceInterval(nullptr, type) == client_interval);
 	}
 }
 
@@ -294,75 +264,14 @@ static void FixtureReset(bool networking, bool server)
 	/* Company-control completion restores this fixture's initial current company. */
 	fixture_post_company.local_company = []() noexcept -> uint8_t { return 18; };
 }
-/* The default maps do not load unclassified NewGRF road masks or extreme prices. */
-TEST_CASE("Commands - road price saturation, rounding and independent type masks")
-{
-	extern RoadTypes &_roadtypes_road, &_roadtypes_tram;
-	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
-	AutoRestoreBackup<Money> build(_price[PR_BUILD_ROAD], Money(7));
-	AutoRestoreBackup<Money> clear(_price[PR_CLEAR_ROAD], Money(-27));
-	AutoRestoreBackup<RoadTypes> roads(_roadtypes_road, {ROADTYPE_ROAD});
-	AutoRestoreBackup<RoadTypes> trams(_roadtypes_tram, {ROADTYPE_TRAM});
-	AutoRestoreBackup<uint16_t> road_multiplier(_roadtypes[ROADTYPE_ROAD].cost_multiplier, 3);
-	AutoRestoreBackup<uint16_t> tram_multiplier(_roadtypes[ROADTYPE_TRAM].cost_multiplier, UINT16_MAX);
-	CHECK(RoadBuildCost(ROADTYPE_ROAD) == Money(2));
-	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-27));
-	CHECK(RoadConvertCost(ROADTYPE_ROAD, ROADTYPE_ROAD) == Money(0));
-	_roadtypes_road.Reset(); // neither road nor tram: source clear policy still earns removal value
-	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-28));
-	_price[PR_BUILD_ROAD] = -7;
-	CHECK(RoadBuildCost(ROADTYPE_ROAD) == Money(-3));
-	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-25));
-	_price[PR_BUILD_ROAD] = INT64_MAX;
-	CHECK(RoadBuildCost(ROADTYPE_TRAM) == Money(1152921504606846975LL));
-	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(-864691128455135258LL));
-	_price[PR_BUILD_ROAD] = INT64_MIN;
-	CHECK(RoadBuildCost(ROADTYPE_TRAM) == Money(-1152921504606846976LL));
-	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(864691128455135205LL));
-}
-
-/* Save comparison cannot observe skipped metadata reads or local encoded errors.
- * Unreachable callbacks retain their generated abort defaults. */
-TEST_CASE("Commands - pre-post money short circuits and local error encoding")
+/* Only the local company's cash error is encoded natively; the money short circuits and
+ * subtraction are command::money_tests (#736 F). Retires with the native CommandCost string
+ * encoding. */
+TEST_CASE("Commands - local cash error encoding")
 {
 	FixtureReset(false, false);
 	auto command = GetRustCommandServices();
 	const auto &costs = GetRustCommandCostServices();
-	OpenTTDCompanyFinanceServices unread{};
-	command.finance = &unread;
-	command.infinite_money = OpenTTDCommandServices{}.infinite_money;
-	auto skipped = costs;
-	skipped.money = OpenTTDCommandCostServices{}.money;
-	command.cost = &skipped;
-	/* The Do steps: entry into test or execution, then reconciliation of that result. */
-	auto run = [&](CommandCost &result, DoCommandFlags flags, bool top, bool test) {
-		CHECK((openttd_rust_command_do_test(&command, false, test ? 0 : DoCommandFlags{DoCommandFlag::Execute}.base()) != 0) == test);
-		if (test) {
-			CHECK(openttd_rust_command_do_tested(&command, RustCommandCost(&result), flags.base(), top) == 0);
-		} else {
-			openttd_rust_command_do_executed(&command, RustCommandCost(&result), flags.base(), top);
-		}
-	};
-	for (bool test : {false, true}) {
-		CommandCost failed(STR_ERROR_INSUFFICIENT_FUNDS);
-		run(failed, {}, true, test);
-		CHECK(failed.Failed());
-		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Bankrupt}, DoCommandFlags{DoCommandFlag::QueryCost}}) {
-			bool top = flags.Any();
-			if (!test && flags.Test(DoCommandFlag::QueryCost)) continue;
-			CommandCost result(EXPENSES_CONSTRUCTION, Money(50));
-			run(result, flags, top, test);
-			CHECK(result.Succeeded());
-		}
-	}
-	command.cost = &costs;
-	for (int64_t amount : {-5, 0}) {
-		CommandCost result(EXPENSES_CONSTRUCTION, Money(amount));
-		CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
-	}
-	command.infinite_money = []() noexcept { return true; };
-	CommandCost infinite(EXPENSES_CONSTRUCTION, Money(INT64_MAX));
-	CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&infinite)));
 	command.infinite_money = []() noexcept { return false; };
 	command.finance = &fixture_finance;
 	fixture_companies[0] = std::make_unique<CompanyProperties>();
@@ -374,31 +283,19 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 		_local_company = local_id;
 		CommandCost result(EXPENSES_CONSTRUCTION, Money(21));
 		CHECK_FALSE(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
-		CHECK(result.GetCost() == Money(21));
 		CHECK(result.GetErrorMessage() == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
 		CHECK(result.GetEncodedMessage() == (local_id == 0 ? GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(21)) : EncodedString{}));
 	}
-	CommandCost zero;
-	skipped = costs; skipped.expense = OpenTTDCommandCostServices{}.expense;
-	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&zero));
-	for (auto [amount, expense] : {std::pair{5, EXPENSES_CONSTRUCTION}, std::pair{-3, EXPENSES_ROADVEH_REVENUE}, std::pair{2, EXPENSES_ROADVEH_RUN}}) {
-		CommandCost result(expense, Money(amount));
-		run(result, {}, true, false);
-	}
-	const auto &finances = fixture_companies[0]->Finances();
-	CHECK(finances.money == Money(16));
-	CHECK(finances.yearly_expenses[0][EXPENSES_CONSTRUCTION] == Money(5));
-	CHECK(finances.cur_economy.income == Money(3));
-	CHECK(finances.cur_economy.expenses == Money(-2));
 	fixture_current = 18;
-	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&infinite));
-	CHECK(finances.money == Money(16));
 	fixture_companies[0].reset();
 }
 
-TEST_CASE("Company economy - network deferred deletion and synchronous pool iteration")
+/* Offline and server bankrupt deletions post through the native command and network service
+ * tables; the network client's mode is company::bankruptcy_tests (#736 F). Retires with the
+ * native command-post and network glue. */
+TEST_CASE("Company economy - offline and server bankrupt deletion posts")
 {
-	for (int mode : {0, 1, 2}) {
+	for (int mode : {0, 1}) {
 		FixtureReset(mode != 0, mode == 1);
 		auto *economy = new (openttd_rust_economy_state()) Economy{}; economy->max_loan = 300000; economy->fluct = 100;
 		for (auto &p : fixture_companies) p = std::make_unique<CompanyProperties>();
@@ -411,129 +308,8 @@ TEST_CASE("Company economy - network deferred deletion and synchronous pool iter
 		const OpenTTDClockCompany clock{.services = &fixture_services, .month = []() noexcept { return OpenTTDEconomyMonth{.month = 1, .infinite_money = false, .maintenance = false, .fluctuating = false}; }};
 		openttd_rust_clock_economy_month(&clock, nullptr);
 		CHECK(fixture_current == 18);
-		if (mode == 2) CHECK(fixture_trace == std::vector<std::string>{"admin 1", "admin 2"});
-		else CHECK(fixture_trace == std::vector<std::string>{"post 1", "post 2"});
+		CHECK(fixture_trace == std::vector<std::string>{"post 1", "post 2"});
 		for (uint32_t i : {1U, 2U}) CHECK((fixture_companies[i] == nullptr) == (mode == 0));
 	}
 	for (auto &p : fixture_companies) p.reset();
-}
-TEST_CASE("Company economy - competitor posts return to the caller before each Post")
-{
-	FixtureReset(false, false);
-	for (bool change_limit : {false, true}) {
-		fixture_trace.clear();
-		uint32_t cursor = *openttd_rust_company_tick();
-		static int posts;
-		posts = 0;
-		SessionFixture fixture;
-		auto companies = fixture_services;
-		companies.shared = &fixture.shared;
-		fixture.finance.networking = FixtureNetworking;
-		companies.network_server = FixtureServer;
-		companies.competitor_fired = []() noexcept { return true; };
-		companies.ai_can_start = []() noexcept { return true; };
-		companies.company_count = []() noexcept -> size_t { return 0; };
-		fixture.max_competitors = 2;
-		fixture.services.company = &companies;
-		fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; return true; };
-		if (change_limit) fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; SessionFixture::active->max_competitors = 1; return true; };
-		CHECK(fixture.Run(GM_NORMAL));
-		CHECK(posts == (change_limit ? 1 : 2));
-		/* The competitor timeout reads the same canonical settings and game mode in place. */
-		AutoRestoreBackup game_mode(_game_mode, GM_NORMAL);
-		fixture.competitor_interval = 1;
-		fixture.max_competitors = 1;
-		CHECK(openttd_rust_company_competitor_timeout(&companies));
-		fixture.max_competitors = 0;
-		CHECK_FALSE(openttd_rust_company_competitor_timeout(&companies));
-		fixture.max_competitors = 1;
-		fixture.competitor_interval = 0;
-		CHECK_FALSE(openttd_rust_company_competitor_timeout(&companies));
-		CHECK(fixture_trace == std::vector<std::string>{"timeout 19425"});
-		CHECK(*openttd_rust_company_tick() == (cursor + 1) % MAX_COMPANIES);
-	}
-}
-/* AIInstance::Initialize can raise Script_FatalError for the configured script
- * memory policy before ScriptInstance::Initialize's catch. Rust returns before
- * AI::StartNew; if it throws the frame is abandoned with the original partial
- * effects (allocated company, no new-company events, no network announcement). */
-TEST_CASE("Company economy - AI startup continuation and abandoned frames")
-{
-	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
-	RustTileOwnerContext ownership;
-	FixtureReset(false, false);
-	OpenTTDCompanyControl abandoned{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};
-	REQUIRE(openttd_rust_company_control(&fixture_services, &ownership.view, &abandoned));
-	CHECK(abandoned.startup.company == 2);
-	CHECK(fixture_trace == std::vector<std::string>{"allocate 2", "setup 2"});
-	CHECK(fixture_companies[2]->Finances().money == fixture_companies[2]->Finances().current_loan);
-
-	FixtureReset(false, false);
-	OpenTTDCompanyControl resumed{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};
-	int starts = 0;
-	while (openttd_rust_company_control(&fixture_services, &ownership.view, &resumed)) starts++;
-	CHECK(starts == 1);
-	CHECK(fixture_trace == std::vector<std::string>{"allocate 2", "setup 2", "events 2", "network 2"});
-	CHECK(resumed.result.error == 0);
-
-	FixtureReset(true, false); // network clients do not start AIs
-	OpenTTDCompanyStartup client{.company = UINT32_MAX, .requested = 255, .is_ai = true, .stage = 0};
-	CHECK_FALSE(openttd_rust_company_startup(&fixture_services, &client));
-	CHECK(fixture_trace == std::vector<std::string>{"allocate 2", "setup 2", "events 2"});
-	fixture_companies[2].reset();
-}
-/* AI command APIs cannot select deity/non-company owners. The original wider
- * CompanyMask test is defined through bit 63; compare those special owners and
- * also check the inactive/new/spectator sentinels without an oversized shift. */
-TEST_CASE("Company control - network local switch precedes native settings continuation")
-{
-	static uint8_t local;
-	static bool own;
-	static OpenTTDObjectivesServices windows;
-	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
-	RustTileOwnerContext ownership;
-	for (bool matching_client : {false, true}) {
-		FixtureReset(true, false); local = COMPANY_SPECTATOR.base(); fixture_current = local; own = matching_client;
-		fixture_identity_shared.company_valid = [](uint8_t id) noexcept { return FixtureFinances(id) != nullptr; };
-		fixture_services.shared = &fixture_identity_shared;
-		fixture_services.local_company = []() noexcept { return local; };
-		fixture_services.close_network_status = FixtureVoid;
-		fixture_services.network_own_company = [](uint8_t id, uint32_t) noexcept -> Company * { fixture_trace.push_back("request"); return own ? fixture_identity.company(id) : nullptr; };
-		fixture_services.network_own_company_settings = [](Company *) noexcept { CHECK(local == 2); CHECK(fixture_current == 2); fixture_trace.push_back("settings"); };
-		windows = GetRustObjectivesServices();
-		windows.window_data = [](uint16_t cls, uint32_t number, int32_t data) noexcept { CHECK(cls == WC_SEND_NETWORK_MSG); CHECK(number == DESTTYPE_TEAM); CHECK(data == COMPANY_SPECTATOR.base()); CHECK(local == COMPANY_SPECTATOR.base()); CHECK(fixture_current == COMPANY_SPECTATOR.base()); fixture_trace.push_back("chat"); };
-		windows.window_classes = [](uint16_t, int32_t) noexcept { fixture_trace.push_back("classes"); };
-		fixture_services.objectives = []() noexcept -> const OpenTTDObjectivesServices & { return windows; };
-		fixture_services.assign_company_context = [](uint8_t company) noexcept { local = company; fixture_current = company; fixture_trace.push_back("assign"); };
-		fixture_services.close_construction_windows = []() noexcept { fixture_trace.push_back("construction"); };
-		fixture_identity_shared.screen_dirty = []() noexcept { fixture_trace.push_back("screen"); };
-		fixture_identity.reset_colourmap = []() noexcept { fixture_trace.push_back("colourmap"); };
-		OpenTTDCompanyControl call{.result = {}, .startup = {}, .client = 7, .action = static_cast<uint8_t>(CCA_NEW), .target = 255, .reason = 0, .execute = true, .stage = 0};
-		CHECK_FALSE(openttd_rust_company_control(&fixture_services, &ownership.view, &call));
-		std::vector<std::string> expected{"allocate 2", "setup 2", "events 2", "network 2", "request"};
-		if (matching_client) expected.insert(expected.end(), {"chat", "assign", "classes", "construction", "screen", "classes", "classes", "classes", "colourmap", "settings"});
-		CHECK(fixture_trace == expected);
-		CHECK(call.result.error == 0);
-		CHECK(local == (matching_client ? 2 : COMPANY_SPECTATOR.base()));
-		fixture_companies[2].reset();
-	}
-}
-
-TEST_CASE("Company economy - special owners have no bankruptcy takeover offer")
-{
-	RustTileOwnerContext ownership;
-	FixtureReset(true, false);
-	fixture_companies[1] = std::make_unique<CompanyProperties>();
-	for (uint16_t mask : {uint16_t{0}, uint16_t{UINT16_MAX}}) {
-		fixture_companies[1]->Finances().bankrupt_asked = CompanyMask{};
-		if (mask != 0) fixture_companies[1]->Finances().bankrupt_asked.Set();
-		for (uint32_t current = 16; current <= UINT8_MAX; current++) {
-			fixture_current = static_cast<uint8_t>(current);
-			if (current < 64) CHECK_FALSE(fixture_companies[1]->Finances().bankrupt_asked.Test(CompanyID(static_cast<uint8_t>(current))));
-			for (bool hostile : {false, true}) {
-				CHECK(openttd_rust_company_buy(&fixture_services, &ownership.view, 1, hostile, false).error == 1);
-			}
-		}
-	}
-	fixture_companies[1].reset();
 }

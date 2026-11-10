@@ -1019,3 +1019,273 @@ impl VehicleServices {
         unsafe { entry(v, self) }
     }
 }
+
+/// Maintenance scalar rules: age saturation, value decay, breakdown cadence and wrap,
+/// reacquisition after reentrant callbacks and the loading countdown. The services mirror the
+/// native glue in `src/rust/vehicle_services.cpp`: the record holds the counter, tick, speed,
+/// type and status; the rest are the native fields below.
+#[cfg(test)]
+mod scalar_tests {
+    use super::*;
+    use crate::test_tables::{FLEET_GROUPS, MAINTENANCE, VEHICLE};
+    use crate::timer_game_calendar::CalendarDate;
+    use crate::timer_game_common::MAX_DATE;
+    use crate::timer_game_economy::EconomyDate;
+    use crate::vehicle_base::{VS_HIDDEN, VehicleRecord};
+    use std::cell::Cell;
+    use std::ptr;
+
+    /// The native `Vehicle` members the maintenance services read and write.
+    #[derive(Clone, Copy)]
+    struct Native {
+        age: CalendarDate,
+        economy_age: EconomyDate,
+        value: i64,
+        delay: u8,
+        since: u8,
+        order: OrderType,
+    }
+    thread_local! {
+        static NATIVE: Cell<Native> = const {
+            Cell::new(Native {
+                age: CalendarDate(0),
+                economy_age: EconomyDate(0),
+                value: 0,
+                delay: 0,
+                since: 0,
+                order: OrderType::OT_NOTHING,
+            })
+        };
+        static REENTER: Cell<bool> = const { Cell::new(false) };
+    }
+    fn native() -> Native {
+        NATIVE.get()
+    }
+    fn set(f: impl FnOnce(&mut Native)) {
+        let mut n = NATIVE.get();
+        f(&mut n);
+        NATIVE.set(n);
+    }
+    fn rec(v: VehicleRef) -> *mut VehicleRecord {
+        v.0.as_ptr()
+    }
+
+    extern "C" fn age(_: VehicleRef) -> Age {
+        Age {
+            age: native().age,
+            max_age: CalendarDate(0),
+            decay: 0,
+        }
+    }
+    extern "C" fn age_write(_: VehicleRef, age: CalendarDate) {
+        set(|n| n.age = age);
+    }
+    extern "C" fn economy_age(_: VehicleRef) -> EconomyDate {
+        native().economy_age
+    }
+    extern "C" fn economy_age_write(_: VehicleRef, age: EconomyDate) {
+        set(|n| n.economy_age = age);
+    }
+    extern "C" fn value(_: VehicleRef) -> i64 {
+        native().value
+    }
+    extern "C" fn value_write(_: VehicleRef, value: i64) {
+        set(|n| n.value = value);
+    }
+    extern "C" fn not_primary(_: *mut ()) -> bool {
+        false
+    }
+    extern "C" fn dirty(_: VehicleRef) {}
+    extern "C" fn breakdown_probe(v: VehicleRef) -> BreakdownProbe {
+        // SAFETY: The test's live record.
+        unsafe {
+            BreakdownProbe {
+                counter: (*rec(v)).breakdown_ctr,
+                status: (*rec(v)).vehstatus,
+            }
+        }
+    }
+    extern "C" fn breakdown_start(v: VehicleRef) -> BreakdownStart {
+        BreakdownStart {
+            since: native().since,
+            // SAFETY: The test's live record.
+            kind: unsafe { (*rec(v)).r#type },
+        }
+    }
+    extern "C" fn breakdown_start_write(v: VehicleRef, counter: u8, since: u8) {
+        // SAFETY: The test's live record.
+        unsafe { (*rec(v)).breakdown_ctr = counter };
+        set(|n| n.since = since);
+    }
+    extern "C" fn breakdown_active(v: VehicleRef) -> BreakdownActive {
+        // SAFETY: The test's live record.
+        unsafe {
+            BreakdownActive {
+                kind: (*rec(v)).r#type,
+                tick: (*rec(v)).tick_counter,
+                delay: native().delay,
+            }
+        }
+    }
+    extern "C" fn breakdown_countdown(v: VehicleRef) -> BreakdownCountdown {
+        BreakdownCountdown {
+            order_type: native().order,
+            // SAFETY: The test's live record.
+            counter: unsafe { (*rec(v)).breakdown_ctr },
+        }
+    }
+    extern "C" fn breakdown_delay_write(_: VehicleRef, delay: u8) {
+        set(|n| n.delay = delay);
+    }
+    /// The fixture's reentrant callbacks: the breakdown sound sees the zeroed speed, the
+    /// started counter and the saturated count, then hides the vehicle.
+    extern "C" fn breakdown_sound(
+        v: VehicleRef,
+        event: crate::newgrf_sound::VehicleSoundEvent,
+    ) -> bool {
+        assert_eq!(event.0, crate::newgrf_sound::VSE_BREAKDOWN.0);
+        // SAFETY: The test's live record.
+        unsafe {
+            assert_eq!((*rec(v)).cur_speed, 0);
+            assert_eq!((*rec(v)).breakdown_ctr, 1);
+            (*rec(v)).vehstatus |= VS_HIDDEN;
+        }
+        assert_eq!(native().since, 255);
+        true
+    }
+    /// ... and the dirty callback sees the hidden flag, then makes the vehicle an aircraft.
+    extern "C" fn reentrant_dirty(v: VehicleRef) {
+        if REENTER.get() {
+            // SAFETY: The test's live record.
+            unsafe {
+                assert_ne!((*rec(v)).vehstatus & VS_HIDDEN, 0);
+                (*rec(v)).r#type = VehicleType::VEH_AIRCRAFT;
+            }
+        }
+    }
+
+    fn maintenance(group: &fleet::GroupServices) -> Services {
+        let mut m = MAINTENANCE;
+        m.group = group;
+        m.age = age;
+        m.age_write = age_write;
+        m.economy_age = economy_age;
+        m.economy_age_write = economy_age_write;
+        m.value = value;
+        m.value_write = value_write;
+        m.details_dirty = dirty;
+        m.view_dirty = dirty;
+        m.mark_dirty = reentrant_dirty;
+        m.breakdown_probe = breakdown_probe;
+        m.breakdown_start = breakdown_start;
+        m.breakdown_start_write = breakdown_start_write;
+        m.breakdown_active = breakdown_active;
+        m.breakdown_countdown = breakdown_countdown;
+        m.breakdown_delay_write = breakdown_delay_write;
+        m.max_calendar_date = CalendarDate(MAX_DATE);
+        m.max_economy_date = EconomyDate(MAX_DATE);
+        m
+    }
+
+    /// Ages and value: calendar and economy ages saturate at `MAX_DATE`; value loses
+    /// `value >> 8`, rounding a negative value's loss downward.
+    fn check_ages_and_value(v: VehicleRef, base: &VehicleServices) {
+        set(|n| n.age = CalendarDate(MAX_DATE - 1));
+        for _ in 0..2 {
+            // SAFETY: The test's live record and tables.
+            unsafe { age_vehicle(v, base) };
+            assert_eq!(native().age, CalendarDate(MAX_DATE));
+        }
+        set(|n| n.economy_age = EconomyDate(MAX_DATE - 1));
+        for _ in 0..2 {
+            // SAFETY: As above.
+            unsafe { economy_age_vehicle(v, base) };
+            assert_eq!(native().economy_age, EconomyDate(MAX_DATE));
+        }
+        for (before, after) in [(65535, 65280), (-257, -255)] {
+            set(|n| n.value = before);
+            // SAFETY: As above.
+            unsafe { decrease_vehicle_value(v, base) };
+            assert_eq!(native().value, after, "value {before}");
+        }
+    }
+
+    /// Set the record's type, counter and tick and the native delay, then break down.
+    fn breakdown(
+        v: VehicleRef,
+        base: &VehicleServices,
+        kind: VehicleType,
+        counter: u8,
+        tick: u8,
+        delay: u8,
+    ) -> bool {
+        // SAFETY: The test's live record.
+        unsafe {
+            (*rec(v)).r#type = kind;
+            (*rec(v)).breakdown_ctr = counter;
+            (*rec(v)).tick_counter = tick;
+        }
+        set(|n| n.delay = delay);
+        // SAFETY: As above.
+        unsafe { vehicle_handle_breakdown(v, base) }
+    }
+
+    #[test]
+    fn maintenance_scalar_stores_and_breakdown_cadence() {
+        let mut group = FLEET_GROUPS;
+        group.primary = not_primary;
+        let m = maintenance(&group);
+        let mut base = VEHICLE;
+        base.maintenance = &raw const m;
+        base.play_vehicle_sound = breakdown_sound;
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            ptr::null_mut(),
+            VehicleType::VEH_EFFECT,
+        );
+        let v = VehicleRef::of(record);
+        check_ages_and_value(v, &base);
+        // SAFETY: The test's live record.
+        let counter = move || unsafe { (*record).breakdown_ctr };
+
+        // A broken-down train decrements its delay every fourth tick.
+        for tick in [1, 2, 3] {
+            assert!(breakdown(v, &base, VehicleType::VEH_TRAIN, 1, tick, 3));
+            assert_eq!(native().delay, 3, "train tick {tick}");
+        }
+        assert!(breakdown(v, &base, VehicleType::VEH_TRAIN, 1, 4, 3));
+        assert_eq!(native().delay, 2);
+        // A road vehicle's last delay ends the breakdown.
+        assert!(breakdown(v, &base, VehicleType::VEH_ROAD, 1, 2, 1));
+        assert_eq!((counter(), native().delay), (0, 0));
+        // Aircraft never stop for breakdowns.
+        assert!(!breakdown(v, &base, VehicleType::VEH_AIRCRAFT, 1, 2, 1));
+        assert_eq!((counter(), native().delay), (1, 1));
+        // The native uint8_t pre-decrement wraps.
+        assert!(breakdown(v, &base, VehicleType::VEH_ROAD, 1, 2, 0));
+        assert_eq!(native().delay, 255);
+
+        // Starting a breakdown reacquires the hidden flag after the sound and the type after
+        // the dirty callbacks.
+        REENTER.set(true);
+        // SAFETY: The test's live record.
+        unsafe { (*record).cur_speed = 10 };
+        set(|n| n.since = 255);
+        assert!(!breakdown(v, &base, VehicleType::VEH_ROAD, 2, 2, 5));
+        REENTER.set(false);
+        // SAFETY: As above.
+        assert_eq!(
+            (native().delay, unsafe { (*record).r#type }.0),
+            (5, VehicleType::VEH_AIRCRAFT.0)
+        );
+
+        // A counting-down vehicle waits while loading, then counts.
+        set(|n| n.order = OrderType::OT_LOADING);
+        assert!(!breakdown(v, &base, VehicleType::VEH_EFFECT, 3, 2, 0));
+        assert_eq!(counter(), 3);
+        set(|n| n.order = OrderType::OT_DUMMY);
+        assert!(!breakdown(v, &base, VehicleType::VEH_EFFECT, 3, 2, 0));
+        assert_eq!(counter(), 2);
+        // SAFETY: Allocated above; nothing refers to it any more.
+        unsafe { crate::vehicle_base::openttd_rust_vehicle_record_delete(record) };
+    }
+}
