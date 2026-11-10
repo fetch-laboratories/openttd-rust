@@ -7,10 +7,76 @@
 
 //! Shared history indices from `misc/history_type.hpp`.
 
+/// Native immutable `HistoryRange` chain from `misc/history_type.hpp`.
+#[repr(C)]
+pub struct HistoryRange {
+    /// Previous subdivision, or null for the initial range.
+    pub hr: *const Self,
+    /// Number of periods for this range.
+    pub periods: u8,
+    /// Number of records needed for this range.
+    pub records: u8,
+    /// Index of first element in history data.
+    pub first: u8,
+    /// Index past the last element in history data.
+    pub last: u8,
+    /// Number of divisions of the previous history range.
+    pub division: u8,
+    /// Number of divisions of the initial history range.
+    pub total_division: u8,
+}
+impl HistoryRange {
+    /// `HistoryRange(periods)`: the initial range.
+    #[must_use]
+    pub const fn new(periods: u8) -> Self {
+        Self {
+            hr: std::ptr::null(),
+            periods,
+            records: periods,
+            first: 1,
+            last: 1_u8.wrapping_add(periods),
+            division: 1,
+            total_division: 1,
+        }
+    }
+    /// `HistoryRange(hr, division, periods)`: a range subdividing `hr`, including the
+    /// original's `uint8_t` narrowing. A constant built here carries only the scalar
+    /// fields; native ranges supply the `hr` chain.
+    #[must_use]
+    pub const fn subdividing(hr: &Self, division: u8, periods: u8) -> Self {
+        let records = periods.wrapping_sub((hr.periods / division).wrapping_sub(1));
+        Self {
+            hr: std::ptr::null(),
+            periods,
+            records,
+            first: hr.last,
+            last: hr.last.wrapping_add(records),
+            division,
+            total_division: division.wrapping_mul(hr.total_division),
+        }
+    }
+}
+
 /// Native `HISTORY_PERIODS`: the number of periods each history range reports.
 pub const HISTORY_PERIODS: u8 = 24;
-/// Native `HISTORY_RECORDS`: `HISTORY_YEAR.last`, the length of `HistoryData`.
-pub const HISTORY_RECORDS: usize = 61;
+/// Native `HISTORY_MONTH`.
+pub const HISTORY_MONTH: HistoryRange = HistoryRange::new(HISTORY_PERIODS);
+/// Native `HISTORY_QUARTER`.
+pub const HISTORY_QUARTER: HistoryRange =
+    HistoryRange::subdividing(&HISTORY_MONTH, 3, HISTORY_PERIODS);
+/// Native `HISTORY_YEAR`.
+pub const HISTORY_YEAR: HistoryRange =
+    HistoryRange::subdividing(&HISTORY_QUARTER, 4, HISTORY_PERIODS);
+/// Native `HISTORY_MAX_DIVISION`: maximum number of divisions from previous history range.
+pub const HISTORY_MAX_DIVISION: u8 = {
+    let a = HISTORY_MONTH.division;
+    let b = HISTORY_QUARTER.division;
+    let c = HISTORY_YEAR.division;
+    let ab = if a > b { a } else { b };
+    if ab > c { ab } else { c }
+};
+/// Native `HISTORY_RECORDS`: total number of records require for all history data.
+pub const HISTORY_RECORDS: usize = HISTORY_YEAR.last as usize;
 
 /// Native `THIS_MONTH`: the history record being accumulated.
 pub const THIS_MONTH: u8 = 0;

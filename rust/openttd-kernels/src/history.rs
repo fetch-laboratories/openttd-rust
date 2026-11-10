@@ -77,30 +77,11 @@ pub(crate) fn update(mask: u64, d: Descriptor, month: u32) -> u64 {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "HistoryRange" ["probe"] => HistoryRange {
+    "HistoryRange" ["probe"] => crate::history_type::HistoryRange {
         hr, periods, records, first, last, division, total_division,
     };
     "OpenTTDRustHistoryQuery" ["probe"] => HistoryQuery { is_valid, in_range };
 
-}
-
-/// Native immutable `HistoryRange` chain from `misc/history_type.hpp`.
-#[repr(C)]
-pub struct HistoryRange {
-    /// Previous subdivision, or null for the initial range.
-    pub hr: *const Self,
-    /// Number of periods for this range.
-    pub periods: u8,
-    /// Number of records needed for this range.
-    pub records: u8,
-    /// Index of first element in history data.
-    pub first: u8,
-    /// Index past the last element in history data.
-    pub last: u8,
-    /// Number of divisions of the previous history range.
-    pub division: u8,
-    /// Number of divisions of the initial history range.
-    pub total_division: u8,
 }
 
 /// Native fatal handling and data validity are separate query outcomes.
@@ -122,10 +103,10 @@ impl From<Option<bool>> for HistoryQuery {
     }
 }
 
-// Maximum subdivision among the original month, quarter and year ranges.
-const HISTORY_MAX_DIVISION: usize = 4;
-
-use crate::history_type::{HISTORY_PERIODS, HISTORY_RECORDS};
+use crate::history_type::{
+    HISTORY_MAX_DIVISION, HISTORY_MONTH, HISTORY_QUARTER, HISTORY_RECORDS, HISTORY_YEAR,
+    HistoryRange,
+};
 
 pub(crate) trait HistoryElement: Copy + Default {
     fn sum(history: &[Self]) -> Self;
@@ -147,23 +128,23 @@ impl HistoryElement for crate::town::SuppliedHistory {
 /// subdivision-first order of the original recursion over `HISTORY_YEAR`. Only the
 /// mask update and rotation fields are used; the query-only child fields stay zero.
 const HISTORY_YEAR_RANGES: [Descriptor; 3] = {
-    const fn range(first: u8, last: u8, division: u8, total_division: u8) -> Descriptor {
+    const fn range(hr: &HistoryRange) -> Descriptor {
         Descriptor {
             child: 0,
-            periods: HISTORY_PERIODS,
-            records: last - first,
-            first,
-            last,
-            division,
-            total_division,
+            periods: hr.periods,
+            records: hr.records,
+            first: hr.first,
+            last: hr.last,
+            division: hr.division,
+            total_division: hr.total_division,
             child_periods: 0,
             child_division: 0,
         }
     }
     [
-        range(1, 25, 1, 1),
-        range(25, 42, 3, 3),
-        range(42, 61, 4, 12),
+        range(&HISTORY_MONTH),
+        range(&HISTORY_QUARTER),
+        range(&HISTORY_YEAR),
     ]
 };
 
@@ -263,7 +244,7 @@ impl HistoryRange {
             let mut is_valid = false;
             // No need to clear as we fill every element we use. These concrete types
             // default-construct all four elements without callbacks or side effects.
-            let mut tmp_result = [T::default(); HISTORY_MAX_DIVISION];
+            let mut tmp_result = [T::default(); HISTORY_MAX_DIVISION as usize];
             let month = u32::from(crate::timer_game_common::economy_month());
             let start = start(descriptor, age, month);
             // SAFETY: Aggregation requires the live previous subdivision.
@@ -366,7 +347,7 @@ mod comparison_tests {
     use crate::town::SuppliedHistory;
 
     const ORACLE: &str = include_str!("history/comparison-oracle.txt");
-    const RECORDS: usize = 61;
+    const RECORDS: usize = crate::history_type::HISTORY_RECORDS;
     type Sections<'a> = std::collections::HashMap<&'a str, oracle::Section<'a>>;
 
     /// The probe's `SumHistory<uint16_t>`: `ClampTo<uint16_t>` of the plain total.
@@ -377,29 +358,15 @@ mod comparison_tests {
         }
     }
 
-    /// Original `HistoryRange` constructors, including their `uint8_t` narrowing.
+    /// The production `HistoryRange` constructors, chained to their parent range.
     fn initial(periods: u8) -> HistoryRange {
-        HistoryRange {
-            hr: std::ptr::null(),
-            periods,
-            records: periods,
-            first: 1,
-            last: 1_u8.wrapping_add(periods),
-            division: 1,
-            total_division: 1,
-        }
+        HistoryRange::new(periods)
     }
 
     fn sub(hr: &HistoryRange, division: u8, periods: u8) -> HistoryRange {
-        let records = periods.wrapping_sub((hr.periods / division).wrapping_sub(1));
         HistoryRange {
             hr: std::ptr::from_ref(hr),
-            periods,
-            records,
-            first: hr.last,
-            last: hr.last.wrapping_add(records),
-            division,
-            total_division: division.wrapping_mul(hr.total_division),
+            ..HistoryRange::subdividing(hr, division, periods)
         }
     }
 
