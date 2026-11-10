@@ -433,22 +433,25 @@ fn restore(x: Ctx, list: &[R]) {
         prev = t;
     }
 }
-/// Original `RemoveFromConsist`.
+/// `RemoveFromConsist`: unlink a part, or the chain from it, from its train.
 fn remove_from_consist(x: Ctx, part: R, chain: bool) {
     let tail = if chain {
         x.last(part)
     } else {
         x.last_engine_part(part)
     };
+    /* Unlink at the front, but make it point to the next
+     * vehicle after the to be remove part. */
     let previous = x.previous(part);
     if !previous.is_null() {
         x.set_next(previous, x.next(tail));
     }
+    /* Unlink at the back */
     x.set_next(tail, ptr::null_mut());
 }
-/// Original `InsertInConsist`.
+/// `InsertInConsist`: inserts a chain into the train at dst.
 fn insert_in_consist(x: Ctx, dst: R, chain: R) {
-    // We do not want to add something in the middle of an articulated part.
+    /* We do not want to add something in the middle of an articulated part. */
     x.assert(|| {
         !dst.is_null() && {
             let next = x.next(dst);
@@ -458,10 +461,12 @@ fn insert_in_consist(x: Ctx, dst: R, chain: R) {
     x.set_next(x.last(chain), x.next(dst));
     x.set_next(dst, chain);
 }
-/// Original `NormaliseDualHeads`.
+/// `NormaliseDualHeads`: normalise the dual heads in the train, i.e. if one is
+/// missing move that one to this train.
 fn normalise_dual_heads(x: Ctx, mut t: R) {
     while !t.is_null() {
         if x.is_multiheaded(t) && x.is_engine(t) {
+            /* Make sure that there are no free cars before next engine */
             let mut u = t;
             loop {
                 let next = x.next(u);
@@ -472,26 +477,32 @@ fn normalise_dual_heads(x: Ctx, mut t: R) {
             }
             let other = x.rec((x.r.selection.other_multihead)(Ctx::sh(t)));
             if u != other {
+                /* Remove the part from the 'wrong' train */
                 remove_from_consist(x, other, false);
                 crate::witness::hit(crate::witness::VT_RAIL_DUAL_HEADS);
+                /* And add it to the 'right' train */
                 insert_in_consist(x, u, other);
             }
         }
         t = x.next_vehicle(t);
     }
 }
-/// Original `NormaliseSubtypes`.
+/// `NormaliseSubtypes`: normalise the sub types of the parts in this chain.
 fn normalise_subtypes(x: Ctx, chain: R) {
+    /* Nothing to do */
     if chain.is_null() {
         return;
     }
+    /* We must be the first in the chain. */
     x.assert(|| x.previous(chain).is_null());
+    /* Set the appropriate bits for the first in the chain. */
     if gv::is_wagon(x.subtype(chain)) {
         x.set_subtype(chain, gv::set_free_wagon);
     } else {
         x.assert(|| x.is_engine(chain));
         x.set_subtype(chain, gv::set_front_engine);
     }
+    /* Now clear the bits for the rest of the chain */
     let mut t = x.next(chain);
     while !t.is_null() {
         x.set_subtype(t, gv::clear_free_wagon);
@@ -500,12 +511,18 @@ fn normalise_subtypes(x: Ctx, chain: R) {
     }
 }
 
-/// Original `CheckNewTrain`; `Some` is the `CommandCost(StringID)` error.
+/// `CheckNewTrain`: check/validate whether we may actually build a new train;
+/// `Some` is the `CommandCost(StringID)` error.
 fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> Option<u32> {
+    /* Just add 'new' engines and subtract the original ones.
+     * If that's less than or equal to 0 we can be sure we did
+     * not add any engines (read: trains) along the way. */
     let engine = |v: R| i32::from(!v.is_null() && x.is_engine(v));
     if engine(src) + engine(dst) - engine(original_src) - engine(original_dst) <= 0 {
         return None;
     }
+    /* Get a free unit number and check whether it's within the bounds.
+     * There will always be a maximum of one new train. */
     // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
     if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN)
         <= unsafe { x.t.shared.settings().max_trains.read() }
@@ -514,16 +531,21 @@ fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> 
     }
     Some(x.b.too_many)
 }
-/// Original `CheckTrainAttachment`. An error leaves the chain split, exactly
-/// as the original; every caller restores its backup.
+/// `CheckTrainAttachment`: check whether the train parts can be attached. An
+/// error leaves the chain split, exactly as the original; every caller
+/// restores its backup.
 fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
+    /* No multi-part train, no need to check. */
     if t.is_null() || x.next(t).is_null() {
         return None;
     }
+    /* The maximum length for a train. For each part we decrease this by one
+     * and if the result is negative the train is simply too long. */
     // Unsigned `uint8_t * uint` arithmetic, then the original's `int` conversion.
     let mut allowed_len = (u32::from(x.w.max_train_length()) * TILE_SIZE)
         .wrapping_sub(u32::from(x.length(t)))
         .cast_signed();
+    /* For free-wagon chains, check if they are within the max_train_length limit. */
     if !x.is_engine(t) {
         t = x.next(t);
         while !t.is_null() {
@@ -537,18 +559,26 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
     }
     let head = t;
     let mut prev = t;
+    /* Break the prev -> t link so it always holds within the loop. */
     t = x.next(t);
     x.set_next(prev, ptr::null_mut());
+    /* Make sure the cache is cleared. */
     (x.s.invalidate_grf)(Ctx::sh(head));
     let strings = &x.c.strings;
     while !t.is_null() {
         allowed_len -= i32::from(x.length(t));
         let next = x.next(t);
+        /* Unlink the to-be-added piece; it is already unlinked from the previous
+         * part due to the fact that the prev -> t link is broken. */
         x.set_next(t, ptr::null_mut());
+        /* Don't check callback for articulated or rear dual headed parts */
         if !x.is_articulated(t) && !x.is_rear(t) {
+            /* Back up and clear the first_engine data to avoid using wagon override group */
             let cache = Ctx::vref(t).ground_cache();
             let first_engine = read_field!(cache, first_engine);
             write_field!(cache, first_engine, crate::engine_type::INVALID_ENGINE);
+            /* We don't want the cache to interfere. head's cache is cleared before
+             * the loop and after each callback does not need to be cleared here. */
             (x.s.invalidate_grf)(Ctx::sh(t));
             let mut regs100 = MaybeUninit::<i32>::uninit();
             let callback = unsafe {
@@ -564,10 +594,13 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                     1,
                 )
             };
+            /* Restore original first_engine data */
             write_field!(Ctx::vref(t).ground_cache(), first_engine, first_engine);
+            /* We do not want to remember any cached variables from the test run */
             (x.s.invalidate_grf)(Ctx::sh(t));
             (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
+                /* A failing callback means everything is okay */
                 let mut error = strings.null_string;
                 let grf_text = |n: u32| {
                     x.c.grf_text(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
@@ -590,6 +623,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                     error = grf_text(u32::from(callback));
                 } else {
                     match callback {
+                        // 0x400: allow if railtypes match (always the case for OpenTTD); 0x401: allow
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
@@ -597,6 +631,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                                 .c
                                 .grf_text(Ctx::sh(head), unsafe { regs100.assume_init() } as u32);
                         }
+                        // unknown reason, or 0x402: disallow attaching
                         _ => error = strings.incompatible_rail,
                     }
                 }
@@ -605,6 +640,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                 }
             }
         }
+        /* And link it to the new part. */
         x.set_next(prev, t);
         prev = t;
         t = next;
@@ -614,7 +650,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
     }
     None
 }
-/// Original `ValidateTrains`.
+/// `ValidateTrains`: validate whether we are going to create valid trains.
 fn validate_trains(
     x: Ctx,
     original_dst: R,
@@ -623,7 +659,7 @@ fn validate_trains(
     src: R,
     check_limit: bool,
 ) -> Option<u32> {
-    // Source attachment errors take precedence over destination errors.
+    /* Check whether we may actually construct the trains. */
     let error = check_train_attachment(x, src);
     if error.is_some() {
         return error;
@@ -632,20 +668,32 @@ fn validate_trains(
     if error.is_some() {
         return error;
     }
+    /* Check whether we need to build a new train. */
     if check_limit {
         check_new_train(x, original_dst, dst, original_src, src)
     } else {
         None
     }
 }
-/// Original `ArrangeTrains`.
+/// `ArrangeTrains`: arrange the trains in the wanted way.
 fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, move_chain: bool) {
+    /* First determine the front of the two resulting trains */
     if *src_head == *dst_head {
+        /* If we aren't moving part(s) to a new train, we are just moving the
+         * front back and there is not destination head. */
         *dst_head = ptr::null_mut();
     } else if dst_head.is_null() {
+        /* If we are moving to a new train the head of the move train would become
+         * the head of the new vehicle. */
         *dst_head = src;
     }
     if src == *src_head {
+        /* If we are moving the front of a train then we are, in effect, creating
+         * a new head for the train. Point to that. Unless we are moving the whole
+         * train in which case there is not 'source' train anymore.
+         * In case we are a multiheaded part we want the complete thing to come
+         * with us, so src->GetNextUnit(), however... when we are e.g. a wagon
+         * that is followed by a rear multihead we do not want to include that. */
         *src_head = if move_chain {
             ptr::null_mut()
         } else if x.is_multiheaded(src) {
@@ -656,24 +704,35 @@ fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, mo
             x.next_vehicle(src)
         };
     }
+    /* Now it's just simply removing the part that we are going to move from the
+     * source train and *if* the destination is a not a new train add the chain
+     * at the destination location. */
     remove_from_consist(x, src, move_chain);
     if *dst_head != src {
         insert_in_consist(x, dst, src);
     }
+    /* Now normalise the dual heads, that is move the dual heads around in such
+     * a way that the head and rear of a dual head are in the same train */
     normalise_dual_heads(x, *src_head);
     normalise_dual_heads(x, *dst_head);
 }
-/// Original `NormaliseTrainHead`.
+/// `NormaliseTrainHead`: normalise the head of the train again, i.e. that is
+/// tell the world that we have changed and update all kinds of variables.
 fn normalise_train_head(x: Ctx, head: R) {
+    /* Not much to do! */
     if head.is_null() {
         return;
     }
+    /* Tell the 'world' the train changed. */
     x.consist_changed(head);
     x.update_group(head);
+    /* Not a front engine, i.e. a free wagon chain. No need to do more. */
     if !x.is_front(head) {
         return;
     }
+    /* Update the refit button and window */
     (x.s.head_windows)(Ctx::sh(head));
+    /* If we don't have a unit number yet, set one. */
     if (x.s.unit)(Ctx::sh(head)) != 0 {
         return;
     }
