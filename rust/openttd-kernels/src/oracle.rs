@@ -32,6 +32,19 @@ pub(crate) struct Section<'a> {
     cases: Vec<u32>,
 }
 
+impl<'a> Section<'a> {
+    /// The stored output of case `index`, for tests that need it before running the case.
+    pub(crate) fn case(&self, index: usize) -> Option<&'a str> {
+        self.cases
+            .get(index)
+            .map(|&output| self.outputs[output as usize])
+    }
+    /// The number of cases.
+    pub(crate) fn len(&self) -> usize {
+        self.cases.len()
+    }
+}
+
 /// Parse every section of an oracle file.
 pub(crate) fn parse(text: &str) -> HashMap<&str, Section<'_>> {
     let mut sections = HashMap::new();

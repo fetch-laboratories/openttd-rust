@@ -2532,23 +2532,14 @@ mod financial_command_tests {
         amount: i64,
     }
     impl Case {
-        fn from_row(index: usize, fields: &[i64]) -> Self {
-            // Verify full Cartesian coverage and original loop order rather than
-            // trusting the captured count or accepting duplicate/sample inputs.
-            let expected = [
-                21 + (index / 504) as i64,
-                ((index / 252) % 2) as i64,
-                MONEY[(index / 36) % 7],
-                LOANS[(index / 9) % 4],
-                AMOUNTS[index % 9],
-            ];
-            assert_eq!(fields[..5], expected);
+        /// Row `index` of the original's nested op, execute, money, loan and amount loops.
+        fn from_index(index: usize) -> Self {
             Self {
-                op: fields[0] as u8,
-                execute: fields[1] != 0,
-                money: fields[2],
-                loan: fields[3],
-                amount: fields[4],
+                op: 21 + (index / 504) as u8,
+                execute: !(index / 252).is_multiple_of(2),
+                money: MONEY[(index / 36) % 7],
+                loan: LOANS[(index / 9) % 4],
+                amount: AMOUNTS[index % 9],
             }
         }
 
@@ -2649,68 +2640,43 @@ mod financial_command_tests {
         })
     }
 
-    fn decode_observation(fields: &[&str]) -> Vec<i64> {
-        let mut values = Vec::new();
-        for token in fields {
-            if let Some((count, value)) = token.split_once('*') {
-                let count = count.parse::<usize>().unwrap();
-                assert!(count > 1 && count <= 138);
-                values.extend(std::iter::repeat_n(value.parse::<i64>().unwrap(), count));
-            } else {
-                values.push(token.parse().unwrap());
-            }
-        }
-        // Five result/context fields, 44 per company, and the trace count.
-        let trace_count = usize::try_from(values[137]).unwrap();
-        assert_eq!(values.len(), 138 + trace_count * 3);
-        values
-    }
+    /// Observation field ranges of the oracle's sections, in observation order.
+    const SECTIONS: [(&str, usize, Option<usize>); 7] = [
+        ("result", 0, Some(5)),
+        ("company0", 5, Some(49)),
+        ("company1-money", 49, Some(50)),
+        ("company1-loan", 50, Some(52)),
+        ("company1-finances", 52, Some(93)),
+        ("company2", 93, Some(137)),
+        ("trace", 137, None),
+    ];
 
     #[test]
     fn all_financial_commands_match_original() {
         let _guard = ECONOMY_LOCK.lock().unwrap();
         let _run = Run::start();
-        let mut dictionary = Vec::new();
-        let mut used = Vec::new();
-        let mut rows = 0;
-        let mut cases = 0;
-        for line in include_str!("company/financial-command-oracle.txt").lines() {
-            if line.starts_with('#') {
-                continue;
-            }
-            let fields: Vec<_> = line.split_whitespace().collect();
-            match fields[0] {
-                "D" => {
-                    assert_eq!(rows, 0, "dictionary must precede cases");
-                    assert_eq!(fields[1].parse::<usize>().unwrap(), dictionary.len());
-                    dictionary.push(decode_observation(&fields[2..]));
-                    used.push(false);
+        let mut actual: Vec<Vec<(String, String)>> = vec![Vec::new(); SECTIONS.len()];
+        for row in 0..2_520 {
+            let case = Case::from_index(row);
+            for variant in VARIANTS {
+                case.reset(variant);
+                let values = observation(case.invoke(variant));
+                let inputs = format!(
+                    "op {} execute {} money {} loan {} amount {} variant {variant}",
+                    case.op, case.execute, case.money, case.loan, case.amount
+                );
+                for (stream, &(_, start, end)) in actual.iter_mut().zip(&SECTIONS) {
+                    let fields = &values[start..end.unwrap_or(values.len())];
+                    let text: Vec<String> = fields.iter().map(i64::to_string).collect();
+                    stream.push((inputs.clone(), text.join(" ")));
                 }
-                "C" => {
-                    let values: Vec<i64> = fields[1..].iter().map(|v| v.parse().unwrap()).collect();
-                    assert_eq!(values.len(), 21);
-                    let case = Case::from_row(rows, &values);
-                    for (variant, &key) in VARIANTS.iter().zip(&values[5..]) {
-                        case.reset(*variant);
-                        let result = case.invoke(*variant);
-                        let key = usize::try_from(key).unwrap();
-                        assert_eq!(
-                            observation(result),
-                            dictionary[key],
-                            "row {rows}, variant {variant}"
-                        );
-                        used[key] = true;
-                        cases += 1;
-                    }
-                    rows += 1;
-                }
-                _ => panic!("unknown oracle record: {line}"),
             }
         }
-        assert_eq!(rows, 2_520);
-        assert_eq!(cases, 40_320);
-        assert_eq!(dictionary.len(), 4_219);
-        assert!(used.iter().all(|seen| *seen));
+        let oracle = crate::oracle::parse(include_str!("company/financial-command-oracle.txt"));
+        assert_eq!(oracle.len(), SECTIONS.len());
+        for (stream, &(name, _, _)) in actual.into_iter().zip(&SECTIONS) {
+            assert_eq!(crate::oracle::check(&oracle, name, stream), 40_320);
+        }
     }
 }
 

@@ -3226,9 +3226,9 @@ mod production_policy_tests {
     fn production_callback_matches_complete_original_corpus() {
         let shared = crate::services::fixture(ptr::null_mut(), random, unused_industry);
         let services = services(&shared);
-        let mut oracle = include_str!("industry/production-oracle.txt")
-            .lines()
-            .filter(|line| line.starts_with("I "));
+        let oracle = crate::oracle::parse(include_str!("industry/production-oracle.txt"));
+        let section = &oracle["I"];
+        assert_eq!(section.len(), 4480, "Industry policy case count");
         // Mixed-radix enumeration preserves the complete 4 x 5 x 4 x 4 x 2 x 7
         // input nest, including its exact original order.
         for checked in 0..4480 {
@@ -3238,15 +3238,10 @@ mod production_policy_tests {
             let limit = [0, 1, 3, 65536][(checked / 14) % 4];
             let reason = [0, 1][(checked / 7) % 2];
             let amount = [i32::MIN, -65536, -1, 0, 1, 65536, i32::MAX][checked % 7];
-            let line = oracle.next().expect("missing Industry policy case");
+            let line = section.case(checked).expect("missing Industry policy case");
             let tokens: Vec<_> = line.split_whitespace().collect();
-            let input = format!("I {version} {level} {behaviour} {limit} {reason} {amount} ");
-            assert!(
-                line.starts_with(&input),
-                "case {checked}: dimensions changed"
-            );
-            let expected: Vec<u32> = tokens[7..17].iter().map(|v| v.parse().unwrap()).collect();
-            let pairs = parameters(&tokens[17..]);
+            let expected: Vec<u32> = tokens[..10].iter().map(|v| v.parse().unwrap()).collect();
+            let pairs = parameters(&tokens[10..]);
             assert_eq!(pairs.len(), expected[9] as usize);
             let cargo = if amount == i32::MAX {
                 254
@@ -3305,11 +3300,11 @@ mod production_policy_tests {
                 u32::from(industry.produced[1].waiting),
                 u32::from(industry.produced[2].waiting),
             ];
-            assert_eq!(actual, expected[..9], "case {checked}: state/effects");
+            assert_eq!(
+                actual,
+                expected[..9],
+                "case {checked} (version {version} level {level} behaviour {behaviour} limit {limit} reason {reason} amount {amount}): state/effects"
+            );
         }
-        assert!(
-            oracle.next().is_none(),
-            "unexpected extra Industry policy case"
-        );
     }
 }
