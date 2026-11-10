@@ -210,7 +210,9 @@ pub(crate) unsafe fn cmd_build_vehicle(
     let seeds = unsafe { (s.random.save)() };
     let v = match kind {
         VehicleType::TRAIN => unsafe { rail::build(s, temporary, subflags.0, tile, e) },
-        VehicleType::ROAD => unsafe { construct::road(s, temporary, subflags.0, tile, e) },
+        VehicleType::ROAD => unsafe {
+            construct::cmd_build_road_vehicle(s, temporary, subflags, cmd.tile, e)
+        },
         VehicleType::SHIP => {
             let north = (s.ship_tile)(tile);
             let v = if subflags.test(DoCommandFlag::Execute) {
@@ -232,7 +234,9 @@ pub(crate) unsafe fn cmd_build_vehicle(
             (b.cost.zero)(temporary);
             v
         }
-        VehicleType::AIRCRAFT => unsafe { construct::aircraft(s, temporary, subflags.0, tile, e) },
+        VehicleType::AIRCRAFT => unsafe {
+            construct::cmd_build_aircraft(s, temporary, subflags, cmd.tile, e)
+        },
         _ => {
             (b.shared.not_reached)(); // Safe due to IsDepotTile()
             std::process::abort()
