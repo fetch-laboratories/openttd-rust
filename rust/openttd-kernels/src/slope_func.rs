@@ -13,52 +13,60 @@ pub use crate::slope_type::*;
 
 use crate::direction_type::{Axis, DiagDirection};
 
-/// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
+/// `IsValidCorner`: rangecheck for `Corner` enumeration.
 #[must_use]
 pub const fn is_valid_corner(corner: Corner) -> bool {
     corner.0 < Corner::CORNER_END.0
 }
-/// `IsSteepSlope`.
+/// `IsSteepSlope`: checks if a slope is steep.
 #[must_use]
 pub fn is_steep_slope(s: Slope) -> bool {
     (s & Slope::SLOPE_STEEP) != Slope::SLOPE_FLAT
 }
-/// `IsHalftileSlope`.
+/// `IsHalftileSlope`: checks for non-continuous slope on halftile foundations.
 #[must_use]
 pub fn is_halftile_slope(s: Slope) -> bool {
     (s & Slope::SLOPE_HALFTILE) != Slope::SLOPE_FLAT
 }
-/// `RemoveHalftileSlope`.
+/// `RemoveHalftileSlope`: removes a halftile slope from a slope.
+/// Non-halftile slopes remain unmodified.
 #[must_use]
 pub const fn remove_halftile_slope(s: Slope) -> Slope {
     Slope(s.0 & !Slope::SLOPE_HALFTILE_MASK.0)
 }
-/// `ComplementSlope`.
+/// `ComplementSlope`: return the complement of a slope.
+///
+/// This method returns the complement of a slope. The complement of a
+/// slope is a slope with raised corner which aren't raised in the given
+/// slope. The slope must be neither steep nor a halftile slope.
 pub fn complement_slope(s: Slope, check: impl Fn(bool)) -> Slope {
     if is_steep_slope(s) || is_halftile_slope(s) {
         check(false);
     }
     s ^ Slope::SLOPE_ELEVATED
 }
-/// `IsSlopeWithOneCornerRaised`.
+/// `IsSlopeWithOneCornerRaised`: tests if a specific slope has exactly one corner raised.
 #[must_use]
 pub fn is_slope_with_one_corner_raised(s: Slope) -> bool {
     (s == Slope::SLOPE_W) || (s == Slope::SLOPE_S) || (s == Slope::SLOPE_E) || (s == Slope::SLOPE_N)
 }
-/// `SlopeWithOneCornerRaised`.
+/// `SlopeWithOneCornerRaised`: returns the slope with a specific corner raised.
 pub fn slope_with_one_corner_raised(corner: Corner, check: impl Fn(bool)) -> Slope {
     if !is_valid_corner(corner) {
         check(false);
     }
     Slope((1_u32.wrapping_shl(u32::from(corner.0)) & 0xff) as u8)
 }
-/// `HasSlopeHighestCorner`.
+/// `HasSlopeHighestCorner`: tests if a slope has a highest corner (i.e. one
+/// corner raised or a steep slope). Note: A halftile slope is ignored.
 #[must_use]
 pub fn has_slope_highest_corner(s: Slope) -> bool {
     let s = remove_halftile_slope(s);
     is_steep_slope(s) || is_slope_with_one_corner_raised(s)
 }
-/// `GetHighestSlopeCorner`; the caller supplies its non-returning failure operation.
+/// `GetHighestSlopeCorner`: returns the highest corner of a slope (one corner
+/// raised or a steep slope). A halftile slope is ignored. The caller supplies
+/// its non-returning failure operation.
 pub fn get_highest_slope_corner(s: Slope, not_reached: impl FnOnce()) -> Corner {
     match remove_halftile_slope(s) {
         Slope::SLOPE_W | Slope::SLOPE_STEEP_W => Corner::CORNER_W,
@@ -71,7 +79,8 @@ pub fn get_highest_slope_corner(s: Slope, not_reached: impl FnOnce()) -> Corner 
         }
     }
 }
-/// `GetSlopeMaxZ`.
+/// `GetSlopeMaxZ`: returns the height of the highest corner of a slope relative
+/// to `TileZ` (= minimal height).
 #[must_use]
 pub fn get_slope_max_z(s: Slope) -> i32 {
     if s == Slope::SLOPE_FLAT {
@@ -82,17 +91,19 @@ pub fn get_slope_max_z(s: Slope) -> i32 {
     }
     1
 }
-/// `GetSlopeMaxPixelZ`.
+/// `GetSlopeMaxPixelZ`: returns the height of the highest corner of a slope
+/// relative to `TileZ` (= minimal height), in pixels.
 #[must_use]
 pub fn get_slope_max_pixel_z(s: Slope) -> i32 {
     get_slope_max_z(s) * crate::tile_type::TILE_HEIGHT.cast_signed()
 }
-/// `OppositeCorner`.
+/// `OppositeCorner`: returns the opposite corner.
 #[must_use]
 pub const fn opposite_corner(corner: Corner) -> Corner {
     Corner(corner.0 ^ 2)
 }
-/// `IsSlopeWithThreeCornersRaised`.
+/// `IsSlopeWithThreeCornersRaised`: tests if a specific slope has exactly three
+/// corners raised.
 #[must_use]
 pub fn is_slope_with_three_corners_raised(s: Slope) -> bool {
     !is_halftile_slope(s)
@@ -101,16 +112,16 @@ pub fn is_slope_with_three_corners_raised(s: Slope) -> bool {
             crate::services_assert::check(ok);
         }))
 }
-/// `SlopeWithThreeCornersRaised`.
+/// `SlopeWithThreeCornersRaised`: returns the slope with all except one corner raised.
 pub fn slope_with_three_corners_raised(corner: Corner, check: impl Fn(bool)) -> Slope {
     let s = slope_with_one_corner_raised(corner, &check);
     complement_slope(s, check)
 }
-/// `SteepSlope`.
+/// `SteepSlope`: returns a specific steep slope.
 pub fn steep_slope(corner: Corner, check: impl Fn(bool)) -> Slope {
     Slope::SLOPE_STEEP | slope_with_three_corners_raised(opposite_corner(corner), check)
 }
-/// `IsInclinedSlope`.
+/// `IsInclinedSlope`: tests if a specific slope is an inclined slope.
 #[must_use]
 pub fn is_inclined_slope(s: Slope) -> bool {
     (s == Slope::SLOPE_NW)
@@ -118,7 +129,8 @@ pub fn is_inclined_slope(s: Slope) -> bool {
         || (s == Slope::SLOPE_SE)
         || (s == Slope::SLOPE_NE)
 }
-/// `GetInclinedSlopeDirection`.
+/// `GetInclinedSlopeDirection`: returns the direction of an inclined slope, or
+/// `INVALID_DIAGDIR` for any other slope.
 #[must_use]
 pub fn get_inclined_slope_direction(s: Slope) -> DiagDirection {
     match s {
@@ -143,7 +155,9 @@ pub fn inclined_slope(dir: DiagDirection, not_reached: impl FnOnce()) -> Slope {
         }
     }
 }
-/// `FlatteningFoundation`.
+/// `FlatteningFoundation`: returns the foundation needed to flatten a slope.
+/// The returned foundation is either `FOUNDATION_NONE` if the tile was already
+/// flat, or `FOUNDATION_LEVELED`.
 #[must_use]
 pub fn flattening_foundation(s: Slope) -> Foundation {
     if s == Slope::SLOPE_FLAT {
@@ -152,7 +166,7 @@ pub fn flattening_foundation(s: Slope) -> Foundation {
         Foundation::FOUNDATION_LEVELED
     }
 }
-/// `InclinedFoundation`.
+/// `InclinedFoundation`: returns the along a specific axis inclined foundation.
 #[must_use]
 pub fn inclined_foundation(axis: Axis) -> Foundation {
     if axis == Axis::AXIS_X {
@@ -161,14 +175,16 @@ pub fn inclined_foundation(axis: Axis) -> Foundation {
         Foundation::FOUNDATION_INCLINED_Y
     }
 }
-/// `HalftileFoundation`.
+/// `HalftileFoundation`: returns the halftile foundation for single
+/// horizontal/vertical track.
 pub fn halftile_foundation(corner: Corner, check: impl Fn(bool)) -> Foundation {
     if !is_valid_corner(corner) {
         check(false);
     }
     Foundation(Foundation::FOUNDATION_HALFTILE_W.0.wrapping_add(corner.0))
 }
-/// `SpecialRailFoundation`.
+/// `SpecialRailFoundation`: returns the special rail foundation for single
+/// horizontal/vertical track.
 pub fn special_rail_foundation(corner: Corner, check: impl Fn(bool)) -> Foundation {
     if !is_valid_corner(corner) {
         check(false);
@@ -276,21 +292,28 @@ mod tests {
     #[test]
     fn helpers_match_the_header_tables() {
         for s in 0..=u8::MAX {
+            let slope = Slope(s);
             assert_eq!(
-                is_slope_with_three_corners_raised_raw(s),
+                is_slope_with_three_corners_raised(slope),
                 matches!(s, 7 | 11 | 13 | 14)
             );
-            assert_eq!(is_inclined_slope_raw(s), matches!(s, 3 | 6 | 9 | 12));
+            assert_eq!(is_inclined_slope(slope), matches!(s, 3 | 6 | 9 | 12));
             assert_eq!(
-                get_inclined_slope_direction_raw(s) != 0xFF,
-                is_inclined_slope_raw(s)
+                get_inclined_slope_direction(slope) != DiagDirection::INVALID_DIAGDIR,
+                is_inclined_slope(slope)
             );
         }
         assert_eq!(
-            get_slope_max_z_raw(SLOPE_STEEP | SLOPE_S | SLOPE_E | SLOPE_N),
+            get_slope_max_z(Slope::SLOPE_STEEP | Slope::SLOPE_S | Slope::SLOPE_E | Slope::SLOPE_N),
             2
         );
-        assert_eq!(get_inclined_slope_direction_raw(SLOPE_NE), 0);
-        assert_eq!(get_inclined_slope_direction_raw(SLOPE_NW), 3);
+        assert_eq!(
+            get_inclined_slope_direction(Slope::SLOPE_NE),
+            DiagDirection::DIAGDIR_NE
+        );
+        assert_eq!(
+            get_inclined_slope_direction(Slope::SLOPE_NW),
+            DiagDirection::DIAGDIR_NW
+        );
     }
 }
