@@ -36,7 +36,7 @@ use crate::bridge::MAX_BRIDGES;
 use crate::cargo_type::{CargoType, is_valid_cargo_type};
 use crate::cargotype::TownAcceptanceEffect;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
-use crate::company_type::{CompanyID, MAX_COMPANIES, OWNER_NONE, OWNER_TOWN};
+use crate::company_type::{CompanyID, CompanyMask, MAX_COMPANIES, OWNER_NONE, OWNER_TOWN};
 use crate::direction_func::{
     change_diag_dir, diag_dir_to_axis, is_valid_diag_direction, reverse_diag_dir,
 };
@@ -3240,7 +3240,9 @@ pub(crate) unsafe fn change_town_rating(
     if !testing {
         // SAFETY: Field writes finish before native window invalidation.
         unsafe {
-            (*state).simulation.have_ratings |= 1 << company;
+            let mut have_ratings = CompanyMask((*state).simulation.have_ratings);
+            have_ratings.set(CompanyID(company));
+            (*state).simulation.have_ratings = have_ratings.0;
             (*state).simulation.ratings[usize::from(company)] = rating as i16;
         }
         (leaves.dirty_authority)(u32::from(t.id.0));
