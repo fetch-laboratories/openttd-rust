@@ -390,13 +390,12 @@ impl Engine<'_> {
             let it = super::layout_tile(layout, n);
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(tile, i32::from(it.x), i32::from(it.y));
-            if cur_tile == TileIndex::INVALID {
+            let world = crate::map_func::World::new(shared);
+            if !world.is_valid_tile(cur_tile.0) {
                 return self.fail(StringID(self.e.site));
             }
             if gfx == IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
-                if !(shared.is_water_tile)(cur_tile.0)
-                    || self.tile_slope(cur_tile) != Slope::SLOPE_FLAT
-                {
+                if !(shared.is_water_tile)(cur_tile.0) || !world.tile_flat(cur_tile.0) {
                     return self.fail(StringID(self.e.site));
                 }
             } else {
@@ -1039,11 +1038,13 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
                 };
                 let cur_company = e.swap_company(Owner::TOWN);
                 for _ in 0..5000 {
-                    let map = e.map();
                     // We should not have more than one Random() in a function call because
                     // parameter evaluation order is not guaranteed in the c++ standard.
+                    let world = crate::map_func::World::new(e.s.shared());
                     let tile = TileIndex(
-                        e.s.shared().random() & map.size_x.wrapping_mul(map.size_y).wrapping_sub(1),
+                        world
+                            .dimensions
+                            .random_tile_seed(world.size_y(), e.s.shared().random()),
                     );
                     // Start with a random layout.
                     let mut layout = e.s.shared().random_range(num_layouts as u32) as usize;
