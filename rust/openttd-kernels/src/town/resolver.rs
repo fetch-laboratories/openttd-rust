@@ -413,14 +413,14 @@ unsafe fn get_distance_from_nearby_house(
 ) -> u32 {
     let searchtype = gb(u32::from(parameter), 6, 2);
     let searchradius = gb(u32::from(parameter), 0, 6);
-    // Do not use a too low radius.
+    // do not use a too low radius
     if searchradius < 1 {
         return 0;
     }
     let start_hs = (s.search_spec)(start_house);
     let mut start_house = start_house;
     let leaves = unsafe { &*s.towns };
-    // Modifies 'start_house'!
+    // modifies 'start_house'!
     let start_north_tile =
         start_tile
             .0
@@ -438,7 +438,8 @@ unsafe fn get_distance_from_nearby_house(
         if TileType((unsafe { &*s.shared }.tile_type)(tile.0)) == TileType::MP_HOUSE {
             let mut house = (unsafe { &*leaves.houses }.house_type)(tile.0);
             let hs = (s.search_spec)(house);
-            // Must be one from a grf file, and always ignore the origin house.
+            // must be one from a grf file
+            // Always ignore origin house
             if hs.has_file
                 && start_north_tile
                     != tile
@@ -446,12 +447,15 @@ unsafe fn get_distance_from_nearby_house(
                         .wrapping_add(house::get_house_north_part(leaves, &mut house, map))
             {
                 let matched = match searchtype {
-                    // Same local id as the one requested, from the same grf.
-                    0 => hs.local == start_hs.local && hs.grfid == start_hs.grfid,
-                    // Same classid as the one requested, from the same grf.
-                    1 => hs.house_class == start_hs.house_class && hs.grfid == start_hs.grfid,
-                    // From the same grf.
-                    2 => hs.grfid == start_hs.grfid,
+                    0 => {
+                        hs.local == start_hs.local // same local id as the one requested
+                            && hs.grfid == start_hs.grfid // from the same grf
+                    }
+                    1 => {
+                        hs.house_class == start_hs.house_class // same classid as the one requested
+                            && hs.grfid == start_hs.grfid // from the same grf
+                    }
+                    2 => hs.grfid == start_hs.grfid, // from the same grf
                     _ => return 0,
                 };
                 if matched {
@@ -478,8 +482,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let l = unsafe { &*s.towns };
     let shared = unsafe { &*s.shared };
     if scope.tile == INVALID_TILE {
-        // House does not yet exist, nor is it being planned to exist. Provide some
-        // default values instead.
+        // House does not yet exist, nor is it being planned to exist. Provide some default values instead.
         return match variable {
             // Construction stage.
             0x40 => u32::from(TOWN_HOUSE_COMPLETED) | (scope.view as u32).wrapping_shl(2),
@@ -595,8 +598,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
-        // Cargo acceptance history of nearby stations, through the canonical
-        // GoodsEntry::ConvertState helper.
+        // Cargo acceptance history of nearby stations
         0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
         // Distance test for some house types.
         0x65 => unsafe {

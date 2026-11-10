@@ -411,19 +411,20 @@ impl<'a> Founding<'a> {
         city: bool,
         layout: TownLayout,
     ) -> Option<TownRef> {
-        // Editor or world generation is required by CMD_DELETE_TOWN.
+        // These are the preconditions for CMD_DELETE_TOWN
         observed!((self.s.assert_random_context)());
         if !observed!((self.s.can_allocate)()) {
             return None;
         }
         loop {
-            // Generate a tile index not too close to the edge.
+            // Generate a tile index not too close from the edge
             let random = self.random();
             let mut tile = self.align_tile_to_grid(
                 TileIndex(self.map().random_tile_seed(self.size_y(), random)),
                 layout,
             );
-            // If the random tile is water, find suitable land nearby; otherwise evaluate it.
+            // If we tried to place the town on water, find a suitable land tile nearby.
+            // Otherwise, evaluate the land tile.
             let valid =
                 if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_WATER {
                     tile = self.find_nearest_good_coastal_town_spot(tile, layout);
@@ -432,7 +433,7 @@ impl<'a> Founding<'a> {
                     self.town_can_be_placed_here(tile, true).is_none()
                 };
             if valid {
-                // Allocate a town struct.
+                // Allocate a town struct
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
                     self.do_create_town(
@@ -447,7 +448,8 @@ impl<'a> Founding<'a> {
                         },
                     );
                 }
-                // A population still at zero means the placement was too bad to grow at all.
+                // if the population is still 0 at the point, then the
+                // placement is so bad it couldn't grow at all
                 if unsafe { super::population(town.state) } > 0 {
                     return Some(town);
                 }
@@ -456,8 +458,10 @@ impl<'a> Founding<'a> {
                     observed!((self.leaves.exchange_company)(u32::from(CompanyID::TOWN.0)));
                 observed!((self.s.delete_town)(town.id));
                 observed!((self.leaves.exchange_company)(cur_company));
-                // Creating and deleting resets allocation checks. We could allocate on entry,
-                // but must check again when assertions are enabled.
+                // We already know that we can allocate a single town when
+                // entering this function. However, we create and delete
+                // a town which "resets" the allocation checks. As such we
+                // need to check again when assertions are enabled.
                 observed!((self.s.assert_allocation)());
             }
             w::hit(w::TOWN_RETRY);

@@ -482,7 +482,8 @@ impl<'a> Commands<'a> {
                 }
             }
         }
-        // Waypoints, then depots, refer to towns.
+        // Waypoints refer to towns.
+        // Depots refer to towns.
         for next in [self.s.next_waypoint, self.s.next_depot] {
             from = 0;
             loop {
