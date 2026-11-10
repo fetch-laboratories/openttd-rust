@@ -475,6 +475,9 @@ impl Engine<'_> {
             let it = super::layout_tile(layout, n);
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(candidate.tile, i32::from(it.x), i32::from(it.y));
+            let world = crate::map_func::World::new(self.s.shared());
+            world.assert_with(|| world.is_valid_tile(cur_tile.0)); // checked before in CheckIfIndustryTilesAreFree
+
             if gfx != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
                 let its = get_industry_tile_spec(gfx);
                 if unsafe {
