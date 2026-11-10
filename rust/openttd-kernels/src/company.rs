@@ -1419,7 +1419,7 @@ pub(crate) fn control(
     if c.stage == 0 {
         (s.company_league_dirty)();
         match c.action {
-            0 => {
+            crate::company_type::CCA_NEW => {
                 if !(s.finance.networking)() {
                     c.result = error();
                     return false;
@@ -1450,7 +1450,7 @@ pub(crate) fn control(
                     }
                 }
             }
-            1 => {
+            crate::company_type::CCA_NEW_AI => {
                 let target = c.target;
                 if target != INVALID_OWNER && u32::from(target) >= u32::from(MAX_COMPANIES) {
                     c.result = error();
@@ -1476,7 +1476,7 @@ pub(crate) fn control(
                 };
                 c.stage = 1;
             }
-            2 => {
+            crate::company_type::CCA_DELETE => {
                 let target = c.target;
                 if c.reason >= 3 {
                     c.result = error();
@@ -2705,16 +2705,15 @@ mod financial_command_tests {
 mod road_price_tests {
     use crate::economy_type::Price;
     use crate::road_cost::{build_cost, clear_cost, convert_cost};
+    use crate::road_type::{ROADTYPE_ROAD, ROADTYPE_TRAM};
 
     const PR_BUILD_ROAD: Price = Price::PR_BUILD_ROAD;
     const PR_CLEAR_ROAD: Price = Price::PR_CLEAR_ROAD;
 
-    const ROAD: u8 = 0;
-    const TRAM: u8 = 1;
     extern "C" fn cost_multiplier(road_type: u8) -> u16 {
         match road_type {
-            ROAD => 3,
-            TRAM => u16::MAX,
+            ROADTYPE_ROAD => 3,
+            ROADTYPE_TRAM => u16::MAX,
             _ => unreachable!(),
         }
     }
@@ -2740,30 +2739,30 @@ mod road_price_tests {
             (
                 prices.add(PR_BUILD_ROAD.0 as usize).read(),
                 prices.add(PR_CLEAR_ROAD.0 as usize).read(),
-                road_mask.replace(1 << ROAD),
-                tram_mask.replace(1 << TRAM),
+                road_mask.replace(1 << ROADTYPE_ROAD),
+                tram_mask.replace(1 << ROADTYPE_TRAM),
             )
         };
         let mut s = crate::test_tables::SHARED;
         s.road_cost_multiplier = cost_multiplier;
         set_price(PR_BUILD_ROAD.0 as usize, 7);
         set_price(PR_CLEAR_ROAD.0 as usize, -27);
-        assert_eq!(build_cost(&s, ROAD), 2);
-        assert_eq!(clear_cost(&s, ROAD), -27);
-        assert_eq!(convert_cost(&s, ROAD, ROAD), 0);
+        assert_eq!(build_cost(&s, ROADTYPE_ROAD), 2);
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -27);
+        assert_eq!(convert_cost(&s, ROADTYPE_ROAD, ROADTYPE_ROAD), 0);
         // Neither road nor tram: the source clear policy still earns removal value.
         // SAFETY: As above.
         unsafe { road_mask.write(0) };
-        assert_eq!(clear_cost(&s, ROAD), -28);
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -28);
         set_price(PR_BUILD_ROAD.0 as usize, -7);
-        assert_eq!(build_cost(&s, ROAD), -3);
-        assert_eq!(clear_cost(&s, ROAD), -25);
+        assert_eq!(build_cost(&s, ROADTYPE_ROAD), -3);
+        assert_eq!(clear_cost(&s, ROADTYPE_ROAD), -25);
         set_price(PR_BUILD_ROAD.0 as usize, i64::MAX);
-        assert_eq!(build_cost(&s, TRAM), 1_152_921_504_606_846_975);
-        assert_eq!(clear_cost(&s, TRAM), -864_691_128_455_135_258);
+        assert_eq!(build_cost(&s, ROADTYPE_TRAM), 1_152_921_504_606_846_975);
+        assert_eq!(clear_cost(&s, ROADTYPE_TRAM), -864_691_128_455_135_258);
         set_price(PR_BUILD_ROAD.0 as usize, i64::MIN);
-        assert_eq!(build_cost(&s, TRAM), -1_152_921_504_606_846_976);
-        assert_eq!(clear_cost(&s, TRAM), 864_691_128_455_135_205);
+        assert_eq!(build_cost(&s, ROADTYPE_TRAM), -1_152_921_504_606_846_976);
+        assert_eq!(clear_cost(&s, ROADTYPE_TRAM), 864_691_128_455_135_205);
         // SAFETY: As above.
         unsafe {
             prices.add(PR_BUILD_ROAD.0 as usize).write(saved.0);
@@ -2780,9 +2779,7 @@ mod road_price_tests {
 #[cfg(test)]
 mod control_tests {
     use super::*;
-    use crate::company_type::{
-        COMPANY_SPECTATOR, CompanyID, OWNER_END, OWNER_NONE, OWNER_TOWN, OpenTTDCompany, Owner,
-    };
+    use crate::company_type::{COMPANY_SPECTATOR, CompanyID, OWNER_END, OpenTTDCompany, Owner};
     use crate::settings_table::VehicleDefaults;
     use crate::test_tables::{COMMAND_COSTS, COMPANY, COMPANY_IDENTITY, FINANCE, MOVEMENT, SHARED};
     use crate::tile_type::TileIndex;
@@ -2802,11 +2799,11 @@ mod control_tests {
         /// What the next `Company::CanAllocateItem` returns, when set.
         static ALLOCATION_ANSWER: Cell<Option<bool>> = const { Cell::new(None) };
     }
-    fn handle(id: u8) -> *mut OpenTTDCompany {
-        std::ptr::without_provenance_mut(usize::from(id) + 1)
+    fn handle(id: CompanyID) -> *mut OpenTTDCompany {
+        std::ptr::without_provenance_mut(usize::from(id.0) + 1)
     }
     extern "C" fn company(id: CompanyID) -> *mut OpenTTDCompany {
-        handle(id.0)
+        handle(id)
     }
     extern "C" fn company_id(c: *mut OpenTTDCompany) -> CompanyID {
         CompanyID((c.addr() - 1) as u8)
@@ -2816,7 +2813,7 @@ mod control_tests {
             let s = s.borrow();
             (from..u32::from(MAX_COMPANIES))
                 .find(|&id| s[id as usize].is_some())
-                .map_or(std::ptr::null_mut(), |id| handle(id as u8))
+                .map_or(std::ptr::null_mut(), |id| handle(CompanyID(id as u8)))
         })
     }
     extern "C" fn is_ai(c: *mut OpenTTDCompany) -> bool {
@@ -2900,16 +2897,16 @@ mod control_tests {
         s.owned_by = OWNED_BY;
         s
     }
-    fn set(id: u8, slot: Option<bool>) {
-        SLOTS.with(|s| s.borrow_mut()[usize::from(id)] = slot);
+    fn set(id: CompanyID, slot: Option<bool>) {
+        SLOTS.with(|s| s.borrow_mut()[usize::from(id.0)] = slot);
     }
-    fn check(s: &Services, owner: u8, tile: u32) -> Vec<String> {
+    fn check(s: &Services, owner: Owner, tile: TileIndex) -> Vec<String> {
         ERRORS.with(|e| e.borrow_mut().clear());
         check_ownership(
             s,
             crate::services::Cost(std::ptr::null_mut(), s.cost),
-            CompanyID(owner),
-            TileIndex(tile),
+            owner,
+            tile,
         );
         ERRORS.with(|e| e.borrow().clone())
     }
@@ -2991,21 +2988,21 @@ mod control_tests {
             );
             id
         };
-        set(3, Some(false));
+        set(CompanyID(3), Some(false));
         assert_eq!(select(0), 3, "a human wins before the hole at 0");
-        set(3, Some(true));
+        set(CompanyID(3), Some(true));
         assert_eq!(select(1), 0);
         for id in (0..MAX_COMPANIES).filter(|&id| id != 3) {
-            set(id, Some(true));
+            set(CompanyID(id), Some(true));
         }
         assert_eq!(select(1), CompanyID::BEGIN.0, "a full AI pool");
-        set(9, Some(false));
-        set(12, Some(false));
+        set(CompanyID(9), Some(false));
+        set(CompanyID(12), Some(false));
         assert_eq!(select(0), 9);
-        set(1, None);
+        set(CompanyID(1), None);
         assert_eq!(select(0), 9);
-        set(9, Some(true));
-        set(12, Some(true));
+        set(CompanyID(9), Some(true));
+        set(CompanyID(12), Some(true));
         assert_eq!(select(1), 1);
         // The free slot is taken only when the pool grants the allocation.
         ALLOCATION_ANSWER.set(Some(false));
@@ -3058,28 +3055,36 @@ mod control_tests {
         CURRENT.set(0);
         for observer in [0, COMPANY_SPECTATOR] {
             LOCAL.set(observer);
-            assert_eq!(check(&s, 0, 0), ["zero"]);
-            for owner in [3, OWNER_NONE] {
+            assert_eq!(check(&s, CompanyID(0), TileIndex(0)), ["zero"]);
+            for owner in [CompanyID(3), Owner::NONE] {
                 let mut expected = vec![format!("error {OWNED_BY}")];
                 if observer == 0 {
-                    expected.extend([format!("encode {owner} 0"), format!("owner {owner}")]);
+                    expected.extend([
+                        format!("encode {} 0", owner.0),
+                        format!("owner {}", owner.0),
+                    ]);
                 }
                 assert_eq!(
-                    check(&s, owner, 0),
+                    check(&s, owner, TileIndex(0)),
                     expected,
-                    "observer {observer} owner {owner}"
+                    "observer {observer} owner {}",
+                    owner.0
                 );
             }
         }
         // Both original assertions precede error selection; a spectator gets no encoding.
         LOCAL.set(COMPANY_SPECTATOR);
-        for (owner, tile) in [(OWNER_END, 1), (OWNER_TOWN, 0)] {
+        for (owner, tile) in [
+            (CompanyID(OWNER_END), TileIndex(1)),
+            (Owner::TOWN, TileIndex(0)),
+        ] {
             FAILED.with(|f| f.borrow_mut().clear());
             assert_eq!(check(&s, owner, tile), [format!("error {OWNED_BY}")]);
             assert_eq!(
                 FAILED.with(|f| f.borrow().clone()),
                 [false],
-                "owner {owner}"
+                "owner {}",
+                owner.0
             );
         }
     }
@@ -3583,7 +3588,7 @@ mod startup_tests {
             road: std::ptr::null(),
         }
     }
-    fn control_frame(action: u8, client: u32) -> Control {
+    fn control_frame(action: u8, client: crate::network_type::ClientID) -> Control {
         Control {
             result: Cost {
                 cost: 0,
@@ -3597,7 +3602,7 @@ mod startup_tests {
                 is_ai: false,
                 stage: 0,
             },
-            client,
+            client: client.0,
             action,
             target: INVALID_OWNER,
             reason: 0,
@@ -3628,7 +3633,10 @@ mod startup_tests {
         colour_scope(|| {
             let ownership = ownership();
             let s = services(false, false);
-            let mut abandoned = control_frame(1, 0);
+            let mut abandoned = control_frame(
+                crate::company_type::CCA_NEW_AI,
+                crate::network_type::ClientID::INVALID_CLIENT_ID,
+            );
             assert!(control(s, &ownership, &mut abandoned));
             assert_eq!(abandoned.startup.company, u32::from(ID));
             assert_eq!(traced(), ["allocate 2", "setup 2"]);
@@ -3637,7 +3645,10 @@ mod startup_tests {
             assert_eq!(money, loan);
 
             let s = services(false, false);
-            let mut resumed = control_frame(1, 0);
+            let mut resumed = control_frame(
+                crate::company_type::CCA_NEW_AI,
+                crate::network_type::ClientID::INVALID_CLIENT_ID,
+            );
             let mut starts = 0;
             while control(s, &ownership, &mut resumed) {
                 starts += 1;
@@ -3673,7 +3684,10 @@ mod startup_tests {
                 LOCAL.set(COMPANY_SPECTATOR);
                 CURRENT.set(COMPANY_SPECTATOR);
                 OWN.set(matching_client);
-                let mut call = control_frame(0, 7);
+                let mut call = control_frame(
+                    crate::company_type::CCA_NEW,
+                    crate::network_type::ClientID(7),
+                );
                 assert!(!control(s, &ownership, &mut call));
                 let mut expected =
                     vec!["allocate 2", "setup 2", "events 2", "network 2", "request"];
