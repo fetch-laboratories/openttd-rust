@@ -18,7 +18,11 @@ runs:
     run: |
       # Each mirror fails at times. Azure trickled at about 40 kB/s without timing out
       # (#858's Full spent 6 minutes on 46 MB), and Canonical's archive timed out three
-      # times in 30 minutes (#833, #841). Bound each attempt, then retry without Azure.
+      # times in 30 minutes (#833, #841). Bound the first two attempts tightly and retry
+      # without Azure. The last attempt gets eight minutes per command, because a slow
+      # install beats a failed job: #862's first Full lost its Emscripten job when both
+      # mirrors ran at about 1 MB/s and three tight bounds cut 58 MB off each time.
+      # apt keeps what an interrupted attempt downloaded.
       sudo=$(command -v sudo || true)
       read -r -a packages <<< "$PACKAGES"
       options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
@@ -28,9 +32,15 @@ runs:
         install+=(--no-install-recommends)
       fi
       $sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
+      bounds=(90 90 480)
+      updated=false
       for attempt in 1 2 3; do
-        if $sudo timeout 120 apt-get "${options[@]}" update &&
-           $sudo timeout 90 apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
+        bound=${bounds[attempt - 1]}
+        if [ "$updated" = false ] && $sudo timeout "$bound" apt-get "${options[@]}" update; then
+          updated=true
+        fi
+        if [ "$updated" = true ] &&
+           $sudo timeout "$bound" apt-get "${options[@]}" "${install[@]}" --download-only "${packages[@]}"; then
           break
         fi
         if [ "$attempt" = 3 ]; then
@@ -45,5 +55,6 @@ runs:
             $sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' "$sources"
           fi
         done
+        updated=false
       done
       $sudo apt-get "${options[@]}" "${install[@]}" "${packages[@]}"
