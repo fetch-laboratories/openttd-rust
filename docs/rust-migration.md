@@ -154,7 +154,7 @@ See [speed](speed.md) for benchmarks and profiles and [deep checks](deep-checks.
 
 ## Continuous integration
 
-Full validation requires native comparisons and simulation, Windows x64, Linux GCC SDL2, Emscripten, quick checks and annotation checks. It publishes a status only for the captured PR head after all succeed; skipped or cancelled jobs do not qualify. The exception is a checker-only PR, whose merge commit changes only these files:
+Full validation requires native comparisons and simulation, Windows x64 and x86, Linux GCC SDL2, GCC Dedicated and Clang, Emscripten, quick checks and annotation checks. Windows x86, GCC Dedicated and Clang returned to Full on 2026-11-10 (#860, reversing #514): each red cadence from 11-05 to 11-09 came from one of them, and two stopped integrations for 134 minutes. A covered protected push refreshes their compiler caches with the others. It publishes a status only for the captured PR head after all succeed; skipped or cancelled jobs do not qualify. The exception is a checker-only PR, whose merge commit changes only these files:
   - Quick's checker scripts: `lint-ratchet`, `lint-policy`, `growth-ratchet`, `refactor-proof`, `baseline_ratchet`, `cleanup_contract` and `test-cleanup-checks`;
   - the Clippy and Ruff debt files;
   - `migration/lints/clippy.toml`;
