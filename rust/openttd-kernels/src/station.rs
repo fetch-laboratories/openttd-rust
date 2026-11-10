@@ -1080,17 +1080,6 @@ pub(crate) unsafe fn for_each_catchment_tile(
         unsafe { it.advance(bitmap, c.map, check) };
     }
 }
-/// Raw adapter for `subsidy.rs` and `station_service.rs`, outside this pass;
-/// delegates to `for_each_catchment_tile`.
-/// # Safety
-/// As `for_each_catchment_tile`.
-pub(crate) unsafe fn for_each_catchment_tile_raw(
-    state: *mut Service,
-    c: &Ctx<'_>,
-    mut visit: impl FnMut(u32),
-) {
-    unsafe { for_each_catchment_tile(state, c, |tile| visit(tile.0)) }
-}
 
 /// `MoveGoodsToStation` with this entry's station and visit services.
 /// # Safety
