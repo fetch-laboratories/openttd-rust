@@ -197,7 +197,7 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
-	auto tile_shared = *animation.shared; tile_shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { return GetTileType(tile); }; const auto *base_shared = std::exchange(animation.shared, &tile_shared); animation.industries = &services; animation.construction = &construction; animation.industry_tiles = &tileservice;
+	auto tile_shared = *animation.shared; tile_shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { if (tile != 2) std::abort(); return MP_INDUSTRY; }; const auto *base_shared = animation.shared; animation.shared = &tile_shared; animation.industries = &services; animation.construction = &construction; animation.industry_tiles = &tileservice;
 	builtin_mode = true;
 	uint cases = 0;
 	for (uint32_t seed : {0U, 1U, 0x12345678U, UINT32_MAX}) for (uint64_t tick : {0ULL, 1ULL, 2ULL, 3ULL, 7ULL, 8ULL, 1023ULL, 1024ULL, 1025ULL, 1056ULL, 1407ULL, 1408ULL, 1439ULL, 1440ULL, 1536ULL, 1568ULL, 1919ULL, 1920ULL, 1951ULL, 1952ULL, 2047ULL, static_cast<unsigned long long>(UINT64_MAX)}) {
