@@ -479,7 +479,7 @@ impl<'a> Founding<'a> {
         if u32::from(number_towns) == super::CUSTOM_TOWN_NUMBER_DIFFICULTY {
             return u32::from(observed!((self.s.custom_number)()));
         }
-        // Native setting's original array domain; no extra rejection is added.
+        // SAFETY: The setting's domain is the array's; the original indexes it unchecked.
         let value = unsafe { *NUM_INITIAL_TOWNS.get_unchecked(usize::from(number_towns)) };
         observed!((self.s.scale_size)(value))
     }
