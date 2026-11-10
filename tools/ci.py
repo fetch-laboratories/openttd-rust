@@ -76,6 +76,37 @@ def passed_run(repository: str, head: str) -> str | None:
     return None
 
 
+def variable(repository: str, name: str) -> str | None:
+    variables = json.loads(
+        gh("variable", "list", "--repo", repository, "--json", "name,value")
+    )
+    return next((item["value"] for item in variables if item["name"] == name), None)
+
+
+def changes_definitions(repository: str, pr: int) -> bool:
+    """Whether a PR may change .github/workflows/; ci-request.yml's plan refuses
+    such an ordinary Full in merge-queue mode, under the same rule."""
+    pages = json.loads(
+        gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/pulls/{pr}/files?per_page=100",
+        )
+    )
+    files = [item for page in pages for item in page]
+
+    def definition(path: object) -> bool:
+        return not isinstance(path, str) or path.startswith(".github/workflows/")
+
+    return not 0 < len(files) < 3000 or any(
+        definition(item.get("filename"))
+        or item.get("previous_filename") is not None
+        and definition(item["previous_filename"])
+        for item in files
+    )
+
+
 def find_run(record: dict, runs: list[dict]) -> dict | None:
     if record.get("run_id"):
         return next((run for run in runs if run["id"] == record["run_id"]), None)
@@ -120,6 +151,13 @@ def request(args: argparse.Namespace) -> Path | None:
         if run := passed_run(repository, head):
             print(f"PR #{args.pr} at {head} already passed Full validation: {run}")
             return None
+        if variable(repository, "CI_MERGE_QUEUE") == "true" and changes_definitions(
+            repository, args.pr
+        ):
+            raise ValueError(
+                "In merge-queue mode a PR changing .github/workflows/ needs root's "
+                "reviewed bootstrap Full"
+            )
     validate_pull(pull, head)
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
@@ -138,13 +176,7 @@ def request(args: argparse.Namespace) -> Path | None:
     path = args.request_file or Path(".local/ci-requests") / f"{request_id}.json"
     write_request(path, record)
     if args.bootstrap:
-        variables = json.loads(
-            gh("variable", "list", "--repo", repository, "--json", "name,value")
-        )
-        if any(
-            item["name"] == "CI_ON_DEMAND" and item["value"] == "true"
-            for item in variables
-        ):
+        if variable(repository, "CI_ON_DEMAND") == "true":
             raise ValueError(
                 "Label requests need CI_ON_DEMAND unset; root must review workflow changes first"
             )

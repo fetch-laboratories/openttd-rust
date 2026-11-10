@@ -1307,6 +1307,49 @@ class MergeQueueTests(unittest.TestCase):
                     )
                     self.assertEqual(observed, expected)
 
+    def test_queue_mode_refuses_an_ordinary_full_for_workflow_changes(self) -> None:
+        # Both status writers decide "changes no workflow definition" identically.
+        blocks = []
+        for filename, name in (
+            ("ci-invalidate.yml", "invalidate"),
+            ("ci-request.yml", "plan"),
+        ):
+            script = script_for(filename, name)
+            start = script.index("// The queue runs the group commit's own workflow")
+            end = script.index("};", script.index("const definitionsUnchanged")) + 2
+            blocks.append(" ".join(script[start:end].split()))
+        self.assertEqual(len(set(blocks)), 1)
+        code = [{"filename": "src/game.cpp"}]
+        changed = [*code, {"filename": ".github/workflows/ci-request.yml"}]
+        bootstrap = {"event_name": "pull_request"}
+        for label, mode, profile, options, files, refused in (
+            ("code", "true", "full", {}, code, False),
+            ("workflow", "true", "full", {}, changed, True),
+            ("unreadable list", "true", "full", {}, None, True),
+            ("file cap", "true", "full", {}, code * 3000, True),
+            # Today's mode, diagnosis profiles and root's bootstrap are unaffected.
+            ("mode unset", "", "full", {}, changed, False),
+            ("native", "true", "native", {}, changed, False),
+            ("bootstrap", "true", "full", bootstrap, changed, False),
+        ):
+            with self.subTest(label):
+                env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
+                result = execute_script(
+                    "ci-request.yml",
+                    "plan",
+                    dict(PULL, number=170),
+                    env={**env, "CI_MERGE_QUEUE": mode},
+                    files=files,
+                    **cast(dict[str, Any], options),
+                )
+                if refused:
+                    self.assertTrue(result.get("error"))
+                    self.assertEqual(result["statuses"], [])
+                else:
+                    self.assertNotIn("error", result)
+                    pending = [HEAD] if profile == "full" else []
+                    self.assertEqual([s["sha"] for s in result["statuses"]], pending)
+
     def test_queue_mode_satisfies_a_head_without_workflow_changes(self) -> None:
         event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
         code = [{"filename": "src/game.cpp"}]
@@ -1343,6 +1386,18 @@ class MergeQueueTests(unittest.TestCase):
                         "previous_filename": ".github/workflows/x.yml",
                     }
                 ],
+                pending,
+            ),
+            (
+                "workflow deleted",
+                "true",
+                [{"filename": ".github/workflows/x.yml", "status": "removed"}],
+                pending,
+            ),
+            (
+                "renamed into workflows",
+                "true",
+                [{"filename": ".github/workflows/x.yml", "previous_filename": "x.yml"}],
                 pending,
             ),
             ("no filename", "true", [{}], pending),
@@ -1934,7 +1989,13 @@ class RequestTests(unittest.TestCase):
                 )
                 with (
                     patch.object(ci, "api", side_effect=pull_and_statuses([])),
-                    patch.object(ci, "gh", return_value=json.dumps([[]])) as gh,
+                    patch.object(
+                        ci,
+                        "gh",
+                        side_effect=lambda *args: json.dumps(
+                            [] if args[0] == "variable" else [[]]
+                        ),
+                    ) as gh,
                 ):
                     request_path = ci.request(args)
                 invocation = gh.call_args.args
@@ -1999,6 +2060,62 @@ class RequestTests(unittest.TestCase):
                 writes = [call for call in gh.call_args_list if call.args[0] != "api"]
                 self.assertEqual(bool(writes), dispatched)
                 self.assertEqual(path is not None, dispatched)
+
+    def test_queue_mode_full_request_refuses_workflow_changes(self) -> None:
+        code = [{"filename": "src/game.cpp"}]
+        workflow = [*code, {"filename": ".github/workflows/ci-request.yml"}]
+        renamed = [
+            {"filename": "a.yml", "previous_filename": ".github/workflows/a.yml"}
+        ]
+        for mode, profile, bootstrap, files, refused in (
+            ("true", "full", False, code, False),
+            ("true", "full", False, workflow, True),
+            ("true", "full", False, renamed, True),
+            ("true", "full", False, [], True),
+            ("true", "full", False, code * 3000, True),
+            ("true", "full", False, [{}], True),
+            # Today's mode, diagnosis profiles and root's bootstrap are unaffected.
+            ("", "full", False, workflow, False),
+            ("true", "native", False, workflow, False),
+            ("true", "full", True, workflow, False),
+        ):
+            # Root unsets every gating variable for a bootstrap request.
+            variables = [] if bootstrap else [{"name": "CI_MERGE_QUEUE", "value": mode}]
+
+            def answer(
+                *args: str, files: object = files, variables: object = variables
+            ) -> str:
+                if args[0] == "variable":
+                    return json.dumps(variables)
+                if args[-1].startswith("repos/example/fork/pulls/170/files"):
+                    return json.dumps([files])
+                return json.dumps([[]])
+
+            with (
+                self.subTest(mode=mode, profile=profile, files=len(files)),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                args = argparse.Namespace(
+                    repo="example/fork",
+                    pr=170,
+                    profile=profile,
+                    bootstrap=bootstrap,
+                    request_file=Path(directory) / "request.json",
+                )
+                with (
+                    patch.object(ci, "api", side_effect=pull_and_statuses([])),
+                    patch.object(ci, "gh", side_effect=answer) as gh,
+                    patch("builtins.print"),
+                ):
+                    if refused:
+                        with self.assertRaisesRegex(ValueError, "bootstrap Full"):
+                            ci.request(args)
+                    else:
+                        ci.request(args)
+                writes = [
+                    c for c in gh.call_args_list if c.args[0] in ("workflow", "pr")
+                ]
+                self.assertEqual(not writes, refused)
 
     def test_run_discovery_uses_unique_request_identity(self) -> None:
         record = {

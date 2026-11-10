@@ -98,20 +98,21 @@ jobs:
             });
             return;
           }
-          // Merge-queue mode: Full runs on each merge group, and a PR needs its required checks green
-          // to enter the queue, so its head needs no Full of its own. The queue runs the group commit's
-          // own workflow definitions with write permissions, so a PR changing them still needs a
-          // reviewed bootstrap Full on its head. Any doubt leaves the status pending.
-          const queued = async () => {
-            if (process.env.CI_MERGE_QUEUE !== 'true') return false;
+          // The queue runs the group commit's own workflow definitions with write permissions, so in
+          // merge-queue mode only a reviewed bootstrap Full admits a PR that changes them. Any doubt
+          // counts as a change.
+          const definitionsUnchanged = async number => {
             const files = await github.paginate(github.rest.pulls.listFiles, {
-              ...context.repo, pull_number: event.number, per_page: 100
+              ...context.repo, pull_number: number, per_page: 100
             });
             const definition = path => typeof path !== 'string' || path.startsWith('.github/workflows/');
             // GitHub lists at most 3000 files: fail closed if the list may be truncated.
             return Array.isArray(files) && files.length > 0 && files.length < 3000 && files.every(file =>
               !definition(file?.filename) && (file.previous_filename == null || !definition(file.previous_filename)));
           };
+          // Merge-queue mode: Full runs on each merge group, and a PR needs its required checks green
+          // to enter the queue, so its head needs no Full of its own. Any doubt leaves it pending.
+          const queued = async () => process.env.CI_MERGE_QUEUE === 'true' && await definitionsUnchanged(event.number);
           let queue = false;
           try {
             queue = await queued();

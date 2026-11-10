@@ -79,6 +79,7 @@ jobs:
         PR: ${{ inputs.pr || github.event.pull_request.number }}
         HEAD: ${{ inputs.head || github.event.pull_request.head.sha }}
         PROFILE: ${{ inputs.profile || 'full' }}
+        CI_MERGE_QUEUE: ${{ vars.CI_MERGE_QUEUE }}
       with:
         script: |
           // A merge group tests its own commit, whose second parent is the queued PR's head.
@@ -105,6 +106,23 @@ jobs:
           }
           if (!queue && (pull.mergeable !== true || !/^[0-9a-f]{40}$/.test(pull.merge_commit_sha || ''))) {
             throw new Error('Pull request is unmergeable or mergeability is pending; retry after resolving it');
+          }
+          // The queue runs the group commit's own workflow definitions with write permissions, so in
+          // merge-queue mode only a reviewed bootstrap Full admits a PR that changes them. Any doubt
+          // counts as a change.
+          const definitionsUnchanged = async number => {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: number, per_page: 100
+            });
+            const definition = path => typeof path !== 'string' || path.startsWith('.github/workflows/');
+            // GitHub lists at most 3000 files: fail closed if the list may be truncated.
+            return Array.isArray(files) && files.length > 0 && files.length < 3000 && files.every(file =>
+              !definition(file?.filename) && (file.previous_filename == null || !definition(file.previous_filename)));
+          };
+          // An ordinary Full's success on such a head would admit it to the queue unreviewed.
+          if (context.eventName === 'workflow_dispatch' && profile === 'full' && process.env.CI_MERGE_QUEUE === 'true' &&
+              !await definitionsUnchanged(pr)) {
+            throw new Error('In merge-queue mode a PR changing .github/workflows/ needs the reviewed bootstrap Full');
           }
           const merge = queue ? group.head_sha : pull.merge_commit_sha;
           const {data: tested} = await github.rest.repos.getCommit({...context.repo, ref: merge});
