@@ -11,7 +11,6 @@ use crate::track_type::{TRACKDIR_X_NE, TRACKDIR_X_SW, TRACKDIR_Y_NW, TRACKDIR_Y_
 
 /// `RemoveFirstTrack`: removes the lowest track from `tracks` and returns it,
 /// or `INVALID_TRACK` when `tracks` is empty.
-#[allow(clippy::cast_possible_truncation)] // ClrBit keeps the byte-sized TrackBits.
 pub fn remove_first_track(
     tracks: &mut crate::track_type::TrackBits,
     check: impl Fn(bool) + Copy,
@@ -22,9 +21,7 @@ pub fn remove_first_track(
             check(false);
         }
         let first = Track(crate::bitmath_func::find_first_bit(u64::from(tracks.0)));
-        let mut bits = u32::from(tracks.0);
-        crate::bitmath_func::clr_bit(&mut bits, first.0);
-        tracks.0 = bits as u8;
+        crate::bitmath_func::clr_bit8(&mut tracks.0, first.0);
         return first;
     }
     Track::INVALID_TRACK

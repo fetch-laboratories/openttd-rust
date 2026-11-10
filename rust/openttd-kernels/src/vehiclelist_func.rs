@@ -6,8 +6,6 @@
  */
 
 //! Functions from `vehiclelist_func.h` for generating vehicle lists.
-#![allow(unsafe_code)]
-#![allow(clippy::cast_possible_truncation)] // OrderList pool IDs fit their u16 representation.
 use crate::station_service::{Links, OrderDestination};
 use crate::vehicle::VehicleRef;
 
@@ -21,15 +19,15 @@ pub(crate) fn find_vehicles_with_order(
     mut ord_pred: impl FnMut(&OrderDestination) -> bool,
     mut veh_func: impl FnMut(VehicleRef),
 ) {
-    for id in 0..(links.order_pool_size)() {
-        // OrderList pool IDs are bounded by their u16 representation.
-        let orderlist = (links.order_list)(id as u16);
+    // OrderList pool IDs are bounded by their u16 representation.
+    for id in (0..=u16::MAX).take((links.order_pool_size)()) {
+        let orderlist = (links.order_list)(id);
         if orderlist.is_null() {
             continue;
         }
         /* We assume all vehicles sharing an order list match the condition. */
         // A live order list has a first shared vehicle.
-        let mut v = unsafe { (links.order_vehicle)(orderlist).unwrap_unchecked() };
+        let mut v = (links.order_vehicle)(orderlist).expect("first shared vehicle");
         if !veh_pred(v) {
             continue;
         }
