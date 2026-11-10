@@ -511,7 +511,6 @@ pub struct Services {
     pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub resolver: *const resolver::ResolverServices,
-    pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
     pub directory_dirty: unsafe extern "C" fn(u8),
@@ -528,9 +527,14 @@ impl Services {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
-    /// `_settings_game.game_creation.landscape`, through the service.
+    /// `_settings_game.game_creation.landscape`.
     pub(crate) fn landscape_type(&self) -> LandscapeType {
-        LandscapeType(unsafe { (self.landscape)() })
+        LandscapeType(unsafe { self.shared().settings().climate.read() })
+    }
+    /// `ScaleByMapSize`: `Map::ScaleBySize(n)`.
+    pub(crate) fn scale_by_map_size(&self, n: u32) -> u32 {
+        let world = crate::map_func::World::new(self.shared());
+        world.dimensions.scale_by_size(world.size_y(), n)
     }
 }
 impl Map {
@@ -989,7 +993,7 @@ fn check_industry_close_down_protection(
 ) -> bool {
     // oil wells (or the industries with that flag set) are always allowed to closedown
     if o.behaviour.test(IndustryBehaviour::DontIncrProd)
-        && LandscapeType(unsafe { (s.landscape)() }) == LandscapeType::Temperate
+        && s.landscape_type() == LandscapeType::Temperate
     {
         return false;
     }
@@ -1106,7 +1110,7 @@ fn change_industry_production(
     {
         // decrease or increase
         let only_decrease = obs.behaviour.test(IndustryBehaviour::DontIncrProd)
-            && LandscapeType(unsafe { (svc.landscape)() }) == LandscapeType::Temperate;
+            && svc.landscape_type() == LandscapeType::Temperate;
         if original_economy {
             if only_decrease || crate::random_func::chance16(svc.shared(), 1, 3) {
                 let pct = u32::from(unsafe {
@@ -1328,7 +1332,7 @@ fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u
         return (0, 0);
     }
     let ind_spc = get_industry_spec(it);
-    let climate = unsafe { s.shared().settings().climate.read() };
+    let climate = s.landscape_type().0;
     let (behaviour, enabled, layouts, chance) = unsafe {
         (
             IndustryBehaviours((*ind_spc).behaviour),
@@ -1421,9 +1425,9 @@ fn industry_build_data_economy_monthly_loop(builder: *mut Builder, s: &Services)
     // add a fraction of new industries each month, but only if the manager can keep up.
     // At most 2 industries for small maps, and 100 at the biggest map (about 6 months
     // industry build attempts).
-    let max_behind = 1 + unsafe { (s.scale_by_map_size)(3) }.min(99);
+    let max_behind = 1 + s.scale_by_map_size(3).min(99);
     if total(builder).wrapping_add(max_behind) >= unsafe { (*b).wanted_inds >> 16 } {
-        let increment = unsafe { (s.scale_by_map_size)(NEWINDS_PER_MONTH) };
+        let increment = s.scale_by_map_size(NEWINDS_PER_MONTH);
         unsafe {
             (*b).wanted_inds = (*b).wanted_inds.wrapping_add(increment);
         }
@@ -1942,7 +1946,7 @@ fn tick_map(s: &Services) -> Map {
     Map {
         size_x: world.dimensions.size_x(),
         size_y: world.size_y(),
-        landscape: unsafe { s.shared().settings().climate.read() },
+        landscape: s.landscape_type().0,
     }
 }
 /// `PlantRandomFarmField`, reading the landscape from the game settings.
@@ -1952,9 +1956,7 @@ fn plant_random_farm_field_with_settings(
     map: Map,
     s: &Services,
 ) {
-    plant_random_farm_field(owner, id, map, s, &|| {
-        LandscapeType(unsafe { s.shared().settings().climate.read() })
-    });
+    plant_random_farm_field(owner, id, map, s, &|| s.landscape_type());
 }
 /// # Safety
 /// Live industry, synchronous map/RNG services. No owner references cross calls.
@@ -2733,7 +2735,6 @@ crate::abi::layouts! {
         num_items,
         get,
         resolver,
-        scale_by_map_size,
         company_none,
         restore_company,
         directory_dirty,
@@ -3020,9 +3021,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_get(_: u16) -> *mut c_void {
         unreachable!("unexpected Services::get")
     }
-    extern "C" fn unexpected_scale_by_map_size(_: u32) -> u32 {
-        unreachable!("unexpected Services::scale_by_map_size")
-    }
     extern "C" fn unexpected_company_none() -> u8 {
         unreachable!("unexpected Services::company_none")
     }
@@ -3082,7 +3080,6 @@ mod production_policy_tests {
             num_items: unexpected_num_items,
             get: unexpected_get,
             resolver: ptr::null(),
-            scale_by_map_size: unexpected_scale_by_map_size,
             company_none: unexpected_company_none,
             restore_company: unexpected_restore_company,
             directory_dirty: unexpected_directory_dirty,

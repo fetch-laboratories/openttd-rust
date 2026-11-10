@@ -58,8 +58,8 @@ fn get_scaled_industry_generation_probability(
         return 0; // The original leaves `force_at_least_one` untouched here.
     }
     let (enabled, layouts) = unsafe { ((*ind_spc).enabled, !(*ind_spc).layouts.is_empty()) };
-    let landscape = unsafe { s.shared().settings().climate.read() };
-    let chance = unsafe { (*ind_spc).appear_creation[usize::from(landscape)] };
+    let landscape = s.landscape_type();
+    let chance = unsafe { (*ind_spc).appear_creation[usize::from(landscape.0)] };
     if !enabled
         || !layouts
         || (!(g.environment.editor)()
@@ -89,7 +89,7 @@ fn get_scaled_industry_generation_probability(
     ) {
         unsafe { (g.scale_by_size_1d)(chance) }
     } else {
-        unsafe { (s.scale_by_map_size)(chance) }
+        s.scale_by_map_size(chance)
     };
     *force_at_least_one = chance > 0
         && !behaviour
@@ -154,7 +154,7 @@ fn get_number_of_industries(s: &Services, g: &GenerationServices) -> u32 {
     if difficulty == IndustryDensity::ID_CUSTOM {
         unsafe { (g.custom_number)() }.min(u32::from(IndustryID::END.0))
     } else {
-        unsafe { (s.scale_by_map_size)(u32::from(NUMOF_INDUSTRY_TABLE[usize::from(difficulty.0)])) }
+        s.scale_by_map_size(u32::from(NUMOF_INDUSTRY_TABLE[usize::from(difficulty.0)]))
             .min(u32::from(IndustryID::END.0))
     }
 }

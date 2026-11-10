@@ -281,7 +281,6 @@ struct IndustryGenerationFixture {
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
 		static auto resolver = GetIndustryResolverServices();
 		world.resolver = &resolver;
-		world.scale_by_map_size = [](uint32_t n) noexcept -> uint32_t { return n; };
 		static auto shared = GetRustSharedServices();
 		shared.random = [](void *) noexcept -> uint32_t { ++draws; return 0; };
 		world.shared = &shared;
@@ -326,6 +325,8 @@ struct IndustryGenerationFixture {
 TEST_CASE("Industry - generation cancellation restores company before return")
 {
 	using F = IndustryGenerationFixture;
+	/* On a 256x256 map ScaleByMapSize is the identity. */
+	Map::Allocate(256, 256);
 	const auto world = F::World();
 	const auto generation = F::Generation();
 	/* Borrowed views replace the owned specs only for this test; the originals return untouched. */

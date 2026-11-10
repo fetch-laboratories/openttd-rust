@@ -142,7 +142,6 @@ typedef struct OpenTTDIndustryServices {
 	uint32_t (*num_items)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(num_items);
 	void *(*get)(uint16_t id) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
 	const struct OpenTTDIndustryResolverServices *resolver;
-	uint32_t (*scale_by_map_size)(uint32_t n) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_map_size);
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
 	void (*restore_company)(uint8_t company) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(restore_company);
 	void (*directory_dirty)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(directory_dirty);
