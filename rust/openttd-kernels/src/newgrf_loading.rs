@@ -690,7 +690,12 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
                     0,
                     "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.",
                     Bytes(config_filename(s, config())),
-                    Bytes(&make_valid(std::slice::from_raw_parts(name, size), 1)),
+                    Bytes(&make_valid(
+                        std::slice::from_raw_parts(name, size),
+                        crate::string_type::StringValidationSettings::from_element(
+                            crate::string_type::StringValidationSetting::ReplaceWithQuestionMark
+                        )
+                    )),
                     id.swap_bytes(),
                     version
                 );
@@ -734,7 +739,12 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
                 "GRFInfo: Loaded GRFv{} set {:08X} - {} (palette: {}, version: {})",
                 version,
                 id.swap_bytes(),
-                Bytes(&make_valid(std::slice::from_raw_parts(name, size), 1)),
+                Bytes(&make_valid(
+                    std::slice::from_raw_parts(name, size),
+                    crate::string_type::StringValidationSettings::from_element(
+                        crate::string_type::StringValidationSetting::ReplaceWithQuestionMark
+                    )
+                )),
                 if (s.config_palette)(config()) & GRFP_USE_MASK != 0 {
                     "Windows"
                 } else {

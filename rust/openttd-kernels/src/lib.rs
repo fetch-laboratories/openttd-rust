@@ -1046,7 +1046,10 @@ pub unsafe extern "C" fn openttd_rust_validation_step(
     settings: u8,
 ) -> string_validation::Step {
     // SAFETY: The caller grants the short-lived readable byte allocation.
-    string_validation::step(unsafe { utf8::borrow(bytes, length) }, settings)
+    string_validation::step(
+        unsafe { utf8::borrow(bytes, length) },
+        string_type::StringValidationSettings(settings),
+    )
 }
 
 /// Validate a fixed span, requiring its first valid NUL before its end.

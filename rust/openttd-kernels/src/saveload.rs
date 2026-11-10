@@ -1388,7 +1388,7 @@ fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: VarTyp
     if length == 0 {
         return Ok(());
     }
-    let settings = validation_settings(conv).0;
+    let settings = validation_settings(conv);
     let mut consumed = 0;
     let mut written = 0;
     while consumed < length {

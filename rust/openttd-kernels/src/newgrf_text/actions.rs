@@ -136,7 +136,12 @@ pub(crate) unsafe fn feature_new_name(
                 8,
                 "FeatureNewName: 0x{:04X} <- {}",
                 id,
-                Bytes(&make_valid(std::slice::from_raw_parts(name.0, name.1), 1))
+                Bytes(&make_valid(
+                    std::slice::from_raw_parts(name.0, name.1),
+                    crate::string_type::StringValidationSettings::from_element(
+                        crate::string_type::StringValidationSetting::ReplaceWithQuestionMark
+                    )
+                ))
             );
             if feature <= GSF_AIRCRAFT {
                 if generic {
