@@ -116,10 +116,10 @@ pub(crate) fn closest_town_from_tile(
                     if (s.clear_square_services.generating_world)() {
                         return calc_closest_town_from_tile(s, tile, threshold);
                     }
-                    world.check((s.town_count)() == 0);
+                    world.assert_with(|| (s.town_count)() == 0);
                     return ptr::null();
                 }
-                world.check((s.town_next_id)(u32::from(tid.0)) == u32::from(tid.0));
+                world.assert_with(|| (s.town_next_id)(u32::from(tid.0)) == u32::from(tid.0));
                 let town = (s.town_by_id)(u32::from(tid.0));
                 let xy = unsafe { super::position((s.town_owner)(town)) };
                 if world.dimensions.distance_manhattan(tile.0, xy.0) >= threshold {
