@@ -737,6 +737,12 @@ mod tests {
 
     #[test]
     fn pake_handlers_match_upstream_sections() {
+        if crate::services_assert::isolate_test_check(
+            "auth::tests::pake_handlers_match_upstream_sections",
+            check,
+        ) {
+            return;
+        }
         // ResponseResult::Authenticated, then NotAuthenticated.
         assert_eq!(pake(b"", b""), 0);
         assert_eq!(pake(b"sikrit", b"sikrit"), 0);

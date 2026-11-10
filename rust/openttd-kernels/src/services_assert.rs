@@ -51,3 +51,23 @@ pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
         openttd_rust_assert_bind(check, std::ptr::null());
     }
 }
+
+/// Run a test with its native assertion policy in a separate process, so binding
+/// cannot race with parallel tests that deliberately replace the process-wide policy.
+/// Return true in the parent after successful completion; the child binds `check`
+/// and returns false to execute the existing test body.
+#[cfg(test)]
+pub(crate) fn isolate_test_check(name: &str, check: extern "C" fn(bool)) -> bool {
+    const CHILD: &str = "OPENTTD_ASSERT_TEST_CHILD";
+    if std::env::var(CHILD).ok().as_deref() == Some(name) {
+        bind_test_check(check);
+        return false;
+    }
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name])
+        .env(CHILD, name)
+        .status()
+        .unwrap();
+    assert!(status.success(), "isolated native assertion test {name}");
+    true
+}

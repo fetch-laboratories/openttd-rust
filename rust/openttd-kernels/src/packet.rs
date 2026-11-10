@@ -2050,6 +2050,12 @@ mod comparison_tests {
 
     #[test]
     fn packet_bytes_cursors_and_strings_match_original() {
+        if crate::services_assert::isolate_test_check(
+            "packet::comparison_tests::packet_bytes_cursors_and_strings_match_original",
+            asserts,
+        ) {
+            return;
+        }
         let oracle = oracle::parse(ORACLE);
         FAILED_ASSERTIONS.with(|failed| failed.set(0));
         assert_eq!(oracle::check(&oracle, "binary", binary_cases()), 4);
