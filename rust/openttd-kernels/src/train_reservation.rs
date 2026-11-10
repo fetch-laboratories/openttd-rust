@@ -269,6 +269,31 @@ impl Game<'_> {
         (self.leaves.trackdir)(self.context, id) as u8
     }
 }
+/// `Train::ReserveTrackUnderConsist`: tries to reserve track under whole train consist.
+fn reserve_track_under_consist(g: &Game, id: Handle) {
+    let mut part = id;
+    while part != Handle::NONE {
+        let v_tile: u32 = part.vehicle().tile();
+        let track = part.get_track() as u8;
+        match track {
+            WORMHOLE => {
+                g.reserve_track(
+                    v_tile,
+                    (g.leaves.diag_track)(
+                        g.context,
+                        part,
+                        crate::map_func::World::new(g.shared()).tunnel_bridge_dir(v_tile),
+                    ) as u8,
+                );
+            }
+            DEPOT => {}
+            _ => {
+                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
+            }
+        }
+        part = part.next();
+    }
+}
 fn single(bits: u16) -> bool {
     bits & bits.wrapping_sub(1) == 0
 }
@@ -1067,28 +1092,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
     context: *mut std::ffi::c_void,
 ) {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
-    let mut part = id;
-    while part != Handle::NONE {
-        let v_tile: u32 = part.vehicle().tile();
-        let track = part.get_track() as u8;
-        match track {
-            WORMHOLE => {
-                g.reserve_track(
-                    v_tile,
-                    (g.leaves.diag_track)(
-                        g.context,
-                        part,
-                        crate::map_func::World::new(g.shared()).tunnel_bridge_dir(v_tile),
-                    ) as u8,
-                );
-            }
-            DEPOT => {}
-            _ => {
-                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
-            }
-        }
-        part = part.next();
-    }
+    reserve_track_under_consist(&g, id);
 }
 
 crate::abi::layouts! {
