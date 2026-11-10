@@ -390,9 +390,9 @@ fn make_industry_tile_bigger(
         (c.set_construction_counter)(tile.0, 0);
         (c.set_construction_stage)(tile.0, stage);
         // `TriggerIndustryTileAnimation_ConstructionStageChanged(tile, false)`.
-        super::openttd_rust_industry_animate_tile_abi(
-            tile.0,
-            IndustryAnimationTrigger::ConstructionStageChanged.0,
+        super::trigger_industry_tile_animation(
+            tile,
+            IndustryAnimationTrigger::ConstructionStageChanged,
             0,
             s,
             l,
@@ -499,9 +499,9 @@ pub(crate) unsafe fn tile_loop(
     }
     let industry = unsafe { (tiles.industry)(tile.0) };
     unsafe {
-        super::openttd_rust_industry_randomise_tile(
-            tile.0,
-            IndustryRandomTrigger::TileLoop.0,
+        super::trigger_industry_tile_randomisation(
+            tile,
+            IndustryRandomTrigger::TileLoop,
             industry.shell.cast::<c_void>(),
             industry.owner,
             prod,
@@ -518,14 +518,14 @@ pub(crate) unsafe fn tile_loop(
     if unsafe { (tiles.transport)(tile.0) } {
         let industry = unsafe { (tiles.industry)(tile.0) };
         if !unsafe {
-            super::openttd_rust_industry_animate_abi(
+            super::trigger_industry_animation(
                 industry.owner,
-                (tiles.industry_index)(tile.0),
-                IndustryAnimationTrigger::CargoDistributed.0,
+                crate::industry_type::IndustryID((tiles.industry_index)(tile.0)),
+                IndustryAnimationTrigger::CargoDistributed,
                 map.size_x(),
                 prod,
                 life,
-            ) != 0
+            )
         } {
             let gfx = tiles.get_industry_gfx(tile);
             let newgfx = IndustryGfx(u16::from(unsafe {
@@ -541,13 +541,13 @@ pub(crate) unsafe fn tile_loop(
         }
     }
     if unsafe {
-        super::openttd_rust_industry_animate_tile_abi(
-            tile.0,
-            IndustryAnimationTrigger::TileLoop.0,
+        super::trigger_industry_tile_animation(
+            tile,
+            IndustryAnimationTrigger::TileLoop,
             0,
             prod,
             life,
-        ) != 0
+        )
     } {
         return;
     }

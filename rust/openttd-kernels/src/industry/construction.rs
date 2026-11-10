@@ -499,9 +499,9 @@ pub(crate) unsafe fn do_create_new_industry(
         if (life.belongs)(cur_tile.0, id.0) {
             // There are no shared random bits, consistent with "MakeIndustryTileBigger"
             // in tile loop. So, trigger tiles individually; `first_call` adds 0x100.
-            super::openttd_rust_industry_animate_tile_abi(
-                cur_tile.0,
-                IndustryAnimationTrigger::ConstructionStageChanged.0,
+            super::trigger_industry_tile_animation(
+                cur_tile,
+                IndustryAnimationTrigger::ConstructionStageChanged,
                 0x100,
                 prod,
                 life,

@@ -2087,19 +2087,19 @@ pub(crate) unsafe fn trigger_industry_production(
         }
     }
     unsafe {
-        openttd_rust_industry_randomise(
+        trigger_industry_randomisation(
             shell.cast(),
             owner,
-            id.0,
-            IndustryRandomTrigger::CargoReceived.0,
+            id,
+            IndustryRandomTrigger::CargoReceived,
             services.shared().map().size_x(),
             services,
             resolver.lifecycle(),
         );
-        openttd_rust_industry_animate_abi(
+        trigger_industry_animation(
             owner,
-            id.0,
-            IndustryAnimationTrigger::CargoReceived.0,
+            id,
+            IndustryAnimationTrigger::CargoReceived,
             services.shared().map().size_x(),
             services,
             resolver.lifecycle(),
