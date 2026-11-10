@@ -2340,10 +2340,24 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text(
     text: *const u8,
     length: usize,
 ) {
+    unsafe {
+        set_text(
+            owner,
+            crate::services::ByteSpan {
+                data: text,
+                size: length,
+            },
+        );
+    }
+}
+/// `ind->text.clear(); if (!text.empty()) ind->text = text;`.
+/// # Safety
+/// Live owner with no other borrow of its text; `text` is a live byte span.
+pub(crate) unsafe fn set_text(owner: *mut Industry, text: crate::services::ByteSpan) {
     let target = unsafe { &mut (*owner).text };
     target.clear();
-    if length != 0 {
-        target.extend_from_slice(unsafe { std::slice::from_raw_parts(text, length) });
+    if text.size != 0 {
+        target.extend_from_slice(unsafe { std::slice::from_raw_parts(text.data, text.size) });
     }
 }
 /// # Safety

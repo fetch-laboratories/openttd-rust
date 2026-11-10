@@ -10,6 +10,7 @@
 use super::{Industry, ShellHandle};
 use super::{IndustryControlFlag, IndustryControlFlags, PRODLEVEL_MAXIMUM, PRODLEVEL_MINIMUM};
 use crate::company_type::{CompanyID, Owner};
+use crate::industry_type::IndustryID;
 use crate::services::ByteSpan;
 
 #[repr(C)]
@@ -20,8 +21,39 @@ pub struct IndustryCommandServices {
     pub valid_company: unsafe extern "C" fn(u8) -> bool,
     pub invalidate_view: unsafe extern "C" fn(u16),
 }
-/// Original `CmdIndustrySetFlags`: set industry control flags.
-///
+/// `CmdIndustrySetFlags`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdIndustrySetFlags {
+    /// `IndustryID`.
+    pub(crate) ind_id: IndustryID,
+    /// `IndustryControlFlags`.
+    pub(crate) ctlflags: IndustryControlFlags,
+}
+/// Original `CmdIndustrySetFlags`: set industry control flags. `execute` is
+/// `flags.Test(DoCommandFlag::Execute)`; returns false for `CMD_ERROR`.
+pub(crate) fn cmd_industry_set_flags(
+    execute: bool,
+    args: CmdIndustrySetFlags,
+    s: &IndustryCommandServices,
+) -> bool {
+    if !unsafe { (s.deity)() } {
+        return false;
+    }
+    let ind = unsafe { (s.get)(args.ind_id.0) };
+    if ind.is_null() {
+        return false;
+    }
+    if !args.ctlflags.is_valid() {
+        return false;
+    }
+    if execute {
+        let owner = unsafe { (s.owner)(ind) };
+        unsafe {
+            (*owner).fields.ctlflags = args.ctlflags.0;
+        }
+    }
+    true
+}
 /// # Safety
 /// Live synchronous pool services; the owner is resolved only for an executing
 /// command and no reference to its fields survives a callback.
@@ -32,27 +64,58 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     value: u8,
     services: *const IndustryCommandServices,
 ) -> u8 {
-    let s = unsafe { &*services };
+    u8::from(cmd_industry_set_flags(
+        execute,
+        CmdIndustrySetFlags {
+            ind_id: IndustryID(id),
+            ctlflags: IndustryControlFlags(value),
+        },
+        unsafe { &*services },
+    ))
+}
+/// `CmdIndustrySetProduction`'s arguments. The news arguments are unused: the original's
+/// news comparison follows the assignment and is always false.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdIndustrySetProduction {
+    /// `IndustryID`.
+    pub(crate) ind_id: IndustryID,
+    /// Production level.
+    pub(crate) prod_level: u8,
+}
+/// Original `CmdIndustrySetProduction`: set industry production. `execute` is
+/// `flags.Test(DoCommandFlag::Execute)`; returns false for `CMD_ERROR`.
+pub(crate) fn cmd_industry_set_production(
+    execute: bool,
+    args: CmdIndustrySetProduction,
+    s: &IndustryCommandServices,
+) -> bool {
     if !unsafe { (s.deity)() } {
-        return u8::from(false);
+        return false;
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() || !IndustryControlFlags(value).is_valid() {
-        return u8::from(false);
+    if args.prod_level < PRODLEVEL_MINIMUM || args.prod_level > PRODLEVEL_MAXIMUM {
+        return false;
+    }
+    let ind = unsafe { (s.get)(args.ind_id.0) };
+    if ind.is_null() {
+        return false;
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
+        let owner = unsafe { (s.owner)(ind) };
         unsafe {
-            (*owner).fields.ctlflags = value;
+            (*owner).fields.ctlflags |=
+                IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
+            (*owner).fields.prod_level = args.prod_level;
         }
+        super::recompute_production_multipliers(owner);
+        /* Show news message if requested. */
+        // `prod_level != ind->prod_level` is false after the assignment above, so the
+        // original adds no news item.
     }
-    u8::from(true)
+    true
 }
-/// Original `CmdIndustrySetProduction`: set industry production.
-///
 /// # Safety
-/// Live synchronous services. The original post-assignment news comparison is
-/// always false; production multiplier leaves cannot mutate the requested level.
+/// Live synchronous services and production tables. Production multiplier leaves
+/// cannot mutate the requested level.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     id: u16,
@@ -60,31 +123,61 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     level: u8,
     services: *const IndustryCommandServices,
 ) -> u8 {
-    let s = unsafe { &*services };
-    if !unsafe { (s.deity)() } || !(PRODLEVEL_MINIMUM..=PRODLEVEL_MAXIMUM).contains(&level) {
-        return u8::from(false);
-    }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
-        return u8::from(false);
-    }
-    if execute {
-        let owner = unsafe { (s.owner)(shell) };
-        unsafe {
-            (*owner).fields.ctlflags |=
-                IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
-            (*owner).fields.prod_level = level;
-        }
-        super::recompute_production_multipliers(owner);
-        // Show news message if requested: `prod_level != ind->prod_level` is false after the
-        // assignment above, so the original adds no news item.
-    }
-    u8::from(true)
+    u8::from(cmd_industry_set_production(
+        execute,
+        CmdIndustrySetProduction {
+            ind_id: IndustryID(id),
+            prod_level: level,
+        },
+        unsafe { &*services },
+    ))
+}
+/// `CmdIndustrySetExclusivity`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdIndustrySetExclusivity {
+    /// `IndustryID`.
+    pub(crate) ind_id: IndustryID,
+    /// `CompanyID` to set or `INVALID_OWNER` (available to everyone) or `OWNER_NONE`
+    /// (neutral stations only) or `OWNER_DEITY` (no one).
+    pub(crate) company_id: Owner,
+    /// Set exclusive consumer if true, supplier if false.
+    pub(crate) consumer: bool,
 }
 /// Original `CmdIndustrySetExclusivity`: change exclusive consumer or supplier for the
-/// industry. `company` is the company to set, or `INVALID_OWNER` (available to everyone),
-/// `OWNER_NONE` (neutral stations only) or `OWNER_DEITY` (no one).
-///
+/// industry. `execute` is `flags.Test(DoCommandFlag::Execute)`; returns false for
+/// `CMD_ERROR`.
+pub(crate) fn cmd_industry_set_exclusivity(
+    execute: bool,
+    args: CmdIndustrySetExclusivity,
+    s: &IndustryCommandServices,
+) -> bool {
+    if !unsafe { (s.deity)() } {
+        return false;
+    }
+    let ind = unsafe { (s.get)(args.ind_id.0) };
+    if ind.is_null() {
+        return false;
+    }
+    let company_id = args.company_id;
+    if company_id != Owner::NONE
+        && company_id != Owner::INVALID
+        && company_id != Owner::DEITY
+        && !unsafe { (s.valid_company)(company_id.0) }
+    {
+        return false;
+    }
+    if execute {
+        let owner = unsafe { (s.owner)(ind) };
+        unsafe {
+            if args.consumer {
+                (*owner).metadata.exclusive_consumer = company_id.0;
+            } else {
+                (*owner).metadata.exclusive_supplier = company_id.0;
+            }
+        }
+    }
+    true
+}
 /// # Safety
 /// Synchronous native pool and company lookup; owner mutation has no reentry.
 #[unsafe(no_mangle)]
@@ -95,36 +188,47 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
     consumer: bool,
     services: *const IndustryCommandServices,
 ) -> u8 {
-    let s = unsafe { &*services };
+    u8::from(cmd_industry_set_exclusivity(
+        execute,
+        CmdIndustrySetExclusivity {
+            ind_id: IndustryID(id),
+            company_id: CompanyID(company),
+            consumer,
+        },
+        unsafe { &*services },
+    ))
+}
+/// `CmdIndustrySetText`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdIndustrySetText {
+    /// `IndustryID`.
+    pub(crate) ind_id: IndustryID,
+    /// Additional industry text, as its full encoded bytes.
+    pub(crate) text: ByteSpan,
+}
+/// Original `CmdIndustrySetText`: change additional industry text. `execute` is
+/// `flags.Test(DoCommandFlag::Execute)`; returns false for `CMD_ERROR`.
+pub(crate) fn cmd_industry_set_text(
+    execute: bool,
+    args: CmdIndustrySetText,
+    s: &IndustryCommandServices,
+) -> bool {
     if !unsafe { (s.deity)() } {
-        return u8::from(false);
+        return false;
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
-        return u8::from(false);
-    }
-    let company_id = CompanyID(company);
-    if company_id != Owner::NONE
-        && company_id != Owner::INVALID
-        && company_id != Owner::DEITY
-        && !unsafe { (s.valid_company)(company_id.0) }
-    {
-        return u8::from(false);
+    let ind = unsafe { (s.get)(args.ind_id.0) };
+    if ind.is_null() {
+        return false;
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
+        let owner = unsafe { (s.owner)(ind) };
         unsafe {
-            if consumer {
-                (*owner).metadata.exclusive_consumer = company_id.0;
-            } else {
-                (*owner).metadata.exclusive_supplier = company_id.0;
-            }
+            super::set_text(owner, args.text);
+            (s.invalidate_view)(args.ind_id.0);
         }
     }
-    u8::from(true)
+    true
 }
-/// Original `CmdIndustrySetText`: change additional industry text.
-///
 /// # Safety
 /// Borrowed full encoded byte span remains live through this synchronous call.
 /// Native UI invalidation runs only after the owner text mutation ends.
@@ -135,22 +239,14 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
     text: ByteSpan,
     services: *const IndustryCommandServices,
 ) -> u8 {
-    let s = unsafe { &*services };
-    if !unsafe { (s.deity)() } {
-        return u8::from(false);
-    }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
-        return u8::from(false);
-    }
-    if execute {
-        let owner = unsafe { (s.owner)(shell) };
-        unsafe {
-            super::openttd_rust_industry_set_text(owner, text.data, text.size);
-            (s.invalidate_view)(id);
-        }
-    }
-    u8::from(true)
+    u8::from(cmd_industry_set_text(
+        execute,
+        CmdIndustrySetText {
+            ind_id: IndustryID(id),
+            text,
+        },
+        unsafe { &*services },
+    ))
 }
 /// Original `ChangeTileOwner_Industry`, after its `Industry::GetByTile` lookup.
 ///
