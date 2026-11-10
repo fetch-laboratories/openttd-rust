@@ -668,6 +668,52 @@ mod income_tests {
             .collect()
     }
 
+    /// Original-order case indices of the income domain enumerated in `order`, outermost
+    /// first, over dimensions 0 payment, 1 `transit_periods[0]`, 2 `transit_periods[1]`,
+    /// 3 pieces, 4 distance, 5 periods and 6 callback.
+    fn in_order(order: [usize; 7]) -> Vec<usize> {
+        let lengths = [
+            PAYMENTS.len(),
+            PERIODS1.len(),
+            PERIODS2.len(),
+            PIECES.len(),
+            DISTANCES.len(),
+            PERIODS.len(),
+            CALLBACKS.len(),
+        ];
+        let mut strides = [1_usize; 7];
+        for d in (0..6).rev() {
+            strides[d] = strides[d + 1] * lengths[d + 1];
+        }
+        (0..lengths.iter().product())
+            .map(|mut rest: usize| {
+                let mut index = 0;
+                for &d in order.iter().rev() {
+                    index += (rest % lengths[d]) * strides[d];
+                    rest /= lengths[d];
+                }
+                index
+            })
+            .collect()
+    }
+
+    /// One column of `cases`: the space-separated output fields `fields`, in `order`.
+    fn column(
+        cases: &[(String, String)],
+        order: Option<[usize; 7]>,
+        fields: std::ops::Range<usize>,
+    ) -> Vec<(String, String)> {
+        let indices = order.map_or_else(|| (0..cases.len()).collect(), in_order);
+        indices
+            .into_iter()
+            .map(|index| {
+                let (inputs, output) = &cases[index];
+                let output: Vec<&str> = output.split(' ').collect();
+                (inputs.clone(), output[fields.clone()].join(" "))
+            })
+            .collect()
+    }
+
     /// `PayTransfer` of 65535 of a 65535-piece packet, distance 250 and 45 periods, with the
     /// income loop's last spec: (inputs, "profit `visual_transfer` calls argument").
     fn transfer_cases(s: &Services) -> Vec<(String, String)> {
@@ -737,12 +783,26 @@ mod income_tests {
         s.feeder_payment_share = feeder_payment_share;
         let sections = oracle::parse(ORACLE);
 
-        // The three sections run in the fixture's order: its callback argument and spec carry over.
-        assert_eq!(
-            oracle::check(&sections, "income", income_cases(&s)),
-            185_220
-        );
-        assert_eq!(oracle::check(&sections, "transfer", transfer_cases(&s)), 64);
+        // The cases run in the fixture's order: its callback argument and spec carry over.
+        // Each column is then compared in its own stored order.
+        let income = income_cases(&s);
+        let transfer = transfer_cases(&s);
+        let income_order = Some([3, 6, 0, 1, 2, 4, 5]);
+        let var18_order = Some([5, 4, 3, 6, 1, 2, 0]);
+        for (name, cases, order, fields) in [
+            ("income", &income, income_order, 0..2),
+            ("var18", &income, var18_order, 2..3),
+            ("transfer", &transfer, None, 0..2),
+            ("transfer-callback", &transfer, None, 2..4),
+        ] {
+            assert_eq!(
+                oracle::check(&sections, name, column(cases, order, fields)),
+                cases.len(),
+                "{name}"
+            );
+        }
+        assert_eq!(income.len(), 185_220);
+        assert_eq!(transfer.len(), 64);
         let (payment, _, periods1, periods2) = SPEC.get();
         SPEC.set((payment, 0, periods1, periods2));
         CALLS.set(0);
