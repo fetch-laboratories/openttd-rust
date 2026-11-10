@@ -26,9 +26,9 @@ pub struct Services {
 const INVALID_STRING: u32 = 0xFFFF;
 
 /// `SetCurrentCompany`, through the command table's finance owner.
-fn set_current_company(t: &TransactionServices, company: u8) {
+fn set_current_company(t: &TransactionServices, company: crate::company_type::CompanyID) {
     // SAFETY: The command table is immutable for the process lifetime.
-    (unsafe { &*t.commands }.finance.set_current_company)(company);
+    (unsafe { &*t.commands }.finance.set_current_company)(company.0);
 }
 
 static PENDING: GameState<BTreeMap<u32, bool>> = GameState::new(BTreeMap::new());
@@ -82,7 +82,7 @@ pub(crate) unsafe fn drain(
     let visit = |id, leave| {
         let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
         let owner = v.owner();
-        set_current_company(t, owner);
+        set_current_company(t, crate::company_type::CompanyID(owner));
         if leave {
             v.write_status(v.status() & !crate::vehicle_base::VS_STOPPED);
         }
@@ -120,7 +120,7 @@ pub(crate) unsafe fn drain(
         }
     };
     unsafe { for_each_pending(visit) };
-    set_current_company(t, previous);
+    set_current_company(t, crate::company_type::CompanyID(previous));
 }
 
 crate::abi::layouts! {

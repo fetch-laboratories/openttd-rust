@@ -722,24 +722,28 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         subtract(f, p, id, cost, expense);
     }
 }
-/// `Station::Get(id)->facilities.Count()`, through the shared facility reader.
+/// The `StationID` of a station pool index that `NextOwned<Station>` yields.
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "StationID is the original uint16_t pool index that NextOwned yields"
+    reason = "StationID is the original uint16_t station pool index"
 )]
-fn station_facility_count(s: &Services, id: u32) -> u32 {
-    (s.shared.station_facilities)(id as u16).count_ones()
+fn station_id(index: u32) -> crate::station_type::StationID {
+    crate::station_type::StationID(index as u16)
+}
+/// `Station::Get(id)->facilities.Count()`, through the shared facility reader.
+fn station_facility_count(s: &Services, id: crate::station_type::StationID) -> u32 {
+    (s.shared.station_facilities)(id.0).count_ones()
 }
 /// `Aircraft::From(Vehicle::Get(id))->IsNormalAircraft()`. For a valid ID, the first
 /// vehicle at or after it is that vehicle.
-fn aircraft_is_normal(s: &Services, id: u32) -> bool {
-    (s.shared.vehicle_next)(id).is_some_and(|v| crate::aircraft::is_normal_aircraft(v.subtype()))
+fn aircraft_is_normal(s: &Services, id: crate::vehicle_type::VehicleID) -> bool {
+    (s.shared.vehicle_next)(id.0).is_some_and(|v| crate::aircraft::is_normal_aircraft(v.subtype()))
 }
 fn assets(s: &Services, id: u8) -> i64 {
     let mut num = 0_u32;
     each(
         |from| (s.station_next_owned)(id, from),
-        |st| num = num.wrapping_add(station_facility_count(s, st)),
+        |st| num = num.wrapping_add(station_facility_count(s, station_id(st))),
     );
     let price = unsafe { (&raw const PRICES).cast::<i64>().read() };
     let mut value = price.saturating_mul(i64::from(num)).saturating_mul(25);
@@ -751,7 +755,11 @@ fn assets(s: &Services, id: u8) -> i64 {
             break;
         }
         from = v.wrapping_add(1);
-        if kind == 0 || kind == 1 || (kind == 3 && aircraft_is_normal(s, v)) || kind == 2 {
+        if kind == 0
+            || kind == 1
+            || (kind == 3 && aircraft_is_normal(s, crate::vehicle_type::VehicleID(v)))
+            || kind == 2
+        {
             value = value.saturating_add((s.vehicle_value)(v).saturating_mul(3) >> 1);
         }
     }
@@ -812,7 +820,7 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
         |st| {
             let t = (s.station_times)(st);
             if t.since_load <= 20 || t.since_unload <= 20 {
-                count = count.wrapping_add(station_facility_count(s, st));
+                count = count.wrapping_add(station_facility_count(s, station_id(st)));
             }
         },
     );
