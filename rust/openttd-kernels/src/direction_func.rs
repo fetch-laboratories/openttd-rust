@@ -151,10 +151,6 @@ pub fn reverse_dir_raw(d: u8, check: impl Fn(bool)) -> u8 {
 pub fn change_diag_dir_raw(direction: u8, difference: u8, check: impl Fn(bool)) -> u8 {
     change_diag_dir(DiagDirection(direction), DiagDirDiff(difference), check).0
 }
-/// Raw adapter: `IsValidAxis` over a base value.
-pub const fn is_valid_axis_raw(axis: u8) -> bool {
-    is_valid_axis(Axis(axis))
-}
 /// Raw adapter: `OtherAxis` over base values.
 pub fn other_axis_raw(axis: u8, check: impl Fn(bool)) -> u8 {
     other_axis(Axis(axis), check).0

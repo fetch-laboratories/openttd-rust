@@ -355,7 +355,7 @@ impl<'a> House<'a> {
     }
     /// `TileAddXY`.
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(self.map().tile_add_xy(tile.0, x, y))
+        self.map().tile_add_xy(tile, x, y)
     }
     /// `MarkTileDirtyByTile`.
     fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {

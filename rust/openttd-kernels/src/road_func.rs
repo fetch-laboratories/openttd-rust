@@ -6,12 +6,22 @@
  */
 
 //! Shared `road_func.h` helpers.
-/// `DiagDirToRoadBits`, with the native valid direction precondition.
-pub fn diag_dir_to_road_bits(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if dir >= 4 {
+/// `DiagDirToRoadBits`: create the road-part which belongs to the given `DiagDirection`.
+pub fn diag_dir_to_road_bits(
+    d: crate::direction_type::DiagDirection,
+    check: impl Fn(bool),
+) -> crate::road_type::RoadBits {
+    if !crate::direction_func::is_valid_diag_direction(d) {
         check(false);
     }
-    (u32::from(crate::road_type::ROAD_NW).wrapping_shl(u32::from(3 ^ dir)) & 0xff) as u8
+    crate::road_type::RoadBits(
+        (u32::from(crate::road_type::RoadBits::ROAD_NW.0).wrapping_shl(u32::from(3 ^ d.0)) & 0xff)
+            as u8,
+    )
+}
+/// Raw adapter: `DiagDirToRoadBits` over base values, for files no pass has finished yet.
+pub fn diag_dir_to_road_bits_raw(dir: u8, check: impl Fn(bool)) -> u8 {
+    diag_dir_to_road_bits(crate::direction_type::DiagDirection(dir), check).0
 }
 
 /// `MirrorRoadBits`, retaining `IsValidRoadBits`'s precondition.
@@ -27,7 +37,9 @@ pub(crate) fn axis_to_road_bits(
     a: crate::direction_type::Axis,
     check: impl Fn(bool) + Copy,
 ) -> crate::road_type::RoadBits {
-    check(crate::direction_func::is_valid_axis_raw(a.0));
+    if !crate::direction_func::is_valid_axis(a) {
+        check(false);
+    }
     if a == crate::direction_type::Axis::AXIS_X {
         crate::road_type::RoadBits::ROAD_X
     } else {

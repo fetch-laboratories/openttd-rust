@@ -232,7 +232,7 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     check(dir < 4);
     RoadPiece {
         tile: tile.wrapping_add(w.dimensions.offs_by_diag_dir(dir)),
-        bits: crate::road_func::diag_dir_to_road_bits(bits_dir, check),
+        bits: crate::road_func::diag_dir_to_road_bits_raw(bits_dir, check),
     }
 }
 

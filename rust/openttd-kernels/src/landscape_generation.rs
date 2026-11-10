@@ -295,7 +295,7 @@ impl World<'_> {
                 } else {
                     self.map.tile_xy(row, col)
                 };
-                if (!freeform && self.map.distance_from_edge(tile, self.size_y) <= 1)
+                if (!freeform && self.map.distance_from_edge_raw(tile, self.size_y) <= 1)
                     || row < row_pad
                     || row >= height - row_pad - u32::from(!freeform)
                     || col < col_pad
@@ -711,7 +711,7 @@ impl World<'_> {
                 return;
             }
             let radius = diameter / 2;
-            if self.map.distance_square(tile, center) > radius * radius && self.chance(3, 4) {
+            if self.map.distance_square_raw(tile, center) > radius * radius && self.chance(3, 4) {
                 return;
             }
             if self.chance(1, 3) {
@@ -785,7 +785,7 @@ impl World<'_> {
         {
             return false;
         }
-        if self.map.distance_from_edge(tile, self.size_y) <= 1 {
+        if self.map.distance_from_edge_raw(tile, self.size_y) <= 1 {
             w::hit(w::GENERATION_SEA_EDGE);
             return true;
         }

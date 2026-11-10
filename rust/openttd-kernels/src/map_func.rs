@@ -7,6 +7,9 @@
 
 //! Inline helpers of `map_func.h` over map dimensions read once per entry.
 #![allow(unsafe_code)]
+use crate::direction_type::{DiagDirection, Direction};
+use crate::map_type::TileIndexDiff;
+use crate::tile_type::TileIndex;
 
 /// Map dimensions read once per entry.
 #[derive(Clone, Copy)]
@@ -89,9 +92,9 @@ impl Map {
             self.tile_xy(x, y)
         }
     }
-    /// `DistanceFromEdge`.
+    /// Raw adapter: `DistanceFromEdge` over a base tile, for files no pass has finished yet.
     #[must_use]
-    pub fn distance_from_edge(self, tile: u32, size_y: u32) -> u32 {
+    pub fn distance_from_edge_raw(self, tile: u32, size_y: u32) -> u32 {
         let x = self.tile_x(tile);
         let y = self.tile_y(tile);
         x.min(y).min(
@@ -138,10 +141,10 @@ impl Map {
             .abs_diff(self.tile_x(b))
             .max(self.tile_y(a).abs_diff(self.tile_y(b)))
     }
-    /// `TileAddXY`: `tile + TileDiffXY(x, y)` in unsigned arithmetic.
+    /// Raw adapter: `TileAddXY` over a base tile.
     #[must_use]
     #[inline]
-    pub fn tile_add_xy(self, tile: u32, x: i32, y: i32) -> u32 {
+    pub fn tile_add_xy_raw(self, tile: u32, x: i32, y: i32) -> u32 {
         tile.wrapping_add(self.diff(x, y))
     }
     /// `TileIndexToTileIndexDiffC`: the unsigned coordinate differences
@@ -162,10 +165,10 @@ impl Map {
             y: self.tile_y(tile_a.0).wrapping_sub(self.tile_y(tile_b.0)) as i16,
         }
     }
-    /// Original `DistanceSquare` over captured map dimensions.
+    /// Raw adapter: `DistanceSquare` over base tiles.
     #[must_use]
     #[inline]
-    pub fn distance_square(self, a: u32, b: u32) -> u32 {
+    pub fn distance_square_raw(self, a: u32, b: u32) -> u32 {
         let x = self.tile_x(a).cast_signed() - self.tile_x(b).cast_signed();
         let y = self.tile_y(a).cast_signed() - self.tile_y(b).cast_signed();
         (x * x + y * y).cast_unsigned()
@@ -235,6 +238,71 @@ impl Map {
         ];
         let (x, y) = OFFSETS[usize::from(dir)];
         tile.wrapping_add(self.diff(x, y))
+    }
+    /// `DistanceFromEdge`: gets the distance to the edge of the map in given direction.
+    #[must_use]
+    pub fn distance_from_edge(self, tile: TileIndex, size_y: u32) -> u32 {
+        self.distance_from_edge_raw(tile.0, size_y)
+    }
+    /// `DistanceSquare`: gets the 'Square' distance between the two given tiles.
+    #[must_use]
+    #[inline]
+    pub fn distance_square(self, t0: TileIndex, t1: TileIndex) -> u32 {
+        self.distance_square_raw(t0.0, t1.0)
+    }
+    /// `TileAddXY`: adds a given offset of x and y to a tile.
+    #[must_use]
+    #[inline]
+    pub fn tile_add_xy(self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
+        TileIndex(self.tile_add_xy_raw(tile.0, x, y))
+    }
+    /// `TileOffsByDiagDir`: convert a `DiagDirection` to a `TileIndexDiff`.
+    #[must_use]
+    #[inline]
+    pub fn tile_offs_by_diag_dir(self, dir: DiagDirection, check: impl Fn(bool)) -> TileIndexDiff {
+        if !crate::direction_func::is_valid_diag_direction(dir) {
+            check(false);
+            std::process::abort();
+        }
+        self.offs_by_diag_dir(dir.0).cast_signed()
+    }
+    /// `TileOffsByDir`: convert a `Direction` to a `TileIndexDiff`.
+    #[must_use]
+    #[inline]
+    pub fn tile_offs_by_dir(self, dir: Direction, check: impl Fn(bool)) -> TileIndexDiff {
+        if !crate::direction_func::is_valid_direction(dir) {
+            check(false);
+            std::process::abort();
+        }
+        self.add_dir(0, dir.0).cast_signed()
+    }
+    /// `TileAddByDir`: adds a `Direction` to a tile.
+    #[must_use]
+    #[inline]
+    pub fn tile_add_by_dir(
+        self,
+        tile: TileIndex,
+        dir: Direction,
+        check: impl Fn(bool),
+    ) -> TileIndex {
+        TileIndex(
+            tile.0
+                .wrapping_add(self.tile_offs_by_dir(dir, check).cast_unsigned()),
+        )
+    }
+    /// `TileAddByDiagDir`: adds a `DiagDirection` to a tile.
+    #[must_use]
+    #[inline]
+    pub fn tile_add_by_diag_dir(
+        self,
+        tile: TileIndex,
+        dir: DiagDirection,
+        check: impl Fn(bool),
+    ) -> TileIndex {
+        TileIndex(
+            tile.0
+                .wrapping_add(self.tile_offs_by_diag_dir(dir, check).cast_unsigned()),
+        )
     }
     /// `AddTileIndexDiffCWrap(tile, TileIndexDiffCByDiagDir(dir))`.
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.

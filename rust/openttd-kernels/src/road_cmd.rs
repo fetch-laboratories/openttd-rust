@@ -838,7 +838,7 @@ impl<'a> Ctx<'a> {
                     company = OWNER_NONE;
                 } else {
                     let edge = (self.s.town_edge)(town);
-                    if self.map.distance_square(tile, edge.tile) > edge.radius {
+                    if self.map.distance_square_raw(tile, edge.tile) > edge.radius {
                         company = OWNER_NONE;
                     }
                 }

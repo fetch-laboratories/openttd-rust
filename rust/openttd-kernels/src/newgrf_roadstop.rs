@@ -253,7 +253,7 @@ unsafe fn variable(
                 (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), t, c.tile) }) << 16)
                     | s.map().distance_manhattan(c.tile, xy).min(65535)
             } else {
-                s.map().distance_square(c.tile, xy)
+                s.map().distance_square_raw(c.tile, xy)
             };
         }
         0x47 => {

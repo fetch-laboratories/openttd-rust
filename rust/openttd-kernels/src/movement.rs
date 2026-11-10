@@ -741,7 +741,7 @@ impl Context<'_> {
                             ROAD_TILE_NORMAL => {
                                 let road = self.world.road_bits(tile, tram);
                                 if side != INVALID_DIAGDIR
-                                    && crate::road_func::diag_dir_to_road_bits(side, |ok| {
+                                    && crate::road_func::diag_dir_to_road_bits_raw(side, |ok| {
                                         (self.native_assert)(ok);
                                     }) & road
                                         == 0

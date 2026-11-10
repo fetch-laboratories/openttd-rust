@@ -176,7 +176,7 @@ impl Engine<'_> {
         self.map().coordinates().distance_max(a.0, b.0)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(self.map().coordinates().tile_add_xy(tile.0, x, y))
+        self.map().coordinates().tile_add_xy(tile, x, y)
     }
     fn tile_type(&self, tile: TileIndex) -> TileType {
         TileType((self.s.shared().tile_type)(tile.0))

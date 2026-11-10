@@ -1167,7 +1167,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         area.expand(radius.cast_signed(), map, size_y);
         for target in area.tiles(map) {
             if world.kind(target) != crate::tile_type::MP_VOID
-                && map.distance_square(tile, target) < radius.wrapping_mul(radius)
+                && map.distance_square_raw(tile, target) < radius.wrapping_mul(radius)
             {
                 (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
             }

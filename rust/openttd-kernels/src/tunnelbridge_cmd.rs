@@ -263,7 +263,7 @@ impl<'a> World<'a> {
             return OWNER_NONE;
         }
         let edge = (self.road.town_edge)(town);
-        if self.map.distance_square(tile, edge.tile) > edge.radius {
+        if self.map.distance_square_raw(tile, edge.tile) > edge.radius {
             OWNER_NONE
         } else {
             OWNER_TOWN

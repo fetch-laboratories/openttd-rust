@@ -192,7 +192,7 @@ impl<'a> Founding<'a> {
     ) -> Option<crate::strings_type::StringID> {
         w::hit(w::TOWN_PLACEMENT);
         // Check if too close to the edge of map.
-        if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
+        if self.map().distance_from_edge(tile, self.size_y()) < 12 {
             return Some(crate::strings_type::StringID(self.s.edge_error));
         }
         // Check distance to all other towns.
