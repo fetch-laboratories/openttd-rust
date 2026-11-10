@@ -235,6 +235,7 @@ static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 static_assert(std::is_same_v<std::underlying_type_t<Colours>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<LandscapeType>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<EconomyType>, uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<ParticipateSurvey>, uint8_t>);
 static_assert(LS_DEFAULT == 0);
 static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.allow_town_level_crossings = &_settings_game.economy.allow_town_level_crossings,
@@ -271,13 +272,17 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
 	.oil_refinery_limit = &_settings_game.game_creation.oil_refinery_limit,
 	.order_review_system = &_settings_client.gui.order_review_system,
+	.participate_survey = reinterpret_cast<const uint8_t *>(&_settings_client.network.participate_survey),
+	.pause_on_newgame = &_settings_client.gui.pause_on_newgame,
 	.raw_industry_construction = &_settings_game.construction.raw_industry_construction,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
+	.reload_cfg = &_settings_client.network.reload_cfg,
 	.reverse_at_signals = &_settings_game.pf.reverse_at_signals,
 	.roadveh_acceleration_model = &_settings_game.vehicle.roadveh_acceleration_model,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.select_goods = &_settings_game.order.selectgoods,
+	.starting_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour),
 	.station_noise = &_settings_game.economy.station_noise_level,
 	.town_council_tolerance = &_settings_game.difficulty.town_council_tolerance,
 	.town_growth_rate = &_settings_game.economy.town_growth_rate,

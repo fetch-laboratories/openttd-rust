@@ -44,9 +44,5 @@ src/order_cmd.cpp | openttd_orders_shared_window(void *ctx, void *first) noexcep
 write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
 src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1
 src/rust/session_services.inc | []() noexcept | 5910eb80ec425d16 | 1
-src/rust/session_services.inc | []() noexcept | 819ee15bd28ec7c1 | 1
-src/rust/session_services.inc | []() noexcept | f0134ca136619379 | 1
-src/rust/session_services.inc | []() noexcept | d03f30b8b71355b4 | 1
-src/rust/session_services.inc | []() noexcept | bf49647f7492024a | 1
 write | src/rust/session_services.inc | []() noexcept | 11b9689a67f6034c | 1
 src/rust/session_services.inc | [](uint8_t c) noexcept | 5c9064175640b625 | 1
