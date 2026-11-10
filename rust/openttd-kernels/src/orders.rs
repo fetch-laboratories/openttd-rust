@@ -1660,7 +1660,8 @@ fn set_timetable_start(g: Game, call: &CommandCall, args: &TimetableStart) -> u3
                     args.start_tick
                         .wrapping_add(((index as i32).wrapping_mul(total) / count) as u64)
                 );
-                // Preserve the original args.veh (rather than u) reset quirk.
+                // Unbunching data is no longer valid.
+                // The original resets v, not w; the quirk is preserved.
                 g.reset(args.veh);
                 g.dirty(u);
             }
