@@ -45,8 +45,6 @@ rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking
 rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking_tile
 rebound | OpenTTDIsTileFlat | src/rust/station_command_services.hpp | tile_flat
 rebound | OpenTTDIsTileFlat | src/town_cmd.cpp | flat
-rebound | OpenTTDLandscapeValue | src/industry_cmd.cpp | landscape
-rebound | OpenTTDLandscapeValue | src/town_cmd.cpp | climate
 rebound | OpenTTDLargerTowns | src/newgrf_house.cpp | larger_towns
 rebound | OpenTTDLargerTowns | src/town_cmd.cpp | larger_towns
 rebound | OpenTTDMapLogX | src/rust/vehicle_services.cpp | map_log_x
