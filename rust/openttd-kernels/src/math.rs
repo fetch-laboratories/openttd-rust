@@ -40,13 +40,23 @@ pub(crate) const fn ceil_div(a: u32, b: u32) -> u32 {
 }
 
 /// `ClampTo<uint8_t>`: clamp the given value down to lie within the `uint8_t` range.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "ClampTo's static_cast<To> of the clamped value"
+)]
 pub(crate) fn clamp_to_u8(a: i64) -> u8 {
-    u8::try_from(a.clamp(0, i64::from(u8::MAX))).unwrap_or(u8::MAX)
+    a.clamp(0, i64::from(u8::MAX)) as u8
 }
 
 /// `ClampTo<uint16_t>`: clamp the given value down to lie within the `uint16_t` range.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "ClampTo's static_cast<To> of the clamped value"
+)]
 pub(crate) fn clamp_to_u16(a: i64) -> u16 {
-    u16::try_from(a.clamp(0, i64::from(u16::MAX))).unwrap_or(u16::MAX)
+    a.clamp(0, i64::from(u16::MAX)) as u16
 }
 
 /// The value mask of a `width`-bit integer, for the template's integer types.
