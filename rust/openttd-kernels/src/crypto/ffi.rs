@@ -24,6 +24,7 @@ unsafe fn bytes<'a>(data: *const u8, length: usize) -> &'a [u8] {
     }
 }
 
+/// `crypto_x25519_public_key`.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_crypto_public_key(out: *mut u8, secret: *const u8) {
     unsafe {
@@ -31,6 +32,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_public_key(out: *mut u8, sec
     }
 }
 
+/// `crypto_wipe`.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_crypto_wipe(data: *mut u8, length: usize) {
     if length != 0 {
@@ -40,6 +42,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_wipe(data: *mut u8, length: 
     }
 }
 
+/// `crypto_ed25519_check`, for `ValidateSignature` (`signature.cpp`).
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_crypto_check(
     signature: *const u8,
@@ -56,6 +59,8 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_check(
     }
 }
 
+/// `GenerateUid`'s digest (`misc.cpp`): the 16-byte `BLAKE2b` hash of the 32 random
+/// bytes, then the coding string.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_uid(
     out: *mut u8,
@@ -63,14 +68,17 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_uid(
     text: *const u8,
     length: usize,
 ) {
-    let mut hash = Hash::new(16);
     unsafe {
+        let digest = slice::from_raw_parts_mut(out, 16);
+        let mut hash = Hash::new(digest.len());
         hash.update(slice::from_raw_parts(random, 32));
         hash.update(bytes(text, length));
-        hash.finish(slice::from_raw_parts_mut(out, 16));
+        hash.finish(digest);
     }
 }
 
+/// `CalculateHashV1` (`signature.cpp`): calculate the 32-byte blake2b hash of a
+/// file, read through `feof` and `fread`.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_file(
     out: *mut u8,
@@ -78,13 +86,14 @@ pub(crate) unsafe extern "C" fn openttd_rust_crypto_hash_file(
     eof: unsafe extern "C" fn(*mut c_void) -> u8,
     read: unsafe extern "C" fn(*mut c_void, *mut u8, usize) -> usize,
 ) {
-    let mut hash = Hash::new(32);
     unsafe {
+        let digest = slice::from_raw_parts_mut(out, 32);
+        let mut hash = Hash::new(digest.len());
         while eof(file) == 0 {
-            let mut buffer = [0; 1024];
-            let size = read(file, buffer.as_mut_ptr(), buffer.len());
-            hash.update(&buffer[..size]);
+            let mut buf = [0; 1024];
+            let len = read(file, buf.as_mut_ptr(), buf.len());
+            hash.update(&buf[..len]);
         }
-        hash.finish(slice::from_raw_parts_mut(out, 32));
+        hash.finish(digest);
     }
 }

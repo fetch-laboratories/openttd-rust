@@ -29,6 +29,7 @@ use sha2::Sha512;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, Zeroizing};
 
+/// `crypto_blake2b_ctx`, for the digest sizes `OpenTTD` uses.
 pub(crate) enum Hash {
     Short(Blake2b128),
     Medium(Blake2b256),
@@ -36,15 +37,21 @@ pub(crate) enum Hash {
 }
 
 impl Hash {
+    /// `crypto_blake2b_init(&ctx, size)`.
     pub(crate) fn new(size: usize) -> Self {
         match size {
             16 => Self::Short(Blake2b128::new()),
             32 => Self::Medium(Blake2b256::new()),
             64 => Self::Long(Blake2b512::new()),
-            _ => unreachable!("OpenTTD BLAKE2b output size"),
+            // OpenTTD hashes only 16-, 32- and 64-byte digests.
+            _ => {
+                crate::services_assert::check(false);
+                std::process::abort()
+            }
         }
     }
 
+    /// `crypto_blake2b_update`.
     pub(crate) fn update(&mut self, bytes: &[u8]) {
         match self {
             Self::Short(hash) => hash.update(bytes),
@@ -53,6 +60,7 @@ impl Hash {
         }
     }
 
+    /// `crypto_blake2b_final`.
     pub(crate) fn finish(self, out: &mut [u8]) {
         match self {
             Self::Short(hash) => out.copy_from_slice(&hash.finalize()),
@@ -62,14 +70,19 @@ impl Hash {
     }
 }
 
+/// `crypto_x25519_public_key`.
 pub(crate) fn public_key(secret: &[u8; 32]) -> [u8; 32] {
     MontgomeryPoint::mul_base_clamped(*secret).to_bytes()
 }
 
+/// `crypto_x25519`.
 pub(crate) fn x25519(secret: &[u8; 32], peer: &[u8; 32]) -> [u8; 32] {
     MontgomeryPoint(*peer).mul_clamped(*secret).to_bytes()
 }
 
+/// `X25519DerivedKeys::Exchange`: perform the actual key exchange. `server` is
+/// whether we are the server; it orders the public keys in the hash. Returns
+/// false when an illegal public key was given.
 pub(crate) fn derive(
     keys: &mut [u8; 64],
     secret: &[u8; 32],
@@ -80,9 +93,10 @@ pub(crate) fn derive(
 ) -> bool {
     let shared = Zeroizing::new(x25519(secret, peer));
     if bool::from(shared.ct_eq(&[0; 32])) {
+        /* A shared secret of all zeros means that the peer tried to force the shared secret to a known constant. */
         return false;
     }
-    let mut hash = Hash::new(64);
+    let mut hash = Hash::new(keys.len());
     hash.update(shared.as_ref());
     let (server, client) = if server {
         (public, peer)
@@ -96,6 +110,7 @@ pub(crate) fn derive(
     true
 }
 
+/// `crypto_aead_ctx`.
 #[derive(Clone)]
 pub(crate) struct Aead {
     key: [u8; 32],
@@ -110,6 +125,7 @@ impl Drop for Aead {
 }
 
 impl Aead {
+    /// `crypto_aead_init_x`.
     pub(crate) fn new(key: &[u8; 32], nonce: &[u8; 24]) -> Self {
         let mut subkey = hchacha::<R20>(key.into(), nonce[..16].try_into().unwrap());
         let result = Self {
@@ -138,6 +154,7 @@ impl Aead {
         poly.finalize().into()
     }
 
+    /// `crypto_aead_write`, in place.
     pub(crate) fn write(&mut self, text: &mut [u8], ad: &[u8]) -> [u8; 16] {
         let (mut cipher, block) = self.cipher();
         cipher.apply_keystream(text);
@@ -146,6 +163,7 @@ impl Aead {
         tag
     }
 
+    /// `crypto_aead_read`, in place: false if the tag does not match.
     pub(crate) fn read(&mut self, text: &mut [u8], tag: &[u8; 16], ad: &[u8]) -> bool {
         let (mut cipher, block) = self.cipher();
         let mut expected = Self::tag(&block[..32], ad, text);
@@ -159,6 +177,7 @@ impl Aead {
     }
 }
 
+/// `crypto_ed25519_check`: whether `signature` signs `message` for `public`.
 pub(crate) fn ed25519_check(signature: &[u8; 64], public: &[u8; 32], message: &[u8]) -> bool {
     let Some(a) = CompressedEdwardsY(*public).decompress() else {
         return false;
