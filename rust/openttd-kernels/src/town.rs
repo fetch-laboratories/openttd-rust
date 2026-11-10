@@ -5203,10 +5203,9 @@ mod protocol_tests {
     fn fixture_services() -> *mut Services {
         let mut services = crate::services::fixture(ptr::null_mut(), random, industry);
         services.company_human = human;
-        // The removed allow_roads fixture leaf returned false; the catalog keeps that setting.
+        // Town roads and level crossings are disabled; growth uses the normal rate.
         services.settings = leak(crate::settings_type::SettingAddresses {
             allow_town_roads: leak(false),
-            // The removed growth_rate and allow_crossings leaves returned 2 and false.
             town_growth_rate: leak(2),
             allow_town_level_crossings: leak(false),
             ..crate::settings_type::SettingAddresses::NULL

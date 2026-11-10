@@ -327,7 +327,7 @@ TEST_CASE("Industry - generation cancellation restores company before return")
 	using F = IndustryGenerationFixture;
 	/* On a 256x256 map ScaleByMapSize is the identity. */
 	Map::Allocate(256, 256);
-	/* The retired density and custom-number leaves returned 4 and 0; the catalog reads these. */
+	/* Normal density selects the generation cancellation cases; the custom count is unused. */
 	AutoRestoreBackup density(_settings_game.difficulty.industry_density, uint8_t{4});
 	AutoRestoreBackup custom(_settings_game.game_creation.custom_industry_number, uint16_t{0});
 	const auto world = F::World();
