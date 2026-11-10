@@ -7,7 +7,9 @@ committed oracle. The program is built at -O0 and at -O2 -DNDEBUG against the
 pinned sources only; both streams must match before conversion. No candidate
 header, archive or library is compiled or linked.
 
-    python3 tools/oracle-capture.py [name ...]
+    python3 tools/oracle-recapture-comparison.py [name ...]
+
+tools/run-comparisons.py runs it with the other reference comparisons.
 """
 
 import argparse
@@ -220,7 +222,7 @@ def capture(name: str) -> bool:
     for level in (["-O0"], ["-O2", "-DNDEBUG"]):
         binary = out / ("capture" + "".join(level).replace("-", "_"))
         command = [
-            "c++",
+            probe.compiler(),
             "-std=c++20",
             *level,
             *recipe.flags,
@@ -248,9 +250,7 @@ def capture(name: str) -> bool:
             file=sys.stderr,
         )
         return False
-    print(
-        f"{name}: recapture matches {oracle.relative_to(ROOT)} ({len(printed[0].splitlines())} printed rows)"
-    )
+    probe.passed(f"Oracle recapture {name}", printed_rows=len(printed[0].splitlines()))
     return True
 
 
