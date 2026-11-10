@@ -1651,8 +1651,13 @@ fn reserve_consist(
      * In that case, only reserve if it's a fixed refit and the equivalent of "articulated chain"
      * a vehicle belongs to already has the right cargo. */
     let must_reserve = !control.refit || (l.get_payment)(u).is_null();
+    let map = crate::map_func::World::new(unsafe { &*w.shared });
     let mut current = Some(u);
     while let Some(v) = current {
+        if map.types.assertions() {
+            map.check(u32::from(v.cargo_cap()) >= l.cargo_list(v).remaining_count());
+        }
+
         /* Exclude various ways in which the vehicle might not be the head of an equivalent of
          * "articulated chain". Also don't do the reservation if the vehicle is going to refit
          * to a different cargo and hasn't tried to do so, yet. */
@@ -1680,12 +1685,7 @@ fn reserve_consist(
             && v.cargo_cap() != 0
         {
             let observed = (l.cargo_capacity)(v);
-            let v_cargo = VehicleCargo(observed.owner.cast_mut());
-            let map = crate::map_func::World::new(unsafe { &*w.shared });
-            if map.types.assertions() {
-                map.check(u32::from(v.cargo_cap()) >= v_cargo.remaining_count());
-            }
-            let remaining = v_cargo.remaining_count();
+            let remaining = VehicleCargo(observed.owner.cast_mut()).remaining_count();
             let cargo = usize::from(observed.cargo);
             consist_capleft[cargo] = consist_capleft[cargo]
                 .wrapping_add(u32::from(v.cargo_cap()).wrapping_sub(remaining));
