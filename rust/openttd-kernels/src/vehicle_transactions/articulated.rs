@@ -116,7 +116,10 @@ pub(crate) unsafe fn add_articulated_parts(s: &Services, first: *mut ()) {
                 (s.copy_roadtype)(v, first);
                 v
             }
-            _ => unreachable!("articulated vehicles are ground vehicles"),
+            _ => {
+                (c.base.shared.not_reached)();
+                std::process::abort()
+            }
         };
         let can_carry = unsafe {
             crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e) != 0
