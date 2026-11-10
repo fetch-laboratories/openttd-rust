@@ -120,6 +120,29 @@ class RunTests(unittest.TestCase):
             self.assertEqual(preflight.main(), 0)
             hooks.assert_not_called()
 
+    def test_changed_tracked_files_warn_at_start_and_in_summary(self) -> None:
+        quick = workflow({"name": "Only", "run": "true"})
+        for status, warnings in (("", 0), (" M tools/preflight.py", 2)):
+
+            def git(_repo: Path, *arguments: str, status: str = status) -> str:
+                return status if arguments[0] == "status" else "sha"
+
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(preflight, "git", side_effect=git),
+                patch.object(preflight.yaml, "safe_load", return_value=quick),
+                patch.object(preflight.migration, "LOCAL", Path(directory)),
+                patch.object(sys, "argv", ["preflight.py", "--step", "only"]),
+                patch("builtins.print") as printed,
+            ):
+                self.assertEqual(preflight.main(), 0)
+                lines = [str(call.args[0]) for call in printed.call_args_list]
+                self.assertEqual(
+                    sum("not the commit CI tests" in line for line in lines), warnings
+                )
+                if warnings:
+                    self.assertIn("not the commit CI tests", lines[-1])
+
     def test_supplied_checker_must_match_pin_and_be_clean(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

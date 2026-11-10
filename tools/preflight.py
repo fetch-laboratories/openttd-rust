@@ -192,6 +192,25 @@ def revision(name: str) -> str:
     )
 
 
+def uncommitted() -> str:
+    """A warning when tracked files differ from HEAD, or nothing."""
+    if git(migration.ROOT, "status", "--porcelain", "--untracked-files=no"):
+        return (
+            "warning: tracked files differ from HEAD; this result describes the "
+            "working tree, not the commit CI tests"
+        )
+    return ""
+
+
+def summary(chosen: list[Step], failed: list[str], seconds: float, warning: str) -> int:
+    print(f"{len(chosen) - len(failed)}/{len(chosen)} passed in {seconds:.0f}s")
+    for name in failed:
+        print(f"failed: {name}; rerun: python3 tools/preflight.py --step {name!r}")
+    if warning:
+        print(warning)
+    return 1 if failed else 0
+
+
 def main() -> int:
     options = arguments()
     try:
@@ -206,6 +225,8 @@ def main() -> int:
         if COMMITS in names:
             hooks = hooks_checkout(options.hooks.resolve() if options.hooks else None)
             steps.insert(0, commit_step(base, head, hooks))
+        if warning := uncommitted():
+            print(warning, flush=True)
         logs = migration.LOCAL / "preflight" / time.strftime("%Y%m%d-%H%M%S")
         logs.mkdir(parents=True, exist_ok=True)
         env = environment()
@@ -226,12 +247,7 @@ def main() -> int:
     ) as error:
         print(error, file=sys.stderr)
         return 1
-    print(
-        f"{len(chosen) - len(failed)}/{len(chosen)} passed in {time.monotonic() - started:.0f}s"
-    )
-    for name in failed:
-        print(f"failed: {name}; rerun: python3 tools/preflight.py --step {name!r}")
-    return 1 if failed else 0
+    return summary(chosen, failed, time.monotonic() - started, warning)
 
 
 if __name__ == "__main__":
