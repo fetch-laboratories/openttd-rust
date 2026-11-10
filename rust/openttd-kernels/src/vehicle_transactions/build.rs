@@ -210,10 +210,10 @@ pub(crate) unsafe fn cmd_build_vehicle(
     let seeds = unsafe { (s.random.save)() };
     let v = match kind {
         VehicleType::TRAIN => unsafe {
-            rail::cmd_build_rail_vehicle(s, temporary, subflags, cmd.tile, e)
+            rail::cmd_build_rail_vehicle(s, temporary, subflags, rail::CmdBuildRailVehicle { tile: cmd.tile, e })
         },
         VehicleType::ROAD => unsafe {
-            construct::cmd_build_road_vehicle(s, temporary, subflags, cmd.tile, e)
+            construct::cmd_build_road_vehicle(s, temporary, subflags, construct::CmdBuildRoadVehicle { tile: cmd.tile, e })
         },
         VehicleType::SHIP => {
             let north = (s.ship_tile)(tile);
@@ -237,7 +237,7 @@ pub(crate) unsafe fn cmd_build_vehicle(
             v
         }
         VehicleType::AIRCRAFT => unsafe {
-            construct::cmd_build_aircraft(s, temporary, subflags, cmd.tile, e)
+            construct::cmd_build_aircraft(s, temporary, subflags, construct::CmdBuildAircraft { tile: cmd.tile, e })
         },
         _ => {
             (b.shared.not_reached)(); // Safe due to IsDepotTile()

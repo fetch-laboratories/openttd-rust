@@ -287,6 +287,12 @@ pub(crate) unsafe fn nested_move(
     }
 }
 
+/// Arguments of `CmdBuildRailWagon`.
+pub(crate) struct CmdBuildRailWagon {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
 /// `CmdBuildRailWagon`: build a railroad wagon. `out` doubles as the scratch
 /// result of the nested free-chain moves; the original returns a fresh zero
 /// cost after them.
@@ -294,9 +300,9 @@ unsafe fn cmd_build_rail_wagon(
     x: Ctx,
     out: *mut CommandCost,
     flags: DoCommandFlags,
-    tile: TileIndex,
-    e: *const OpenTTDEngine,
+    cmd: CmdBuildRailWagon,
 ) -> R {
+    let CmdBuildRailWagon { tile, e } = cmd;
     /* Check that the wagon can drive on the track in question */
     let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
     let tiletype = (x.b.refit.train.physics.rail_type)(tile.0);
@@ -399,6 +405,12 @@ fn add_rear_engine_to_multiheaded_train(x: Ctx, v: R) {
     (x.s.link_multihead)(Ctx::sh(v), Ctx::sh(u));
 }
 
+/// Arguments of `CmdBuildRailVehicle`.
+pub(crate) struct CmdBuildRailVehicle {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
 /// `CmdBuildRailVehicle`: build a railroad vehicle at the depot `tile`; returns
 /// the new vehicle, or null when only testing or on error.
 ///
@@ -409,14 +421,14 @@ pub(crate) unsafe fn cmd_build_rail_vehicle(
     b: &'static build::Services,
     out: *mut CommandCost,
     flags: DoCommandFlags,
-    tile: TileIndex,
-    e: *const OpenTTDEngine,
+    cmd: CmdBuildRailVehicle,
 ) -> *mut () {
+    let CmdBuildRailVehicle { tile, e } = cmd;
     let x = Ctx::new(b);
     let s = x.s;
     let kind = crate::vehicle::EngineRef::of(e).rail_kind();
     if kind == RailVehicleTypes::WAGON {
-        return Ctx::sh(unsafe { cmd_build_rail_wagon(x, out, flags, tile, e) });
+        return Ctx::sh(unsafe { cmd_build_rail_wagon(x, out, flags, CmdBuildRailWagon { tile, e }) });
     }
     /* Check if depot and new engine uses the same kind of tracks *
      * We need to see if the engine got power on the tile to avoid electric engines in non-electric depots */
@@ -1099,6 +1111,16 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
     (cost.zero)(out);
 }
 
+/// Arguments of `CmdSellRailWagon`.
+pub(crate) struct CmdSellRailWagon {
+    pub t: *mut (),
+    /// Sell the chain following the wagon, including belonging rear engines.
+    /// A rear engine belonging to a preceding front engine is not sold.
+    pub sell_chain: bool,
+    pub backup_order: bool,
+    pub user: ClientID,
+}
+
 /// `CmdSellRailWagon`: sell a (single) train wagon/engine, or the chain from
 /// it when `sell_chain`.
 ///
@@ -1109,11 +1131,9 @@ pub(crate) unsafe fn cmd_sell_rail_wagon(
     b: &'static build::Services,
     out: *mut CommandCost,
     flags: DoCommandFlags,
-    t: *mut (),
-    sell_chain: bool,
-    backup_order: bool,
-    user: ClientID,
+    cmd: CmdSellRailWagon,
 ) {
+    let CmdSellRailWagon { t, sell_chain, backup_order, user } = cmd;
     let x = Ctx::new(b);
     let s = x.s;
     let cost = x.t.cost;

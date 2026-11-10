@@ -38,6 +38,12 @@ pub struct Services {
     pub service_flags: extern "C" fn(*mut (), bool, bool),
     pub wrong_depot: u32,
 }
+/// Arguments of `CmdBuildRoadVehicle`.
+pub(crate) struct CmdBuildRoadVehicle {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
 /// `CmdBuildRoadVehicle`: build a road vehicle at the depot `tile`; returns the
 /// new vehicle, or null when only testing or on error.
 ///
@@ -47,9 +53,9 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     s: &build::Services,
     out: *mut CommandCost,
     flags: DoCommandFlags,
-    tile: TileIndex,
-    e: *const OpenTTDEngine,
+    cmd: CmdBuildRoadVehicle,
 ) -> *mut () {
+    let CmdBuildRoadVehicle { tile, e } = cmd;
     let tile = tile.0;
     let k = s.construct;
     let a = k.articulated;
@@ -149,6 +155,12 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
     v
 }
 
+/// Arguments of `CmdBuildAircraft`.
+pub(crate) struct CmdBuildAircraft {
+    pub tile: TileIndex,
+    pub e: *const OpenTTDEngine,
+}
+
 /// `CmdBuildAircraft`: build an aircraft at the hangar `tile`, with its shadow
 /// and helicopter rotor; returns the new aircraft, or null when only testing or
 /// on error.
@@ -160,9 +172,9 @@ pub(crate) unsafe fn cmd_build_aircraft(
     s: &build::Services,
     out: *mut CommandCost,
     flags: DoCommandFlags,
-    tile: TileIndex,
-    e: *const OpenTTDEngine,
+    cmd: CmdBuildAircraft,
 ) -> *mut () {
+    let CmdBuildAircraft { tile, e } = cmd;
     let tile = tile.0;
     let k = s.construct;
     let a = k.articulated;
