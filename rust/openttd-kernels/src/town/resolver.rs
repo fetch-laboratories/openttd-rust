@@ -180,11 +180,9 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
     };
-    let mut id = (l.next_town)(u32::from(crate::town_type::TownID::BEGIN.0));
-    while id != u32::MAX {
-        let owner = (s.town_owner_by_id)(id);
+    for id in super::iterate(|from| (l.next_town)(from)) {
+        let owner = (s.town_owner_by_id)(u32::from(id.0));
         unsafe { initialize_counts(owner, specs, classes) };
-        id = (l.next_town)(id + 1);
     }
 }
 /// `GetNumHouses`: direct canonical counts; all four `ClampTo<uint8_t>` precede packing.

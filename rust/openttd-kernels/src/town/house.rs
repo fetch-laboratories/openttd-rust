@@ -1441,10 +1441,8 @@ impl<'a> House<'a> {
     }
     /// `Town::Iterate`.
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
-        let mut town = (self.l.next_town)(u32::from(TownID::BEGIN.0));
-        while town != u32::MAX {
-            visit((self.l.resolve_owner)(town));
-            town = (self.l.next_town)(town.wrapping_add(1));
+        for town in super::iterate(|from| (self.l.next_town)(from)) {
+            visit((self.l.resolve_owner)(u32::from(town.0)));
         }
     }
     /// `RebuildTownCaches`: rebuild all the cached variables of towns; canonical

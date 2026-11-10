@@ -512,17 +512,43 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, t: TownID, amoun
     // Cargo requirements may appear/vanish for small populations.
     (leaves.population_changed)(u32::from(t.0));
 }
+/// `Town::Iterate()`: the valid towns in pool order from `TownID::BEGIN`. `next(from)`
+/// is the pool's next valid index at or after `from`, or `u32::MAX` past the end; it is
+/// called only when the iteration advances, after the previous town's visit.
+pub(crate) fn iterate(mut next: impl FnMut(u32) -> u32) -> impl Iterator<Item = TownId> {
+    let mut from = Some(u32::from(TownId::BEGIN.0));
+    std::iter::from_fn(move || {
+        let id = next(from?);
+        if id == u32::MAX {
+            from = None;
+            return None;
+        }
+        from = Some(id.wrapping_add(1));
+        Some(TownId(id as u16))
+    })
+}
+/// `Town::Iterate()` over a lookup that resolves each town, ending at a null shell.
+pub(crate) fn iterate_refs(mut next: impl FnMut(u32) -> TownRef) -> impl Iterator<Item = TownRef> {
+    let mut from = Some(u32::from(TownId::BEGIN.0));
+    std::iter::from_fn(move || {
+        let town = next(from?);
+        if town.shell.is_null() {
+            from = None;
+            return None;
+        }
+        from = Some(u32::from(town.id.0).wrapping_add(1));
+        Some(town)
+    })
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
     // SAFETY: Immutable table remains live; no owner access spans pool iteration.
     let leaves = unsafe { &*leaves };
     let mut total = 0_u32;
-    let mut town = (leaves.next_town)(0);
-    while town != u32::MAX {
-        let owner = (leaves.resolve_owner)(town);
+    for town in iterate(|from| (leaves.next_town)(from)) {
+        let owner = (leaves.resolve_owner)(u32::from(town.0));
         // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
         total = total.wrapping_add(unsafe { population(owner) });
-        town = (leaves.next_town)(town.wrapping_add(1));
     }
     total
 }
@@ -2889,15 +2915,12 @@ impl Engine<'_> {
         if (self.leaves.environment.editor)() {
             return;
         }
-        let mut id = (self.leaves.next_town)(0);
-        while id != u32::MAX {
-            // Each town starts with an empty map/shell cache, as the previous
-            // per-town engine did, without copying that engine each tick.
+        for id in iterate(|from| (self.leaves.next_town)(from)) {
+            // Each town starts with an empty map and shell cache.
             self.map.take();
             self.house_shell.take();
-            self.owner = (self.leaves.resolve_owner)(id);
-            self.town_tick_handler(TownID(id as u16));
-            id = (self.leaves.next_town)(id + 1);
+            self.owner = (self.leaves.resolve_owner)(u32::from(id.0));
+            self.town_tick_handler(id);
         }
     }
     /// `CmdTownGrowthRate`'s execution.
@@ -3084,15 +3107,12 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
     month: u8,
 ) {
     let engine = engine(leaves, services);
-    let mut town = (engine.leaves.next_town)(0);
-    while town != u32::MAX {
-        let t = TownID(town as u16);
+    for t in iterate(|from| (engine.leaves.next_town)(from)) {
         let owner = engine.clone().bind(t);
         owner.monthly_statistics(month);
         owner.update_town_growth(t);
         owner.update_town_rating(t);
-        (owner.leaves.dirty_town)(town);
-        town = (engine.leaves.next_town)(town + 1);
+        (owner.leaves.dirty_town)(u32::from(t.0));
     }
 }
 /// Native fixture observes the real station-count and monthly-rating consumers.

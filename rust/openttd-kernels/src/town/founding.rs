@@ -719,8 +719,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         return u8::from(false);
     }
     // Pre-populate the name list with the names of towns already on the map.
-    let mut town = observed!((f.names.next)(u32::from(TownID::BEGIN.0)));
-    while !town.shell.is_null() {
+    for town in super::iterate_refs(|from| observed!((f.names.next)(from))) {
         let custom = unsafe { names::openttd_rust_town_name(town.state) };
         let name = if custom.size == 0 {
             observed!((f.s.cached_name)(town.shell))
@@ -728,7 +727,6 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
             custom
         };
         town_names.insert(unsafe { names::bytes(name) }.to_vec());
-        town = observed!((f.names.next)(u32::from(town.id.0).wrapping_add(1)));
     }
     // Randomise the city-status offset: at 1 in 4, ten towns may yield two or three cities.
     let larger_towns = observed!((f.s.larger_towns)());

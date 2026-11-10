@@ -97,14 +97,12 @@ pub unsafe extern "C" fn openttd_rust_town_names_clear(names: *mut Names) {
 /// Verifies this custom name is unique. Only custom names are checked
 /// (`town_cmd.cpp::IsUniqueTownName`). Return true if the name is unique.
 pub(super) unsafe fn is_unique_town_name(s: &NameServices, name: ByteSpan) -> bool {
-    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
-    while !town.shell.is_null() {
+    for town in super::iterate_refs(|from| observed!((s.next)(from))) {
         // SAFETY: Iteration supplies a live owner; borrow ends before next callback.
         let equal = unsafe { !(*town.state).name.is_empty() && (*town.state).name == bytes(name) };
         if equal {
             return false;
         }
-        town = observed!((s.next)(u32::from(town.id.0).wrapping_add(1)));
     }
     true
 }
@@ -166,8 +164,7 @@ pub(super) unsafe fn verify_town_name(
         }
         return true;
     }
-    let mut town = observed!((s.next)(u32::from(crate::town_type::TownID::BEGIN.0)));
-    while !town.shell.is_null() {
+    for town in super::iterate_refs(|from| observed!((s.next)(from))) {
         // We cannot just compare the numbers: several numbers may map to one name.
         // SAFETY: Short canonical name observation before resolver reentry.
         let custom = unsafe { openttd_rust_town_name(town.state) };
@@ -183,7 +180,6 @@ pub(super) unsafe fn verify_town_name(
             w::hit(w::TOWN_NAME_DUPLICATE);
             return false;
         }
-        town = observed!((s.next)(u32::from(town.id.0).wrapping_add(1)));
     }
     true
 }

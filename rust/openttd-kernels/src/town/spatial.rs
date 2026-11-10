@@ -20,15 +20,7 @@ fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -
 /// `RebuildTownKdtree`.
 pub(crate) fn rebuild_town_kdtree(s: &Services) {
     let map = s.map();
-    let mut id = (s.town_next_id)(u32::from(TownId::BEGIN.0));
-    let ids = std::iter::from_fn(|| {
-        if id == u32::MAX {
-            return None;
-        }
-        let town = TownId(id as u16);
-        id = (s.town_next_id)(id + 1);
-        Some(town)
-    });
+    let ids = super::iterate(|from| (s.town_next_id)(from));
     unsafe {
         (*TREE.get()).build(ids, &|id, dim| coordinate(s, map, id, dim), &|keys| {
             crate::kdtree::native_split(s, keys)
