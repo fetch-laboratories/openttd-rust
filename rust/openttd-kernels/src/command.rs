@@ -798,7 +798,13 @@ mod money_tests {
         command
     }
     /// `Do`'s steps: entry into test or execution, then reconciliation of that result.
-    fn run(command: &CommandServices, result: &mut Result, flags: u16, top: bool, test: bool) {
+    fn run(
+        command: &CommandServices,
+        result: &mut Result,
+        flags: crate::command_type::DoCommandFlags,
+        top: bool,
+        test: bool,
+    ) {
         let entry = openttd_rust_command_do_test(
             command,
             false,
@@ -809,11 +815,11 @@ mod money_tests {
         unsafe {
             if test {
                 assert_eq!(
-                    openttd_rust_command_do_tested(command, cost(result), flags, top),
+                    openttd_rust_command_do_tested(command, cost(result), flags.0, top),
                     0
                 );
             } else {
-                openttd_rust_command_do_executed(command, cost(result), flags, top);
+                openttd_rust_command_do_executed(command, cost(result), flags.0, top);
             }
         }
     }
@@ -829,10 +835,20 @@ mod money_tests {
                 money: 0,
                 expense: ExpensesType::EXPENSES_CONSTRUCTION,
             };
-            run(&command, &mut failed, 0, true, test);
+            run(
+                &command,
+                &mut failed,
+                crate::command_type::DoCommandFlags::EMPTY,
+                true,
+                test,
+            );
             assert!(!failed.ok);
-            for flags in [0, DoCommandFlag::BANKRUPT, DoCommandFlag::QUERY_COST] {
-                if !test && flags == DoCommandFlag::QUERY_COST {
+            for flags in [
+                crate::command_type::DoCommandFlags::EMPTY,
+                crate::command_type::DoCommandFlags(DoCommandFlag::BANKRUPT),
+                crate::command_type::DoCommandFlags(DoCommandFlag::QUERY_COST),
+            ] {
+                if !test && flags.0 == DoCommandFlag::QUERY_COST {
                     continue;
                 }
                 let mut result = Result {
@@ -840,8 +856,8 @@ mod money_tests {
                     money: 50,
                     expense: ExpensesType::EXPENSES_CONSTRUCTION,
                 };
-                run(&command, &mut result, flags, flags != 0, test);
-                assert!(result.ok, "flags {flags:#x} test {test}");
+                run(&command, &mut result, flags, flags.0 != 0, test);
+                assert!(result.ok, "flags {:#x} test {test}", flags.0);
             }
         }
     }
@@ -908,7 +924,7 @@ mod money_tests {
             expense: ExpensesType::EXPENSES_CONSTRUCTION,
         };
         // SAFETY: As above.
-        unsafe { openttd_rust_command_subtract_money(&command, &no_expense, cost(&mut zero)) };
+        unsafe { subtract_money(&command, &no_expense, cost(&mut zero)) };
         // Executed top-level commands subtract construction, revenue and running costs.
         for (amount, kind) in [
             (5, ExpensesType::EXPENSES_CONSTRUCTION),
@@ -920,7 +936,13 @@ mod money_tests {
                 money: amount,
                 expense: kind,
             };
-            run(&command, &mut result, 0, true, false);
+            run(
+                &command,
+                &mut result,
+                crate::command_type::DoCommandFlags::EMPTY,
+                true,
+                false,
+            );
         }
         assert_eq!(owner.money, 16);
         assert_eq!(
@@ -931,7 +953,7 @@ mod money_tests {
         // An invalid current company subtracts nothing.
         CURRENT.set(18);
         // SAFETY: As above.
-        unsafe { openttd_rust_command_subtract_money(&command, &no_expense, cost(&mut huge)) };
+        unsafe { subtract_money(&command, &no_expense, cost(&mut huge)) };
         assert_eq!(owner.money, 16);
         OWNER.set(std::ptr::null_mut());
     }
