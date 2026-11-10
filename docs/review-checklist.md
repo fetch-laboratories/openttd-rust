@@ -27,7 +27,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 ## Cleanup PRs
 
-- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or, where code differs, a source review showing each changed function performs the same operations in the same order, and exact-head Full.
+- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or, where code differs, a source review showing each changed function performs the same operations in the same order, and the merge queue's Full.
 
 ## Report
 

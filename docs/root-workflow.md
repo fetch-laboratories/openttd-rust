@@ -5,7 +5,7 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 
 ## Integration
 
-A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2026-11-10; #860). Nobody merges by hand, bypasses the queue or uses `--admin`. Open PRs whose heads predate the switch (2026-11-10 08:22 UTC) keep a pending `Full validation` status until their next push, which the queue-mode invalidator then marks as satisfied.
+A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2026-11-10; #860). Nobody merges by hand, bypasses the queue or uses `--admin`.
 
 - Each ownership port has one open PR at a time, targeting `rust-migration` directly.
 - Queue an owner's checkpoint only once it meets all of the following:
