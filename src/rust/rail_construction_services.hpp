@@ -124,13 +124,6 @@ static void *RailNewRear(void *front) noexcept
 	RustWriteVehicleSpriteSequence(u, SPR_IMG_QUERY);
 	return u;
 }
-static void RailLinkMultihead(void *front, void *rear) noexcept
-{
-	Train *v = static_cast<Train *>(front);
-	Train *u = static_cast<Train *>(rear);
-	v->SetOtherMultiheadedPart(u);
-	u->SetOtherMultiheadedPart(v);
-}
 static void RailHeadWindows(void *shell) noexcept
 {
 	const Vehicle *head = static_cast<Vehicle *>(shell);
@@ -164,7 +157,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.new_engine = RailNewEngine,
 		.engine_dates = RailEngineDates,
 		.new_rear = RailNewRear,
-		.link_multihead = RailLinkMultihead,
 		.invalidate_grf = RustOpaqueVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,
