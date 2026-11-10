@@ -1051,7 +1051,11 @@ impl Ctx<'_> {
             /* Make sure there is no more than one other station around us that is owned by us. */
             // `GetStationAround`.
             let mut ta = ta;
-            ta.expand(1, self.map(), (self.shared.map_max_y)() + 1);
+            ta.expand(
+                1,
+                self.map(),
+                crate::map_func::World::new(self.shared).size_y(),
+            );
             let company = CompanyID((self.shared.current_company)());
             let mut closest_station = existing_station;
             /* check around to see if there are any stations there owned by the company */
@@ -1563,7 +1567,7 @@ impl Ctx<'_> {
                 tile.0,
                 i32::from(w) - 1,
                 i32::from(h) - 1,
-                (self.shared.map_max_y)() + 1,
+                crate::map_func::World::new(self.shared).size_y(),
                 (self.world().environment.freeform_edges)(),
             ) != TileIndex::INVALID.0
     }
@@ -4365,13 +4369,13 @@ impl Ctx<'_> {
         spec: *const AirportSpec,
         layout: u8,
         tile: TileIndex,
-        (owner, index): (CompanyID, u16),
+        (owner, index): (CompanyID, StationID),
     ) {
         for iter in self.airport_tiles(spec, layout, tile) {
             (self.s.make_airport)(
                 iter.tile,
                 owner.0,
-                index,
+                index.0,
                 iter.gfx,
                 crate::water_map::WaterClass::Invalid.0,
             );
@@ -4545,11 +4549,11 @@ impl Ctx<'_> {
         (self.s.set_airport_details)(st, airport_type, layout, rotation.0);
         self.before_add_rect(ret, st, airport_area, StationRectMode::ADD_TRY);
         let owner = CompanyID((self.world().station_owner)(st));
-        let index = (self.links().graphs.station_id)(st);
+        let index = StationID((self.links().graphs.station_id)(st));
         self.make_airport_tiles(st, spec, layout, tile, (owner, index));
         // `UpdateAirplanesOnNewStation`.
         unsafe {
-            crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index);
+            crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index.0);
         }
         (self.s.airport_infrastructure)(owner.0, 1);
         self.after_station_tile_set_change(st, true, StationType::Airport);
@@ -4583,9 +4587,9 @@ impl Ctx<'_> {
         while let Some(v) = (self.shared.vehicle_next)(from) {
             let a = (self.s.aircraft_vehicle)(v);
             from = a.id + 1;
-            // `Aircraft::Iterate()` and `IsNormalAircraft`.
+            // `Aircraft::Iterate()`.
             if VehicleType(v.vehicle_type()) != VehicleType::VEH_AIRCRAFT
-                || v.subtype() > crate::aircraft::AIR_AIRCRAFT
+                || !crate::aircraft::is_normal_aircraft(v.subtype())
             {
                 continue;
             }
@@ -4819,7 +4823,7 @@ impl Ctx<'_> {
          * making sure that we remain inside the map. */
         let x2 = (x + u32::from(area.w) + 1).min(map.size_x());
         let x1 = x.saturating_sub(1);
-        let y2 = (y + u32::from(area.h) + 1).min((self.shared.map_max_y)() + 1);
+        let y2 = (y + u32::from(area.h) + 1).min(crate::map_func::World::new(self.shared).size_y());
         let y1 = y.saturating_sub(1);
         let ta = TileArea::between(map, map.tile_xy(x1, y1), map.tile_xy(x2 - 1, y2 - 1));
         for tile in ta.tiles(map) {
@@ -4965,9 +4969,7 @@ impl Ctx<'_> {
         }
         cost.add_money(ret.money());
         let tile_cur = self.tile_add_by_diag_dir(tile, direction);
-        if !(self.shared.has_water_ground)(tile_cur.0)
-            || Slope(world.tile_slope(tile_cur.0)) != Slope::SLOPE_FLAT
-        {
+        if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur.0) {
             return cost.error(self.s.strings.unsuitable);
         }
         self.default_bridge_above_ok(
@@ -4996,7 +4998,7 @@ impl Ctx<'_> {
         }
         let tile_cur = self.tile_add_by_diag_dir(tile_cur, direction);
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
-            || Slope(world.tile_slope(tile_cur.0)) != Slope::SLOPE_FLAT
+            || !world.tile_flat(tile_cur.0)
         {
             return cost.error(self.s.strings.unsuitable);
         }
