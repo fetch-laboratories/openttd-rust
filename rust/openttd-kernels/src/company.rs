@@ -2988,7 +2988,11 @@ mod control_tests {
         let select = |checks: u32| {
             ALLOCATION_CHECKS.set(0);
             let id = first_playable(&s).0;
-            assert_eq!(ALLOCATION_CHECKS.get(), checks, "allocation checks for {id}");
+            assert_eq!(
+                ALLOCATION_CHECKS.get(),
+                checks,
+                "allocation checks for {id}"
+            );
             id
         };
         set(3, Some(false));
