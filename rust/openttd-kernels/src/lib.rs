@@ -207,6 +207,7 @@ pub use vehicle_type::{
     DepotCommandFlag, DepotCommandFlags, VehicleRandomTrigger, VehicleRandomTriggers, VehicleType,
 };
 pub mod vehiclelist;
+pub mod vehiclelist_func;
 mod viewport_func;
 mod water;
 mod water_cmd;

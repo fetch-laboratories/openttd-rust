@@ -21,3 +21,16 @@ pub fn mirror_road_bits(bits: u8, check: impl Fn(bool) + Copy) -> u8 {
     }
     (bits & 3) << 2 | (bits >> 2) & 3
 }
+
+/// `AxisToRoadBits`: create the road-part which belongs to the given `Axis`.
+pub(crate) fn axis_to_road_bits(
+    a: crate::direction_type::Axis,
+    check: impl Fn(bool) + Copy,
+) -> crate::road_type::RoadBits {
+    check(crate::direction_func::is_valid_axis(a.0));
+    if a == crate::direction_type::Axis::AXIS_X {
+        crate::road_type::RoadBits::ROAD_X
+    } else {
+        crate::road_type::RoadBits::ROAD_Y
+    }
+}

@@ -2635,7 +2635,7 @@ impl Ctx<'_> {
         if end.0 == 0 {
             end = start;
         }
-        let map_size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
+        let map_size = self.shared.map_size();
         if start.0 >= map_size || end.0 >= map_size {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
@@ -3597,42 +3597,6 @@ impl Ctx<'_> {
             self.after_station_tile_set_change(st, true, station_type);
         }
     }
-    /// `FindVehiclesWithOrder` with `RemoveRoadStop`'s filters: make sure no
-    /// vehicle is going to the old roadstop. Narrow the search to any road
-    /// vehicles with an order to this station, then look for any currently
-    /// heading to the tile.
-    fn retarget_road_vehicles(&self, station_id: StationID, tile: TileIndex) {
-        for id in 0..(self.links().order_pool_size)() {
-            let orderlist = (self.links().order_list)(id as u16);
-            if orderlist.is_null() {
-                continue;
-            }
-            // A live order list has a first shared vehicle, as in the original helper.
-            let mut v = unsafe { (self.links().order_vehicle)(orderlist).unwrap_unchecked() };
-            if VehicleType(v.vehicle_type()) != VehicleType::VEH_ROAD {
-                continue;
-            }
-            for index in 0..(self.links().order_count)(orderlist) {
-                let order = (self.links().order_destination)(orderlist, index);
-                if order.kind != OrderType::OT_GOTO_STATION || order.destination != station_id.0 {
-                    continue;
-                }
-                loop {
-                    if OrderType((self.vehicle().order_type)(v)) == OrderType::OT_GOTO_STATION
-                        && v.dest_tile() == tile.0
-                    {
-                        let destination = (self.s.order_station_location)(v, station_id.0);
-                        (self.vehicle().set_dest_tile)(v, destination);
-                    }
-                    match (self.links().next_shared)(v) {
-                        Some(next) => v = next,
-                        None => break,
-                    }
-                }
-                break;
-            }
-        }
-    }
     /// `RemoveRoadStop`: remove a bus station/truck stop. A negative
     /// `replacement_spec_index` means the tile is not being replaced.
     fn remove_road_stop(
@@ -3743,8 +3707,24 @@ impl Ctx<'_> {
                 crate::ground::clear_square(tile.0, self.shared);
             }
             (self.s.delete_stop)(cur_stop);
+            /* Make sure no vehicle is going to the old roadstop. Narrow the search to any road vehicles with an order to
+             * this station, then look for any currently heading to the tile. */
             let station_id = StationID((self.links().graphs.station_id)(st));
-            self.retarget_road_vehicles(station_id, tile);
+            crate::vehiclelist_func::find_vehicles_with_order(
+                self.links(),
+                |v| VehicleType(v.vehicle_type()) == VehicleType::VEH_ROAD,
+                |order| {
+                    order.kind == OrderType::OT_GOTO_STATION && order.destination == station_id.0
+                },
+                |v| {
+                    if OrderType((self.vehicle().order_type)(v)) == OrderType::OT_GOTO_STATION
+                        && v.dest_tile() == tile.0
+                    {
+                        let destination = (self.s.order_station_location)(v, station_id.0);
+                        (self.vehicle().set_dest_tile)(v, destination);
+                    }
+                },
+            );
             self.after_remove_tile(st, tile);
             if replacement_spec_index < 0 {
                 self.after_station_tile_set_change(
@@ -3923,12 +3903,10 @@ impl Ctx<'_> {
                         road_type[i] = RoadType::INVALID_ROADTYPE;
                     }
                 }
-                // `AxisToRoadBits`.
-                road_bits = if world.get_drive_through_stop_axis(cur_tile) == Axis::AXIS_X {
-                    RoadBits::ROAD_X
-                } else {
-                    RoadBits::ROAD_Y
-                };
+                road_bits = crate::road_func::axis_to_road_bits(
+                    world.get_drive_through_stop_axis(cur_tile),
+                    |ok| crate::movement::native_assert(self.shared, ok),
+                );
             }
             if road_waypoint {
                 self.remove_road_waypoint_stop(ret, cur_tile, flags, -1);
@@ -4038,7 +4016,7 @@ impl Ctx<'_> {
         if end.0 == 0 {
             end = start;
         }
-        let map_size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
+        let map_size = self.shared.map_size();
         if start.0 >= map_size || end.0 >= map_size {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
