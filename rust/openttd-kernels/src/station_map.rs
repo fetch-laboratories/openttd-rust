@@ -189,8 +189,9 @@ pub(crate) fn is_hangar_tile_raw(tile: u32, s: &crate::newgrf_airport::Services)
 /// accessors.
 fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: TileIndex) -> Option<()> {
     m.available(tile.0)?;
-    if m.assertions() && (m.read(tile.0) != MP_STATION || !is_road_waypoint(m, tile)?) {
-        return None;
+    if m.assertions() {
+        let ok = m.read(tile.0) == MP_STATION && is_road_waypoint(m, tile)?;
+        m.check(ok)?;
     }
     Some(())
 }
