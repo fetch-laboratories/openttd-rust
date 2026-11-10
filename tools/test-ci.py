@@ -118,6 +118,25 @@ def good_needs() -> dict[str, dict[str, Any]]:
     return needs
 
 
+WORLD = {
+    "event_name",
+    "latest",
+    "commits",
+    "runs",
+    "progress",
+    "statuses",
+    "files",
+    "tick",
+}
+
+
+def split_world(options: Mapping[str, Any]) -> dict[str, Any]:
+    """Pass `options` to execute_script, moving its WORLD keys into `world`."""
+    rest = {key: value for key, value in options.items() if key not in WORLD}
+    world = {key: value for key, value in options.items() if key in WORLD}
+    return {**rest, "world": {**rest.get("world", {}), **world}}
+
+
 def execute_script(
     filename: str,
     name: str,
@@ -125,26 +144,29 @@ def execute_script(
     *,
     env: Mapping[str, str] | None = None,
     event: object = None,
-    latest: object = None,
     payload: Mapping[str, object] | None = None,
     previous: Iterable[object] = (),
     trees: object = None,
     compare: str | None = None,
-    event_name: str = "workflow_dispatch",
-    commits: Mapping[str, object] | None = None,
-    runs: str = "async () => ({data: {workflow_runs: []}})",
-    progress: Mapping[int, list[object]] | None = None,
-    statuses: Mapping[str, Iterable[object]] | None = None,
-    files: object = None,
-    tick: int = 0,
+    world: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run a status writer; `previous` holds the statuses of the PREVIOUS head.
 
-    `commits` answers getCommit by ref, `runs` is the workflow run listing,
-    `progress` the successive getWorkflowRun answers by run ID, `statuses` the
-    listed statuses of other refs and `files` the PR file list (None fails the
-    lookup). Each Date.now() call advances the clock by `tick` milliseconds.
+    `world` holds the rest of GitHub's answers, each optional (see WORLD):
+    `event_name`; `latest`, the combined Full validation status of other refs;
+    `commits`, getCommit by ref; `runs`, the workflow run listing; `progress`,
+    the successive getWorkflowRun answers by run ID; `statuses`, the listed
+    statuses of other refs; `files`, the PR file list (None fails the lookup);
+    and `tick`, the milliseconds each Date.now() call advances the clock.
     """
+    world = dict(world or {})
+    if unknown := set(world) - WORLD:
+        raise TypeError(f"Unknown world keys: {sorted(unknown)}")
+    event_name = world.get("event_name", "workflow_dispatch")
+    latest, commits = world.get("latest"), world.get("commits")
+    runs = world.get("runs", "async () => ({data: {workflow_runs: []}})")
+    progress, statuses = world.get("progress"), world.get("statuses")
+    files, tick = world.get("files"), world.get("tick", 0)
     script = script_for(filename, name)
     payload = {"pull_request": event, **(payload or {})}
     compare = compare or "async () => ({data: {behind_by: 0}})"
@@ -198,25 +220,29 @@ def execute_publisher(
     superseded: bool = False,
     queue: bool = False,
     latest: object = True,
-    creator: object = ACTIONS,
 ) -> dict[str, Any]:
-    """Publish with `latest` the newest Full validation status on the target,
-    which the plan marked pending unless it is superseded or None."""
+    """Publish with `latest` the newest Full validation status on the target:
+    by default the plan's pending status, or a newer request's if superseded."""
     if latest is True:
-        latest = {
-            "context": ci.CONTEXT,
-            "target_url": RUN.replace("123", "999") if superseded else RUN,
-            "creator": creator,
-        }
+        latest = pending(RUN.replace("123", "999") if superseded else RUN)
     target = MERGE if queue else HEAD
     return execute_script(
         "ci-request.yml",
         "publish",
         pull,
         env={"RESULTS": json.dumps(needs)},
-        statuses={target: [latest] if latest else []},
-        **cast(dict[str, Any], QUEUE if queue else {}),
+        **split_world(
+            {
+                "statuses": {target: [latest] if latest else []},
+                **(QUEUE if queue else {}),
+            }
+        ),
     )
+
+
+def pending(url: str = RUN, creator: object = ACTIONS) -> dict[str, object]:
+    """A Full validation status a request's plan wrote."""
+    return {"context": ci.CONTEXT, "target_url": url, "creator": creator}
 
 
 def execute_invalidator(
@@ -227,8 +253,7 @@ def execute_invalidator(
         "invalidate",
         pull,
         event=event,
-        latest=latest,
-        **cast(dict[str, Any], carry),
+        **split_world({"latest": latest, **carry}),
     )["statuses"]
 
 
@@ -250,38 +275,42 @@ QUEUE: dict[str, Any] = {
 GROUP = {"parents": [{"sha": PARENT}, {"sha": HEAD}], "commit": {"tree": {"sha": TREE}}}
 
 
+PUSHED = "head"  # The commit a protected push moved the base to.
+ON_DEMAND = {"CI_ON_DEMAND": "true"}
+QUEUE_MODE = {**ON_DEMAND, "CI_MERGE_QUEUE": "true"}
+
+
 def run_policy(
     *,
     event: str = "push",
-    on_demand: str = "true",
+    variables: Mapping[str, str] = ON_DEMAND,
     files: object = (),
     trees: object = None,
     pulls: Iterable[object] = (),
-    statuses: Iterable[object] = (),
-    pushed: Iterable[object] = (),
+    statuses: Mapping[str, Iterable[object]] | None = None,
     compare: str | None = None,
-    queue: bool = False,
 ) -> dict[str, Any]:
     """Run the actual policy script; `trees` maps the base and pushed tree SHAs.
 
-    `statuses` are the merged PR head's and `pushed` the pushed commit's own;
-    `queue` sets CI_MERGE_QUEUE.
+    `variables` are the repository variables; `statuses` maps HEAD, the merged
+    PR's head, and PUSHED, the pushed commit, to their statuses.
     """
+    listed = {HEAD: [], PUSHED: []}
+    listed |= {ref: list(rows) for ref, rows in (statuses or {}).items()}
     script = script_for("ci-policy.yml", "policy")
     compare = compare or f"async () => ({{data: {{files: {json.dumps(files)}}}}})"
     return cast(
         dict[str, Any],
         node(f"""
-process.env.CI_ON_DEMAND = {json.dumps(on_demand)};
-process.env.CI_MERGE_QUEUE = {json.dumps("true" if queue else "")};
+Object.assign(process.env, {{CI_ON_DEMAND: '', CI_MERGE_QUEUE: ''}}, {json.dumps(dict(variables))});
 const outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
 let calls = 0;
 const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
 const context = {{eventName: {json.dumps(event)}, repo: {{owner: 'example', repo: 'fork'}},
-  serverUrl: 'https://github.com', sha: 'head',
+  serverUrl: 'https://github.com', sha: {json.dumps(PUSHED)},
   payload: {{before: 'base', pull_request: {{base: {{ref: 'rust-migration'}}}}}}}};
 const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}, warning: () => {{}}}};
-const listed = {{head: {json.dumps(list(pushed))}, {json.dumps(HEAD)}: {json.dumps(list(statuses))}}};
+const listed = {json.dumps(listed)};
 const github = {{paginate: async (method, args) =>
   method === github.rest.repos.listPullRequestsAssociatedWithCommit ? {json.dumps(list(pulls))} : listed[args.ref],
   rest: {{
@@ -599,7 +628,9 @@ class GateTests(unittest.TestCase):
         for creator in (None, {}, {"login": "writer", "type": "User"}):
             # A writer's status naming this run does not make the request this run's.
             with self.subTest(creator=creator):
-                result = execute_publisher(good_needs(), PULL, creator=creator)
+                result = execute_publisher(
+                    good_needs(), PULL, latest=pending(creator=creator)
+                )
                 self.assertEqual(result["statuses"], [])
                 self.assertTrue(result["failures"])
         for name in good_needs():
@@ -852,12 +883,21 @@ def plan_queue(
         "plan",
         options.pop("pull", PULL),
         env={"PR": "", "HEAD": "", "PROFILE": str(options.pop("profile", "full"))},
-        commits={MERGE: GROUP, EARLIER: earlier, **(commits or {})},
-        statuses=statuses
-        if statuses is not None
-        else {EARLIER: validation(run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=BASE)},
         trees=trees if trees is not None else {TREE: tree(CODE), BASE: INVENTORY},
-        **cast(dict[str, Any], {**QUEUE, **options}),
+        **split_world(
+            {
+                "commits": {MERGE: GROUP, EARLIER: earlier, **(commits or {})},
+                "statuses": statuses
+                if statuses is not None
+                else {
+                    EARLIER: validation(
+                        run=EARLIER_RUN, marker_run=EARLIER_RUN, tree=BASE
+                    )
+                },
+                **QUEUE,
+                **options,
+            }
+        ),
     )
 
 
@@ -1137,8 +1177,10 @@ class MergeQueueTests(unittest.TestCase):
             "plan",
             PULL,
             env={"PR": "170", "HEAD": HEAD, "PROFILE": "full"},
-            commits={MERGE: GROUP},
-            runs=f"async () => ({{data: {{workflow_runs: {json.dumps([earlier_run()])}}}}})",
+            world={
+                "commits": {MERGE: GROUP},
+                "runs": f"async () => ({{data: {{workflow_runs: {json.dumps([earlier_run()])}}}}})",
+            },
         )
         self.assertEqual(requested["outputs"]["carried"], "")
 
@@ -1221,7 +1263,7 @@ class MergeQueueTests(unittest.TestCase):
         for creator in (None, {}, {"login": "writer", "type": "User"}):
             with self.subTest(creator=creator):
                 forged = execute_publisher(
-                    good_needs(), PULL, queue=True, creator=creator
+                    good_needs(), PULL, queue=True, latest=pending(creator=creator)
                 )
                 self.assertEqual(forged["statuses"], [])
                 self.assertTrue(forged["failures"])
@@ -1339,8 +1381,7 @@ class MergeQueueTests(unittest.TestCase):
                     "plan",
                     dict(PULL, number=170),
                     env={**env, "CI_MERGE_QUEUE": mode},
-                    files=files,
-                    **cast(dict[str, Any], options),
+                    world={"files": files, **options},
                 )
                 if refused:
                     self.assertTrue(result.get("error"))
@@ -1845,7 +1886,10 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(on_demand=on_demand, event=event, files=count):
                 trees = {BASE: readme, TREE: readme}
                 result = run_policy(
-                    event=event, on_demand=on_demand, files=files, trees=trees
+                    event=event,
+                    variables={"CI_ON_DEMAND": on_demand},
+                    files=files,
+                    trees=trees,
                 )
                 self.assertEqual(result["outputs"]["heavy"], expected)
 
@@ -1896,15 +1940,20 @@ class PolicyTests(unittest.TestCase):
             pull = dict(PULL, merged_at="date" if merged else None)
             files = [{"filename": "src/code.cpp"}]
             with self.subTest(full=full, marker=marker, run=run, merged=merged):
-                for queue in (False, True):
+                for variables in (ON_DEMAND, QUEUE_MODE):
                     result = run_policy(
-                        files=files, pulls=[pull], statuses=statuses, queue=queue
+                        variables=variables,
+                        files=files,
+                        pulls=[pull],
+                        statuses={HEAD: statuses},
                     )
                     self.assertEqual(result["outputs"]["heavy"], expected)
                 # A merge-queue merge pushes the tested group commit itself, which
                 # needs no merged PR.
                 if merged:
-                    result = run_policy(files=files, pushed=statuses, queue=True)
+                    result = run_policy(
+                        variables=QUEUE_MODE, files=files, statuses={PUSHED: statuses}
+                    )
                     self.assertEqual(result["outputs"]["heavy"], expected)
 
     def test_queue_mode_coverage_trusts_only_the_publishers_statuses(self) -> None:
@@ -1917,24 +1966,32 @@ class PolicyTests(unittest.TestCase):
                 forged[index]["creator"] = creator
                 with self.subTest(index=index, creator=creator):
                     for result in (
-                        run_policy(files=files, pushed=forged, queue=True),
                         run_policy(
-                            files=files, pulls=merged, statuses=forged, queue=True
+                            variables=QUEUE_MODE,
+                            files=files,
+                            statuses={PUSHED: forged},
+                        ),
+                        run_policy(
+                            variables=QUEUE_MODE,
+                            files=files,
+                            pulls=merged,
+                            statuses={HEAD: forged},
                         ),
                     ):
                         self.assertEqual(result["outputs"]["heavy"], "true")
                     # A newer untrusted status hides an older trusted one.
                     result = run_policy(
-                        files=files, pushed=[forged[index], *trusted], queue=True
+                        variables=QUEUE_MODE,
+                        files=files,
+                        statuses={PUSHED: [forged[index], *trusted]},
                     )
                     self.assertEqual(result["outputs"]["heavy"], "true")
         # An untested pushed commit still finds the merged PR head's result.
         result = run_policy(
+            variables=QUEUE_MODE,
             files=files,
-            pushed=validation("failure"),
             pulls=merged,
-            statuses=trusted,
-            queue=True,
+            statuses={PUSHED: validation("failure"), HEAD: trusted},
         )
         self.assertEqual(result["outputs"], {"heavy": "false", "covered": "true"})
 
@@ -1942,11 +1999,11 @@ class PolicyTests(unittest.TestCase):
         files = [{"filename": "src/code.cpp"}]
         merged = [dict(PULL, merged_at="date")]
         # The pushed commit's own statuses count only in merge-queue mode.
-        result = run_policy(files=files, pushed=validation())
+        result = run_policy(files=files, statuses={PUSHED: validation()})
         self.assertEqual(result["outputs"], {"heavy": "true"})
         # Merged PR heads keep the combined-status rule, which sees no creator.
         forged = [dict(status, creator=None) for status in validation()]
-        result = run_policy(files=files, pulls=merged, statuses=forged)
+        result = run_policy(files=files, pulls=merged, statuses={HEAD: forged})
         self.assertEqual(result["outputs"], {"heavy": "false", "covered": "true"})
 
     def test_markdown_tree_differences_require_complete_inventories(self) -> None:
@@ -1960,7 +2017,7 @@ class PolicyTests(unittest.TestCase):
                         files=[{"filename": "src/game.cpp"}],
                         trees={BASE: left, TREE: right},
                         pulls=[dict(PULL, merged_at="date")],
-                        statuses=validation(tree=BASE),
+                        statuses={HEAD: validation(tree=BASE)},
                     )["outputs"]
                     covered = "true" if expected == "false" else None
                     self.assertEqual(outputs["heavy"], expected)
