@@ -92,6 +92,7 @@ impl Default for CargoFields {
 }
 #[repr(C)]
 pub struct Fields {
+    /// Bitmask of always accepted cargo types (by houses, HQs, industry tiles when industry doesn't accept cargo)
     pub always_accepted: u64,
     pub delete_ctr: u8,
     pub time_since_load: u8,
@@ -315,8 +316,6 @@ pub(crate) unsafe fn loading_vehicles_value(entry: *const QueueEntry) -> *mut Op
 /// SAFETY: `entry` is a live node of this owner.
 unsafe fn loading_vehicles_erase(state: *mut Service, entry: *mut QueueEntry) -> *mut QueueEntry {
     let successor = unsafe { (&raw const (*entry).next).read() };
-    // Original erase requires a live iterator from this owner; no new rejection
-    // or fatal path is introduced for an input outside that precondition.
     let index = unsafe {
         (*state)
             .queue
@@ -717,10 +716,8 @@ fn byte_inc_sat(p: *mut u8) {
     }
 }
 /// `UpdateStationRating`: periodic update of a station's rating.
-// Preserve the complete source rating loop and its immediate mutation order.
 #[allow(clippy::too_many_lines)]
 unsafe fn update_station_rating(st: *mut BaseStation, w: &World) {
-    // The original declares these at their use below.
     const WAITING_CARGO_THRESHOLD: u32 = 1 << 12;
     const WAITING_CARGO_CUT_FACTOR: u32 = 1 << 6;
     const MAX_WAITING_CARGO: u32 = 1 << 15;
@@ -1251,7 +1248,6 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
 /// a valid link they may use to travel on. Reroute any cargo not having a valid link and
 /// remove timed out links found like this from the linkgraph. We're not all links here as
 /// that is expensive and useless. A link no one is using doesn't hurt either.
-// Keep the source edge/vehicle iteration and its immediate mutation order together.
 #[allow(clippy::too_many_lines)]
 unsafe fn delete_stale_links(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
     let map = crate::map_func::World::new(unsafe { &*w.shared });
