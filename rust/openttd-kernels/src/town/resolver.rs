@@ -5,6 +5,7 @@ use crate::cargo_type::{CargoLabel, CargoType, is_valid_cargo_type};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
+use crate::math::{clamp_to_u8, clamp_to_u16};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, TileIndex, TileType};
@@ -201,10 +202,10 @@ unsafe fn get_num_houses(owner: *const State, house_id: HouseID, class_id: House
             c.classes[usize::from(class_id)],
         )
     };
-    map_class_count.min(u32::from(u8::MAX)) << 24
-        | u32::from(town_class_count.min(u16::from(u8::MAX))) << 16
-        | map_id_count.min(u32::from(u8::MAX)) << 8
-        | u32::from(town_id_count.min(u16::from(u8::MAX)))
+    u32::from(clamp_to_u8(i64::from(map_class_count))) << 24
+        | u32::from(clamp_to_u8(i64::from(town_class_count))) << 16
+        | u32::from(clamp_to_u8(i64::from(map_id_count))) << 8
+        | u32::from(clamp_to_u8(i64::from(town_id_count)))
 }
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
 unsafe fn town_history_helper(
@@ -214,12 +215,11 @@ unsafe fn town_history_helper(
     transported: bool,
 ) -> u32 {
     unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
-        (if transported {
+        u32::from(clamp_to_u16(i64::from(if transported {
             h.transported
         } else {
             h.production
-        })
-        .min(u32::from(u16::MAX))
+        })))
     })
 }
 #[unsafe(no_mangle)]
@@ -292,7 +292,8 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0x80 => state.simulation.xy,
             0x81 => gb(state.simulation.xy, 8, 8),
             0x82 | 0x83 => {
-                state.simulation.population.min(u32::from(u16::MAX)) >> (8 * (variable & 1))
+                u32::from(clamp_to_u16(i64::from(state.simulation.population)))
+                    >> (8 * (variable & 1))
             }
             0x8A => u32::from(state.growth.counter / TOWN_GROWTH_TICKS),
             // In original game, 0x92 and 0x93 are one word.
@@ -300,9 +301,10 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0x93 => 0,
             // Squared zone radii from `HouseZone::TownEdge` to `HouseZone::TownCentre`.
             0x94..=0x9D => {
-                state.simulation.radius[usize::from(HouseZone::TownEdge.0 + (variable - 0x94) / 2)]
-                    .min(u32::from(u16::MAX))
-                    >> (8 * (variable & 1))
+                u32::from(clamp_to_u16(i64::from(
+                    state.simulation.radius
+                        [usize::from(HouseZone::TownEdge.0 + (variable - 0x94) / 2)],
+                ))) >> (8 * (variable & 1))
             }
             0x9E..=0xAD => {
                 let rating = state.simulation.ratings[usize::from((variable - 0x9E) / 2)];
@@ -314,7 +316,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             }
             0xAE => u32::from(state.simulation.have_ratings),
             0xB2 => u32::from(state.simulation.statues),
-            0xB6 => state.simulation.num_houses.min(u32::from(u16::MAX)),
+            0xB6 => u32::from(clamp_to_u16(i64::from(state.simulation.num_houses))),
             0xB9 => u32::from(state.growth.rate / TOWN_GROWTH_TICKS),
             0xCC..=0xD3 => {
                 let index = variable - 0xCC;
@@ -630,7 +632,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 u32::from(nearby_house_id)
             } else {
                 // Spec only allows 8 bits, so all local-ids above 254 are clamped.
-                same_file << 8 | u32::from(hs.local.min(u16::from(u8::MAX)))
+                same_file << 8 | u32::from(clamp_to_u8(i64::from(hs.local)))
             };
             houseclass << 16 | local_houseid
         }
@@ -669,12 +671,12 @@ unsafe fn acceptance_history(
     parameter: u32,
     map: Map,
 ) -> u32 {
-    let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+    let cargo = crate::cargo_registry::get_cargo_translation(
         parameter as u8,
         (s.shared().resolver_grf_file)(ro),
         false,
     );
-    if !is_valid_cargo_type(cargo) {
+    if !is_valid_cargo_type(cargo.0) {
         return 0;
     }
     // Extract tile offset. ResolverObject::GetRegister uses this process-wide canonical
@@ -697,10 +699,7 @@ unsafe fn acceptance_history(
     // SAFETY: The call-local finder's set; each visit reads canonical status only.
     unsafe {
         crate::station::for_each_station(list, |near| {
-            let ge = crate::station_service::goods(
-                (c.c.owner)(near.station),
-                crate::cargo_type::CargoType(cargo),
-            );
+            let ge = crate::station_service::goods((c.c.owner)(near.station), cargo);
             // Read only canonical status, then use the shared pure conversion.
             result |= u32::from(crate::station_base::goods_entry::convert_state(
                 crate::station_base::goods_entry::States((*ge).status),
@@ -708,7 +707,7 @@ unsafe fn acceptance_history(
         });
     }
     // Cargo triggered CB 148?
-    if scope.watched & (1_u64 << cargo) != 0 {
+    if scope.watched & (1_u64 << cargo.0) != 0 {
         crate::bitmath_func::set_bit(&mut result, 4);
     }
     result
