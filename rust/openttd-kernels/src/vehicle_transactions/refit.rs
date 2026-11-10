@@ -18,14 +18,14 @@ use std::ptr;
 pub struct Capacity {
     pub total: u32,
     pub mail: u16,
-    pub cargo: [u32; 64],
+    pub cargo: crate::cargo_type::CargoArray,
 }
 impl Default for Capacity {
     fn default() -> Self {
         Self {
             total: 0,
             mail: 0,
-            cargo: [0; 64],
+            cargo: [0; crate::cargo_type::NUM_CARGO as usize],
         }
     }
 }
@@ -79,16 +79,16 @@ impl Services {
         std::process::abort()
     }
     /// `_settings_game.vehicle.roadveh_acceleration_model`, from the settings catalog.
-    pub(crate) fn road_acceleration_model(&self) -> u8 {
+    pub(crate) fn road_acceleration_model(&self) -> crate::vehicle_type::AccelerationModel {
         // SAFETY: The catalog addresses the process-wide setting; one field-sized load.
-        unsafe {
+        crate::vehicle_type::AccelerationModel(unsafe {
             self.common
                 .base
                 .shared
                 .settings()
                 .roadveh_acceleration_model
                 .read()
-        }
+        })
     }
     /// `v->GetEngine()`.
     pub(crate) fn vehicle_engine(&self, v: *mut OpenTTDVehicle) -> *const OpenTTDEngine {
@@ -103,10 +103,15 @@ impl Services {
     }
 }
 #[derive(Clone, Copy)]
+/// `RefitResult`: helper structure for `RefitVehicle()`.
 struct Result {
+    /// Vehicle to refit
     vehicle: *mut (),
+    /// New capacity of vehicle
     capacity: u32,
+    /// New mail capacity of aircraft
     mail: u32,
+    /// cargo subtype to refit to
     subtype: u8,
 }
 #[derive(Default)]
@@ -251,6 +256,25 @@ unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {
         }
     }
 }
+/// `RefitVehicle`'s arguments.
+#[derive(Clone, Copy)]
+struct RefitVehicleArgs {
+    /// The vehicle to refit.
+    v: *mut (),
+    /// Whether to only refit this vehicle, or to check the rest of them.
+    only_this: bool,
+    /// Number of vehicles to refit (not counting articulated parts). Zero means the whole chain.
+    num_vehicles: u8,
+    /// Cargotype to refit to.
+    new_cargo_type: CargoType,
+    /// Cargo subtype to refit to. 0xFF means to try keeping the same subtype
+    /// according to `GetBestFittingSubType()`.
+    new_subtype: u8,
+    /// Command flags.
+    flags: DoCommandFlags,
+    /// Refitting is done as automatic refitting outside a depot.
+    auto_refit: bool,
+}
 /// `RefitVehicle`: refits a vehicle (chain). This is the vehicle-type
 /// independent part of the `CmdRefitXXX` functions. `num_vehicles` zero means
 /// the whole chain; `new_subtype` 0xFF means to try keeping the same subtype
@@ -260,14 +284,17 @@ unsafe fn refit_vehicle(
     s: &Services,
     cost: *mut CommandCost,
     temp: *mut CommandCost,
-    mut v: *mut (),
-    only_this: bool,
-    num_vehicles: u8,
-    new_cargo_type: CargoType,
-    new_subtype: u8,
-    flags: DoCommandFlags,
-    auto_refit: bool,
+    args: RefitVehicleArgs,
 ) -> Capacity {
+    let RefitVehicleArgs {
+        mut v,
+        only_this,
+        num_vehicles,
+        new_cargo_type,
+        new_subtype,
+        flags,
+        auto_refit,
+    } = args;
     let (only, count, cargo, subtype, automatic) = (
         only_this,
         num_vehicles,
@@ -672,13 +699,15 @@ pub(crate) unsafe fn cmd_refit_vehicle(
             s,
             cost,
             temp,
-            v,
-            only_this,
-            num_vehicles,
-            new_cargo_type,
-            new_subtype,
-            flags,
-            auto_refit,
+            RefitVehicleArgs {
+                v,
+                only_this,
+                num_vehicles,
+                new_cargo_type,
+                new_subtype,
+                flags,
+                auto_refit,
+            },
         )
     };
     if flags.test(DoCommandFlag::Execute) {
@@ -705,7 +734,9 @@ pub(crate) unsafe fn cmd_refit_vehicle(
                         s.road,
                     );
                 }
-                if s.road_acceleration_model() != 0 {
+                if s.road_acceleration_model()
+                    != crate::vehicle_type::AccelerationModel::AM_ORIGINAL
+                {
                     crate::ground_vehicle::cargo_changed(
                         s.road_ground.physics,
                         unsafe { vehicle_ref(front, s.common.vehicles) }.first(),
