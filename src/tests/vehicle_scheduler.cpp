@@ -182,7 +182,6 @@ TEST_CASE("Base vehicle scheduler - Tick timing scope returns before post-Tick r
 	auto group = FleetGroupServices();
 	const auto unused = [](auto...) noexcept { FAIL_CHECK("Unexpected pending fleet operation"); };
 	OpenTTDFleetPendingServices pending{
-		.set_current = [](uint8_t) noexcept {},
 		.company = &GetRustCompanyIdentityServices(),
 		.subtract = unused,
 		.command = unused,
