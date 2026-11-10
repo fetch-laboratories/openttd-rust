@@ -12,7 +12,7 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 
 With file paths it prints those files' residue instead of the totals. The Rust
 and the candidate C++ come from the revision's archive, the original from the
-baseline commit in migration/baseline.json. Counts are estimates for stocktakes,
+baseline commit that the revision's own migration/baseline.json pins. Counts are estimates for stocktakes,
 not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
 measured them.
 """
@@ -51,7 +51,7 @@ except ImportError:
             "--with",
             "tree-sitter==0.25.2",
             "--with",
-            "tree-sitter-rust==0.24.2",
+            "tree-sitter-rust==0.24.0",
             "--with",
             "tree-sitter-cpp==0.23.4",
             "python3",
@@ -363,7 +363,7 @@ class Matcher:
 
 
 def comment_pairs(head: str) -> list[tuple[Function, Function]]:
-    baseline = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
+    baseline = baseline_commit(head)
     candidate = archive(head, RUST, "src")
     rust = [
         function
@@ -384,6 +384,14 @@ def comment_pairs(head: str) -> list[tuple[Function, Function]]:
         for function in functions(path, data, "cpp")
     ]
     return Matcher(rust, original, facades).pairs()
+
+
+def baseline_commit(revision: str) -> str:
+    """The original commit pinned by the revision's own baseline manifest."""
+    manifest = subprocess.check_output(
+        ["git", "show", f"{revision}:migration/baseline.json"], cwd=ROOT
+    )
+    return json.loads(manifest)["commit"]
 
 
 def cpp_source(path: str) -> bool:

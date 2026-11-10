@@ -2,8 +2,12 @@
 """Seed each pattern the code-standards inventory counts and check its count."""
 
 import importlib.util
+import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location(
     "inventory", Path(__file__).with_name("code-standards-inventory.py")
@@ -69,6 +73,24 @@ class CommentTests(unittest.TestCase):
         self.assertEqual(
             [(r.name, o.name) for r, o in pairs], [("build", "CmdBuildThing")]
         )
+
+
+class BaselineTests(unittest.TestCase):
+    def test_the_revision_manifest_pins_the_original_not_the_working_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "migration/baseline.json"
+            manifest.parent.mkdir()
+            manifest.write_text(json.dumps({"commit": "a" * 40}))
+            for command in (
+                ["init", "-q"],
+                ["add", "migration/baseline.json"],
+                ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"],
+            ):
+                subprocess.run(["git", *command], cwd=root, check=True)
+            manifest.write_text(json.dumps({"commit": "b" * 40}))  # Dirty, uncommitted.
+            with patch.object(INVENTORY, "ROOT", root):
+                self.assertEqual(INVENTORY.baseline_commit("HEAD"), "a" * 40)
 
 
 class SiteTests(unittest.TestCase):
