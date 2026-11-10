@@ -4,7 +4,6 @@
 #include "../../src/rust/session_ffi.h"
 #include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
-#include "../../src/rust/command_services_ffi.h"
 #include "../../src/rust/station_lifecycle_ffi.h"
 #include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
@@ -79,9 +78,7 @@ struct SessionFixture {
 		station_tiles.roadstop = &roadstops;
 		tiles.station = &station_tiles;
 		group.shared = &shared; shared.current_company = []() noexcept -> uint8_t { return 0; };
-		finance.set_current_company = [](uint8_t) noexcept {};
-		commands.finance = &finance;
-		transaction.commands = &commands;
+		finance.set_current_company = [](uint8_t) noexcept {}; commands.finance = &finance; transaction.commands = &commands;
 		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
 		scheduler.vehicle = &vehicles;
