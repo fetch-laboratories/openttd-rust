@@ -166,17 +166,6 @@ unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     owner.id_counts.resize(specs, 0);
     owner.class_counts.resize(classes, 0);
 }
-/// # Safety
-/// As `initialize_building_counts`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_counts_init(
-    l: &Leaves,
-    s: &Services,
-    owner: *mut State,
-    specs: usize,
-) {
-    unsafe { initialize_building_counts(l, s, owner, specs) }
-}
 /// Initialise global building counts and all town building counts
 /// (`InitializeBuildingCounts()`), or only `owner`'s counts when it is not null.
 pub(crate) unsafe fn initialize_building_counts(

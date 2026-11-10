@@ -72,7 +72,6 @@ ScopeResolver *openttd_rust_house_scope(ResolverObject *, ScopeResolver *, Scope
 ScopeResolver *openttd_rust_town_scope(ResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 void openttd_rust_house_classes_reset();
 uint16_t openttd_rust_house_class_allocate(uint8_t, uint32_t);
-void openttd_rust_house_counts_init(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, size_t);
 uint32_t openttd_rust_house_variable(const OpenTTDHouseResolverServices *, const OpenTTDHouseScope *, const ResolverObject *, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_house_random(const OpenTTDHouseResolverServices *, const OpenTTDHouseScope *, bool);
 uint32_t openttd_rust_town_variable(const OpenTTDHouseResolverServices *, const OpenTTDTownScope *, const ResolverObject *, uint8_t, uint32_t, bool *);

@@ -10,7 +10,6 @@ no production user | openttd_rust_economy_startup
 no production user | openttd_rust_generic_reset
 no production user | openttd_rust_house_class_allocate
 no production user | openttd_rust_house_classes_reset
-no production user | openttd_rust_house_counts_init
 no production user | openttd_rust_house_resolver_exchange
 no production user | openttd_rust_industry_location_check
 no production user | openttd_rust_industry_shape_check
