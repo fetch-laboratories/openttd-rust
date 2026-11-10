@@ -865,61 +865,25 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
     layout: u8,
 ) {
     let c = unsafe { Ctx::new(s) };
-    // `IsRoadStationBridgeAboveOk`.
-    let (tile, station_type, layout) = (TileIndex(tile), StationType(kind), StationGfx(layout));
-    if !crate::map_func::World::new(c.shared).bridge_above(tile.0) {
-        return c.c(out).zero();
-    }
-    let rampsouth = TileIndex((c.s.southern_bridge_end)(tile.0));
-    let bridgeable_info = if spec.is_null() {
-        (c.s.default_bridge_info)(station_type.0)
-    } else {
-        unsafe { (c.s.road_bridge_info)(spec) }
-    };
-    c.is_station_bridge_above_ok(StationBridgeCheck {
-        out: c.c(out),
-        tile,
-        bridgeable_info,
-        station_type,
-        layout,
-        bridge_height: c.bridge_height(rampsouth),
-        disallowed_msg: StringID(c.s.strings.demolish_bridge),
-    });
+    c.is_road_station_bridge_above_ok(
+        c.c(out),
+        TileIndex(tile),
+        spec,
+        StationType(kind),
+        StationGfx(layout),
+    );
 }
 
-/// Source uint8 tolerance-distance truncation and noise reduction.
+/// `GetAirportNoiseLevelForDistance`.
 /// # Safety
-/// The immutable native table and authority table are live.
+/// The immutable native table, authority table and airport spec are live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_airport_noise(
     s: *const CommandServicesTable,
-    noise: u8,
+    spec: *const AirportSpec,
     distance: u32,
 ) -> u8 {
-    // `GetAirportNoiseLevelForDistance`.
-    /* 0 cannot be accounted, and 1 is the lowest that can be reduced from town.
-     * So no need to go any further*/
-    if noise < 2 {
-        return noise;
-    }
-    let s = unsafe { &*s };
-    let authority = unsafe { &*s.authority };
-    /* The steps for measuring noise reduction are based on the "magical" (and arbitrary) 8 base distance
-     * adding the town_council_tolerance 4 times, as a way to graduate, depending of the tolerance.
-     * Basically, it says that the less tolerant a town is, the bigger the distance before
-     * an actual decrease can be granted */
-    let town_tolerance_distance =
-        8_u8.wrapping_add((authority.council_tolerance)().wrapping_mul(4));
-    /* now, we want to have the distance segmented using the distance judged bareable by town
-     * This will give us the coefficient of reduction the distance provides. */
-    let noise_reduction = distance / u32::from(town_tolerance_distance);
-    /* If the noise reduction equals the airport noise itself, don't give it for free.
-     * Otherwise, simply reduce the airport's level. */
-    if noise_reduction >= u32::from(noise) {
-        1
-    } else {
-        (u32::from(noise) - noise_reduction) as u8
-    }
+    unsafe { Ctx::new(s) }.get_airport_noise_level_for_distance(spec, distance)
 }
 
 /// Check bridge construction above the existing station's actual spec.
@@ -934,36 +898,7 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
 ) {
     crate::witness::hit(crate::witness::STATION_CMD_BUILD_ABOVE);
     let c = unsafe { Ctx::new(s) };
-    // `CheckBuildAbove_Station`.
-    let tile = TileIndex(tile);
-    let station_type = StationType((c.shared.station_type)(tile.0).0);
-    let mut bridgeable_info = (c.s.default_bridge_info)(station_type.0);
-    match station_type {
-        StationType::Rail | StationType::RailWaypoint => {
-            let spec = (c.s.rail_spec)(tile.0);
-            if !spec.is_null() {
-                bridgeable_info = unsafe { (c.s.rail_bridge_info)(spec) };
-            }
-        }
-        StationType::Bus | StationType::Truck | StationType::RoadWaypoint => {
-            let spec = unsafe {
-                crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile.0, c.s.roadstop_resolver)
-            };
-            if !spec.is_null() {
-                bridgeable_info = unsafe { (c.s.road_bridge_info)(spec) };
-            }
-        }
-        _ => (),
-    }
-    c.is_station_bridge_above_ok(StationBridgeCheck {
-        out: c.c(out),
-        tile,
-        bridgeable_info,
-        station_type,
-        layout: StationGfx((c.shared.station_gfx)(tile.0)),
-        bridge_height: height,
-        disallowed_msg: StringID::INVALID_STRING_ID,
-    });
+    c.check_build_above_station(c.c(out), TileIndex(tile), height);
 }
 
 impl Ctx<'_> {
@@ -2951,6 +2886,40 @@ impl Ctx<'_> {
             disallowed_msg: StringID(self.s.strings.demolish_bridge),
         });
     }
+    /// `CheckBuildAbove_Station`.
+    fn check_build_above_station(&self, out: Cost<'_>, tile: TileIndex, height: i32) {
+        let station_type = StationType((self.shared.station_type)(tile.0).0);
+        let mut bridgeable_info = (self.s.default_bridge_info)(station_type.0);
+        match station_type {
+            StationType::Rail | StationType::RailWaypoint => {
+                let spec = (self.s.rail_spec)(tile.0);
+                if !spec.is_null() {
+                    bridgeable_info = unsafe { (self.s.rail_bridge_info)(spec) };
+                }
+            }
+            StationType::Bus | StationType::Truck | StationType::RoadWaypoint => {
+                let spec = unsafe {
+                    crate::newgrf_roadstop::openttd_rust_roadstop_spec(
+                        tile.0,
+                        self.s.roadstop_resolver,
+                    )
+                };
+                if !spec.is_null() {
+                    bridgeable_info = unsafe { (self.s.road_bridge_info)(spec) };
+                }
+            }
+            _ => (),
+        }
+        self.is_station_bridge_above_ok(StationBridgeCheck {
+            out,
+            tile,
+            bridgeable_info,
+            station_type,
+            layout: StationGfx((self.shared.station_gfx)(tile.0)),
+            bridge_height: height,
+            disallowed_msg: StringID::INVALID_STRING_ID,
+        });
+    }
     /// `CheckFlatLandRoadStop`'s check of building a road+tram stop over an
     /// existing normal road tile.
     fn check_build_over_road(
@@ -4296,10 +4265,67 @@ impl Ctx<'_> {
             }),
         )
     }
-    /// `GetAirportNoiseLevelForDistance`.
+    /// `GetAirportNoiseLevelForDistance`: get a possible noise reduction factor
+    /// based on distance from town center. The further you get, the less noise
+    /// you generate.
     fn get_airport_noise_level_for_distance(&self, spec: *const AirportSpec, distance: u32) -> u8 {
-        unsafe {
-            openttd_rust_station_airport_noise(self.s, (self.s.airport_noise)(spec), distance)
+        let noise_level = (self.s.airport_noise)(spec);
+        /* 0 cannot be accounted, and 1 is the lowest that can be reduced from town.
+         * So no need to go any further*/
+        if noise_level < 2 {
+            return noise_level;
+        }
+        let authority = unsafe { &*self.s.authority };
+        /* The steps for measuring noise reduction are based on the "magical" (and arbitrary) 8 base distance
+         * adding the town_council_tolerance 4 times, as a way to graduate, depending of the tolerance.
+         * Basically, it says that the less tolerant a town is, the bigger the distance before
+         * an actual decrease can be granted */
+        let town_tolerance_distance =
+            8_u8.wrapping_add((authority.council_tolerance)().wrapping_mul(4));
+        /* now, we want to have the distance segmented using the distance judged bareable by town
+         * This will give us the coefficient of reduction the distance provides. */
+        let noise_reduction = distance / u32::from(town_tolerance_distance);
+        /* If the noise reduction equals the airport noise itself, don't give it for free.
+         * Otherwise, simply reduce the airport's level. */
+        if noise_reduction >= u32::from(noise_level) {
+            1
+        } else {
+            (u32::from(noise_level) - noise_reduction) as u8
+        }
+    }
+    /// `UpdateAirportsNoise`: recalculate the noise generated by the airports
+    /// of each town.
+    fn update_airports_noise(&self) {
+        let mut from = 0;
+        loop {
+            let id = (self.shared.town_next_id)(from);
+            if id == u32::MAX {
+                break;
+            }
+            from = id + 1;
+            let owner = (self.shared.town_owner_by_id)(id);
+            let fields = unsafe { crate::town::openttd_rust_town_simulation(owner) };
+            unsafe {
+                (&raw mut (*fields).noise_reached).write(0);
+            }
+        }
+        for id in 0..(self.world().pool_size)() {
+            let st = self.full_station(StationID(id as u16));
+            if st.is_null() {
+                continue;
+            }
+            if (self.s.airport_tile)(st) != TileIndex::INVALID.0
+                && (self.s.airport_type)(st) != AT_OILRIG
+            {
+                let (nearest, dist) = self.airport_get_nearest_town_of(st);
+                let spec =
+                    crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime });
+                let noise = self.get_airport_noise_level_for_distance(spec, dist);
+                let noise_reached = self.noise_reached(nearest);
+                unsafe {
+                    noise_reached.write(noise_reached.read().wrapping_add(u16::from(noise)));
+                }
+            }
         }
     }
     /// `t->noise_reached`, for immediate access only.
@@ -4689,35 +4715,7 @@ pub unsafe extern "C" fn openttd_rust_station_airport_nearest(
 /// Tables and serialized station/town pools remain live throughout this entry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const CommandServicesTable) {
-    let c = unsafe { Ctx::new(s) };
-    let mut from = 0;
-    loop {
-        let id = (c.shared.town_next_id)(from);
-        if id == u32::MAX {
-            break;
-        }
-        from = id + 1;
-        let owner = (c.shared.town_owner_by_id)(id);
-        let fields = unsafe { crate::town::openttd_rust_town_simulation(owner) };
-        unsafe {
-            (&raw mut (*fields).noise_reached).write(0);
-        }
-    }
-    for id in 0..(c.world().pool_size)() {
-        let st = c.full_station(StationID(id as u16));
-        if st.is_null() {
-            continue;
-        }
-        if (c.s.airport_tile)(st) != TileIndex::INVALID.0 && (c.s.airport_type)(st) != AT_OILRIG {
-            let (nearest, dist) = c.airport_get_nearest_town_of(st);
-            let spec = crate::newgrf_airport::station_spec(st, unsafe { &*c.s.airport_runtime });
-            let noise = c.get_airport_noise_level_for_distance(spec, dist);
-            let noise_reached = c.noise_reached(nearest);
-            unsafe {
-                noise_reached.write(noise_reached.read().wrapping_add(u16::from(noise)));
-            }
-        }
-    }
+    unsafe { Ctx::new(s) }.update_airports_noise();
 }
 /// # Safety
 /// Native tables and distinct result slots remain live for the serialized command.
