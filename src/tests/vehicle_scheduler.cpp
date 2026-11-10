@@ -121,9 +121,41 @@ TEST_CASE("Vehicle records - distinct native shells and inline scalar aliases")
 	CHECK(record->direction == DIR_NE);
 	delete v;
 }
-/* The native tick leaf's timing scope ends before Rust's post-Tick reads; the rest of this
- * case (growth, pool reads, the fresh type and deletion) is vehicle::scheduler::pool_tests
- * (#736 F). Retires with the native tick leaf. */
+/* The production pool service returns the native descriptor's slots, their length and the
+ * canonical first_unused address, which tracks the live extent; a later acquisition sees
+ * grown storage. Retires with the native vehicle pool descriptor. */
+TEST_CASE("Base vehicle scheduler - native pool cursor binding")
+{
+	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
+	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem(3));
+	new (VehicleID(0)) Vehicle(VEH_EFFECT);
+	new (VehicleID(2)) Vehicle(VEH_EFFECT);
+	const auto &services = GetRustVehicleSchedulerServices();
+	auto cursor = services.pool();
+	static_assert(std::is_same_v<decltype(cursor.slots), const RustPoolSlot *>);
+	static_assert(std::is_same_v<decltype(cursor.first_unused), const size_t *>);
+	CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
+	CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
+	CHECK(cursor.first_unused == &_vehicle_pool.descriptor->first_unused);
+	new (VehicleID(6)) Vehicle(VEH_EFFECT); // Raise the extent without indexing growth.
+	CHECK(*cursor.first_unused == 7);
+	const auto growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.size());
+	REQUIRE(Vehicle::CanAllocateItem());
+	new (VehicleID(growth)) Vehicle(VEH_EFFECT); // Growth reallocates the slots.
+	CHECK(*cursor.first_unused == growth + 1); // Stable canonical address.
+	cursor = services.pool();
+	CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
+	CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
+	CHECK(cursor.slots_len > growth);
+	_vehicle_pool.CleanPool();
+	cursor = services.pool(); // A fresh acquisition after reset sees an empty pool.
+	CHECK(cursor.slots_len == 0);
+	CHECK(*cursor.first_unused == 0);
+}
+
+/* The native tick leaf's timing scope ends before the scheduler's post-Tick reads. Retires
+ * with the native tick leaf. */
 static bool _scheduler_tick_scope_ended;
 struct SchedulerProbeVehicle final : Vehicle {
 	SchedulerProbeVehicle() : Vehicle(VEH_EFFECT) {}
@@ -178,9 +210,8 @@ TEST_CASE("Vehicle maintenance consumed native ABI")
 #include "abi-layout-maintenance.inc"
 }
 
-/* Each native maintenance read and store reaches the Vehicle field it names, once; the
- * saturation, rounding, cadence and wrap rules are vehicle::maintenance::scalar_tests
- * (#736 F). Retires with the native maintenance services. */
+/* Each native maintenance read and store reaches the Vehicle field it names. Retires with the
+ * native maintenance services. */
 TEST_CASE("Vehicle maintenance - native scalar reads and stores")
 {
 	REQUIRE(Vehicle::GetNumItems() == 0);
@@ -228,9 +259,8 @@ TEST_CASE("Vehicle maintenance - native scalar reads and stores")
 
 
 /* The native VehiclesOnTile iterator copies its cursor, and the ground check reads the real map
- * height; the index rules (ground comparison, links, stale removal, reset) are
- * vehicle::occupancy::index_tests (#736 F). Retires with the native iterator, the native
- * tile_links member and the native map height. */
+ * height. Retires with the native iterator, the native tile_links member and the native map
+ * height. */
 TEST_CASE("Vehicle occupancy - native tile links and copied cursors")
 {
 	Map::Allocate(64, 64);
