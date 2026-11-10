@@ -256,7 +256,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services.company_count = []() noexcept -> size_t { return std::count_if(fixture_companies.begin(), fixture_companies.end(), [](const auto &p) { return p != nullptr; }); };
 	fixture_services.company_bankrupt_news = FixtureNoop;
 	fixture_services.remove_engine_replacements = FixtureNoop;
-	fixture_services.map_size = []() noexcept -> uint32_t { return 0; };
+	static const uint32_t no_tiles = 0; static OpenTTDMapStatics empty_map = _rust_map_statics; empty_map.size = &no_tiles; fixture_shared.map = &empty_map;
 	fixture_services.delete_company = FixturePostDelete;
 	fixture_services.company_removed = [](uint8_t, uint8_t) noexcept {};
 	fixture_shared.screen_dirty = FixtureVoid;

@@ -69,8 +69,6 @@ struct OpenTTDAircraftLeaves {
 	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint16_t (OPENTTD_RUST_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
 	bool (OPENTTD_RUST_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
-	bool (OPENTTD_RUST_CALL *nearest_depot_order)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(nearest_depot_order);
-	bool (OPENTTD_RUST_CALL *part_of_orders)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(part_of_orders);
 	OpenTTDAircraftVehicle (OPENTTD_RUST_CALL *next_aircraft)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_aircraft);
 	void (OPENTTD_RUST_CALL *viewport)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (OPENTTD_RUST_CALL *rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image);

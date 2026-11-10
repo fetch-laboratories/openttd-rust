@@ -98,8 +98,6 @@ struct OpenTTDFleetTransactionServices {
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
-	uint8_t (*max_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_length);
-	void (*check)(bool condition) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	bool (*needs_renew)(void *shell, bool settings) noexcept OPENTTD_SERVICE_DEFAULT(needs_renew);
 	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
 	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
@@ -110,7 +108,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*order_refit)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_refit);
 	bool (*order_auto)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_auto);
 	uint8_t (*order_cargo)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_cargo);
-	bool (*local)() noexcept OPENTTD_SERVICE_DEFAULT(local);
 	void (*refit_news)(void *shell, int32_t order) noexcept OPENTTD_SERVICE_DEFAULT(refit_news);
 	uint8_t (*subtype)(void *old, void *replacement, uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
 	void (*reverse)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
@@ -130,7 +127,6 @@ struct OpenTTDFleetTransactionServices {
 };
 struct OpenTTDCompanyIdentityServices;
 struct OpenTTDFleetPendingServices {
-	void (*set_current)(uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(set_current);
 	const OpenTTDCompanyIdentityServices *company;
 	void (*subtract)(int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(subtract);
 	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);

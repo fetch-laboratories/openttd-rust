@@ -122,7 +122,7 @@ impl Services {
         let native = self.refit.common.transactions;
         if native.assertions {
             // SAFETY: the shared native assertion leaf retains no state.
-            unsafe { (native.check)(condition()) };
+            native.check(condition());
         }
     }
     pub(crate) fn vehicles(&self) -> &VehicleServices {
