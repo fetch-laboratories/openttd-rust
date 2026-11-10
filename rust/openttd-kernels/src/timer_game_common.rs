@@ -457,7 +457,7 @@ owner_callback!(
     crate::engine::Services,
     s,
     {
-        crate::engine::openttd_rust_engine_monthly(s);
+        crate::engine::calendar_engines_monthly_loop(s);
     }
 );
 owner_callback!(

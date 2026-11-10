@@ -34,7 +34,6 @@ struct OpenTTDEngineServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDRandomServices *rng;
 	const OpenTTDTypeAvailabilityServices *types;
-	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	uint16_t (*display_variant)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(display_variant);
 	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
@@ -54,9 +53,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
-	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
-	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
-	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	uint (*company_engine_count)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(company_engine_count);
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*toolbar_enable)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_enable);
@@ -67,7 +63,6 @@ struct OpenTTDEngineServices {
 	void (*available_event)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(available_event);
 	void (*available_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(available_news);
 	void (*no_engines)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_engines);
-	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 };
 const OpenTTDEngineServices &EngineServices() noexcept;
 extern "C" {

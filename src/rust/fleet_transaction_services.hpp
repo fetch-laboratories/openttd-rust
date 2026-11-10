@@ -44,7 +44,6 @@ static bool FleetTransaction_needs_renew(void *shell, bool settings) noexcept { 
 static bool FleetTransaction_engine_valid(uint16_t id) noexcept { return Engine::IsValidID(EngineID(id)); }
 static bool FleetTransaction_company_valid(uint8_t id) noexcept { return GetRustSharedServices().company_valid(id); }
 static bool FleetTransaction_engine_buildable(uint16_t id, uint8_t type, uint8_t company) noexcept { return IsEngineBuildable(EngineID(id), static_cast<VehicleType>(type), CompanyID(company)); }
-static void * FleetTransaction_orders(void *shell) noexcept { return static_cast<Vehicle *>(shell)->orders; }
 static size_t FleetTransaction_order_count(void *orders) noexcept { return static_cast<OrderList *>(orders)->GetOrders().size(); }
 static uint8_t FleetTransaction_order_count_id(void *orders) noexcept { return static_cast<OrderList *>(orders)->GetNumOrders(); }
 static void * FleetTransaction_order_at(void *orders, size_t index) noexcept { return &static_cast<OrderList *>(orders)->GetOrders()[index]; }
@@ -87,7 +86,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.engine_valid = FleetTransaction_engine_valid,
 	.company_valid = FleetTransaction_company_valid,
 	.engine_buildable = FleetTransaction_engine_buildable,
-	.orders = FleetTransaction_orders,
 	.order_count = FleetTransaction_order_count,
 	.order_count_id = FleetTransaction_order_count_id,
 	.order_at = FleetTransaction_order_at,

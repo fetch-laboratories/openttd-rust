@@ -177,7 +177,6 @@ pub struct Services {
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub display_max_speed: extern "C" fn(VehicleRef) -> i32,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
-    pub details_dirty: extern "C" fn(VehicleRef),
     pub base_crash: extern "C" fn(VehicleRef, bool) -> u32,
     pub depot_tile: extern "C" fn(u32, u8) -> bool,
 }
@@ -437,7 +436,8 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
             (*o.state).cache.cached_power = total_power;
             (*o.state).cache.cached_max_te = max_te;
         }
-        (s.details_dirty)(v);
+        // SAFETY: The canonical vehicle table names the immutable process-lifetime maintenance table.
+        (unsafe { &*s.vehicle.maintenance }.details_dirty)(v);
         (s.vehicle.start_stop_dirty)(v);
     }
     unsafe {
@@ -832,6 +832,6 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, weight_input, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, weight_input, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, base_crash, depot_tile, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
 }

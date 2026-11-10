@@ -304,3 +304,6 @@ impl EngineFlags {
 crate::base_bitset_type::impl_bitset_ops!(ExtraEngineFlags);
 crate::base_bitset_type::impl_bitset_ops!(EngineMiscFlags);
 crate::base_bitset_type::impl_bitset_ops!(EngineFlags);
+
+/// The maximum length of an engine name in characters including '\0'.
+pub const MAX_LENGTH_ENGINE_NAME_CHARS: u32 = 32;

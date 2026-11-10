@@ -376,8 +376,8 @@ pub(crate) unsafe fn position(state: *const State) -> TileIndex {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     TileIndex(unsafe { (*state).simulation.xy })
 }
-/// Raw adapter for callers outside workset 01 (`subsidy.rs`, `station_cmd.rs`,
-/// `station_lifecycle.rs`); delegates to `position`.
+/// Raw adapter for callers outside workset 01 (`subsidy.rs`); delegates to
+/// `position`.
 /// SAFETY: As `position`.
 pub(crate) unsafe fn position_raw(state: *const State) -> u32 {
     unsafe { position(state) }.0
