@@ -1388,7 +1388,7 @@ fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: VarTyp
     if length == 0 {
         return Ok(());
     }
-    let settings = validation_settings(conv).0;
+    let settings = validation_settings(conv);
     let mut consumed = 0;
     let mut written = 0;
     while consumed < length {
@@ -1446,10 +1446,12 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: VarTyp
             if conv & VarType::from(VarTypes::SLF_ALLOW_CONTROL) != 0 {
                 if version_before(SaveLoadVersion::SLV_ENCODED_STRING_FORMAT) {
                     let fix_code = version_before(SaveLoadVersion::SLV_169);
-                    fix_encoded(services, ptr, |src| crate::encoded::legacy(src, fix_code))?;
+                    fix_encoded(services, ptr, |src| {
+                        crate::encoded::fix_scc_encoded(src, fix_code)
+                    })?;
                 }
                 if version_before(SaveLoadVersion::SLV_FIX_SCC_ENCODED_NEGATIVE) {
-                    fix_encoded(services, ptr, crate::encoded::negatives)?;
+                    fix_encoded(services, ptr, crate::encoded::fix_scc_encoded_negative)?;
                 }
             }
             make_valid(services, ptr, conv)?;
@@ -2172,7 +2174,7 @@ mod tests {
         );
         assert_eq!(
             fix_encoded(&services, std::ptr::null_mut(), |src| {
-                crate::encoded::legacy(src, false)
+                crate::encoded::fix_scc_encoded(src, false)
             }),
             Err(SL_STATUS_NATIVE)
         );

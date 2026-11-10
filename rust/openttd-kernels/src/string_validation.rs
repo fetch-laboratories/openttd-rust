@@ -7,6 +7,11 @@
 
 //! Historical sanitation decisions and borrowed in-place write progression.
 
+use crate::control_codes::{
+    SCC_ENCODED, SCC_ENCODED_INTERNAL, SCC_ENCODED_NUMERIC, SCC_ENCODED_STRING,
+    SCC_RECORD_SEPARATOR, SCC_SPRITE_END, SCC_SPRITE_START,
+};
+use crate::string_type::{StringValidationSetting, StringValidationSettings};
 use crate::utf8;
 
 /// One scan decision. C++ commits consumption before any output/allocation.
@@ -25,13 +30,22 @@ pub struct Write {
 }
 
 fn sprite(codepoint: u32) -> bool {
-    (0xe200..=0xe2ff).contains(&codepoint)
+    (SCC_SPRITE_START..=SCC_SPRITE_END).contains(&codepoint)
 }
-fn encoded_control(codepoint: u32) -> bool {
-    codepoint == 0x1e || (0xe000..=0xe003).contains(&codepoint)
+/// `IsSccEncodedCode`: whether this is an encoded string control code.
+fn is_scc_encoded_code(codepoint: u32) -> bool {
+    matches!(
+        codepoint,
+        SCC_RECORD_SEPARATOR
+            | SCC_ENCODED
+            | SCC_ENCODED_INTERNAL
+            | SCC_ENCODED_NUMERIC
+            | SCC_ENCODED_STRING
+    )
 }
 
-pub fn step(bytes: &[u8], settings: u8) -> Step {
+/// One `StrMakeValid` decision; the caller commits consumption before output.
+pub fn step(bytes: &[u8], settings: StringValidationSettings) -> Step {
     let decoded = utf8::decode(bytes);
     let mut result = Step {
         consumed: decoded.length,
@@ -41,32 +55,40 @@ pub fn step(bytes: &[u8], settings: u8) -> Step {
     if bytes.is_empty() {
         result.stopped = 1;
     } else if decoded.length == 0 {
-        // Unlike undesirable decoded characters, malformed bytes never emit '?'.
+        /* Maybe the next byte is still a valid character? */
+        // Malformed bytes never emit '?'.
         result.consumed = 1;
     } else if decoded.codepoint == 0 {
         result.stopped = 1;
     } else {
         let codepoint = decoded.codepoint;
-        let newline = settings & 2 != 0;
+        let newline = settings.test(StringValidationSetting::AllowNewline);
         if (crate::string_func::is_printable(codepoint) && !sprite(codepoint))
-            || (settings & 4 != 0 && encoded_control(codepoint))
+            || (settings.test(StringValidationSetting::AllowControlCode)
+                && is_scc_encoded_code(codepoint))
             || (newline && codepoint == 10)
         {
             result.output = utf8::encode(codepoint);
         } else if newline && codepoint == 13 && bytes[decoded.length..].starts_with(b"\n") {
-            // Drop CR only; LF is consumed by the next decision.
-        } else if settings & 8 != 0 && matches!(codepoint, 9 | 10 | 13) {
-            result.output = utf8::encode(32);
-        } else if settings & 1 != 0 {
-            result.output = utf8::encode(63);
+            /* Skip carriage return if followed by newline. */
+            // LF is consumed by the next decision.
+        } else if settings.test(StringValidationSetting::ReplaceTabCrNlWithSpace)
+            && matches!(codepoint, 9 | 10 | 13)
+        {
+            /* Replace the tab, carriage return or newline with a space. */
+            result.output = utf8::encode(u32::from(b' '));
+        } else if settings.test(StringValidationSetting::ReplaceWithQuestionMark) {
+            /* Replace the undesirable character with a question mark. */
+            result.output = utf8::encode(u32::from(b'?'));
         }
     }
     result
 }
 
 /// `StrMakeValid(str, settings)`: the scan decisions of `step`, appended to a new string.
-pub fn make_valid(mut bytes: &[u8], settings: u8) -> Vec<u8> {
+pub fn make_valid(mut bytes: &[u8], settings: StringValidationSettings) -> Vec<u8> {
     let mut result = Vec::new();
+    /* Assume the ABSOLUTE WORST to be in str as it comes from the outside. */
     while !bytes.is_empty() {
         let step = step(bytes, settings);
         bytes = &bytes[step.consumed..];
@@ -75,25 +97,29 @@ pub fn make_valid(mut bytes: &[u8], settings: u8) -> Vec<u8> {
         }
         result.extend_from_slice(&step.output.bytes[..step.output.length]);
     }
+    /* String termination, if needed, is left to the caller of this function. */
     result
 }
 
+/// `StrValid`: printable characters and NUL termination in a fixed-length buffer.
+/// This is a span rather than a C string because termination is being checked.
 pub fn valid(bytes: &[u8]) -> bool {
+    /* Assume the ABSOLUTE WORST to be in str as it comes from the outside. */
     let mut position = 0;
     while position < bytes.len() {
         let decoded = utf8::decode(&bytes[position..]);
         if decoded.length == 0 {
-            return false;
+            return false; // invalid codepoint
         }
         if decoded.codepoint == 0 {
-            return true;
+            return true; // NUL termination
         }
         if !crate::string_func::is_printable(decoded.codepoint) || sprite(decoded.codepoint) {
             return false;
         }
         position += decoded.length;
     }
-    false
+    false // missing NUL termination
 }
 
 /// Capacity uses the current external consumer, including native unsigned wrap.
@@ -202,7 +228,10 @@ mod tests {
     fn make_valid_in_place(buffer: &mut [u8], span: usize, settings: u8) -> Pair {
         let mut pair = Pair::new(span);
         while pair.read < span {
-            let decision = step(&buffer[pair.read..span], settings);
+            let decision = step(
+                &buffer[pair.read..span],
+                crate::string_type::StringValidationSettings(settings),
+            );
             pair.skip(decision.consumed);
             if decision.stopped != 0 {
                 break;
@@ -253,7 +282,10 @@ mod tests {
     /// One validation row: the `string_view`, in-place `std::string` and in-place `char *` results.
     fn validation_case(input: &[u8], settings: u8) -> String {
         // StrMakeValid(std::string_view): the same loop appending to a string.
-        let output = make_valid(input, settings);
+        let output = make_valid(
+            input,
+            crate::string_type::StringValidationSettings(settings),
+        );
         // StrMakeValidInPlace(std::string &): empty returns early; erase tail.
         let mut inplace = input.to_vec();
         if !inplace.is_empty() {

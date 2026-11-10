@@ -120,6 +120,18 @@ pub fn prefix(bytes: &[u8], pattern: &[u8]) -> MatchResult {
     }
 }
 
+/// `StringConsumer::ReadUtf8If`: check whether the next UTF-8 char matches `c`,
+/// and skip it. Return the matching byte length for the caller's cursor commit,
+/// or zero without consuming malformed or mismatched input.
+pub fn read_utf8_if(bytes: &[u8], c: u32) -> usize {
+    let decoded = crate::utf8::decode(bytes);
+    if decoded.length > 0 && decoded.codepoint == c {
+        decoded.length
+    } else {
+        0
+    }
+}
+
 /// `Find`, `FindCharIn` or `FindCharNotIn`, by `mode`; `npos` (`usize::MAX`) if
 /// not found.
 pub fn find(bytes: &[u8], pattern: &[u8], mode: u8) -> usize {
@@ -198,12 +210,6 @@ pub fn until(bytes: &[u8], str: &[u8], sep: SeparatorUsage) -> SeparatorResult {
         },
         consumed_length: end,
     }
-}
-
-/// Raw adapter: [`until`] over a base `SeparatorUsage`, for `encoded.rs` until
-/// its pass.
-pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
-    until(bytes, pattern, SeparatorUsage(policy))
 }
 
 crate::abi::layouts! {

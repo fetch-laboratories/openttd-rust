@@ -5,7 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Historical byte codec and iterator positions; surrogate codepoints are valid.
+//! `core/utf8.hpp` / `.cpp` byte codec and iterator positions. The original
+//! `char32_t` domain includes surrogate codepoints; it is not Rust `char`.
+
+use crate::bitmath_func::{gb, has_bit};
 
 /// By-value UTF-8 encoding result. Unused bytes are zero, including on failure.
 #[repr(C)]
@@ -27,31 +30,33 @@ pub struct Decoded {
     pub codepoint: u32,
 }
 
-pub fn is_part(byte: u8) -> bool {
-    byte >> 6 == 2
+/// `IsUtf8Part`: check whether the byte is part of a UTF-8 sequence.
+pub fn is_utf8_part(byte: u8) -> bool {
+    gb(u32::from(byte), 6, 2) == 2
 }
 
+/// `EncodeUtf8`: binary data and length; length is zero outside its range.
 pub fn encode(codepoint: u32) -> Encoded {
     // Every conversion is bounded by the branch threshold or an explicit mask.
     let mut result = Encoded {
         bytes: [0; 4],
         length: 0,
     };
-    let part = |shift: u32| 0x80 + u8::try_from((codepoint >> shift) & 0x3f).unwrap();
+    let part = |shift: u8| 0x80 + u8::try_from(gb(codepoint, shift, 6)).unwrap();
     if codepoint < 0x80 {
         result.bytes[0] = u8::try_from(codepoint).unwrap();
         result.length = 1;
     } else if codepoint < 0x800 {
-        result.bytes[0] = 0xc0 + u8::try_from(codepoint >> 6).unwrap();
+        result.bytes[0] = 0xc0 + u8::try_from(gb(codepoint, 6, 5)).unwrap();
         result.bytes[1] = part(0);
         result.length = 2;
     } else if codepoint < 0x10000 {
-        result.bytes[0] = 0xe0 + u8::try_from(codepoint >> 12).unwrap();
+        result.bytes[0] = 0xe0 + u8::try_from(gb(codepoint, 12, 4)).unwrap();
         result.bytes[1] = part(6);
         result.bytes[2] = part(0);
         result.length = 3;
     } else if codepoint < 0x0011_0000 {
-        result.bytes[0] = 0xf0 + u8::try_from(codepoint >> 18).unwrap();
+        result.bytes[0] = 0xf0 + u8::try_from(gb(codepoint, 18, 3)).unwrap();
         result.bytes[1] = part(12);
         result.bytes[2] = part(6);
         result.bytes[3] = part(0);
@@ -60,36 +65,41 @@ pub fn encode(codepoint: u32) -> Encoded {
     result
 }
 
+/// `DecodeUtf8`: length and codepoint; zero length denotes invalid input.
 pub fn decode(bytes: &[u8]) -> Decoded {
     let valid = |length, codepoint| Decoded { length, codepoint };
-    if !bytes.is_empty() && bytes[0] & 0x80 == 0 {
+    if !bytes.is_empty() && !has_bit(u32::from(bytes[0]), 7) {
+        /* Single byte character: 0xxxxxxx */
         return valid(1, u32::from(bytes[0]));
-    } else if bytes.len() >= 2 && bytes[0] >> 5 == 6 {
-        if is_part(bytes[1]) {
-            let codepoint = u32::from(bytes[0] & 0x1f) << 6 | u32::from(bytes[1] & 0x3f);
+    } else if bytes.len() >= 2 && gb(u32::from(bytes[0]), 5, 3) == 6 {
+        if is_utf8_part(bytes[1]) {
+            /* Double byte character: 110xxxxx 10xxxxxx */
+            let codepoint = gb(u32::from(bytes[0]), 0, 5) << 6 | gb(u32::from(bytes[1]), 0, 6);
             if codepoint >= 0x80 {
                 return valid(2, codepoint);
             }
         }
-    } else if bytes.len() >= 3 && bytes[0] >> 4 == 14 {
-        if is_part(bytes[1]) && is_part(bytes[2]) {
-            let codepoint = u32::from(bytes[0] & 0x0f) << 12
-                | u32::from(bytes[1] & 0x3f) << 6
-                | u32::from(bytes[2] & 0x3f);
+    } else if bytes.len() >= 3 && gb(u32::from(bytes[0]), 4, 4) == 14 {
+        if is_utf8_part(bytes[1]) && is_utf8_part(bytes[2]) {
+            /* Triple byte character: 1110xxxx 10xxxxxx 10xxxxxx */
+            let codepoint = gb(u32::from(bytes[0]), 0, 4) << 12
+                | gb(u32::from(bytes[1]), 0, 6) << 6
+                | gb(u32::from(bytes[2]), 0, 6);
             if codepoint >= 0x800 {
                 return valid(3, codepoint);
             }
         }
     } else if bytes.len() >= 4
-        && bytes[0] >> 3 == 30
-        && is_part(bytes[1])
-        && is_part(bytes[2])
-        && is_part(bytes[3])
+        && gb(u32::from(bytes[0]), 3, 5) == 30
+        && is_utf8_part(bytes[1])
+        && is_utf8_part(bytes[2])
+        && is_utf8_part(bytes[3])
     {
-        let codepoint = u32::from(bytes[0] & 0x07) << 18
-            | u32::from(bytes[1] & 0x3f) << 12
-            | u32::from(bytes[2] & 0x3f) << 6
-            | u32::from(bytes[3] & 0x3f);
+        /* 4 byte character: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
+        let codepoint = gb(u32::from(bytes[0]), 0, 3) << 18
+            | gb(u32::from(bytes[1]), 0, 6) << 12
+            | gb(u32::from(bytes[2]), 0, 6) << 6
+            | gb(u32::from(bytes[3]), 0, 6);
         if (0x10000..=0x0010_ffff).contains(&codepoint) {
             return valid(4, codepoint);
         }
@@ -97,28 +107,32 @@ pub fn decode(bytes: &[u8]) -> Decoded {
     valid(0, 0)
 }
 
+/// `Utf8View::iterator::operator++`: skip continuation bytes, including malformed runs.
 pub fn next(bytes: &[u8], position: usize) -> usize {
     // The C++ facade asserts position < length, so this increment cannot overflow.
     let mut position = position + 1;
-    while position < bytes.len() && is_part(bytes[position]) {
+    while position < bytes.len() && is_utf8_part(bytes[position]) {
         position += 1;
     }
     position
 }
 
+/// `Utf8View::iterator::operator--`: move to the beginning of the preceding codepoint.
 pub fn previous(bytes: &[u8], position: usize) -> usize {
     // The C++ facade asserts position > 0; its iterator has position <= length.
     let mut position = position - 1;
-    while position > 0 && is_part(bytes[position]) {
+    while position > 0 && is_utf8_part(bytes[position]) {
         position -= 1;
     }
     position
 }
 
+/// `Utf8View::GetIterAtByte`: the offset may point inside a codepoint.
 pub fn at_byte(bytes: &[u8], offset: usize) -> usize {
     if offset >= bytes.len() {
         return bytes.len();
     }
+    /* Sanitize iterator to point to the start of a codepoint. */
     // offset < length bounds offset + 1. This intentionally scans malformed runs.
     previous(bytes, offset + 1)
 }
@@ -154,7 +168,7 @@ crate::abi::layouts! {
 /// the unchanged original (see `utf8/comparison-oracle.txt`) and replayed on the Rust codec.
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::{at_byte, decode, encode, is_part, next, previous};
+    use super::{at_byte, decode, encode, is_utf8_part, next, previous};
     use crate::oracle;
     use std::fmt::Write as _;
 
@@ -284,7 +298,10 @@ pub(crate) mod tests {
         }
         for byte in 0..=u8::MAX {
             decoded(&mut cases, &[byte]);
-            cases.push((format!("part {byte}"), u8::from(is_part(byte)).to_string()));
+            cases.push((
+                format!("part {byte}"),
+                u8::from(is_utf8_part(byte)).to_string(),
+            ));
         }
         for bytes in MALFORMED {
             decoded(&mut cases, bytes);

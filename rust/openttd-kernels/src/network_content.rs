@@ -221,7 +221,7 @@ fn send_packet(s: &Services, mut p: PacketState) {
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
     unsafe {
         packet::recv_string_into(p, s.tcp.packet, check, length, settings, |bytes| {
-            append(text, bytes.as_ptr(), bytes.len());
+            append(text, bytes);
         });
     }
 }
@@ -888,7 +888,7 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
             filename = &filename[..pos];
         }
 
-        unsafe { append((s.filename)(ci), filename.as_ptr(), filename.len()) };
+        unsafe { append((s.filename)(ci), filename) };
 
         // Request the next file.
         if !before_download(s) {

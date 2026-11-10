@@ -87,3 +87,15 @@ impl StringTab {
     /// Start of `NewGRF` supplied strings.
     pub const TEXT_TAB_NEWGRF_START: Self = Self(64);
 }
+
+/// Call-local borrowed projection of `StringParameterData` from `strings_type.h`.
+/// Native parameter owners retain their strings throughout synchronous encoding.
+#[derive(Clone, Copy)]
+pub(crate) enum StringParameterData<'a> {
+    /// `std::monostate`.
+    Empty,
+    /// Unsigned numeric parameter.
+    Integer(u64),
+    /// The parameter's native string bytes.
+    String(&'a [u8]),
+}

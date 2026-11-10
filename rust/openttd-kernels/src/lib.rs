@@ -213,6 +213,7 @@ mod water;
 mod water_cmd;
 mod water_type;
 mod widget_parser;
+mod widget_type;
 mod witness;
 mod yapf_node;
 
@@ -348,7 +349,7 @@ pub extern "C" fn openttd_rust_encode_utf8(codepoint: u32) -> Utf8Encoded {
 #[allow(unsafe_code)] // Export attribute only.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_is_utf8_part(byte: u8) -> u8 {
-    u8::from(utf8::is_part(byte))
+    u8::from(utf8::is_utf8_part(byte))
 }
 
 /// Decode the first sequence, without examining trailing bytes or rejecting surrogates.
@@ -628,13 +629,15 @@ pub use encoded::{
 /// Tag is 0/1/2. A tag-2 nonempty byte span meets `utf8::borrow`'s contract.
 /// The returned borrow never escapes the enclosing operation.
 #[allow(unsafe_code)]
-unsafe fn encoded_parameter<'a>(descriptor: &EncodedDescriptor) -> encoded::Parameter<'a> {
+unsafe fn encoded_parameter<'a>(
+    descriptor: &EncodedDescriptor,
+) -> strings_type::StringParameterData<'a> {
     match descriptor.kind {
-        0 => encoded::Parameter::Empty,
-        1 => encoded::Parameter::Integer(descriptor.value),
-        2 => {
-            encoded::Parameter::String(unsafe { utf8::borrow(descriptor.bytes, descriptor.length) })
-        }
+        0 => strings_type::StringParameterData::Empty,
+        1 => strings_type::StringParameterData::Integer(descriptor.value),
+        2 => strings_type::StringParameterData::String(unsafe {
+            utf8::borrow(descriptor.bytes, descriptor.length)
+        }),
         _ => unreachable!("unknown encoded descriptor tag"),
     }
 }
@@ -669,8 +672,8 @@ pub unsafe extern "C" fn openttd_rust_encoded_serialize(
             unsafe { encoded_parameter(&descriptor) }
         })
         .collect();
-    Box::into_raw(Box::new(encoded::serialize(
-        id,
+    Box::into_raw(Box::new(encoded::get_encoded_string_with_args(
+        strings_type::StringID(id),
         &parameters,
         string_assertions != 0,
     )))
@@ -692,7 +695,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_legacy(
 ) -> *mut std::ffi::c_void {
     // SAFETY: Input is readable and remains immutable for this call.
     let bytes = unsafe { utf8::borrow(data, length) };
-    Box::into_raw(Box::new(encoded::legacy(bytes, fix_code != 0))).cast()
+    Box::into_raw(Box::new(encoded::fix_scc_encoded(bytes, fix_code != 0))).cast()
 }
 
 /// Canonicalize numeric records, trying unsigned hex before signed/default-zero.
@@ -708,7 +711,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_negatives(
 ) -> *mut std::ffi::c_void {
     // SAFETY: Input is readable and remains immutable for this call.
     let bytes = unsafe { utf8::borrow(data, length) };
-    Box::into_raw(Box::new(encoded::negatives(bytes))).cast()
+    Box::into_raw(Box::new(encoded::fix_scc_encoded_negative(bytes))).cast()
 }
 
 /// Parse, replace, and serialize an internal encoded string in a single operation.
@@ -731,7 +734,7 @@ pub unsafe extern "C" fn openttd_rust_encoded_replace(
     let bytes = unsafe { utf8::borrow(data, length) };
     // SAFETY: The tag and nested replacement span obey the descriptor contract.
     let replacement = unsafe { encoded_parameter(&replacement) };
-    Box::into_raw(Box::new(encoded::replace(
+    Box::into_raw(Box::new(encoded::replace_param(
         bytes,
         index,
         replacement,
@@ -870,7 +873,11 @@ pub unsafe extern "C" fn openttd_rust_admin_conversion_destroy(handle: *mut std:
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_widget_part_classify(kind: u8) -> u8 {
-    u8::from(widget_parser::attribute(kind)) | (u8::from(widget_parser::container(kind)) << 1)
+    u8::from(widget_parser::is_attribute_widget_part_type(
+        widget_type::WidgetType(kind),
+    )) | (u8::from(widget_parser::is_container_widget_type(
+        widget_type::WidgetType(kind),
+    )) << 1)
 }
 
 /// Create widget-only traversal state; descriptor/widget pointers stay in C++.
@@ -1046,7 +1053,10 @@ pub unsafe extern "C" fn openttd_rust_validation_step(
     settings: u8,
 ) -> string_validation::Step {
     // SAFETY: The caller grants the short-lived readable byte allocation.
-    string_validation::step(unsafe { utf8::borrow(bytes, length) }, settings)
+    string_validation::step(
+        unsafe { utf8::borrow(bytes, length) },
+        string_type::StringValidationSettings(settings),
+    )
 }
 
 /// Validate a fixed span, requiring its first valid NUL before its end.

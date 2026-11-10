@@ -425,7 +425,10 @@ pub unsafe fn recv_buffer_size(state: *mut State, services: &Services) -> usize 
 fn validate_string(input: &[u8], settings: u8, mut append: impl FnMut(&[u8])) {
     let mut position = 0;
     while position < input.len() {
-        let step = crate::string_validation::step(&input[position..], settings);
+        let step = crate::string_validation::step(
+            &input[position..],
+            crate::string_type::StringValidationSettings(settings),
+        );
         position += step.consumed;
         if step.stopped != 0 {
             break;
