@@ -1184,6 +1184,11 @@ impl Engine<'_> {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { population(self.owner) }
     }
+    /// `assert(tile < Map::Size())`, under the native build's assertion policy.
+    fn assert_tile_in_map(&self, tile: TileIndex) {
+        let world = crate::map_func::World::new(self.services);
+        world.assert_with(|| tile.0 < self.services.map_size());
+    }
     /// `NOT_REACHED()`: the native fatal error; it does not return.
     fn not_reached(&self) -> ! {
         (self.services.not_reached)();
@@ -1635,6 +1640,8 @@ impl Engine<'_> {
     }
     /// `TerraformTownTile`.
     fn terraform_town_tile(&self, tile: TileIndex, edges: Slope, dir: bool) -> bool {
+        self.assert_tile_in_map(tile);
+
         let r = self.cmd_terraform_land(DC_AUTO_NO_WATER, tile, edges, dir);
         if !r.success || r.cost >= ((self.leaves.terraform_price)() + 2) * 8 {
             return false;
@@ -1644,6 +1651,8 @@ impl Engine<'_> {
     }
     /// `LevelTownLand`.
     fn level_town_land(&self, tile: TileIndex) {
+        self.assert_tile_in_map(tile);
+
         /* Don't terraform if land is plain or if there's a house there. */
         if self.is_tile_type(tile, TileType::MP_HOUSE) {
             return;
@@ -2098,6 +2107,9 @@ impl Engine<'_> {
     ) -> TownGrowthResult {
         let mut rcmd; // RoadBits for the road construction command
         let tile = *tile_ptr; // The main tile on which we base our growth
+
+        self.assert_tile_in_map(tile);
+
         let layout = self.layout();
         if cur_rb == RoadBits::ROAD_NONE {
             /* Tile has no road.
@@ -2319,6 +2331,8 @@ impl Engine<'_> {
          * @see GrowTownInTile Check the else if
          */
         let mut target_dir = DiagDirection::DIAGDIR_END; // The direction in which we want to extend the town
+
+        self.assert_tile_in_map(tile);
 
         /* Number of times to search.
          * Better roads, 2X2 and 3X3 grid grow quite fast so we give
