@@ -14,7 +14,7 @@ use super::{
     Services, SpecHandle,
 };
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_type::CargoType;
+use crate::cargo_type::{CargoArray, CargoType, CargoTypes};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, Owner};
 use crate::economy_type::{ExpensesType, Price};
@@ -296,8 +296,6 @@ fn animate_mine_tower(tile: TileIndex, s: &Services, t: &TileServices) {
         mark_tile_dirty_by_tile(tile, s);
     }
 }
-/// `AnimateTile_Industry`.
-///
 /// # Safety
 /// Industry tile; immutable service tables outlive the synchronous invocation.
 #[unsafe(no_mangle)]
@@ -307,8 +305,15 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
     c: *const ConstructionServices,
     t: *const TileServices,
 ) {
-    let (s, c, t) = unsafe { (&*s, &*c, &*t) };
-    let tile = TileIndex(tile);
+    unsafe { animate_tile_industry(TileIndex(tile), &*s, &*c, &*t) };
+}
+/// `AnimateTile_Industry`.
+pub(crate) fn animate_tile_industry(
+    tile: TileIndex,
+    s: &Services,
+    c: &ConstructionServices,
+    t: &TileServices,
+) {
     let gfx = t.get_industry_gfx(tile);
     if unsafe { (*get_industry_tile_spec(gfx)).animation.status } != AnimationStatus::NoAnimation.0
     {
@@ -639,26 +644,41 @@ pub(crate) unsafe fn tile_loop(
     }
 }
 
-/// `AddAcceptedCargo_Industry`.
-///
 /// # Safety
 /// Live industry tile, 64 native `CargoArray` entries and a live `CargoTypes` mask.
-/// Immutable specs outlive the call. Resolver callbacks retain no owner borrow;
-/// each final membership test reads the current accepted list at its source point.
 #[unsafe(no_mangle)]
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "AddAcceptedCargo_Industry keeps the original's implicit C++ integer conversions"
-)]
 pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     tile: u32,
     acceptance: *mut u32,
     always_accepted: *mut u64,
     services: *const TileServices,
 ) {
-    let t = unsafe { &*services };
-    let tile = TileIndex(tile);
+    unsafe {
+        add_accepted_cargo_industry(
+            TileIndex(tile),
+            &mut *acceptance.cast::<CargoArray>(),
+            &mut *always_accepted.cast::<CargoTypes>(),
+            &*services,
+        );
+    }
+}
+/// `AddAcceptedCargo_Industry`.
+///
+/// # Safety
+/// Live industry tile; immutable specs outlive the call. Resolver callbacks retain no
+/// owner borrow; each final membership test reads the current accepted list at its
+/// source point.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "AddAcceptedCargo_Industry keeps the original's implicit C++ integer conversions"
+)]
+pub(crate) unsafe fn add_accepted_cargo_industry(
+    tile: TileIndex,
+    acceptance: &mut CargoArray,
+    always_accepted: &mut CargoTypes,
+    t: &TileServices,
+) {
     let gfx = t.get_industry_gfx(tile);
     let itspec = get_industry_tile_spec(gfx);
     let ind = unsafe { (t.industry)(tile.0) };
@@ -724,13 +744,11 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             continue;
         }
         // Add accepted cargo.
-        unsafe {
-            let entry = acceptance.add(usize::from(cargo.0));
-            *entry = (*entry).wrapping_add(amount as u32);
-        }
+        let entry = &mut acceptance[usize::from(cargo.0)];
+        *entry = entry.wrapping_add(amount as u32);
         // Maybe set 'always accepted' bit (if it's not set already).
         let bit = 1_u64.wrapping_shl(u32::from(cargo.0));
-        if unsafe { *always_accepted } & bit != 0 {
+        if always_accepted.0 & bit != 0 {
             continue;
         }
         // Test whether the industry itself accepts the cargo type.
@@ -740,7 +758,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             continue;
         }
         // If the industry itself doesn't accept this cargo, set 'always accepted' bit.
-        unsafe { set_bit64(&mut *always_accepted, cargo.0) };
+        set_bit64(&mut always_accepted.0, cargo.0);
     }
 }
 

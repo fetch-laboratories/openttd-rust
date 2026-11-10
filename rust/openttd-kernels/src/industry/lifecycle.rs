@@ -86,11 +86,8 @@ pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(TileI
     }
 }
 
-/// Original `Industry::~Industry`.
-///
 /// # Safety
-/// Live shell/owner in its native destructor, including partial initialization or
-/// pool cleanup. Tables/map are valid for the call. No callback destroys this owner.
+/// As `industry_destruct`.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn openttd_rust_industry_cleanup(
@@ -103,12 +100,44 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
+    let d = IndustryDestruct {
+        industry,
+        owner,
+        builder,
+        id: IndustryID(id),
+        cleaning,
+        map,
+    };
+    unsafe { industry_destruct(d, &*services, &*lifecycle) };
+}
+/// The industry an `Industry::~Industry` call destroys: its native shell, owner,
+/// registry, index, whether the pool is being cleaned, and the map dimensions.
+#[derive(Clone, Copy)]
+pub(crate) struct IndustryDestruct {
+    pub industry: *mut c_void,
+    pub owner: *mut Industry,
+    pub builder: *mut Builder,
+    pub id: IndustryID,
+    pub cleaning: bool,
+    pub map: Map,
+}
+/// Original `Industry::~Industry`.
+///
+/// # Safety
+/// Live shell/owner in its native destructor, including partial initialization or
+/// pool cleanup. Tables/map are valid for the call. No callback destroys this owner.
+pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &LifecycleServices) {
+    let IndustryDestruct {
+        industry,
+        owner,
+        builder,
+        id,
+        cleaning,
+        map,
+    } = d;
     if cleaning {
         return;
     }
-    let id = IndustryID(id);
     let width = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.width)) };
     // Industry can also be destroyed when not fully initialized.
     // This means that we do not have to clear tiles either.

@@ -83,11 +83,11 @@ pub(crate) fn add_accepted_cargo(
                 );
             }
             TileType::MP_INDUSTRY => {
-                crate::industry::tile::openttd_rust_industry_tile_acceptance(
-                    tile.0,
-                    cargoes,
-                    always,
-                    c.c.industry_tile,
+                crate::industry::tile::add_accepted_cargo_industry(
+                    tile,
+                    &mut *cargoes.cast::<CargoArray>(),
+                    &mut *always.cast::<CargoTypes>(),
+                    &*c.c.industry_tile,
                 );
             }
             _ => crate::objects::openttd_rust_object_cargo(c.c.object, tile.0, cargoes, always),

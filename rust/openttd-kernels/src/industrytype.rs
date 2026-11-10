@@ -527,8 +527,15 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
     tiles: bool,
     badge: u32,
 ) -> u8 {
+    u8::from(unsafe { add_badge_to_specs(file, tiles, badge) })
+}
+/// `AddBadgeToSpecs` over the file's industry or industry-tile specs; whether any exists.
+///
+/// # Safety
+/// Serialized by the game-state mutex.
+unsafe fn add_badge_to_specs(file: *const c_void, tiles: bool, badge: u32) -> bool {
     let Some(specs) = (unsafe { (*FILES.get()).get_mut(&(file as usize)) }) else {
-        return 0;
+        return false;
     };
     let mut any = false;
     if tiles {
@@ -542,7 +549,7 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
             any = true;
         }
     }
-    u8::from(any)
+    any
 }
 /// The animation facts of an industry tile spec, for the shared animation owner.
 ///
@@ -552,7 +559,10 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
 pub unsafe extern "C" fn openttd_rust_industry_tile_animation_info(
     spec: *const IndustryTileSpec,
 ) -> crate::newgrf_animation_base::Info {
-    let spec = unsafe { &*spec };
+    tile_animation_info(unsafe { &*spec })
+}
+/// The animation facts of an industry tile spec, for the shared animation owner.
+fn tile_animation_info(spec: &IndustryTileSpec) -> crate::newgrf_animation_base::Info {
     let callback_mask = IndustryTileCallbackMasks(spec.callback_mask);
     crate::newgrf_animation_base::Info {
         speed: spec.animation.speed,
