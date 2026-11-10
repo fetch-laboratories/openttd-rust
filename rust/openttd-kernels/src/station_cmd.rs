@@ -611,17 +611,16 @@ impl<'a> Ctx<'a> {
         mode: StationRectMode,
     ) {
         let c = self.catchment();
-        let r = self.rect(st);
-        // SAFETY: Local copy; no borrow spans the setting reads.
-        let mut rect = unsafe { *r };
-        let ok = rect.before_add_rect(
+        // SAFETY: The live Rust-owned rectangle, updated in place as the original
+        // does. Its callbacks (the spread setting, map reads and the native
+        // assertion) never access a station rectangle.
+        let ok = unsafe { &mut *self.rect(st) }.before_add_rect(
             TileIndex(area.tile),
             i32::from(area.w),
             i32::from(area.h),
             mode,
             &c,
         );
-        unsafe { *r = rect };
         if ok {
             out.zero();
         } else {
@@ -637,11 +636,8 @@ impl<'a> Ctx<'a> {
         mode: StationRectMode,
     ) {
         let c = self.catchment();
-        let r = self.rect(st);
-        // SAFETY: Local copy; no borrow spans the setting reads.
-        let mut rect = unsafe { *r };
-        let ok = rect.before_add_tile(tile, mode, &c);
-        unsafe { *r = rect };
+        // SAFETY: As in `before_add_rect`.
+        let ok = unsafe { &mut *self.rect(st) }.before_add_tile(tile, mode, &c);
         if ok {
             out.zero();
         } else {
@@ -652,29 +648,24 @@ impl<'a> Ctx<'a> {
     fn after_remove_tile(&self, st: *mut BaseStation, tile: TileIndex) {
         let c = self.catchment();
         let id = (c.c.id)(st);
-        let r = self.rect(st);
-        // SAFETY: Local copy; no borrow spans the map scans.
-        let mut rect = unsafe { *r };
-        rect.after_remove_tile(id, tile, &c);
-        unsafe { *r = rect };
+        // SAFETY: As in `before_add_rect`; the map scans read only tile types and
+        // station indices.
+        unsafe { &mut *self.rect(st) }.after_remove_tile(id, tile, &c);
     }
     /// `st->rect.AfterRemoveRect(st, area)`.
     fn after_remove_rect(&self, st: *mut BaseStation, area: TileArea) {
         let c = self.catchment();
         let id = (c.c.id)(st);
-        let r = self.rect(st);
-        // SAFETY: Local copy; no borrow spans the map scans.
-        let mut rect = unsafe { *r };
-        rect.after_remove_rect(id, area, &c);
-        unsafe { *r = rect };
+        // SAFETY: As in `after_remove_tile`.
+        unsafe { &mut *self.rect(st) }.after_remove_rect(id, area, &c);
     }
     /// `st->rect.PtInExtendedRect(TileX(tile), TileY(tile))`.
     #[allow(clippy::cast_possible_wrap)]
     fn rect_contains(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
         let map = self.map();
-        // SAFETY: Live owner; immediate copy.
-        let rect = unsafe { *self.rect(st) };
-        rect.pt_in_extended_rect(map.tile_x(tile.0) as i32, map.tile_y(tile.0) as i32, 0)
+        let (x, y) = (map.tile_x(tile.0) as i32, map.tile_y(tile.0) as i32);
+        // SAFETY: Live owner; the test reads its fields in place without a callback.
+        unsafe { &*self.rect(st) }.pt_in_extended_rect(x, y, 0)
     }
     /// `Station::From(st)->RecomputeCatchment(no_clear)`.
     fn recompute_catchment(&self, st: *mut BaseStation, no_clear_nearby_lists: bool) {
@@ -933,12 +924,16 @@ impl Ctx<'_> {
         if unsafe { crate::station::rect_is_empty(owner) } {
             return; // no tiles belong to this station
         }
-        let r = unsafe { *crate::station::rect(owner) };
+        let r = unsafe { crate::station::rect(owner) };
         /* clamp sign coord to be inside the station rect */
         let xy = (self.s.location)(st);
+        // SAFETY: Field-sized reads of the live rectangle at the clamp; no callback
+        // runs between them.
         let new_xy = TileIndex(self.map().tile_xy(
-            (self.map().tile_x(xy) as i32).clamp(r.left, r.right) as u32,
-            (self.map().tile_y(xy) as i32).clamp(r.top, r.bottom) as u32,
+            (self.map().tile_x(xy) as i32).clamp(unsafe { (*r).left }, unsafe { (*r).right })
+                as u32,
+            (self.map().tile_y(xy) as i32).clamp(unsafe { (*r).top }, unsafe { (*r).bottom })
+                as u32,
         ));
         crate::station::spatial::station_move_sign(self.shared, st, new_xy);
         if !(self.world().is_station)(st) {
