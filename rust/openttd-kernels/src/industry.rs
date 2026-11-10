@@ -9,7 +9,6 @@
 //! owner; construction, destruction, cargo distribution and `NewGRF` resolution may revisit
 //! it, so no reference survives a world service. Slot growth invalidates views exactly as the
 //! original vector does; history allocations stay stable until their slot is removed.
-// Original fixed-width conversion and variable names are retained for audit.
 #![allow(unsafe_code)]
 use crate::bitmath_func::{gb, has_bit, sb};
 use crate::cargo_type::{CargoType, is_valid_cargo_type};

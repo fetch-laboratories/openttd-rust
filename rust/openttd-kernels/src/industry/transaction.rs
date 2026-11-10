@@ -415,13 +415,13 @@ impl Engine<'_> {
                 {
                     return self.fail(StringID(self.e.site));
                 }
-                // The tile must be a house, or is allowed to be a house (and it is a house).
-                if ind_behav.any(
-                    IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).with(
-                        IndustryBehaviours::from_element(IndustryBehaviour::Town1200More),
-                    ),
-                ) || (ind_behav.test(IndustryBehaviour::OnlyNearTown)
-                    && self.tile_type(cur_tile) == TileType::MP_HOUSE)
+                let in_town = IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).with(
+                    IndustryBehaviours::from_element(IndustryBehaviour::Town1200More),
+                );
+                let near_town = ind_behav.test(IndustryBehaviour::OnlyNearTown);
+                if ind_behav.any(in_town) // Tile must be a house
+                    || (near_town && self.tile_type(cur_tile) == TileType::MP_HOUSE)
+                // Tile is allowed to be a house (and it is a house)
                 {
                     if self.tile_type(cur_tile) != TileType::MP_HOUSE {
                         return self.fail(StringID(self.e.town));
