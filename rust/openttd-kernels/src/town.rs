@@ -51,7 +51,7 @@ use crate::landscape_type::LandscapeType;
 use crate::map_type::TileIndexDiffC;
 use crate::math::round_div_su;
 use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
-use crate::random_func::chance16_i;
+use crate::random_func::chance16;
 use crate::road::{RoadTypeFlag, RoadTypeFlags};
 use crate::road_func::diag_dir_to_road_bits;
 use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadTramType, RoadType};
@@ -1065,10 +1065,6 @@ impl Engine<'_> {
             true,
         ))
     }
-    /// `Chance16(a, b)` over the shared random stream.
-    fn chance16(&self, a: u32, b: u32) -> bool {
-        chance16_i(a, b, self.services.random())
-    }
     /// `RandomDiagDir`.
     fn random_diag_dir(&self) -> DiagDirection {
         DiagDirection(
@@ -1377,7 +1373,7 @@ impl Engine<'_> {
         }
         if self.fund_buildings_months() == 0
             && self.count_active_stations() == 0
-            && !self.chance16(1, 12)
+            && !chance16(self.services, 1, 12)
         {
             return;
         }
@@ -1528,11 +1524,11 @@ impl Engine<'_> {
             Slope::SLOPE_NE
         };
         if desired_slope != cur_slope && Slope(complement_slope(desired_slope.0)) != cur_slope {
-            if self.chance16(1, 8) {
+            if chance16(self.services, 1, 8) {
                 let mut res = false;
-                if !(self.leaves.generating_world)() && self.chance16(1, 10) {
+                if !(self.leaves.generating_world)() && chance16(self.services, 1, 10) {
                     /* Note: Do not replace "^ SLOPE_ELEVATED" with ComplementSlope(). The slope might be steep. */
-                    let edges = if self.chance16(1, 16) {
+                    let edges = if chance16(self.services, 1, 16) {
                         cur_slope
                     } else {
                         cur_slope ^ Slope::SLOPE_ELEVATED
@@ -1541,7 +1537,7 @@ impl Engine<'_> {
                         .cmd_terraform_land(DC_EXECUTE_AUTO_NO_WATER, tile, edges, false)
                         .success;
                 }
-                if !res && self.chance16(1, 3) {
+                if !res && chance16(self.services, 1, 3) {
                     /* We can consider building on the slope, though. */
                     return ret;
                 }
@@ -2025,7 +2021,7 @@ impl Engine<'_> {
                 return TownGrowthResult::SearchStopped;
             }
             /* Remove hills etc */
-            if !(self.services.build_on_slopes)() || self.chance16(1, 6) {
+            if !(self.services.build_on_slopes)() || chance16(self.services, 1, 6) {
                 self.level_town_land(tile);
             }
             /* Is a road allowed here? */
@@ -2041,7 +2037,7 @@ impl Engine<'_> {
                         return TownGrowthResult::SearchStopped;
                     }
                     let source_dir = self.reverse_diag_dir(target_dir);
-                    if self.chance16(1, 4) {
+                    if chance16(self.services, 1, 4) {
                         /* Randomize a new target dir */
                         target_dir = self.random_diag_dir();
                         while target_dir == source_dir {
@@ -2105,7 +2101,7 @@ impl Engine<'_> {
              * it is the starting tile. Half the time, we stay on this side then.*/
             if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
                 if self.get_tunnel_bridge_transport_type(tile) == TransportType::TRANSPORT_ROAD
-                    && (target_dir != DiagDirection::DIAGDIR_END || self.chance16(1, 2))
+                    && (target_dir != DiagDirection::DIAGDIR_END || chance16(self.services, 1, 2))
                 {
                     *tile_ptr = TileIndex((self.services.other_tunnel_end)(tile.0));
                 }
@@ -2173,7 +2169,7 @@ impl Engine<'_> {
                          * always ok if no road allowed. */
                         rcmd = target_rb;
                         allow_house = !self.is_road_allowed_here(t1, house_tile, target_dir)
-                            || self.chance16(6, 10);
+                            || chance16(self.services, 6, 10);
                     }
                     _ => self.not_reached(),
                 }
@@ -2183,7 +2179,7 @@ impl Engine<'_> {
                 /* Build a house, but not if there already is a house there. */
                 if !self.is_tile_type(house_tile, TileType::MP_HOUSE) {
                     /* Level the land if possible */
-                    if self.chance16(1, 6) {
+                    if chance16(self.services, 1, 6) {
                         self.level_town_land(house_tile);
                     }
                     /* And build a house.
@@ -2607,7 +2603,7 @@ impl Engine<'_> {
             if (self.leaves.generating_world)()
                 && !HouseExtraFlags((self.leaves.house_extra_flags)(house))
                     .test(HouseExtraFlag::BuildingIsHistorical)
-                && self.chance16(1, 7)
+                && chance16(self.services, 1, 7)
             {
                 construction_stage = gb(construction_random, 0, 2) as u8;
             }
