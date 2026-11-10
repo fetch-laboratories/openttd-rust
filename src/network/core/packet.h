@@ -117,7 +117,6 @@ public:
 	uint16_t Recv_uint16();
 	uint32_t Recv_uint32();
 	uint64_t Recv_uint64();
-	std::vector<uint8_t> Recv_buffer();
 	size_t Recv_bytes(std::span<uint8_t> span);
 	std::string Recv_string(size_t length, StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark);
 
