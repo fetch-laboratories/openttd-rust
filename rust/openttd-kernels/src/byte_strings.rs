@@ -36,7 +36,8 @@ fn lower(byte: u8) -> u8 {
     mapped.to_le_bytes()[0]
 }
 
-fn compare_prefix(left: &[u8], right: &[u8], signed_char: bool) -> i32 {
+/// `CaseInsensitiveCharTraits::compare`: compare exactly the paired bytes.
+fn case_insensitive_char_traits_compare(left: &[u8], right: &[u8], signed_char: bool) -> i32 {
     for (&left, &right) in left.iter().zip(right) {
         if upper(left, signed_char) < upper(right, signed_char) {
             return -1;
@@ -48,6 +49,53 @@ fn compare_prefix(left: &[u8], right: &[u8], signed_char: bool) -> i32 {
     0
 }
 
+/// ABI selectors used by the five native case-insensitive string facades.
+const CASE_COMPARE: u8 = 0;
+const CASE_EQUALS: u8 = 1;
+const CASE_STARTS_WITH: u8 = 2;
+const CASE_ENDS_WITH: u8 = 3;
+const CASE_CONTAINS: u8 = 4;
+
+/// `StrCompareIgnoreCase`; length ordering remains the native library's result.
+fn str_compare_ignore_case(left: &[u8], right: &[u8], signed_char: bool, length_order: i32) -> i32 {
+    let result = case_insensitive_char_traits_compare(left, right, signed_char);
+    if result == 0 { length_order } else { result }
+}
+/// `StrEqualsIgnoreCase`: equal lengths and case-insensitive byte equality.
+fn str_equals_ignore_case(left: &[u8], right: &[u8], signed_char: bool) -> bool {
+    left.len() == right.len() && case_insensitive_char_traits_compare(left, right, signed_char) == 0
+}
+/// `StrStartsWithIgnoreCase`: compare the prefix only if it fits.
+fn str_starts_with_ignore_case(left: &[u8], right: &[u8], signed_char: bool) -> bool {
+    left.len() >= right.len() && str_equals_ignore_case(&left[..right.len()], right, signed_char)
+}
+/// `StrEndsWithIgnoreCase`: compare the suffix only if it fits.
+fn str_ends_with_ignore_case(left: &[u8], right: &[u8], signed_char: bool) -> bool {
+    left.len() >= right.len()
+        && str_equals_ignore_case(&left[left.len() - right.len()..], right, signed_char)
+}
+/// `StrContainsIgnoreCase`: the native case-insensitive view's substring search.
+fn str_contains_ignore_case(left: &[u8], right: &[u8], signed_char: bool) -> bool {
+    if right.is_empty() {
+        return true;
+    }
+    if right.len() > left.len() {
+        return false;
+    }
+    for start in 0..=left.len() - right.len() {
+        if upper(left[start], signed_char) == upper(right[0], signed_char)
+            && case_insensitive_char_traits_compare(
+                &left[start..start + right.len()],
+                right,
+                signed_char,
+            ) == 0
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn case_operation(
     left: &[u8],
     right: &[u8],
@@ -56,37 +104,62 @@ fn case_operation(
     length_order: i32,
 ) -> i32 {
     match mode {
-        0 => {
-            let result = compare_prefix(left, right, signed_char);
-            if result == 0 { length_order } else { result }
-        }
-        1 => i32::from(left.len() == right.len() && compare_prefix(left, right, signed_char) == 0),
-        2 => i32::from(
-            left.len() >= right.len()
-                && compare_prefix(&left[..right.len()], right, signed_char) == 0,
-        ),
-        3 => i32::from(
-            left.len() >= right.len()
-                && compare_prefix(&left[left.len() - right.len()..], right, signed_char) == 0,
-        ),
-        4 => {
-            if right.is_empty() {
-                return 1;
-            }
-            if right.len() > left.len() {
-                return 0;
-            }
-            for start in 0..=left.len() - right.len() {
-                if upper(left[start], signed_char) == upper(right[0], signed_char)
-                    && compare_prefix(&left[start..start + right.len()], right, signed_char) == 0
-                {
-                    return 1;
-                }
-            }
-            0
-        }
+        CASE_COMPARE => str_compare_ignore_case(left, right, signed_char, length_order),
+        CASE_EQUALS => i32::from(str_equals_ignore_case(left, right, signed_char)),
+        CASE_STARTS_WITH => i32::from(str_starts_with_ignore_case(left, right, signed_char)),
+        CASE_ENDS_WITH => i32::from(str_ends_with_ignore_case(left, right, signed_char)),
+        CASE_CONTAINS => i32::from(str_contains_ignore_case(left, right, signed_char)),
         _ => unreachable!("invalid case operation"),
     }
+}
+
+/// `strtolower`: lowercase bytes from the original offset, reporting any change.
+fn strtolower(bytes: &mut [u8], offset: usize) -> bool {
+    let mut changed = false;
+    for byte in &mut bytes[offset..] {
+        let mapped = lower(*byte);
+        changed |= mapped != *byte;
+        *byte = mapped;
+    }
+    changed
+}
+
+/// `FormatArrayAsHex`: write a continuous uppercase hex string into its native
+/// pre-sized storage. The input and output are disjoint.
+pub(crate) fn format_array_as_hex(bytes: &[u8], output: &mut [u8]) {
+    const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+    for (&byte, pair) in bytes.iter().zip(output.as_chunks_mut::<2>().0) {
+        pair[0] = DIGITS[usize::from(byte >> 4)];
+        pair[1] = DIGITS[usize::from(byte & 15)];
+    }
+}
+
+/// `ConvertHexToBytes`: the hex string must have exactly twice the output
+/// length. Read each pair before writing, preserving partial writes on failure.
+/// Call-local byte accessors retain defined overlapping-span behavior without
+/// creating overlapping Rust references or allocating temporary storage.
+fn convert_hex_to_bytes(
+    length: usize,
+    output_length: usize,
+    mut read: impl FnMut(usize) -> u8,
+    mut write: impl FnMut(usize, u8),
+) -> bool {
+    if output_length != length / 2 {
+        return false;
+    }
+    /* Hex-string lengths are always divisible by 2. */
+    if !length.is_multiple_of(2) {
+        return false;
+    }
+    for index in 0..output_length {
+        let hi = convert_hex_nibble_to_byte(read(index * 2));
+        let lo = convert_hex_nibble_to_byte(read(index * 2 + 1));
+        let (Some(hi), Some(lo)) = (hi, lo) else {
+            return false;
+        };
+        write(index, (hi << 4) | lo);
+    }
+    true
 }
 
 /// Offsets for the C++ source substring; zero length selects a default null view.
@@ -98,7 +171,8 @@ pub struct TrimResult {
     pub length: usize,
 }
 
-fn trim(bytes: &[u8], set: &[u8]) -> TrimResult {
+/// `StrTrimView`: return the retained substring or a default null view.
+fn str_trim_view(bytes: &[u8], set: &[u8]) -> TrimResult {
     let Some(first) = bytes.iter().position(|byte| !set.contains(byte)) else {
         return TrimResult {
             offset: 0,
@@ -112,7 +186,8 @@ fn trim(bytes: &[u8], set: &[u8]) -> TrimResult {
     }
 }
 
-fn nibble(byte: u8) -> Option<u8> {
+/// `ConvertHexNibbleToByte`: a hex digit, or no value for the original -1.
+fn convert_hex_nibble_to_byte(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
         b'A'..=b'F' => Some(byte + 10 - b'A'),
@@ -173,13 +248,7 @@ pub unsafe extern "C" fn openttd_rust_bytes_lower(
         // SAFETY: Caller provides the exclusive initialized writable allocation.
         unsafe { std::slice::from_raw_parts_mut(data, length) }
     };
-    let mut changed = false;
-    for byte in &mut bytes[offset..] {
-        let mapped = lower(*byte);
-        changed |= mapped != *byte;
-        *byte = mapped;
-    }
-    u8::from(changed)
+    u8::from(strtolower(bytes, offset))
 }
 
 /// Encode uppercase hex into caller-owned storage.
@@ -196,7 +265,6 @@ pub unsafe extern "C" fn openttd_rust_bytes_hex_encode(
     length: usize,
     output: *mut u8,
 ) {
-    const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
     // SAFETY: Caller provides disjoint input and twice-sized initialized output.
     let bytes = unsafe { borrowed(data, length) };
     let output = if length == 0 {
@@ -205,10 +273,7 @@ pub unsafe extern "C" fn openttd_rust_bytes_hex_encode(
         // SAFETY: Exactly twice the input length, exclusive and disjoint.
         unsafe { std::slice::from_raw_parts_mut(output, length * 2) }
     };
-    for (&byte, pair) in bytes.iter().zip(output.as_chunks_mut::<2>().0) {
-        pair[0] = DIGITS[usize::from(byte >> 4)];
-        pair[1] = DIGITS[usize::from(byte & 15)];
-    }
+    format_array_as_hex(bytes, output);
 }
 
 /// Decode hex sequentially, preserving partial writes and legal overlapping views.
@@ -226,25 +291,15 @@ pub unsafe extern "C" fn openttd_rust_bytes_hex_decode(
     output: *mut u8,
     output_length: usize,
 ) -> u8 {
-    if output_length != length / 2 || !length.is_multiple_of(2) {
-        return 0;
-    }
-    for index in 0..output_length {
-        // SAFETY: Both positions are inside the readable caller span. These raw
-        // reads finish before writing, even when input/output allocations overlap.
-        let (hi, lo) = unsafe {
-            (
-                nibble(hex.add(index * 2).read()),
-                nibble(hex.add(index * 2 + 1).read()),
-            )
-        };
-        let (Some(hi), Some(lo)) = (hi, lo) else {
-            return 0;
-        };
-        // SAFETY: This position is within the writable span; no references alias it.
-        unsafe { output.add(index).write((hi << 4) | lo) };
-    }
-    1
+    u8::from(convert_hex_to_bytes(
+        length,
+        output_length,
+        // SAFETY: The core reads only the validated caller input extent.
+        |index| unsafe { hex.add(index).read() },
+        // SAFETY: Each output index is within the live writable extent. All
+        // reads of its input pair finish first, including for overlapping views.
+        |index, byte| unsafe { output.add(index).write(byte) },
+    ))
 }
 
 /// Return byte-set trim offsets without allocating or retaining views.
@@ -263,7 +318,7 @@ pub unsafe extern "C" fn openttd_rust_bytes_trim(
 ) -> TrimResult {
     // SAFETY: Caller supplies two immutable live spans for this call.
     let (bytes, set) = unsafe { (borrowed(data, length), borrowed(set, set_length)) };
-    trim(bytes, set)
+    str_trim_view(bytes, set)
 }
 
 crate::abi::layouts! {

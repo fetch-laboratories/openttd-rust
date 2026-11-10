@@ -384,7 +384,11 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
         };
         let mut encoded = [0; 64];
         unsafe {
-            crate::byte_strings::openttd_rust_bytes_hex_encode(peer, 32, encoded.as_mut_ptr());
+            // SAFETY: The live fixed-size public key is disjoint from encoded output.
+            crate::byte_strings::format_array_as_hex(
+                std::slice::from_raw_parts(peer, 32),
+                &mut encoded,
+            );
         }
         if unsafe { ((*services).allowed)(authorized, encoded.as_ptr(), encoded.len()) } == 0 {
             return 1;
