@@ -218,7 +218,8 @@ pub(crate) unsafe fn cmd_build_aircraft(
             .as_ptr(),
     )
     .write_refit_cap(0);
-    let mail = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
+    let mail =
+        crate::cargo_registry::get_cargo_type_by_label(crate::cargo_type::CargoLabel::CT_MAIL).0;
     if (c.valid_cargo)(mail) {
         (k.set_cargo_type)(
             unsafe { super::vehicle_ref(u, r.common.vehicles) }

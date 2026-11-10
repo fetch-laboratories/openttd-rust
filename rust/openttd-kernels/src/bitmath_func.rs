@@ -166,3 +166,30 @@ pub fn clr_bit64(value: &mut u64, bit: u8) -> u64 {
     *value &= !1_u64.wrapping_shl(u32::from(bit));
     *value
 }
+
+/// `KillFirstBit` for 64-bit bitsets.
+pub const fn kill_first_bit_u64(value: u64) -> u64 {
+    value & value.wrapping_sub(1)
+}
+
+/// `SetBitIterator`: iterable ensemble of each set bit in a 64-bit value.
+/// The value is copied on construction; positions are visited in ascending order.
+pub struct SetBitIterator {
+    bitset: u64,
+}
+impl SetBitIterator {
+    pub const fn new(bitset: u64) -> Self {
+        Self { bitset }
+    }
+}
+impl Iterator for SetBitIterator {
+    type Item = u8;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bitset == 0 {
+            return None;
+        }
+        let bitpos = find_first_bit(self.bitset);
+        self.bitset = kill_first_bit_u64(self.bitset);
+        Some(bitpos)
+    }
+}

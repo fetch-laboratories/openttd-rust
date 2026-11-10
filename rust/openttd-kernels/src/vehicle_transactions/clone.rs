@@ -472,6 +472,7 @@ unsafe fn cmd_clone_vehicle(
         /* Since we can't estimate the cost of cloning a vehicle accurately we must
          * check whether the company has enough money manually. */
         if !unsafe { crate::command::check_money(b.commands, b.cost, out) } {
+            /* The vehicle has already been bought, so now it must be sold again. */
             unsafe { sell(s, temporary, flags, front) };
             return invalid;
         }

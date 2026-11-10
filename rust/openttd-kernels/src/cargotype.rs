@@ -187,3 +187,17 @@ crate::base_bitset_type::impl_bitset_ops!(CargoClasses);
 
 /// Divisor of `CargoSpec::town_production_multiplier` (`cargotype.h`).
 pub const TOWN_PRODUCTION_DIVISOR: u32 = 256;
+
+/// `SetCargoBitIterator`: the cargo-typed specialization of `SetBitIterator`.
+pub struct SetCargoBitIterator(crate::bitmath_func::SetBitIterator);
+impl SetCargoBitIterator {
+    pub const fn new(bitset: crate::cargo_type::CargoTypes) -> Self {
+        Self(crate::bitmath_func::SetBitIterator::new(bitset.0))
+    }
+}
+impl Iterator for SetCargoBitIterator {
+    type Item = crate::cargo_type::CargoType;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(crate::cargo_type::CargoType)
+    }
+}

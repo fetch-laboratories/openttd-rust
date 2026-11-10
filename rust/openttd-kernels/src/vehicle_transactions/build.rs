@@ -210,10 +210,20 @@ pub(crate) unsafe fn cmd_build_vehicle(
     let seeds = unsafe { (s.random.save)() };
     let v = match kind {
         VehicleType::TRAIN => unsafe {
-            rail::cmd_build_rail_vehicle(s, temporary, subflags, rail::CmdBuildRailVehicle { tile: cmd.tile, e })
+            rail::cmd_build_rail_vehicle(
+                s,
+                temporary,
+                subflags,
+                rail::CmdBuildRailVehicle { tile: cmd.tile, e },
+            )
         },
         VehicleType::ROAD => unsafe {
-            construct::cmd_build_road_vehicle(s, temporary, subflags, construct::CmdBuildRoadVehicle { tile: cmd.tile, e })
+            construct::cmd_build_road_vehicle(
+                s,
+                temporary,
+                subflags,
+                construct::CmdBuildRoadVehicle { tile: cmd.tile, e },
+            )
         },
         VehicleType::SHIP => {
             let north = (s.ship_tile)(tile);
@@ -237,7 +247,12 @@ pub(crate) unsafe fn cmd_build_vehicle(
             v
         }
         VehicleType::AIRCRAFT => unsafe {
-            construct::cmd_build_aircraft(s, temporary, subflags, construct::CmdBuildAircraft { tile: cmd.tile, e })
+            construct::cmd_build_aircraft(
+                s,
+                temporary,
+                subflags,
+                construct::CmdBuildAircraft { tile: cmd.tile, e },
+            )
         },
         _ => {
             (b.shared.not_reached)(); // Safe due to IsDepotTile()
@@ -291,8 +306,10 @@ pub(crate) unsafe fn cmd_build_vehicle(
                 )
             };
             result.capacity.cargo[usize::from(default_cargo)] = result.capacity.total;
-            let mail =
-                crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
+            let mail = crate::cargo_registry::get_cargo_type_by_label(
+                crate::cargo_type::CargoLabel::CT_MAIL,
+            )
+            .0;
             if (c.valid_cargo)(mail) {
                 result.capacity.cargo[usize::from(mail)] = u32::from(result.capacity.mail);
             }
