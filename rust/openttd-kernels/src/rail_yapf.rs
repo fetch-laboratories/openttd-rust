@@ -566,7 +566,7 @@ impl Search {
         crate::bridge::has_bridge_flat_ramp(
             shared,
             crate::map_func::World::new(shared).tile_slope(tile),
-            crate::direction_func::diag_dir_to_axis(direction, |ok| {
+            crate::direction_func::diag_dir_to_axis_raw(direction, |ok| {
                 crate::movement::native_assert(shared, ok);
             }),
         )

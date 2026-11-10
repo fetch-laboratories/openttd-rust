@@ -306,7 +306,7 @@ pub(crate) fn generate_station_name(
     }
     /* Check lakeside */
     if sni.is_available(StringID(n.lakeside), s)
-        && map.distance_from_edge(tile.0, size_y) < 20
+        && map.distance_from_edge(tile, size_y) < 20
         && count_map_square_around(tile, map, size_y, freeform, |at| cmsa_water(at, &m)) >= 5
     {
         return StringID(n.lakeside);

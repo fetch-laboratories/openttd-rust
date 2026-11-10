@@ -9,8 +9,8 @@
 #![allow(unsafe_code, missing_docs)]
 use crate::services::{Axis, Foundation, Services, Slope};
 use crate::slope_func::{
-    FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, flattening_foundation,
-    has_slope_highest_corner, inclined_foundation,
+    FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, flattening_foundation_raw,
+    has_slope_highest_corner_raw, inclined_foundation_raw,
 };
 pub(crate) const MAX_BRIDGES: u32 = 13;
 /// Original long-bridge price factor, including precondition-free small inputs.
@@ -39,10 +39,10 @@ pub(crate) fn get_bridge_foundation(slope: u8, axis: u8) -> u8 {
     {
         return FOUNDATION_NONE;
     }
-    if has_slope_highest_corner(slope) {
-        inclined_foundation(axis)
+    if has_slope_highest_corner_raw(slope) {
+        inclined_foundation_raw(axis)
     } else {
-        flattening_foundation(slope)
+        flattening_foundation_raw(slope)
     }
 }
 

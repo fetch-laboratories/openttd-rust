@@ -131,11 +131,7 @@ impl StationRect {
             // Important when the old rect is completely inside the new rect, resp. the old one was empty.
             let ok = self.before_add_tile(tile, mode, c);
             if ok {
-                return self.before_add_tile(
-                    TileIndex(c.map.tile_add_xy(tile.0, w - 1, h - 1)),
-                    mode,
-                    c,
-                );
+                return self.before_add_tile(c.map.tile_add_xy(tile, w - 1, h - 1), mode, c);
             }
             return ok;
         }
@@ -211,10 +207,8 @@ impl StationRect {
             empty = empty
                 || self.after_remove_tile(
                     id,
-                    TileIndex(
-                        c.map
-                            .tile_add_xy(ta.tile, i32::from(ta.w) - 1, i32::from(ta.h) - 1),
-                    ),
+                    c.map
+                        .tile_add_xy(TileIndex(ta.tile), i32::from(ta.w) - 1, i32::from(ta.h) - 1),
                     c,
                 );
         }

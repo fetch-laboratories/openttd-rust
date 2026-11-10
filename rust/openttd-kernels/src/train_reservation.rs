@@ -323,7 +323,7 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
             }
         }
     } else if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        let next = g.shared().map().add_diag(tile, dir);
+        let next = g.shared().map().tile_add_by_diag_dir_raw(tile, dir);
         if (g.leaves.compat_station)(g.context, id, next, tile) == 0 {
             g.set_platform(tile, dir ^ 2, false);
         }
@@ -778,7 +778,7 @@ fn choose(
     // SAFETY: The entry keeps the native train live through reservation traversal.
     while !g.safe(id, dest.tile, dest.td) {
         let exit = g.dir(id, dest.td);
-        let next = g.shared().map().add_diag(dest.tile, exit);
+        let next = g.shared().map().tile_add_by_diag_dir_raw(dest.tile, exit);
         let mut reachable =
             tracks(g.track_status(next)) & (g.leaves.reach_tracks)(g.context, id, exit) as u8;
         if (g.leaves.rail90)(g.context, id, dest.tile, next) != 0 {
@@ -843,7 +843,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
             return false;
         }
         let dir = (g.leaves.depot_dir)(g.context, id, v_tile) as u8;
-        let next = g.shared().map().add_diag(v_tile, dir);
+        let next = g.shared().map().tile_add_by_diag_dir_raw(v_tile, dir);
         if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
             return false;
         }
@@ -869,7 +869,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         }
     }
     let exit = g.dir(id, origin.td);
-    let new_tile = g.shared().map().add_diag(origin.tile, exit);
+    let new_tile = g.shared().map().tile_add_by_diag_dir_raw(origin.tile, exit);
     let mut reachable =
         tracks(g.track_status(new_tile) & (g.leaves.diag_reach_dirs)(g.context, id, exit) as u16);
     if (g.leaves.rail90)(g.context, id, origin.tile, new_tile) != 0 {

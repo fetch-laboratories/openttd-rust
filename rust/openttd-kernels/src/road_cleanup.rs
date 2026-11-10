@@ -38,8 +38,8 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
     }
     let check = |ok| world.check(ok);
     for dir in crate::direction_type::DIAGDIR_BEGIN..crate::direction_type::DIAGDIR_END {
-        let neighbour = world.dimensions.add_diag(tile, dir);
-        let target = crate::road_func::diag_dir_to_road_bits(dir, check);
+        let neighbour = world.dimensions.tile_add_by_diag_dir_raw(tile, dir);
+        let target = crate::road_func::diag_dir_to_road_bits_raw(dir, check);
         if bits.0 & target != 0 {
             let mirrored = crate::road_func::mirror_road_bits(target, check);
             let connective = valid(neighbour)
@@ -57,7 +57,7 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
                     MP_RAILWAY => is_possible_crossing(
                         &world,
                         neighbour,
-                        crate::direction_func::diag_dir_to_axis(dir, check),
+                        crate::direction_func::diag_dir_to_axis_raw(dir, check),
                     ),
                     MP_WATER => !world.asserted(|m| crate::water_map::is_water(m, neighbour)),
                     _ => false,

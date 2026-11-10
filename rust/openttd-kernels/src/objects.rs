@@ -32,7 +32,7 @@ use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
-use crate::slope_func::{get_slope_max_z, is_steep_slope};
+use crate::slope_func::{get_slope_max_z_raw, is_steep_slope_raw};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
 use crate::tilearea::TileArea;
@@ -1328,9 +1328,9 @@ impl World<'_> {
                 }
             } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
                 let old_slope = crate::map_func::World::new(self.shared).tile_slope(tile);
-                if !is_steep_slope(old_slope)
-                    && !is_steep_slope(slope)
-                    && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)
+                if !is_steep_slope_raw(old_slope)
+                    && !is_steep_slope_raw(slope)
+                    && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
                 {
                     let spec = (self.s.spec)(kind);
                     let callbacks = (self.s.callbacks)(spec);
@@ -1613,7 +1613,7 @@ impl World<'_> {
                     crate::witness::hit(crate::witness::OBJECT_LIGHTHOUSE);
                     return true;
                 }
-                tile = self.map.add_diag(tile, dir);
+                tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
                 if !(self.shared.tile_valid)(tile) {
                     return false;
                 }
