@@ -88,6 +88,7 @@ pub(crate) fn cmd_industry_set_production(
     execute: bool,
     args: CmdIndustrySetProduction,
     s: &IndustryCommandServices,
+    production: &super::Services,
 ) -> bool {
     if !unsafe { (s.deity)() } {
         return false;
@@ -106,7 +107,7 @@ pub(crate) fn cmd_industry_set_production(
                 IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
             (*owner).fields.prod_level = args.prod_level;
         }
-        super::recompute_production_multipliers(owner);
+        super::recompute_production_multipliers_checked(owner, production);
         /* Show news message if requested. */
         // `prod_level != ind->prod_level` is false after the assignment above, so the
         // original adds no news item.
@@ -122,6 +123,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     execute: bool,
     level: u8,
     services: *const IndustryCommandServices,
+    production: *const super::Services,
 ) -> u8 {
     u8::from(cmd_industry_set_production(
         execute,
@@ -130,6 +132,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
             prod_level: level,
         },
         unsafe { &*services },
+        unsafe { &*production },
     ))
 }
 /// `CmdIndustrySetExclusivity`'s arguments.

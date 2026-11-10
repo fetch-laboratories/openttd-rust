@@ -922,6 +922,18 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     }
     u8::from(moved_cargo)
 }
+/// `Industry::RecomputeProductionMultipliers`, with its `UsesOriginalEconomy` assertion.
+fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services) {
+    let indspec = spec_of(owner);
+    crate::movement::native_assert(
+        svc.shared(),
+        uses_original_economy(
+            crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*indspec).callback_mask }),
+            EconomyType(unsafe { (svc.economy_type)() }),
+        ),
+    );
+    recompute_production_multipliers(owner);
+}
 /// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
 /// `prod_level`. This function is only valid when not using smooth economy.
 #[allow(
