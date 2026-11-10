@@ -206,7 +206,15 @@ impl ParticipateSurvey {
     /// Ask whether the user wants to participate.
     pub const PS_ASK: Self = Self(0);
     /// Do not participate.
+    #[allow(
+        dead_code,
+        reason = "Retain the canonical PS_NO setting value while ParticipateSurvey is reproduced."
+    )]
     pub const PS_NO: Self = Self(1);
     /// Participate in the survey.
+    #[allow(
+        dead_code,
+        reason = "Retain the canonical PS_YES setting value while ParticipateSurvey is reproduced."
+    )]
     pub const PS_YES: Self = Self(2);
 }
