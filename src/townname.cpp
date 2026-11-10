@@ -20,6 +20,7 @@
 #include "rust/townname_ffi.h"
 #include "rust/town_name_ffi.h"
 #include "rust/presentation_services.h"
+#include "rust/services_ffi.h"
 
 #include "safeguards.h"
 
@@ -153,7 +154,7 @@ void GenerateTownNameString(StringBuilder &builder, size_t lang, uint32_t seed)
 	static_assert(BUILTIN_TOWNNAME_GENERATOR_COUNT == 21);
 	assert(lang < BUILTIN_TOWNNAME_GENERATOR_COUNT);
 	/* Append outside Rust; RAII also frees the result if the C++ allocation throws. */
-	auto result = std::unique_ptr<OpenTTDTownNameResult, decltype(&openttd_rust_townname_destroy)>(openttd_rust_townname_generate(lang, seed), openttd_rust_townname_destroy);
+	auto result = std::unique_ptr<OpenTTDTownNameResult, decltype(&openttd_rust_townname_destroy)>(openttd_rust_townname_generate(&GetRustSharedServices(), lang, seed), openttd_rust_townname_destroy);
 	size_t length;
 	const char *data = openttd_rust_townname_data(result.get(), &length);
 	builder.Put(std::string_view(data, length));

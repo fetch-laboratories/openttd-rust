@@ -86,11 +86,8 @@ pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(TileI
     }
 }
 
-/// Original `Industry::~Industry`.
-///
 /// # Safety
-/// Live shell/owner in its native destructor, including partial initialization or
-/// pool cleanup. Tables/map are valid for the call. No callback destroys this owner.
+/// As `industry_destruct`.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn openttd_rust_industry_cleanup(
@@ -103,12 +100,44 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
+    let d = IndustryDestruct {
+        industry,
+        owner,
+        builder,
+        id: IndustryID(id),
+        cleaning,
+        map,
+    };
+    unsafe { industry_destruct(d, &*services, &*lifecycle) };
+}
+/// The industry an `Industry::~Industry` call destroys: its native shell, owner,
+/// registry, index, whether the pool is being cleaned, and the map dimensions.
+#[derive(Clone, Copy)]
+pub(crate) struct IndustryDestruct {
+    pub industry: *mut c_void,
+    pub owner: *mut Industry,
+    pub builder: *mut Builder,
+    pub id: IndustryID,
+    pub cleaning: bool,
+    pub map: Map,
+}
+/// Original `Industry::~Industry`.
+///
+/// # Safety
+/// Live shell/owner in its native destructor, including partial initialization or
+/// pool cleanup. Tables/map are valid for the call. No callback destroys this owner.
+pub(crate) unsafe fn industry_destruct(d: IndustryDestruct, s: &Services, w: &LifecycleServices) {
+    let IndustryDestruct {
+        industry,
+        owner,
+        builder,
+        id,
+        cleaning,
+        map,
+    } = d;
     if cleaning {
         return;
     }
-    let id = IndustryID(id);
     let width = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.width)) };
     // Industry can also be destroyed when not fully initialized.
     // This means that we do not have to clear tiles either.
@@ -176,7 +205,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         // Clear the persistent storage.
         (w.delete_storage)(industry);
         let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
-        super::openttd_rust_industry_registry_erase(builder, kind, id.0);
+        super::industry_registry_erase(builder, crate::industry_type::IndustryType(kind), id);
         (w.delete_news)(id.0);
         (w.close_view)(id.0);
         (w.close_production)(id.0);
@@ -240,9 +269,8 @@ unsafe fn do_reseed_industry(ind: *mut Industry, reseed: u32, s: &Services) {
     let random_bits = s.shared().random() as u16;
     unsafe {
         let field = ptr::addr_of_mut!((*ind).metadata.random);
-        let old = ptr::read(field);
-        // Historical &= reseed (not &= ~reseed) is the specification.
-        ptr::write(field, (old & reseed as u16) | (random_bits & reseed as u16));
+        ptr::write(field, ptr::read(field) & reseed as u16);
+        ptr::write(field, ptr::read(field) | (random_bits & reseed as u16));
     }
 }
 /// Original `TriggerIndustryTileRandomisation`: trigger a random trigger for a single
@@ -250,6 +278,22 @@ unsafe fn do_reseed_industry(ind: *mut Industry, reseed: u32, s: &Services) {
 ///
 /// # Safety
 /// Live industry owner for this industry tile and immutable tables; serial call.
+pub(crate) unsafe fn trigger_industry_tile_randomisation(
+    tile: TileIndex,
+    trigger: IndustryRandomTrigger,
+    industry: *mut c_void,
+    owner: *mut Industry,
+    s: &Services,
+    w: &LifecycleServices,
+) {
+    let reseed_industry =
+        unsafe { do_trigger_industry_tile_randomisation(tile, trigger, industry, s, w) };
+    unsafe { do_reseed_industry(owner, reseed_industry, s) };
+}
+/// `TriggerIndustryTileRandomisation`.
+///
+/// # Safety
+/// As `trigger_industry_tile_randomisation`; the tables are live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_randomise_tile(
     tile: u32,
@@ -259,23 +303,43 @@ pub unsafe extern "C" fn openttd_rust_industry_randomise_tile(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
-    let reseed_industry = unsafe {
-        do_trigger_industry_tile_randomisation(
+    unsafe {
+        trigger_industry_tile_randomisation(
             TileIndex(tile),
             IndustryRandomTrigger(trigger),
             industry,
-            s,
-            w,
-        )
-    };
-    unsafe { do_reseed_industry(owner, reseed_industry, s) };
+            owner,
+            &*services,
+            &*lifecycle,
+        );
+    }
 }
 /// Original `TriggerIndustryRandomisation`: trigger a random trigger for all industry tiles.
 ///
 /// # Safety
 /// Live industry and map with valid original trigger; tables outlive this call.
+pub(crate) unsafe fn trigger_industry_randomisation(
+    industry: *mut c_void,
+    owner: *mut Industry,
+    id: IndustryID,
+    trigger: IndustryRandomTrigger,
+    size_x: u32,
+    s: &Services,
+    w: &LifecycleServices,
+) {
+    let mut reseed_industry = 0;
+    tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
+        if (w.belongs)(tile.0, id.0) {
+            reseed_industry |=
+                do_trigger_industry_tile_randomisation(tile, trigger, industry, s, w);
+        }
+    });
+    unsafe { do_reseed_industry(owner, reseed_industry, s) };
+}
+/// `TriggerIndustryRandomisation`.
+///
+/// # Safety
+/// As `trigger_industry_randomisation`; the tables are live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_randomise(
     industry: *mut c_void,
@@ -286,21 +350,17 @@ pub unsafe extern "C" fn openttd_rust_industry_randomise(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
-    let mut reseed_industry = 0;
-    tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile.0, id) {
-            reseed_industry |= do_trigger_industry_tile_randomisation(
-                tile,
-                IndustryRandomTrigger(trigger),
-                industry,
-                s,
-                w,
-            );
-        }
-    });
-    unsafe { do_reseed_industry(owner, reseed_industry, s) };
+    unsafe {
+        trigger_industry_randomisation(
+            industry,
+            owner,
+            IndustryID(id),
+            IndustryRandomTrigger(trigger),
+            size_x,
+            &*services,
+            &*lifecycle,
+        );
+    }
 }
 /// Original `DoTriggerIndustryTileAnimation`.
 unsafe fn do_trigger_industry_tile_animation(
@@ -329,6 +389,20 @@ unsafe fn do_trigger_industry_tile_animation(
 ///
 /// # Safety
 /// Industry tile and valid original trigger; native frame service may reenter.
+pub(crate) unsafe fn trigger_industry_tile_animation(
+    tile: TileIndex,
+    iat: IndustryAnimationTrigger,
+    extra: u32,
+    s: &Services,
+    w: &LifecycleServices,
+) -> bool {
+    let random = s.shared().random();
+    unsafe { do_trigger_industry_tile_animation(tile, iat, random, extra, w) }
+}
+/// `TriggerIndustryTileAnimation`.
+///
+/// # Safety
+/// As `trigger_industry_tile_animation`; the tables are live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_animate_tile_abi(
     tile: u32,
@@ -337,16 +411,13 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_tile_abi(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) -> u8 {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
-    let random = s.shared().random();
     u8::from(unsafe {
-        do_trigger_industry_tile_animation(
+        trigger_industry_tile_animation(
             TileIndex(tile),
             IndustryAnimationTrigger(trigger),
-            random,
             extra,
-            w,
+            &*services,
+            &*lifecycle,
         )
     })
 }
@@ -354,6 +425,32 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_tile_abi(
 ///
 /// # Safety
 /// Live industry and map; immutable tables and valid original trigger.
+pub(crate) unsafe fn trigger_industry_animation(
+    owner: *mut Industry,
+    id: IndustryID,
+    iat: IndustryAnimationTrigger,
+    size_x: u32,
+    s: &Services,
+    w: &LifecycleServices,
+) -> bool {
+    let mut ret = true;
+    let mut random = s.shared().random();
+    tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
+        if (w.belongs)(tile.0, id.0) {
+            if do_trigger_industry_tile_animation(tile, iat, random, 0, w) {
+                // SB does not mask its input, so the draw can set high bits too.
+                crate::bitmath_func::sb(&mut random, 0, 16, s.shared().random());
+            } else {
+                ret = false;
+            }
+        }
+    });
+    ret
+}
+/// `TriggerIndustryAnimation`.
+///
+/// # Safety
+/// As `trigger_industry_animation`; the tables are live.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_animate_abi(
     owner: *mut Industry,
@@ -363,25 +460,14 @@ pub unsafe extern "C" fn openttd_rust_industry_animate_abi(
     services: *const Services,
     lifecycle: *const LifecycleServices,
 ) -> u8 {
-    let s = unsafe { &*services };
-    let w = unsafe { &*lifecycle };
-    let mut ret = true;
-    let mut random = s.shared().random();
-    tiles(unsafe { location(owner) }, size_x, |tile| unsafe {
-        if (w.belongs)(tile.0, id) {
-            if do_trigger_industry_tile_animation(
-                tile,
-                IndustryAnimationTrigger(trigger),
-                random,
-                0,
-                w,
-            ) {
-                // SB does not mask its input, so the draw can set high bits too.
-                crate::bitmath_func::sb(&mut random, 0, 16, s.shared().random());
-            } else {
-                ret = false;
-            }
-        }
-    });
-    u8::from(ret)
+    u8::from(unsafe {
+        trigger_industry_animation(
+            owner,
+            IndustryID(id),
+            IndustryAnimationTrigger(trigger),
+            size_x,
+            &*services,
+            &*lifecycle,
+        )
+    })
 }

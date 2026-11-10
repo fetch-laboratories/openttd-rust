@@ -392,7 +392,7 @@ bool IsTileForestIndustry(TileIndex tile)
 
 void PlantRandomFarmField(const Industry *i)
 {
-	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), &GetIndustryRustServices());
+	openttd_rust_industry_farm(i->production_owner.get(), i->index.base(), &GetIndustryRustServices());
 }
 
 
@@ -472,7 +472,7 @@ CommandCost CmdIndustrySetProduction(DoCommandFlags flags, IndustryID ind_id, ui
 {
 	(void)show_news;
 	(void)custom_news; // The original post-assignment news test is always false.
-	return openttd_rust_industry_set_production_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), prod_level, &GetIndustryCommandServices()) ? CommandCost() : CMD_ERROR;
+	return openttd_rust_industry_set_production_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), prod_level, &GetIndustryCommandServices(), &GetIndustryRustServices()) ? CommandCost() : CMD_ERROR;
 }
 
 /**
@@ -670,7 +670,7 @@ void InitializeIndustries()
 /** Verify whether the generated industries are complete, and warn the user if not. */
 void CheckIndustries()
 {
-	openttd_rust_industry_check(&GetIndustryRustServices(), &GetIndustryGenerationServices());
+	openttd_rust_industry_check(RustIndustryBuilderState(), &GetIndustryRustServices(), &GetIndustryGenerationServices());
 }
 
 /**
@@ -790,10 +790,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
 	},
-	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
-		const Industry *i = RustIndustry(handle);
-		return {RustIndustryTile(handle), i->location.w, i->location.h};
-	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
 		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->type)->random_sounds[index]);
@@ -863,9 +859,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
 	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
-	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
 	.resolver = &GetIndustryResolverServices(),
-	.scale_by_map_size = OpenTTDMapScaleSize,
 	.company_none = []() noexcept -> uint8_t {
 		CompanyID old = OpenTTDCurrentCompany();
 		OpenTTDSetCurrentCompany(OWNER_NONE);
@@ -876,7 +870,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.economy_month = []() noexcept -> uint8_t { return TimerGameEconomy::month; },
 	.economy_year = []() noexcept -> int32_t { return TimerGameEconomy::year.base(); },
 	.days_since_last_month = []() noexcept -> uint32_t { return TimerGameEconomy::days_since_last_month; },
-	.landscape = OpenTTDLandscapeValue,
 	.economy_type = []() noexcept -> uint8_t { return _settings_game.economy.type; },
 
 	.fund_only = []() noexcept -> bool { return _settings_game.difficulty.industry_density == ID_FUND_ONLY; },

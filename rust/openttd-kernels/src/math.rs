@@ -59,6 +59,16 @@ pub(crate) fn clamp_to_u16(a: i64) -> u16 {
     a.clamp(0, i64::from(u16::MAX)) as u16
 }
 
+/// `ClampTo<uint32_t>` of an unsigned 64-bit value: clamp it down to lie within the
+/// `uint32_t` range.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "ClampTo's static_cast<To> of the clamped value"
+)]
+pub(crate) fn clamp_to_u32(a: u64) -> u32 {
+    a.min(u64::from(u32::MAX)) as u32
+}
+
 /// The value mask of a `width`-bit integer, for the template's integer types.
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));

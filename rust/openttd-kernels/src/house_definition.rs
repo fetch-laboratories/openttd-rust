@@ -12,11 +12,10 @@
     clippy::too_many_lines
 )]
 use crate::bitmath_func::{gb, has_bit, set_bit64};
-use crate::cargo_registry::{
-    openttd_rust_cargo_by_label as by_label, openttd_rust_cargo_translate as translate,
-};
+use crate::cargo_registry::{get_cargo_translation, get_cargo_type_by_label};
 use crate::cargo_type::{
-    CT_CANDY, CT_FIZZY_DRINKS, CT_FOOD, CT_GOODS, CT_INVALID, INVALID_CARGO, is_valid_cargo_type,
+    CT_CANDY, CT_FIZZY_DRINKS, CT_FOOD, CT_GOODS, CT_INVALID, CargoLabel, INVALID_CARGO,
+    is_valid_cargo_type,
 };
 use crate::debug::{Bytes, debug, grf_msg};
 use crate::gfx_type::{COLOUR_BLUE, COLOUR_GREEN, COLOUR_ORANGE, COLOUR_RED};
@@ -244,7 +243,7 @@ fn property(
                     let cargo = if is_valid_cargo_type(cargo.cargo) {
                         cargo.cargo
                     } else {
-                        by_label(cargo.label)
+                        get_cargo_type_by_label(CargoLabel(cargo.label)).0
                     };
                     if !is_valid_cargo_type(cargo) {
                         (s.set_acceptance)(spec, 2, 0);
@@ -287,7 +286,7 @@ fn property(
                 } else {
                     CT_FOOD
                 };
-                let cargo = by_label(label);
+                let cargo = get_cargo_type_by_label(CargoLabel(label)).0;
                 // Make sure the cargo type is valid in this climate.
                 if !is_valid_cargo_type(cargo) {
                     goods = 0;
@@ -362,7 +361,7 @@ fn property(
             0x1b => (s.set_animation_speed)(spec, reader.byte()?.clamp(2, 16)),
             // Class of the building type.
             0x1c => {
-                let class = crate::town::resolver::openttd_rust_house_class_allocate(
+                let class = crate::town::resolver::allocate_house_class_id(
                     reader.byte()?,
                     (unsafe { &*s.resolver }.shared().grf_file_id)(file),
                 );
@@ -383,7 +382,8 @@ fn property(
                 }
                 for index in 0..HOUSE_ORIGINAL_NUM_ACCEPTS {
                     // Get the cargo number from the list.
-                    let cargo = translate(gb(cargos, 8 * index, 8) as u8, file, false);
+                    let cargo =
+                        get_cargo_translation(gb(cargos, 8 * index, 8) as u8, file, false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_cargo)(spec, index, cargo);
                     } else {
@@ -399,7 +399,7 @@ fn property(
             0x20 => {
                 let count = reader.byte()?;
                 for _ in 0..count {
-                    let cargo = translate(reader.byte()?, file, false);
+                    let cargo = get_cargo_translation(reader.byte()?, file, false).0;
                     if is_valid_cargo_type(cargo) {
                         (s.set_watched)(spec, set_bit64(&mut (s.watched)(spec), cargo));
                     }
@@ -432,7 +432,11 @@ fn property(
                 // the provided data to initialize all values and avoid array overruns.
                 for index in 0..HOUSE_NUM_ACCEPTS {
                     if index < count {
-                        (s.set_cargo)(spec, index, translate(reader.byte()?, file, false));
+                        (s.set_cargo)(
+                            spec,
+                            index,
+                            get_cargo_translation(reader.byte()?, file, false).0,
+                        );
                         (s.set_acceptance)(spec, index, reader.byte()?);
                     } else {
                         (s.set_cargo)(spec, index, INVALID_CARGO);
@@ -604,14 +608,14 @@ pub fn reset(s: &Services) {
     unsafe {
         crate::town::resolver::openttd_rust_house_resolver_exchange(s.resolver);
     }
-    crate::town::resolver::openttd_rust_house_classes_reset();
+    crate::town::resolver::reset_house_classes();
     // Copy default houses.
     for id in 0..NEW_HOUSE_OFFSET {
         (s.append_default)(id);
     }
     // Reset any overrides that have been set.
     unsafe {
-        override_manager::openttd_rust_override_reset(override_manager::house());
+        override_manager::reset_override(override_manager::house());
     }
 }
 pub fn publish(s: &Services, spec: Spec) {
@@ -704,7 +708,7 @@ pub fn finalise(s: &Services) {
             let cargo = if is_valid_cargo_type(info.cargo) {
                 info.cargo
             } else {
-                let cargo = by_label(info.label);
+                let cargo = get_cargo_type_by_label(CargoLabel(info.label)).0;
                 (s.set_cargo)(spec, index, cargo);
                 cargo
             };

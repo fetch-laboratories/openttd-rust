@@ -17,6 +17,7 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_type::CargoType;
+use crate::cargotype::TownAcceptanceEffect;
 use crate::company_type::{CompanyID, Owner};
 use crate::industry_type::{Industry as ShellHandle, IndustryID};
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_CARGO_PROFIT_CALC};
@@ -266,10 +267,10 @@ fn deliver_goods(
     let finances = (finance.company_finances)(company.0);
     unsafe { crate::company::record_delivery(finances, cargo_type.0, accepted_total) };
     // Increase the town counter for town effects.
-    let effect = crate::cargo_registry::town_acceptance(cargo_type.0);
+    let effect = TownAcceptanceEffect(crate::cargo_registry::town_acceptance(cargo_type.0));
     let town = (s.station_town)(st);
     let town = (subsidies.shared().town_owner)(town);
-    unsafe { crate::town::record_delivery(town, effect, accepted_total) };
+    unsafe { crate::town::add_received(town, effect, accepted_total) };
     // Determine profit.
     let mut profit =
         get_transported_goods_income(s, accepted_total, distance, periods_in_transit, cargo_type);

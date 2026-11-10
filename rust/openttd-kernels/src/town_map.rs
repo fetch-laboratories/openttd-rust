@@ -10,9 +10,13 @@ use crate::tile_type::TileIndex;
 use crate::town::house::HouseServices;
 
 /// Increments the age of the house (`IncrementHouseAge`).
-/// `t` is the tile of this house; the caller has checked `IsTileType(t, MP_HOUSE)`.
+/// `t` is the tile of this house.
 /// One observation reads `IsHouseCompleted(t)` and, for a completed house, `t.m5()`.
-pub fn increment_house_age(h: &HouseServices, t: TileIndex) {
+pub fn increment_house_age(s: &crate::services::Services, h: &HouseServices, t: TileIndex) {
+    let world = crate::map_func::World::new(s);
+    world.assert_with(|| {
+        crate::tile_map::is_tile_type(s, t.0, crate::tile_type::TileType::MP_HOUSE.0)
+    });
     let house = (h.age)(t.0);
     if house.completed && house.age < 0xFF {
         (h.set_age)(t.0, house.age + 1);

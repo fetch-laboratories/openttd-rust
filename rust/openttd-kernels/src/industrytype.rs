@@ -11,6 +11,7 @@ use crate::industry_type::{
 };
 use crate::newgrf::CargoLabel;
 use crate::newgrf_animation_type::AnimationStatus;
+use crate::newgrf_badge_type::BadgeID;
 use crate::newgrf_callbacks::{IndustryTileCallbackMask, IndustryTileCallbackMasks};
 use crate::newgrf_commons::StandardSpriteGroup;
 use std::collections::BTreeMap;
@@ -172,11 +173,15 @@ pub type Layout = NativeVec<LayoutTile>;
 /// `SubstituteGRFFileProps`, viewed in place.
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "StandardGRFFileProps' static_cast<size_t>(StandardSpriteGroup::End)"
+)]
 pub struct SubstituteProps {
     pub local_id: u16,
     pub grfid: u32,
     pub grffile: *const c_void,
-    pub spritegroups: [*const c_void; 2],
+    pub spritegroups: [*const c_void; StandardSpriteGroup::End.0 as usize],
     pub subst_id: u16,
     pub override_id: u16,
 }
@@ -187,7 +192,7 @@ impl SubstituteProps {
             local_id: 0,
             grfid: 0,
             grffile: std::ptr::null(),
-            spritegroups: [std::ptr::null(); 2],
+            spritegroups: [std::ptr::null(); StandardSpriteGroup::End.0 as usize],
             subst_id,
             override_id: subst_id,
         }
@@ -523,22 +528,29 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
     tiles: bool,
     badge: u32,
 ) -> u8 {
+    u8::from(unsafe { add_badge_to_specs(file, tiles, BadgeID(badge)) })
+}
+/// `AddBadgeToSpecs` over the file's industry or industry-tile specs; whether any exists.
+///
+/// # Safety
+/// Serialized by the game-state mutex.
+unsafe fn add_badge_to_specs(file: *const c_void, tiles: bool, badge: BadgeID) -> bool {
     let Some(specs) = (unsafe { (*FILES.get()).get_mut(&(file as usize)) }) else {
-        return 0;
+        return false;
     };
     let mut any = false;
     if tiles {
         for spec in specs.tiles.iter_mut().flatten() {
-            spec.badges.push(badge);
+            spec.badges.push(badge.0);
             any = true;
         }
     } else {
         for spec in specs.industries.iter_mut().flatten() {
-            spec.badges.push(badge);
+            spec.badges.push(badge.0);
             any = true;
         }
     }
-    u8::from(any)
+    any
 }
 /// The animation facts of an industry tile spec, for the shared animation owner.
 ///
@@ -548,7 +560,10 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
 pub unsafe extern "C" fn openttd_rust_industry_tile_animation_info(
     spec: *const IndustryTileSpec,
 ) -> crate::newgrf_animation_base::Info {
-    let spec = unsafe { &*spec };
+    tile_animation_info(unsafe { &*spec })
+}
+/// The animation facts of an industry tile spec, for the shared animation owner.
+fn tile_animation_info(spec: &IndustryTileSpec) -> crate::newgrf_animation_base::Info {
     let callback_mask = IndustryTileCallbackMasks(spec.callback_mask);
     crate::newgrf_animation_base::Info {
         speed: spec.animation.speed,
@@ -848,15 +863,3 @@ pub const CHOPPER_ATTACKS: u32 =
 /// Raw compatibility mask for `IndustryBehaviour::CanSubsidence`.
 pub const CAN_SUBSIDENCE: u32 =
     IndustryBehaviours::from_element(IndustryBehaviour::CanSubsidence).0;
-
-/// Raw compatibility mask for `IndustryBehaviour::CutTrees`.
-pub const CUT_TREES: u32 = IndustryBehaviours::from_element(IndustryBehaviour::CutTrees).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Extractive`.
-pub const LIFE_EXTRACTIVE: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Extractive).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Organic`.
-pub const LIFE_ORGANIC: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Organic).0;
-
-/// Raw compatibility mask for `IndustryLifeType::Processing`.
-pub const LIFE_PROCESSING: u8 = IndustryLifeTypes::from_element(IndustryLifeType::Processing).0;

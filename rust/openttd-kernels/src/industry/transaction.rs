@@ -390,13 +390,12 @@ impl Engine<'_> {
             let it = super::layout_tile(layout, n);
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(tile, i32::from(it.x), i32::from(it.y));
-            if cur_tile == TileIndex::INVALID {
+            let world = crate::map_func::World::new(shared);
+            if !world.is_valid_tile(cur_tile.0) {
                 return self.fail(StringID(self.e.site));
             }
             if gfx == IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
-                if !(shared.is_water_tile)(cur_tile.0)
-                    || self.tile_slope(cur_tile) != Slope::SLOPE_FLAT
-                {
+                if !(shared.is_water_tile)(cur_tile.0) || !world.tile_flat(cur_tile.0) {
                     return self.fail(StringID(self.e.site));
                 }
             } else {
@@ -416,13 +415,13 @@ impl Engine<'_> {
                 {
                     return self.fail(StringID(self.e.site));
                 }
-                // The tile must be a house, or is allowed to be a house (and it is a house).
-                if ind_behav.any(
-                    IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).with(
-                        IndustryBehaviours::from_element(IndustryBehaviour::Town1200More),
-                    ),
-                ) || (ind_behav.test(IndustryBehaviour::OnlyNearTown)
-                    && self.tile_type(cur_tile) == TileType::MP_HOUSE)
+                let in_town = IndustryBehaviours::from_element(IndustryBehaviour::OnlyInTown).with(
+                    IndustryBehaviours::from_element(IndustryBehaviour::Town1200More),
+                );
+                let near_town = ind_behav.test(IndustryBehaviour::OnlyNearTown);
+                if ind_behav.any(in_town) // Tile must be a house
+                    || (near_town && self.tile_type(cur_tile) == TileType::MP_HOUSE)
+                // Tile is allowed to be a house (and it is a house)
                 {
                     if self.tile_type(cur_tile) != TileType::MP_HOUSE {
                         return self.fail(StringID(self.e.town));
@@ -476,6 +475,9 @@ impl Engine<'_> {
             let it = super::layout_tile(layout, n);
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(candidate.tile, i32::from(it.x), i32::from(it.y));
+            let world = crate::map_func::World::new(self.s.shared());
+            world.assert_with(|| world.is_valid_tile(cur_tile.0)); // checked before in CheckIfIndustryTilesAreFree
+
             if gfx != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
                 let its = get_industry_tile_spec(gfx);
                 if unsafe {
@@ -495,8 +497,9 @@ impl Engine<'_> {
             }
         }
         *custom_shape_check = custom_shape;
-        // It is almost impossible to have a fully flat land in TG, so what we do is that we
-        // check if we can make the land flat later on. See CheckIfCanLevelIndustryPlatform().
+        // It is almost impossible to have a fully flat land in TG, so what we
+        //  do is that we check if we can make the land flat later on. See
+        //  CheckIfCanLevelIndustryPlatform().
         if !refused_slope
             || (unsafe { (self.x.terragenesis)() }
                 && unsafe { (self.c.generating)() }
@@ -539,8 +542,9 @@ impl Engine<'_> {
             if internal != 0 && curh.abs_diff(height) > 1 {
                 return false;
             }
-            // Different height, so the surrounding tiles of this tile has to be correct too
-            // (in level, or almost in level) else you get a chain-reaction of terraforming.
+            // Different height, so the surrounding tiles of this tile
+            //  has to be correct too (in level, or almost in level)
+            //  else you get a chain-reaction of terraforming.
             if internal == 0
                 && curh != height
                 && (coordinates.tile_x(tile_walk.0) == 0
@@ -721,6 +725,8 @@ impl Engine<'_> {
         ip: *mut *mut ShellHandle,
     ) -> bool {
         let (tile, kind) = (candidate.tile, candidate.kind);
+        self.s
+            .assert_with(|| candidate.layout_index < unsafe { (*indspec).layouts.len() });
         let layout = unsafe { &raw const (*indspec).layouts.as_slice()[candidate.layout_index] };
         unsafe { *ip = ptr::null_mut() };
         // 1. Cheap: Built-in checks on industry level.
@@ -730,6 +736,8 @@ impl Engine<'_> {
         let Some(t) = self.find_town_for_industry(tile, kind) else {
             return false;
         };
+        self.s.assert_with(|| !t.is_null());
+
         if !self.check_if_industry_is_allowed(tile, kind, t) {
             return false;
         }
@@ -941,16 +949,26 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
         }
     }
 }
-/// `CmdBuildIndustry`: build or fund an industry at `tile`. `first_layout` is the first
-/// layout to try, `fund` is false to prospect and true to fund (only valid if the current
-/// company is `OWNER_DEITY`), and `seed` is used for desync-free randomisations. The result
-/// holds the cost of this operation or an error.
+/// `CmdBuildIndustry`'s arguments.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdBuildIndustry {
+    /// The tile to build the industry at.
+    pub(crate) tile: TileIndex,
+    /// The industry type to build.
+    pub(crate) it: IndustryType,
+    /// The first layout to try.
+    pub(crate) first_layout: u32,
+    /// False = prospect, True = fund (only valid if current company is DEITY).
+    pub(crate) fund: bool,
+    /// Seed to use for desyncfree randomisations.
+    pub(crate) seed: u32,
+}
+/// `CmdBuildIndustry`: build/fund an industry. The result in `out` holds the cost of this
+/// operation or an error.
 ///
 /// # Safety
 /// Live native stack cost/output and synchronous services. Borrowed specs/layouts
 /// remain immutable. Commands, allocation and resolvers receive no owner borrow.
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::cast_possible_truncation,
     reason = "CmdBuildIndustry keeps the original's implicit C++ integer conversions"
@@ -959,18 +977,20 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
     clippy::too_many_lines,
     reason = "CmdBuildIndustry is ported as the original's single body; its length is tracked in the Clippy debt ledger"
 )]
-pub unsafe extern "C" fn openttd_rust_industry_build(
+pub(crate) unsafe fn cmd_build_industry(
     out: *mut IndustryCost,
-    tile: u32,
-    kind: u8,
-    flags: u16,
-    first_layout: u32,
-    fund: bool,
-    seed: u32,
-    context: *const TransactionContext,
+    flags: DoCommandFlags,
+    args: CmdBuildIndustry,
+    context: &TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    let (tile, it, flags) = (TileIndex(tile), IndustryType(kind), DoCommandFlags(flags));
+    let CmdBuildIndustry {
+        tile,
+        it,
+        first_layout,
+        fund,
+        seed,
+    } = args;
     if it >= IndustryType::NUM_INDUSTRYTYPES {
         e.fail(StringID::INVALID_STRING_ID);
         return;
@@ -994,25 +1014,25 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     }
     if !e.editor()
         && unsafe {
-            super::resolver::openttd_rust_industry_probability(
-                it.0,
+            super::resolver::get_industry_probability_callback(
+                it,
                 if e.company() == Owner::DEITY {
-                    IndustryAvailabilityCallType::IACT_RANDOMCREATION.0
+                    IndustryAvailabilityCallType::IACT_RANDOMCREATION
                 } else {
-                    IndustryAvailabilityCallType::IACT_USERCREATION.0
+                    IndustryAvailabilityCallType::IACT_USERCREATION
                 },
                 1,
-                e.s.resolver,
+                &*e.s.resolver,
             )
         } == 0
     {
         e.fail(StringID::INVALID_STRING_ID);
         return;
     }
-    // The local Randomizer is seeded twice with seed and Next is called once.
-    // Its returned second word is rotr(seed, 3) - 1; the updated first word is unused.
+    let mut randomizer = crate::random_func::Randomizer::default();
+    randomizer.set_seed(seed);
     let random_initial_bits = gb(seed, 0, 16) as u16;
-    let random_var8f = seed.rotate_right(3).wrapping_sub(1);
+    let random_var8f = randomizer.next();
     let num_layouts = unsafe { (*indspec).layouts.len() };
     e.fail(StringID(e.e.site));
     let deity_prospect = e.company() == Owner::DEITY && !fund;
@@ -1039,11 +1059,13 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
                 };
                 let cur_company = e.swap_company(Owner::TOWN);
                 for _ in 0..5000 {
-                    let map = e.map();
                     // We should not have more than one Random() in a function call because
                     // parameter evaluation order is not guaranteed in the c++ standard.
+                    let world = crate::map_func::World::new(e.s.shared());
                     let tile = TileIndex(
-                        e.s.shared().random() & map.size_x.wrapping_mul(map.size_y).wrapping_sub(1),
+                        world
+                            .dimensions
+                            .random_tile_seed(world.size_y(), e.s.shared().random()),
                     );
                     // Start with a random layout.
                     let mut layout = e.s.shared().random_range(num_layouts as u32) as usize;
@@ -1125,16 +1147,38 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     };
     unsafe { (e.cost.expense_money)(out, ExpensesType::EXPENSES_OTHER.0, construction) };
 }
-/// `CreateNewIndustry`: create a new industry of random layout at `tile`. `industry`
-/// receives the created industry, or null if it failed.
-///
+/// # Safety
+/// As `cmd_build_industry`; the transaction tables are live.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn openttd_rust_industry_build(
+    out: *mut IndustryCost,
+    tile: u32,
+    kind: u8,
+    flags: u16,
+    first_layout: u32,
+    fund: bool,
+    seed: u32,
+    context: *const TransactionContext,
+) {
+    unsafe {
+        cmd_build_industry(
+            out,
+            DoCommandFlags(flags),
+            CmdBuildIndustry {
+                tile: TileIndex(tile),
+                it: IndustryType(kind),
+                first_layout,
+                fund,
+                seed,
+            },
+            &*context,
+        );
+    }
+}
 /// # Safety
 /// Live stack result/output; source preconditions require a nonempty layout list.
 #[unsafe(no_mangle)]
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "CreateNewIndustry keeps the original's implicit C++ integer conversions"
-)]
 pub unsafe extern "C" fn openttd_rust_industry_create(
     out: *mut IndustryCost,
     industry: *mut *mut ShellHandle,
@@ -1144,7 +1188,32 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
     context: *const TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    let kind = IndustryType(kind);
+    unsafe {
+        create_new_industry(
+            &e,
+            industry,
+            TileIndex(tile),
+            IndustryType(kind),
+            IndustryAvailabilityCallType(creation_type),
+        );
+    }
+}
+/// `CreateNewIndustry`: create a new industry of random layout at `tile`. `industry`
+/// receives the created industry, or null if it failed.
+///
+/// # Safety
+/// Live output; source preconditions require a nonempty layout list.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "CreateNewIndustry keeps the original's implicit C++ integer conversions"
+)]
+unsafe fn create_new_industry(
+    e: &Engine<'_>,
+    industry: *mut *mut ShellHandle,
+    tile: TileIndex,
+    kind: IndustryType,
+    creation_type: IndustryAvailabilityCallType,
+) {
     let indspec = get_industry_spec(kind);
     let seed = e.s.shared().random();
     let seed2 = e.s.shared().random();
@@ -1152,20 +1221,21 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
         e.s.shared()
             .random_range(unsafe { (*indspec).layouts.len() } as u32) as usize;
     let candidate = IndustryCandidate {
-        tile: TileIndex(tile),
+        tile,
         kind,
         layout_index,
         initial_random_bits: gb(seed2, 0, 16) as u16,
         founder: Owner::NONE,
-        creation_type: IndustryAvailabilityCallType(creation_type),
+        creation_type,
     };
-    e.create_new_industry_helper(
+    let succeeded = e.create_new_industry_helper(
         &candidate,
         DoCommandFlags::from_element(DoCommandFlag::Execute),
         indspec,
         seed,
         industry,
     );
+    e.s.assert_with(|| unsafe { !(*industry).is_null() } || !succeeded);
 }
 
 /// # Safety

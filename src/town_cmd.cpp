@@ -956,7 +956,7 @@ Town *ClosestTownFromTile(TileIndex tile, uint threshold)
 	return const_cast<Town *>(reinterpret_cast<const Town *>(openttd_rust_town_closest(&GetRustSharedServices(), tile.base(), threshold)));
 }
 
-void SetTownRatingTestMode(bool mode) { openttd_rust_town_rating_test(mode); }
+void SetTownRatingTestMode(bool mode) { openttd_rust_town_rating_test(&GetRustSharedServices(), mode); }
 void ChangeTownRating(Town *t, int add, int max, DoCommandFlags flags)
 {
 	openttd_rust_town_change_rating(&GetRustTownServices(), &GetRustSharedServices(), t == nullptr ? nullptr : t->growth_owner.get(),
