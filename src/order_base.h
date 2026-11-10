@@ -232,8 +232,6 @@ public:
 	inline void SetMaxSpeed(uint16_t speed) { this->max_speed = speed; }
 
 	bool ShouldStopAtStation(const Vehicle *v, StationID station) const;
-	bool CanLoadOrUnload() const;
-	bool CanLeaveWithCargo(bool has_cargo) const;
 
 	TileIndex GetLocation(const Vehicle *v, bool airport = false) const;
 
@@ -421,11 +419,8 @@ public:
 	inline VehicleOrderID GetNumManualOrders() const { return this->num_manual_orders; }
 
 	void GetNextStoppingStation(std::vector<StationID> &next_station, const Vehicle *v, VehicleOrderID first = INVALID_VEH_ORDER_ID, uint hops = 0) const;
-	VehicleOrderID GetNextDecisionNode(VehicleOrderID next, uint hops) const;
 
 	void InsertOrderAt(Order &&order, VehicleOrderID index);
-	void DeleteOrderAt(VehicleOrderID index);
-	void MoveOrder(VehicleOrderID from, VehicleOrderID to);
 
 	/**
 	 * Is this a shared order list?
@@ -452,8 +447,6 @@ public:
 	 * @param v vehicle to add to the list
 	 */
 	inline void AddVehicle([[maybe_unused]] Vehicle *v) { ++this->num_vehicles; }
-
-	void RemoveVehicle(Vehicle *v);
 
 	bool IsCompleteTimetable() const;
 

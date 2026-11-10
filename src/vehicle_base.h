@@ -689,7 +689,6 @@ public:
 	}
 
 	void AddToShared(Vehicle *shared_chain);
-	void RemoveFromShared();
 
 	/**
 	 * Get the next vehicle of the shared vehicle chain.
@@ -815,9 +814,6 @@ public:
 
 	inline void SetServiceIntervalIsPercent(bool on) { this->vehicle_flags.Set(VehicleFlag::ServiceIntervalIsPercent, on); }
 
-	bool HasFullLoadOrder() const;
-	bool HasConditionalOrder() const;
-	bool HasUnbunchingOrder() const;
 	void LeaveUnbunchingDepot();
 	bool IsWaitingForUnbunching() const;
 
