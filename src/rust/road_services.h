@@ -54,13 +54,12 @@ static bool OPENTTD_RUST_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t tile
 	const RoadVehicle *u = RoadOf(v);
 	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
 }
-/** The first-arrival body of `RoadVehArrivesAt`: mark, news, AI and game events. */
-static void OPENTTD_RUST_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t station, uint8_t vehicle_type, uint8_t headline) noexcept
+/** The first-arrival body of `RoadVehArrivesAt` after the station is marked: news, AI and game events. */
+static void OPENTTD_RUST_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t station, uint8_t headline) noexcept
 {
 	static const StringID headlines[] = {STR_NEWS_FIRST_BUS_ARRIVAL, STR_NEWS_FIRST_PASSENGER_TRAM_ARRIVAL, STR_NEWS_FIRST_TRUCK_ARRIVAL, STR_NEWS_FIRST_CARGO_TRAM_ARRIVAL};
 	const RoadVehicle *u = RoadOf(v);
 	Station *st = Station::Get(StationID(station));
-	st->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(vehicle_type);
 	AddVehicleNewsItem(GetEncodedString(headlines[headline], st->index), (u->GetOwner() == _local_company) ? NewsType::ArrivalCompany : NewsType::ArrivalOther, u->index, st->index);
 	AI::NewEvent(u->GetOwner(), new ScriptEventStationFirstVehicle(st->index, u->index));
 	Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, u->index));

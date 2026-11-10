@@ -247,7 +247,7 @@ pub(crate) const ROAD_LEAVES: crate::road::Leaves = crate::road::Leaves {
     tram_build_read: unreachable2,
     disconnect: unreachable0,
     should_stop: unreachable2,
-    arrival_news: unreachable4,
+    arrival_news: unreachable3,
     depot_exit_dirty: unreachable1,
     crash_news: unreachable2,
     pay_running: unreachable2,

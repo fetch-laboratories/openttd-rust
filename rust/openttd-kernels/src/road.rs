@@ -391,7 +391,7 @@ pub struct Leaves {
         extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
-    pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
+    pub arrival_news: extern "C" fn(VehicleRef, u16, u8),
     /// The road stop arrival randomisation and animation triggers.
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
     pub crash_news: extern "C" fn(VehicleRef, u32),
@@ -1413,7 +1413,8 @@ impl Game<'_> {
         let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
         if r.had_vehicle_of_type & bit == 0 {
             let headline = if bus { 0 } else { 2 } + u8::from(s.tram);
-            service!(self.l.arrival_news)(v.v, station, bit, headline);
+            service!(self.ss.station_add_vehicle_of_type)(station, bit);
+            service!(self.l.arrival_news)(v.v, station, headline);
         }
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
         crate::animated_tile::road_event(

@@ -57,7 +57,7 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadTramBuildRead (OPENTTD_RUST_CALL *tram_build_read)(OpenTTDVehicle *, OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(tram_build_read);
 	void (OPENTTD_RUST_CALL *disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	bool (OPENTTD_RUST_CALL *should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
-	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
+	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 
 	void (OPENTTD_RUST_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);
 	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
