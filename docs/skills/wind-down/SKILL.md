@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Inspect root's session and the project in /home/fetch/projects/openttd-rust. Send a tailored message to root with `t3_thread_send` in step 5. Stay read-only apart from that send: no commits, pushes, GitHub comments, CI requests, process signals or messages to other agents. Give the user a short note and the message sent.
 
-User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root is `gpt-6.1-sol` xhigh in Codex from `$start-development` (`docs/skills/start-development/SKILL.md`), with subagents under [team](../../team.md#roles-and-models), component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
+User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root runs `/start-development` (`docs/skills/start-development/SKILL.md`) under Claude Code, with subagents under [team](../../team.md#roles-and-models), component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
 
 Quote the first two blocks of the [rollback and wind-down rules](../../workflow.md#automatic-rollback-and-wind-down) verbatim from current base in step 4. Apply them without adding process rules. Explicit user scope changes the action allowance, not the merge checks or automatic rollback.
 

@@ -4,7 +4,8 @@ A reviewer reads this brief, then the spawn message. The spawn gives:
 - the reviewer's name;
 - the PR;
 - the function group to review, and who covers the other groups;
-- the points the PR body flags for review.
+- the points the PR body flags for review;
+- the implementer's thread ID.
 
 Everything else is here ([delegation](team.md#review-loop)).
 
@@ -20,7 +21,7 @@ Everything else is here ([delegation](team.md#review-loop)).
 
 ## Report only
 
-Do not commit, push, request Full or merge. The PR's Opus implementer fixes each finding in its own commits ending `Found-by: review`. When root asks, verify the fixing commits for your own findings and post the verification, also report only.
+Do not commit, push, request Full or merge. The PR's Opus implementer fixes each finding in its own commits ending `Found-by: review`. When the implementer asks, verify the fixing commits for your own findings and post the verification, also report only.
 
 ## What to examine in your group
 
@@ -68,5 +69,7 @@ Post one report on the PR, with the PR template's review skeleton, starting `Rev
   - the check or reading that found it;
   - the suggested remedy.
 - End with the disposition: accepted, or findings to remediate.
+
+After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID: your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
 
 Your last line is `PR <url>, head <SHA>, checks and reviews <state>`.

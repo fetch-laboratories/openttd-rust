@@ -91,8 +91,9 @@ TGP's projection rose 5.32%, over the 3% row. The [attribution](https://github.c
 
 - **Execution order:** the cleanup stage, then phase 3 readers, then phase 2 storage with each pool's save/load, then phases 4, 5 and 6 ([planning](planning.md#goal-and-phases)).
 - **Yardstick:** net fork C++ removed, counting C++ under `tools/` and `src/tests`. Rust exports plus callback slots fall or hold; growth needs a reason the reviewer accepts ([cost decisions](planning.md#cost-decisions)).
-- **Limits:** at most four implementation agents ([team](team.md#roles-and-models)); stocktake and profile every twelfth integration (user, 2026-11-08; every sixth from 2026-11-06, and stocktake 137 is skipped).
+- **Limits:** at most two implementation agents (user, 2026-11-10; [team](team.md#roles-and-models)); stocktake and profile every twelfth integration (user, 2026-11-08; every sixth from 2026-11-06, and stocktake 137 is skipped).
 - **Enforcement:** checks enforce mechanical rules on every push (#733); reviewers work from the [review checklist](review-checklist.md); implementers read the [implementer brief](implementer-brief.md) and their work order.
+- **Process (user, 2026-11-10):** #860 lists the changes from the development-process review: a merge queue, Windows x86, Clang and GCC Dedicated in Full, cached CI packages, one Clippy run, scenario comparison on CI, direct reviewer and implementer messages, and a checkpoint written at wind-down only.
 - **Sizes, never durations:** plans, issues and briefs size work in counts (files, lines, call sites), never in time (user, 2026-11-06).
 
 ## Phases
@@ -170,7 +171,7 @@ Root's first actions on resume:
 
 Each stream issue holds its batches, rules, proof and inventory. [Selection](planning.md#selection) ranks cleanup work by stream inventory. A file belongs to at most one open PR across all streams: check open PRs' file sets before starting. Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries; resolve those edits when updating from base. Cleanup PRs integrate on their stream's proof, review and exact-head Full, growing neither fork C++ nor the boundary ([integration](root-workflow.md#integration)).
 
-Slots: while ready worksets remain, #734/#735 file passes hold two of the four implementer slots. The other two run items 2 to 4 in order. A running profile counts as one of the four. #738 runs as one docs agent outside the implementer count.
+Slots (two implementers; user, 2026-11-10): while ready worksets remain, one slot runs #734/#735 file passes and the other runs items 2 to 4 in order. A running profile counts as one of the two. #738 runs as one docs agent outside the implementer count.
 
 1. **#734/#735 file passes.** One PR per workset in the #734 manifest finishes every file it touches, in one pass:
    - the original's wrapper types in internal signatures, return types and accessors. FFI exports, service tables and generated declarations keep base integers (#355);
@@ -440,7 +441,7 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 
 ## Recurring
 
-- After every twelfth integration (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the four implementers; profile 143 ran beside four. The next stocktake and profile follow integration 155.
+- After every twelfth integration (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow integration 155.
 - Run the platform cadence after every fifth integration; the next follows 150. A new failure stops integrations. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -475,7 +476,7 @@ The finished-file residue PR and work order items 2 and 3 are not queue entries.
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-**Paused at the user's request (wind-down, 2026-11-09 05:35 UTC).** No implementers, integrator or planner run. No merge or rollback was performed at wind-down: no PR or combination had review plus a passing exact-head Full. Code main is integration 146, `61c6d2c598`, and the docs tip is this commit. Base 146, `21db9b3b8a`'s Quick, Build and baseline runs, and cadence 145 are all green. Integrations 142 and 144 have a coverage regression, but later code merges followed them, so no bounded rollback applies. Steering 33 merged #849's fix in integration 147 (#851, `489f4ea161`). Apply the [thirty-third steering review](#thirty-third-steering-review-2026-11-09)'s actions first. On resume, the [delegation](team.md#delegation-user-2026-11-08) model applies: an Opus integrator at medium effort, fresh reviewers for re-checks, a planner-filled ready queue, and pipelined implementers, up to four.
+**Paused at the user's request (wind-down, 2026-11-09 05:35 UTC).** No implementers, integrator or planner run. No merge or rollback was performed at wind-down: no PR or combination had review plus a passing exact-head Full. Code main is integration 146, `61c6d2c598`, and the docs tip is this commit. Base 146, `21db9b3b8a`'s Quick, Build and baseline runs, and cadence 145 are all green. Integrations 142 and 144 have a coverage regression, but later code merges followed them, so no bounded rollback applies. Steering 33 merged #849's fix in integration 147 (#851, `489f4ea161`). Apply the [thirty-third steering review](#thirty-third-steering-review-2026-11-09)'s actions first. On resume, the [delegation](team.md#delegation-user-2026-11-08) model applies: an Opus integrator at medium effort, fresh reviewers for re-checks, a planner-filled ready queue, and pipelined implementers, up to two (user, 2026-11-10).
 
 | PR | Head | State and CI at pause | Next action on resume |
 | --- | --- | --- | --- |

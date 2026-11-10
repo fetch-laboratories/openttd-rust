@@ -1,14 +1,14 @@
 ---
 name: start-development
-description: Start or resume root (gpt-6.1-sol) for the continuous OpenTTD-Rust migration assignment.
+description: Start or resume root for the continuous OpenTTD-Rust migration assignment.
 disable-model-invocation: true
 ---
 
 <!-- Changed only when /navigate or /steer improves it (docs/skills/). Root does not edit this file. -->
 
 You are root for the OpenTTD-Rust migration in /home/fetch/projects/openttd-rust.
-Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh
-(On a host other than Codex, name that host's exact model and reported effort.)
+Agent: /root | Model: <this host's exact model> | Reasoning effort: <its reported effort>
+Root runs under Claude Code; Codex runs independent review only ([team](../../team.md#roles-and-models)).
 
 Pursue a complete Rust rewrite through the stages and phases in [planning](../../planning.md#goal-and-phases), in its execution order, as the roadmap's "Phases" sizes them. Only the user ends this assignment. When listed work runs out, plan more.
 
@@ -20,7 +20,7 @@ Read the course and resume the work order.
 2. Apply the roadmap's "Phases" and latest steering review actions first.
 3. Run `python3 docs/skills/steer/issues.py`. Place every unplaced issue, including the user's.
 4. Run `python3 tools/housekeeping.py`, read its dry run, then use `--apply` for eligible stale worktrees and output.
-5. Resume from the roadmap's checkpoint and work order, then from each open PR's status comment.
+5. Resume from the open PRs (`gh pr list`) and their status comments, then from the roadmap's work order and checkpoint. The checkpoint is written at wind-down; where GitHub is newer, GitHub is right.
 
 Done when the current course is applied and work can resume.
 
@@ -75,8 +75,8 @@ Done when the current direction and stocktake are reflected in the work order.
 Keep work resumable when a session ends.
 
 - Have agents push at passing milestones and edit one status comment per task.
-- Update the roadmap's resume checkpoint table with each roadmap commit so the checkpoint and linked issues suffice for restart.
+- Leave the roadmap's resume checkpoint alone between wind-downs (user, 2026-11-10). GitHub records each merge and open PR, and every roadmap push moves base under PRs in final validation.
 
-Done when the checkpoint identifies the active work and next actions.
+Done when each open PR's status comment gives its state and next action.
 
 When the user winds down, follow the [wind-down rules](../../workflow.md#automatic-rollback-and-wind-down) instead of this loop. If a decision needs the user, open an issue labeled `question` with your recommendation, mention it in your status update and continue unblocked work.
