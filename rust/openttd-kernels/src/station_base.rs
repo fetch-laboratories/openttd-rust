@@ -155,3 +155,29 @@ pub(crate) unsafe fn goods_get_via_raw(
     }
     .0
 }
+
+/// `Station::TileBelongsToRailStation` and its `Waypoint` override: whether
+/// `tile` is a rail station (or rail waypoint) tile of station `index`.
+pub(crate) fn tile_belongs_to_rail_station(
+    s: &crate::services::Services,
+    waypoint: bool,
+    index: StationID,
+    tile: TileIndex,
+) -> bool {
+    let world = crate::map_func::World::new(s);
+    (if waypoint {
+        world.is_rail_waypoint_tile(tile)
+    } else {
+        world.is_rail_station_tile(tile)
+    }) && world.get_station_index(tile) == index
+}
+/// `Station::TileBelongsToAirport`: whether `tile` is an airport tile of
+/// station `index`.
+pub(crate) fn tile_belongs_to_airport(
+    s: &crate::services::Services,
+    index: StationID,
+    tile: TileIndex,
+) -> bool {
+    let world = crate::map_func::World::new(s);
+    world.is_airport_tile(tile) && world.get_station_index(tile) == index
+}

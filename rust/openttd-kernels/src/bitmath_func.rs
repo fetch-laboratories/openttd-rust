@@ -117,6 +117,13 @@ pub fn set_bit_size(value: &mut usize, bit: u8) -> usize {
     *value
 }
 
+/// `ClrBit` for byte-sized bitsets such as `TrackBits`, preserving the original
+/// return value.
+pub fn clr_bit8(value: &mut u8, bit: u8) -> u8 {
+    *value &= !1_u8.wrapping_shl(u32::from(bit));
+    *value
+}
+
 /// `ClrBit` for native `size_t` words such as `Pool::BitmapStorage`, preserving the
 /// original return value.
 pub fn clr_bit_size(value: &mut usize, bit: u8) -> usize {

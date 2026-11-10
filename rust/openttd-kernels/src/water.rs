@@ -535,7 +535,7 @@ impl<'a> World<'a> {
             let stations = (self.s.station_commands)();
             // SAFETY: the getter supplies the borrowed process-lifetime table;
             // docking runs synchronously without a live owner borrow.
-            unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
+            unsafe { crate::station_cmd::check_possible_docking_raw(stations, tile) };
             unsafe {
                 self.w.invalidate_region(tile, self.s);
             }
