@@ -481,21 +481,23 @@ At most three undispatched work orders, each ready once the next merge lands ([d
 
 Agent: /root | Model: claude-fable-5-2 | Reasoning effort: xhigh
 
-Refreshed by root on 2026-11-10 after the eleventh merge, from the planner's measurements at `c12561671f`, and checked against #876, #877, #878 and the two branches without a PR yet (entry 15 and #736's NewGRF loading family). Entry 15 (vehicle transactions) was dispatched on 2026-11-10 and has left the queue. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
+Refreshed by root on 2026-11-10 after the fifteenth merge, from the planner's measurements at `c12561671f`, and checked against #879, #883, #884 and #737's W branch. Entries 15 (vehicle transactions, #879 and #883) and 23r (workset 23 remainder, #884) are dispatched and have left the queue. Sites are primitive integer declarations; changed lines are 8.6 to 15.5 per site.
 
-1. **23r, #734 workset 23 remainder.**
-   - **Files:** `alternating.rs`, `builder.rs`, `consumer.rs`, `crypto.rs`, `crypto/ffi.rs`, `crypto/tests.rs`, `md5.rs`, `pool/tests.rs`, `debug.rs`, `game_state.rs`, `raw_field.rs` and `witness.rs`: 2,964 lines, 89 sites, 765 to 1,380 changed lines. One PR.
-   - **Callers:** none edited. These are integer and string helpers whose signatures stay, as #832's eight were.
-   - **Waits on:** nothing. No file is in an open PR, and it can stay open beside 7a.
-   - **Rank:** last in order (d). It is queued because it is the only pass free while 7a's 95 files are held.
+1. **22, #734 workset 22 Text/GUI.**
+   - **Files:** `byte_strings.rs`, `control_codes.rs`, `encoded.rs`, `sprites.rs`, `string_func.rs`, `string_services.rs`, `string_validation.rs`, `utf8.rs`, `viewport_func.rs` and `widget_parser.rs`: 2,854 lines, 114 sites, 980 to 1,767 changed lines. One PR.
+   - **Callers:** none in 7a's set except through `sprites.rs` and `viewport_func.rs`, which have no sites. `encoded.rs` adopts the `SeparatorUsage` form #884 adds.
+   - **Waits on:** #884, for that form. No file is in an open PR.
+   - **Rank:** a leaf in order (d). It is queued because it is free while #737's W and I hold the map-core pass back.
 2. **7a, #734 workset 13 map core.**
    - **Files:** `map_func.rs` and `tile_map.rs`: 1,243 lines, 167 sites, 1,436 to 2,588 changed lines. One PR, one reviewer per function group.
    - **Callers:** 93 files, the highest fan-in in the tree. The finished ones adopt the typed forms; the unfinished ones take one-token `_raw` renames. Among the finished callers, `town.rs` keeps six `Engine` map-reader wrappers that this pass converts ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6770371199)).
-   - **Waits on:** #878 (entry 6b-1), which edits `map_func.rs`, and then #737's W and I PRs, which cannot be open beside it ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767606869)). Root says when it opens.
+   - **Waits on:** #737's W and I PRs, which cannot be open beside it ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767606869)). Root says when it opens.
 3. **9m, #734 workset 09 `movement.rs` single-file pass.**
    - **Files:** `movement.rs`, `movement/tests.rs` and `signal_func.rs`: 1,825 lines, 87 sites, 748 to 1,348 changed lines.
    - **Callers:** 66 files.
    - **Waits on:** 7a. The two share 50 files, `movement.rs` among them, and cannot be open together.
+
+After entry 22, the next pass free beside 7a is workset 20 Network: `packet.rs` as a single-file pass, and the other 17 files in two PRs ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)).
 
 Work order item 4 is not queued here: root dispatches it from the rankings on [#737](https://github.com/fetch-laboratories/openttd-rust/issues/737#issuecomment-6767417698) and [#736](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6767452427).
 
