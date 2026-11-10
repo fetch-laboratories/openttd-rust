@@ -42,3 +42,12 @@ pub(crate) fn not_reached() -> ! {
     }
     std::process::abort()
 }
+
+/// Replace only the assertion callback for a Rust test; retain fatal dispatch.
+#[cfg(test)]
+pub(crate) fn bind_test_check(check: extern "C" fn(bool)) {
+    // SAFETY: A null table changes no pointer lifetime contract.
+    unsafe {
+        openttd_rust_assert_bind(check, std::ptr::null());
+    }
+}
