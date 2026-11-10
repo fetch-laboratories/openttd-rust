@@ -596,12 +596,36 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
     effect: u8,
     goal: u32,
 ) {
+    let cmd = CmdTownCargoGoal {
+        town_id: TownId(id),
+        tae: crate::cargotype::TownAcceptanceEffect(effect),
+        goal,
+    };
+    unsafe { cmd_town_cargo_goal(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownCargoGoal`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownCargoGoal {
+    pub town_id: TownId,
+    pub tae: crate::cargotype::TownAcceptanceEffect,
+    pub goal: u32,
+}
+/// `CmdTownCargoGoal`: change the cargo goal of a town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_cargo_goal(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownCargoGoal,
+) {
     use crate::cargotype::TownAcceptanceEffect;
-    let (flags, town_id, effect) = (
-        DoCommandFlags(flags),
-        TownId(id),
-        TownAcceptanceEffect(effect),
-    );
+    let CmdTownCargoGoal {
+        town_id,
+        tae: effect,
+        goal,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     if c.current_company() != CompanyID::DEITY {
         c.error(out);
@@ -651,7 +675,29 @@ pub unsafe extern "C" fn openttd_rust_town_text_command(
     id: u16,
     text: ByteSpan,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownSetText {
+        town_id: TownId(id),
+        text,
+    };
+    unsafe { cmd_town_set_text(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownSetText`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownSetText {
+    pub town_id: TownId,
+    pub text: ByteSpan,
+}
+/// `CmdTownSetText`: set a custom text in the town window.
+/// # Safety
+/// Live command tables, native result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_town_set_text(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownSetText,
+) {
+    let CmdTownSetText { town_id, text } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
@@ -673,7 +719,32 @@ pub unsafe extern "C" fn openttd_rust_town_growth_command(
     id: u16,
     rate: u16,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownGrowthRate {
+        town_id: TownId(id),
+        growth_rate: rate,
+    };
+    unsafe { cmd_town_growth_rate(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownGrowthRate`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownGrowthRate {
+    pub town_id: TownId,
+    pub growth_rate: u16,
+}
+/// `CmdTownGrowthRate`: change the growth rate of the town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_growth_rate(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownGrowthRate,
+) {
+    let CmdTownGrowthRate {
+        town_id,
+        growth_rate: rate,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
@@ -694,7 +765,35 @@ pub unsafe extern "C" fn openttd_rust_town_rating_command(
     company: u8,
     rating: i16,
 ) {
-    let flags = DoCommandFlags(flags);
+    let cmd = CmdTownRating {
+        town_id: TownId(id),
+        company_id: CompanyID(company),
+        rating,
+    };
+    unsafe { cmd_town_rating(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdTownRating`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdTownRating {
+    pub town_id: TownId,
+    pub company_id: CompanyID,
+    pub rating: i16,
+}
+/// `CmdTownRating`: change the rating of a company in a town.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_town_rating(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdTownRating,
+) {
+    let CmdTownRating {
+        town_id,
+        company_id,
+        rating,
+    } = cmd;
+    let (id, company) = (town_id.0, company_id.0);
     let c = unsafe { Commands::new(s) };
     let Some(t) = c.deity(out, TownId(id)) else {
         return;
@@ -723,10 +822,36 @@ pub unsafe extern "C" fn openttd_rust_town_expand_command(
     amount: u32,
     modes: u8,
 ) {
-    let (flags, modes) = (
-        DoCommandFlags(flags),
-        crate::town_type::TownExpandModes(modes),
-    );
+    let cmd = CmdExpandTown {
+        town_id: TownId(id),
+        grow_amount: amount,
+        modes: crate::town_type::TownExpandModes(modes),
+    };
+    unsafe { cmd_expand_town(s, road, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdExpandTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdExpandTown {
+    pub town_id: TownId,
+    pub grow_amount: u32,
+    pub modes: crate::town_type::TownExpandModes,
+}
+/// `CmdExpandTown`: expand a town (scenario editor only).
+/// # Safety
+/// Live command tables, road context and native result storage for the call.
+pub(crate) unsafe fn cmd_expand_town(
+    s: &CommandServices,
+    road: *const crate::road_cmd::CommandContext,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdExpandTown,
+) {
+    let CmdExpandTown {
+        town_id,
+        grow_amount: amount,
+        modes,
+    } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     if (!(unsafe { &*c.f.growth }.environment.editor)() && c.current_company() != CompanyID::DEITY)
         || modes.0 == 0
@@ -754,6 +879,26 @@ pub unsafe extern "C" fn openttd_rust_town_delete_command(
     flags: u16,
     id: u16,
 ) {
+    let cmd = CmdDeleteTown {
+        town_id: TownId(id),
+    };
+    unsafe { cmd_delete_town(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdDeleteTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdDeleteTown {
+    pub town_id: TownId,
+}
+/// `CmdDeleteTown`: delete a town (scenario editor or worldgen only).
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_delete_town(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdDeleteTown,
+) {
+    let id = cmd.town_id.0;
     let c = unsafe { Commands::new(s) };
     let growth = unsafe { &*c.f.growth };
     if !(growth.environment.editor)() && !(growth.generating_world)() {
@@ -765,10 +910,8 @@ pub unsafe extern "C" fn openttd_rust_town_delete_command(
         c.error(out);
         return;
     }
-    c.delete_town(out, DoCommandFlags(flags), t);
+    c.delete_town(out, flags, t);
 }
-/// Do a town action (`CmdDoTownAction`). This performs an action such as advertising,
-/// building a statue, funding buildings, but also bribing the town-council.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_action(
     s: &CommandServices,
@@ -777,7 +920,30 @@ pub unsafe extern "C" fn openttd_rust_town_action(
     id: u16,
     action: u8,
 ) {
-    let (flags, town_id, action) = (DoCommandFlags(flags), TownId(id), TownAction(action));
+    let cmd = CmdDoTownAction {
+        town_id: TownId(id),
+        action: TownAction(action),
+    };
+    unsafe { cmd_do_town_action(s, out, DoCommandFlags(flags), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdDoTownAction`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdDoTownAction {
+    pub town_id: TownId,
+    pub action: TownAction,
+}
+/// Do a town action (`CmdDoTownAction`). This performs an action such as advertising,
+/// building a statue, funding buildings, but also bribing the town-council.
+/// # Safety
+/// Live command tables and native result storage for the call.
+pub(crate) unsafe fn cmd_do_town_action(
+    s: &CommandServices,
+    out: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdDoTownAction,
+) {
+    let CmdDoTownAction { town_id, action } = cmd;
+    let id = town_id.0;
     let c = unsafe { Commands::new(s) };
     let t = c.resolve(town_id);
     if t.shell.is_null()

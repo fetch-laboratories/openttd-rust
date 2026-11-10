@@ -13,6 +13,7 @@ use super::{
 };
 use crate::cargotype::TownAcceptanceEffect;
 use crate::clear_map::ClearGround;
+use crate::command_type::{DoCommandFlag, DoCommandFlags};
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::economy_type::EXPENSES_OTHER;
 use crate::landscape_type::LandscapeType;
@@ -543,10 +544,79 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     text: ByteSpan,
     execute: bool,
 ) {
+    let context = FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    };
+    let cmd = CmdFoundTown {
+        tile,
+        size,
+        city,
+        layout,
+        random_location,
+        townnameparts,
+        text,
+    };
+    unsafe { cmd_found_town(context, result, execute_flags(execute), cmd) };
+}
+/// The command flags of a positional export's execute boolean.
+fn execute_flags(execute: bool) -> DoCommandFlags {
+    if execute {
+        DoCommandFlags::from_element(DoCommandFlag::Execute)
+    } else {
+        DoCommandFlags(0)
+    }
+}
+/// The tables and native frames of one `CmdFoundTown` invocation.
+#[derive(Clone, Copy)]
+pub(crate) struct FoundTownContext {
+    pub s: *const FoundingServices,
+    pub road: *const crate::road_cmd::CommandContext,
+    pub frame: *mut Frame,
+    pub name_frame: *mut names::NameFrame,
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdFoundTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdFoundTown {
+    pub tile: Tile,
+    pub size: TownSize,
+    pub city: bool,
+    pub layout: TownLayout,
+    pub random_location: bool,
+    pub townnameparts: u32,
+    pub text: ByteSpan,
+}
+/// `CmdFoundTown`: create a new town.
+/// # Safety
+/// Live tables, native frames, result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_found_town(
+    context: FoundTownContext,
+    result: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdFoundTown,
+) {
     // Multidimensional arrays have to have defined length of non-first dimension.
     #[allow(non_upper_case_globals)]
     const price_mult: [[i32; TownSize::TSZ_RANDOM.0 as usize + 1]; 2] =
         [[15, 25, 40, 25], [20, 35, 55, 35]];
+    let FoundTownContext {
+        s,
+        road,
+        frame,
+        name_frame,
+    } = context;
+    let CmdFoundTown {
+        tile,
+        size,
+        city,
+        layout,
+        random_location,
+        townnameparts,
+        text,
+    } = cmd;
+    let execute = flags.test(DoCommandFlag::Execute);
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
@@ -812,7 +882,27 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
     text: ByteSpan,
     execute: bool,
 ) {
-    let f = unsafe { Founding::new(&*s) };
+    let cmd = CmdRenameTown { town_id, text };
+    unsafe { cmd_rename_town(&*s, result, execute_flags(execute), cmd) };
+}
+/// Gameplay arguments of `town_cmd.cpp::CmdRenameTown`, in command order.
+#[derive(Clone, Copy)]
+pub(crate) struct CmdRenameTown {
+    pub town_id: TownId,
+    pub text: ByteSpan,
+}
+/// `CmdRenameTown`: rename a town (server-only).
+/// # Safety
+/// Live tables, result storage and text bytes for the call.
+pub(crate) unsafe fn cmd_rename_town(
+    s: &FoundingServices,
+    result: *mut CommandCost,
+    flags: DoCommandFlags,
+    cmd: CmdRenameTown,
+) {
+    let CmdRenameTown { town_id, text } = cmd;
+    let execute = flags.test(DoCommandFlag::Execute);
+    let f = unsafe { Founding::new(s) };
     w::hit(w::TOWN_ENTRIES);
     w::hit(w::TOWN_RENAME);
     let town = observed!((f.s.resolve)(town_id));
