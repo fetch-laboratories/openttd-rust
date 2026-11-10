@@ -421,7 +421,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryConstructionServices construction{};
 	OpenTTDIndustryLifecycleServices lifecycle{};
 	OpenTTDIndustryTileServices tiles{};
-	OpenTTDIndustryTilePolicyServices policy{};
 	OpenTTDIndustryCommandServices commands{};
 	OpenTTDIndustryCostServices costs{};
 	OpenTTDIndustryTransactionServices transaction{};
