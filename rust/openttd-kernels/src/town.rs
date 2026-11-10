@@ -1685,7 +1685,8 @@ impl Engine<'_> {
         tile: TileIndex,
         road_dir: DiagDirection,
     ) -> bool {
-        let next_tile = self.tile_add_by_diag_dir(tile, road_dir); // The tile beyond which must be connectable to the target tile
+        let delta = self.tile_offs_by_diag_dir(road_dir); // +1 tile in the direction of the road
+        let next_tile = TileIndex(tile.0.wrapping_add_signed(delta)); // The tile beyond which must be connectable to the target tile
         let rt = self.get_town_road_type();
         /* Before we try anything, make sure the tile is on the map and not the void. */
         if !self.is_valid_tile(next_tile) {
@@ -2127,6 +2128,7 @@ impl Engine<'_> {
              * Randomize a direction and if it has a road, bail out. */
             target_dir = self.random_diag_dir();
             let target_rb = self.diag_dir_to_road_bits(target_dir);
+            // position of a possible house
             let house_tile = if cur_rb & target_rb == RoadBits::ROAD_NONE {
                 self.tile_add_by_diag_dir(tile, target_dir)
             } else {
