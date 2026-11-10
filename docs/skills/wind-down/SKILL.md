@@ -10,7 +10,7 @@ Inspect root's session and the project in /home/fetch/projects/openttd-rust. Sen
 
 User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root runs `/start-development` (`docs/skills/start-development/SKILL.md`) under Claude Code, with subagents under [team](../../team.md#roles-and-models), component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
 
-Quote the first two blocks of the [rollback and wind-down rules](../../workflow.md#automatic-rollback-and-wind-down) verbatim from current base in step 4. Apply them without adding process rules. Explicit user scope changes the action allowance, not the merge checks or automatic rollback.
+Quote the first two blocks of the [rollback and wind-down rules](../../root-workflow.md#automatic-rollback-and-wind-down) verbatim from current base in step 4. Apply them without adding process rules. Explicit user scope changes the action allowance, not the merge checks or automatic rollback.
 
 ## 1. Read root's live session
 
@@ -29,8 +29,8 @@ Verify the live state instead of trusting the roadmap or messages.
 
 - Run `git fetch` and `gh run list --branch rust-migration`; identify red and running jobs.
 - Run `git worktree list`; check each worktree's dirty state, unpushed commits and merged status, including older leftovers.
-- For each open PR, inspect head, checks, latest review report and reviewed commit, current-head `Full validation`, and last state comment.
-- Read the roadmap checkpoint and count unintegrated branches. Map running cmake, ninja, cargo, openttd and tools/*.py jobs to worktrees.
+- For each open PR, inspect head, checks, latest review report and reviewed commit, current-head `Full validation`, whether it is in the merge queue, and last state comment.
+- Read the roadmap checkpoint and count unmerged branches. Map running cmake, ninja, cargo, openttd and tools/*.py jobs to worktrees.
 - For optional cleanup of verified merged work only, root may run `python3 tools/housekeeping.py`, read its dry run and use `--apply`. List retained worktrees in the checkpoint. Leave cache and log audits and unrelated housekeeping for normal development.
 
 Done when the live work, validation, jobs and eligible cleanup are known.
@@ -39,7 +39,7 @@ Done when the live work, validation, jobs and eligible cleanup are known.
 
 Assign each item its next action under the wind-down rules.
 
-- **Merge now**: review and required validation already passed for the exact combination, and strict protection permits it. Do not update base, start CI or fix a failure to qualify it.
+- **Leave queued**: a PR already in the merge queue stays there and merges on a pass. Queue no other PR; do not update base, start CI or fix a failure to qualify one.
 - **Finish the current action**: finish and save an edit underway, or record findings of an active review; start no downstream round. Cancel a clean, pushed worker and record its head. If a worker is unresponsive, resend stop or cancel it once its edit is pushed.
 - **Hand off**: name the next action for work needing implementation, a new review, fixes, validation or a CI result, not a chain of actions.
 - **Recover**: name an identified breaking merge eligible for [automatic rollback](../../workflow.md#automatic-rollback-and-wind-down) and its restoration target. Root verifies and rolls back without asking. Hand off other failures.
@@ -56,18 +56,18 @@ Write one ASCII code block in the user's voice, with three parts.
 2. Copy the rules exactly. After `git fetch`, print them from current base:
 
    ```sh
-   git show origin/rust-migration:docs/workflow.md | perl -00 -ne \
+   git show origin/rust-migration:docs/root-workflow.md | perl -00 -ne \
      'if (/^## Automatic rollback and wind-down/) { $f = 1; next } print if $f && $n++ < 2'
    ```
 
-   Check that it printed the rollback and wind-down paragraphs. If the section changed, quote the blocks that now define them. Put them between `--- docs/workflow.md at <short SHA of
+   Check that it printed the rollback and wind-down paragraphs. If the section changed, quote the blocks that now define them. Put them between `--- docs/root-workflow.md at <short SHA of
    origin/rust-migration>: Automatic rollback and wind-down ---` and `--- end ---`, without edits, summary or additions.
 3. Add one or two tailored lines per item. Name PRs, agents and heads; apply the quoted rules without repeating them.
    - State each current action or handoff. Name any component, review, planner or repair round root was about to start as "do not start it; stop it if already started". Keep due speed and planning work in the checkpoint, not as a new resume gate.
-   - Name tested combinations eligible to merge now, or say none. Name an eligible rollback target; root retains removed work for a replacement PR on resume. Do not demand a fix PR or CI cycle before stopping.
+   - Name PRs in the merge queue, or say none. Name an eligible rollback target; root retains removed work for a replacement PR on resume. Do not demand a fix PR or CI cycle before stopping.
    - Record changed facts and preserve unfinished work.
    - Request one docs-only roadmap commit updating "Where the fork stands" and replacing the checkpoint with one opening "Paused at the user's request", each remaining draft, head, next action and running jobs or CI. Leave other sections alone; `/steer` prunes the roadmap.
-   - Request a final report of integrations and rollbacks, available progress metrics, remaining work and next actions, and CI state including pending or unknown. Do not launch measurement work to fill it. Report unperformed or failed recovery honestly; do not wait for green.
+   - Request a final report of merges and rollbacks, available progress metrics, remaining work and next actions, and CI state including pending or unknown. Do not launch measurement work to fill it. Report unperformed or failed recovery honestly; do not wait for green.
 
 Done when the message quotes current rules and accounts for every item in flight.
 

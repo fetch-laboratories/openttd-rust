@@ -38,5 +38,5 @@ Each reviewer tells you in one line when its report is posted, and gives its thr
 
 - Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - Ask each finding's reviewer to verify, in one line naming the fixing commits, with `t3_thread_send` to its thread ID.
-- When every reviewer accepts, send the PR and its head in one line to the integrator, whose thread ID your spawn brief gives.
-- Ask root only for a fresh reviewer after a substantive rewrite, or when you and a reviewer disagree.
+- When every reviewer accepts, queue the PR under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
+- Ask root only for a fresh reviewer after a substantive rewrite or a base update that needs one, or when you and a reviewer disagree.

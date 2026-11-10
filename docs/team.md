@@ -4,9 +4,9 @@ Readers: Root and user-invoked skills that spawn agents.
 
 ## Roles and models
 
-- Root (`gpt-6.1-sol`, xhigh) orchestrates and delegates heavily, selects components, integrates and spot-checks delegated diffs.
-- Root, implementers, the integrator and planners run under Claude Code ([Claude Code root](#claude-code-root)). Codex runs independent review only (user, 2026-11-10): the 11-07 Codex root took the weekly Codex allowance from 1% to 81% in 15 hours, and 61 reviews under a Claude Code root took 5%. The Codex roles in this section describe a Codex root and apply only if the user starts one.
-- Run at most two implementation agents at once (user, 2026-11-10). On this 4-core host, 1.6 implementers were working at a cap of two and 2.0 at a cap of four (11-08/09); the rest waited on builds. Reviews, planning and research use the remaining slots and do not count; a running profile counts as one implementer. Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unintegrated component branches in [integration](root-workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
+- Root (`gpt-6.1-sol`, xhigh) orchestrates and delegates heavily, selects components and spot-checks delegated diffs.
+- Root, implementers and planners run under Claude Code ([Claude Code root](#claude-code-root)). Codex runs independent review only (user, 2026-11-10): the 11-07 Codex root took the weekly Codex allowance from 1% to 81% in 15 hours, and 61 reviews under a Claude Code root took 5%. The Codex roles in this section describe a Codex root and apply only if the user starts one.
+- Run at most two implementation agents at once (user, 2026-11-10). On this 4-core host, 1.6 implementers were working at a cap of two and 2.0 at a cap of four (11-08/09); the rest waited on builds. Reviews, planning and research use the remaining slots and do not count; a running profile counts as one implementer. Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unmerged component branches in [integration](root-workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
 - Specify model and effort on every spawn. Each subagent uses less effort than root's xhigh. Under a Claude Code root, root may run one role at xhigh when its work justifies it (user, 2026-11-09). No role is designated now.
 - Use `gpt-6.1-sol` for most implementation and analysis and all independent review. Use high effort unless a clearly bounded task justifies lower.
 - Use `gpt-6-luna` at low or medium effort for bounded mechanical work.
@@ -15,11 +15,11 @@ Readers: Root and user-invoked skills that spawn agents.
 ## Spawning
 
 - Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order, and reviewer briefs at the [review checklist](review-checklist.md); those agents read further docs only where these point.
-- Children send mid-task messages to their own `parentThreadId`, read from their thread metadata; never find root by searching thread titles. A reviewer, its PR's implementer and the integrator message each other directly, by the thread IDs their briefs give ([review loop](#review-loop)).
+- Children send mid-task messages to their own `parentThreadId`, read from their thread metadata; never find root by searching thread titles. A reviewer and its PR's implementer message each other directly, by the thread IDs their briefs give ([review loop](#review-loop)).
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work.
 - Each review round, including re-review, gets a fresh reviewer who reads the PR's earlier attributed review reports.
 - Follow the host's orchestration rules: use native agents for compatible shared-checkout work completed in the same turn; use T3 delegation for background work, another provider or an isolated checkout. T3 creates and binds isolated checkouts. Follow its completion notifications and returned next action; do not poll a running delegate.
-- At the host slot limit, root works its own queue (integration, spot-checking fix commits, roadmap) until a slot frees. Do not archive threads or edit host databases to free slots.
+- At the host slot limit, root works on its own duties (spot-checking fix commits, CI administration, housekeeping, roadmap) until a slot frees. Do not archive threads or edit host databases to free slots.
 - A quiet-host hold lasts only through timed games. At an independent wake while holding other agents, inspect the named job of a child already known to be idle; release the hold as soon as the measurement ends, before report preparation. A failed or declined peripheral host action does not cancel unrelated authorized work.
 - A long-job brief links the [background rule](../AGENTS.md#every-agent). Root never runs a child's jobs for it. A child names its job ID and uses the host's background-completion mechanism before ending its turn. At each independent wake, root handles completed results and checks jobs of children already known to be idle on them. If a job ended without waking its child, use the host's supported resume action; do not poll a running delegate or duplicate its work. This recovery remains necessary: four missed resumes cost about six agent-hours on 11-02. A child's own completion is such a wake: when a child's turn ends naming a running job, check that job in the same wake. A job that ends seconds before its child's turn ends never wakes the child, and this is the common case. If the job has already ended, resume the child at once. If it is still running and root has no other wake coming, a Claude Code root starts one background Bash command that exits when that job's process ends, so the end wakes root. This root-side wait is not the child waiter that #724 bans. Root never ends its turn with every child idle on a job and no wake of its own (user, 11-09). A child that reports a running job without an ID has not established a resumable handoff; correct it immediately. A subagent waiting only on CI or another task reports and stops.
 - Start each long job as `exec python3 tools/signal-witness.py -- <command>`. On this Linux host the wrapper records a received SIGTERM's sender and forwards it to the command's process group in the same session, then reaps the child. If the job exits 143 and the log shows no failure, read the sender record and the run's log or report, then rerun once incrementally (#724). Add no waiter sessions, pidfd waits or duplicate runs. Root adds each new kill time and sender evidence to #724. Existing jobs continue unchanged.
@@ -34,42 +34,23 @@ Readers: Root and user-invoked skills that spawn agents.
 
 ### Delegation (user, 2026-11-08)
 
-Under a Claude Code root, these rules move routine work off root, so that root's turns go to selection, policy rulings, briefs and the roadmap. Where they differ from [spawning](#spawning), they replace it.
-
-#### Integrator
-
-- One integrator runs at a time, outside the implementer count. Its work is mechanical, so it runs Opus at medium effort (user, 2026-11-09). It works from the main checkout but only through worktrees under `.local/worktrees`. It never changes the main checkout's branch or tracked files, including the user's `.codex/config.toml`. It edits no docs and selects no work.
-- It owns every step of [integration](root-workflow.md#integration):
-  - **Readiness.** A PR is ready when every review accepts, or each finding's reviewer has verified the fix.
-  - **Base updates.** Merge commits titled `Update: Merge integration N into ...`, never `gh pr update-branch`. The integrator records the base-update condition on the PR.
-  - **Batching.** Overlap checks, and combined integration PRs for disjoint ready PRs.
-  - **Validation and merge.** Local checks, exact-head Full requests and waits, and merges with `--match-head-commit` once the integration rule holds.
-  - **Records and cleanup.** Integration notes with whole-fork metrics; closing component PRs; removing branches, worktrees and finished worktrees' `build-rust`.
-  - **Platform cadence.** A run after every fifth integration.
-  - **Notifying implementers** of open PRs when base moves.
-- It escalates to root and does not decide:
-  - a conflict in `src/`, `rust/`, `tools/` or `.github/`;
-  - a failed Full or cadence run: it diagnoses and reports, and root routes the fix;
-  - except a runner or network failure (a step before any build or test, such as package install, checkout or cache download, or a lost runner with no test output), which it reruns once without asking and names in the integration note. For a simulation shard, the rerun is a fresh `tools/ci.py request`, because after a failed-job rerun, `native / complete` still reads the earlier attempt's shard artifact (#693, 11-09). A second failure of the same job escalates. A network-protocol scenario hang follows #693: keep the evidence, rerun once, record it there;
-  - the [rollback rule](root-workflow.md#automatic-rollback-and-wind-down);
-  - anything no rule covers.
-- Each implementer sends it its newly ready PR in one line ([review loop](#review-loop)). It reports each merge or escalation to root.
+Under a Claude Code root, these rules move routine work off root, so that root's turns go to selection, policy rulings, briefs and the roadmap. Where they differ from [spawning](#spawning), they replace it. Implementers queue their own PRs; root keeps [CI administration](root-workflow.md#ci-administration) with the platform cadence, [cleanup](root-workflow.md#cleanup) and the stocktake, and neither batches nor merges PRs (user, 2026-11-10). Root watches each queued PR with the host's PR watch, counts each merge, and tells the implementer when the queue removes its PR.
 
 #### Review loop
 
-- Root spawns reviewers from the [review brief](review-brief.md). The spawn adds only the PR, the reviewer's name, its function group, the other groups, the points the PR body flags, and the implementer's thread ID. Root gives each implementer the integrator's thread ID.
+- Root spawns reviewers from the [review brief](review-brief.md). The spawn adds only the PR, the reviewer's name, its function group, the other groups, the points the PR body flags, and the implementer's thread ID.
 - Reviewers rule on policy questions themselves, from the decisions recorded on the stream issues, and state each ruling in the report. Only a question no recorded decision answers waits for root.
 - Reviewer and implementer message each other directly, and root relays nothing (user, 2026-11-10). On 11-09, relays were 88 of root's 164 outgoing actions.
   - The reviewer posts its report, then tells the implementer in one line.
   - The implementer fixes the findings, then asks each finding's reviewer, in one line naming the fixing commits, to verify them. Fix verification is part of that reviewer's round, not a new round.
-  - When every reviewer accepts, the implementer sends the PR and its head to the integrator in one line.
-- The implementer asks root only for a fresh reviewer after a substantive rewrite, or when it and a reviewer disagree. Root reads dispositions, not diffs.
+  - When every reviewer accepts, the implementer queues the PR ([integration](root-workflow.md#integration)).
+- The implementer asks root only for a fresh reviewer after a substantive rewrite or a base update that needs one ([integration](root-workflow.md#integration)), or when it and a reviewer disagree. Root reads dispositions, not diffs.
 
 #### Ready queue and pipelining
 
-- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next integration lands. Each gives its scope, its file set checked against open PRs and reservations, and what it waits on, in a few lines. Fan-in and held-caller analysis goes on the stream issue.
+- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each gives its scope, its file set checked against open PRs and reservations, and what it waits on, in a few lines. Fan-in and held-caller analysis goes on the stream issue.
 - A planner (Opus, high) refreshes the queue whenever fewer than two entries are ready. It edits only that roadmap section, in docs-only commits; these are the one exception to roadmap commits only at stocktakes, course changes and wind-down. An entry becomes selected when root dispatches it, and then leaves the queue: its state lives on its PR, not in the roadmap.
-- An implementer whose PR waits on review or Full takes the next ready entry on a new branch, within the six-branch limit. Findings on its earlier PR come first. It keeps its agent path; each PR's title names the work. The two implementer slots therefore count agents that stay busy, not PRs.
+- An implementer whose PR waits on review or the merge queue takes the next ready entry on a new branch, within the six-branch limit. Findings on its earlier PR come first. It keeps its agent path; each PR's title names the work. The two implementer slots therefore count agents that stay busy, not PRs.
 
 ## Provider handoff
 

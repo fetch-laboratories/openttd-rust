@@ -91,7 +91,7 @@ TGP's projection rose 5.32%, over the 3% row. The [attribution](https://github.c
 
 - **Execution order:** the cleanup stage, then phase 3 readers, then phase 2 storage with each pool's save/load, then phases 4, 5 and 6 ([planning](planning.md#goal-and-phases)).
 - **Yardstick:** net fork C++ removed, counting C++ under `tools/` and `src/tests`. Rust exports plus callback slots fall or hold; growth needs a reason the reviewer accepts ([cost decisions](planning.md#cost-decisions)).
-- **Limits:** at most two implementation agents (user, 2026-11-10; [team](team.md#roles-and-models)); stocktake and profile every twelfth integration (user, 2026-11-08; every sixth from 2026-11-06, and stocktake 137 is skipped).
+- **Limits:** at most two implementation agents (user, 2026-11-10; [team](team.md#roles-and-models)); stocktake and profile every twelfth merge (user, 2026-11-08; every sixth from 2026-11-06, and stocktake 137 is skipped).
 - **Enforcement:** checks enforce mechanical rules on every push (#733); reviewers work from the [review checklist](review-checklist.md); implementers read the [implementer brief](implementer-brief.md) and their work order.
 - **Process (user, 2026-11-10):** #860 lists the changes from the development-process review: a merge queue, Windows x86, Clang and GCC Dedicated in Full, cached CI packages, one Clippy run, scenario comparison on CI, direct reviewer and implementer messages, and a checkpoint written at wind-down only.
 - **Sizes, never durations:** plans, issues and briefs size work in counts (files, lines, call sites), never in time (user, 2026-11-06).
@@ -441,12 +441,13 @@ Evidence and review reports stay in the linked PRs. Metrics are actual reduction
 
 ## Recurring
 
-- After every twelfth integration (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow integration 155.
-- Run the platform cadence after every fifth integration; the next follows 150. A new failure stops integrations. Full runs Windows x86, Clang and GCC Dedicated itself (#860), so the cadence adds macOS and the platform comparison. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
+- Merges, [one merged PR each](root-workflow.md#integration), count from the switch to the merge queue after integration 147.
+- After every twelfth merge (user, 2026-11-08), take stock under `/start-development` step 4 and profile the merged tip in the background ([speed](speed.md#instruction-projections)). A running profile counts as one of the two implementers. The next stocktake and profile follow the eighth merge.
+- Run the platform cadence after every fifth merge; the next follows the third. A new failure stops merges ([integration](root-workflow.md#integration)). Full runs Windows x86, Clang and GCC Dedicated itself (#860), so the cadence adds macOS and the platform comparison. Cadences 135 (Windows x86 oracle tests, fixed by #818) and 140 (`-Wmissing-field-initializers`, fixed by #831) each stopped integrations for about 75 minutes.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
-- #156 (coverage gaps), #275 (speed), #724 and #710 (host) stay open trackers. #500 is delivered by #734; #168 and #199 attach to #737 and the owners that touch those records. #693 retains the cancelled reconnect failure and two completed original/original runs that did not reproduce it; the cause remains unresolved and that two-run authorization is exhausted. Its loopback hang cost two Full reruns in root's 11-08/09 session (integrations 141 and 145); the integrator reruns once ([team](team.md#integrator)). #736 P (#820) delivered without touching it, so diagnosis returns with #730's network owner after cleanup, or sooner if hangs exceed one rerun in ten Full requests at a stocktake (provisional; 2 in 26 measured). #503's coverage continuation runs last.
+- #156 (coverage gaps), #275 (speed), #724 and #710 (host) stay open trackers. #500 is delivered by #734; #168 and #199 attach to #737 and the owners that touch those records. #693 retains the cancelled reconnect failure and two completed original/original runs that did not reproduce it; the cause remains unresolved and that two-run authorization is exhausted. Its loopback hang cost two Full reruns in root's 11-08/09 session (integrations 141 and 145); the implementer queues the PR again once ([integration](root-workflow.md#integration)). #736 P (#820) delivered without touching it, so diagnosis returns with #730's network owner after cleanup, or sooner if hangs exceed one rerun in ten Full requests at a stocktake (provisional; 2 in 26 measured). #503's coverage continuation runs last.
 
 Excluded, with issue placement and return conditions rechecked on 2026-11-09; near-full reproduction and fork release-source publication triggers are not met:
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
@@ -454,7 +455,7 @@ Excluded, with issue placement and return conditions rechecked on 2026-11-09; ne
 
 ## Ready queue
 
-At most three undispatched work orders, each ready once the next integration lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis of later entries lives on the stream issue; the queue at `4471d41669`, with fan-in and held-caller counts for 9a to 9c, 7, 8, 11 and 14, is on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
+At most three undispatched work orders, each ready once the next merge lands ([delegation](team.md#ready-queue-and-pipelining)). The planner refreshes this section when fewer than two are ready. A dispatched entry leaves the queue; its state lives on its PR. Analysis of later entries lives on the stream issue; the queue at `4471d41669`, with fan-in and held-caller counts for 9a to 9c, 7, 8, 11 and 14, is on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6747537417).
 
 Agent: /root/planner_ready_queue_146 | Model: claude-opus-5-5 | Reasoning effort: high (trimmed by steering 33)
 
@@ -476,7 +477,7 @@ The finished-file residue PR and work order items 2 and 3 are not queue entries.
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-**Paused at the user's request (wind-down, 2026-11-09 05:35 UTC).** No implementers, integrator or planner run. No merge or rollback was performed at wind-down: no PR or combination had review plus a passing exact-head Full. Code main is integration 146, `61c6d2c598`, and the docs tip is this commit. Base 146, `21db9b3b8a`'s Quick, Build and baseline runs, and cadence 145 are all green. Integrations 142 and 144 have a coverage regression, but later code merges followed them, so no bounded rollback applies. Steering 33 merged #849's fix in integration 147 (#851, `489f4ea161`). Apply the [thirty-third steering review](#thirty-third-steering-review-2026-11-09)'s actions first. On resume, the [delegation](team.md#delegation-user-2026-11-08) model applies: an Opus integrator at medium effort, fresh reviewers for re-checks, a planner-filled ready queue, and pipelined implementers, up to two (user, 2026-11-10).
+**Paused at the user's request (wind-down, 2026-11-09 05:35 UTC).** No implementers, integrator or planner run. No merge or rollback was performed at wind-down: no PR or combination had review plus a passing exact-head Full. Code main is integration 146, `61c6d2c598`, and the docs tip is this commit. Base 146, `21db9b3b8a`'s Quick, Build and baseline runs, and cadence 145 are all green. Integrations 142 and 144 have a coverage regression, but later code merges followed them, so no bounded rollback applies. Steering 33 merged #849's fix in integration 147 (#851, `489f4ea161`). Apply the [thirty-third steering review](#thirty-third-steering-review-2026-11-09)'s actions first. On resume, the [delegation](team.md#delegation-user-2026-11-08) model applies: implementers queue their own PRs in the merge queue, fresh reviewers do re-checks, a planner fills the ready queue, and implementers, up to two, pipeline (user, 2026-11-10).
 
 | PR | Head | State and CI at pause | Next action on resume |
 | --- | --- | --- | --- |
@@ -497,7 +498,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 | TGP speed recovery | #843 inside #851: TGP −80.6M Ir, projection 1.230x → 1.163x | Confirm at the next profile. |
 | Cadence, stocktake and profile | Cadence 145 green | Platform cadence after 150; stocktake and profile after 155. |
 
-Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Base updates are merge commits titled `Update: Merge integration N into ...`: `gh pr update-branch` titles them `Merge branch ...`, which the commit checker rejects. That is why #822 used #816's earlier reviewed head. Root clears finished reviewers' `build-rust` at integrations, since those builds filled the SSD on 11-08 (#710).
+Pass briefs add `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`: `rust-checks` does not compile that feature, and #807's first Full failed on such a caller. A root acceptance comment uses the plain `Agent: /root | Model: ... | Reasoning effort: ...` form, which the lint gates parse. #710 records six missed Codex reviewer resumes on 11-08. Root clears finished reviewers' `build-rust` at housekeeping, since those builds filled the SSD on 11-08 (#710).
 
 Remaining placement and limits:
 

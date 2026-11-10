@@ -32,7 +32,7 @@ This file holds what every agent needs. The routing table points to the rest (us
 | Touching an already-ported component | [Components](docs/components/README.md) |
 | Designing a storage port or map access | [World state](docs/design/world-state.md), [storage ports](docs/porting.md#storage-ports) |
 | Opening issues or PRs, committing or reviewing | [Workflow](docs/workflow.md) |
-| Integrating PRs, administering CI, taking stock or reclaiming output as root or integrator | [Root workflow](docs/root-workflow.md) |
+| Merging PRs, administering CI, taking stock or reclaiming output | [Root workflow](docs/root-workflow.md) |
 | Spawning or briefing agents, or running as root | [Team](docs/team.md) |
 | Checking speed projections or running speed passes | [Speed](docs/speed.md) |
 | Running a deep check | [Deep checks](docs/deep-checks.md) |
