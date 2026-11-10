@@ -28,3 +28,29 @@ pub fn chance16_i(a: u32, b: u32, r: u32) -> bool {
 pub fn chance16(shared: &crate::services::Services, a: u32, b: u32) -> bool {
     chance16_i(a, b, shared.random())
 }
+
+/// `Randomizer`: a local pseudo random number generator, independent of the shared
+/// random streams.
+#[derive(Clone, Copy, Default)]
+pub struct Randomizer {
+    /// The state of the randomizer.
+    pub state: [u32; 2],
+}
+impl Randomizer {
+    /// `Randomizer::Next`: generate the next pseudo random number.
+    pub fn next(&mut self) -> u32 {
+        let s = self.state[0];
+        let t = self.state[1];
+
+        self.state[0] = s
+            .wrapping_add((t ^ 0x1234_567F).rotate_right(7))
+            .wrapping_add(1);
+        self.state[1] = s.rotate_right(3).wrapping_sub(1);
+        self.state[1]
+    }
+    /// `Randomizer::SetSeed`: (re)set the state of the random number generator.
+    pub fn set_seed(&mut self, seed: u32) {
+        self.state[0] = seed;
+        self.state[1] = seed;
+    }
+}

@@ -1029,10 +1029,10 @@ pub(crate) unsafe fn cmd_build_industry(
         e.fail(StringID::INVALID_STRING_ID);
         return;
     }
-    // The local Randomizer is seeded twice with seed and Next is called once.
-    // Its returned second word is rotr(seed, 3) - 1; the updated first word is unused.
+    let mut randomizer = crate::random_func::Randomizer::default();
+    randomizer.set_seed(seed);
     let random_initial_bits = gb(seed, 0, 16) as u16;
-    let random_var8f = seed.rotate_right(3).wrapping_sub(1);
+    let random_var8f = randomizer.next();
     let num_layouts = unsafe { (*indspec).layouts.len() };
     e.fail(StringID(e.e.site));
     let deity_prospect = e.company() == Owner::DEITY && !fund;
