@@ -24,6 +24,7 @@
     clippy::cast_sign_loss
 )]
 
+use crate::bitmath_func::{gb, has_bit};
 use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::string_type::{StringValidationSetting, StringValidationSettings};
@@ -225,14 +226,14 @@ impl From<VarTypes> for VarType {
 
 /// `GetVarMemType`: the `SLE_VAR_*` part of a variable-type description.
 const fn mem_type(conv: VarType) -> VarTypes {
-    // `GB(type, 4, 4) << 4`, which fits the enum's `uint16_t`.
-    VarTypes((conv & 0xF0) as u16)
+    // The result fits the enum's `uint16_t`.
+    VarTypes((gb(conv, 4, 4) << 4) as u16)
 }
 
 /// `GetVarFileType`: the `SLE_FILE_*` part of a variable-type description.
 const fn file_type(conv: VarType) -> VarTypes {
-    // `GB(type, 0, 4)`, which fits the enum's `uint16_t`.
-    VarTypes((conv & 0xF) as u16)
+    // The result fits the enum's `uint16_t`.
+    VarTypes(gb(conv, 0, 4) as u16)
 }
 
 /// Result of a codec entry that can fail.
@@ -501,13 +502,13 @@ fn read_uint64(services: &OpenTTDSaveLoadServices) -> Result<u64, OpenTTDRustSav
 }
 
 fn write_uint16(v: u16) {
-    write_byte((v >> 8) as u8);
-    write_byte(v as u8);
+    write_byte(gb(u32::from(v), 8, 8) as u8);
+    write_byte(gb(u32::from(v), 0, 8) as u8);
 }
 
 fn write_uint32(v: u32) {
-    write_uint16((v >> 16) as u16);
-    write_uint16(v as u16);
+    write_uint16(gb(v, 16, 16) as u16);
+    write_uint16(gb(v, 0, 16) as u16);
 }
 
 fn write_uint64(x: u64) {
@@ -545,15 +546,15 @@ fn version() -> SaveLoadVersion {
 /// index): `x = ((x & 0x7F) << 8) + SlReadByte();`.
 fn read_simple_gamma(services: &OpenTTDSaveLoadServices) -> Result<u32, OpenTTDRustSaveLoadStatus> {
     let mut i = u32::from(read_byte(services)?);
-    if i & 0x80 != 0 {
+    if has_bit(i, 7) {
         i &= !0x80;
-        if i & 0x40 != 0 {
+        if has_bit(i, 6) {
             i &= !0x40;
-            if i & 0x20 != 0 {
+            if has_bit(i, 5) {
                 i &= !0x20;
-                if i & 0x10 != 0 {
+                if has_bit(i, 4) {
                     i &= !0x10;
-                    if i & 0x08 != 0 {
+                    if has_bit(i, 3) {
                         return Err(corrupt("Unsupported gamma".to_owned()));
                     }
                     i = u32::from(read_byte(services)?); // 32 bits only.
