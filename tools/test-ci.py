@@ -1230,6 +1230,92 @@ class MergeQueueTests(unittest.TestCase):
                     )
                     self.assertEqual(observed, expected)
 
+    def test_queue_mode_satisfies_a_head_without_workflow_changes(self) -> None:
+        event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
+        code = [{"filename": "src/game.cpp"}]
+        queued = (HEAD, "success", ci.CONTEXT, RUN, ci.QUEUED)
+        pending = (
+            HEAD,
+            "pending",
+            ci.CONTEXT,
+            None,
+            "Request full CI for this PR head before merge",
+        )
+        for label, mode, files, expected in (
+            ("code", "true", code, queued),
+            (
+                "local action",
+                "true",
+                [{"filename": ".github/actions/apt-install/action.yml"}],
+                queued,
+            ),
+            ("mode unset", "", code, pending),
+            ("mode off", "false", code, pending),
+            (
+                "workflow",
+                "true",
+                [*code, {"filename": ".github/workflows/ci-request.yml"}],
+                pending,
+            ),
+            (
+                "workflow renamed away",
+                "true",
+                [
+                    {
+                        "filename": "tools/x.yml",
+                        "previous_filename": ".github/workflows/x.yml",
+                    }
+                ],
+                pending,
+            ),
+            ("no filename", "true", [{}], pending),
+            (
+                "bad rename",
+                "true",
+                [{"filename": "a", "previous_filename": 1}],
+                pending,
+            ),
+            ("no files", "true", [], pending),
+            ("file cap", "true", code * 3000, pending),
+            ("lookup failure", "true", None, pending),
+        ):
+            with self.subTest(label):
+                statuses = execute_invalidator(
+                    event, PULL, env={"CI_MERGE_QUEUE": mode}, files=files
+                )
+                observed = [
+                    (
+                        s["sha"],
+                        s["state"],
+                        s["context"],
+                        s.get("target_url"),
+                        s["description"],
+                    )
+                    for s in statuses
+                ]
+                self.assertEqual(observed, [expected])
+        # A carried Full result still wins, so the head keeps a tested tree marker.
+        statuses = execute_invalidator(
+            event,
+            PULL,
+            env={"CI_MERGE_QUEUE": "true"},
+            files=code,
+            payload=SYNCHRONIZE,
+            previous=validation(tree=BASE),
+            trees={BASE: INVENTORY, TREE: tree(CODE)},
+        )
+        self.assertEqual(
+            [s["context"] for s in statuses], [ci.CONTEXT, "Validated tree"]
+        )
+        # A request started after the push keeps its own status.
+        latest = {"context": ci.CONTEXT, "updated_at": "2026-10-07T12:00:01Z"}
+        self.assertEqual(
+            execute_invalidator(
+                event, PULL, latest, env={"CI_MERGE_QUEUE": "true"}, files=code
+            ),
+            [],
+        )
+
 
 class CacheTests(unittest.TestCase):
     def prune(self, caches: object) -> dict[str, Any]:
@@ -1767,6 +1853,8 @@ class RequestTests(unittest.TestCase):
                 True,
             ),
             ("full", [dict(passed, creator=None), passed], False, True),
+            # The merge-queue status on a PR head is no Full of that head.
+            ("full", [dict(passed, description=ci.QUEUED)], False, True),
             ("full", [passed], True, True),
             ("native", [passed], False, True),
         ):

@@ -18,6 +18,8 @@ PROFILES = ("rust", "native", "platform", "full")
 WORKFLOW = "ci-request.yml"
 PROTECTED_REF = "rust-migration"
 CONTEXT = "Full validation"
+# ci-invalidate.yml's merge-queue status on a PR head: no Full ran on that head.
+QUEUED = "Full runs in the merge queue"
 # Under the agent shell's 10-minute command cap, so a foreground wait returns.
 WAIT_TIMEOUT = 540
 
@@ -51,7 +53,7 @@ def validate_pull(pull: dict, head: str | None = None) -> str:
 
 
 def passed_run(repository: str, head: str) -> str | None:
-    """Return the run URL of a successful Full validation already on the head."""
+    """Return the run URL of a successful Full validation already run for the head."""
     # Combined statuses omit creators; only the gate's GitHub Actions source qualifies.
     pages = json.loads(
         gh(
@@ -64,7 +66,7 @@ def passed_run(repository: str, head: str) -> str | None:
     full = next(
         (item for page in pages for item in page if item["context"] == CONTEXT), None
     )
-    if full and full["state"] == "success":
+    if full and full["state"] == "success" and full.get("description") != QUEUED:
         creator = full.get("creator") or {}
         if (
             creator.get("login") == "github-actions[bot]"
