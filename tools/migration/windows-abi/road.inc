@@ -450,7 +450,10 @@ static void RoadServiceBoundary()
 	const OpenTTDEngineDefaults engine_defaults{};
 	openttd_rust_engine_construct(service_engine, &engine_defaults, VEH_ROAD, UINT16_MAX);
 	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return service_engine; };
-	t.leaves.max_depot_penalty = []() noexcept -> uint32_t { return 300; };
+	static const uint32_t depot_penalty = 300;
+	static OpenTTDSettingAddresses catalog{};
+	catalog.maximum_go_to_depot_penalty = &depot_penalty;
+	t.shared.settings = &catalog;
 	static VehicleDefaultSettings defaults{}; defaults.servint_roadveh = 1;
 	static OpenTTDSettingServices settings{};
 	settings.company_vehicle_defaults = [](uint8_t) noexcept { return &defaults; };

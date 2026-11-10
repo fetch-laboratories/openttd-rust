@@ -30,7 +30,6 @@ struct OpenTTDShipLeaves {
 	bool (*wait_unbunch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wait_unbunch);
 	bool (*chain_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
 	uint32_t (*servint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(servint);
-	uint32_t (*max_distance)() noexcept OPENTTD_SERVICE_DEFAULT(max_distance);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	uint32_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
 	uint32_t (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
@@ -46,7 +45,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint32_t (*industry_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_station);
 	bool (*oilrig)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig);
-	bool (*station_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_dock);
 	void (*arrival)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival);
 	void (*leave_unbunch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunch);
 	void (*path_result)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(path_result);

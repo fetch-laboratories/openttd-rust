@@ -8,6 +8,7 @@
 #include "engine_ffi.h"
 #include "../livery.h"
 struct Company;
+struct OpenTTDEngineCapabilitiesServices;
 struct Town;
 struct alignas(16) OpenTTDCompanyNameStorage { std::byte bytes[128]; };
 struct OpenTTDCompanyIdentityStrings {
@@ -54,11 +55,9 @@ struct OpenTTDCompanyIdentityServices {
 	void (OPENTTD_RUST_CALL *colour_windows)() noexcept OPENTTD_SERVICE_DEFAULT(colour_windows);
 	void (OPENTTD_RUST_CALL *object_colours)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(object_colours);
 	void (OPENTTD_RUST_CALL *reset_colourmap)() noexcept OPENTTD_SERVICE_DEFAULT(reset_colourmap);
-	const OpenTTDEngine * (OPENTTD_RUST_CALL *engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	uint8_t (OPENTTD_RUST_CALL *vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (OPENTTD_RUST_CALL *wagon_override)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 	bool (OPENTTD_RUST_CALL *cargo_freight)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_freight);
-	uint16_t (OPENTTD_RUST_CALL *cargo_classes)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
 	void (OPENTTD_RUST_CALL *invalidate_vehicle)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_vehicle);
 };

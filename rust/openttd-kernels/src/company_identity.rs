@@ -9,7 +9,7 @@
     clippy::too_many_lines
 )]
 use crate::company_type::{CompanyID, CompanyManagerFace, OpenTTDCompany};
-use crate::engine_type::{EngineID, OpenTTDEngine};
+use crate::engine_type::EngineID;
 use crate::livery::{Livery, LiveryScheme, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
@@ -75,13 +75,20 @@ pub struct Services {
     pub colour_windows: extern "C" fn() -> (),
     pub object_colours: extern "C" fn(*mut OpenTTDCompany) -> (),
     pub reset_colourmap: extern "C" fn() -> (),
-    pub engine: extern "C" fn(EngineID) -> *const OpenTTDEngine,
-    pub vehicle_cargo: extern "C" fn(*mut OpenTTDVehicle) -> u8,
+    /// The engine capabilities table, for engines, vehicle cargo and cargo classes.
+    pub capabilities: *const crate::engine_capabilities::Services,
     pub wagon_override: extern "C" fn(*mut OpenTTDVehicle) -> bool,
     pub cargo_freight: extern "C" fn(u8) -> bool,
-    pub cargo_classes: extern "C" fn(u8) -> u16,
     pub vehicle_id: extern "C" fn(*mut OpenTTDVehicle) -> VehicleID,
     pub invalidate_vehicle: extern "C" fn(*mut OpenTTDVehicle) -> (),
+}
+impl Services {
+    /// The engine capabilities table.
+    fn capabilities(&self) -> &crate::engine_capabilities::Services {
+        // SAFETY: Both tables are process-lifetime and immutable; the native table
+        // names the canonical engine capabilities table.
+        unsafe { &*self.capabilities }
+    }
 }
 impl NameStorage {
     fn new() -> Self {
@@ -583,9 +590,9 @@ pub(crate) fn get_engine_livery_scheme(
     let mut cargo_type = if v.is_null() {
         CargoType::INVALID_CARGO
     } else {
-        CargoType((s.vehicle_cargo)(v))
+        CargoType((s.capabilities().vehicle_cargo)(v))
     };
-    let mut e = (s.engine)(engine_type);
+    let mut e = (s.capabilities().engine)(engine_type.0);
     match EngineRef::of(e).kind() {
         VehicleType::VEH_TRAIN => {
             if !v.is_null()
@@ -597,7 +604,7 @@ pub(crate) fn get_engine_livery_scheme(
                 // Wagonoverrides use the colour scheme of the front engine.
                 // Articulated parts use the colour scheme of the first part. (Not supported for articulated wagons)
                 engine_type = parent_engine_type;
-                e = (s.engine)(engine_type);
+                e = (s.capabilities().engine)(engine_type.0);
                 // Note: Luckily cargo_type is not needed for engines
             }
             if !is_valid_cargo_type(cargo_type.0) {
@@ -615,7 +622,7 @@ pub(crate) fn get_engine_livery_scheme(
                 if parent_engine_type == EngineID::INVALID {
                     return LiveryScheme(LS_PASSENGER_WAGON_STEAM).0;
                 }
-                let p = (s.engine)(parent_engine_type);
+                let p = (s.capabilities().engine)(parent_engine_type.0);
                 // RAIL_IS_MU is the retained raw adapter for EngineMiscFlag::RailIsMU.
                 let is_mu = EngineRef::of(p).misc() & RAIL_IS_MU != 0;
                 match EngineClass(EngineRef::of(p).train_class()) {
@@ -666,8 +673,10 @@ pub(crate) fn get_engine_livery_scheme(
             // Always use the livery of the front
             if !v.is_null() && parent_engine_type != EngineID::INVALID {
                 engine_type = parent_engine_type;
-                e = (s.engine)(engine_type);
-                cargo_type = CargoType((s.vehicle_cargo)(VehicleRef::of(v).first().0.as_ptr()));
+                e = (s.capabilities().engine)(engine_type.0);
+                cargo_type = CargoType((s.capabilities().vehicle_cargo)(
+                    VehicleRef::of(v).first().0.as_ptr(),
+                ));
             }
             if !is_valid_cargo_type(cargo_type.0) {
                 cargo_type = CargoType(EngineRef::of(e).default_cargo());
@@ -680,12 +689,16 @@ pub(crate) fn get_engine_livery_scheme(
             // Important: Use Tram Flag of front part. Luckily engine_type refers to the front part here.
             if EngineMiscFlags(EngineRef::of(e).misc()).test(EngineMiscFlag::RoadIsTram) {
                 // Tram
-                if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+                if CargoClasses((s.capabilities().cargo_classes)(cargo_type.0))
+                    .test(CargoClass::Passengers)
+                {
                     LiveryScheme(LS_PASSENGER_TRAM)
                 } else {
                     LiveryScheme(LS_FREIGHT_TRAM)
                 }
-            } else if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+            } else if CargoClasses((s.capabilities().cargo_classes)(cargo_type.0))
+                .test(CargoClass::Passengers)
+            {
                 // Bus or truck
                 LiveryScheme(LS_BUS)
             } else {
@@ -701,7 +714,9 @@ pub(crate) fn get_engine_livery_scheme(
                 cargo_type = CargoType(get_cargo_type_by_label(CargoLabel::CT_GOODS.0));
             }
             assert!(is_valid_cargo_type(cargo_type.0));
-            if CargoClasses((s.cargo_classes)(cargo_type.0)).test(CargoClass::Passengers) {
+            if CargoClasses((s.capabilities().cargo_classes)(cargo_type.0))
+                .test(CargoClass::Passengers)
+            {
                 LiveryScheme(LS_PASSENGER_SHIP)
             } else {
                 LiveryScheme(LS_FREIGHT_SHIP)
@@ -734,5 +749,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine,       vehicle_cargo, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, capabilities, wagon_override, cargo_freight, vehicle_id, invalidate_vehicle, };
 }
