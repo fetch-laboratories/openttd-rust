@@ -484,6 +484,15 @@ impl crate::vehicle::VehicleRef {
         std::ptr::NonNull::new(crate::raw_field::read_field!(train, other_multiheaded_part))
             .map(Self)
     }
+    /// `Train::SetOtherMultiheadedPart`; both records are live trains.
+    pub(crate) fn set_other_multiheaded_part(self, part: Option<Self>) {
+        let train = crate::raw_field::read_field!(self.0.as_ptr(), train);
+        crate::raw_field::write_field!(
+            train,
+            other_multiheaded_part,
+            part.map_or(std::ptr::null_mut(), |v| v.0.as_ptr())
+        );
+    }
     pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
         crate::raw_field::read_field!(self.0.as_ptr(), ground)
     }

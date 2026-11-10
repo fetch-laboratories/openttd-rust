@@ -169,3 +169,13 @@ pub(crate) fn is_compatible_rail(s: &crate::services::Services, engine: u8, tile
 
 /// `RailTypeSpriteGroup::RTSG_END`.
 pub const RTSG_END: u8 = 13;
+
+/// `IsCompatibleRail(RailTypes, RailType)`: whether an engine of these rail
+/// types can drive on the tile's rail type, retaining the canonical type table.
+pub(crate) fn is_compatible_rail_types(
+    shared: &Shared,
+    enginetype: crate::rail_type::RailTypes,
+    tiletype: crate::rail_type::RailType,
+) -> bool {
+    crate::rail_type::RailTypes((shared.all_compatible_railtypes)(enginetype.0)).test(tiletype)
+}

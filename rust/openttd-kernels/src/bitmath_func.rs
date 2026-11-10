@@ -178,6 +178,7 @@ pub struct SetBitIterator {
     bitset: u64,
 }
 impl SetBitIterator {
+    /// Copy the bitset as the original ensemble does.
     pub const fn new(bitset: u64) -> Self {
         Self { bitset }
     }

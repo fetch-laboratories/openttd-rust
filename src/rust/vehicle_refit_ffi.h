@@ -91,7 +91,6 @@ struct OpenTTDRailConstructionServices {
 	void *(*new_engine)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
 	void (*engine_dates)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_dates);
 	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
-	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
 	void (*use_unit)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);

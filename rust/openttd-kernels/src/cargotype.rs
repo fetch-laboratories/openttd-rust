@@ -191,6 +191,7 @@ pub const TOWN_PRODUCTION_DIVISOR: u32 = 256;
 /// `SetCargoBitIterator`: the cargo-typed specialization of `SetBitIterator`.
 pub struct SetCargoBitIterator(crate::bitmath_func::SetBitIterator);
 impl SetCargoBitIterator {
+    /// Copy the cargo mask for iteration without retaining its owner.
     pub const fn new(bitset: crate::cargo_type::CargoTypes) -> Self {
         Self(crate::bitmath_func::SetBitIterator::new(bitset.0))
     }
