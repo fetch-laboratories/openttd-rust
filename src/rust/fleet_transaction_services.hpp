@@ -33,7 +33,6 @@ static uint32_t FleetTransaction_error(void *out) noexcept { return GetRustComma
 static int64_t FleetTransaction_money(void *out) noexcept { return GetRustCommandCostServices().money(RustCommandCost(static_cast<CommandCost *>(out))); }
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
-static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 static constexpr bool FLEET_ASSERTIONS = true;
@@ -80,8 +79,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
-	.max_length = FleetTransaction_max_length,
-	.check = RustAssertCondition,
 	.needs_renew = FleetTransaction_needs_renew,
 	.engine_valid = FleetTransaction_engine_valid,
 	.company_valid = FleetTransaction_company_valid,
@@ -92,7 +89,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.order_refit = FleetTransaction_order_refit,
 	.order_auto = FleetTransaction_order_auto,
 	.order_cargo = FleetTransaction_order_cargo,
-	.local = RustIsLocalCompany,
 	.refit_news = FleetTransaction_refit_news,
 	.subtype = FleetTransaction_subtype,
 	.reverse = FleetTransaction_reverse,

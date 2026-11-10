@@ -417,6 +417,10 @@ impl<'a> Game<'a> {
             movement: crate::movement::CachedTable::new(services),
         }
     }
+    /// Raw map access over the shared table's canonical allocation.
+    fn world(&self) -> crate::map_func::World<'a> {
+        crate::map_func::World::new(self.services)
+    }
     fn vs(&self) -> &VehicleServices {
         // SAFETY: The native table names the immutable process-wide base table.
         unsafe { &*self.leaves.vehicle }
@@ -835,7 +839,7 @@ impl Game<'_> {
         if model == u64::from(AccelerationModel::AM_REALISTIC.0)
             && (self.leaves.is_station)(id, v_tile.0) != 0
         {
-            let sid = StationID((self.services.station_index)(v_tile.0));
+            let sid = self.world().get_station_index(v_tile);
             if crate::movement::should_stop(self.services, id.vehicle(), sid.0) {
                 let (stop_at, station_ahead, station_length) =
                     self.get_train_stop_location(id, sid, v_tile);
@@ -998,7 +1002,7 @@ impl Game<'_> {
             return false;
         }
         if is_tile_type(self.services, v_tile, MP_TUNNELBRIDGE)
-            && (self.services.tunnel_bridge_direction)(v_tile) * 2 + 1 == v_direction
+            && self.world().tunnel_bridge_dir(v_tile) * 2 + 1 == v_direction
         {
             return false;
         }
@@ -1593,11 +1597,10 @@ impl Game<'_> {
             let td = tds.trailing_zeros() as u8;
             let exit = (self.leaves.trackdir_exit)(id, td);
             // Tile owner is used here, rather than the moving train's owner.
-            if u64::from(self.signal_context().segment(
-                tile,
-                exit as u8,
-                (self.services.tile_owner)(tile),
-            )) == (self.leaves.sigseg_pbs)(id)
+            if u64::from(
+                self.signal_context()
+                    .segment(tile, exit as u8, self.world().owner(tile)),
+            ) == (self.leaves.sigseg_pbs)(id)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
             {
                 if (self.leaves.signal_pbs)(id, (self.leaves.signal_type)(id, tile, td & 7) as u8)
@@ -1652,7 +1655,7 @@ impl Game<'_> {
                         return (2, false);
                     }
                     if vets & 1 != 0 {
-                        self.enter_station(id, (self.services.station_index)(new));
+                        self.enter_station(id, self.world().get_station_index(TileIndex(new)).0);
                     }
                 }
             } else {
@@ -1843,7 +1846,7 @@ impl Game<'_> {
                     (self.leaves.check_next)(id);
                 }
                 if vets & 1 != 0 {
-                    self.enter_station(id, (self.services.station_index)(new));
+                    self.enter_station(id, self.world().get_station_index(TileIndex(new)).0);
                 }
             }
         } else {
@@ -1852,7 +1855,7 @@ impl Game<'_> {
             {
                 if (id).front() != 0 {
                     crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
-                    self.reserve_track(id, new, (self.services.tunnel_bridge_direction)(new) & 1);
+                    self.reserve_track(id, new, self.world().tunnel_bridge_dir(new) & 1);
                     (self.leaves.check_next)(id);
                 }
                 if old == new {
@@ -2109,7 +2112,7 @@ impl Game<'_> {
         let owner = v_owner;
         (self.leaves.delete_vehicle)(id);
         if tracks == WORMHOLE {
-            tracks = 1 << (u64::from((self.services.tunnel_bridge_direction)(tile)) & 1);
+            tracks = 1 << (u64::from(self.world().tunnel_bridge_dir(tile)) & 1);
         }
         let track = tracks.trailing_zeros() as u8;
         if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(tile, tracks) {
@@ -2121,10 +2124,8 @@ impl Game<'_> {
                 }
                 let t = u.track();
                 if t == WORMHOLE {
-                    remaining |= 1
-                        << (u64::from((self.services.tunnel_bridge_direction)(
-                            (u).vehicle().tile(),
-                        )) & 1);
+                    remaining |=
+                        1 << (u64::from(self.world().tunnel_bridge_dir((u).vehicle().tile())) & 1);
                 } else if t != DEPOT {
                     remaining |= t;
                 }
@@ -2441,7 +2442,7 @@ impl Game<'_> {
                 if (v_order == OT_GOTO_WAYPOINT || v_order == OT_GOTO_STATION)
                     && v_nonstop & 2 != 0
                     && (self.leaves.is_station_any)(Handle::NONE, v_tile) != 0
-                    && v_order_destination == (self.services.station_index)(v_tile)
+                    && v_order_destination == self.world().get_station_index(TileIndex(v_tile)).0
                 {
                     // SAFETY: The orders owner is resolved at this source call; no owner borrow remains.
                     unsafe {
@@ -2628,8 +2629,10 @@ impl Game<'_> {
                 if (id).vehicle().current_order().kind() == OT_LOADING {
                     let last = ((id).last()).vehicle().tile();
                     if (self.leaves.is_station_any)(Handle::NONE, last) == 0
-                        || (self.services.station_index)(last)
-                            != (self.services.station_index)((id).vehicle().tile())
+                        || self.world().get_station_index(TileIndex(last))
+                            != self
+                                .world()
+                                .get_station_index(TileIndex((id).vehicle().tile()))
                     {
                         crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
                     }

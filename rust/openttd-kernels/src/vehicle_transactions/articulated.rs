@@ -215,7 +215,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         }
         let cargo = unsafe { (c.transactions.cargo_type)(v) };
         if c.transactions.assertions {
-            unsafe { (c.transactions.check)(cargo < c.strings.cargo_count) };
+            c.transactions.check(cargo < c.strings.cargo_count);
         }
         if unsafe { super::vehicle_ref(v, r.common.vehicles) }.cargo_cap() > 0 {
             real_cargo |= 1_u64.wrapping_shl(u32::from(cargo));

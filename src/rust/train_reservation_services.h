@@ -81,11 +81,6 @@ static uint64_t TrainReservationIsWaypoint(void *, OpenTTDTrainHandle, uint32_t 
 	TileIndex t(static_cast<uint32_t>(a));
 	return IsRailWaypointTile(t);
 }
-static uint64_t TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.difficulty.line_reverse_mode;
-}
-
 static uint64_t TrainReservationOrderService(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));

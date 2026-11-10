@@ -17,7 +17,6 @@ static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast
 static void FleetPending_length_news(uint32_t id) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, VehicleID(id)), VehicleID(id)); }
 static void FleetPending_failed_news(uint32_t id, uint32_t error) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, VehicleID(id), error, std::monostate{}), VehicleID(id)); }
 static const OpenTTDFleetPendingServices _fleet_pending_services{
-	.set_current = RustSetCurrentCompanyID,
 	.company = &GetRustCompanyIdentityServices(),
 	.subtract = FleetPending_subtract,
 	.command = FleetPending_command,
