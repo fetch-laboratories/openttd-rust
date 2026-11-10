@@ -50,7 +50,6 @@ src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 
 src/rust/fleet_transaction_services.hpp | FleetTransaction_copy_configuration(void *old, void *replacement) noexcept | 727c7c448c7843d3 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_max_length() noexcept | 27d4365792c77eba | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_needs_renew(void *shell, bool settings) noexcept | 0c9267b6cb5b5b22 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_orders(void *shell) noexcept | fad29c81879d9cca | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1

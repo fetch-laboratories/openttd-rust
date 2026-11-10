@@ -177,7 +177,6 @@ pub(crate) const GROUND_VEHICLE: crate::ground_vehicle::Services =
         steepness: unreachable1,
         display_max_speed: unreachable1,
         viewport: unreachable3,
-        details_dirty: unreachable1,
         base_crash: unreachable2,
         depot_tile: unreachable2,
     };

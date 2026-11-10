@@ -682,7 +682,7 @@ CommandCost CmdRemoveFromRoadWaypoint(DoCommandFlags flags, TileIndex start, Til
  */
 uint8_t GetAirportNoiseLevelForDistance(const AirportSpec *as, uint distance)
 {
-	return openttd_rust_station_airport_noise(&GetRustStationCommandServices(), as->noise_level, distance);
+	return openttd_rust_station_airport_noise(&GetRustStationCommandServices(), as, distance);
 }
 
 /**

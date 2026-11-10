@@ -138,8 +138,6 @@ bool VehicleCargoList::Stage(bool accepted, StationID station, std::span<const S
 {
 	return openttd_rust_cargo_list_stage(this->state, &_cargo_storage_services, accepted, station.base(), CargoNext(next), next.size(), to_underlying(unload), ge, cargo, payment, tile.base()) != 0;
 }
-template <VehicleCargoList::MoveToAction Tfrom, VehicleCargoList::MoveToAction Tto>
-uint VehicleCargoList::Reassign(uint amount) { return openttd_rust_cargo_list_reassign(this->state, &_cargo_storage_services, Tfrom, Tto, amount); }
 static uint CargoMove(OpenTTDCargoList *src, OpenTTDCargoList *dest, uint8_t mode, uint amount, StationID avoid = StationID::Invalid(), StationID avoid2 = StationID::Invalid(), std::span<const StationID> next = {}, const GoodsEntry *ge = nullptr, CargoType cargo = 0, void *payment = nullptr, TileIndex tile = INVALID_TILE)
 {
 	return openttd_rust_cargo_list_move(src, dest, &_cargo_storage_services, mode, amount, avoid.base(), avoid2.base(), CargoNext(next), next.size(), ge, cargo, payment, tile.base());
@@ -156,8 +154,5 @@ uint StationCargoList::Truncate(uint amount, StationCargoAmountMap *origins) { r
 
 template class CargoList<VehicleCargoList, CargoPacketList>;
 template class CargoList<StationCargoList, StationCargoPacketMap>;
-template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, VehicleCargoList::MTA_KEEP>(uint);
-template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, VehicleCargoList::MTA_TRANSFER>(uint);
-template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_LOAD, VehicleCargoList::MTA_KEEP>(uint);
 
 const OpenTTDCargoStorageServices *CargoStorageServices() { return &_cargo_storage_services; }

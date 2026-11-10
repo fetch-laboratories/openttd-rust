@@ -153,6 +153,15 @@ impl crate::map_func::World<'_> {
     }
 }
 
+/// `GetTileRailType`: the rail type of a rail, crossing, rail station or waypoint, or rail
+/// tunnel or bridge tile, read in place from the canonical map; `INVALID_RAILTYPE` otherwise.
+pub(crate) fn get_tile_rail_type(
+    shared: &Shared,
+    tile: crate::tile_type::TileIndex,
+) -> crate::rail_type::RailType {
+    crate::rail_type::RailType(crate::map_func::World::new(shared).tile_rail_type(tile.0))
+}
+
 /// `IsCompatibleRail(RailType, RailType)`, retaining the canonical type table.
 pub(crate) fn is_compatible_rail(s: &crate::services::Services, engine: u8, tile: u8) -> bool {
     (crate::pbs::Pbs::acquire(s).0.compatible)(engine) & (1_u64 << tile) != 0

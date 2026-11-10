@@ -385,6 +385,13 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
     }
 }
 
+/// `Vehicle::orders`: the native `OrderList` shell named by the live record's canonical order
+/// state, read at the caller's observation point.
+pub(crate) fn order_list(v: *mut crate::vehicle::OpenTTDVehicle) -> *mut std::ffi::c_void {
+    let state = crate::raw_field::read_field!(v, orders);
+    crate::raw_field::read_field!(state, orders)
+}
+
 // VehicleRef's live-record contract permits field-sized raw reads between callbacks.
 impl crate::vehicle::VehicleRef {
     /// `Vehicle::First`: first vehicle of this chain.

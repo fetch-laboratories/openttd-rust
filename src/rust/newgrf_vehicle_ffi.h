@@ -42,7 +42,6 @@ struct OpenTTDVehicleResolverServices {
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
-	bool (*valid_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_company);
 	const Livery *(*livery)(uint16_t, uint8_t, uint16_t, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(livery);
 	uint32_t (*company_info)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company_info);
 	const SpriteGroup *(*cached_override)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_override);
@@ -91,7 +90,6 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*moving_flags)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving_flags);
 	RoadType (*roadtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(roadtype);
 	RoadType (*tile_roadtype)(uint32_t, RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(tile_roadtype);
-	RailType (*tile_railtype)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_railtype);
 	bool (*rail_catenary)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_catenary);
 	bool (*road_catenary)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_catenary);
 	bool (*compatible_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);

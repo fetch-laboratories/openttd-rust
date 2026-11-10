@@ -192,7 +192,6 @@ pub struct Services {
     pub finance: *const crate::company::FinanceServices,
     pub rng: *const RandomServices,
     pub types: *const crate::type_availability::Services,
-    pub next: unsafe extern "C" fn(u32) -> EngineRef,
     pub resolve: unsafe extern "C" fn(u16) -> EngineRef,
     pub display_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     pub engine_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
@@ -212,9 +211,6 @@ pub struct Services {
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
-    pub company_valid: unsafe extern "C" fn(u8) -> bool,
-    pub company_railtypes: unsafe extern "C" fn(u8) -> u64,
-    pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
     pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
@@ -225,12 +221,11 @@ pub struct Services {
     pub available_event: unsafe extern "C" fn(u16),
     pub available_news: unsafe extern "C" fn(u16),
     pub no_engines: unsafe extern "C" fn(i32),
-    pub utf8_length: unsafe extern "C" fn(*const u8, usize) -> usize,
 }
 
 const AVAILABLE: u8 = 1;
 const EXCLUSIVE: u8 = 2;
-use crate::company_type::OWNER_DEITY;
+use crate::company_type::{CompanyID, OWNER_DEITY};
 use crate::engine_type::INVALID_ENGINE as INVALID;
 // Original static year is process-wide; all engine entries run serialized by
 // the game-state mutex, including main-thread GUI commands and game timers.
@@ -453,12 +448,15 @@ pub unsafe extern "C" fn openttd_rust_engine_start_one(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
+    set_year_engine_aging_stops(unsafe { &*s });
+}
+/// `SetYearEngineAgingStops`: compute the year in which engine aging stops.
+fn set_year_engine_aging_stops(s: &Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
     let mut year = 2050;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -477,8 +475,13 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
+    unsafe { startup_engines(&*s) };
+}
+/// `StartupEngines`: start/initialise all our engines.
+/// # Safety
+/// The immutable tables and the engine records they reach stay live for the call.
+pub(crate) unsafe fn startup_engines(s: &Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
     let date = crate::timer_game_common::calendar_date().0.min(
         crate::timer_game_common::calendar_ymd_to_date(unsafe { AGING_STOPS }, 0, 1),
     );
@@ -487,7 +490,7 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     let seed = call!(shared, random, shared.context);
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -498,7 +501,7 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     }
     from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -619,7 +622,7 @@ unsafe fn accept(s: &Services, e: EngineRef, company: u8, depth: i32) {
     }
     let mut from = 0;
     loop {
-        let ve = unsafe { call!(s, next, from) };
+        let ve = unsafe { call!((*s.types), next, from) };
         if ve.shell.is_null() {
             break;
         }
@@ -708,7 +711,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::rail::openttd_rust_add_date_rail_types(
                     types,
-                    call!(s, company_railtypes, c.id),
+                    call!((*s.types), company_railtypes, c.id),
                     date,
                 ),
             );
@@ -716,7 +719,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
                 c.id,
                 crate::road::openttd_rust_add_date_road_types(
                     types,
-                    call!(s, company_roadtypes, c.id),
+                    call!((*s.types), company_roadtypes, c.id),
                     date,
                 ),
             );
@@ -728,7 +731,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
     }
     from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -811,7 +814,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!(s, company_railtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), company_railtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_railtypes)(
                     c.id,
@@ -833,7 +836,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            let types = unsafe { call!(s, company_roadtypes, c.id) } | introduced;
+            let types = unsafe { call!((*s.types), company_roadtypes, c.id) } | introduced;
             unsafe {
                 ((&*s.types).set_company_roadtypes)(
                     c.id,
@@ -859,8 +862,14 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
+    unsafe { calendar_engines_monthly_loop(&*s) };
+}
+/// `CalendarEnginesMonthlyLoop`: monthly update of the availability, reliability and
+/// preview of engines.
+/// # Safety
+/// The immutable tables and the engine records they reach stay live for the call.
+pub(crate) unsafe fn calendar_engines_monthly_loop(s: &Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
     if crate::timer_game_common::calendar_year().0 >= unsafe { AGING_STOPS } {
         crate::witness::hit(crate::witness::ENGINE_CUTOFF);
         return;
@@ -869,7 +878,7 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
     let mut refresh = false;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -910,11 +919,16 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_clear_hidden(s: *const Services, company: u8) {
+    clear_engines_hidden_flag_of_company(unsafe { &*s }, CompanyID(company));
+}
+/// `ClearEnginesHiddenFlagOfCompany`: clear the 'hidden' flag for all engines of a new
+/// company.
+fn clear_engines_hidden_flag_of_company(s: &Services, cid: CompanyID) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
+    let company = cid.0;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -948,7 +962,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::TRAIN
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).compatible_railtypes(&*s.shared)
-                    & call!(s, company_railtypes, company)
+                    & call!((*s.types), company_railtypes, company)
             } == 0
         {
             return false;
@@ -956,7 +970,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         if kind == VehicleType::ROAD
             && unsafe {
                 crate::vehicle::EngineRef::of(e.shell).powered_roadtypes(&*s.shared)
-                    & call!(s, company_roadtypes, company)
+                    & call!((*s.types), company_roadtypes, company)
             } == 0
         {
             return false;
@@ -1057,6 +1071,16 @@ pub unsafe extern "C" fn openttd_rust_engine_want_preview(
     }
     0
 }
+/// `CmdEngineCtrl`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdEngineCtrl {
+    /// Engine id, resolved by the caller (a null shell for an invalid id).
+    engine_id: EngineRef,
+    /// Company to allow/forbid the use of an engine.
+    company_id: CompanyID,
+    /// false to forbid, true to allow.
+    allow: bool,
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_control(
     s: *const Services,
@@ -1065,17 +1089,30 @@ pub unsafe extern "C" fn openttd_rust_engine_control(
     allow: bool,
     execute: bool,
 ) -> u8 {
+    cmd_engine_ctrl(
+        unsafe { &*s },
+        execute,
+        CmdEngineCtrl {
+            engine_id: e,
+            company_id: CompanyID(company),
+            allow,
+        },
+    )
+}
+/// `CmdEngineCtrl`: allow or forbid a specific company to use an engine. Returns 0 on
+/// success and 1 for the command error.
+fn cmd_engine_ctrl(s: &Services, execute: bool, args: CmdEngineCtrl) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
+    let (e, company) = (args.engine_id, args.company_id.0);
     if unsafe { call!(&*s.shared, current_company) } != OWNER_DEITY
         || e.shell.is_null()
-        || !unsafe { call!(s, company_valid, company) }
+        || !unsafe { call!((*s.shared), company_valid, company) }
     {
         return 1;
     }
     if execute {
         crate::witness::hit(crate::witness::ENGINE_CONTROL);
-        if allow {
+        if args.allow {
             unsafe {
                 enable(s, e, company);
             }
@@ -1087,6 +1124,14 @@ pub unsafe extern "C" fn openttd_rust_engine_control(
     }
     0
 }
+/// `CmdRenameEngine`'s arguments.
+#[derive(Clone, Copy)]
+struct CmdRenameEngine {
+    /// Engine ID to rename, resolved by the caller (a null shell for an invalid id).
+    engine_id: EngineRef,
+    /// The new name or an empty string when resetting to the default.
+    text: ByteSpan,
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_rename(
     s: *const Services,
@@ -1094,19 +1139,33 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
     name: ByteSpan,
     execute: bool,
 ) -> u8 {
+    cmd_rename_engine(
+        unsafe { &*s },
+        execute,
+        CmdRenameEngine {
+            engine_id: e,
+            text: name,
+        },
+    )
+}
+/// `CmdRenameEngine`: rename an engine. Returns 0 on success, 1 for an invalid engine or
+/// too long a name and 2 for a name that is not unique.
+fn cmd_rename_engine(s: &Services, execute: bool, args: CmdRenameEngine) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
+    let (e, name) = (args.engine_id, args.text);
     if e.shell.is_null() {
         return 1;
     }
-    let s = unsafe { &*s };
     if name.size != 0 {
-        if unsafe { call!(s, utf8_length, name.data, name.size) } >= 32 {
+        if unsafe { call!((*s.shared), utf8_length, name.data, name.size) }
+            >= crate::engine_type::MAX_LENGTH_ENGINE_NAME_CHARS as usize
+        {
             return 1;
         }
         let bytes = unsafe { std::slice::from_raw_parts(name.data, name.size) };
         let mut from = 0;
         loop {
-            let other = unsafe { call!(s, next, from) };
+            let other = unsafe { call!((*s.types), next, from) };
             if other.shell.is_null() {
                 break;
             }
@@ -1128,12 +1187,15 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
+    check_engines(unsafe { &*s });
+}
+/// `CheckEngines`: check for engines that have an appropriate availability.
+fn check_engines(s: &Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    let s = unsafe { &*s };
     let mut min = i32::MAX;
     let mut from = 0;
     loop {
-        let e = unsafe { call!(s, next, from) };
+        let e = unsafe { call!((*s.types), next, from) };
         if e.shell.is_null() {
             break;
         }
@@ -1188,7 +1250,6 @@ crate::abi::layouts! {
         finance,
         rng,
         types,
-        next,
         resolve,
         display_variant,
         engine_id,
@@ -1208,9 +1269,6 @@ crate::abi::layouts! {
         vehicle_next,
         vehicle_cargo,
         capabilities,
-        company_valid,
-        company_railtypes,
-        company_roadtypes,
         company_engine_count,
         local_company,
         toolbar_enable,
@@ -1221,7 +1279,6 @@ crate::abi::layouts! {
         available_event,
         available_news,
         no_engines,
-        utf8_length,
     };
 }
 

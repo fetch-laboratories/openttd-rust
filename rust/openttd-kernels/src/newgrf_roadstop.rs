@@ -884,3 +884,37 @@ impl RoadStopView {
     /// Drive-through stop on the Y axis.
     pub const RSV_DRIVE_THROUGH_Y: Self = Self(5);
 }
+
+/// `RoadStopSpec::GetBuildCost`: get the cost for building a road stop of
+/// this type. The command table reads the spec's `build_cost_multiplier` and
+/// its GRF file's price shift.
+pub(crate) fn get_build_cost(
+    s: &crate::station_cmd::CommandServicesTable,
+    spec: *const RoadSpec,
+    category: crate::economy_type::Price,
+) -> i64 {
+    let cost = (s.road_spec_build_cost)(spec, category.0);
+    crate::economy_func::get_price(
+        u32::from(category.0),
+        u32::from(cost.multiplier),
+        cost.shift,
+        -4,
+    )
+}
+
+/// `RoadStopSpec::GetClearCost`: get the cost for clearing a road stop of
+/// this type. The command table reads the spec's `clear_cost_multiplier` and
+/// its GRF file's price shift.
+pub(crate) fn get_clear_cost(
+    s: &crate::station_cmd::CommandServicesTable,
+    spec: *const RoadSpec,
+    category: crate::economy_type::Price,
+) -> i64 {
+    let cost = (s.road_spec_clear_cost)(spec, category.0);
+    crate::economy_func::get_price(
+        u32::from(category.0),
+        u32::from(cost.multiplier),
+        cost.shift,
+        -4,
+    )
+}

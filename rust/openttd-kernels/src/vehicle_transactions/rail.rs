@@ -192,11 +192,6 @@ impl Ctx {
                 .set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
-    /// `Vehicle::orders`.
-    fn orders(self, v: R) -> *mut std::ffi::c_void {
-        let orders = read_field!(v, orders);
-        read_field!(orders, orders)
-    }
 }
 
 /// Original `GetFreeWagonsInDepot`: IDs sorted for consistency across clients.
@@ -686,8 +681,8 @@ fn normalise_train_head(x: Ctx, head: R) {
     );
 }
 /// `new_head->orders = old->orders`.
-fn take_orders(x: Ctx, new_head: R, old: R) {
-    let orders = x.orders(old);
+fn take_orders(new_head: R, old: R) {
+    let orders = crate::vehicle_base::order_list(old);
     let view = read_field!(new_head, orders);
     write_field!(view, orders, orders);
 }
@@ -838,8 +833,8 @@ pub(crate) unsafe fn move_vehicle(
         (s.front_windows)(Ctx::sh(src));
         if !src_head.is_null() && x.is_front(src_head) {
             crate::witness::hit(crate::witness::VT_RAIL_HEAD_TRANSFER);
-            take_orders(x, src_head, src);
-            if !x.orders(src_head).is_null() {
+            take_orders(src_head, src);
+            if !crate::vehicle_base::order_list(src_head).is_null() {
                 add_to_shared(x, src_head, src);
             }
             unsafe { (x.w.copy_configuration)(Ctx::sh(src), Ctx::sh(src_head)) };
@@ -935,7 +930,7 @@ pub(crate) unsafe fn sell(
         restore(x, &original);
         return (cost.error)(out, error);
     }
-    if x.orders(first).is_null() && (x.c.orders.list_capacity)() == 0 {
+    if crate::vehicle_base::order_list(first).is_null() && (x.c.orders.list_capacity)() == 0 {
         restore(x, &original);
         return (cost.error)(out, s.strings.no_orders);
     }
@@ -953,7 +948,7 @@ pub(crate) unsafe fn sell(
     if v == first && !sell_chain && !new_head.is_null() && x.is_front(new_head) {
         if x.is_engine(v) {
             crate::witness::hit(crate::witness::VT_RAIL_SELL_TRANSFER);
-            take_orders(x, new_head, first);
+            take_orders(new_head, first);
             add_to_shared(x, new_head, first);
             delete_orders(x, first);
             unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };

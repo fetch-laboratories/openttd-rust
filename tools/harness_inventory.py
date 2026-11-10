@@ -6,6 +6,11 @@ each comparison driver's case lines, MASKS and KNOWN_FAILURES. The tree must
 match it, so every removal shows in the diff. Against --base-ref, MASKS gains no
 entry and a new KNOWN_FAILURES entry names an open issue. A scenario key that no
 tool reads fails. run-comparisons.py checks reported case counts at run time.
+
+Native CTest case names are read from the registered src/tests sources at the
+tree and at --base-ref: a case that disappears needs a ctest: record naming it
+exactly, unless a source: record retires its whole file, and a new ctest: record
+names a case that exists at --base-ref and no longer exists in the tree (#856).
 """
 
 import argparse
@@ -26,6 +31,17 @@ import vcs
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = "migration/harness-inventory.json"
 COUNT = re.compile(r"\b\d+\b")
+# Catch's CTest name is the TEST_CASE literal; TEST_CASE_METHOD names its fixture first.
+CASE = re.compile(r"\bTEST_CASE(?:_METHOD)?\s*\(")
+# Cases deleted before this check existed, recorded afterwards (#856): their
+# ctest: records name no case at any later base.
+BELATED_CASES = {
+    "Base vehicle scheduler - scalar member identity and lifetime",  # a9f471051f
+    "Town growth - command boundaries and callback reentry",  # f360fca7f1
+}
+CASE_NAME = re.compile(
+    r'\bTEST_CASE(?:_METHOD\s*\(\s*[\w:<>]+\s*,|\s*\()\s*"((?:[^"\\\n]|\\.)*)"'
+)
 
 
 class NativeInventory(TypedDict):
@@ -162,6 +178,80 @@ def native_inventory(ref: str | None = None) -> NativeInventory:
         "native_tests": sorted(tests),
         "native_targets": sorted(targets),
     }
+
+
+def case_names(text: str, path: str) -> tuple[list[str], list[str]]:
+    """Each TEST_CASE's CTest name, or an error where the literal is not plain."""
+    names, found = [], []
+    for name in CASE_NAME.findall(text):
+        if re.search(r'\\[^"\\]', name):
+            found.append(f"{path}: unsupported escape in TEST_CASE name {name!r}")
+        names.append(re.sub(r"\\(.)", r"\1", name))
+    if len(names) != len(CASE.findall(text)):
+        found.append(f"{path}: TEST_CASE without a plain string-literal name")
+    return names, found
+
+
+def native_cases(ref: str | None = None) -> tuple[dict[str, str], list[str]]:
+    """CTest case names of the registered native test sources, with their files."""
+    cases: dict[str, str] = {}
+    found = []
+    present = (
+        set(git("ls-tree", "-r", "--name-only", ref, "--", "src/tests").split())
+        if ref
+        else None
+    )
+    for path in native_inventory(ref)["native_tests"]:
+        if not path.endswith(".cpp") or (present is not None and path not in present):
+            continue
+        text = git("show", f"{ref}:{path}") if ref else (ROOT / path).read_text()
+        names, errors = case_names(text, path)
+        found += errors
+        cases.update(dict.fromkeys(names, path))
+    return cases, found
+
+
+def retirements(ref: str | None = None) -> set[str]:
+    """Every retired identity in the replacement manifests at ref or in the tree."""
+    if ref is None:
+        return {item for record in replacements.load() for item in record["retires"]}
+    paths = git(
+        "ls-tree", "--name-only", ref, "--", "migration/evidence-replacements/"
+    ).split()
+    return {
+        item
+        for path in paths
+        if path.endswith(".json")
+        for record in json.loads(git("show", f"{ref}:{path}"))
+        for item in record["retires"]
+    }
+
+
+def ctest_case_errors(
+    base: Mapping[str, str],
+    tree: Mapping[str, str],
+    retired: set[str],
+    base_retired: set[str],
+) -> list[str]:
+    """A lost case needs its exact ctest: record; a new record names a lost case."""
+    found = [
+        f"CTest case removed without a ctest: record: {name}"
+        for name, path in sorted(base.items())
+        if name not in tree
+        and f"ctest:{name}" not in retired
+        and f"source:{path}" not in retired
+    ]
+    for item in sorted(retired - base_retired):
+        name = item.removeprefix("ctest:")
+        if not item.startswith("ctest:"):
+            continue
+        if name not in base and name not in BELATED_CASES:
+            found.append(f"ctest: record names no CTest case at the base: {name}")
+        elif name in tree:
+            found.append(
+                f"ctest: record retires a CTest case that still exists: {name}"
+            )
+    return found
 
 
 def replacement_errors(tree: Inventory, base: Inventory) -> list[str]:
@@ -363,6 +453,13 @@ def main() -> int:
                 f"archived {key} removed; retain inventory and register replacements"
             )
     found += replacement_errors(tree, base)
+    base_cases, base_case_errors = native_cases(args.base_ref)
+    tree_cases, tree_case_errors = native_cases()
+    found += tree_case_errors + ctest_case_errors(
+        base_cases, tree_cases, retirements(), retirements(args.base_ref)
+    )
+    if base_case_errors:
+        print(f"note: {len(base_case_errors)} unparsed TEST_CASE names at the base")
     found += case_errors(base["comparisons"], expected["comparisons"])
     found += [f"scenario key read by no tool: {key}" for key in unread]
     for line in removals(recorded, base):
@@ -370,7 +467,7 @@ def main() -> int:
     for line in found:
         print(f"error: {line}")
     print(
-        f"Harness inventory: {len(tree['default'])} default, {len(tree['soak'])} soak-only scenarios, {len(tree['comparisons'])} comparisons; {len(found)} errors"
+        f"Harness inventory: {len(tree['default'])} default, {len(tree['soak'])} soak-only scenarios, {len(tree['comparisons'])} comparisons, {len(tree_cases)} native CTest cases; {len(found)} errors"
     )
     return int(bool(found))
 

@@ -109,7 +109,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.finance = &GetRustCompanyFinanceServices(),
 		.rng = &GetRustRandomServices(),
 		.types = &GetRustTypeAvailabilityServices(),
-		.next = Engine_next,
 		.resolve = Engine_resolve,
 		.display_variant = Engine_display_variant,
 		.engine_id = RustEngineID,
@@ -129,9 +128,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.vehicle_next = Engine_vehicle_next,
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
-		.company_valid = GetRustSharedServices().company_valid,
-		.company_railtypes = RustCompanyRailTypes,
-		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,
 		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,
@@ -142,7 +138,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.available_event = Engine_available_event,
 		.available_news = Engine_available_news,
 		.no_engines = Engine_no_engines,
-		.utf8_length = GetRustSharedServices().utf8_length,
 	};
 	return services;
 }

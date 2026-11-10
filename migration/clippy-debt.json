@@ -153,21 +153,6 @@
     "rust/openttd-kernels/src/ship_yapf.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_airport | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_rail | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      13
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn build_road | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      15
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_rail_command | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      9
-    ],
-    "rust/openttd-kernels/src/station_cmd.rs | impl Ctx < ' _ >::fn remove_road_command | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      12
-    ],
     "rust/openttd-kernels/src/station_service.rs | module | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
