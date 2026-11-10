@@ -4,6 +4,9 @@
 /// The number of a sprite, without mapping bits and colourtables.
 pub type SpriteID = u32;
 
+/// The number of the palette (`gfx_type.h`).
+pub type PaletteID = u32;
+
 /// `MILLISECONDS_PER_TICK`.
 pub(crate) const MILLISECONDS_PER_TICK: u32 = 27;
 pub const COLOUR_RED: u8 = Colours::COLOUR_RED.0;

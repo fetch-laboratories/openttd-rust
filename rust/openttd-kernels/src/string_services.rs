@@ -18,9 +18,10 @@ pub extern "C" fn openttd_rust_string_append_bind(append: Append) {
 }
 
 /// # Safety
-/// `text` is a live native string and `data` holds `size` readable bytes.
-pub unsafe fn append(text: *mut c_void, data: *const u8, size: usize) {
+/// `text` is a live native string, serialized for this synchronous append.
+/// The input slice remains readable for the call; no pointer is retained.
+pub unsafe fn append(text: *mut c_void, data: &[u8]) {
     // SAFETY: Both the initial function and every bound function have this signature.
     let append: Append = unsafe { std::mem::transmute(APPEND.load(Ordering::Acquire)) };
-    append(text, data, size);
+    append(text, data.as_ptr(), data.len());
 }
