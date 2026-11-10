@@ -125,59 +125,50 @@ pub(crate) fn is_field_tile(m: &TileTypeAccess, t: TileIndex) -> Option<bool> {
 }
 
 /// Raw adapter: `IsSnowTile` over a base tile, for files no pass has finished yet.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_snow_tile_raw(m: &TileTypeAccess, t: u32) -> Option<bool> {
     is_snow_tile(m, TileIndex(t))
 }
 /// Raw adapter: `GetClearGround` over base values.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_clear_ground_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
     get_clear_ground(m, TileIndex(t)).map(|g| g.0)
 }
 /// Raw adapter: `GetClearGround` over checked fields, as a base value.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_clear_ground_from_fields_raw(fields: &TileFields<'_>) -> u8 {
     get_clear_ground_from_fields(fields).0
 }
 /// Raw adapter: `GetClearDensity` over a base tile.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_clear_density_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
     get_clear_density(m, TileIndex(t))
 }
 /// Raw adapter: `GetClearCounter` over a base tile.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_clear_counter_raw(m: &TileTypeAccess, t: u32) -> Option<u8> {
     get_clear_counter(m, TileIndex(t))
 }
 /// Raw adapter: the checked field tile over a base tile.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn require_field_raw(m: &TileTypeAccess, t: u32) -> Option<TileFields<'_>> {
     require_field(m, TileIndex(t))
 }
 /// Raw adapter: `GetIndustryIndexOfField` as a base value.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_industry_index_of_field_raw(fields: &TileFields<'_>) -> u16 {
     get_industry_index_of_field(fields).0
 }
 /// Raw adapter: `GetFence` over a base side; `NOT_REACHED` fails through the
 /// canonical native assertion.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn get_fence_raw(fields: &TileFields<'_>, side: u8) -> u32 {
     get_fence(fields, DiagDirection(side), || {
         crate::services_assert::check(false);
     })
 }
 /// Raw adapter: the field-tile test over a base tile.
-#[allow(clippy::inline_always)]
-#[inline(always)]
+#[inline]
 pub(crate) fn is_field_tile_raw(m: &TileTypeAccess, t: u32) -> Option<bool> {
     is_field_tile(m, TileIndex(t))
 }
