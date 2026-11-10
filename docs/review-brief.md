@@ -69,6 +69,7 @@ Post one report on the PR, with the PR template's review skeleton, starting `Rev
   - the check or reading that found it;
   - the suggested remedy.
 - End with the disposition: accepted, or findings to remediate.
+- Findings do not wait for CI: post the report when the source review is done. Only an acceptance needs the passing `native` result at the reviewed head ([checks](workflow.md#checks)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
 
 After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"` ([spawning](team.md#spawning)): your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
 
