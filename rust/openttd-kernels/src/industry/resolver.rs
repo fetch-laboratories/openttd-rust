@@ -206,7 +206,8 @@ fn get_industry_id_at_offset(
             0xFFFE
         }
     } else {
-        // The tile has no spritegroup, so just give it the substitute
+        // The tile has no spritegroup
+        // so just give it the substitute
         0xFF << 8 | u32::from(indtsp.subst_id)
     }
 }

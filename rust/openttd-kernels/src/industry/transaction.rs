@@ -497,8 +497,9 @@ impl Engine<'_> {
             }
         }
         *custom_shape_check = custom_shape;
-        // It is almost impossible to have a fully flat land in TG, so what we do is that we
-        // check if we can make the land flat later on. See CheckIfCanLevelIndustryPlatform().
+        // It is almost impossible to have a fully flat land in TG, so what we
+        //  do is that we check if we can make the land flat later on. See
+        //  CheckIfCanLevelIndustryPlatform().
         if !refused_slope
             || (unsafe { (self.x.terragenesis)() }
                 && unsafe { (self.c.generating)() }
@@ -541,8 +542,9 @@ impl Engine<'_> {
             if internal != 0 && curh.abs_diff(height) > 1 {
                 return false;
             }
-            // Different height, so the surrounding tiles of this tile has to be correct too
-            // (in level, or almost in level) else you get a chain-reaction of terraforming.
+            // Different height, so the surrounding tiles of this tile
+            //  has to be correct too (in level, or almost in level)
+            //  else you get a chain-reaction of terraforming.
             if internal == 0
                 && curh != height
                 && (coordinates.tile_x(tile_walk.0) == 0

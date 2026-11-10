@@ -679,12 +679,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
         // Copy all accepted cargoes from industry itself.
         for n in 0..super::accepted_count(ind.owner) {
             let cargo = CargoType(unsafe { (*super::accepted(ind.owner, n)).cargo });
-            // Not found, insert; with nowhere to place it, give up on this one.
+            // Not found, insert
             let Some(pos) = info.cargo.iter().position(|&c| c == cargo.0).or_else(|| {
                 info.cargo
                     .iter()
                     .position(|&c| c == CargoType::INVALID_CARGO.0)
             }) else {
+                // nowhere to place, give up on this one
                 continue;
             };
             info.cargo[pos] = cargo.0;
@@ -774,9 +775,10 @@ pub(crate) unsafe fn clear_tile_industry(
         (*i.owner).metadata.kind
     }));
     let current_company = || CompanyID(unsafe { (policy.current_company)() });
-    // Water can destroy industries, in editor you can bulldoze industries, with
-    // magic_bulldozer cheat you can destroy industries (area around OILRIG is water, so
-    // water shouldn't flood it).
+    // water can destroy industries
+    // in editor you can bulldoze industries
+    // with magic_bulldozer cheat you can destroy industries
+    // (area around OILRIG is water, so water shouldn't flood it
     if (current_company() != Owner::WATER
         && !(generation.environment.editor)()
         && !unsafe { (policy.magic_bulldozer)() })

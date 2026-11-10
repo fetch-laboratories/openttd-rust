@@ -1603,10 +1603,11 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
             let mut it = IndustryType(0);
             loop {
                 let f = builddata(b, it);
-                // Type may not be built now; too many of this kind.
+                // Type may not be built now.
                 if unsafe { (*f).wait_count == 0 } {
                     let difference = unsafe { i32::from((*f).target_count) }
                         - i32::from(get_industry_type_count(builder, it, s));
+                    // Too many of this kind.
                     if difference > 0 {
                         if count == 1 || r < difference as u32 {
                             break it;
