@@ -178,8 +178,6 @@ pub(crate) fn tile_belongs_to_airport(
     index: StationID,
     tile: TileIndex,
 ) -> bool {
-    // `IsAirportTile`.
-    crate::tile_type::TileType((s.tile_type)(tile.0)) == crate::tile_type::TileType::MP_STATION
-        && crate::station_map::is_airport(tile, s)
-        && crate::map_func::World::new(s).get_station_index(tile) == index
+    let world = crate::map_func::World::new(s);
+    world.is_airport_tile(tile) && world.get_station_index(tile) == index
 }

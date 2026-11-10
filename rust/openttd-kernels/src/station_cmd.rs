@@ -1350,7 +1350,7 @@ impl Ctx<'_> {
     }
     /// `TileBelongsToShipStation`.
     fn tile_belongs_to_ship_station(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
-        self.is_dock_tile(tile)
+        crate::map_func::World::new(self.shared).is_dock_tile(tile)
             && StationID((self.shared.station_index)(tile.0))
                 == StationID((self.links().graphs.station_id)(st))
     }
@@ -2281,14 +2281,12 @@ impl Ctx<'_> {
                 }
                 /* Remove animation if overbuilding */
                 crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
-                let old_specindex = if TileType((self.shared.tile_type)(tile.0))
-                    == TileType::MP_STATION
-                    && crate::map_func::World::new(self.shared).has_station_rail(tile)
-                {
-                    (self.s.custom_rail_index)(tile.0) as u8
-                } else {
-                    0
-                };
+                let old_specindex =
+                    if crate::map_func::World::new(self.shared).has_station_tile_rail(tile) {
+                        (self.s.custom_rail_index)(tile.0) as u8
+                    } else {
+                        0
+                    };
                 let gfx = Self::rail_station_tile_layout_gfx(layout, position, numtracks, plat_len);
                 (self.s.make_rail_station)(tile.0, owner.0, index, axis.0, gfx.0, rt.0);
                 /* Free the spec if we overbuild something */
@@ -2529,9 +2527,7 @@ impl Ctx<'_> {
         for tile in ta.tiles(self.map()) {
             let tile = TileIndex(tile);
             /* Make sure the specified tile is a rail station */
-            if TileType((self.shared.tile_type)(tile.0)) != TileType::MP_STATION
-                || !crate::map_func::World::new(self.shared).has_station_rail(tile)
-            {
+            if !crate::map_func::World::new(self.shared).has_station_tile_rail(tile) {
                 continue;
             }
             /* If there is a vehicle on ground, do not allow to remove (flood) the tile */
@@ -4747,11 +4743,6 @@ struct CmdBuildDock {
 }
 
 impl Ctx<'_> {
-    /// `IsDockTile`.
-    fn is_dock_tile(&self, t: TileIndex) -> bool {
-        TileType((self.shared.tile_type)(t.0)) == TileType::MP_STATION
-            && StationType((self.shared.station_type)(t.0).0) == StationType::Dock
-    }
     /// `t + TileOffsByDiagDir(d)`.
     fn tile_add_by_diag_dir(&self, t: TileIndex, d: DiagDirection) -> TileIndex {
         TileIndex(self.map().add_diag(t.0, d.0))
@@ -4779,10 +4770,8 @@ impl Ctx<'_> {
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
-            // `IsDockWaterPart`.
-            if self.is_dock_tile(tile)
-                && (self.shared.station_gfx)(tile.0) >= GFX_DOCK_BASE_WATER_PART
-            {
+            let world = crate::map_func::World::new(self.shared);
+            if world.is_dock_tile(tile) && world.is_dock_water_part(tile) {
                 let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
                 self.area_add((self.s.docking_area)(st), t);
                 (self.s.set_docking)(t.0, true);
@@ -4795,7 +4784,7 @@ impl Ctx<'_> {
                 }
             }
             if TileType((self.shared.tile_type)(tile.0)) == TileType::MP_STATION
-                && StationType((self.shared.station_type)(tile.0).0) == StationType::Oilrig
+                && crate::map_func::World::new(self.shared).is_oil_rig(tile)
             {
                 let st = self.full_station(StationID((self.shared.station_index)(tile.0)));
                 self.area_add((self.s.docking_area)(st), t);
@@ -5044,19 +5033,22 @@ impl Ctx<'_> {
     }
     /// `FindDockLandPart`: find the part of a dock that is land-based.
     fn find_dock_land_part(&self, t: TileIndex) -> TileIndex {
-        let gfx = (self.shared.station_gfx)(t.0);
-        if gfx < GFX_DOCK_BASE_WATER_PART {
+        let world = crate::map_func::World::new(self.shared);
+        world.check(world.is_dock_tile(t));
+        let gfx = world.get_station_gfx(t);
+        if gfx.0 < GFX_DOCK_BASE_WATER_PART {
             return t;
         }
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
             let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
-            if !(self.shared.tile_valid)(tile.0) || !self.is_dock_tile(tile) {
+            if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
-            // `GetDockDirection(tile)` is the land part's gfx.
-            let gfx = (self.shared.station_gfx)(tile.0);
-            if gfx < GFX_DOCK_BASE_WATER_PART
-                && self.tile_add_by_diag_dir(tile, DiagDirection(gfx)) == t
+            if !world.is_dock_tile(tile) {
+                continue;
+            }
+            if world.get_station_gfx(tile).0 < GFX_DOCK_BASE_WATER_PART
+                && self.tile_add_by_diag_dir(tile, world.get_dock_direction(tile)) == t
             {
                 return tile;
             }
@@ -5131,15 +5123,17 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if !self.is_dock_tile(tile) {
+        if !crate::map_func::World::new(self.shared).is_dock_tile(tile) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         let tile1 = self.find_dock_land_part(tile);
         if tile1 == TileIndex::INVALID {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let tile2 =
-            self.tile_add_by_diag_dir(tile1, DiagDirection((self.shared.station_gfx)(tile1.0)));
+        let tile2 = self.tile_add_by_diag_dir(
+            tile1,
+            crate::map_func::World::new(self.shared).get_dock_direction(tile1),
+        );
         unsafe {
             self.command.no_vehicle(cost.0, tile1.0);
         }
@@ -5458,8 +5452,15 @@ pub unsafe extern "C" fn openttd_rust_station_in_orders_abi(
 impl Ctx<'_> {
     /// `ClearTile_Station`'s `DoCommandFlag::Auto` errors.
     fn auto_clear(&self, cost: Cost<'_>, tile: TileIndex) {
-        let has_tram =
-            || self.get_road_type(tile, RoadTramType::RTT_TRAM) != RoadType::INVALID_ROADTYPE;
+        let has_tram = || {
+            crate::map_func::World::new(self.shared).asserted(|m| {
+                crate::road_map::has_tile_road_type(
+                    m,
+                    tile.0,
+                    crate::services::RoadTramType(RoadTramType::RTT_TRAM.0),
+                )
+            })
+        };
         let error = match StationType((self.shared.station_type)(tile.0).0) {
             StationType::Rail => self.s.strings.demolish_railroad,
             StationType::RailWaypoint | StationType::RoadWaypoint => {
@@ -5722,7 +5723,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        if CompanyID((self.shared.tile_owner)(tile.0)) != old_owner {
+        if !crate::tile_map::is_tile_owner(self.shared, tile.0, old_owner.0) {
             return;
         }
         if new_owner != CompanyID::INVALID {
@@ -5750,7 +5751,7 @@ impl Ctx<'_> {
                 _ => (),
             }
             /* Update station tile count. */
-            if station_type != StationType::Buoy && station_type != StationType::Airport {
+            if !world.is_buoy(tile) && !world.is_airport(tile) {
                 (self.s.station_infrastructure)(old_owner.0, u32::MAX);
                 (self.s.station_infrastructure)(new_owner.0, 1);
             }
@@ -5764,12 +5765,7 @@ impl Ctx<'_> {
             /* Change owner of tile and all roadtypes */
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe {
-                crate::tile_owner::openttd_rust_tile_change_owner(
-                    ownership,
-                    tile.0,
-                    old_owner.0,
-                    new_owner.0,
-                );
+                crate::tile_owner::change_tile_owner(ownership, tile, old_owner, new_owner);
             };
         } else {
             crate::landscape_cmd::clear_command(
@@ -5783,11 +5779,9 @@ impl Ctx<'_> {
             /* Set tile owner of water under (now removed) buoy and dock to OWNER_NONE.
              * Update owner of buoy if it was not removed (was in orders).
              * Do not update when owned by OWNER_WATER (sea and rivers). */
-            let tile_type = TileType((self.shared.tile_type)(tile.0));
-            if (tile_type == TileType::MP_WATER
-                || (tile_type == TileType::MP_STATION
-                    && StationType((self.shared.station_type)(tile.0).0) == StationType::Buoy))
-                && CompanyID((self.shared.tile_owner)(tile.0)) == old_owner
+            if (TileType((self.shared.tile_type)(tile.0)) == TileType::MP_WATER
+                || world.is_buoy_tile(tile))
+                && crate::tile_map::is_tile_owner(self.shared, tile.0, old_owner.0)
             {
                 (self.shared.set_tile_owner)(tile.0, CompanyID::NONE.0);
             }
