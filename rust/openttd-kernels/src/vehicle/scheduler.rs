@@ -994,8 +994,12 @@ mod pool_tests {
         assert!(condition);
     }
 
+    /// The test's pool owner, kept at the address `POOL` records.
+    struct TestPool {
+        _core: Box<PoolCore>,
+    }
     /// The vehicle pool's parameters: `Pool<Vehicle, VehicleID, 512>`.
-    fn new_pool() -> Box<PoolCore> {
+    fn new_pool() -> TestPool {
         let mut core = PoolCore::new(
             PoolConfig {
                 max_size: 0xFF000,
@@ -1015,7 +1019,7 @@ mod pool_tests {
             },
         );
         POOL.set(&raw mut *core);
-        core
+        TestPool { _core: core }
     }
     /// `new (VehicleID(index)) Vehicle(VEH_EFFECT)`: shell, then its fresh canonical record.
     fn new_vehicle(index: usize) -> *mut Shell {
