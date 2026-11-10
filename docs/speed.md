@@ -14,7 +14,7 @@ here, use the mean of those it has (provisional; the record restarted on 2026-11
 
 | Event | Action |
 | --- | --- |
-| Every twelfth integration (user, 2026-11-08; every sixth from 2026-11-06) | Root profiles the integrated tip in the background and records six projections in the roadmap's "Where the fork stands". |
+| Every twelfth merge (user, 2026-11-08; every sixth from 2026-11-06) | Root profiles the merged tip in the background and records six projections in the roadmap's "Where the fork stands". |
 | Projection rises over 3% since previous tip | Attribute the rise per function to the intervening PRs; fix forward in the next maintenance PR. A ready ownership PR proceeds meanwhile. |
 | Record first reaches its band | Run a speed pass. |
 | Scenario remains in band | Run another pass only when its projection rises at least 3% over its anchor or a repair batch crediting at least 1.5% of its loop count integrates; otherwise the projection is the record. |

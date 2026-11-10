@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import code_lines
+
 SPEC = importlib.util.spec_from_file_location(
     "port_metrics", Path(__file__).with_name("port-metrics.py")
 )
@@ -427,6 +429,106 @@ class PortMetricsTests(unittest.TestCase):
             "src/timer/timer_game_tick.h",
         ):
             self.assertFalse(METRICS.simulation_source(path), path)
+
+
+class CodeLineStoreTests(unittest.TestCase):
+    """A stored result is exactly the lexed one, and no other text reaches it."""
+
+    SOURCE = "// comment\n\nint x; /* tail */\n#if A\nint y;\n#endif\n"
+
+    def setUp(self) -> None:
+        self.lines = code_lines
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        self.forget()
+        self.addCleanup(self.forget)
+
+    def forget(self) -> None:
+        """Drop this process's results and its store."""
+        self.lines._code_lines.cache_clear()
+        self.lines._without_comments.cache_clear()
+        self.lines.STORE = None
+
+    def fresh(self) -> code_lines.Store:
+        """Start as a new run would: nothing in memory, the store read from disk."""
+        self.forget()
+        store = self.lines.Store(self.directory)
+        self.lines.STORE = store
+        return store
+
+    def test_a_stored_result_equals_the_lexed_one_in_a_later_run(self) -> None:
+        lexed = self.lines.code_lines(self.SOURCE, "a.cpp")
+        self.assertEqual(lexed, {3, 5})
+        store = self.fresh()
+        self.assertEqual(self.lines.code_lines(self.SOURCE, "a.cpp"), lexed)
+        store.save()
+        (stored,) = self.directory.iterdir()
+        self.assertEqual(list(json.loads(stored.read_text()).values()), [[3, 5]])
+        # A later run reads the result and lexes nothing.
+        store = self.fresh()
+        with mock.patch.object(self.lines, "lexed", side_effect=AssertionError):
+            self.assertEqual(self.lines.code_lines(self.SOURCE, "b.cpp"), lexed)
+        self.assertEqual(store.added, {})
+
+    def test_another_text_or_lexer_never_reaches_a_stored_result(self) -> None:
+        store = self.fresh()
+        self.lines.code_lines(self.SOURCE, "a.cpp")
+        store.save()
+        store = self.fresh()
+        # The same text is Rust under another lexer, where `#if A` is code.
+        self.assertEqual(self.lines.code_lines(self.SOURCE, "a.rs"), {3, 4, 5, 6})
+        self.assertEqual(
+            self.lines.code_lines(self.SOURCE + "int z;\n", "a.cpp"), {3, 5, 7}
+        )
+        self.assertEqual(len(store.added), 2)
+
+    def test_runs_merge_and_a_damaged_store_is_recomputed(self) -> None:
+        first, second = (self.lines.Store(self.directory) for _ in range(2))
+        first.added, second.added = {"one": [1]}, {"two": [2]}
+        first.save()
+        second.save()
+        self.assertEqual(
+            self.lines.Store(self.directory).entries, {"one": [1], "two": [2]}
+        )
+        first.path.write_text("{ damaged")
+        self.fresh()
+        self.assertEqual(self.lines.code_lines(self.SOURCE, "a.cpp"), {3, 5})
+
+    def test_a_store_of_another_shape_is_ignored(self) -> None:
+        store = self.fresh()
+        for other in (
+            '["list"]',
+            '{"key": "text"}',
+            '{"key": [1, "2"]}',
+            '{"key": [true]}',
+        ):
+            store.path.write_text(other)
+            self.assertEqual(self.lines.Store(self.directory).entries, {}, other)
+
+    def test_an_unwritable_store_costs_no_result(self) -> None:
+        occupied = self.directory / "file"
+        occupied.write_text("")
+        self.forget()
+        store = self.lines.Store(occupied / "below")
+        self.lines.STORE = store
+        self.assertEqual(self.lines.code_lines(self.SOURCE, "a.cpp"), {3, 5})
+        store.save()
+        self.assertEqual(store.added, {})
+        self.assertEqual(sorted(self.directory.iterdir()), [occupied])
+
+    def test_text_that_utf8_cannot_encode_is_counted_with_and_without_a_store(
+        self,
+    ) -> None:
+        text = "int x; // \udcff\n"
+        self.assertEqual(self.lines.code_lines(text, "a.cpp"), {1})
+        self.fresh()
+        self.assertEqual(self.lines.code_lines(text, "a.cpp"), {1})
+
+    def test_a_module_or_pygments_change_starts_an_empty_store(self) -> None:
+        name = self.lines.Store(self.directory).path.name
+        with mock.patch.object(self.lines.pygments, "__version__", "0"):
+            self.assertNotEqual(self.lines.Store(self.directory).path.name, name)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,9 @@ DIRECTORIES = {
     "PKG_CONFIG_SYSROOT_DIR",
     "CARGO_TARGET_DIR",
 }
+# The checkout's own Clippy configuration, which hand-run Clippy shares with
+# the gate and the debt ratchet.
+CHECKOUT = {"CLIPPY_CONF_DIR": migration.ROOT / migration.CLIPPY_CONFIGURATION}
 
 
 class MigrationEnvTests(unittest.TestCase):
@@ -51,6 +54,13 @@ class MigrationEnvTests(unittest.TestCase):
         patch = mock.patch.object(migration, "CARGO_TARGET_DIR", self.build / "cargo")
         patch.start()
         self.addCleanup(patch.stop)
+        # A `migration.py env` shell already holds the checkout's own values,
+        # which `env` then leaves out; start each test without them.
+        patch = mock.patch.dict(os.environ)
+        patch.start()
+        self.addCleanup(patch.stop)
+        for name in CHECKOUT:
+            os.environ.pop(name, None)
 
     def bootstrap(self) -> None:
         for directory in ("cargo/bin", "rustup", "deps/usr/bin", LIBRARIES):
@@ -80,7 +90,9 @@ class MigrationEnvTests(unittest.TestCase):
     def test_exports_point_inside_bootstrapped_local(self) -> None:
         self.bootstrap()
         exports = self.exports()
-        self.assertEqual(set(exports), PATH_LISTS | DIRECTORIES)
+        self.assertEqual(set(exports), PATH_LISTS | DIRECTORIES | set(CHECKOUT))
+        for name, path in CHECKOUT.items():
+            self.assertEqual(exports[name], str(path))
         for name in DIRECTORIES:
             self.assertTrue(self.inside(exports[name]), name)
         for name in PATH_LISTS:
@@ -92,6 +104,14 @@ class MigrationEnvTests(unittest.TestCase):
             for entry in added.split(os.pathsep):
                 self.assertTrue(self.inside(entry), f"{name}: {entry}")
         self.assertIn(str(self.local / LIBRARIES), exports["LD_LIBRARY_PATH"])
+
+    def test_checkout_values_are_exported_unless_already_correct(self) -> None:
+        for name, path in CHECKOUT.items():
+            os.environ[name] = "/elsewhere"
+            self.assertEqual(self.exports()[name], str(path))
+            os.environ[name] = str(path)
+            self.assertNotIn(name, self.exports())
+            self.assertEqual(migration.environment()[name], str(path))
 
     def test_shell_eval_reproduces_exports(self) -> None:
         self.bootstrap()
@@ -122,6 +142,7 @@ class MigrationEnvTests(unittest.TestCase):
                 {
                     "CARGO_TARGET_DIR": str(self.build / "cargo"),
                     "CPATH": str(self.build / "generated-abi"),
+                    **{name: str(path) for name, path in CHECKOUT.items()},
                 },
             )
 

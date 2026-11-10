@@ -2606,3 +2606,227 @@ mod tests {
         }
     }
 }
+
+/// The behavioural checks of the retired `tools/simulation/cargo-list-scaling.cpp` (#736 F):
+/// lists of 1000 to 64000 packets, far larger than the play corpus, keep packet identity,
+/// order and counts through `NoUnload` staging, first-hit appends, reverse removal, keyed
+/// loads and next-hop queries, reading each appended or loaded packet a bounded number of
+/// times. Expected values are the probe's own checks; its timings were not observations.
+#[cfg(test)]
+mod scaling_tests {
+    use super::*;
+    use crate::test_tables::{CARGO_STORAGE, SHARED};
+    use std::cell::Cell;
+
+    thread_local! {
+        static READS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn packet_of(shell: *mut c_void) -> *mut Packet {
+        READS.set(READS.get() + 1);
+        shell.cast()
+    }
+    extern "C" fn destroy_packet(shell: *mut c_void) {
+        // SAFETY: Every shell in these lists is a packet from `openttd_rust_cargo_packet_new`.
+        unsafe { openttd_rust_cargo_packet_destroy(shell.cast()) };
+    }
+    extern "C" fn collect(context: *mut c_void, _: u16, shell: *mut c_void) {
+        if !shell.is_null() {
+            // SAFETY: `snapshot`'s own vector.
+            unsafe { (*context.cast::<Vec<*mut c_void>>()).push(shell) };
+        }
+    }
+    fn snapshot(list: *const List) -> Vec<*mut c_void> {
+        let mut shells = Vec::new();
+        // SAFETY: A live list; the callback writes only the local vector.
+        unsafe { openttd_rust_cargo_list_snapshot(list, (&raw mut shells).cast(), collect) };
+        shells
+    }
+    fn packet_aged(periods: u32) -> *mut c_void {
+        // SAFETY: A null input allocates a default packet.
+        let packet = unsafe { openttd_rust_cargo_packet_new(std::ptr::null()) };
+        // SAFETY: Allocated above; the list takes it.
+        unsafe {
+            (*packet).count = 1;
+            (*packet).periods_in_transit = periods as u16;
+        }
+        packet.cast()
+    }
+    fn exported(list: *const List) -> Fields {
+        let mut fields = Fields::default();
+        // SAFETY: A live list and a local output.
+        unsafe { openttd_rust_cargo_list_export(list, &raw mut fields) };
+        fields
+    }
+    fn imported(list: *mut List, count: u32, periods: u64, keep: u32) {
+        let mut fields = Fields {
+            count,
+            cargo_periods_in_transit: periods,
+            ..Fields::default()
+        };
+        fields.action_counts[2] = keep;
+        // SAFETY: A live list and a local input.
+        unsafe { openttd_rust_cargo_list_import(list, &raw const fields) };
+    }
+
+    /// The vehicle list: 7 `NoUnload` stages keep the order; 1024 first-hit appends merge
+    /// into the newest packet with 4 reads each; a reverse removal empties the list.
+    fn check_vehicle(s: &Services, size: u32) {
+        let vehicle = openttd_rust_cargo_list_new(1);
+        // SAFETY: The list is live until destroyed at the end; every shell is a fresh packet.
+        unsafe {
+            for i in 0..size {
+                openttd_rust_cargo_list_insert(vehicle, 0, packet_aged(i));
+            }
+            imported(
+                vehicle,
+                size,
+                u64::from(size) * u64::from(size - 1) / 2,
+                size,
+            );
+            let expected = snapshot(vehicle);
+            for round in 0..7 {
+                openttd_rust_cargo_list_stage(
+                    vehicle,
+                    s,
+                    0,
+                    0,
+                    std::ptr::null(),
+                    0,
+                    4,
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null_mut(),
+                    0,
+                );
+                assert!(snapshot(vehicle) == expected, "{size}: stage {round} order");
+            }
+            READS.set(0);
+            for _ in 0..1024 {
+                openttd_rust_cargo_list_append(vehicle, s, packet_aged(size - 1), 2);
+            }
+            assert_eq!(READS.get(), 4096, "{size}: first-hit append reads");
+            assert!(snapshot(vehicle) == expected, "{size}: append order");
+            let fields = exported(vehicle);
+            assert_eq!(
+                (fields.count, fields.action_counts[2]),
+                (size + 1024, size + 1024)
+            );
+            openttd_rust_cargo_list_move(
+                vehicle,
+                std::ptr::null_mut(),
+                s,
+                4,
+                size + 1024,
+                0,
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                0,
+            );
+            assert!(
+                snapshot(vehicle).is_empty(),
+                "{size}: removal empties the list"
+            );
+            let fields = exported(vehicle);
+            assert_eq!(
+                (
+                    fields.count,
+                    fields.action_counts[2],
+                    fields.cargo_periods_in_transit
+                ),
+                (0, 0, 0),
+                "{size}: removed counts"
+            );
+            openttd_rust_cargo_list_destroy(vehicle, s);
+        }
+    }
+
+    /// The station list: keyed next-hop queries, 1024 first-hit appends with 4 reads each,
+    /// and a 1025-piece keyed load of only the front packet with 4 reads.
+    fn check_station(s: &Services, size: u32) {
+        let station = openttd_rust_cargo_list_new(0);
+        // SAFETY: Both lists are live until destroyed at the end; every shell is a fresh packet.
+        unsafe {
+            openttd_rust_cargo_list_insert(station, 0, packet_aged(size));
+            for i in 0..size {
+                openttd_rust_cargo_list_insert(station, (i + 2) as u16, packet_aged(i));
+            }
+            let periods = u64::from(size) * u64::from(size - 1) / 2 + u64::from(size);
+            imported(station, size + 1, periods, 0);
+            let mut expected = snapshot(station);
+            let (last_key, missing_key) = ((size + 1) as u16, 1_u16);
+            for _ in 0..1024 {
+                assert_eq!(
+                    openttd_rust_cargo_list_has(station, &raw const last_key, 1),
+                    1
+                );
+                assert_eq!(
+                    openttd_rust_cargo_list_has(station, &raw const missing_key, 1),
+                    0
+                );
+            }
+            openttd_rust_cargo_list_insert(station, u16::MAX, std::ptr::null_mut());
+            assert_eq!(openttd_rust_cargo_list_has(station, std::ptr::null(), 0), 1);
+            READS.set(0);
+            for _ in 0..1024 {
+                openttd_rust_cargo_list_append(station, s, packet_aged(size), 0);
+            }
+            assert_eq!(READS.get(), 4096, "{size}: station first-hit append reads");
+            assert!(
+                snapshot(station) == expected,
+                "{size}: station append order"
+            );
+            let vehicle = openttd_rust_cargo_list_new(1);
+            let next = 0_u16;
+            READS.set(0);
+            let moved = openttd_rust_cargo_list_move(
+                station,
+                vehicle,
+                s,
+                7,
+                1025,
+                0,
+                0,
+                &raw const next,
+                1,
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                0,
+            );
+            assert_eq!((moved, READS.get()), (1025, 4), "{size}: keyed load, reads");
+            assert!(snapshot(vehicle) == [expected[0]], "{size}: loaded packet");
+            expected.remove(0);
+            assert!(snapshot(station) == expected, "{size}: station remainder");
+            assert_eq!(exported(station).count, size, "{size}: station count");
+            openttd_rust_cargo_list_destroy(vehicle, s);
+            openttd_rust_cargo_list_destroy(station, s);
+        }
+    }
+
+    #[test]
+    fn large_lists_keep_identity_order_and_bounded_reads() {
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 65536,
+                assertions: false,
+            },
+            8,
+        );
+        let mut shared = SHARED;
+        shared.map = crate::map_func::fixture::statics();
+        let mut s = CARGO_STORAGE;
+        s.packet = packet_of;
+        s.destroy = destroy_packet;
+        s.shared = &raw const shared;
+        for size in [1000, 4000, 16000, 64000] {
+            check_vehicle(&s, size);
+            check_station(&s, size);
+        }
+    }
+}

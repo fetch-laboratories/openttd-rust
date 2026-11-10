@@ -47,7 +47,6 @@ struct OpenTTDVehicleRefitServices {
 };
 struct OpenTTDVehicleArticulatedServices {
 	const OpenTTDVehicleRefitServices *refit;
-	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	void *(*prepare_previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_previous);
 	void *(*new_train)() noexcept OPENTTD_SERVICE_DEFAULT(new_train);
 	void *(*new_road)() noexcept OPENTTD_SERVICE_DEFAULT(new_road);
@@ -110,7 +109,6 @@ struct OpenTTDVehicleBuildServices {
 	const OpenTTDVehicleMassServices *mass;
 	const OpenTTDRandomServices *random;
 	VehicleType (*depot_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_kind);
-	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);
 	const OpenTTDVehicleConstructServices *construct;
 	const OpenTTDRailConstructionServices *rail;

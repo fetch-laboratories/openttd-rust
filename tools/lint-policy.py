@@ -78,7 +78,18 @@ def lint_config(path: str, data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+# Thresholds of Clippy lints the debt collector no longer runs (steering 33):
+# a faithful port keeps the original's function length and nesting.
+RETIRED_THRESHOLDS = {
+    "too-many-lines-threshold",
+    "cognitive-complexity-threshold",
+    "excessive-nesting-threshold",
+}
+
+
 def permitted_change(key: str, before: object, after: object) -> bool:
+    if key in RETIRED_THRESHOLDS and after is None:
+        return True
     if key in ("select", "extend-select") and isinstance(after, list):
         return isinstance(before, list) and set(before) <= set(after)
     if key in ("ignore", "extend-ignore", "exclude", "extend-exclude"):
@@ -402,12 +413,7 @@ def main() -> int:
         before, after = lint_config(path, before), lint_config(path, after)
         if not before and path == "migration/lints/clippy.toml":
             # Bootstrap only these pinned thresholds, not an arbitrary config.
-            expected = {
-                "too-many-lines-threshold": 100,
-                "too-many-arguments-threshold": 7,
-                "cognitive-complexity-threshold": 25,
-                "excessive-nesting-threshold": 5,
-            }
+            expected = {"too-many-arguments-threshold": 7}
             if after != expected:
                 errors.append("invalid initial Clippy thresholds")
         else:

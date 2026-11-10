@@ -197,12 +197,19 @@ impl HouseZones {
     pub const fn test(self, element: HouseZone) -> bool {
         self.any(Self::from_element(element))
     }
-    /// Native set iteration, visiting set elements in ascending bit order.
+    /// Native set iteration, visiting set elements in ascending bit order. Like the
+    /// native `SetBitIterator`, it visits only the set bits.
     pub fn iter(self) -> impl Iterator<Item = HouseZone> {
-        // `HouseZones` stores 16 bits.
-        (0..16_u8)
-            .map(HouseZone)
-            .filter(move |&zone| self.test(zone))
+        use crate::bitmath_func::{find_first_bit, kill_first_bit_u32};
+        let mut bits = u32::from(self.0);
+        std::iter::from_fn(move || {
+            if bits == 0 {
+                return None;
+            }
+            let zone = HouseZone(find_first_bit(u64::from(bits)));
+            bits = kill_first_bit_u32(bits);
+            Some(zone)
+        })
     }
 }
 crate::base_bitset_type::impl_bitset_ops!(HouseZones);
@@ -242,5 +249,26 @@ impl HouseExtraFlags {
     #[must_use]
     pub const fn test(self, element: HouseExtraFlag) -> bool {
         self.0 & Self::from_element(element).0 != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HouseZone, HouseZones};
+
+    #[test]
+    fn house_zones_iter_visits_set_bits_in_ascending_order() {
+        for mask in 0..=u16::MAX {
+            let zones = HouseZones(mask);
+            let expected: Vec<HouseZone> = (0..16_u8)
+                .map(HouseZone)
+                .filter(|&zone| zones.test(zone))
+                .collect();
+            assert_eq!(
+                zones.iter().collect::<Vec<_>>(),
+                expected,
+                "mask {mask:#06x}"
+            );
+        }
     }
 }

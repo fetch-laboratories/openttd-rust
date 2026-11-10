@@ -2,7 +2,6 @@
 
 import hashlib
 import struct
-import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 from typing import NotRequired, cast
@@ -391,58 +390,6 @@ def check(
             )
     core.findings(result)[f"{mode}_{role}_payment_samples"] = len(payments)
     core.findings(result)[f"{mode}_{role}_delivered_delta"] = delivered_delta
-
-
-def income_gap() -> None:
-    """Native-width/negative callback and Money bounds absent from road fixtures."""
-    import probe
-
-    import migration
-
-    build = ROOT / "build-rust"
-    out = ROOT / ".local/cargo-income-gap"
-    out.mkdir(parents=True, exist_ok=True)
-    source = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/economy.cpp"], cwd=ROOT
-    ).decode()
-
-    def body(start: str, end: str) -> str:
-        offset = source.index(start)
-        return source[offset : source.index(end, offset)]
-
-    (out / "cargo-reference.inc").write_text(
-        "\n".join(
-            body(start, end)
-            for start, end in (
-                ("static inline int32_t BigMulS(", "typedef std::vector<Industry *>"),
-                ("Money GetTransportedGoodsIncome(", "/** The industries"),
-                ("Money CargoPayment::PayTransfer(", "/**\n * Prepare the vehicle"),
-            )
-        )
-    )
-    command = [
-        probe.compiler(build),
-        "-std=c++20",
-        "-O2",
-        *probe.target_flags(build),
-        "-I" + str(ROOT / "src"),
-        "-I" + str(out),
-        str(ROOT / "tools/migration/cargo-income-gap.cpp"),
-        *probe.rust(build, define=False),
-        "-o",
-        str(out / "probe"),
-    ]
-    probe.compile(command, out / "compile.log", cwd=ROOT, env=migration.environment())
-    print(
-        probe.execute(
-            [out / "probe"], out / "probe", cwd=ROOT, stderr="inherited"
-        ).decode(),
-        end="",
-    )
-
-
-if __name__ == "__main__":
-    income_gap()
 
 
 def subsidy_reference(folder: Path) -> None:

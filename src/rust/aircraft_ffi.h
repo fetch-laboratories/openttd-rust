@@ -80,7 +80,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
 	void (OPENTTD_RUST_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
 	void (OPENTTD_RUST_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
-	void (OPENTTD_RUST_CALL *update_delta)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 
 	void (OPENTTD_RUST_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
 	void (OPENTTD_RUST_CALL *delete_range_news)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(delete_range_news);

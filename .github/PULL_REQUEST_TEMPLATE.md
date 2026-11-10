@@ -1,6 +1,8 @@
 <!-- Target rust-migration. See docs/workflow.md#records. -->
 
-Closes #<issue>. Roadmap item: <phase / issue>.
+<!-- GitHub closes an issue on merge when "close", "fix" or "resolve" (any form) precedes its number, even in "does not close #N". Write "Closes #N" only when this PR finishes the issue's remaining scope; otherwise "Part of #N". -->
+
+Part of #<issue>. Roadmap item: <phase / issue>.
 
 Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 

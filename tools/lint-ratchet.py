@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Measure pinned Clippy/Ruff JSON as shrinking item/site debt, never line keys."""
+"""Measure pinned Clippy/Ruff JSON as item debt that may not grow, never line keys.
+
+Only growth fails: a new item over its threshold, or more or larger diagnostics
+on an item than the merge base allows. Improvements and one-to-one renames that
+do not grow pass without any record; `--write` records improvements.
+"""
 
 import argparse
 import ast
@@ -8,6 +13,7 @@ import json
 import re
 import subprocess
 from collections import defaultdict
+from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
 
@@ -17,14 +23,11 @@ from code_lines import without_comments
 from rust_syntax import item_source, nodes, syntax_trees
 from vcs import git
 
+import migration
+
 ROOT = Path(__file__).resolve().parents[1]
-CLIPPY = (
-    "too_many_lines",
-    "too_many_arguments",
-    "cognitive_complexity",
-    "excessive_nesting",
-    "missing_safety_doc",
-)
+CLIPPY = migration.CLIPPY_DEBT_LINTS
+ITEM = hashlib.sha256(b"item").hexdigest()[:20]
 RUFF = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 VERSIONS = {"clippy": "1.99.0", "ruff": "0.16.8"}
 
@@ -62,32 +65,12 @@ def rust_items(path: str, text: str) -> tuple[str, list[tuple[int, int, str]]]:
     return clean, items
 
 
-def rust_site(path: str, text: str, start: int, end: int, lint: str) -> tuple[str, int]:
-    clean, items = rust_items(path, text)
-    containing = [(a, b, n) for a, b, n in items if a <= start < b]
-    item = containing[-1][2] if containing else "module"
-    # Function-level metrics retain identity when the signature/body grows.
-    if lint in CLIPPY[:3] or lint == "missing_safety_doc":
-        site = "item"
-    else:
-        site = compact(clean[start:end])
-        # Unsafe/nesting block size must not turn a magnitude increase into a
-        # different allowance. The initial statement identifies the operation.
-        if lint in ("excessive_nesting", "multiple_unsafe_ops_per_block"):
-            site = site.split(";", 1)[0][:160]
-        if lint == "undocumented_unsafe_blocks":
-            site = compact(clean[start : start + 180]).split(";", 1)[0][:160]
-    depth = 1
-    if lint == "excessive_nesting" and containing:
-        prefix = clean[containing[-1][0] : start]
-        scope = clean[start:end]
-        level = prefix.count("{") - prefix.count("}")
-        depth = max(depth, level)
-        for token in re.findall(r"[{}]", scope):
-            level += 1 if token == "{" else -1
-            depth = max(depth, level)
-    fingerprint = hashlib.sha256(site.encode()).hexdigest()[:20]
-    return f"{path} | {item} | {lint} | {fingerprint}", depth
+def rust_site(path: str, text: str, start: int, lint: str) -> str:
+    """Key a diagnostic by its innermost named item; lines and bodies may change."""
+    _, items = rust_items(path, text)
+    containing = [name for a, b, name in items if a <= start < b]
+    item = containing[-1] if containing else "module"
+    return f"{path} | {item} | {lint} | {ITEM}"
 
 
 def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
@@ -109,15 +92,23 @@ def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
             data = (root / path).read_bytes()
             start, end = span["byte_start"], span["byte_end"]
             # rustc byte offsets are UTF-8; lexer offsets are Unicode characters.
-            a, b = len(data[:start].decode()), len(data[:end].decode())
-            key, magnitude = rust_site(path, data.decode(), a, b, lint)
-            match = re.search(
-                r"\((\d+)/\d+\)|contains (\d+) unsafe operations", diagnostic["message"]
-            )
-            if match:
-                magnitude = int(next(value for value in match.groups() if value))
-            sites[key][(path, start, end)] = magnitude
+            a = len(data[:start].decode())
+            key = rust_site(path, data.decode(), a, lint)
+            match = re.search(r"\((\d+)/\d+\)", diagnostic["message"])
+            sites[key][(path, start, end)] = int(match[1]) if match else 1
     return {key: sorted(rows.values()) for key, rows in sorted(sites.items())}
+
+
+def clippy_errors(raw: str) -> list[str]:
+    """Rendered error diagnostics from Cargo's JSON messages."""
+    errors = []
+    for line in raw.splitlines():
+        if not line.startswith("{"):
+            continue
+        message = json.loads(line).get("message") or {}
+        if message.get("level") == "error" and message.get("rendered"):
+            errors.append(message["rendered"])
+    return errors
 
 
 def python_item(tree: ast.AST, row: int) -> str:
@@ -167,37 +158,31 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
             text=True,
         )
     else:
-        # Reuse the migration driver's host toolchain discovery unchanged.
-        import migration
-
+        # The gate's own Clippy command, build directory and configuration
+        # (`migration.py rust-checks`): after a gate run Cargo replays its
+        # diagnostics here and checks nothing again.
         env = migration.environment()
-        env["CARGO_TARGET_DIR"] = str(root / "build-rust/cargo-lint-ratchet")
-        env["CLIPPY_CONF_DIR"] = str(root / "migration/lints")
+        env["CARGO_TARGET_DIR"] = str(
+            root / migration.CARGO_TARGET_DIR.relative_to(migration.ROOT)
+        )
+        env["CLIPPY_CONF_DIR"] = str(root / migration.CLIPPY_CONFIGURATION)
         version = subprocess.check_output(
             ["rustc", "--version"], env=env, text=True
         ).strip()
         run = subprocess.run(
-            [
-                "cargo",
-                "clippy",
-                "--workspace",
-                "--all-targets",
-                "--locked",
-                "--message-format=json",
-                "--",
-                "-A",
-                "warnings",
-                *[
-                    part
-                    for lint in CLIPPY
-                    for part in ("--force-warn", "clippy::" + lint)
-                ],
-            ],
+            migration.clippy_command("--message-format=json"),
             cwd=root,
             env=env,
             capture_output=True,
             text=True,
         )
+        if run.returncode:
+            raise ValueError(
+                "Clippy reports errors, which `python3 tools/migration.py "
+                "rust-checks` also fails on; fix them first:\n"
+                + "".join(clippy_errors(run.stdout))
+                + run.stderr[-4000:]
+            )
     if VERSIONS[kind] not in version or run.returncode not in (
         (0, 1) if kind == "ruff" else (0,)
     ):
@@ -269,29 +254,117 @@ def unchanged_item(kind: str, site: str, revision: str) -> bool:
     )
 
 
+@lru_cache(maxsize=4096)
+def item_names(kind: str, path: str, revision: str | None) -> frozenset[str]:
+    """Named items in a file at a revision, or in the working tree for None."""
+    if revision is None:
+        file = ROOT / path
+        if not file.is_file():
+            return frozenset()
+        text = file.read_text()
+    else:
+        try:
+            text = git("show", f"{revision}:{path}")
+        except subprocess.CalledProcessError:
+            return frozenset()
+    if kind == "clippy":
+        return frozenset(name for _, _, name in rust_items(path, text)[1])
+    tree = ast.parse(text)
+    return frozenset(
+        python_item(tree, node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+
+
+def item_exists(kind: str, key: str, revision: str | None) -> bool:
+    """Whether a row's item exists; module-level rows always do."""
+    path, item = key.split(" | ")[:2]
+    return item in ("module", "") or item in item_names(kind, path, revision)
+
+
+def paired_renames(
+    kind: str, ledger: Ledger, taken: dict[str, str], base: str | None
+) -> dict[str, str]:
+    """Pair a renamed or moved item's base row with its head row.
+
+    A pair needs evidence of a rename, not just a retired and a new
+    diagnostic: the old item existed at base and is gone at head, and the new
+    item did not exist at base. Rows pair one-to-one within the same lint,
+    first by item name (a move), then within one file (a rename). The head row
+    may not grow over the base row. Returns `new -> old`; declared carries in
+    `taken` keep precedence, and anything else needs a declared carry.
+    """
+    if base is None:
+        return {}
+    pairs = dict(taken)
+    scopes: tuple[Callable[[str], tuple[str, ...]], ...] = (
+        lambda key: (*lint_of(key), *key.split(" | ")[1:2]),
+        lambda key: (*lint_of(key), *key.split(" | ")[:1]),
+    )
+    for scope in scopes:
+        olds: dict[tuple[str, ...], list[str]] = defaultdict(list)
+        news: dict[tuple[str, ...], list[str]] = defaultdict(list)
+        used = set(pairs.values())
+        for key in ledger.before:
+            if (
+                key not in ledger.after
+                and key not in used
+                and item_exists(kind, key, base)
+                and not item_exists(kind, key, None)
+            ):
+                olds[scope(key)].append(key)
+        for key in ledger.after:
+            if (
+                key not in ledger.before
+                and key not in pairs
+                and not item_exists(kind, key, base)
+            ):
+                news[scope(key)].append(key)
+        for group, added in news.items():
+            retired = olds.get(group, [])
+            if len(added) == len(retired) == 1 and ledger.fits(
+                ledger.after[added[0]], ledger.before[retired[0]]
+            ):
+                pairs[added[0]] = retired[0]
+    return {new: old for new, old in pairs.items() if new not in taken}
+
+
 def reviewed_debt(
     kind: str,
     baseline: dict[str, list[int]],
     previous: dict[str, list[int]],
     rows: dict[str, list[int]] | None = None,
+    base: str | None = None,
 ) -> dict[str, list[int]]:
-    """Allowed head debt: base rows, valid carries and reviewed lint contracts."""
+    """Allowed head debt: base rows, renamed rows and reviewed lint contracts.
+
+    A renamed row's allowance moves to its new key; the old key loses it, so
+    one diagnostic never holds two allowances.
+    """
     measured = baseline if rows is None else rows
-    growth = {
-        key: values
-        for key, values in baseline.items()
-        if exceeds(values, previous.get(key, []))
-    }
-    if not growth and measured.keys() <= previous.keys():
+
+    def grown(allowed: dict[str, list[int]]) -> dict[str, list[int]]:
+        return {
+            key: values
+            for source in (baseline, measured)
+            for key, values in source.items()
+            if exceeds(values, allowed.get(key, []))
+        }
+
+    if not grown(previous):
         return previous
+    ledger = Ledger(kind, previous, measured, lint_of, fits)
     author, proposals, comments, head = context()
-    ledger = Ledger(kind, previous, baseline, lint_of, fits)
     carried = checked_carries(proposals, ledger)
+    renamed = paired_renames(kind, ledger, carried, base)
     allowed = dict(previous)
-    allowed.update({new: previous[old] for new, old in carried.items()})
-    for site, values in growth.items():
-        if site in carried:
-            continue
+    for new, old in {**carried, **renamed}.items():
+        allowed[new] = previous[old]
+        print(f"carried: {old} -> {new}")
+    for old in {**carried, **renamed}.values():
+        allowed.pop(old, None)
+    for site, values in grown(allowed).items():
         for proposal in proposals:
             expected = {
                 "kind": "lint",
@@ -322,12 +395,58 @@ def reviewed_debt(
                         sort_keys=True,
                     )
                 )
+    paired = {**carried, **renamed}
     carry_hints(
-        ledger._replace(after=measured),
-        previous.keys() - measured.keys() - set(carried.values()),
-        [key for key in measured if key not in allowed],
+        ledger,
+        previous.keys() - measured.keys() - set(paired.values()),
+        [key for key in measured if key not in previous and key not in paired],
     )
     return allowed
+
+
+def merge_base(base_ref: str) -> str:
+    """The base the change started from, not a base tip that moved since.
+
+    CI passes the base branch's current tip; comparing against it would count
+    base's own later changes as this change's growth. Without a common
+    ancestor there is no inventory to compare against, so the check stops.
+    """
+    try:
+        return git("merge-base", "HEAD", base_ref).strip()
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(
+            f"no common ancestor of HEAD and {base_ref}; fetch full history"
+            " (git fetch --unshallow) or pass the branch's real base"
+        ) from error
+
+
+def check(
+    kind: str,
+    rows: dict[str, list[int]],
+    recorded: dict[str, list[int]],
+    previous: dict[str, list[int]],
+    base: str | None,
+) -> tuple[list[str], list[str]]:
+    """Return growth errors in the measured and in the recorded debt.
+
+    Base rows whose item no longer exists at base are stale and allow nothing
+    new. The recorded file may keep stale or improved base rows unchanged, but
+    not a renamed item's old row: a rename is recorded in the same change.
+    """
+    live = (
+        previous
+        if base is None
+        else {key: v for key, v in previous.items() if item_exists(kind, key, base)}
+    )
+    changed = {key: v for key, v in recorded.items() if previous.get(key) != v}
+    allowed = reviewed_debt(kind, changed, live, rows, base)
+    renamed_from = live.keys() - allowed.keys()
+    kept = {key: v for key, v in previous.items() if key not in renamed_from}
+    measured = debt_errors(rows, {}, allowed)
+    stored = debt_errors({}, recorded, {**kept, **allowed})
+    for key in sorted(renamed_from & recorded.keys()):
+        stored.append(f"rename not recorded: {key}; run with --write")
+    return measured, stored
 
 
 def main() -> int:
@@ -338,6 +457,11 @@ def main() -> int:
         "--initialize",
         action="store_true",
         help="explicit initial inventory; never used by CI",
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="record measured debt, renames included, when nothing grew",
     )
     parser.add_argument(
         "--input", type=Path, help="replay compiler JSON for diagnostic investigation"
@@ -366,14 +490,28 @@ def main() -> int:
             f"Initialized {kind}: {sum(map(len, rows.values()))} distinct diagnostics"
         )
         return 0
-    baseline = json.loads((ROOT / path).read_text())
-    tracked = git("ls-tree", "--name-only", args.base_ref, path).strip()
-    previous = (
-        json.loads(git("show", f"{args.base_ref}:{path}")) if tracked else baseline
+    families, parts = (CLIPPY, 4) if kind == "clippy" else (RUFF, 3)
+
+    def collected(sites: dict[str, list[int]]) -> dict[str, list[int]]:
+        malformed = [key for key in sites if len(key.split(" | ")) != parts]
+        if malformed:
+            raise SystemExit(f"malformed {path} keys: {malformed[:3]}")
+        return {key: v for key, v in sites.items() if lint_of(key)[0] in families}
+
+    recorded = json.loads((ROOT / path).read_text())
+    base = merge_base(args.base_ref)
+    tracked = git("ls-tree", "--name-only", base, path).strip()
+    previous = json.loads(git("show", f"{base}:{path}")) if tracked else recorded
+    measured, stored = check(
+        kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
     )
-    allowed = reviewed_debt(kind, baseline["sites"], previous["sites"], rows)
-    errors = debt_errors(rows, baseline["sites"], allowed)
-    if baseline["version"] != version or previous["version"] != version:
+    if args.write and not measured:
+        recorded["sites"] = rows
+        (ROOT / path).write_text(json.dumps(recorded, indent=2) + "\n")
+        print(f"recorded the measured debt in {path}")
+        stored = []
+    errors = measured + stored
+    if recorded["version"] != version or previous["version"] != version:
         errors.append("compiler/linter version differs from the recorded inventory")
     for error in errors:
         print(error)
