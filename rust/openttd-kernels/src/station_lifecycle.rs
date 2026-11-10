@@ -459,8 +459,11 @@ pub(crate) unsafe fn tile_loop_station(
         }
         StationType::Truck | StationType::Bus => trigger_road_stop_animation(),
         StationType::RoadWaypoint => {
-            let on_snow_or_desert =
-                || crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile).unwrap();
+            let on_snow_or_desert = || {
+                m.asserted(s.shared, |m| {
+                    crate::station_map::is_road_waypoint_on_snow_or_desert(m, tile)
+                })
+            };
             let change = match s.landscape() {
                 LandscapeType::Arctic => {
                     on_snow_or_desert()
@@ -475,7 +478,9 @@ pub(crate) unsafe fn tile_loop_station(
                 _ => false,
             };
             if change {
-                crate::station_map::toggle_road_waypoint_on_snow_or_desert(m, tile).unwrap();
+                m.asserted(s.shared, |m| {
+                    crate::station_map::toggle_road_waypoint_on_snow_or_desert(m, tile)
+                });
                 (s.shared.mark_dirty)(tile.0);
             }
             let t = crate::town::spatial::closest_town_from_tile(s.shared, tile, u32::MAX);
@@ -490,18 +495,21 @@ pub(crate) unsafe fn tile_loop_station(
             } else {
                 ROADSIDE_PAVED
             };
-            let cur_rs = crate::station_map::get_road_waypoint_roadside(m, tile).unwrap();
+            let cur_rs = m.asserted(s.shared, |m| {
+                crate::station_map::get_road_waypoint_roadside(m, tile)
+            });
             if new_rs != cur_rs {
-                crate::station_map::set_road_waypoint_roadside(
-                    m,
-                    tile,
-                    if cur_rs == ROADSIDE_BARREN {
-                        new_rs
-                    } else {
-                        ROADSIDE_BARREN
-                    },
-                )
-                .unwrap();
+                m.asserted(s.shared, |m| {
+                    crate::station_map::set_road_waypoint_roadside(
+                        m,
+                        tile,
+                        if cur_rs == ROADSIDE_BARREN {
+                            new_rs
+                        } else {
+                            ROADSIDE_BARREN
+                        },
+                    )
+                });
                 (s.shared.mark_dirty)(tile.0);
             }
             trigger_road_stop_animation();
