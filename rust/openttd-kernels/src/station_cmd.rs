@@ -1643,7 +1643,7 @@ impl Ctx<'_> {
             affected_vehicles,
         } = context;
         if rt != RailType((self.rail_map().invalid_rail_type)().0)
-            && (self.shared.is_plain_rail)(tile_cur.0)
+            && crate::map_func::World::new(self.shared).plain_rail(tile_cur.0)
         {
             /* Don't overbuild signals. */
             if crate::map_func::World::new(self.shared).has_signals(tile_cur.0) {
@@ -1655,7 +1655,8 @@ impl Ctx<'_> {
                 crate::map_func::World::new(self.shared).rail_type(tile_cur.0),
                 rt.0,
             ) {
-                let mut tracks = TrackBits((self.rail_map().traversal)(tile_cur.0).tracks.0);
+                let mut tracks =
+                    TrackBits(crate::map_func::World::new(self.shared).tracks(tile_cur.0));
                 let track = crate::track_func::remove_first_track(&mut tracks, |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });
@@ -1765,11 +1766,12 @@ impl Ctx<'_> {
         /* if station is set, then we have special handling to allow building on top of already existing stations.
          * so station points to StationID::Invalid() if we can build on any station.
          * Or it points to a station if we're only allowed to build on exactly that station. */
-        if TileType((self.shared.tile_type)(tile_cur.0)) == TileType::MP_STATION {
-            if !crate::map_func::World::new(self.shared).is_rail_station(tile_cur) {
+        let world = crate::map_func::World::new(self.shared);
+        if world.kind(tile_cur.0) == TileType::MP_STATION.0 {
+            if !world.is_rail_station(tile_cur) {
                 return self.auto_clear(cost, tile_cur); // get error message
             }
-            let st = StationID((self.shared.station_index)(tile_cur.0));
+            let st = world.get_station_index(tile_cur);
             if *station == StationID::INVALID {
                 *station = st;
             } else if *station != st {
@@ -1879,8 +1881,10 @@ impl Ctx<'_> {
     }
     /// `SetRailStationTileFlags`: set rail station tile flags for the given tile.
     fn set_rail_station_tile_flags(&self, tile: TileIndex, statspec: *const RailSpec) {
-        let flags =
-            self.get_station_tile_flags(StationGfx((self.shared.station_gfx)(tile.0)), statspec);
+        let flags = self.get_station_tile_flags(
+            crate::map_func::World::new(self.shared).get_station_gfx(tile),
+            statspec,
+        );
         (self.s.set_tile_flags)(
             tile.0,
             flags.test(TileFlag::Blocked),
@@ -2303,7 +2307,9 @@ impl Ctx<'_> {
                 if !statspec.is_null() {
                     /* Use a fixed axis for GetPlatformInfo as our platforms / numtracks are always the right way around */
                     let platinfo = crate::newgrf_station::platform_info(
-                        (self.shared.station_gfx)(tile.0),
+                        crate::map_func::World::new(self.shared)
+                            .get_station_gfx(tile)
+                            .0,
                         plat_len,
                         numtracks,
                         j,
@@ -2539,7 +2545,7 @@ impl Ctx<'_> {
                 continue;
             }
             /* Check ownership of station */
-            let id = StationID((self.shared.station_index)(tile.0));
+            let id = crate::map_func::World::new(self.shared).get_station_index(tile);
             let st = if waypoint {
                 self.waypoint(id)
             } else {
@@ -2743,7 +2749,7 @@ impl Ctx<'_> {
                 },
             );
         }
-        let id = StationID((self.shared.station_index)(tile.0));
+        let id = crate::map_func::World::new(self.shared).get_station_index(tile);
         let st = if waypoint {
             self.waypoint(id)
         } else {
