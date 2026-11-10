@@ -485,7 +485,6 @@ pub struct Change {
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
-    pub location: unsafe extern "C" fn(*mut c_void) -> TileArea,
     pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
@@ -801,7 +800,12 @@ fn produce_industry_goods(entry: Entry, svc: &Services, builder: *mut Builder) {
         };
         if act {
             if parameter == 0 {
-                plant_random_farm_field_with_settings(i, IndustryID(entry.id), tick_map(svc), svc);
+                plant_random_farm_field_with_settings(
+                    owner,
+                    IndustryID(entry.id),
+                    tick_map(svc),
+                    svc,
+                );
             } else {
                 chop_lumber_mill_trees(i, owner, tick_map(svc), svc, builder);
             }
@@ -1910,13 +1914,13 @@ fn plant_farm_field(
     reason = "PlantRandomFarmField keeps the original's implicit C++ integer conversions"
 )]
 fn plant_random_farm_field(
-    i: *mut c_void,
+    owner: *mut Industry,
     id: IndustryID,
     map: Map,
     s: &Services,
     landscape: &impl Fn() -> LandscapeType,
 ) {
-    let location = unsafe { (s.location)(i) };
+    let location = location(owner);
     let x = (u32::from(location.w) / 2)
         .wrapping_add(random(s) % 31)
         .wrapping_sub(16) as i32;
@@ -1943,17 +1947,26 @@ fn tick_map(s: &Services) -> Map {
     }
 }
 /// `PlantRandomFarmField`, reading the landscape from the game settings.
-fn plant_random_farm_field_with_settings(i: *mut c_void, id: IndustryID, map: Map, s: &Services) {
-    plant_random_farm_field(i, id, map, s, &|| {
+fn plant_random_farm_field_with_settings(
+    owner: *mut Industry,
+    id: IndustryID,
+    map: Map,
+    s: &Services,
+) {
+    plant_random_farm_field(owner, id, map, s, &|| {
         LandscapeType(unsafe { s.shared().settings().climate.read() })
     });
 }
 /// # Safety
 /// Live industry, synchronous map/RNG services. No owner references cross calls.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: *const Services) {
+pub unsafe extern "C" fn openttd_rust_industry_farm(
+    owner: *mut Industry,
+    id: u16,
+    s: *const Services,
+) {
     let s = unsafe { &*s };
-    plant_random_farm_field_with_settings(i, IndustryID(id), tick_map(s), s);
+    plant_random_farm_field_with_settings(owner, IndustryID(id), tick_map(s), s);
 }
 /// Perform a circular search around the Lumber Mill in order to find trees to cut.
 #[allow(
@@ -1971,7 +1984,7 @@ fn chop_lumber_mill_trees(
     if produced_count(owner) == 0 || unsafe { !is_valid_cargo_type((*produced(owner, 0)).cargo) } {
         return;
     }
-    let location = unsafe { (s.location)(i) };
+    let location = location(owner);
     let tiles = map.coordinates();
     // We only want to cut trees if all tiles are completed.
     for tile_cur in location.tiles(tiles) {
@@ -2695,7 +2708,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
-        location,
         industry_sound,
         play_sound,
         special_effect,
@@ -2949,9 +2961,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_next_tick(_: u32) -> Entry {
         unreachable!("unexpected Services::next_tick")
     }
-    extern "C" fn unexpected_location(_: *mut c_void) -> TileArea {
-        unreachable!("unexpected Services::location")
-    }
     extern "C" fn unexpected_industry_sound(_: *mut c_void, _: u32) {
         unreachable!("unexpected Services::industry_sound")
     }
@@ -3049,7 +3058,6 @@ mod production_policy_tests {
         Services {
             shared,
             next_tick: unexpected_next_tick,
-            location: unexpected_location,
             industry_sound: unexpected_industry_sound,
             play_sound: unexpected_play_sound,
             special_effect: unexpected_special_effect,

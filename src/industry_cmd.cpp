@@ -392,7 +392,7 @@ bool IsTileForestIndustry(TileIndex tile)
 
 void PlantRandomFarmField(const Industry *i)
 {
-	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), &GetIndustryRustServices());
+	openttd_rust_industry_farm(i->production_owner.get(), i->index.base(), &GetIndustryRustServices());
 }
 
 
@@ -789,10 +789,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		Industry *i = OpenTTDNextIndustry(from);
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
-	},
-	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
-		const Industry *i = RustIndustry(handle);
-		return {RustIndustryTile(handle), i->location.w, i->location.h};
 	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
