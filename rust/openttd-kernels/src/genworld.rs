@@ -307,7 +307,7 @@ pub(crate) unsafe fn setup(
     let town = unsafe { &*s.town };
     let growth = unsafe { &*town.growth };
     unsafe {
-        crate::town::resolver::openttd_rust_house_counts_init(
+        crate::town::resolver::initialize_building_counts(
             growth,
             &*town.shared,
             std::ptr::null_mut(),

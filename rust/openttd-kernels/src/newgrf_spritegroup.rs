@@ -289,10 +289,10 @@ impl<'a> Invocation<'a> {
                     relative,
                     self.s.roadstop,
                 ),
-                7 => crate::town::resolver::openttd_rust_house_scope(
-                    self.ro, b.own, b.parent, kind, relative,
-                ),
-                8 => crate::town::resolver::openttd_rust_town_scope(self.ro, b.own, kind, relative),
+                7 => {
+                    crate::town::resolver::house_get_scope(self.ro, b.own, b.parent, kind, relative)
+                }
+                8 => crate::town::resolver::town_get_scope(self.ro, b.own, kind, relative),
                 9 | 10 => crate::newgrf_airport::openttd_rust_airport_scope(
                     b.state.cast(),
                     self.ro,
@@ -389,7 +389,7 @@ impl<'a> Invocation<'a> {
                         available,
                     )
                 }
-                6 => crate::town::resolver::openttd_rust_town_variable(
+                6 => crate::town::resolver::town_get_variable(
                     &*self.s.house,
                     b.data.town,
                     self.ro,
@@ -397,7 +397,7 @@ impl<'a> Invocation<'a> {
                     parameter,
                     available,
                 ),
-                10 => crate::town::resolver::openttd_rust_house_variable(
+                10 => crate::town::resolver::house_get_variable(
                     &*self.s.house,
                     b.data.house,
                     self.ro,
@@ -472,7 +472,7 @@ impl<'a> Invocation<'a> {
                     false,
                     self.s.roadstop,
                 ),
-                10 => crate::town::resolver::openttd_rust_house_random(
+                10 => crate::town::resolver::house_random_bits(
                     &*self.s.house,
                     scope.binding.data.house,
                     false,
@@ -511,7 +511,7 @@ impl<'a> Invocation<'a> {
                     true,
                     self.s.roadstop,
                 ),
-                10 => crate::town::resolver::openttd_rust_house_random(
+                10 => crate::town::resolver::house_random_bits(
                     &*self.s.house,
                     scope.binding.data.house,
                     true,
@@ -534,7 +534,7 @@ impl<'a> Invocation<'a> {
                         value,
                     );
                 }
-                6 => crate::town::resolver::openttd_rust_town_scope_store(
+                6 => crate::town::resolver::town_store_psa(
                     &*self.s.house,
                     scope.binding.data.town,
                     self.ro,

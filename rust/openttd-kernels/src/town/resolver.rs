@@ -120,9 +120,12 @@ struct HouseClassMapping {
 }
 /// Original `_class_mapping`.
 static CLASSES: GameState<Vec<HouseClassMapping>> = GameState::new(Vec::new());
-/// `ResetHouseClassIDs`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_classes_reset() {
+    reset_house_classes();
+}
+/// `ResetHouseClassIDs`.
+pub(crate) fn reset_house_classes() {
     unsafe {
         let classes = &mut *CLASSES.get();
         classes.clear();
@@ -130,9 +133,12 @@ pub extern "C" fn openttd_rust_house_classes_reset() {
         classes.push(HouseClassMapping::default());
     }
 }
-/// `AllocateHouseClassID`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_class_allocate(grf_class_id: u8, grfid: u32) -> HouseClassID {
+    allocate_house_class_id(grf_class_id, grfid)
+}
+/// `AllocateHouseClassID`.
+pub(crate) fn allocate_house_class_id(grf_class_id: u8, grfid: u32) -> HouseClassID {
     unsafe {
         let classes = &mut *CLASSES.get();
         // Start from 1 because 0 means that no class has been assigned.
@@ -160,10 +166,20 @@ unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     owner.id_counts.resize(specs, 0);
     owner.class_counts.resize(classes, 0);
 }
-/// Initialise global building counts and all town building counts
-/// (`InitializeBuildingCounts()`), or only `owner`'s counts when it is not null.
+/// # Safety
+/// As `initialize_building_counts`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_counts_init(
+    l: &Leaves,
+    s: &Services,
+    owner: *mut State,
+    specs: usize,
+) {
+    unsafe { initialize_building_counts(l, s, owner, specs) }
+}
+/// Initialise global building counts and all town building counts
+/// (`InitializeBuildingCounts()`), or only `owner`'s counts when it is not null.
+pub(crate) unsafe fn initialize_building_counts(
     l: &Leaves,
     s: &Services,
     owner: *mut State,
@@ -222,9 +238,21 @@ unsafe fn town_history_helper(
         })))
     })
 }
+/// # Safety
+/// As `town_get_variable`.
 #[unsafe(no_mangle)]
-/// `TownScopeResolver::GetVariable`.
 pub unsafe extern "C" fn openttd_rust_town_variable(
+    s: &ResolverServices,
+    scope: *const TownScope,
+    ro: *const c_void,
+    variable: u8,
+    parameter: u32,
+    available: *mut bool,
+) -> u32 {
+    unsafe { town_get_variable(s, scope, ro, variable, parameter, available) }
+}
+/// `TownScopeResolver::GetVariable`.
+pub(crate) unsafe fn town_get_variable(
     s: &ResolverServices,
     scope: *const TownScope,
     ro: *const c_void,
@@ -353,8 +381,19 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         value
     }
 }
+/// # Safety
+/// As `town_store_psa`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_scope_store(
+    s: &ResolverServices,
+    scope: *const TownScope,
+    ro: *const c_void,
+    pos: u32,
+    value: i32,
+) {
+    unsafe { town_store_psa(s, scope, ro, pos, value) }
+}
+pub(crate) unsafe fn town_store_psa(
     s: &ResolverServices,
     scope: *const TownScope,
     ro: *const c_void,
@@ -377,9 +416,18 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
         );
     }
 }
-/// `HouseScopeResolver::GetRandomBits` and `GetRandomTriggers`.
+/// # Safety
+/// As `house_random_bits`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_random(
+    s: &ResolverServices,
+    scope: *const HouseScope,
+    triggers: bool,
+) -> u32 {
+    unsafe { house_random_bits(s, scope, triggers) }
+}
+/// `HouseScopeResolver::GetRandomBits` and `GetRandomTriggers`.
+pub(crate) unsafe fn house_random_bits(
     s: &ResolverServices,
     scope: *const HouseScope,
     triggers: bool,
@@ -466,10 +514,22 @@ unsafe fn get_distance_from_nearby_house(
     }
     0
 }
-/// `HouseScopeResolver::GetVariable`, used by the resolver to get values for feature 07
-/// deterministic spritegroups.
+/// # Safety
+/// As `house_get_variable`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_variable(
+    s: &ResolverServices,
+    scope: *const HouseScope,
+    ro: *const c_void,
+    variable: u8,
+    parameter: u32,
+    available: *mut bool,
+) -> u32 {
+    unsafe { house_get_variable(s, scope, ro, variable, parameter, available) }
+}
+/// `HouseScopeResolver::GetVariable`, used by the resolver to get values for feature 07
+/// deterministic spritegroups.
+pub(crate) unsafe fn house_get_variable(
     s: &ResolverServices,
     scope: *const HouseScope,
     ro: *const c_void,
@@ -847,6 +907,15 @@ pub extern "C" fn openttd_rust_house_scope(
     scope: u8,
     relative: u8,
 ) -> *mut c_void {
+    house_get_scope(ro, house, town, scope, relative)
+}
+pub(crate) fn house_get_scope(
+    ro: *mut c_void,
+    house: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
     match scope {
         VSG_SCOPE_SELF => house,
         VSG_SCOPE_PARENT => town,
@@ -860,6 +929,14 @@ pub extern "C" fn openttd_rust_town_scope(
     scope: u8,
     relative: u8,
 ) -> *mut c_void {
+    town_get_scope(ro, town, scope, relative)
+}
+pub(crate) fn town_get_scope(
+    ro: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
     if scope == VSG_SCOPE_SELF {
         town
     } else {
@@ -867,8 +944,21 @@ pub extern "C" fn openttd_rust_town_scope(
     }
 }
 
+/// # Safety
+/// As `get_house_animation_callback`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_animation_callback(
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    spec: *const c_void,
+    town: *mut TownHandle,
+    tile: u32,
+    watched: u64,
+) -> u16 {
+    unsafe { get_house_animation_callback(callback, param1, param2, spec, town, tile, watched) }
+}
+pub(crate) unsafe fn get_house_animation_callback(
     callback: u16,
     param1: u32,
     param2: u32,

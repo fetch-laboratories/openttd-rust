@@ -306,7 +306,7 @@ impl<'a> Founding<'a> {
         }
         // SAFETY: Fresh canonical owner; no count view exists yet.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
+            super::resolver::initialize_building_counts(
                 self.leaves,
                 self.shared,
                 town.state,

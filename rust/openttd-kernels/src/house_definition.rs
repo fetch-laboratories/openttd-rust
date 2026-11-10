@@ -361,7 +361,7 @@ fn property(
             0x1b => (s.set_animation_speed)(spec, reader.byte()?.clamp(2, 16)),
             // Class of the building type.
             0x1c => {
-                let class = crate::town::resolver::openttd_rust_house_class_allocate(
+                let class = crate::town::resolver::allocate_house_class_id(
                     reader.byte()?,
                     (unsafe { &*s.resolver }.shared().grf_file_id)(file),
                 );
@@ -608,7 +608,7 @@ pub fn reset(s: &Services) {
     unsafe {
         crate::town::resolver::openttd_rust_house_resolver_exchange(s.resolver);
     }
-    crate::town::resolver::openttd_rust_house_classes_reset();
+    crate::town::resolver::reset_house_classes();
     // Copy default houses.
     for id in 0..NEW_HOUSE_OFFSET {
         (s.append_default)(id);

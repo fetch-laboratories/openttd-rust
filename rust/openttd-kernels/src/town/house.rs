@@ -1467,7 +1467,7 @@ impl<'a> House<'a> {
     fn rebuild_town_caches(&self) {
         // SAFETY: Rebuild entry is serialized; no native count view survives reset.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
+            super::resolver::initialize_building_counts(
                 self.l,
                 self.s,
                 std::ptr::null_mut(),
