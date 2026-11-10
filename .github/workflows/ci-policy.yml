@@ -26,6 +26,7 @@ jobs:
       uses: actions/github-script@v7
       env:
         CI_ON_DEMAND: ${{ vars.CI_ON_DEMAND }}
+        CI_MERGE_QUEUE: ${{ vars.CI_MERGE_QUEUE }}
       with:
         script: |
           // Keep the old required contexts until root installs the merge gate.
@@ -96,16 +97,23 @@ jobs:
             const pulls = await lookup(() => github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
               ...context.repo, commit_sha: context.sha, per_page: 100
             }));
-            for (const pull of pulls) {
-              if (!pull.merged_at || pull.base.ref !== 'rust-migration') continue;
-              const {data: combined} = await lookup(() => github.rest.repos.getCombinedStatusForRef({
-                ...context.repo, ref: pull.head.sha
-              }));
-              const full = combined.statuses.find(status => status.context === 'Full validation');
-              const covered = combined.statuses.find(status => status.context === 'Validated tree');
+            // Merge-queue mode: a queue merge pushes the group commit that Full tested, so its own
+            // statuses come first, and only the publisher's own statuses qualify. An ordinary merge
+            // carries the result on the merged PR's head.
+            const queue = process.env.CI_MERGE_QUEUE === 'true';
+            const heads = [...(queue ? [context.sha] : []), ...pulls
+              .filter(pull => pull.merged_at && pull.base.ref === 'rust-migration').map(pull => pull.head.sha)];
+            for (const head of heads) {
+              // Combined statuses omit creators.
+              const statuses = queue ? await lookup(() => github.paginate(github.rest.repos.listCommitStatusesForRef, {
+                ...context.repo, ref: head, per_page: 100
+              })) : (await lookup(() => github.rest.repos.getCombinedStatusForRef({...context.repo, ref: head}))).data.statuses;
+              const full = statuses.find(status => status.context === 'Full validation');
+              const covered = statuses.find(status => status.context === 'Validated tree');
               const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
               const run = full?.target_url;
-              if (full?.state !== 'success' || covered?.state !== 'success' ||
+              if (![full, covered].every(status => status?.state === 'success' && (!queue ||
+                    status.creator?.login === 'github-actions[bot]' && status.creator?.type === 'Bot')) ||
                   typeof run !== 'string' || !run.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(run.slice(runPrefix.length)) ||
                   full.target_url !== covered.target_url || !/^[0-9a-f]{40}$/.test(covered.description)) continue;
               let matches = covered.description === tree;
