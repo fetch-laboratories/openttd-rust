@@ -20,8 +20,8 @@
 use crate::map_func::World;
 use crate::script_host::{self, Services};
 use crate::slope_func::{
-    SLOPE_ELEVATED, SLOPE_HALFTILE_MASK, SLOPE_STEEP, complement_slope, is_halftile_slope,
-    is_steep_slope,
+    SLOPE_ELEVATED, SLOPE_HALFTILE_MASK, SLOPE_STEEP, complement_slope_raw, is_halftile_slope_raw,
+    is_steep_slope_raw,
 };
 use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_ROAD, MP_STATION, MP_TREES, MP_WATER};
 
@@ -147,7 +147,7 @@ pub extern "C" fn openttd_rust_script_map_distance_max(s: &Services, a: u32, b: 
 /// `ScriptMap::DistanceSquare`, also `ScriptTile::GetDistanceSquareToTile`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_map_distance_square(s: &Services, a: u32, b: u32) -> i64 {
-    distance(s, a, b, |m| m.distance_square(a, b))
+    distance(s, a, b, |m| m.distance_square_raw(a, b))
 }
 
 /// `ScriptMap::DistanceFromEdge`.
@@ -157,7 +157,7 @@ pub extern "C" fn openttd_rust_script_map_distance_from_edge(s: &Services, tile:
     if !valid(&w, tile) {
         return -1;
     }
-    i64::from(w.dimensions.distance_from_edge(tile, w.size_y()))
+    i64::from(w.dimensions.distance_from_edge_raw(tile, w.size_y()))
 }
 
 /// `ScriptTile::IsBuildable`.
@@ -255,7 +255,7 @@ fn is_coast(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         (is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_coast(m, tile)))
             || (is_type(w, tile, MP_TREES)
-                && w.asserted(|m| crate::tree_map::get_tree_ground(m, tile))
+                && w.asserted(|m| crate::tree_map::get_tree_ground_raw(m, tile))
                     == crate::tree_map::TREE_GROUND_SHORE)
     })
 }
@@ -274,12 +274,12 @@ fn game_slope(slope: u32) -> Option<u8> {
 
 /// `ScriptTile::IsSteepSlope`.
 fn script_is_steep_slope(slope: u32) -> bool {
-    game_slope(slope).is_some_and(is_steep_slope)
+    game_slope(slope).is_some_and(is_steep_slope_raw)
 }
 
 /// `ScriptTile::IsHalftileSlope`.
 fn script_is_halftile_slope(slope: u32) -> bool {
-    game_slope(slope).is_some_and(is_halftile_slope)
+    game_slope(slope).is_some_and(is_halftile_slope_raw)
 }
 
 /// `ScriptTile::HasTreeOnTile`.
@@ -291,7 +291,7 @@ fn has_tree(s: &Services, tile: u32) -> bool {
 fn clear_ground(s: &Services, tile: u32, ground: u8) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_CLEAR)
-            && w.asserted(|m| crate::clear_map::get_clear_ground(m, tile)) == ground
+            && w.asserted(|m| crate::clear_map::get_clear_ground_raw(m, tile)) == ground
     })
 }
 
@@ -313,7 +313,7 @@ fn is_rough(s: &Services, tile: u32) -> bool {
 /// `ScriptTile::IsSnowTile`.
 fn is_snow(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
-        is_type(w, tile, MP_CLEAR) && w.asserted(|m| crate::clear_map::is_snow_tile(m, tile))
+        is_type(w, tile, MP_CLEAR) && w.asserted(|m| crate::clear_map::is_snow_tile_raw(m, tile))
     })
 }
 
@@ -361,7 +361,9 @@ pub extern "C" fn openttd_rust_script_tile_complement_slope(slope: u32) -> u32 {
     if slope & !u32::from(SLOPE_ELEVATED) != 0 {
         return SLOPE_INVALID;
     }
-    u32::from(complement_slope(slope as u8))
+    u32::from(complement_slope_raw(slope as u8, |ok| {
+        crate::services_assert::check(ok);
+    }))
 }
 
 /// `ScriptTile::GetMinHeight`.
@@ -396,7 +398,7 @@ pub extern "C" fn openttd_rust_script_tile_corner_height(
 ) -> i64 {
     let corner = corner as u8;
     let map = world(s);
-    if !valid(&map, tile) || !crate::slope_func::is_valid_corner(corner) {
+    if !valid(&map, tile) || !crate::slope_func::is_valid_corner_raw(corner) {
         return -1;
     }
     let (size_x, size_y) = map.size();

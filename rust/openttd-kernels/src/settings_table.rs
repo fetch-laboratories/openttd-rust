@@ -328,7 +328,7 @@ fn road_front_engines(s: &Services, mut each: impl FnMut(VehicleRef)) {
 }
 
 fn road_acceleration_model_changed(s: &Services) {
-    if s.refit.road_acceleration_model() != AM_ORIGINAL {
+    if s.refit.road_acceleration_model().0 != AM_ORIGINAL {
         road_front_engines(s, |v| {
             hit(witness::SETTINGS_ROAD_ACCELERATION);
             crate::ground_vehicle::cargo_changed(physics(s), v);
@@ -437,10 +437,10 @@ fn update_freeform_edges(s: &Services, new_value: i32) {
     if new_value != 0 {
         hit(witness::SETTINGS_EDGES_VOID);
         for x in 0..map.size_x() {
-            crate::void_map::make_void(&w, map.tile_xy(x, 0), freeform);
+            crate::void_map::make_void_raw(&w, map.tile_xy(x, 0), freeform);
         }
         for y in 0..w.size_y() {
-            crate::void_map::make_void(&w, map.tile_xy(0, y), freeform);
+            crate::void_map::make_void_raw(&w, map.tile_xy(0, y), freeform);
         }
     } else {
         hit(witness::SETTINGS_EDGES_WATER);

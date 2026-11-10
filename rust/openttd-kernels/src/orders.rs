@@ -4461,17 +4461,6 @@ impl OrderHandle {
         // SAFETY: One scalar read from the live canonical record.
         unsafe { (&*self.0).kind() == kind }
     }
-    /// # Safety
-    /// Handle denotes a live Order under the serial game-state mutex.
-    pub(crate) unsafe fn destination(&self) -> u16 {
-        read_field!(self.0, destination)
-    }
-    /// # Safety
-    /// Handle denotes a live depot Order under the serial game-state mutex.
-    pub(crate) unsafe fn nearest_depot(&self) -> bool {
-        // SAFETY: One scalar read; native OrderDepotActionFlag::NearestDepot = 1.
-        unsafe { (&*self.0).action() & 2 != 0 }
-    }
 }
 
 /// Direct access to the canonical orders owner for route prediction.

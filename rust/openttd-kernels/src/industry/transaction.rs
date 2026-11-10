@@ -176,7 +176,7 @@ impl Engine<'_> {
         self.map().coordinates().distance_max(a.0, b.0)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(self.map().coordinates().tile_add_xy(tile.0, x, y))
+        self.map().coordinates().tile_add_xy(tile, x, y)
     }
     fn tile_type(&self, tile: TileIndex) -> TileType {
         TileType((self.s.shared().tile_type)(tile.0))
@@ -908,14 +908,14 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
 }
 /// `IsSlopeRefused`.
 fn is_slope_refused(current: Slope, refused: Slope) -> bool {
-    if is_steep_slope(current.0) {
+    if is_steep_slope(current) {
         return true;
     }
     if current != Slope::SLOPE_FLAT {
-        if is_steep_slope(refused.0) {
+        if is_steep_slope(refused) {
             return true;
         }
-        let t = complement_slope(current.0);
+        let t = complement_slope(current, |ok| crate::services_assert::check(ok)).0;
         if refused.0 & Slope::SLOPE_W.0 != 0 && t & Slope::SLOPE_NW.0 != 0 {
             return true;
         }

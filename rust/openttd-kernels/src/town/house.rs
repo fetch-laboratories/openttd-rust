@@ -355,7 +355,7 @@ impl<'a> House<'a> {
     }
     /// `TileAddXY`.
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(self.map().tile_add_xy(tile.0, x, y))
+        self.map().tile_add_xy(tile, x, y)
     }
     /// `MarkTileDirtyByTile`.
     fn mark_tile_dirty_by_tile(&self, tile: TileIndex) {
@@ -1086,8 +1086,8 @@ impl<'a> House<'a> {
             self.get_house_north_part(&mut house);
             // Here we differ from TTDP by checking BuildingFlag::NotSloped.
             if !self.building_flags(house).test(BuildingFlag::NotSloped)
-                && !is_steep_slope(tileh_new.0)
-                && (self.s.tile_max_z)(tile.0) == z_new + get_slope_max_z(tileh_new.0)
+                && !is_steep_slope(tileh_new)
+                && (self.s.tile_max_z)(tile.0) == z_new + get_slope_max_z(tileh_new)
             {
                 let mut allow_terraform = true;
                 // Call the autosloping callback per tile, not for the whole building at once.
@@ -1158,17 +1158,29 @@ impl<'a> House<'a> {
             ta.add(self.tile_add_xy(tile, 1, 1).0, map);
         }
         if building_flags.test(BuildingFlag::Size2x1) {
-            ta.add(map.add_diag(tile.0, DiagDirection::DIAGDIR_SW.0), map);
+            ta.add(
+                map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SW, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })
+                .0,
+                map,
+            );
         }
         if building_flags.test(BuildingFlag::Size1x2) {
-            ta.add(map.add_diag(tile.0, DiagDirection::DIAGDIR_SE.0), map);
+            ta.add(
+                map.tile_add_by_diag_dir(tile, DiagDirection::DIAGDIR_SE, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })
+                .0,
+                map,
+            );
         }
         // SAFETY: Static command table referenced by the house table.
         let commands = unsafe { &*self.h.commands };
         for subtile in ta.tiles(map).map(TileIndex) {
             // Houses cannot be built on steep slopes.
             let slope = Slope(crate::map_func::World::new(self.s).tile_slope(subtile.0));
-            if is_steep_slope(slope.0) {
+            if is_steep_slope(slope) {
                 (c.error)(call.result, self.h.errors.sloped);
                 return;
             }

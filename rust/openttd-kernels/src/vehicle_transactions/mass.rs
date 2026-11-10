@@ -10,7 +10,8 @@ use crate::tile_type::TileIndex;
 use crate::vehicle_type::{DepotCommandFlags, VehicleID, VehicleType};
 use crate::vehiclelist::{VehicleListIdentifier, VehicleListType};
 
-/// The native `VehicleListIdentifier` and its `Valid()` result.
+/// The native `VehicleListIdentifier`, with the native `Valid()` result the
+/// typed identifier recomputes.
 #[repr(C)]
 pub struct ListId {
     pub kind: u8,
@@ -126,10 +127,8 @@ pub(crate) struct CmdMassStartStopVehicle {
     pub(crate) do_start: bool,
     /// If set, then it's a vehicle list window, not a depot and Tile is ignored in this case.
     pub(crate) vehicle_list_window: bool,
-    /// The vehicle list, if `vli_valid`.
+    /// `VehicleListIdentifier`.
     pub(crate) vli: VehicleListIdentifier,
-    /// `vli.Valid()`.
-    pub(crate) vli_valid: bool,
 }
 /// `CmdMassStartStopVehicle`: starts or stops a lot of vehicles.
 ///
@@ -145,7 +144,7 @@ pub(crate) unsafe fn cmd_mass_start_stop_vehicle(
 ) {
     let b = s.common.base;
     let mut list = List::new();
-    if !cmd.vli_valid || !unsafe { (b.groups.buildable_type)(cmd.vli.vtype.0) } {
+    if !cmd.vli.valid() || !unsafe { (b.groups.buildable_type)(cmd.vli.vtype.0) } {
         (b.cost.error)(cost, ERROR);
         return;
     }
@@ -216,7 +215,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_mass_start(
                 do_start: start,
                 vehicle_list_window: window,
                 vli: id.identifier(),
-                vli_valid: id.valid,
             },
         );
     }
@@ -459,10 +457,8 @@ pub(crate) struct CmdSendVehicleToDepot {
     pub(crate) veh_id: VehicleID,
     /// The depot command flags.
     pub(crate) depot_cmd: DepotCommandFlags,
-    /// The vehicle list, if `vli_valid`, for a mass send.
+    /// The vehicle list, for a mass send.
     pub(crate) vli: VehicleListIdentifier,
-    /// `vli.Valid()`.
-    pub(crate) vli_valid: bool,
 }
 /// `CmdSendVehicleToDepot`: send a vehicle to the depot.
 ///
@@ -478,7 +474,7 @@ pub(crate) unsafe fn cmd_send_vehicle_to_depot(
 ) {
     if cmd.depot_cmd.0 & s.mass_send != 0 {
         /* Mass goto depot requested */
-        if !cmd.vli_valid {
+        if !cmd.vli.valid() {
             (s.common.base.cost.error)(cost, ERROR);
             return;
         }
@@ -520,7 +516,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_send(
                 veh_id: VehicleID(id),
                 depot_cmd: DepotCommandFlags(command),
                 vli: list_id.identifier(),
-                vli_valid: list_id.valid,
             },
         );
     }

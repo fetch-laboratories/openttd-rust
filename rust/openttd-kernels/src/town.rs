@@ -48,7 +48,7 @@ use crate::house::{
 };
 use crate::house_type::{HouseClassID, HouseID};
 use crate::landscape_type::LandscapeType;
-use crate::map_type::{TileIndexDiff, TileIndexDiffC};
+use crate::map_type::TileIndexDiffC;
 use crate::math::{clamp_to_u8, clamp_to_u16, clamp_to_u32, round_div_su};
 use crate::newgrf_callbacks::{HouseCallbackMask, HouseCallbackMasks};
 use crate::random_func::chance16;
@@ -393,7 +393,7 @@ pub(crate) unsafe fn get_town_radius_group(
     map: crate::map_func::Map,
 ) -> HouseZone {
     let state = unsafe { &*state };
-    let dist = map.distance_square(tile.0, state.simulation.xy);
+    let dist = map.distance_square(tile, TileIndex(state.simulation.xy));
     if state.growth.funding != 0 && dist <= 25 {
         return HouseZone::TownCentre;
     }
@@ -1069,41 +1069,6 @@ impl Engine<'_> {
     fn check(&self) -> impl Fn(bool) + Copy + '_ {
         |ok| crate::movement::native_assert(self.services, ok)
     }
-    fn distance_from_edge(&self, tile: TileIndex) -> u32 {
-        self.map().distance_from_edge(tile.0, self.size_y())
-    }
-    fn distance_square(&self, a: TileIndex, b: TileIndex) -> u32 {
-        self.map().distance_square(a.0, b.0)
-    }
-    fn tile_index_to_tile_index_diff_c(&self, a: TileIndex, b: TileIndex) -> TileIndexDiffC {
-        self.map().tile_index_to_tile_index_diff_c(a, b)
-    }
-    /// `tile + TileDiffXY(x, y)`.
-    fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(self.map().tile_add_xy(tile.0, x, y))
-    }
-    /// `TileOffsByDiagDir`.
-    fn tile_offs_by_diag_dir(&self, dir: DiagDirection) -> TileIndexDiff {
-        self.map().offs_by_diag_dir(dir.0).cast_signed()
-    }
-    fn tile_add_by_diag_dir(&self, tile: TileIndex, dir: DiagDirection) -> TileIndex {
-        TileIndex(self.map().add_diag(tile.0, dir.0))
-    }
-    fn tile_add_by_dir(&self, tile: TileIndex, dir: Direction) -> TileIndex {
-        TileIndex(self.map().add_dir(tile.0, dir.0))
-    }
-    fn reverse_diag_dir(&self, dir: DiagDirection) -> DiagDirection {
-        DiagDirection(reverse_diag_dir(dir.0, self.check()))
-    }
-    fn diag_dir_to_axis(&self, dir: DiagDirection) -> Axis {
-        Axis(diag_dir_to_axis(dir.0, self.check()))
-    }
-    fn diag_dir_to_road_bits(&self, dir: DiagDirection) -> RoadBits {
-        RoadBits(diag_dir_to_road_bits(dir.0, self.check()))
-    }
-    fn inclined_slope(dir: DiagDirection) -> Slope {
-        inclined_slope(dir, || unreachable!("native inclined slope direction"))
-    }
     fn is_valid_tile(&self, tile: TileIndex) -> bool {
         (self.services.tile_valid)(tile.0)
     }
@@ -1347,7 +1312,7 @@ impl Engine<'_> {
         let search_radius = radius / 2;
         let c = unsafe { &*(self.services.station_catchment)() };
         crate::station::spatial::for_all_stations_radius(self.services, xy, search_radius, |st| {
-            if self.distance_square(TileIndex((c.location)(st)), xy) <= radius {
+            if self.map().distance_square(TileIndex((c.location)(st)), xy) <= radius {
                 func(c, st);
             }
         });
@@ -1530,12 +1495,16 @@ impl Engine<'_> {
         }
         /* Lookup table for the used diff values */
         let tid_lt = [
-            self.tile_offs_by_diag_dir(change_diag_dir_typed(
-                dir,
-                DiagDirDiff::DIAGDIRDIFF_90RIGHT,
-            )),
-            self.tile_offs_by_diag_dir(change_diag_dir_typed(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT)),
-            self.tile_offs_by_diag_dir(self.reverse_diag_dir(dir)),
+            self.map().tile_offs_by_diag_dir(
+                change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT, self.check()),
+                self.check(),
+            ),
+            self.map().tile_offs_by_diag_dir(
+                change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT, self.check()),
+                self.check(),
+            ),
+            self.map()
+                .tile_offs_by_diag_dir(reverse_diag_dir(dir, self.check()), self.check()),
         ];
         let dist_multi = (dist_multi + 1) * 4;
         for pos in 4..dist_multi {
@@ -1549,11 +1518,14 @@ impl Engine<'_> {
             let test = TileIndex(tile.0.wrapping_add_signed(cur));
             if self.is_valid_tile(test)
                 && self.get_town_road_bits(test)
-                    & self.diag_dir_to_road_bits(if pos & 2 != 0 {
-                        dir
-                    } else {
-                        self.reverse_diag_dir(dir)
-                    })
+                    & diag_dir_to_road_bits(
+                        if pos & 2 != 0 {
+                            dir
+                        } else {
+                            reverse_diag_dir(dir, self.check())
+                        },
+                        self.check(),
+                    )
                     != RoadBits::ROAD_NONE
             {
                 return true;
@@ -1564,12 +1536,12 @@ impl Engine<'_> {
     /// `IsRoadAllowedHere`: check if a road is allowed on a given tile, extending
     /// the town in `dir`.
     fn is_road_allowed_here(&self, t: TownID, tile: TileIndex, dir: DiagDirection) -> bool {
-        if self.distance_from_edge(tile) == 0 {
+        if self.map().distance_from_edge(tile, self.size_y()) == 0 {
             return false;
         }
         /* Prevent towns from building roads under bridges along the bridge. Looks silly. */
         if self.is_bridge_above(tile)
-            && Axis((self.services.bridge_axis)(tile.0)) == self.diag_dir_to_axis(dir)
+            && Axis((self.services.bridge_axis)(tile.0)) == diag_dir_to_axis(dir, self.check())
         {
             return false;
         }
@@ -1615,7 +1587,8 @@ impl Engine<'_> {
         } else {
             Slope::SLOPE_NE
         };
-        if desired_slope != cur_slope && Slope(complement_slope(desired_slope.0)) != cur_slope {
+        if desired_slope != cur_slope && complement_slope(desired_slope, self.check()) != cur_slope
+        {
             if chance16(self.services, 1, 8) {
                 let mut res = false;
                 if !(self.leaves.generating_world)() && chance16(self.services, 1, 10) {
@@ -1670,7 +1643,7 @@ impl Engine<'_> {
     /// `dir`, regarding the town's grid layout.
     fn get_town_road_grid_element(&self, tile: TileIndex, dir: DiagDirection) -> RoadBits {
         /* align the grid to the downtown */
-        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile); // Vector from downtown to the tile
+        let grid_pos = self.map().tile_index_to_tile_index_diff_c(self.xy(), tile); // Vector from downtown to the tile
         let mut rcmd = RoadBits::ROAD_NONE;
         match self.layout() {
             TownLayout::TL_2X2_GRID => {
@@ -1711,13 +1684,14 @@ impl Engine<'_> {
             _ => RoadBits::ROAD_ALL,
         };
         /* Stop if the template is compatible to the growth dir */
-        if self.diag_dir_to_road_bits(self.reverse_diag_dir(dir)) & rb_template
+        if diag_dir_to_road_bits(reverse_diag_dir(dir, self.check()), self.check()) & rb_template
             != RoadBits::ROAD_NONE
         {
             return rb_template;
         }
         /* If not generate a straight road in the direction of the growth */
-        self.diag_dir_to_road_bits(dir) | self.diag_dir_to_road_bits(self.reverse_diag_dir(dir))
+        diag_dir_to_road_bits(dir, self.check())
+            | diag_dir_to_road_bits(reverse_diag_dir(dir, self.check()), self.check())
     }
     /// `GrowTownWithExtraHouse`: check if there are enough neighbour house tiles
     /// next to the current tile. If there are enough add another house.
@@ -1728,7 +1702,7 @@ impl Engine<'_> {
         modes: TownExpandModes,
     ) -> bool {
         /* We can't look further than that. */
-        if self.distance_from_edge(tile) == 0 {
+        if self.map().distance_from_edge(tile, self.size_y()) == 0 {
             return false;
         }
         let mut counter = 0; // counts the house neighbour tiles
@@ -1739,7 +1713,11 @@ impl Engine<'_> {
              * are enough houses in the area. This to make it likely that
              * houses get build up to the edge of the map. */
             if matches!(
-                self.get_tile_type(self.tile_add_by_diag_dir(tile, DiagDirection(dir))),
+                self.get_tile_type(self.map().tile_add_by_diag_dir(
+                    tile,
+                    DiagDirection(dir),
+                    self.check()
+                )),
                 TileType::MP_HOUSE | TileType::MP_VOID
             ) {
                 counter += 1;
@@ -1765,7 +1743,7 @@ impl Engine<'_> {
         tile: TileIndex,
         road_dir: DiagDirection,
     ) -> bool {
-        let delta = self.tile_offs_by_diag_dir(road_dir); // +1 tile in the direction of the road
+        let delta = self.map().tile_offs_by_diag_dir(road_dir, self.check()); // +1 tile in the direction of the road
         let next_tile = TileIndex(tile.0.wrapping_add_signed(delta)); // The tile beyond which must be connectable to the target tile
         let rt = self.get_town_road_type();
         /* Before we try anything, make sure the tile is on the map and not the void. */
@@ -1784,11 +1762,11 @@ impl Engine<'_> {
                 /* If the next tile is a road station, allow if it can be entered by the new tunnel/bridge, otherwise disallow. */
                 if (self.services.is_drive_through_stop)(next_tile.0) {
                     return Axis((self.services.drive_through_axis)(next_tile.0))
-                        == self.diag_dir_to_axis(road_dir);
+                        == diag_dir_to_axis(road_dir, self.check());
                 }
                 if (self.services.is_bay_stop)(next_tile.0) {
                     return DiagDirection((self.services.bay_stop_direction)(next_tile.0))
-                        == self.reverse_diag_dir(road_dir);
+                        == reverse_diag_dir(road_dir, self.check());
                 }
                 return false;
             }
@@ -1796,7 +1774,7 @@ impl Engine<'_> {
             TileType::MP_ROAD => {
                 return (self.services.is_road_depot)(next_tile.0)
                     && DiagDirection((self.services.road_depot_direction)(next_tile.0))
-                        == self.reverse_diag_dir(road_dir);
+                        == reverse_diag_dir(road_dir, self.check());
             }
             /* If the next tile is a railroad track, check if towns are allowed to build level crossings.
              * If level crossing are not allowed, reject the construction. Else allow DoCommand to determine if the rail track is buildable. */
@@ -1808,7 +1786,7 @@ impl Engine<'_> {
             _ => {}
         }
         /* If a road tile can be built, the construction is allowed. */
-        let rcmd = self.diag_dir_to_road_bits(self.reverse_diag_dir(road_dir));
+        let rcmd = diag_dir_to_road_bits(reverse_diag_dir(road_dir, self.check()), self.check());
         self.cmd_build_road(DC_AUTO_NO_WATER, next_tile, rcmd, rt, t)
     }
     /// `GrowTownWithBridge`: at first we check if a bridge is reasonable. If so we
@@ -1820,14 +1798,16 @@ impl Engine<'_> {
          * Well we check if the slope has an up bit set in the
          * reverse direction. */
         if slope != Slope::SLOPE_FLAT
-            && slope & Self::inclined_slope(bridge_dir) != Slope::SLOPE_FLAT
+            && slope & inclined_slope(bridge_dir, || self.not_reached()) != Slope::SLOPE_FLAT
         {
             return false;
         }
         /* Assure that the bridge is connectable to the start side */
-        if self
-            .get_town_road_bits(self.tile_add_by_diag_dir(tile, self.reverse_diag_dir(bridge_dir)))
-            & self.diag_dir_to_road_bits(bridge_dir)
+        if self.get_town_road_bits(self.map().tile_add_by_diag_dir(
+            tile,
+            reverse_diag_dir(bridge_dir, self.check()),
+            self.check(),
+        )) & diag_dir_to_road_bits(bridge_dir, self.check())
             == RoadBits::ROAD_NONE
         {
             return false;
@@ -1856,7 +1836,9 @@ impl Engine<'_> {
                     /* Allow to cross rivers, not big lakes, nor large amounts of rails or one-way roads. */
                     return false;
                 }
-                bridge_tile = self.tile_add_by_diag_dir(bridge_tile, bridge_dir);
+                bridge_tile =
+                    self.map()
+                        .tile_add_by_diag_dir(bridge_tile, bridge_dir, self.check());
                 if !(self.is_valid_tile(bridge_tile)
                     && (((self.services.is_water_tile)(bridge_tile.0)
                         && !world().is_sea(bridge_tile.0))
@@ -1874,7 +1856,9 @@ impl Engine<'_> {
                     /* Ensure the bridge is not longer than the max allowed length. */
                     return false;
                 }
-                bridge_tile = self.tile_add_by_diag_dir(bridge_tile, bridge_dir);
+                bridge_tile =
+                    self.map()
+                        .tile_add_by_diag_dir(bridge_tile, bridge_dir, self.check());
                 if !(self.is_valid_tile(bridge_tile)
                     && ((self.services.is_water_tile)(bridge_tile.0)
                         || (self.services.is_plain_rail)(bridge_tile.0)
@@ -1912,7 +1896,9 @@ impl Engine<'_> {
                 if (self.services.is_bridge)(at.0)
                     && self.get_tunnel_bridge_transport_type(at) == TransportType::TRANSPORT_ROAD
                     && self.get_tile_slope(at)
-                        & Self::inclined_slope(self.reverse_diag_dir(bridge_dir))
+                        & inclined_slope(reverse_diag_dir(bridge_dir, self.check()), || {
+                            self.not_reached()
+                        })
                         != Slope::SLOPE_FLAT
                 {
                     return false;
@@ -1936,13 +1922,15 @@ impl Engine<'_> {
     /// check if we are able to build it.
     fn grow_town_with_tunnel(&self, t: TownID, tile: TileIndex, tunnel_dir: DiagDirection) -> bool {
         /* Only consider building a tunnel if the starting tile is sloped properly. */
-        if self.get_tile_slope(tile) != Self::inclined_slope(tunnel_dir) {
+        if self.get_tile_slope(tile) != inclined_slope(tunnel_dir, || self.not_reached()) {
             return false;
         }
         /* Assure that the tunnel is connectable to the start side */
-        if self
-            .get_town_road_bits(self.tile_add_by_diag_dir(tile, self.reverse_diag_dir(tunnel_dir)))
-            & self.diag_dir_to_road_bits(tunnel_dir)
+        if self.get_town_road_bits(self.map().tile_add_by_diag_dir(
+            tile,
+            reverse_diag_dir(tunnel_dir, self.check()),
+            self.check(),
+        )) & diag_dir_to_road_bits(tunnel_dir, self.check())
             == RoadBits::ROAD_NONE
         {
             return false;
@@ -1956,13 +1944,15 @@ impl Engine<'_> {
                     return false;
                 }
                 let slope = self.get_tile_slope(slope_tile);
-                if slope != Self::inclined_slope(tunnel_dir)
-                    && !is_steep_slope(slope.0)
-                    && !is_slope_with_one_corner_raised(slope.0)
+                if slope != inclined_slope(tunnel_dir, || self.not_reached())
+                    && !is_steep_slope(slope)
+                    && !is_slope_with_one_corner_raised(slope)
                 {
                     return false;
                 }
-                slope_tile = self.tile_add_by_diag_dir(slope_tile, tunnel_dir);
+                slope_tile = self
+                    .map()
+                    .tile_add_by_diag_dir(slope_tile, tunnel_dir, self.check());
             }
             /* More population means longer tunnels, but make sure we can at least cover the smallest mountain which necessitates tunneling. */
             self.population() / 1000 + 7
@@ -1980,7 +1970,9 @@ impl Engine<'_> {
             if u32::from(length) >= max_tunnel_length {
                 return false;
             }
-            tunnel_tile = self.tile_add_by_diag_dir(tunnel_tile, tunnel_dir);
+            tunnel_tile = self
+                .map()
+                .tile_add_by_diag_dir(tunnel_tile, tunnel_dir, self.check());
             /* The tunnel ends when start and end tiles are the same height. */
             if !self.is_valid_tile(tunnel_tile)
                 || self.get_tile_z(tile) == self.get_tile_z(tunnel_tile)
@@ -2019,7 +2011,7 @@ impl Engine<'_> {
         ];
         let mut allow = false;
         for (x, y) in TILES {
-            let cur_tile = self.tile_add_xy(t, x, y);
+            let cur_tile = self.map().tile_add_xy(t, x, y);
             if !self.is_valid_tile(cur_tile) {
                 continue;
             }
@@ -2053,7 +2045,7 @@ impl Engine<'_> {
     /// `CanFollowRoad`: whether a road can be followed or is a dead end that can
     /// not be extended to the next tile. This only checks trivial but often cases.
     fn can_follow_road(&self, tile: TileIndex, dir: DiagDirection, modes: TownExpandModes) -> bool {
-        let target_tile = self.tile_add_by_diag_dir(tile, dir);
+        let target_tile = self.map().tile_add_by_diag_dir(tile, dir, self.check());
         if !self.is_valid_tile(target_tile) || self.has_tile_water_ground(target_tile) {
             return false;
         }
@@ -2074,15 +2066,11 @@ impl Engine<'_> {
         } else {
             /* Check whether a road connection already exists,
              * and it leads somewhere else. */
-            let back_rb = self.diag_dir_to_road_bits(self.reverse_diag_dir(dir));
+            let back_rb = diag_dir_to_road_bits(reverse_diag_dir(dir, self.check()), self.check());
             target_rb & back_rb != RoadBits::ROAD_NONE
                 && target_rb & !back_rb != RoadBits::ROAD_NONE
         }
     }
-}
-/// `ChangeDiagDir`, over the shared modulo-four helper.
-fn change_diag_dir_typed(dir: DiagDirection, delta: DiagDirDiff) -> DiagDirection {
-    DiagDirection(change_diag_dir(dir.0, delta.0))
 }
 /// `TownAllowedToBuildRoads`.
 fn town_allowed_to_build_roads(modes: TownExpandModes) -> bool {
@@ -2136,7 +2124,7 @@ impl Engine<'_> {
                     if !self.is_road_allowed_here(t1, tile, target_dir) {
                         return TownGrowthResult::SearchStopped;
                     }
-                    let source_dir = self.reverse_diag_dir(target_dir);
+                    let source_dir = reverse_diag_dir(target_dir, self.check());
                     if chance16(self.services, 1, 4) {
                         /* Randomize a new target dir */
                         target_dir = self.random_diag_dir();
@@ -2144,36 +2132,46 @@ impl Engine<'_> {
                             target_dir = self.random_diag_dir();
                         }
                     }
-                    let next_tile = self.tile_add_by_diag_dir(tile, target_dir);
+                    let next_tile = self
+                        .map()
+                        .tile_add_by_diag_dir(tile, target_dir, self.check());
                     if !self.is_road_allowed_here(t1, next_tile, target_dir) {
                         /* A road is not allowed to continue the randomized road,
                          *  return if the road we're trying to build is curved. */
-                        if target_dir != self.reverse_diag_dir(source_dir) {
+                        if target_dir != reverse_diag_dir(source_dir, self.check()) {
                             return TownGrowthResult::SearchStopped;
                         }
                         /* Return if neither side of the new road is a house */
-                        let right =
-                            change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
-                        let left =
-                            change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
+                        let right = change_diag_dir(
+                            target_dir,
+                            DiagDirDiff::DIAGDIRDIFF_90RIGHT,
+                            self.check(),
+                        );
+                        let left = change_diag_dir(
+                            target_dir,
+                            DiagDirDiff::DIAGDIRDIFF_90LEFT,
+                            self.check(),
+                        );
                         if !self.is_tile_type(
-                            self.tile_add_by_diag_dir(tile, right),
+                            self.map().tile_add_by_diag_dir(tile, right, self.check()),
                             TileType::MP_HOUSE,
-                        ) && !self
-                            .is_tile_type(self.tile_add_by_diag_dir(tile, left), TileType::MP_HOUSE)
-                        {
+                        ) && !self.is_tile_type(
+                            self.map().tile_add_by_diag_dir(tile, left, self.check()),
+                            TileType::MP_HOUSE,
+                        ) {
                             return TownGrowthResult::SearchStopped;
                         }
                         /* That means that the road is only allowed if there is a house
                          *  at any side of the new road. */
                     }
-                    rcmd = self.diag_dir_to_road_bits(target_dir)
-                        | self.diag_dir_to_road_bits(source_dir);
+                    rcmd = diag_dir_to_road_bits(target_dir, self.check())
+                        | diag_dir_to_road_bits(source_dir, self.check());
                 }
                 _ => self.not_reached(),
             }
         } else if target_dir.0 < DiagDirection::DIAGDIR_END.0
-            && cur_rb & self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir))
+            && cur_rb
+                & diag_dir_to_road_bits(reverse_diag_dir(target_dir, self.check()), self.check())
                 == RoadBits::ROAD_NONE
         {
             if !self.town_can_grow_road(tile) {
@@ -2190,7 +2188,10 @@ impl Engine<'_> {
                     rcmd = self.get_town_road_grid_element(tile, target_dir);
                 }
                 TownLayout::TL_BETTER_ROADS | TownLayout::TL_ORIGINAL => {
-                    rcmd = self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir));
+                    rcmd = diag_dir_to_road_bits(
+                        reverse_diag_dir(target_dir, self.check()),
+                        self.check(),
+                    );
                 }
                 _ => self.not_reached(),
             }
@@ -2210,10 +2211,11 @@ impl Engine<'_> {
             /* Possibly extend the road in a direction.
              * Randomize a direction and if it has a road, bail out. */
             target_dir = self.random_diag_dir();
-            let target_rb = self.diag_dir_to_road_bits(target_dir);
+            let target_rb = diag_dir_to_road_bits(target_dir, self.check());
             // position of a possible house
             let house_tile = if cur_rb & target_rb == RoadBits::ROAD_NONE {
-                self.tile_add_by_diag_dir(tile, target_dir)
+                self.map()
+                    .tile_add_by_diag_dir(tile, target_dir, self.check())
             } else {
                 /* If it's a road turn possibly build a house in a corner.
                  * Use intersection with straight road as an indicator
@@ -2246,7 +2248,11 @@ impl Engine<'_> {
                         if layout == TownLayout::TL_3X3_GRID
                             && self.grow_town_with_extra_house(
                                 t1,
-                                self.tile_add_by_diag_dir(house_tile, target_dir),
+                                self.map().tile_add_by_diag_dir(
+                                    house_tile,
+                                    target_dir,
+                                    self.check(),
+                                ),
                                 modes,
                             )
                         {
@@ -2260,7 +2266,11 @@ impl Engine<'_> {
                         if layout == TownLayout::TL_BETTER_ROADS
                             && self.grow_town_with_extra_house(
                                 t1,
-                                self.tile_add_by_diag_dir(house_tile, target_dir),
+                                self.map().tile_add_by_diag_dir(
+                                    house_tile,
+                                    target_dir,
+                                    self.check(),
+                                ),
                                 modes,
                             )
                         {
@@ -2318,10 +2328,26 @@ impl Engine<'_> {
     /// `GrowTownInTile`'s corner tile of a road turn, or `None` if `cur_rb` is not a turn.
     fn road_turn_corner_tile(&self, tile: TileIndex, cur_rb: RoadBits) -> Option<TileIndex> {
         match cur_rb {
-            RoadBits::ROAD_N => Some(self.tile_add_by_dir(tile, Direction::DIR_S)),
-            RoadBits::ROAD_S => Some(self.tile_add_by_dir(tile, Direction::DIR_N)),
-            RoadBits::ROAD_E => Some(self.tile_add_by_dir(tile, Direction::DIR_W)),
-            RoadBits::ROAD_W => Some(self.tile_add_by_dir(tile, Direction::DIR_E)),
+            RoadBits::ROAD_N => Some(self.map().tile_add_by_dir(
+                tile,
+                Direction::DIR_S,
+                self.check(),
+            )),
+            RoadBits::ROAD_S => Some(self.map().tile_add_by_dir(
+                tile,
+                Direction::DIR_N,
+                self.check(),
+            )),
+            RoadBits::ROAD_E => Some(self.map().tile_add_by_dir(
+                tile,
+                Direction::DIR_W,
+                self.check(),
+            )),
+            RoadBits::ROAD_W => Some(self.map().tile_add_by_dir(
+                tile,
+                Direction::DIR_E,
+                self.check(),
+            )),
             _ => None,
         }
     }
@@ -2356,14 +2382,17 @@ impl Engine<'_> {
             /* Exclude the source position from the bitmask
              * and return if no more road blocks available */
             if is_valid_diag_direction(target_dir) {
-                cur_rb &= !self.diag_dir_to_road_bits(self.reverse_diag_dir(target_dir));
+                cur_rb &= !diag_dir_to_road_bits(
+                    reverse_diag_dir(target_dir, self.check()),
+                    self.check(),
+                );
             }
             if cur_rb == RoadBits::ROAD_NONE {
                 return false;
             }
             if self.is_tile_type(tile, TileType::MP_TUNNELBRIDGE) {
                 /* Only build in the direction away from the tunnel or bridge. */
-                target_dir = self.reverse_diag_dir(self.get_tunnel_bridge_direction(tile));
+                target_dir = reverse_diag_dir(self.get_tunnel_bridge_direction(tile), self.check());
             } else {
                 /* Select a random bit from the blockmask, walk a step
                  * and continue the search from there. */
@@ -2373,7 +2402,7 @@ impl Engine<'_> {
                     }
                     let target_bits = loop {
                         target_dir = self.random_diag_dir();
-                        let target_bits = self.diag_dir_to_road_bits(target_dir);
+                        let target_bits = diag_dir_to_road_bits(target_dir, self.check());
                         if cur_rb & target_bits != RoadBits::ROAD_NONE {
                             break target_bits;
                         }
@@ -2384,7 +2413,9 @@ impl Engine<'_> {
                     }
                 }
             }
-            tile = self.tile_add_by_diag_dir(tile, target_dir);
+            tile = self
+                .map()
+                .tile_add_by_diag_dir(tile, target_dir, self.check());
             if self.is_tile_type(tile, TileType::MP_ROAD)
                 && !(self.services.is_road_depot)(tile.0)
                 && (self.services.has_road_type)(tile.0)
@@ -2451,7 +2482,9 @@ impl Engine<'_> {
                 (self.leaves.exchange_company)(u32::from(cur_company.0));
                 return success;
             }
-            tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
+            tile = self
+                .map()
+                .tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
         }
         /* No road available, try to build a random road block by
          * clearing some land and then building a road there. */
@@ -2468,7 +2501,9 @@ impl Engine<'_> {
                     (self.leaves.exchange_company)(u32::from(cur_company.0));
                     return true;
                 }
-                tile = self.tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
+                tile = self
+                    .map()
+                    .tile_add_xy(tile, i32::from(ptr.x), i32::from(ptr.y));
             }
         }
         (self.leaves.exchange_company)(u32::from(cur_company.0));
@@ -2486,7 +2521,7 @@ impl Engine<'_> {
         if !town_allowed_to_build_roads(modes) {
             return true;
         }
-        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile);
+        let grid_pos = self.map().tile_index_to_tile_index_diff_c(self.xy(), tile);
         match self.layout() {
             TownLayout::TL_2X2_GRID => grid_pos.x % 3 != 0 && grid_pos.y % 3 != 0,
             TownLayout::TL_3X3_GRID => grid_pos.x % 4 != 0 && grid_pos.y % 4 != 0,
@@ -2504,7 +2539,7 @@ impl Engine<'_> {
             return true;
         }
         /* Compute relative position of tile. (Positive offsets are towards north) */
-        let grid_pos = self.tile_index_to_tile_index_diff_c(self.xy(), tile);
+        let grid_pos = self.map().tile_index_to_tile_index_diff_c(self.xy(), tile);
         match self.layout() {
             TownLayout::TL_2X2_GRID => {
                 matches!(grid_pos.x % 3, 2 | -1) && matches!(grid_pos.y % 3, 2 | -1)
@@ -2518,7 +2553,7 @@ impl Engine<'_> {
     fn can_build_house_here(&self, tile: TileIndex, noslope: bool) -> bool {
         /* cannot build on these slopes... */
         let slope = self.get_tile_slope(tile);
-        if (noslope && slope != Slope::SLOPE_FLAT) || is_steep_slope(slope.0) {
+        if (noslope && slope != Slope::SLOPE_FLAT) || is_steep_slope(slope) {
             return false;
         }
         /* at least one RoadTypes allow building the house here? */
@@ -2548,7 +2583,9 @@ impl Engine<'_> {
             return false;
         }
         for d in DiagDirection::DIAGDIR_SE.0..DiagDirection::DIAGDIR_END.0 {
-            tile = self.tile_add_by_diag_dir(tile, DiagDirection(d));
+            tile = self
+                .map()
+                .tile_add_by_diag_dir(tile, DiagDirection(d), self.check());
             if !self.check_build_house_same_z(tile, z, noslope) {
                 return false;
             }
@@ -2567,13 +2604,17 @@ impl Engine<'_> {
         modes: TownExpandModes,
     ) -> bool {
         /* 'tile' is already checked in BuildTownHouse() - CanBuildHouseHere() and slope test */
-        let mut tile2 = self.tile_add_by_diag_dir(*tile, second);
+        let mut tile2 = self.map().tile_add_by_diag_dir(*tile, second, self.check());
         if self.town_layout_allows_house_here(tile2, modes)
             && self.check_build_house_same_z(tile2, maxz, noslope)
         {
             return true;
         }
-        tile2 = self.tile_add_by_diag_dir(*tile, self.reverse_diag_dir(second));
+        tile2 = self.map().tile_add_by_diag_dir(
+            *tile,
+            reverse_diag_dir(second, self.check()),
+            self.check(),
+        );
         if self.town_layout_allows_house_here(tile2, modes)
             && self.check_build_house_same_z(tile2, maxz, noslope)
         {
@@ -2604,7 +2645,11 @@ impl Engine<'_> {
             if d == DiagDirection::DIAGDIR_END.0 {
                 break;
             }
-            tile2 = self.tile_add_by_diag_dir(tile2, self.reverse_diag_dir(DiagDirection(d))); // go clockwise
+            tile2 = self.map().tile_add_by_diag_dir(
+                tile2,
+                reverse_diag_dir(DiagDirection(d), self.check()),
+                self.check(),
+            ); // go clockwise
         }
         false
     }
@@ -2651,15 +2696,15 @@ impl Engine<'_> {
         self.clear_make_house_tile(tile, t, house, c);
         if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
             house += 1;
-            self.clear_make_house_tile(self.tile_add_xy(tile, 0, 1), t, house, c);
+            self.clear_make_house_tile(self.map().tile_add_xy(tile, 0, 1), t, house, c);
         }
         if size.any(BuildingFlags::BUILDING_2_TILES_X) {
             house += 1;
-            self.clear_make_house_tile(self.tile_add_xy(tile, 1, 0), t, house, c);
+            self.clear_make_house_tile(self.map().tile_add_xy(tile, 1, 0), t, house, c);
         }
         if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
             house += 1;
-            self.clear_make_house_tile(self.tile_add_xy(tile, 1, 1), t, house, c);
+            self.clear_make_house_tile(self.map().tile_add_xy(tile, 1, 1), t, house, c);
         }
         let area = crate::tilearea::TileArea {
             tile: tile.0,
@@ -2763,13 +2808,13 @@ impl Engine<'_> {
         };
         stage_changed(tile);
         if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
-            stage_changed(self.tile_add_xy(tile, 0, 1));
+            stage_changed(self.map().tile_add_xy(tile, 0, 1));
         }
         if size.any(BuildingFlags::BUILDING_2_TILES_X) {
-            stage_changed(self.tile_add_xy(tile, 1, 0));
+            stage_changed(self.map().tile_add_xy(tile, 1, 0));
         }
         if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
-            stage_changed(self.tile_add_xy(tile, 1, 1));
+            stage_changed(self.map().tile_add_xy(tile, 1, 1));
         }
     }
 }
@@ -3845,17 +3890,27 @@ mod policy_tests {
         }
     }
 
+    /// Compare regenerated `"<kind> <inputs> <outputs>"` rows with the kind's oracle section,
+    /// which stores only the outputs; the input field counts are the header's.
     fn check_rows(kind: char, actual: &[String], count: usize) {
-        let prefix = format!("{kind} ");
-        let expected: Vec<_> = include_str!("town/policy-oracle.txt")
-            .lines()
-            .filter(|line| line.starts_with(&prefix))
-            .collect();
+        let inputs = match kind {
+            'H' => 4,
+            'R' => 8,
+            'Z' => 1,
+            'A' => 9,
+            'P' => 2,
+            _ => unreachable!("unknown policy oracle kind {kind}"),
+        };
+        let oracle = crate::oracle::parse(include_str!("town/policy-oracle.txt"));
         assert_eq!(actual.len(), count);
-        assert_eq!(expected.len(), count);
-        for (case, (a, e)) in actual.iter().zip(expected).enumerate() {
-            assert_eq!(a, e, "{kind} case {case}");
-        }
+        let rows = actual.iter().map(|row| {
+            let fields: Vec<&str> = row.split(' ').collect();
+            (fields[..=inputs].join(" "), fields[inputs + 1..].join(" "))
+        });
+        assert_eq!(
+            crate::oracle::check(&oracle, &kind.to_string(), rows),
+            count
+        );
     }
     fn supplied_history(
         count: usize,

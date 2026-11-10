@@ -718,13 +718,13 @@ impl<'a> Ctx<'a> {
          *   1) The tile is "steep" (i.e. stretches two height levels).
          *   2) The tile is non-flat and the build_on_slopes switch is disabled.
          */
-        if (!allow_steep && is_steep_slope(tileh.0))
+        if (!allow_steep && is_steep_slope(tileh))
             || (!(self.shared.build_on_slopes)() && tileh != Slope::SLOPE_FLAT)
         {
             return out.error(self.s.strings.flat_land);
         }
         out.set(0);
-        let flat_z = z + get_slope_max_z(tileh.0);
+        let flat_z = z + get_slope_max_z(tileh);
         if tileh != Slope::SLOPE_FLAT {
             /* Forbid building if the tile faces a slope in a invalid direction. */
             for dir in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
@@ -1963,10 +1963,13 @@ impl Ctx<'_> {
             if self.is_station_tile_blocked(tile) {
                 continue;
             }
-            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
+            let dir = axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }));
-            let tile_offset = self.map().offs_by_diag_dir(dir.0);
+            });
+            let tile_offset = self
+                .map()
+                .tile_offs_by_diag_dir(dir, |ok| crate::movement::native_assert(self.shared, ok))
+                .cast_unsigned();
             let mut platform_begin = tile;
             let mut platform_end = tile;
             /* We can only account for tiles that are reachable from this tile, so ignore primarily blocked tiles while finding the platform begin and end. */
@@ -2017,7 +2020,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis.0) {
+        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
@@ -2113,9 +2116,12 @@ impl Ctx<'_> {
         }
         let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
         let tile_delta = self.map().offs_by_axis(axis.0); // offset to go to the next platform tile
-        let track_delta = self.map().offs_by_axis(other_axis(axis.0, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        })); // offset to go to the next track
+        let track_delta = self.map().offs_by_axis(
+            other_axis(axis, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            })
+            .0,
+        ); // offset to go to the next track
         let layout = (self.s.rail_layout)(
             statspec,
             crate::newgrf_station::get_station_layout_key(numtracks, plat_len),
@@ -3126,13 +3132,13 @@ impl Ctx<'_> {
             unit_cost,
         } = context;
         let invalid_dirs = if is_drive_through {
-            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
+            let dir = axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }));
+            });
             DiagDirections::from_element(dir)
-                | DiagDirections::from_element(DiagDirection(reverse_diag_dir(dir.0, |ok| {
+                | DiagDirections::from_element(reverse_diag_dir(dir, |ok| {
                     crate::movement::native_assert(self.shared, ok);
-                })))
+                }))
         } else {
             DiagDirections::from_element(ddir)
         };
@@ -3348,9 +3354,9 @@ impl Ctx<'_> {
         if !is_drive_through && road_type_is_tram(rt.0) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let axis = Axis(diag_dir_to_axis(ddir.0, |ok| {
+        let axis = diag_dir_to_axis(ddir, |ok| {
             crate::movement::native_assert(self.shared, ok);
-        }));
+        });
         self.check_if_authority_allows_new_station(cost, tile, flags);
         if !cost.ok() {
             return;
@@ -4731,10 +4737,6 @@ struct CmdBuildDock {
 }
 
 impl Ctx<'_> {
-    /// `t + TileOffsByDiagDir(d)`.
-    fn tile_add_by_diag_dir(&self, t: TileIndex, d: DiagDirection) -> TileIndex {
-        TileIndex(self.map().add_diag(t.0, d.0))
-    }
     /// `IsPossibleDockingTile`.
     fn is_possible_docking_tile(&self, t: TileIndex) -> bool {
         match TileType((self.shared.tile_type)(t.0)) {
@@ -4754,7 +4756,9 @@ impl Ctx<'_> {
     fn check_for_docking_tile(&self, t: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -4813,7 +4817,9 @@ impl Ctx<'_> {
     /// `RemoveDockingTile`.
     fn remove_docking_tile(&self, t: TileIndex) {
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -4840,7 +4846,11 @@ impl Ctx<'_> {
     fn clear_docking_tiles_checking_neighbours(&self, tile: TileIndex) {
         /* Clear and maybe re-set docking tile */
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let docking_tile = self.tile_add_by_diag_dir(tile, DiagDirection(d));
+            let docking_tile = self
+                .map()
+                .tile_add_by_diag_dir(tile, DiagDirection(d), |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                });
             if !(self.shared.tile_valid)(docking_tile.0) {
                 continue;
             }
@@ -4863,7 +4873,9 @@ impl Ctx<'_> {
     ) {
         let world = crate::map_func::World::new(self.shared);
         self.area_add((self.s.ship_station_area)(st), tile);
-        let flat_tile = self.tile_add_by_diag_dir(tile, direction);
+        let flat_tile = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         self.area_add((self.s.ship_station_area)(st), flat_tile);
         crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
             &*self.s.lifecycle
@@ -4917,13 +4929,13 @@ impl Ctx<'_> {
         {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let direction = DiagDirection(get_inclined_slope_direction(world.tile_slope(tile.0)));
+        let direction = get_inclined_slope_direction(Slope(world.tile_slope(tile.0)));
         if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }
-        let direction = DiagDirection(reverse_diag_dir(direction.0, |ok| {
+        let direction = reverse_diag_dir(direction, |ok| {
             crate::movement::native_assert(self.shared, ok);
-        }));
+        });
         /* Docks cannot be placed on rapids */
         if (self.shared.has_water_ground)(tile.0) {
             return cost.error(self.s.strings.unsuitable);
@@ -4945,7 +4957,9 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         cost.add_money(ret.money());
-        let tile_cur = self.tile_add_by_diag_dir(tile, direction);
+        let tile_cur = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur.0) {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -4955,9 +4969,10 @@ impl Ctx<'_> {
             StationType::Dock,
             StationGfx(
                 GFX_DOCK_BASE_WATER_PART
-                    + diag_dir_to_axis(direction.0, |ok| {
+                    + diag_dir_to_axis(direction, |ok| {
                         crate::movement::native_assert(self.shared, ok);
-                    }),
+                    })
+                    .0,
             ),
         );
         if !ret.ok() {
@@ -4973,7 +4988,9 @@ impl Ctx<'_> {
         if add_cost {
             cost.add_money(ret.money());
         }
-        let tile_cur = self.tile_add_by_diag_dir(tile_cur, direction);
+        let tile_cur = self.map().tile_add_by_diag_dir(tile_cur, direction, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
             || !world.tile_flat(tile_cur.0)
         {
@@ -5028,7 +5045,9 @@ impl Ctx<'_> {
             return t;
         }
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.tile_add_by_diag_dir(t, DiagDirection(d));
+            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if !(self.shared.tile_valid)(tile.0) {
                 continue;
             }
@@ -5036,7 +5055,12 @@ impl Ctx<'_> {
                 continue;
             }
             if world.get_station_gfx(tile).0 < GFX_DOCK_BASE_WATER_PART
-                && self.tile_add_by_diag_dir(tile, world.get_dock_direction(tile)) == t
+                && self
+                    .map()
+                    .tile_add_by_diag_dir(tile, world.get_dock_direction(tile), |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    })
+                    == t
             {
                 return tile;
             }
@@ -5118,9 +5142,10 @@ impl Ctx<'_> {
         if tile1 == TileIndex::INVALID {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let tile2 = self.tile_add_by_diag_dir(
+        let tile2 = self.map().tile_add_by_diag_dir(
             tile1,
             crate::map_func::World::new(self.shared).get_dock_direction(tile1),
+            |ok| crate::movement::native_assert(self.shared, ok),
         );
         unsafe {
             self.command.no_vehicle(cost.0, tile1.0);
@@ -5588,7 +5613,7 @@ impl Ctx<'_> {
             /* TODO: If you implement newgrf callback 149 'land slope check', you have to decide what to do with it here.
              *       TTDP does not call it.
              */
-            && (self.shared.tile_max_z)(tile.0) == z_new.wrapping_add(get_slope_max_z(tileh_new.0))
+            && (self.shared.tile_max_z)(tile.0) == z_new.wrapping_add(get_slope_max_z(tileh_new))
         {
             let allowed = match StationType((self.shared.station_type)(tile.0).0) {
                 StationType::RailWaypoint | StationType::Rail => (self.s.autoslope_axis)(

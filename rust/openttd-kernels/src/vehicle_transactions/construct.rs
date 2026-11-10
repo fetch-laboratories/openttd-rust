@@ -136,7 +136,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
         );
     }
     /* Initialize cached values for realistic acceleration. */
-    if r.road_acceleration_model() != 0 {
+    if r.road_acceleration_model() != crate::vehicle_type::AccelerationModel::AM_ORIGINAL {
         crate::ground_vehicle::cargo_changed(
             r.road_ground.physics,
             unsafe { vehicle_ref(v, r.common.vehicles) }.first(),

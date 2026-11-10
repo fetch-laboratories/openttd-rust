@@ -30,28 +30,26 @@ use crate::tree_map::TREE_GROUND_SHORE as GROUND_SHORE;
 
 use crate::landscape_type::{ARCTIC, TROPIC};
 const TOYLAND: u8 = 3;
-const GROUND_GRASS: u8 = 0;
-const GROUND_ROUGH: u8 = 1;
-const GROUND_SNOW_DESERT: u8 = 2;
-const GROUND_ROUGH_SNOW: u8 = 4;
+use crate::tree_map::{
+    TREE_GROUND_GRASS as GROUND_GRASS, TREE_GROUND_ROUGH as GROUND_ROUGH,
+    TREE_GROUND_ROUGH_SNOW as GROUND_ROUGH_SNOW, TREE_GROUND_SNOW_DESERT as GROUND_SNOW_DESERT,
+};
 const ZONE_NORMAL: u8 = 0;
 const ZONE_DESERT: u8 = 1;
 const ZONE_RAINFOREST: u8 = 2;
-const GROWING1: u8 = 0;
-const GROWN: u8 = 3;
-const DEAD: u8 = 6;
-const TREE_RAINFOREST: u8 = 20;
-const TREE_CACTUS: u8 = 27;
-const TREE_SUB_TROPICAL: u8 = 28;
-const TREE_TOYLAND: u8 = 32;
-const TREE_INVALID: u8 = 255;
+const GROWING1: u8 = crate::tree_map::TreeGrowthStage::Growing1.0;
+const GROWN: u8 = crate::tree_map::TreeGrowthStage::Grown.0;
+const DEAD: u8 = crate::tree_map::TreeGrowthStage::Dead.0;
+const TREE_RAINFOREST: u8 = crate::tree_map::TreeType::TREE_RAINFOREST.0;
+const TREE_CACTUS: u8 = crate::tree_map::TreeType::TREE_CACTUS.0;
+const TREE_SUB_TROPICAL: u8 = crate::tree_map::TreeType::TREE_SUB_TROPICAL.0;
+const TREE_TOYLAND: u8 = crate::tree_map::TreeType::TREE_TOYLAND.0;
+const TREE_INVALID: u8 = crate::tree_map::TreeType::TREE_INVALID.0;
 const ETP_NO_SPREAD: u8 = 0;
 const ETP_SPREAD_RAINFOREST: u8 = 1;
 const ETP_SPREAD_ALL: u8 = 2;
 const ETP_NO_GROWTH_NO_SPREAD: u8 = 3;
-use crate::tree_cmd::TP_NONE;
-const TP_ORIGINAL: u8 = 1;
-const TP_IMPROVED: u8 = 2;
+use crate::settings_type::{TP_IMPROVED, TP_NONE, TP_ORIGINAL};
 const DEFAULT_TREE_STEPS: u32 = 1000;
 const DEFAULT_RAINFOREST_TREE_STEPS: u32 = 15000;
 const EDITOR_TREE_DIV: i32 = 5;
@@ -298,14 +296,14 @@ impl Trees<'_> {
                 };
                 if p.tile_type == MP_CLEAR {
                     p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
-                    p.ground = crate::clear_map::get_clear_ground(m, tile)?;
-                    p.density = crate::clear_map::get_clear_density(m, tile)?;
-                    p.snow = crate::clear_map::is_snow_tile(m, tile)?;
+                    p.ground = crate::clear_map::get_clear_ground_raw(m, tile)?;
+                    p.density = crate::clear_map::get_clear_density_raw(m, tile)?;
+                    p.snow = crate::clear_map::is_snow_tile_raw(m, tile)?;
                 } else if p.tile_type == MP_WATER {
                     p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
                     p.coast = crate::water_map::is_coast(m, tile)? && {
                         let width = self.s.map().size_x();
-                        !crate::slope_func::is_slope_with_one_corner_raised(
+                        !crate::slope_func::is_slope_with_one_corner_raised_raw(
                             crate::tile_map::get_tile_slope(m, tile, width, m.count() / width)?,
                         )
                     };
@@ -328,19 +326,19 @@ impl Trees<'_> {
             .unwrap_or_else(|| pick((self.t.tree_observation)(tile)))
     }
     fn ground(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_ground, |t| t.ground)
+        self.field(tile, crate::tree_map::get_tree_ground_raw, |t| t.ground)
     }
     fn density(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_density, |t| t.density)
+        self.field(tile, crate::tree_map::get_tree_density_raw, |t| t.density)
     }
     fn species(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_type, |t| t.species)
+        self.field(tile, crate::tree_map::get_tree_type_raw, |t| t.species)
     }
     fn count(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_count, |t| t.count)
+        self.field(tile, crate::tree_map::get_tree_count_raw, |t| t.count)
     }
     fn growth(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tree_map::get_tree_growth, |t| t.growth)
+        self.field(tile, crate::tree_map::get_tree_growth_raw, |t| t.growth)
     }
     fn zone(&self, tile: u32) -> u8 {
         self.field(tile, crate::tile_map::get_tropic_zone, |t| t.zone)
@@ -1145,7 +1143,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
             continue;
         }
         if world.kind(target) == MP_TREES
-            && world.asserted(|m| crate::tree_map::get_tree_count(m, target)) < 4
+            && world.asserted(|m| crate::tree_map::get_tree_count_raw(m, target)) < 4
         {
             (services.add_count)(target, 1);
             (services.set_growth)(target, GROWING1);
@@ -1167,7 +1165,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         area.expand(radius.cast_signed(), map, size_y);
         for target in area.tiles(map) {
             if world.kind(target) != crate::tile_type::MP_VOID
-                && map.distance_square(tile, target) < radius.wrapping_mul(radius)
+                && map.distance_square_raw(tile, target) < radius.wrapping_mul(radius)
             {
                 (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
             }

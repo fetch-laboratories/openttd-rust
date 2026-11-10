@@ -100,35 +100,37 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     match map.read(tile) {
         0 => {
             use crate::clear_map::{
-                get_clear_counter, get_clear_density, get_clear_ground, get_fence, get_field_type,
-                get_industry_index_of_field, is_snow_tile, require_field,
+                get_clear_counter_raw, get_clear_density_raw, get_clear_ground_raw, get_fence_raw,
+                get_field_type, get_industry_index_of_field_raw, is_snow_tile_raw,
+                require_field_raw,
             };
-            if is_snow_tile(&map, tile) != Some((c.snow)(tile))
-                || get_clear_ground(&map, tile) != Some((s.clear_ground)(tile).0)
-                || get_clear_density(&map, tile).map(u32::from) != Some((c.density)(tile))
-                || get_clear_counter(&map, tile).map(u32::from) != Some((c.counter)(tile))
+            if is_snow_tile_raw(&map, tile) != Some((c.snow)(tile))
+                || get_clear_ground_raw(&map, tile) != Some((s.clear_ground)(tile).0)
+                || get_clear_density_raw(&map, tile).map(u32::from) != Some((c.density)(tile))
+                || get_clear_counter_raw(&map, tile).map(u32::from) != Some((c.counter)(tile))
             {
                 return u8::from(false);
             }
-            if get_clear_ground(&map, tile) == Some(crate::clear_map::CLEAR_FIELDS) {
+            if get_clear_ground_raw(&map, tile) == Some(crate::clear_map::CLEAR_FIELDS) {
                 let fences = (c.fences)(tile);
                 let field = (c.field)(tile);
                 if [fences.ne, fences.se, fences.sw, fences.nw]
                     .into_iter()
                     .zip(0_u8..)
                     .any(|(expected, dir)| {
-                        require_field(&map, tile).map(|fields| get_fence(&fields, dir))
+                        require_field_raw(&map, tile).map(|fields| get_fence_raw(&fields, dir))
                             != Some(expected)
                     })
-                    || require_field(&map, tile).map(|fields| get_field_type(&fields))
+                    || require_field_raw(&map, tile).map(|fields| get_field_type(&fields))
                         != Some(field.field_type)
-                    || require_field(&map, tile).map(|fields| get_industry_index_of_field(&fields))
+                    || require_field_raw(&map, tile)
+                        .map(|fields| get_industry_index_of_field_raw(&fields))
                         != Some(field.industry)
                 {
                     return u8::from(false);
                 }
             } else if allocation.assertions
-                && require_field(&map, tile)
+                && require_field_raw(&map, tile)
                     .map(|fields| get_field_type(&fields))
                     .is_some()
             {
@@ -137,14 +139,15 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         }
         4 => {
             use crate::tree_map::{
-                get_tree_count, get_tree_density, get_tree_ground, get_tree_growth, get_tree_type,
+                get_tree_count_raw, get_tree_density_raw, get_tree_ground_raw, get_tree_growth_raw,
+                get_tree_type_raw,
             };
             let tree = (trees.tree_observation)(tile);
-            if get_tree_ground(&map, tile) != Some(tree.ground)
-                || get_tree_density(&map, tile) != Some(tree.density)
-                || get_tree_type(&map, tile) != Some(tree.species)
-                || get_tree_count(&map, tile) != Some(tree.count)
-                || get_tree_growth(&map, tile) != Some(tree.growth)
+            if get_tree_ground_raw(&map, tile) != Some(tree.ground)
+                || get_tree_density_raw(&map, tile) != Some(tree.density)
+                || get_tree_type_raw(&map, tile) != Some(tree.species)
+                || get_tree_count_raw(&map, tile) != Some(tree.count)
+                || get_tree_growth_raw(&map, tile) != Some(tree.growth)
             {
                 return u8::from(false);
             }
@@ -155,14 +158,14 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     u8::from(
         (!allocation.assertions
             || kind == 0
-            || crate::clear_map::is_snow_tile(&map, tile).is_none())
+            || crate::clear_map::is_snow_tile_raw(&map, tile).is_none())
             && (!allocation.assertions
                 || kind == 4
-                || crate::tree_map::get_tree_type(&map, tile).is_none())
+                || crate::tree_map::get_tree_type_raw(&map, tile).is_none())
             && (!allocation.assertions
                 || kind == 6
                 || crate::water_map::is_coast(&map, tile).is_none())
-            && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
+            && (allocation.assertions || crate::clear_map::is_snow_tile_raw(&map, tile).is_some())
             && crate::movement::native_test_support::map_read_probe(
                 allocation, s, tile, mutate, observe,
             ),

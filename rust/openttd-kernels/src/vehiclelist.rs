@@ -39,6 +39,13 @@ pub struct VehicleListIdentifier {
     /// A vehicle list type specific index.
     pub index: u32,
 }
+impl VehicleListIdentifier {
+    /// `VehicleListIdentifier::Valid`.
+    #[must_use]
+    pub fn valid(&self) -> bool {
+        self.list_type < VehicleListType::VLT_END
+    }
+}
 
 /// `VL_STANDARD`.
 pub const VL_STANDARD: u8 = VehicleListType::VL_STANDARD.0;

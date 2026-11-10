@@ -202,7 +202,7 @@ impl crate::map_func::World<'_> {
     pub(crate) fn crossing_rail_bits(&self, t: u32) -> u8 {
         self.check(self.level_crossing(t));
         let check = |ok| self.check(ok);
-        let axis = crate::direction_func::other_axis(self.crossing_road_axis(t), check);
+        let axis = crate::direction_func::other_axis_raw(self.crossing_road_axis(t), check);
         crate::track_func::axis_to_track_bits(axis, check)
     }
     /// `GetAllRoadBits`.

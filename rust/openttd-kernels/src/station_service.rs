@@ -419,6 +419,8 @@ pub struct LoadingWait {
 pub struct OrderDestination {
     pub(crate) destination: u16,
     pub(crate) kind: crate::vehicle::OrderType,
+    /// `GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)`.
+    pub(crate) nearest_depot: bool,
 }
 #[repr(C)]
 pub struct TruncatedSource {
@@ -2552,6 +2554,7 @@ crate::abi::layouts! {
     "OpenTTDOrderDestination" ["probe"] => OrderDestination {
         destination,
         kind,
+        nearest_depot,
     };
     "OpenTTDTruncatedSource" ["probe"] => TruncatedSource {
         amount,

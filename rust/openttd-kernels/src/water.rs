@@ -17,8 +17,8 @@
 )]
 use crate::services::TileTypeAccess;
 use crate::slope_func::{
-    is_inclined_slope, is_slope_with_one_corner_raised, is_slope_with_three_corners_raised,
-    is_steep_slope,
+    is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
+    is_slope_with_three_corners_raised_raw, is_steep_slope_raw,
 };
 
 /// `RIVER_OFFSET_DESERT_DISTANCE`: diameter of the non-desert search around a river tile.
@@ -106,7 +106,7 @@ pub(crate) unsafe fn restore(
             }
             class = 3;
         }
-        if class != 2 || !is_inclined_slope(slope) {
+        if class != 2 || !is_inclined_slope_raw(slope) {
             class = 3;
         }
     }
@@ -252,9 +252,11 @@ impl<'a> World<'a> {
                     .types
                     .asserted(self.s, |m| crate::water_map::is_coast(m, tile))
                 {
-                    return if is_slope_with_one_corner_raised(self.types.asserted(self.s, |m| {
-                        crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
-                    })) {
+                    return if is_slope_with_one_corner_raised_raw(
+                        self.types.asserted(self.s, |m| {
+                            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+                        }),
+                    ) {
                         1
                     } else {
                         3
@@ -277,7 +279,7 @@ impl<'a> World<'a> {
                     .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
                     == 13
                 {
-                    if is_slope_with_one_corner_raised(self.types.asserted(self.s, |m| {
+                    if is_slope_with_one_corner_raised_raw(self.types.asserted(self.s, |m| {
                         crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
                     })) {
                         1
@@ -291,7 +293,7 @@ impl<'a> World<'a> {
             4 => {
                 if self
                     .types
-                    .asserted(self.s, |m| crate::tree_map::get_tree_ground(m, tile))
+                    .asserted(self.s, |m| crate::tree_map::get_tree_ground_raw(m, tile))
                     == 3
                 {
                     3
@@ -332,7 +334,7 @@ impl<'a> World<'a> {
             crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
         });
         let mut tracks = (self.r().tracks)(tile).0;
-        if is_slope_with_one_corner_raised(slope) {
+        if is_slope_with_one_corner_raised_raw(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
             let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
                 crate::movement::native_assert(self.s, ok);
@@ -374,8 +376,8 @@ impl<'a> World<'a> {
                 Slope(slope),
             );
             if foundation.z == 0
-                && (is_steep_slope(foundation.slope.0)
-                    || is_slope_with_three_corners_raised(foundation.slope.0))
+                && (is_steep_slope_raw(foundation.slope.0)
+                    || is_slope_with_three_corners_raised_raw(foundation.slope.0))
             {
                 flooded = true;
                 (self.r().set_ground)(tile, RailGroundType(13));
@@ -499,7 +501,7 @@ impl<'a> World<'a> {
                         false
                     }
                 }
-                4 if !is_slope_with_one_corner_raised(slope) => {
+                4 if !is_slope_with_one_corner_raised_raw(slope) => {
                     (self.w.set_tree_ground)(
                         tile,
                         TreeGround(crate::tree_map::TREE_GROUND_SHORE),
@@ -597,7 +599,7 @@ impl<'a> World<'a> {
                     if kind == 4
                         && self
                             .types
-                            .asserted(self.s, |m| crate::tree_map::get_tree_ground(m, target))
+                            .asserted(self.s, |m| crate::tree_map::get_tree_ground_raw(m, target))
                             == 3
                     {
                         continue;

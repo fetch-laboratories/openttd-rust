@@ -388,7 +388,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.order_destination = [](OpenTTDOrderList *handle, size_t index) noexcept -> OpenTTDOrderDestination {
 		const Order *order = &static_cast<OrderList *>(handle)->GetOrders()[index];
-		return {order->GetDestination().base(), order->GetType()};
+		return {order->GetDestination().base(), order->GetType(), order->GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)};
 	},
 	.order_vehicle = [](OpenTTDOrderList *handle) noexcept -> OpenTTDVehicle * {
 		return RustVehicle(static_cast<OrderList *>(handle)->GetFirstSharedVehicle());

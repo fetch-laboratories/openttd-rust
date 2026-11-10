@@ -55,7 +55,7 @@ impl RoadTypeFlags {
         self.0 & (1 << element.0) != 0
     }
 }
-use crate::direction_func::dir_to_diag_dir as diag;
+use crate::direction_func::dir_to_diag_dir_raw as diag;
 use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
@@ -873,7 +873,7 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self.map.add_diag(
+        let tile = self.map.tile_add_by_diag_dir_raw(
             s.tile,
             diag(s.direction, |ok| {
                 crate::movement::native_assert(self.ss, ok);
@@ -1492,7 +1492,7 @@ impl Game<'_> {
         );
         let entry = rd.0 & 3;
         if rd.0 & 128 != 0 {
-            let mut tile = self.map.add_diag(s.tile, entry);
+            let mut tile = self.map.tile_add_by_diag_dir_raw(s.tile, entry);
             let mut dir = if s.front {
                 if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)
@@ -1731,7 +1731,7 @@ impl Game<'_> {
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile) {
-                    let next = self.map.add_dir(s.tile, s.direction);
+                    let next = self.map.tile_add_by_dir_raw(s.tile, s.direction);
                     if crate::road_stop::continuation(self.ss, s.tile, next)
                         && self.has_road(v.v, next)
                     {
