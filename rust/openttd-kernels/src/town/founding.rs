@@ -677,6 +677,10 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             observed!((f.s.update_virt)(town.shell));
         }
         if !observed!((f.leaves.environment.editor)()) {
+            // 't' can't be nullptr since 'random' is false outside scenedit
+            let world = crate::map_func::World::new(f.shared);
+            world.assert_with(|| !random_location);
+
             observed!((f.s.founded_news)(town.id, tile));
             observed!((f.s.founded_events)(town.id));
         }
