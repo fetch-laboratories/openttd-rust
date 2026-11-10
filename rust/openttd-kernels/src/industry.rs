@@ -517,7 +517,6 @@ pub struct Services {
     pub economy_month: unsafe extern "C" fn() -> u8,
     pub economy_year: unsafe extern "C" fn() -> i32,
     pub days_since_last_month: unsafe extern "C" fn() -> u32,
-    pub landscape: unsafe extern "C" fn() -> u8,
     pub economy_type: unsafe extern "C" fn() -> u8,
     pub fund_only: unsafe extern "C" fn() -> bool,
     pub deity: unsafe extern "C" fn() -> bool,
@@ -2763,7 +2762,6 @@ crate::abi::layouts! {
         economy_month,
         economy_year,
         days_since_last_month,
-        landscape,
         economy_type,
         fund_only,
         deity,
@@ -3061,9 +3059,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_days_since_last_month() -> u32 {
         unreachable!("unexpected Services::days_since_last_month")
     }
-    extern "C" fn unexpected_landscape() -> u8 {
-        unreachable!("unexpected Services::landscape")
-    }
     extern "C" fn unexpected_economy_type() -> u8 {
         unreachable!("unexpected Services::economy_type")
     }
@@ -3108,7 +3103,6 @@ mod production_policy_tests {
             economy_month: unexpected_economy_month,
             economy_year: unexpected_economy_year,
             days_since_last_month: unexpected_days_since_last_month,
-            landscape: unexpected_landscape,
             economy_type: unexpected_economy_type,
             fund_only: unexpected_fund_only,
             deity: unexpected_deity,

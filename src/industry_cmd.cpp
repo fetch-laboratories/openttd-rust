@@ -870,7 +870,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.economy_month = []() noexcept -> uint8_t { return TimerGameEconomy::month; },
 	.economy_year = []() noexcept -> int32_t { return TimerGameEconomy::year.base(); },
 	.days_since_last_month = []() noexcept -> uint32_t { return TimerGameEconomy::days_since_last_month; },
-	.landscape = OpenTTDLandscapeValue,
 	.economy_type = []() noexcept -> uint8_t { return _settings_game.economy.type; },
 
 	.fund_only = []() noexcept -> bool { return _settings_game.difficulty.industry_density == ID_FUND_ONLY; },

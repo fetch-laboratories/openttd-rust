@@ -148,7 +148,6 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*economy_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_month);
 	int32_t (*economy_year)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_year);
 	uint32_t (*days_since_last_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(days_since_last_month);
-	uint8_t (*landscape)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(landscape);
 	uint8_t (*economy_type)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_type);
 	bool (*fund_only)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(fund_only);
 	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
