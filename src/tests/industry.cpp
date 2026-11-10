@@ -27,9 +27,8 @@
 #include "../industrytype.h"
 #include "../water_map.h"
 #include "../core/backup_type.hpp"
-#include "../settings_type.h"
-#include "../core/backup_type.hpp"
 #include "../economy_func.h"
+#include "../settings_type.h"
 #include <thread>
 extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
