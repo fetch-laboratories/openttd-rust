@@ -269,6 +269,31 @@ impl Game<'_> {
         (self.leaves.trackdir)(self.context, id) as u8
     }
 }
+/// `Train::ReserveTrackUnderConsist`: tries to reserve track under whole train consist.
+fn reserve_track_under_consist(g: &Game, id: Handle) {
+    let mut part = id;
+    while part != Handle::NONE {
+        let v_tile: u32 = part.vehicle().tile();
+        let track = part.get_track() as u8;
+        match track {
+            WORMHOLE => {
+                g.reserve_track(
+                    v_tile,
+                    (g.leaves.diag_track)(
+                        g.context,
+                        part,
+                        crate::map_func::World::new(g.shared()).tunnel_bridge_dir(v_tile),
+                    ) as u8,
+                );
+            }
+            DEPOT => {}
+            _ => {
+                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
+            }
+        }
+        part = part.next();
+    }
+}
 fn single(bits: u16) -> bool {
     bits & bits.wrapping_sub(1) == 0
 }
@@ -283,7 +308,7 @@ fn pbs(step: Search) -> Pbs {
 fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
     let dir = g.dir(id, td);
     if is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE) {
-        if (g.shared().tunnel_bridge_direction)(tile) == dir ^ 2 {
+        if crate::map_func::World::new(g.shared()).tunnel_bridge_dir(tile) == dir ^ 2 {
             let end = (g.leaves.other_end)(g.context, id, tile) as u32;
             if g.tunnel_free(id, tile, end) {
                 (g.leaves.set_tunnel)(g.context, id, tile, 0);
@@ -319,7 +344,9 @@ fn free(g: &Game, id: Handle) {
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
         || (is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE)));
     let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        (g.shared().station_index)(tile)
+        crate::map_func::World::new(g.shared())
+            .get_station_index(crate::tile_type::TileIndex(tile))
+            .0
     } else {
         u16::MAX
     };
@@ -375,7 +402,11 @@ fn free(g: &Game, id: Handle) {
             }
         }
         if free_tile
-            || (!(ft.is_station && (g.shared().station_index)(ft.new_tile.0) == station)
+            || (!(ft.is_station
+                && crate::map_func::World::new(g.shared())
+                    .get_station_index(crate::tile_type::TileIndex(ft.new_tile.0))
+                    .0
+                    == station)
                 && !ft.is_tunnel
                 && !ft.is_bridge)
         {
@@ -696,7 +727,10 @@ fn choose(
         || (v_order != OT_GOTO_DEPOT
             && if v_order == OT_GOTO_STATION {
                 ((g.leaves.is_station)(g.context, id, v_tile) != 0)
-                    && v_destination == (g.shared().station_index)(v_tile)
+                    && v_destination
+                        == crate::map_func::World::new(g.shared())
+                            .get_station_index(crate::tile_type::TileIndex(v_tile))
+                            .0
             } else {
                 v_tile == v_dest
             })
@@ -873,7 +907,10 @@ fn check_next(g: &Game, id: Handle) {
         }
         OT_GOTO_WAYPOINT => {
             if ((g.leaves.is_waypoint)(g.context, id, v_tile) != 0)
-                && (g.shared().station_index)(v_tile) == v_destination
+                && crate::map_func::World::new(g.shared())
+                    .get_station_index(crate::tile_type::TileIndex(v_tile))
+                    .0
+                    == v_destination
             {
                 (g.leaves.process_orders)(id);
             }
@@ -883,7 +920,12 @@ fn check_next(g: &Game, id: Handle) {
     }
     let tile = id.vehicle().tile();
     if ((g.leaves.is_station)(g.context, id, tile) != 0)
-        && g.order_stop(id, (g.shared().station_index)(tile))
+        && g.order_stop(
+            id,
+            crate::map_func::World::new(g.shared())
+                .get_station_index(crate::tile_type::TileIndex(tile))
+                .0,
+        )
     {
         return;
     }
@@ -1050,28 +1092,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
     context: *mut std::ffi::c_void,
 ) {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
-    let mut part = id;
-    while part != Handle::NONE {
-        let v_tile: u32 = part.vehicle().tile();
-        let track = part.get_track() as u8;
-        match track {
-            WORMHOLE => {
-                g.reserve_track(
-                    v_tile,
-                    (g.leaves.diag_track)(
-                        g.context,
-                        part,
-                        (g.shared().tunnel_bridge_direction)(v_tile),
-                    ) as u8,
-                );
-            }
-            DEPOT => {}
-            _ => {
-                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
-            }
-        }
-        part = part.next();
-    }
+    reserve_track_under_consist(&g, id);
 }
 
 crate::abi::layouts! {

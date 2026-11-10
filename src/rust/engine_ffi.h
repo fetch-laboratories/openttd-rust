@@ -38,7 +38,6 @@ struct OpenTTDEngineServices {
 	uint16_t (*display_variant)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(display_variant);
 	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
 	OpenTTDEngineStartSettings (*start_settings)() noexcept OPENTTD_SERVICE_DEFAULT(start_settings);
-	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*road_limit)() noexcept OPENTTD_SERVICE_DEFAULT(road_limit);
 	uint16_t (*ship_limit)() noexcept OPENTTD_SERVICE_DEFAULT(ship_limit);
 	uint16_t (*aircraft_limit)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_limit);
