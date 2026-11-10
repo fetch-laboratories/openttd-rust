@@ -6,7 +6,7 @@
 # Conversion: one case per fixture input in Run() order (4 directions x lengths/populations, slopes, continuation
 # tiles, invalid tiles, crossing setting, command failures), stored as "result effects draws" then each traced service
 # call joined by " | ": 24 road-type query, 1 road-build test (town tile bits type), 5 tunnel build (tile type execute).
-# Recipe: tools/oracle-recipes/tunnel.patch applied to that fixture; `python3 tools/oracle-recapture-comparison.py tunnel` rebuilds
+# Recipe: tools/oracle-recipes/tunnel.patch applied to that fixture; `python3 tools/oracle-capture.py tunnel` rebuilds
 # the capture against the pinned sources only and checks this file byte for byte.
 @@ tunnel
 0 0 0 | 24 0 0 0 0 0 0

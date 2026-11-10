@@ -7,9 +7,10 @@ committed oracle. The program is built at -O0 and at -O2 -DNDEBUG against the
 pinned sources only; both streams must match before conversion. No candidate
 header, archive or library is compiled or linked.
 
-    python3 tools/oracle-recapture-comparison.py [name ...]
+    python3 tools/oracle-capture.py [name ...]
 
-tools/run-comparisons.py runs it with the other reference comparisons.
+A recipe records how an oracle was made; it is provenance, not a CI check. A PR
+that changes an oracle, a recipe or the pin reruns it for the oracles it touches.
 """
 
 import argparse
@@ -333,7 +334,8 @@ def capture(name: str) -> bool:
             file=sys.stderr,
         )
         return False
-    probe.passed(f"Oracle recapture {name}", printed_rows=len(printed[0].splitlines()))
+    rows = len(printed[0].splitlines())
+    print(f"{name}: recapture matches {oracle.relative_to(ROOT)} ({rows} printed rows)")
     return True
 
 

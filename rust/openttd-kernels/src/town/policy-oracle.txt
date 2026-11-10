@@ -13,7 +13,7 @@
 # PASS 36 unchanged-reference percent cases
 # Conversion (#736 oracle compaction): each kind is an oracle.rs section of its outputs (the fields after
 # => above), in the original case order; the test regenerates the inputs before =>, so none is stored.
-# Recipe: tools/oracle-recipes/policy.patch applied to that fixture; `python3 tools/oracle-recapture-comparison.py policy`
+# Recipe: tools/oracle-recipes/policy.patch applied to that fixture; `python3 tools/oracle-capture.py policy`
 # rebuilds the capture against the pinned sources only and checks this file byte for byte.
 @@ H
 0 0

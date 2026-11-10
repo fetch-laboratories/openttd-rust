@@ -635,14 +635,6 @@
   ],
   "compare-integers.py": [
    "Integer comparison passed: 5312 API cases, 6 fatal diagnostic cases, 1624 builder formats, 13 fixed sink alias cases, 103 consumer byte gaps, 10 fatal timing gaps, 4 malformed strgen pragmas"
-  ],
-  "oracle-recapture-comparison.py": [
-   "Oracle recapture policy passed: 16658 printed rows",
-   "Oracle recapture production passed: 4480 printed rows",
-   "Oracle recapture tunnel passed: 1509 printed rows",
-   "Oracle recapture tile_loop passed: 1471 printed rows",
-   "Oracle recapture pool passed: 3 printed rows",
-   "Oracle recapture income passed: 185285 printed rows"
   ]
  },
  "masks": [
