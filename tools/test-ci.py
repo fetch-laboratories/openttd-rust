@@ -832,6 +832,14 @@ class PolicyTests(unittest.TestCase):
         self.assertTrue(steps)
         for step in steps:
             self.assertFalse(str(step.get("uses", "")).startswith("./"), step)
+        # Its package install is the shared action's script, copied, so the two
+        # cannot drift: the copy once lost the action's index and dpkg handling.
+        (shared,) = yaml.safe_load(
+            (ROOT / ".github/actions/apt-install/action.yml").read_text()
+        )["runs"]["steps"]
+        (inline,) = (step for step in steps if "PACKAGES" in step.get("env", {}))
+        self.assertEqual(inline["run"], shared["run"])
+        self.assertEqual(set(inline["env"]), set(shared["env"]))
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
