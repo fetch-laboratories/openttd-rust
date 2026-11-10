@@ -1921,7 +1921,7 @@ impl<'a> Ctx<'a> {
             let town = crate::town::spatial::closest(
                 self.shared,
                 tile,
-                u32::from((self.authority.authority_distance)()),
+                u32::from(crate::town::authority_distance(self.shared)),
             );
             self.rating(ret, town, 0, u8::from(tt == MP_TUNNELBRIDGE));
             if !ret.ok() {

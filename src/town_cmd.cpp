@@ -303,8 +303,6 @@ static void ChangeTileOwner_Town(TileIndex, Owner, Owner)
 static_assert(Ticks::TOWN_GROWTH_TICKS == 70 && MAX_BRIDGES == 13);
 static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865);
-static uint8_t RustTown_growth_rate() noexcept { return _settings_game.economy.town_growth_rate; }
-static bool RustTown_allow_crossings() noexcept { return _settings_game.economy.allow_town_level_crossings; }
 static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(id))->flags.base(); }
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
@@ -499,10 +497,8 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
-		.growth_rate = RustTown_growth_rate,
 		.environment = GetRustEnvironmentServices(),
 		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
-		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
@@ -911,13 +907,11 @@ CommandCost CmdDoTownAction(DoCommandFlags flags, TownID town_id, TownAction act
  * @param flags Command flags. DoCommandFlag::NoTestTownRating is tested.
  * @return Succeeded or failed command.
  */
-static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.difficulty.town_council_tolerance; }
-static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
-		.council_tolerance = RustTownCouncilTolerance, .bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
-		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
+		.bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
+		.town_index = RustTownAuthorityIndex,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
 	return services;

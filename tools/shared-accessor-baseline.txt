@@ -48,10 +48,6 @@ src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
-src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
-src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
-src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1
-src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | IndustryCommandDeity | 2
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1
 write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1

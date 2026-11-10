@@ -21,12 +21,14 @@ crate::abi::shared_records! {
     }
     /// Process-lifetime addresses of canonical settings, shared by simulation owners.
     "OpenTTDSettingAddresses" ["settings"] => pub struct SettingAddresses {
+        pub allow_town_level_crossings: *const bool,
         pub allow_town_roads: *const bool,
         pub ambient: *const bool,
         pub climate: *const u8,
         pub competitor_interval: *const u16,
         pub construction_limits: *const ConstructionLimits,
         pub disable_elrails: *const bool,
+        pub dist_local_authority: *const u8,
         pub extra_tree_placement: *const u8,
         pub freeform_edges: *const bool,
         pub generation_seed: *const u32,
@@ -53,6 +55,8 @@ crate::abi::shared_records! {
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
         pub station_noise: *const bool,
+        pub town_council_tolerance: *const u8,
+        pub town_growth_rate: *const u8,
         pub train_acceleration_model: *const u8,
         pub tree_placer: *const u8,
         pub used_liveries: *const u64,
@@ -67,12 +71,14 @@ crate::abi::shared_records! {
 impl SettingAddresses {
     /// A catalog with every address null; tests fill the fields their entry reads.
     pub(crate) const NULL: Self = Self {
+        allow_town_level_crossings: std::ptr::null(),
         allow_town_roads: std::ptr::null(),
         ambient: std::ptr::null(),
         climate: std::ptr::null(),
         competitor_interval: std::ptr::null(),
         construction_limits: std::ptr::null(),
         disable_elrails: std::ptr::null(),
+        dist_local_authority: std::ptr::null(),
         extra_tree_placement: std::ptr::null(),
         freeform_edges: std::ptr::null(),
         generation_seed: std::ptr::null(),
@@ -99,6 +105,8 @@ impl SettingAddresses {
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
         station_noise: std::ptr::null(),
+        town_council_tolerance: std::ptr::null(),
+        town_growth_rate: std::ptr::null(),
         train_acceleration_model: std::ptr::null(),
         tree_placer: std::ptr::null(),
         used_liveries: std::ptr::null(),

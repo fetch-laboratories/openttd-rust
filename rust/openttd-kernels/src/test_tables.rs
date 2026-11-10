@@ -484,13 +484,11 @@ pub(crate) const COMMAND_COSTS: crate::services::CommandCostServices =
 /// `crate::town::Leaves` with every entry unreachable.
 pub(crate) const TOWN_LEAVES: crate::town::Leaves = crate::town::Leaves {
     map_log_x: unreachable0,
-    growth_rate: unreachable0,
     environment: crate::services::EnvironmentServices {
         editor: unreachable0,
         freeform_edges: unreachable0,
     },
     generating_world: unreachable0,
-    allow_crossings: unreachable0,
     climate: unreachable0,
     road_flags: unreachable1,
     house_availability: unreachable1,

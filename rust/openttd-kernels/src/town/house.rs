@@ -1039,7 +1039,7 @@ impl<'a> House<'a> {
             let current =
                 i32::from(unsafe { (*t.state).simulation.ratings[usize::from(company.0)] });
             if rating > current
-                && TownCouncilAttitudes((authority.council_tolerance)())
+                && TownCouncilAttitudes(crate::town::council_tolerance(self.s))
                     != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
             {
                 witness::hit(W_CLEAR_REFUSED);
