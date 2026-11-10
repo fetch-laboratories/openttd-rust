@@ -288,6 +288,7 @@ pub(crate) unsafe fn nested_move(
 }
 
 /// Arguments of `CmdBuildRailWagon`.
+#[derive(Clone, Copy)]
 pub(crate) struct CmdBuildRailWagon {
     pub tile: TileIndex,
     pub e: *const OpenTTDEngine,
@@ -412,6 +413,7 @@ fn add_rear_engine_to_multiheaded_train(x: Ctx, v: R) {
 }
 
 /// Arguments of `CmdBuildRailVehicle`.
+#[derive(Clone, Copy)]
 pub(crate) struct CmdBuildRailVehicle {
     pub tile: TileIndex,
     pub e: *const OpenTTDEngine,
@@ -1123,6 +1125,7 @@ pub(crate) unsafe fn cmd_move_rail_vehicle(
 }
 
 /// Arguments of `CmdSellRailWagon`.
+#[derive(Clone, Copy)]
 pub(crate) struct CmdSellRailWagon {
     pub t: *mut (),
     /// False sells only the dragged wagon/engine and any belonging rear engines.

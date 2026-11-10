@@ -39,6 +39,7 @@ pub struct Services {
     pub wrong_depot: u32,
 }
 /// Arguments of `CmdBuildRoadVehicle`.
+#[derive(Clone, Copy)]
 pub(crate) struct CmdBuildRoadVehicle {
     pub tile: TileIndex,
     pub e: *const OpenTTDEngine,
@@ -156,6 +157,7 @@ pub(crate) unsafe fn cmd_build_road_vehicle(
 }
 
 /// Arguments of `CmdBuildAircraft`.
+#[derive(Clone, Copy)]
 pub(crate) struct CmdBuildAircraft {
     pub tile: TileIndex,
     pub e: *const OpenTTDEngine,
