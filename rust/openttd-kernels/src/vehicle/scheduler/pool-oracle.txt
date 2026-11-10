@@ -1,0 +1,20 @@
+# Pinned original 14ec60f248547d4d062a1160f0fc26d742319888; cases of src/tests/vehicle_scheduler.cpp at bb473e4806
+# (retired by #736 F). Capture: original only, GCC 13.3.0 GNU/Linux x86_64, R=.local/reference/openttd: the unchanged
+# Pool, PoolItem and PoolIterator of $R/src/core/{pool_type.hpp,pool_func.hpp,pool_func.cpp} instantiated as
+# Pool<Item, PoolID<uint32_t, ItemIDTag, 0xFF000, 0xFFFFF>, 512>, Vehicle's pool parameters, with a minimal item
+# whose user-provided constructor keeps the pool-assigned index and whose destructor deletes its chain successor
+# (Vehicle::~Vehicle). Each case replays the fixture's mutation script with `for (T *v : T::Iterate())`;
+# c++ -std=c++20 -O0|-O2 -DNDEBUG -DUNIX -DFMT_HEADER_ONLY -I $R/src capture.cpp $R/src/core/pool_func.cpp.
+# Both streams are identical. g is the pool's data.size() when the script allocates past it (growth).
+# lifetime ("production deletion, reuse and growth order"): items left | visits over a mutating then a plain pass.
+# cursor ("live cursor equals unchanged PoolIterator"), with then without growth: first_unused after the first
+# visit's mutation | visits | 1 when iteration of the cleaned pool is empty.
+@@ lifetime
+5 | 0 2 3 4 g g+1 0 2 3 4 g+1
+%%
+0
+@@ cursor
+7 | 0 2 3 6 g g+1 | 1
+7 | 0 2 3 6 | 1
+%%
+0 1

@@ -82,6 +82,8 @@ pub const COMPANY_NEW_COMPANY: u8 = 254;
 
 /// `CompanyCtrlAction::CCA_NEW`.
 pub(crate) const CCA_NEW: u8 = 0;
+/// `CompanyCtrlAction::CCA_NEW_AI`.
+pub(crate) const CCA_NEW_AI: u8 = 1;
 /// `CompanyCtrlAction::CCA_DELETE`.
 pub(crate) const CCA_DELETE: u8 = 2;
 /// `CompanyRemoveReason::CRR_NONE`.

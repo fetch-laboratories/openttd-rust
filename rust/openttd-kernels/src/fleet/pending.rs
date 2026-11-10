@@ -132,12 +132,17 @@ crate::abi::layouts! {
     };
 }
 
+/// Serializes the tests that touch the process-wide pending map.
+#[cfg(test)]
+pub(crate) static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn pending_iteration_observes_later_insertions_and_overwrites() {
+        let _guard = TEST_LOCK.lock().unwrap();
         // This test retains no pending-map entry while reentering insertion.
         unsafe { openttd_rust_fleet_pending_clear() };
         for (id, leave) in [(5, true), (3, false), (7, true)] {

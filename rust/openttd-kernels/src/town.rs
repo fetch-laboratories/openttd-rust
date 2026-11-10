@@ -3327,10 +3327,12 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    pub(super) static GLOBAL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Serializes the tests that touch process-wide game state: the town owners and index,
+    /// the road and tram masks, the price table and the rating-test flag.
+    pub(crate) static GLOBAL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn gui_and_game_threads_share_original_globals() {
