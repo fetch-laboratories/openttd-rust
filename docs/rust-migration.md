@@ -62,13 +62,13 @@ cargo test --workspace --locked
 
 ### Quick cleanup checks
 
-Ordinary PR pushes and protected-branch pushes run the four Cargo checks above in `ci-quick.yml`, followed by the cleanup gates below. These checks preserve the original's casts and control flow; a faithful truncation must not become a checked conversion to reduce debt.
+Ordinary PR pushes and protected-branch pushes run the four Cargo checks above in `ci-quick.yml`, followed by the cleanup gates below. `python3 tools/preflight.py --base origin/rust-migration` runs all of them locally; the table says what each distinguishes. These checks preserve the original's casts and control flow; a faithful truncation must not become a checked conversion to reduce debt.
 
 | Command | Failure distinguished |
 | --- | --- |
 | `python3 tools/lint-ratchet.py clippy --base-ref origin/rust-migration` | Growth against the merge base for two force-warn Clippy lints: a new item over its threshold, or more or larger diagnostics on an item. Improvements never fail. |
 | `python3 tools/lint-ratchet.py ruff --base-ref origin/rust-migration` | The same ratchet for C901 and PLR0911/12/13/15 over `tools/`, with `--ignore-noqa`. |
-| `uvx --from ruff==0.16.8 ruff check tools/`, `uvx --from ruff==0.16.8 ruff format --check tools/`, `uvx ty@0.0.92 check`, then every `tools/test-*.py` | Quick's Python step 8, in that order. A PR that changes `tools/` runs all four locally before it is marked ready. CI stops at the first failure, so a `ty` error hides failures in the test scripts (#826). |
+| `uvx --from ruff==0.16.8 ruff check tools/`, `uvx --from ruff==0.16.8 ruff format --check tools/`, `uvx ty@0.0.92 check`, then every `tools/test-*.py` | Quick's Python step, in that order. CI stops at the first failure, so a `ty` error hides failures in the test scripts (#826); preflight runs every step. |
 | `python3 tools/lint-policy.py --base-ref origin/rust-migration` | Weaker selections, broader exclusions/per-file ignores, changed thresholds/tool versions, and new Rust allow/expect or Python noqa sites. Unclassified policy edits fail for review. |
 | `python3 tools/growth-ratchet.py --base-ref origin/rust-migration` | Independent growth in tools C++, fork-added src/tests C++, Rust exports and callback fields. Generated records and other outside-src C++ have separate counters so moves cannot exempt growth. |
 | `python3 tools/refactor-proof.py --base-ref origin/rust-migration` | Claimed release-archive equivalence fails on changed code, relocation targets/addends, read-only data, symbol offsets or section alignment. |
@@ -171,7 +171,7 @@ Full validation requires native comparisons and simulation, Windows x64 and x86,
 | `python3 tools/ci.py request 123 --profile platform` | Diagnose a suspected platform failure across the platform matrix. |
 | `python3 tools/ci.py request 123 --profile full` | Request the only profile that satisfies the merge gate; in merge-queue mode, an optional pre-check of a PR head. |
 | `python3 tools/ci.py wait .local/ci-requests/REQUEST.json` | Wait for a request. |
-| `python3 tools/preflight.py --base origin/rust-migration` | Run the pinned commit checker and rebound-callee gate; `--hooks PATH` uses a clean pinned checkout offline. |
+| `python3 tools/preflight.py --base origin/rust-migration` | Run the pinned commit checker and every `run:` step of Quick's `quick` job, read from `ci-quick.yml`, except the setup steps it lists. It runs every step after a failure and exits non-zero if any failed. `--list` lists the steps, `--step TEXT` runs those whose name contains it, and `--hooks PATH` uses a clean pinned checkout offline. A full run took about 5 minutes on this host with a warm Rust build, so run it in the background; a single `--step` is usually short. |
 
 - The CLI refuses unmergeable or pending-mergeability PRs and changed heads. A changed head or advanced base needs a new Full, except when the head's status was carried (next bullet). A Full request for a head that already passed dispatches nothing. An implementer requests `rust` or `native` for its own PR ([checks](workflow.md#checks)), the integrator requests Full, and root administers workflow bootstraps ([CI administration](root-workflow.md#ci-administration)).
 - Keep warm-cache Full within about 15 minutes (#233). Add parallel jobs or shards, not steps on one job's critical path. Keep caches under the repository limit.

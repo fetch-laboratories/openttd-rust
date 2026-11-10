@@ -26,7 +26,7 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 ## Checks and commits
 
-- Before pushing, run your work order's focused checks, `python3 tools/migration.py rust-checks` and `python3 tools/preflight.py --base origin/rust-migration`. Follow [quick cleanup checks](rust-migration.md#quick-cleanup-checks) for lint/growth ratchets, refactor proof and reviewed exception contracts. Fix failures while preserving the original's operations.
+- Before pushing, run your work order's focused checks and `python3 tools/preflight.py --base origin/rust-migration`, which runs every gate Quick runs. [Quick cleanup checks](rust-migration.md#quick-cleanup-checks) explains each gate and its reviewed exception contracts. Fix failures while preserving the original's operations.
 - Take scenario evidence from CI, not from this host: push, then run `python3 tools/ci.py request PR --profile native` and wait on it in the background ([checks](workflow.md#checks)). Run a scenario locally, by name, only to diagnose a failure.
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
 - Commit coherent steps under titles the preflight commit checker accepts ([commits](workflow.md#commits-and-pushes)). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
