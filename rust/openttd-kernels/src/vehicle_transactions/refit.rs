@@ -325,8 +325,8 @@ unsafe fn refit_vehicle(
                 v,
                 if count == 0 { u8::MAX } else { count },
                 |id| {
-                    if !transaction.0.selection.contains(&id) {
-                        transaction.0.selection.push(id);
+                    if !transaction.0.selection.contains(&id.0) {
+                        transaction.0.selection.push(id.0);
                     }
                 },
             );
@@ -646,7 +646,8 @@ pub(crate) unsafe fn cmd_refit_vehicle(
         return Capacity::default();
     }
     // used by autoreplace/renew
-    let free_wagon = kind == VehicleType::TRAIN.0 && (s.selection.free_wagon)(front);
+    let free_wagon = kind == VehicleType::TRAIN.0
+        && crate::ground_vehicle::is_free_wagon(crate::fleet::record(b.groups, front).subtype());
     /* Don't allow shadows and such to be refitted. */
     if v != front && matches!(VehicleType(kind), VehicleType::SHIP | VehicleType::AIRCRAFT) {
         (b.cost.error)(cost, ERROR);

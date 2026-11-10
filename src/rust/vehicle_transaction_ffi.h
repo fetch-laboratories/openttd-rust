@@ -13,17 +13,16 @@
 #include "command_services_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
+#include "station_service_ffi.h"
 
 struct Vehicle;
 struct Order;
 struct OpenTTDVehicleServices;
-struct OpenTTDVehicleTransactionTarget { uint8_t owner; bool primary; };
 struct OpenTTDVehicleTransactionServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandServices *commands;
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDFleetGroupServices *groups;
-	OpenTTDVehicleTransactionTarget (*target)(void *) noexcept OPENTTD_SERVICE_DEFAULT(target);
 	OpenTTDByteSpan (*name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(name);
 	void (*clear_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(clear_name);
 	void (*set_name)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
@@ -38,12 +37,10 @@ struct OpenTTDVehicleSelectionServices {
 	const OpenTTDFleetGroupServices *groups;
 	const OpenTTDFleetTransactionServices *transactions;
 	const OpenTTDVehicleServices *vehicles;
+	const OpenTTDStationLinks *links;
 	bool (*in_depot)(void *) noexcept OPENTTD_SERVICE_DEFAULT(in_depot);
-	bool (*free_wagon)(void *) noexcept OPENTTD_SERVICE_DEFAULT(free_wagon);
 	void *(*first_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine_part);
-	bool (*multiheaded)(void *) noexcept OPENTTD_SERVICE_DEFAULT(multiheaded);
 	void *(*other_multihead)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multihead);
-	void (*with_orders)(void *, uint8_t (*)(void *, const Vehicle *), uint8_t (*)(void *, const Order *), void (*)(void *, const Vehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(with_orders);
 	void (*list_clear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(list_clear);
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 };
@@ -62,11 +59,9 @@ struct OpenTTDVehicleCommonServices {
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDOrdersLeaves *orders;
 	OpenTTDVehicleTransactionStrings strings;
-	uint32_t (*train_power)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train_power);
 	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
 	uint32_t (*grf_string)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
 	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
-	void (*flip_stopped)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_stopped);
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);

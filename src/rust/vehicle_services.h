@@ -31,11 +31,9 @@ bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
-uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
-void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
 
 OpenTTDByteSpan RustVehicleName(void *shell) noexcept;
@@ -129,9 +127,7 @@ inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return Rust
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
-bool RustTrainFreeWagon(const Vehicle *v) noexcept;
 Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
-bool RustTrainMultiheaded(const Vehicle *v) noexcept;
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
