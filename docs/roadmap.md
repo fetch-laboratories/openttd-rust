@@ -4,88 +4,102 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-09, stocktake 143)
+## Where the fork stands (2026-11-10, stocktake after the eighth merge)
 
-Agent: /root/stocktake_143 | Model: claude-opus-5-5 | Reasoning effort: medium
+Agent: /root/stocktake_merge_8 | Model: claude-sonnet-5-5 | Reasoning effort: high
 
-**Since stocktake 143 (paused 11-09 05:35 UTC).** Code main is integration 147, `489f4ea161` (#851), plus steering 33's process fixes #858 (`9b379f0d99`) and #859 (`ba7bc3fd44`), 11-09. The fork C++ census is 277,044 and exports are 1,539 ([Phases](#phases)). Platform cadence 145 is green. Unintegrated: #839 (entry 4a), #837 (#737 V part 2), #852 (entry 16) and #853 (entry 17).
+**Since stocktake 143 (`da020b52c7`, 11-09 02:31 UTC).** Code main is `c12561671f` (#868), 11-10 11:35 UTC: the eighth merge through the merge queue (#866, #852, #837, #839, #869, #870, #853, #868), integration 155 in the old count. Open: #871 (draft), #872 and #873. The fork C++ census is 276,186, down 1,380 in 1.378 calendar days (−1,001 a day, commit timestamps; the 11-09 05:35 to 11-10 08:35 pause is inside it). The tests fell 828 lines (`src/tests` 5,615 to 4,787), `tools/` 384 (15,821 to 15,437) and ABI-generated non-record C++ 33. Exports are 1,697 expanded and 1,536 historical ([Phases](#phases) counts 1,539 at integration 146). Original C++ retired fell by 2 (−1.5 a day), in Simulation logic (38,329 to 38,327; remaining 9,095 to 9,097). Merged PRs that touched original-derived files since 143: #845 (`newgrf_station.cpp`), #851 (`effectvehicle.cpp`, `order_cmd.cpp`, `train_cmd.cpp`), #839 and #868 (`station_cmd.cpp`) and #869 (`cargopacket.h`). The figure is the metric's, reported as measured; no line was traced.
 
-Stocktake 143 measures integration 143 (`da020b52c7`) against stocktake 131 (`305ac20c28`). Integrations 132 to 143 each passed review and exact-head Full, and none was rolled back. Fork C++ fell 1,393 counted lines, mostly through #736: #810 (U) −746, #829 (W) −246 and #820 (P) −77. Original C++ retired fell by 9 lines, a reclassification of #814's glue edits in original-derived files, not restored original code (root, 2026-11-09). The next platform cadence follows integration 150; the next stocktake and profile follow 155.
+**Speed.** Profile 155 passed, with every canonical exit-save comparison equal and all six policy records below band and ceiling. TGP is 1.163070x (143: 1.230318x), as #843 predicted ([Speed](#speed)). No projection rose.
 
-| Measured quantity | Integration 131 | Integration 143 |
+**Streams.** #734 finished 54 of 319 workset files (143: 41) and 46,082 of 183,789 lines (25.1%); worksets 01, 02 and 03 are finished (14, 15 and 14 files). #736 fell 828 lines in `src/tests` and 384 under `tools/`; #737's three baselines fell 17, 25 and 9 rows. #738's corpus rose 22 lines (3,229 to 3,251) with its item ready. #735's `allow` sites are unchanged at 11. The Clippy debt file is 54 keys because #858 stopped gating length, nesting and complexity rows: the same gate gives 59 keys at 143.
+
+**Process since development resumed (11-10 08:35 UTC).**
+- **Merged PRs.** 7 (#852, #837, #839, #869, #870, #853, #868). #866 merged at 08:32 UTC, before the resume. Created to merged: 28.2, 32.0, 31.6, 0.7, 0.8, 30.1 and 2.3 hours (median 28.2); the first, second, third and sixth were opened 11-09 and include the 27-hour pause. Accepted to merged, from the last review report on the merged head: 10, 22, 17, 18, 11, 15 and 16 minutes (median 16).
+- **Merge queue.** 11 entries since 08:35 (12 with #866's): 7 merged, 4 removed. The removals, all involving #853:
+  - 09:53 #853: Windows x86 Clippy `unnecessary_box_returns` at `vehicle/scheduler.rs:998` (`new_pool() -> Box<PoolCore>`); Quick, native and the other platforms passed (run 42794535339).
+  - 09:59 #837 and 10:04 #839: E0560, `transactions::Services` has no field named `orders`, in Quick, native and platform tests (runs 42795338273 and 42795978873). #837 removed the field while #853 still initialised it; #853's `9220c1e356` removes that initializer. The entries were rebuilt at 10:05 and passed.
+  - 10:33 #853: the same E0560 after #837 merged (run 42800171322).
+- **Quick failures on PR heads.** 25 runs on the seven merged PRs since 08:35: 19 passed, 4 failed, 2 were cancelled. None of the four failed on the Clippy ratchet step: #839 and #868 failed Python complexity debt and lint policy, #869 Python formatting and lint, #853 Rust formatting, check and warnings. Over the five component PRs' whole lives (#852, #837, #839, #853, #868; 46 Quick runs on the seven PRs since 11-08 18:58): 14 failures, 10 on the Clippy ratchet step, all 11-09 02:20 to 05:35 UTC on #837 (2) and #839 (8), before #858 (11-09 20:52 UTC): 2.0 per component PR (steering 33: 1.8; provisional target below 0.5), 0 since #858.
+- **Simulation-tier runs.** 30: 19 native requests (15 passed, 3 cancelled, 1 failed before the simulation shards) and 11 queue runs (7 passed, 4 failed as above, none in simulation). One ended on the network-protocol hang (#693): native request 42788129285 for #839 (09:08): shard 2 printed nothing after 09:20:09, was cancelled at 09:36:13, and three `openttd-network_protocol` processes were terminated at cleanup. No timeout message was logged, so the attribution is by signature. One in 30 (provisional threshold one in ten; 11-08/09 measured 2 in 26). The other two cancellations were superseded runs whose simulation shards stopped after 2 min 17 s and 37 s.
+- **Branches.** 3 open PRs; 48 remote branches not merged into `rust-migration`: 21 upstream (`release/*`, `master`), 3 open-PR heads and 24 others. `issues.py`: 43 open, 0 unplaced, 1 excluded, 1 roadmap exclusion without an issue.
+
+| Measured quantity | Integration 143 | Integration 155 (tip) |
 | --- | ---: | ---: |
-| Original C++ remaining | 221,645 | 221,654 |
-| Fork source glue, including generated records | 34,923 | 34,616 |
-| Compiled source and generated records C++ | 256,568 | 256,270 |
-| Tracked tools C++ evidence | 16,869 | 15,821 |
-| ABI-generated non-record C++ evidence | 5,522 | 5,475 |
-| Measured fork C++ series (scope below) | 278,959 | 277,566 |
-| Original C++ retired | 62,710 of 284,355 (22.05%) | 62,701 of 284,355 (22.05%) |
-| Simulation C++ retired | 41,550 of 61,148 (67.95%) | 41,541 of 61,148 (67.94%) |
-| Expanded Rust exports / callback fields | 1,709 / 3,418 | 1,708 / 3,374 |
-| Historical regex exports / callback slots | 1,553 / 3,376 | 1,552 / 3,332 |
-| Shared-accessor / rebound-callee / orphan-export baseline rows | 117 / 314 / 40 | 104 / 304 / 39 |
-| Retained Clippy keys / diagnostics | 664 / 757 | 649 / 739 |
-| Ruff keys / diagnostics | 296 / 296 | 287 / 287 |
-| Raw GLOBAL Rust / tooling inventories (scope below) | 175,659 / 63,820 | 190,613 / 62,128 |
-| Play-save speed ratio | profile 131 | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
+| Original C++ remaining | 221,654 | 221,656 |
+| Fork source glue, including generated records | 34,616 | 33,651 |
+| Compiled source and generated records C++ | 256,270 | 255,307 |
+| Tracked tools C++ evidence | 15,821 | 15,437 |
+| ABI-generated non-record C++ evidence | 5,475 | 5,442 |
+| Measured fork C++ series (scope below) | 277,566 | 276,186 |
+| Original C++ retired | 62,701 of 284,355 (22.05%) | 62,699 of 284,355 (22.05%) |
+| Simulation C++ retired | 41,541 of 61,148 (67.94%) | 41,539 of 61,148 (67.93%) |
+| Expanded Rust exports / callback fields | 1,708 / 3,374 | 1,697 / 3,340 |
+| Historical regex exports / callback slots | 1,552 / 3,332 | 1,536 / 3,298 |
+| Shared-accessor / rebound-callee / orphan-export baseline rows | 104 / 304 / 39 | 87 / 279 / 30 |
+| Exports held only by uncalled members (`orphan-exports.py --report-uncalled`, not enforced) | – | 53 |
+| Retained Clippy keys / diagnostics | 649 / 739 (59 / 88 under #858's gate) | 54 / 83 |
+| Ruff keys / diagnostics | 287 / 287 | 287 / 287 |
+| Raw GLOBAL Rust / tooling inventories (scope below) | 190,613 / 62,128 | 203,275 / 64,412 |
+| Play-save speed ratio | No wall pass. Projections are 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors | No wall pass. Play projections 1.345x to 1.445x (P2000 highest), unchanged at the anchor floors |
 
-Fork-added C++ under `src/tests` (5,615 lines) is within source glue. The 6,090 ABI-generated lines are 615 record declarations within source glue plus the 5,475 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Most of raw GLOBAL Rust's +14,954 is #734 file passes and #736 oracle tests and data.
+Fork-added C++ under `src/tests` (4,787 lines) is within source glue. The 6,064 ABI-generated lines are 622 record declarations within source glue plus the 5,442 evidence lines above. The series does not yet inventory extracted-original comparison fragments or C++ embedded in Python strings; that scope follow-up belongs to #736 and earns no deletion credit. Raw GLOBAL Rust grew 12,662 lines and tooling 2,284 since 143; the split between executable code and oracle data was not measured.
 
 | Source area / phase relationship | Original | Retired | Remaining | Fork glue |
 | --- | ---: | ---: | ---: | ---: |
-| Simulation logic (phase 1) | 47,424 | 38,329 | 9,095 | 6,456 |
-| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,387 |
+| Simulation logic (phase 1) | 47,424 | 38,327 | 9,097 | 6,427 |
+| Simulation storage (phase 2) | 13,724 | 3,212 | 10,512 | 1,386 |
 | NewGRF, save/load, script API and network (phase 3) | 51,794 | 13,067 | 38,727 | 3,360 |
 | Support, graphics and viewport (phase 4) | 32,602 | 980 | 31,622 | 551 |
 | GUI and platform (phase 5) | 64,120 | 415 | 63,705 | 465 |
 | Vendored (phase 6) | 55,148 | 2,317 | 52,831 | 0 |
 | Data tables | 17,295 | 4,367 | 12,928 | 14 |
-| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 5,615 |
-| Boundary layer | 0 | 0 | 0 | 16,768 |
+| Upstream tests and fork test glue | 2,248 | 14 | 2,234 | 4,787 |
+| Boundary layer | 0 | 0 | 0 | 16,661 |
 
-These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF and historical-save corpora and retained native fixtures leave the limits recorded on #156; entry witnesses are not branch coverage. #503 deep checks remain user-requested.
+These are source-area subtotals, not ownership or phase-exit claims. Null-driver games, bounded NewGRF and historical-save corpora and retained native fixtures leave the limits recorded on #156; entry witnesses are not branch coverage. #503 deep checks remain user-requested. #156 gained one comment since 143, from steering 33's audits (none a demonstrated defect): #810 dropped the short-read view-at-cursor observation and the byte-strings and history sanitizer candidate runs; #825's `wait_twoway` and stuck-train news path have no witness; #814's `deliver_to_transfer` and `deliver_to_keep` are not distinguished, and station auto-refit and first-arrival visit-type bits have no witness; integrations 142 to 146 ran without 14 fork-only kept native cases, restored by #849 in #851.
 
 ### Cleanup stream inventories
 
-Rows marked † are root's, updated at each stocktake ([selection](planning.md#selection)). The others are steering's, measured with the overhaul's analyzers until #854 tracks them in `tools/`; at steering 33 they reproduced integration 129's published figures exactly.
+Rows marked † are root's, updated at each stocktake ([selection](planning.md#selection)). The others are steering's. The comment, integer, wrapper, constant and literal rows now come from `tools/code-standards-inventory.py` (#854, #870); its 143 values were recounted at `da020b52c7` with the same tool, and at integration 129 it reproduced the overhaul's published figures exactly. Finished-file figures count the files in the † row above them.
 
-| Stream | Inventory | Overhaul | Integration 129 | Integration 143 † | Integration 146 (steering 33) |
-| --- | --- | ---: | ---: | ---: | ---: |
-| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319 | 41 of 319 | 51 of 319, with #832's ten |
-| #734 | Workset lines in finished files † | – | – | 32,080 of 176,930 (18.1%) | – |
-| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | – | 2,693; 133 of them in finished files |
-| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | – | 1,772; 121 of them in finished files, many of them FFI or `repr(C)` boundaries that #355 allows |
-| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | – | 287 / 3,482 |
-| #735 | Functions over seven parameters | 150 | 141 | – | 132 (70 FFI exports, 39 helpers, 23 commands) |
-| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 53 / 11 | – |
-| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 15,821 / 5,615 | 15,642 / 5,279 ([Phases](#phases)) |
-| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 104 / 304 / 39 | – |
-| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,229 | 3,231 before this review |
-| None | Ruff rows | 296 | unchanged | 287 | – |
+| Stream | Inventory | Overhaul | Integration 129 | Integration 143 † | Integration 146 (steering 33) | Integration 155 † |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| #734 | Workset files with a finished pass † | 0 of 319 | 0 of 319 | 41 of 319 | 51 of 319, with #832's ten | 54 of 319 (#832's ten, #839, #852, #868) |
+| #734 | Workset lines in finished files † | – | – | 32,080 of 176,930 (18.1%) | – | 46,082 of 183,789 (25.1%) |
+| #734 | Explanatory comment lines missing inside matched ported bodies | 3,139 | 2,827 | 2,715; 129 in finished files | 2,693; 133 in finished files | 2,577; 152 in finished files |
+| #734 | Bare-integer parameters and fields whose concept has a named type | 1,957 | 1,947 | 1,766; 118 in finished files | 1,772; 121 in finished files, many of them FFI or `repr(C)` boundaries that #355 allows | 1,695; 150 in finished files |
+| #734 | Transparent wrapper types / named constants | 69 / 2,181 | 266 / 3,411 | 285 / 3,466; 37 / 332 in finished files | 287 / 3,482 | 294 / 3,538; 47 / 435 in finished files |
+| #734 | Literal sites standing for a named value | – | 14 | 14; 0 in finished files | – | 12; 0 in finished files |
+| #735 | Functions over seven parameters | 150 | 141 | – | 132 (70 FFI exports, 39 helpers, 23 commands) | – (no tracked counter) |
+| #735 | `too_many_arguments` ratchet rows / `allow` sites † | 71 / – | 63 / 19 | 53 / 11 | – | 48 / 11 |
+| #736 | Fork C++ evidence under `tools/` / `src/tests`, code lines † | – | 16,869 / 5,684 | 15,821 / 5,615 | 15,642 / 5,279 ([Phases](#phases)) | 15,437 / 4,787 |
+| #737 | Shared-accessor / rebound-callee / orphan-export rows † | 117 / 314 / 42 | 117 / 314 / 40 | 104 / 304 / 39 | – | 87 / 279 / 30 |
+| #737 | Exports held only by uncalled members † | – | – | – | – | 53 |
+| #738 | Rule corpus lines † | 3,312 | 3,362 | 3,229 | 3,231 before this review | 3,251 |
+| None | Ruff rows | 296 | unchanged | 287 | – | 287 |
 
 Counting commands:
-- **#734:** from its issue's Worksets table and file lists. Lines are `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head. The comment, integer and wrapper rows come from the overhaul's `scratch-comments-signatures/inventory.py` and `scratch-types-literals/inventory.py`, rescanned at the head rather than read from their cached function lists (#854).
-- **#735:** from `migration/clippy-debt.json` and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
-- **#736 and #737:** from `python3 tools/port-metrics.py --whole-fork` and the baselines.
+- **#734:** from its issue's Worksets table and file lists. Lines are `wc -l` of each workset file under `rust/openttd-kernels/src` at the measured head. The issue's own "Finished" line is stale (33 files at integration 138): recount finished files from the pass PRs against the lists. At 155 they are workset 01 (14), 02 (15) and 03 (14), `tile_cmd.rs` and `tile_owner.rs` (13), `saveload.rs` (21), and `binaryheap.rs`, `bitmath_func.rs`, `container_func.rs`, `integer.rs`, `kdtree.rs`, `math.rs`, `pool.rs` and `random_func.rs` (23). The comment, integer, wrapper, constant and literal rows: `python3 tools/code-standards-inventory.py [--head REV]` for the tree, and `python3 tools/code-standards-inventory.py [--head REV] RUST_FILE...` with the finished files' paths for the finished-file figures.
+- **#735:** from `migration/clippy-debt.json` (`too_many_arguments` keys) and `git grep 'allow(clippy::too_many_arguments' -- rust/`.
+- **#736, #737 and the Clippy and Ruff rows:** from `python3 tools/port-metrics.py --whole-fork`, `python3 tools/orphan-exports.py --report-uncalled`, `wc -l` of the three baseline files, and the debt files (keys are `sites` entries, diagnostics the sum of their list lengths). Expanded exports: `growth_inventory` in `tools/port-metrics.py`.
 - **#738:** `cat AGENTS.md $(git ls-files 'docs/*.md' 'docs/**/*.md' | grep -v -E '^docs/(roadmap.md|components/)') | wc -l`.
-
 
 ### Speed
 
-Profile 143 on clean `da020b52c7` ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731513225)) used the same tools as profile 131: Callgrind/LibVEX 3.26.0 (dispatcher 3.22.0), GCC 13.3.0 and Rust 1.99.0. All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling.
+Profile 155 on clean `c12561671f` ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6767370907)) used `simulate --instructions --jobs 2`; every anchor identity was accepted. All seven nonempty canonical exit-save comparisons pass, and all six policy records are below band and ceiling.
 
-| Scenario | Original Ir | Candidate Ir (143) | Projection (143) | Ir change since 131 |
-| --- | ---: | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,857,546,676 | 1.230318x | +2.6689% |
-| Opus | 21,773,343,583 | 27,569,546,889 | 1.345115x | −1.0596% |
-| Grok | 20,969,727,163 | 26,309,996,893 | 1.346652x | −1.0382% |
-| P1996 | 3,600,502,896 | 4,564,266,895 | 1.352193x | −0.5539% |
-| P2000 | 6,049,922,238 | 7,497,361,602 | 1.444531x | −1.0448% |
-| P2016 | 11,343,424,651 | 13,744,477,974 | 1.382593x | −1.2955% |
-| Drawing | 2,149,015,961 | 2,154,326,198 | 1.004635x | +0.0032% |
+| Scenario | Original Ir | Candidate Ir (155) | Projection (155) | Projection (143) | Ir change since 143 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| TGP | 2,265,528,237 | 2,777,157,377 | 1.163070x | 1.230318x | −2.8132% |
+| Opus | 21,773,343,583 | 27,450,175,408 | 1.345115x | 1.345115x | −0.4330% |
+| Grok | 20,969,727,163 | 26,205,322,261 | 1.346652x | 1.346652x | −0.3979% |
+| P1996 | 3,600,502,896 | 4,536,172,521 | 1.352193x | 1.352193x | −0.6155% |
+| P2000 | 6,049,922,238 | 7,474,158,998 | 1.444531x | 1.444531x | −0.3095% |
+| P2016 | 11,343,424,651 | 13,760,566,379 | 1.382593x | 1.382593x | +0.1171% |
+| Drawing | 2,149,015,961 | 2,154,394,984 | 1.004635x | 1.004635x | +0.0032% |
 
-TGP's projection rose 5.32%, over the 3% row. The [attribution](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6731594943) names #816's `&s.industry` spill in `tile_loop::run` and #819's filtered `HouseZones::iter()` scan. #843, inside #851, recovers 80.6M Ir (projection 1.230x → 1.163x); confirm it at profile 155. No anchor or history was reset.
+TGP's Ir fell 80,389,299, the recovery profile 143 expected from #843 (80.6M, projection 1.230x to about 1.163x): it measures 1.163070x, 0.072x below its 1.235x band. No projection rose; the highest play projection, P2000's 1.444531x, is 0.075x below the 1.52x band. No record reached its band, so no speed pass is due. No anchor or history was reset.
 
 ## Course (user, 2026-11-06)
 
