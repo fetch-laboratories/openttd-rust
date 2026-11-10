@@ -42,31 +42,43 @@ impl SpiralState {
         self.cur_radius == self.max_radius && self.direction != INVALID_DIAGDIR
     }
 
+    /// `SpiralTileIterator::InitPosition`: initialise `position` after `direction` was changed.
     fn init_position(&mut self) {
         self.position = self.extent[usize::from(self.direction)]
             .wrapping_add(self.cur_radius.wrapping_mul(2))
             .wrapping_add(1);
     }
 
+    /// One step by `TileIndexDiffCByDir(DIR_W)`.
     fn west(&mut self) {
         self.x = self.x.wrapping_add(1);
         self.y = self.y.wrapping_sub(1);
     }
 
+    /// `SpiralTileIterator::Increment`: advance the internal state to the next
+    /// potential tile. The tile may be outside the map though.
     fn increment(&mut self) {
-        assert!(!self.is_end());
+        if self.is_end() {
+            crate::services_assert::check(false);
+        }
+        /* Special value for first tile in areas with odd diameter */
         if self.direction == INVALID_DIAGDIR {
             self.west();
             self.direction = DIAGDIR_BEGIN;
             self.init_position();
             return;
         }
+        /* Step to the next 'neighbour' in the circular line */
         match self.direction {
             0 => self.x = self.x.wrapping_sub(1),
             1 => self.y = self.y.wrapping_add(1),
             2 => self.x = self.x.wrapping_add(1),
             3 => self.y = self.y.wrapping_sub(1),
-            _ => unreachable!(),
+            _ => {
+                // TileIndexDiffCByDiagDir asserts IsValidDiagDirection(dir).
+                crate::services_assert::check(false);
+                std::process::abort()
+            }
         }
         self.position = self.position.wrapping_sub(1);
         if self.position > 0 {
@@ -81,6 +93,8 @@ impl SpiralState {
         self.init_position();
     }
 
+    /// `SpiralTileIterator::SkipOutsideMap`: advance the internal state until it
+    /// reaches a valid tile or the end.
     fn skip_outside(&mut self, size_x: u32, size_y: u32) {
         while !self.is_end() && (self.x >= size_x || self.y >= size_y) {
             self.increment();
@@ -96,14 +110,20 @@ impl SpiralState {
     }
 }
 
+/// `SpiralTileIterator(center, diameter)`, from the center's coordinates and the
+/// live map dimensions.
 pub fn square(x: u32, y: u32, diameter: u32, size_x: u32, size_y: u32) -> SpiralState {
-    assert!(diameter > 0);
+    if diameter == 0 {
+        crate::services_assert::check(false);
+    }
     let odd = diameter % 2 == 1;
     let mut state = SpiralState {
         max_radius: diameter / 2,
         extent: [u32::from(odd); 4],
         cur_radius: 0,
         position: 0,
+        // Odd diameters start at the center (see increment); even ones at the
+        // west corner of the center 2x2 rect.
         x: if odd { x } else { x.wrapping_add(1) },
         y,
         direction: if odd { INVALID_DIAGDIR } else { DIAGDIR_BEGIN },
@@ -115,6 +135,8 @@ pub fn square(x: u32, y: u32, diameter: u32, size_x: u32, size_y: u32) -> Spiral
     state
 }
 
+/// `SpiralTileIterator(start_north, radius, w, h)`, from the north tile's
+/// coordinates and the live map dimensions.
 pub fn hole(
     x: u32,
     y: u32,
@@ -124,12 +146,15 @@ pub fn hole(
     size_x: u32,
     size_y: u32,
 ) -> SpiralState {
-    assert!(radius > 0);
+    if radius == 0 {
+        crate::services_assert::check(false);
+    }
     let mut state = SpiralState {
         max_radius: radius,
         extent: [width, height, width, height],
         cur_radius: 0,
         position: 0,
+        /* first tile is the west corner */
         x: x.wrapping_add(width).wrapping_add(1),
         y,
         direction: DIAGDIR_BEGIN,
@@ -139,6 +164,7 @@ pub fn hole(
     state
 }
 
+/// Whether two traversals are at the same tile.
 pub fn equal(left: SpiralState, right: SpiralState) -> bool {
     left.x == right.x && left.y == right.y
 }
