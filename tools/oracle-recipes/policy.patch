@@ -1,0 +1,348 @@
+--- a/capture.in
++++ b/capture.in
+@@ -6,9 +6,10 @@
+  */
+
+ /** @file town-tunnel-reference.cpp Controlled services for unchanged town tunnel bodies, absent from the save corpus. */
+-#include "../../src/stdafx.h"
+-#include "../../src/tests/town_protocol.hpp"
+-#include "../../src/rust/town_ffi.h"
++#include "stdafx.h"
++#include "direction_type.h"
++#include "direction_func.h"
++#include "slope_type.h"
+ #include <algorithm>
+ #include <array>
+ #include <cassert>
+@@ -80,7 +81,6 @@
+ 	bool road_test = true, tunnel_test = true, tunnel_execute = true;
+ 	std::unordered_map<uint32_t, Tile> tiles;
+ 	std::vector<std::array<uint32_t, 7>> trace;
+-	OpenTTDTownState *owner = nullptr;
+ };
+ static World *world;
+ static Tile At(TileIndex tile)
+@@ -147,7 +147,6 @@
+ struct CommandCost { bool ok = true; uint32_t error = 0; uint64_t parameter = 0; };
+ static CommandCost CommandCostWithParam(uint32_t error, uint64_t parameter) { return {false, error, parameter}; }
+ static Town *authority_town;
+-static OpenTTDTownState *authority_owner;
+ static uint32_t authority_closest_calls;
+ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
+ {
+@@ -159,53 +158,6 @@
+
+ /* Rust retains this fixture shell only as an opaque identity; the native FFI
+  * tag is global Town, while the reference body uses TownReference::Town. */
+-static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
+-static ::Town *ResolveShell(uint32_t id) noexcept { assert(id == world->town.index); return reinterpret_cast<::Town *>(&world->town); }
+-static uint32_t Random(void *) noexcept { world->draws++; return 0; }
+-static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
+-static uint32_t Read_map_log_x() noexcept { return 10; }
+-static uint8_t Read_tile_type(uint32_t id) noexcept { return uint8_t(At(id).type); }
+-static bool Read_tile_valid(uint32_t id) noexcept { return IsValidTile(id); }
+-static uint8_t Read_tile_slope(uint32_t id) noexcept { return uint8_t(GetTileSlope(id)); }
+-static int32_t Read_tile_z(uint32_t id) noexcept { return int32_t(GetTileZ(id)); }
+-static uint8_t Read_road_bits(uint32_t id, uint8_t type, bool straight) noexcept { assert(type == 0 && straight); return uint8_t(GetTownRoadBits(id)); }
+-static OpenTTDTownRoadChoice Read_road_info(uint8_t id) noexcept { RoadInfo(id); return {.introduction_date = 0, .max_speed = 50, .town_build = true}; }
+-static bool BuildRoad(uint32_t town, uint32_t tile, uint32_t bits, uint32_t type, uint32_t mode) noexcept { assert(mode == 0); return RoadCommand(tile, bits, type, town).Succeeded(); }
+-static bool BuildTunnel(uint32_t tile, uint32_t type, uint32_t execute) noexcept { return TunnelCommand(tile, type, execute != 0).Succeeded(); }
+-static bool Candidate()
+-{
+-	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
+-	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 1);
+-	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
+-	auto leaves = TownProtocolServices();
+-	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
+-	leaves.resolve_owner = ResolveOwner;
+-	auto house_services = *leaves.houses;
+-	leaves.houses = &house_services;
+-	leaves.build_tunnel = BuildTunnel;
+-	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+-	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
+-	services.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(ResolveShell(id)); };
+-	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
+-	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
+-	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };
+-	services.tunnel_bridge_direction = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeDirection(id)); };
+-	services.is_drive_through_stop = [](uint32_t id) noexcept { return IsDriveThroughStopTile(id); };
+-	services.drive_through_axis = [](uint32_t id) noexcept { return uint8_t(GetDriveThroughStopAxis(id)); };
+-	services.is_bay_stop = [](uint32_t id) noexcept { return IsBayRoadStopTile(id); };
+-	services.bay_stop_direction = [](uint32_t id) noexcept { return uint8_t(GetBayRoadStopDir(id)); };
+-	services.is_road_depot = [](uint32_t id) noexcept { return IsRoadDepot(id); };
+-	services.road_depot_direction = [](uint32_t id) noexcept { return uint8_t(GetRoadDepotDirection(id)); };
+-	leaves.allow_crossings = []() noexcept { return _settings_game.economy.allow_town_level_crossings; };
+-	bool road_ok = false;
+-	OpenTTDCommandCostServices costs{}; costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };
+-	OpenTTDRailCommandServices rail{}; rail.cost = &costs;
+-	OpenTTDRoadCommandServices roads{}; roads.do_build = [](const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *out, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t, uint16_t town) noexcept {
+-		assert(flags == 10); *reinterpret_cast<bool *>(out) = BuildRoad(town, tile, bits, rt, 0);
+-	}; roads.rail_commands = &rail;
+-	OpenTTDRoadCommandContext road{&roads, nullptr, reinterpret_cast<OpenTTDCommandCost *>(&road_ok), nullptr};
+-	return openttd_test_town_tunnel(&leaves, &services, &road, world->town.index, world->start, world->direction);
+-}
+ static uint32_t Along(const World &w, int distance) { return w.start + distance * TileOffsByDiagDir(static_cast<DiagDirection>(w.direction)); }
+ static World Fixture(uint32_t dir, uint32_t length, bool mountain)
+ {
+@@ -220,34 +172,6 @@
+ 	if (!mountain) w.tiles[Along(w, 1)].type = MP_STATION;
+ 	return w;
+ }
+-static uint32_t cases;
+-static void Compare(World input, const char *label)
+-{
+-	World reference = input, candidate = input;
+-	world = &reference;
+-	bool expected = GrowTownWithTunnel(&world->town, world->start, static_cast<DiagDirection>(world->direction));
+-	world = &candidate;
+-	candidate.owner = openttd_rust_town_new();
+-	bool actual = Candidate();
+-	openttd_rust_town_destroy(candidate.owner);
+-	if (expected != actual || reference.trace != candidate.trace || reference.effects != candidate.effects || reference.draws != candidate.draws) {
+-		std::fprintf(stderr, "tunnel mismatch: case=%u %s dir=%u length=%u population=%u result=%u/%u trace=%zu/%zu effects=%u/%u RNG=%u/%u\n", cases, label, input.direction, input.length, input.town.cache.population, expected, actual, reference.trace.size(), candidate.trace.size(), reference.effects, candidate.effects, reference.draws, candidate.draws);
+-		for (size_t i = 0; i < std::max(reference.trace.size(), candidate.trace.size()); i++) {
+-			std::fprintf(stderr, "trace[%zu]", i);
+-			for (const auto *trace : {&reference.trace, &candidate.trace}) {
+-				std::fprintf(stderr, " |");
+-				if (i < trace->size()) for (auto value : (*trace)[i]) std::fprintf(stderr, " %u", value);
+-			}
+-			std::fprintf(stderr, "\n");
+-		}
+-		std::exit(1);
+-	}
+-	/* Emit the oracle-derived ordered transcript, not expected values duplicated
+- * from Rust. Python retains this small evidence beside the generated bodies. */
+-	std::printf("%u %s dir=%u length=%u population=%u result=%u effects=%u RNG=%u", cases++, label, input.direction, input.length, input.town.cache.population, expected, reference.effects, reference.draws);
+-	for (const auto &entry : reference.trace) { std::printf(" |"); for (auto value : entry) std::printf(" %u", value); }
+-	std::puts("");
+-}
+ static void CompareHistories()
+ {
+ 	uint32_t checked = 0;
+@@ -256,19 +180,13 @@
+ 			for (const uint32_t transported : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
+ 				for (const uint32_t stride : {0U, 17U, 0x40000000U, 0x80000000U}) {
+ 					std::array<Town::SuppliedHistory, 61> reference{};
+-					std::array<OpenTTDTownSuppliedHistory, 61> candidate{};
+ 					for (size_t i = 0; i < count; ++i) {
+ 						const auto p = production + static_cast<uint32_t>(i) * stride;
+ 						const auto t = transported + static_cast<uint32_t>(i) * stride;
+-						reference[i] = {p, t}; candidate[i] = {p, t};
++						reference[i] = {p, t};
+ 					}
+ 					const auto expected = SumHistory<Town::SuppliedHistory>(std::span{reference.data(), count});
+-					const auto actual = openttd_rust_town_sum_history(candidate.data(), count);
+-					if (actual.production != expected.production || actual.transported != expected.transported) {
+-						std::fprintf(stderr, "history mismatch count=%zu production=%u transported=%u stride=%u expected=%u/%u actual=%u/%u\n",
+-							count, production, transported, stride, expected.production, expected.transported, actual.production, actual.transported);
+-						std::exit(1);
+-					}
++					std::printf("H %u %u\n", expected.production, expected.transported);
+ 					checked++;
+ 				}
+ 			}
+@@ -281,32 +199,18 @@
+ static void CompareRatings()
+ {
+ 	Town town;
+-	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
+-	auto leaves = TownProtocolServices(); leaves.dirty_authority = RatingDirty;
+-	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+-	services.company_valid = RatingCompanyValid;
+ 	uint32_t checked = 0;
+ 	auto reset = [&](int16_t initial) {
+ 		town.ratings.fill(initial); town.have_ratings.bits = 0;
+-		auto *state = openttd_rust_town_simulation(owner.get());
+-		std::fill_n(state->ratings, 15, initial); state->have_ratings = 0;
+ 	};
+-	auto mode = [&](bool enabled) { SetTownRatingTestMode(enabled); openttd_rust_town_rating_test(enabled); };
++	auto mode = [&](bool enabled) { SetTownRatingTestMode(enabled); };
+ 	auto check = [&](int add, int maximum, uint8_t company, bool no_modify = false, bool bulldozer = false, bool null_town = false) {
+ 		_current_company = company; _cheats.magic_bulldozer.value = bulldozer;
+ 		rating_valid_calls = rating_dirty_calls = 0;
+ 		ChangeTownRating(null_town ? nullptr : &town, add, maximum, no_modify ? Flags{DoCommandFlag::NoModifyTownRating} : Flags{});
+-		const auto expected_valid = rating_valid_calls, expected_dirty = rating_dirty_calls;
+-		rating_valid_calls = rating_dirty_calls = 0;
+-		openttd_rust_town_change_rating(&leaves, &services, null_town ? nullptr : owner.get(), town.index,
+-			reinterpret_cast<uintptr_t>(&town), company, add, maximum, no_modify, bulldozer);
+-		const auto *state = openttd_rust_town_simulation(owner.get());
+-		bool equal = expected_valid == rating_valid_calls && expected_dirty == rating_dirty_calls && state->have_ratings == town.have_ratings.bits && std::equal(town.ratings.begin(), town.ratings.end(), state->ratings);
+-		if (company == 0 || company == 4) equal &= GetRating(&town) == openttd_rust_town_rating(owner.get(), reinterpret_cast<uintptr_t>(&town), company);
+-		if (!equal) {
+-			std::fprintf(stderr, "rating mismatch case=%u add=%d max=%d company=%u mode=%u no-modify=%u cheat=%u null=%u\n", checked, add, maximum, company, _town_rating_test, no_modify, bulldozer, null_town);
+-			std::exit(1);
+-		}
++		std::printf("R %u %u %u", rating_valid_calls, rating_dirty_calls, town.have_ratings.bits);
++		for (int16_t rating : town.ratings) std::printf(" %d", rating);
++		std::printf(" %d\n", company == 0 || company == 4 ? GetRating(&town) : 0);
+ 		checked++;
+ 	};
+ 	for (const int16_t initial : {-32768, -1000, 0, 1000, 32767}) {
+@@ -322,100 +226,49 @@
+ 	/* Source keys only the native shell address, including across company and
+ 	 * owner reuse within nested test mode; starting a new outer mode clears it. */
+ 	reset(10); mode(true); check(100, 1000, 0); mode(true);
+-	owner.reset(openttd_rust_town_new()); reset(-100); check(1, 1000, 4); mode(false); check(-1, -1000, 0); mode(false);
++	reset(-100); check(1, 1000, 4); mode(false); check(-1, -1000, 0); mode(false);
+ 	mode(true); check(1, 1000, 4); mode(false);
+ 	std::printf("\nPASS %u unchanged-reference rating cases\n", checked);
+ }
+ static void CompareRadii()
+ {
+ 	Town town;
+-	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
+ 	std::vector<uint32_t> counts;
+ 	for (uint32_t houses = 0; houses <= 100; ++houses) counts.push_back(houses);
+ 	for (uint32_t houses : {1000U, 10000U, 0x1000000U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) counts.push_back(houses);
+ 	for (uint32_t houses : counts) {
+ 		town.cache.num_houses = houses; UpdateTownRadius(&town);
+-		auto *state = openttd_rust_town_simulation(owner.get()); state->num_houses = houses;
+-		openttd_rust_town_update_radius(owner.get());
+-		if (!std::equal(town.cache.squared_town_zone_radius.begin(), town.cache.squared_town_zone_radius.end(), state->radius)) {
+-			std::fprintf(stderr, "radius mismatch houses=%u\n", houses); std::exit(1);
+-		}
++		std::printf("Z");
++		for (uint32_t radius : town.cache.squared_town_zone_radius) std::printf(" %u", radius);
++		std::printf("\n");
+ 	}
+ 	std::printf("\nPASS %zu unchanged-reference radius cases\n", counts.size());
+ }
+ static void CompareAuthority()
+ {
+ 	Town town;
+-	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
+-	authority_owner = owner.get();
+-	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+-	shared.current_company = +[]() noexcept { return _current_company; };
+-	shared.company_valid = +[](uint8_t id) noexcept { return Company::IsValidID(id); };
+-	static const OpenTTDMovementServices movement = [] {
+-		auto m = OpenTTDMovementServices{};
+-		m.native_assert = [](bool ok) noexcept { assert(ok); };
+-		return m;
+-	}();
+-	shared.movement = &movement;
+-	shared.tile_type = +[](uint32_t tile) noexcept -> uint8_t { assert(tile == 129); authority_closest_calls++; return authority_town == nullptr ? 0 : MP_HOUSE; };
+-	const OpenTTDFixtureMap map{6};
+-	shared.map = &map.statics;
+-	shared.town_count = +[]() noexcept -> size_t { return 0; };
+-	shared.town_index = +[](uint32_t) noexcept -> uint16_t { return 17; };
+-	shared.town_by_id = +[](uint32_t) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(authority_town); };
+-	shared.town_owner = +[](const OpenTTDTownHandle *) noexcept { return authority_owner; };
+-	const OpenTTDTownAuthorityServices a{
+-		.council_tolerance = +[]() noexcept { return _settings_game.difficulty.town_council_tolerance; },
+-		.bulldozer = +[]() noexcept { return _cheats.magic_bulldozer.value; },
+-		.authority_distance = +[]() noexcept { return _settings_game.economy.dist_local_authority; },
+-		.town_index = +[](const OpenTTDTownHandle *t) noexcept { return static_cast<uint16_t>(reinterpret_cast<const Town *>(t)->index); },
+-		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
+-	};
+-	OpenTTDCommandCostServices costs{
+-		.zero = +[](OpenTTDCommandCost *) noexcept { std::abort(); },
+-		.error = +[](OpenTTDCommandCost *, uint32_t) noexcept { std::abort(); },
+-		.expense_money = +[](OpenTTDCommandCost *, uint8_t, int64_t) noexcept { std::abort(); },
+-		.error_param = +[](OpenTTDCommandCost *, uint32_t, uint64_t) noexcept { std::abort(); },
+-		.add = +[](OpenTTDCommandCost *, OpenTTDCommandCost *) noexcept { std::abort(); },
+-		.move = +[](OpenTTDCommandCost *, OpenTTDCommandCost *) noexcept { std::abort(); },
+-		.amount = +[](OpenTTDCommandCost *, int64_t) noexcept { std::abort(); },
+-		.success = +[](const OpenTTDCommandCost *) noexcept -> bool { std::abort(); },
+-		.error_message = +[](const OpenTTDCommandCost *) noexcept -> uint32_t { std::abort(); },
+-		.money = +[](const OpenTTDCommandCost *) noexcept -> int64_t { std::abort(); },
+-		.make_error = +[](OpenTTDCommandCost *, uint32_t) noexcept { std::abort(); },
+-	};
+-	costs.zero = +[](OpenTTDCommandCost *out) noexcept { *reinterpret_cast<CommandCost *>(out) = {}; };
+-	costs.error_param = +[](OpenTTDCommandCost *out, uint32_t error, uint64_t parameter) noexcept { *reinterpret_cast<CommandCost *>(out) = CommandCostWithParam(error, parameter); };
+-	auto leaves = TownProtocolServices(); leaves.dirty_authority = RatingDirty;
+ 	uint32_t checked = 0;
+ 	for (uint8_t company : {0, 4, 255}) for (uint8_t council = 0; council < 4; ++council) {
+ 		for (bool no_test : {false, true}) for (bool cheat : {false, true}) for (bool absent : {false, true}) {
+ 			for (int16_t rating : {-32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64, 65, 111, 112, 113, 143, 144, 145, 207, 208, 209, 399, 400, 401, 32767}) for (bool testing : {false, true}) {
+ 				_current_company = company; _settings_game.difficulty.town_council_tolerance = council;
+ 				_cheats.magic_bulldozer.value = cheat; authority_town = absent ? nullptr : &town;
+-				town.ratings.fill(rating); auto *state = openttd_rust_town_simulation(owner.get()); std::fill_n(state->ratings, 15, rating);
++				town.ratings.fill(rating);
+ 				Flags flags; if (no_test) flags.Set(DoCommandFlag::NoTestTownRating);
+ 				if (testing) {
+-					SetTownRatingTestMode(true); openttd_rust_town_rating_test(true);
+-					SetTownRatingTestMode(true); openttd_rust_town_rating_test(true);
++					SetTownRatingTestMode(true);
++					SetTownRatingTestMode(true);
+ 					ChangeTownRating(&town, -40000, -1000, Flags{});
+-					openttd_rust_town_change_rating(&leaves, &shared, owner.get(), town.index, reinterpret_cast<uintptr_t>(&town), company, -40000, -1000, false, cheat);
+ 				}
+ 				for (uint8_t kind = 0; kind < 3; ++kind) {
+ 					rating_valid_calls = authority_closest_calls = 0;
+ 					CommandCost expected = kind == 2 ? CheckIfAuthorityAllowsNewStation(129, flags) : CheckforTownRating(flags, authority_town, static_cast<TownRatingCheckType>(kind));
+-					uint32_t valid_calls = rating_valid_calls, closest_calls = authority_closest_calls;
+-					rating_valid_calls = authority_closest_calls = 0; CommandCost actual;
+-					if (kind == 2) openttd_rust_town_authority_station(&a, &shared, &costs, reinterpret_cast<OpenTTDCommandCost *>(&actual), 129, no_test);
+-					else openttd_rust_town_authority_remove(&a, &shared, &costs, reinterpret_cast<OpenTTDCommandCost *>(&actual), reinterpret_cast<const OpenTTDTownHandle *>(authority_town), no_test, kind);
+-					if (actual.ok != expected.ok || actual.error != expected.error || actual.parameter != expected.parameter || rating_valid_calls != valid_calls || authority_closest_calls != closest_calls) {
+-						std::fprintf(stderr, "authority mismatch case=%u kind=%u rating=%d company=%u council=%u\n", checked, kind, rating, company, council); std::exit(1);
+-					}
++					std::printf("A %u %u %llu %u %u\n", expected.ok, expected.error, static_cast<unsigned long long>(expected.parameter), rating_valid_calls, authority_closest_calls);
+ 					checked++;
+ 				}
+ 				if (testing) {
+-					SetTownRatingTestMode(false); openttd_rust_town_rating_test(false);
+-					SetTownRatingTestMode(false); openttd_rust_town_rating_test(false);
++					SetTownRatingTestMode(false);
++					SetTownRatingTestMode(false);
+ 				}
+ 			}
+ 		}
+@@ -428,10 +281,7 @@
+ 	for (uint32_t production : {0U, 1U, 255U, 256U, 0x1000000U, UINT32_MAX}) {
+ 		for (uint32_t transported : {0U, 1U, 255U, 256U, 0x1000000U, UINT32_MAX}) {
+ 			Town::SuppliedHistory original{production, transported};
+-			OpenTTDTownSuppliedHistory candidate{production, transported};
+-			if (original.PctTransported() != openttd_rust_town_percent_transported(&candidate)) {
+-				std::fprintf(stderr, "transported percent mismatch production=%u transported=%u\n", production, transported); std::exit(1);
+-			}
++			std::printf("P %u\n", original.PctTransported());
+ 			checked++;
+ 		}
+ 	}
+@@ -444,44 +294,6 @@
+ 	CompareRadii();
+ 	CompareAuthority();
+ 	ComparePercentTransported();
+-	for (uint32_t dir = 0; dir < 4; dir++) {
+-		for (bool mountain : {false, true}) {
+-			for (uint32_t length : {1, 2, 4, 5, 6, 7, 8, 9, 255, 256, 257}) {
+-				for (uint32_t population : {0, 999, 1000, 249000, 250000}) {
+-					auto w = Fixture(dir, length, mountain); w.town.cache.population = population; Compare(w, mountain ? "mountain-length" : "obstruction-length");
+-				}
+-			}
+-		}
+-		for (uint32_t slope = 0; slope < 32; slope++) {
+-			auto w = Fixture(dir, 4, true); w.tiles[w.start].slope = slope; Compare(w, "entrance-slope");
+-			w = Fixture(dir, 4, true); w.tiles[Along(w, 2)].slope = slope; Compare(w, "mountain-slope");
+-		}
+-		auto w = Fixture(dir, 4, false); w.tiles[Along(w, -1)].roads = 0; Compare(w, "disconnected");
+-		for (uint32_t place : {1, 5}) {
+-			for (uint32_t type : {0U, MP_ROAD, MP_RAILWAY, MP_STATION, MP_TUNNELBRIDGE}) {
+-				for (uint32_t stop = 0; stop < 4; stop++) {
+-					for (uint32_t facing = 0; facing < 4; facing++) {
+-						w = Fixture(dir, 4, true); auto &t = w.tiles[Along(w, place)]; t.type = type; t.stop = stop; t.facing = facing;
+-						Compare(w, place == 1 ? "start-continuation" : "exit-continuation");
+-						if (type == MP_TUNNELBRIDGE) { t.transport = 0; Compare(w, "rail-tunnel"); }
+-					}
+-				}
+-			}
+-			w = Fixture(dir, 4, true); w.tiles[Along(w, place)].valid = false; Compare(w, "invalid-continuation");
+-		}
+-		for (uint32_t place : {1, 2, 3, 4}) { w = Fixture(dir, 4, true); w.tiles[Along(w, place)].valid = false; Compare(w, "invalid-mountain-end"); }
+-		_settings_game.economy.allow_town_level_crossings = false;
+-		w = Fixture(dir, 4, true); w.tiles[Along(w, 5)].type = MP_RAILWAY; Compare(w, "crossing-disabled");
+-		_settings_game.economy.allow_town_level_crossings = true;
+-		for (uint32_t failure = 0; failure < 3; failure++) {
+-			w = Fixture(dir, 4, true);
+-			if (failure == 0) w.road_test = false;
+-			if (failure == 1) w.tunnel_test = false;
+-			if (failure == 2) w.tunnel_execute = false;
+-			Compare(w, "command-failure");
+-		}
+-	}
+-	std::printf("PASS %u unchanged-reference tunnel cases\n", cases);
+ }
+
+ } // namespace TownReference

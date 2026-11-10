@@ -1,0 +1,133 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,130 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file capture.cpp Original-only capture of vehicle/scheduler/pool-oracle.txt (#736). */
++#include "stdafx.h"
++#include "core/pool_type.hpp"
++#include "core/pool_func.hpp"
++#include <cstdio>
++#include <cstdlib>
++#include <string>
++#include <vector>
++
++/* Error leaves the pool code references; no capture case reaches them. */
++[[noreturn]] void FatalErrorI(const std::string &) { std::abort(); }
++[[noreturn]] void SlErrorCorrupt(const std::string &) { std::abort(); }
++
++/* Vehicle's pool parameters (vehicle_type.h, vehicle_base.h) with a minimal item. */
++using ItemID = PoolID<uint32_t, struct ItemIDTag, 0xFF000, 0xFFFFF>;
++struct Item;
++using ItemPool = Pool<Item, ItemID, 512>;
++ItemPool _item_pool("Item");
++struct Item : ItemPool::PoolItem<&_item_pool> {
++	Item *next = nullptr;
++	Item() {} // User-provided, like Vehicle's: the pool-assigned index is kept.
++	~Item() { delete this->next; } // Vehicle::~Vehicle deletes its chain successor.
++};
++INSTANTIATE_POOL_METHODS(Item)
++
++static size_t _growth = SIZE_MAX;
++static std::string Visit(size_t id)
++{
++	if (id == _growth) return "g";
++	if (_growth != SIZE_MAX && id == _growth + 1) return "g+1";
++	return std::to_string(id);
++}
++
++/* "Base vehicle scheduler - production deletion, reuse and growth order": SchedulerLifetimeVehicle::Tick. */
++static bool LifetimeTick(Item *v, bool mutate, std::vector<std::string> &visits)
++{
++	const size_t id = v->index.base();
++	visits.push_back(Visit(id));
++	if (!mutate) return true;
++	if (id == 0) {
++		delete v;
++		return false;
++	}
++	if (id == 2) {
++		new (ItemID(0)) Item();
++		delete Item::Get(ItemID(4));
++		new (ItemID(4)) Item();
++		new (ItemID(3)) Item();
++		delete Item::Get(ItemID(5));
++		_growth = _item_pool.data.size();
++		new (ItemID(static_cast<uint32_t>(_growth))) Item();
++		new (ItemID(static_cast<uint32_t>(_growth + 1))) Item();
++	}
++	if (id == _growth) {
++		delete v;
++		return false;
++	}
++	return true;
++}
++
++static void Lifetime()
++{
++	_item_pool.CleanPool();
++	_growth = SIZE_MAX;
++	std::vector<std::string> visits;
++	auto *head = new (ItemID(0)) Item();
++	head->next = new (ItemID(1)) Item();
++	new (ItemID(2)) Item();
++	new (ItemID(4)) Item();
++	new (ItemID(5)) Item();
++	for (bool mutate : {true, false}) {
++		for (Item *v : Item::Iterate()) LifetimeTick(v, mutate, visits);
++	}
++	std::printf("lifetime %zu |", _item_pool.items);
++	for (const auto &visit : visits) std::printf(" %s", visit.c_str());
++	std::printf("\n");
++	_item_pool.CleanPool();
++}
++
++/* "Base vehicle scheduler - live cursor equals unchanged PoolIterator": VehicleCursorTrace. */
++static void Cursor(bool indexing_growth)
++{
++	_item_pool.CleanPool();
++	_growth = SIZE_MAX;
++	new (ItemID(0)) Item();
++	new (ItemID(2)) Item();
++	new (ItemID(4)) Item();
++	std::vector<std::string> visits;
++	size_t first_unused = 0;
++	for (Item *v : Item::Iterate()) {
++		const size_t id = v->index.base();
++		visits.push_back(Visit(id));
++		if (id == 0) {
++			delete v;
++			new (ItemID(0)) Item();
++			delete Item::Get(ItemID(2));
++			new (ItemID(2)) Item();
++			new (ItemID(3)) Item();
++			new (ItemID(6)) Item();
++			first_unused = _item_pool.first_unused;
++		} else if (id == 2) {
++			delete Item::Get(ItemID(4));
++			if (indexing_growth) {
++				_growth = _item_pool.data.size();
++				new (ItemID(static_cast<uint32_t>(_growth))) Item();
++				new (ItemID(static_cast<uint32_t>(_growth + 1))) Item();
++			}
++		}
++	}
++	_item_pool.CleanPool();
++	bool empty = true;
++	for ([[maybe_unused]] Item *v : Item::Iterate()) empty = false;
++	std::printf("cursor %zu |", first_unused);
++	for (const auto &visit : visits) std::printf(" %s", visit.c_str());
++	std::printf(" | %d\n", empty ? 1 : 0);
++}
++
++int main()
++{
++	Lifetime();
++	Cursor(true);
++	Cursor(false);
++}

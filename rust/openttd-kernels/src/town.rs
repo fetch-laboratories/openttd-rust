@@ -3890,17 +3890,27 @@ mod policy_tests {
         }
     }
 
+    /// Compare regenerated `"<kind> <inputs> <outputs>"` rows with the kind's oracle section,
+    /// which stores only the outputs; the input field counts are the header's.
     fn check_rows(kind: char, actual: &[String], count: usize) {
-        let prefix = format!("{kind} ");
-        let expected: Vec<_> = include_str!("town/policy-oracle.txt")
-            .lines()
-            .filter(|line| line.starts_with(&prefix))
-            .collect();
+        let inputs = match kind {
+            'H' => 4,
+            'R' => 8,
+            'Z' => 1,
+            'A' => 9,
+            'P' => 2,
+            _ => unreachable!("unknown policy oracle kind {kind}"),
+        };
+        let oracle = crate::oracle::parse(include_str!("town/policy-oracle.txt"));
         assert_eq!(actual.len(), count);
-        assert_eq!(expected.len(), count);
-        for (case, (a, e)) in actual.iter().zip(expected).enumerate() {
-            assert_eq!(a, e, "{kind} case {case}");
-        }
+        let rows = actual.iter().map(|row| {
+            let fields: Vec<&str> = row.split(' ').collect();
+            (fields[..=inputs].join(" "), fields[inputs + 1..].join(" "))
+        });
+        assert_eq!(
+            crate::oracle::check(&oracle, &kind.to_string(), rows),
+            count
+        );
     }
     fn supplied_history(
         count: usize,
