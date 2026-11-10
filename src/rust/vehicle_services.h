@@ -190,7 +190,6 @@ inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return v->Record(
 inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->Record().x_pos; }
 inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->Record().y_pos; }
-inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return v->Record().z_pos; }
 inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->Record().x_pos = x; }
 inline void RustWriteVehicleY(Vehicle *v, int32_t y) noexcept { v->Record().y_pos = y; }
 inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->Record().z_pos = z; }
