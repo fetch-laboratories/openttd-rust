@@ -728,7 +728,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         };
         town_names.insert(unsafe { names::bytes(name) }.to_vec());
     }
-    // Randomise the city-status offset: at 1 in 4, ten towns may yield two or three cities.
+    // Randomised offset for city status. This means with e.g. 1-in-4 towns being cities, a map with 10 towns
+    // may have 2 or 3 cities, instead of always 3.
     let larger_towns = observed!((f.s.larger_towns)());
     let city_random_offset = if larger_towns == 0 {
         w::hit(w::TOWN_NO_CITIES);
@@ -736,7 +737,9 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     } else {
         f.random() % u32::from(larger_towns)
     };
-    // The requested number is a suggestion, so creation cannot lock up on a crowded map.
+    // First attempt will be made at creating the suggested number of towns.
+    // Note that this is really a suggested value, not a required one.
+    // We would not like the system to lock up just because the user wanted 100 cities on a 64*64 map, would we?
     loop {
         let larger_towns = observed!((f.s.larger_towns)());
         let city = larger_towns != 0
@@ -745,14 +748,15 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
             w::hit(w::TOWN_CANCELLED);
             return u8::from(false);
         }
-        // Get a unique town name, then try 20 times to create a random-sized town.
+        // Get a unique name for the town.
         if unsafe { f.generate_town_name(name_frame, &raw mut town_names, &raw mut townnameparts) }
+            // try 20 times to create a random-sized town for the first loop.
             && unsafe {
                 f.create_random_town(20, townnameparts, TownSize::TSZ_RANDOM, city, layout)
             }
             .is_some()
         {
-            // If creation succeeded, raise the flag.
+            // If creation was successful, raise a flag.
             current_number = current_number.wrapping_add(1);
         }
         total = total.wrapping_sub(1);
@@ -761,7 +765,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         }
     }
     town_names.clear();
-    // Rebuild the town k-d tree so it is well balanced.
+    // Build the town k-d tree again to make sure it's well balanced
     observed!(crate::town::spatial::rebuild_town_kdtree(f.shared));
     if current_number != 0 {
         unsafe {
@@ -769,7 +773,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         }
         return u8::from(true);
     }
-    // No town was created. Give it a final, more aggressive try.
+    // If current_number is still zero at this point, it means that not a single town has been created.
+    // So give it a last try, but now more aggressive
     w::hit(w::TOWN_FALLBACK);
     let success =
         unsafe { f.generate_town_name(name_frame, std::ptr::null_mut(), &raw mut townnameparts) }
@@ -783,13 +788,14 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
                 )
             }
             .is_some();
-    // If there are no towns at all while generating a new game, bail out.
+    // If there are no towns at all and we are generating new game, bail out
     if !success
         && observed!((f.shared.town_count)()) == 0
         && !observed!((f.leaves.environment.editor)())
     {
         observed!((f.s.no_town_error)());
     }
+    // we are still without a town? we failed, simply
     unsafe {
         result.write(success);
     }

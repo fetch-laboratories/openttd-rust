@@ -454,7 +454,7 @@ impl<'a> Commands<'a> {
         }
         // Or other adjacent road.
         let end = (unsafe { &*self.s.rail }.other_tunnel_bridge_end)(tile.0);
-        // Historical source adds the other end's direction to the ORIGINAL tile.
+        // The other end's direction is added to this tile, not to the other end.
         owns(TileIndex(tile.0.wrapping_add(self.map().offs_by_diag_dir(
             crate::direction_func::reverse_diag_dir(
                 (self.shared.tunnel_bridge_direction)(end),
