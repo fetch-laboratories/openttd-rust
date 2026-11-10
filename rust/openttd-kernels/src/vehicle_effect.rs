@@ -15,7 +15,7 @@
     clippy::too_many_lines
 )]
 use crate::bitmath_func::{gb, has_bit, sb, set_bit, toggle_bit};
-use crate::direction_func::{change_dir, reverse_dir};
+use crate::direction_func::{change_dir_raw, reverse_dir_raw};
 use crate::direction_type::DIRDIFF_90RIGHT;
 use crate::effect::openttd_rust_effect_create_rel as create_rel;
 use crate::effectvehicle_func::{
@@ -202,7 +202,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
         0
     } as i8;
     let dir = if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
-        reverse_dir(direction, |ok| {
+        reverse_dir_raw(direction, |ok| {
             if s.vehicle.assertions {
                 assert!(ok);
             }
@@ -211,7 +211,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
         direction
     };
     let a = SMOKE_POS[usize::from(dir)];
-    let b = SMOKE_POS[usize::from(change_dir(dir, DIRDIFF_90RIGHT, |ok| {
+    let b = SMOKE_POS[usize::from(change_dir_raw(dir, DIRDIFF_90RIGHT, |ok| {
         if s.vehicle.assertions {
             assert!(ok);
         }

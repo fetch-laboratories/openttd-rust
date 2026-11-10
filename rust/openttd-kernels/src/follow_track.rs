@@ -14,7 +14,7 @@
     clippy::too_many_arguments
 )]
 use crate::company_type::Owner;
-use crate::direction_func::reverse_diag_dir;
+use crate::direction_func::reverse_diag_dir_raw;
 use crate::map_func::World;
 use crate::pbs::Pbs;
 use crate::services::Services;
@@ -192,19 +192,19 @@ impl State {
         if self.mode == ROAD
             && ((self.tram(w, road)
                 && self.single_tram(w, self.old_tile.0, road)
-                    == reverse_diag_dir(self.exitdir, |ok| w.check(ok)))
+                    == reverse_diag_dir_raw(self.exitdir, |ok| w.check(ok)))
                 || (w.bay_stop(self.old_tile.0)
                     && w.bay_dir(self.old_tile.0)
-                        == reverse_diag_dir(self.exitdir, |ok| w.check(ok))))
+                        == reverse_diag_dir_raw(self.exitdir, |ok| w.check(ok))))
         {
-            self.reverse_state(reverse_diag_dir(self.exitdir, |ok| w.check(ok)));
+            self.reverse_state(reverse_diag_dir_raw(self.exitdir, |ok| w.check(ok)));
             return true;
         }
         false
     }
     fn try_reverse(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         if self.mode == ROAD && !self.tram(w, road) {
-            self.exitdir = reverse_diag_dir(self.exitdir, |ok| w.check(ok));
+            self.exitdir = reverse_diag_dir_raw(self.exitdir, |ok| w.check(ok));
             self.new_tile.0 = self.old_tile.0;
             self.query(w, road);
             self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir);
@@ -263,7 +263,7 @@ impl State {
                 ) as i32;
                 return;
             }
-            w.check(reverse_diag_dir(dir, |ok| w.check(ok)) == self.exitdir);
+            w.check(reverse_diag_dir_raw(dir, |ok| w.check(ok)) == self.exitdir);
         }
         self.new_tile.0 = w.dimensions.add_diag(self.old_tile.0, self.exitdir);
         self.is_station = (self.mode == RAIL && w.station_rail_raw(self.new_tile.0))
@@ -272,7 +272,7 @@ impl State {
     fn can_enter(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         if self.mode == ROAD
             && w.bay_stop(self.new_tile.0)
-            && reverse_diag_dir(w.bay_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+            && reverse_diag_dir_raw(w.bay_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
         {
             self.err = EC_NO_WAY;
             return false;
@@ -280,14 +280,15 @@ impl State {
         if self.tram(w, road) {
             let dir = self.single_tram(w, self.new_tile.0, road);
             if dir != crate::direction_type::INVALID_DIAGDIR
-                && dir != reverse_diag_dir(self.exitdir, |ok| w.check(ok))
+                && dir != reverse_diag_dir_raw(self.exitdir, |ok| w.check(ok))
             {
                 self.err = EC_NO_WAY;
                 return false;
             }
         }
         if self.mode == ROAD && w.depot(self.new_tile.0, self.mode) {
-            if reverse_diag_dir(w.road_depot_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+            if reverse_diag_dir_raw(w.road_depot_dir(self.new_tile.0), |ok| w.check(ok))
+                != self.exitdir
             {
                 self.err = EC_NO_WAY;
                 return false;
@@ -299,7 +300,8 @@ impl State {
         }
         if self.mode == RAIL
             && w.depot(self.new_tile.0, self.mode)
-            && reverse_diag_dir(w.rail_depot_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+            && reverse_diag_dir_raw(w.rail_depot_dir(self.new_tile.0), |ok| w.check(ok))
+                != self.exitdir
         {
             self.err = EC_NO_WAY;
             return false;

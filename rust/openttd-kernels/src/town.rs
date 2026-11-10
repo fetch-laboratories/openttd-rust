@@ -1011,10 +1011,10 @@ impl Engine<'_> {
         TileIndex(self.map().add_dir(tile.0, dir.0))
     }
     fn reverse_diag_dir(&self, dir: DiagDirection) -> DiagDirection {
-        DiagDirection(reverse_diag_dir(dir.0, self.check()))
+        reverse_diag_dir(dir, self.check())
     }
     fn diag_dir_to_axis(&self, dir: DiagDirection) -> Axis {
-        Axis(diag_dir_to_axis(dir.0, self.check()))
+        diag_dir_to_axis(dir, self.check())
     }
     fn diag_dir_to_road_bits(&self, dir: DiagDirection) -> RoadBits {
         RoadBits(diag_dir_to_road_bits(dir.0, self.check()))
@@ -1442,11 +1442,8 @@ impl Engine<'_> {
         }
         /* Lookup table for the used diff values */
         let tid_lt = [
-            self.tile_offs_by_diag_dir(change_diag_dir_typed(
-                dir,
-                DiagDirDiff::DIAGDIRDIFF_90RIGHT,
-            )),
-            self.tile_offs_by_diag_dir(change_diag_dir_typed(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT)),
+            self.tile_offs_by_diag_dir(change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT)),
+            self.tile_offs_by_diag_dir(change_diag_dir(dir, DiagDirDiff::DIAGDIRDIFF_90LEFT)),
             self.tile_offs_by_diag_dir(self.reverse_diag_dir(dir)),
         ];
         let dist_multi = (dist_multi + 1) * 4;
@@ -1980,10 +1977,6 @@ impl Engine<'_> {
         }
     }
 }
-/// `ChangeDiagDir`, over the shared modulo-four helper.
-fn change_diag_dir_typed(dir: DiagDirection, delta: DiagDirDiff) -> DiagDirection {
-    DiagDirection(change_diag_dir(dir.0, delta.0))
-}
 /// `TownAllowedToBuildRoads`.
 fn town_allowed_to_build_roads(modes: TownExpandModes) -> bool {
     modes.test(TownExpandMode::Roads)
@@ -2049,8 +2042,8 @@ impl Engine<'_> {
                         return TownGrowthResult::SearchStopped;
                     }
                     /* Return if neither side of the new road is a house */
-                    let right = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
-                    let left = change_diag_dir_typed(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
+                    let right = change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90RIGHT);
+                    let left = change_diag_dir(target_dir, DiagDirDiff::DIAGDIRDIFF_90LEFT);
                     if !self
                         .is_tile_type(self.tile_add_by_diag_dir(tile, right), TileType::MP_HOUSE)
                         && !self

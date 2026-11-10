@@ -860,7 +860,7 @@ impl<'a> World<'a> {
         let dir = (v.vehicle()).direction();
         let tile = self.map().add_diag(
             Self::tile(v),
-            crate::direction_func::dir_to_diag_dir(dir, |valid| {
+            crate::direction_func::dir_to_diag_dir_raw(dir, |valid| {
                 if self.v.assertions {
                     assert!(valid);
                 }
@@ -883,7 +883,7 @@ impl<'a> World<'a> {
         } else {
             DIRDIFF_90LEFT
         };
-        (v.vehicle()).write_direction(crate::direction_func::change_dir(
+        (v.vehicle()).write_direction(crate::direction_func::change_dir_raw(
             (v.vehicle()).direction(),
             diff,
             |valid| {

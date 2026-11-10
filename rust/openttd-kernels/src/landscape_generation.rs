@@ -15,7 +15,7 @@
 use crate::clear_map::{CLEAR_DESERT, CLEAR_ROUGH};
 use crate::clear_map::{CLEAR_GRASS, CLEAR_ROCKS};
 use crate::command_type::DoCommandFlag as F;
-use crate::direction_func::{change_diag_dir, diag_dir_to_axis, reverse_diag_dir};
+use crate::direction_func::{change_diag_dir_raw, diag_dir_to_axis_raw, reverse_diag_dir_raw};
 use crate::direction_type::AXIS_Y;
 use crate::direction_type::{
     DIAGDIRDIFF_90LEFT, DIAGDIRDIFF_90RIGHT, DIAGDIRDIFF_END, DIAGDIRDIFF_REVERSE, DIAGDIRDIFF_SAME,
@@ -467,7 +467,7 @@ impl World<'_> {
         }
         let direction = ((r >> 22) & 3) as u8;
         let (mut width, mut height) = (template.width, template.height);
-        if diag_dir_to_axis(direction, |ok| {
+        if diag_dir_to_axis_raw(direction, |ok| {
             crate::movement::native_assert(self.a.shared(), ok);
         }) == AXIS_Y
         {
@@ -1100,9 +1100,9 @@ impl World<'_> {
                     if is_inclined_slope(slope)
                         && (self.s.tile_max_z)(tile) == (self.s.tile_max_z)(other)
                         && (get_inclined_slope_direction(slope)
-                            == change_diag_dir(dir, DIAGDIRDIFF_90RIGHT)
+                            == change_diag_dir_raw(dir, DIAGDIRDIFF_90RIGHT)
                             || get_inclined_slope_direction(slope)
-                                == change_diag_dir(dir, DIAGDIRDIFF_90LEFT))
+                                == change_diag_dir_raw(dir, DIAGDIRDIFF_90LEFT))
                     {
                         desired = slope;
                         sloped_river = true;
@@ -1131,14 +1131,16 @@ impl World<'_> {
                 w::hit(w::GENERATION_WIDEN_TERRAFORM);
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
-                let direction = reverse_diag_dir(get_inclined_slope_direction(desired), |ok| {
+                let direction = reverse_diag_dir_raw(get_inclined_slope_direction(desired), |ok| {
                     crate::movement::native_assert(self.a.shared(), ok);
                 });
                 for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
                     }
-                    let other = self.map.add_diag(tile, change_diag_dir(direction, diff));
+                    let other = self
+                        .map
+                        .add_diag(tile, change_diag_dir_raw(direction, diff));
                     if self.water(other) && (self.a.river)(other) && self.flat(other) {
                         return;
                     }
@@ -1162,7 +1164,7 @@ impl World<'_> {
             let upstream = self.map.add_diag(tile, direction);
             let downstream = self.map.add_diag(
                 tile,
-                reverse_diag_dir(direction, |ok| {
+                reverse_diag_dir_raw(direction, |ok| {
                     crate::movement::native_assert(self.a.shared(), ok);
                 }),
             );

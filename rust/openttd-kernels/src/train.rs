@@ -783,7 +783,7 @@ impl Game<'_> {
         // SAFETY: The process-lifetime tables resolve the original Station::Get once.
         let stations = unsafe { &*(*((self.services.station_catchment)())).station };
         let st = (stations.station)(station_id.0);
-        let dir = crate::direction_func::dir_to_diag_dir((id).vehicle().direction(), |ok| {
+        let dir = crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction(), |ok| {
             world.check(ok);
         });
         let station_ahead = (crate::follow_track::platform_length_station(&world, tile.0, dir)

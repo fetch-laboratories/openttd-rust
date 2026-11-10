@@ -27,7 +27,7 @@ pub(crate) fn axis_to_road_bits(
     a: crate::direction_type::Axis,
     check: impl Fn(bool) + Copy,
 ) -> crate::road_type::RoadBits {
-    check(crate::direction_func::is_valid_axis(a.0));
+    check(crate::direction_func::is_valid_axis_raw(a.0));
     if a == crate::direction_type::Axis::AXIS_X {
         crate::road_type::RoadBits::ROAD_X
     } else {

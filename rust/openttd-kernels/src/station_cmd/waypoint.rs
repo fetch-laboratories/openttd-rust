@@ -416,10 +416,12 @@ impl Ctx<'_> {
     }
     /// `TileOffsByAxis(OtherAxis(axis))`, as the unsigned pattern of its `TileIndexDiff`.
     fn offs_by_other_axis(&self, axis: Axis) -> u32 {
-        self.map()
-            .offs_by_axis(crate::direction_func::other_axis(axis.0, |ok| {
+        self.map().offs_by_axis(
+            crate::direction_func::other_axis(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }))
+            })
+            .0,
+        )
     }
     /// The common checks of `CmdBuildRailWaypoint` and `CmdBuildRoadWaypoint` after
     /// their class checks: the number of parts to build, whether a deleted
@@ -463,7 +465,7 @@ impl Ctx<'_> {
         let (start_tile, axis, width, height) =
             (args.start_tile, args.axis, args.width, args.height);
         let spec_class = args.spec_class;
-        if !crate::direction_func::is_valid_axis(axis.0) {
+        if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
@@ -662,7 +664,7 @@ impl Ctx<'_> {
         let (start_tile, axis, width, height) =
             (args.start_tile, args.axis, args.width, args.height);
         let spec_class = args.spec_class;
-        if !crate::direction_func::is_valid_axis(axis.0) {
+        if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
@@ -698,10 +700,9 @@ impl Ctx<'_> {
                 crate::economy_type::Price::PR_BUILD_STATION_TRUCK,
             )
         };
-        let ddir = crate::direction_type::DiagDirection(crate::direction_func::axis_to_diag_dir(
-            axis.0,
-            |ok| crate::movement::native_assert(self.shared, ok),
-        ));
+        let ddir = crate::direction_func::axis_to_diag_dir(axis, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         let mut est = StationID::INVALID;
         self.calculate_road_stop_cost(RoadStopCost {
             cost,

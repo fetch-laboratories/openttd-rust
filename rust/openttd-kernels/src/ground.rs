@@ -36,7 +36,7 @@ fn crossing_rail_axis(
     world: &crate::map_func::World<'_>,
     check: impl Fn(bool) + Copy,
 ) -> Axis {
-    Axis(crate::direction_func::other_axis(
+    Axis(crate::direction_func::other_axis_raw(
         world.crossing_road_axis(tile),
         check,
     ))

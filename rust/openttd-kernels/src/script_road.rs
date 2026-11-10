@@ -504,7 +504,7 @@ fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbou
         }
         crate::tile_type::MP_STATION => {
             w.drive_through_stop_tile(neighbour_tile)
-                && crate::direction_func::diag_dir_to_axis(neighbour, check(w))
+                && crate::direction_func::diag_dir_to_axis_raw(neighbour, check(w))
                     == w.drive_through_axis(neighbour_tile)
         }
         _ => false,

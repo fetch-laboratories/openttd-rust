@@ -55,7 +55,7 @@ impl RoadTypeFlags {
         self.0 & (1 << element.0) != 0
     }
 }
-use crate::direction_func::dir_to_diag_dir as diag;
+use crate::direction_func::dir_to_diag_dir_raw as diag;
 use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;

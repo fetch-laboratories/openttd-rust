@@ -14,7 +14,7 @@ use crate::rail_map::is_pbs_signal as pbs;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
-use crate::direction_func::reverse_diag_dir;
+use crate::direction_func::reverse_diag_dir_raw;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::direction_type::{
     Axis, DIAGDIR_BEGIN, DIAGDIR_END, DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW,
@@ -375,7 +375,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
         let mut exitdir = if dir == INVALID_DIAGDIR {
             INVALID_DIAGDIR
         } else {
-            reverse_diag_dir(dir, |ok| native_assert(w.shared, ok))
+            reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok))
         };
         match read!(w, shared, tile_type, tile) {
             MP_RAILWAY => {
@@ -392,7 +392,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         train_on_tile(w, tile, &mut flags);
                         exitdir = w.view().rail_depot_dir(tile);
                         tile = w.map.add_diag(tile, exitdir);
-                        dir = reverse_diag_dir(exitdir, |ok| native_assert(w.shared, ok));
+                        dir = reverse_diag_dir_raw(exitdir, |ok| native_assert(w.shared, ok));
                     } else if dir == w.view().rail_depot_dir(tile) {
                         // Entered a depot.
                         train_on_tile(w, tile, &mut flags);
@@ -428,7 +428,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     }
                     let td = ((u32::from(tracks.0) * 0x101)
                         & u32::from(crate::track_func::diagdir_reaches_trackdirs(
-                            reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)),
+                            reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)),
                         )))
                     .trailing_zeros() as u8;
                     let signal = signal_presence(w, tile, masked.0, td);
@@ -491,7 +491,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         {
                             let next = Item {
                                 tile: w.map.add_diag(tile, exit),
-                                dir: reverse_diag_dir(exit, |ok| native_assert(w.shared, ok)),
+                                dir: reverse_diag_dir_raw(exit, |ok| native_assert(w.shared, ok)),
                             };
                             if !maybe_add_to_todo_set(w, next, Item { tile, dir: exit }) {
                                 return flags | SigFlags::FULL;
@@ -538,10 +538,10 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     // Incoming from the wormhole.
                     train_on_tile(w, tile, &mut flags);
                     dir = direction;
-                    exitdir = reverse_diag_dir(direction, |ok| native_assert(w.shared, ok));
+                    exitdir = reverse_diag_dir_raw(direction, |ok| native_assert(w.shared, ok));
                     tile = w.map.add_diag(tile, exitdir);
                 } else {
-                    if reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)) != direction {
+                    if reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)) != direction {
                         continue;
                     }
                     train_on_tile(w, tile, &mut flags);
@@ -686,11 +686,11 @@ fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
             add_tbd(Item { tile, dir });
             add_tbd(Item {
                 tile: w.map.add_diag(tile, dir),
-                dir: reverse_diag_dir(dir, |ok| native_assert(w.shared, ok)),
+                dir: reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)),
             });
         } else {
             tile = w.map.add_diag(tile, dir);
-            dir = reverse_diag_dir(dir, |ok| native_assert(w.shared, ok));
+            dir = reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok));
             if (track_status_to_track_bits(crate::movement::track_status(
                 w.shared,
                 tile,

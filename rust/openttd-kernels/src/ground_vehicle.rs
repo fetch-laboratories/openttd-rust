@@ -120,7 +120,7 @@ pub unsafe extern "C" fn openttd_rust_ground_destroy(state: *mut State) {
     drop(unsafe { Box::from_raw(state) });
 }
 
-use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
+use crate::direction_func::{diag_dir_to_axis_raw, dir_to_diag_dir_raw};
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW};
 use crate::engine_type::{ACCELERATION_MAGLEV, ACCELERATION_NORMAL};
 use crate::newgrf_properties::{
@@ -642,14 +642,14 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         if s.assertions {
             assert!(direction < crate::direction_type::DIR_END);
         }
-        let dir = dir_to_diag_dir(direction, |ok| {
+        let dir = dir_to_diag_dir_raw(direction, |ok| {
             if s.assertions {
                 assert!(ok);
             }
         });
         let x = v.x();
         let y = v.y();
-        let mut d = (if diag_dir_to_axis(dir, |ok| {
+        let mut d = (if diag_dir_to_axis_raw(dir, |ok| {
             if s.assertions {
                 assert!(ok);
             }

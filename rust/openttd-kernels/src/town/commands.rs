@@ -435,12 +435,19 @@ impl<'a> Commands<'a> {
         if !crate::tile_map::is_tile_owner(self.shared, tile.0, OWNER_TOWN) {
             return false;
         }
-        let adjacent = TileIndex(tile.0.wrapping_add(self.map().offs_by_diag_dir(
-            crate::direction_func::reverse_diag_dir(
-                (self.shared.tunnel_bridge_direction)(tile.0),
-                |ok| crate::movement::native_assert(self.shared, ok),
+        let adjacent = TileIndex(
+            tile.0.wrapping_add(
+                self.map().offs_by_diag_dir(
+                    crate::direction_func::reverse_diag_dir(
+                        crate::direction_type::DiagDirection(
+                            (self.shared.tunnel_bridge_direction)(tile.0),
+                        ),
+                        |ok| crate::movement::native_assert(self.shared, ok),
+                    )
+                    .0,
+                ),
             ),
-        )));
+        );
         let owns = |at: TileIndex| {
             self.tile_type(at) == TileType::MP_ROAD
                 && crate::tile_map::is_tile_owner(self.shared, at.0, OWNER_TOWN)
@@ -452,12 +459,19 @@ impl<'a> Commands<'a> {
         // Or other adjacent road.
         let end = (unsafe { &*self.s.rail }.other_tunnel_bridge_end)(tile.0);
         // Historical source adds the other end's direction to the ORIGINAL tile.
-        owns(TileIndex(tile.0.wrapping_add(self.map().offs_by_diag_dir(
-            crate::direction_func::reverse_diag_dir(
-                (self.shared.tunnel_bridge_direction)(end),
-                |ok| crate::movement::native_assert(self.shared, ok),
+        owns(TileIndex(
+            tile.0.wrapping_add(
+                self.map().offs_by_diag_dir(
+                    crate::direction_func::reverse_diag_dir(
+                        crate::direction_type::DiagDirection(
+                            (self.shared.tunnel_bridge_direction)(end),
+                        ),
+                        |ok| crate::movement::native_assert(self.shared, ok),
+                    )
+                    .0,
+                ),
             ),
-        ))))
+        ))
     }
     /// Delete a town (`CmdDeleteTown`, scenario editor or worldgen only).
     fn delete_town(&self, out: *mut CommandCost, flags: DoCommandFlags, t: TownRef) {

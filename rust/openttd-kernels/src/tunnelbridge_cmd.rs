@@ -21,7 +21,7 @@ use crate::bridge::{MAX_BRIDGES, calc_bridge_len_cost_factor, get_bridge_foundat
 use crate::command_type::DoCommandFlag;
 use crate::company::price;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
-use crate::direction_func::{axis_to_diag_dir, diag_dir_to_axis, reverse_diag_dir};
+use crate::direction_func::{axis_to_diag_dir_raw, diag_dir_to_axis_raw, reverse_diag_dir_raw};
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR};
 use crate::economy_type::{
     PR_BUILD_AQUEDUCT, PR_BUILD_BRIDGE, PR_BUILD_FOUNDATION, PR_BUILD_TUNNEL, PR_CLEAR_AQUEDUCT,
@@ -618,7 +618,7 @@ impl<'a> World<'a> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            let dir = axis_to_diag_dir(axis, |ok| {
+            let dir = axis_to_diag_dir_raw(axis, |ok| {
                 crate::movement::native_assert(self.s, ok);
             });
             let valid_company = (self.s.company_valid)(company);
@@ -639,7 +639,7 @@ impl<'a> World<'a> {
                         end,
                         owner,
                         bridge_type,
-                        DiagDirection(reverse_diag_dir(dir, |ok| {
+                        DiagDirection(reverse_diag_dir_raw(dir, |ok| {
                             crate::movement::native_assert(self.s, ok);
                         })),
                         RailType(railtype),
@@ -696,7 +696,7 @@ impl<'a> World<'a> {
                         owner_road,
                         owner_tram,
                         bridge_type,
-                        DiagDirection(reverse_diag_dir(dir, |ok| {
+                        DiagDirection(reverse_diag_dir_raw(dir, |ok| {
                             crate::movement::native_assert(self.s, ok);
                         })),
                         RoadType(road),
@@ -711,7 +711,7 @@ impl<'a> World<'a> {
                     (self.a.make_aqueduct)(
                         end,
                         owner,
-                        DiagDirection(reverse_diag_dir(dir, |ok| {
+                        DiagDirection(reverse_diag_dir_raw(dir, |ok| {
                             crate::movement::native_assert(self.s, ok);
                         })),
                     );
@@ -723,7 +723,7 @@ impl<'a> World<'a> {
             (self.a.mark_bridge)(
                 start,
                 end,
-                DiagDirection(axis_to_diag_dir(axis, |ok| {
+                DiagDirection(axis_to_diag_dir_raw(axis, |ok| {
                     crate::movement::native_assert(self.s, ok);
                 })),
                 start_z as u32,
@@ -837,7 +837,7 @@ impl<'a> World<'a> {
         }
         let delta = self.map.offs_by_diag_dir(direction);
         // Both source branches deliberately compare against Map::MaxX().
-        let in_way = if diag_dir_to_axis(direction, |ok| {
+        let in_way = if diag_dir_to_axis_raw(direction, |ok| {
             crate::movement::native_assert(self.s, ok);
         }) == 1
         {
@@ -935,7 +935,7 @@ impl<'a> World<'a> {
                 (self.a.make_rail_tunnel)(
                     end,
                     company,
-                    DiagDirection(reverse_diag_dir(direction, |ok| {
+                    DiagDirection(reverse_diag_dir_raw(direction, |ok| {
                         crate::movement::native_assert(self.s, ok);
                     })),
                     RailType(railtype),
@@ -971,7 +971,7 @@ impl<'a> World<'a> {
                 (self.a.make_road_tunnel)(
                     end,
                     company,
-                    DiagDirection(reverse_diag_dir(direction, |ok| {
+                    DiagDirection(reverse_diag_dir_raw(direction, |ok| {
                         crate::movement::native_assert(self.s, ok);
                     })),
                     RoadType(road),
@@ -1106,7 +1106,7 @@ impl<'a> World<'a> {
                 crate::ground::clear_square(end, self.s);
                 self.signal(
                     tile,
-                    reverse_diag_dir(dir, |ok| crate::movement::native_assert(self.s, ok)),
+                    reverse_diag_dir_raw(dir, |ok| crate::movement::native_assert(self.s, ok)),
                     owner,
                 );
                 self.signal(end, dir, owner);
@@ -1255,7 +1255,7 @@ impl<'a> World<'a> {
             if rail {
                 self.signal(
                     tile,
-                    reverse_diag_dir(direction, |ok| {
+                    reverse_diag_dir_raw(direction, |ok| {
                         crate::movement::native_assert(self.s, ok);
                     }),
                     owner,
@@ -1388,7 +1388,7 @@ impl<'a> World<'a> {
             && crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) != WATER
         {
             let direction = (self.s.tunnel_bridge_direction)(tile);
-            let axis = diag_dir_to_axis(direction, |ok| {
+            let axis = diag_dir_to_axis_raw(direction, |ok| {
                 crate::movement::native_assert(self.s, ok);
             });
             let (mut slope_old, mut z_old) = self.slope_z(tile);
@@ -1406,7 +1406,7 @@ impl<'a> World<'a> {
         w::hit(w::TB_BUILD_ABOVE);
         if (self.a.is_tunnel)(tile)
             || (axis
-                != diag_dir_to_axis((self.s.tunnel_bridge_direction)(tile), |ok| {
+                != diag_dir_to_axis_raw((self.s.tunnel_bridge_direction)(tile), |ok| {
                     crate::movement::native_assert(self.s, ok);
                 })
                 && height > self.bridge_height(tile))

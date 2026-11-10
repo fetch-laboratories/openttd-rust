@@ -57,7 +57,7 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
                     MP_RAILWAY => is_possible_crossing(
                         &world,
                         neighbour,
-                        crate::direction_func::diag_dir_to_axis(dir, check),
+                        crate::direction_func::diag_dir_to_axis_raw(dir, check),
                     ),
                     MP_WATER => !world.asserted(|m| crate::water_map::is_water(m, neighbour)),
                     _ => false,

@@ -1773,7 +1773,7 @@ fn setup_farm_field_fence(
     let check = |ok| world.check(ok);
     let diff = map
         .coordinates()
-        .offs_by_axis(other_axis(diag_dir_to_axis(side.0, check), check));
+        .offs_by_axis(other_axis(diag_dir_to_axis(side, check), check).0);
     loop {
         tile = TileIndex(map.coordinates().wrap_to_map(tile.0, map.size_y));
         // The tile is a field whose neighbour in `side` is not a field with a fence in the

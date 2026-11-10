@@ -1963,9 +1963,9 @@ impl Ctx<'_> {
             if self.is_station_tile_blocked(tile) {
                 continue;
             }
-            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
+            let dir = axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }));
+            });
             let tile_offset = self.map().offs_by_diag_dir(dir.0);
             let mut platform_begin = tile;
             let mut platform_end = tile;
@@ -2017,7 +2017,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis.0) {
+        if !crate::rail::val_param_rail_type(self.shared, rt.0) || !is_valid_axis(axis) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
         /* Check if the given station class is valid */
@@ -2113,9 +2113,12 @@ impl Ctx<'_> {
         }
         let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
         let tile_delta = self.map().offs_by_axis(axis.0); // offset to go to the next platform tile
-        let track_delta = self.map().offs_by_axis(other_axis(axis.0, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        })); // offset to go to the next track
+        let track_delta = self.map().offs_by_axis(
+            other_axis(axis, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            })
+            .0,
+        ); // offset to go to the next track
         let layout = (self.s.rail_layout)(
             statspec,
             crate::newgrf_station::get_station_layout_key(numtracks, plat_len),
@@ -3126,13 +3129,13 @@ impl Ctx<'_> {
             unit_cost,
         } = context;
         let invalid_dirs = if is_drive_through {
-            let dir = DiagDirection(axis_to_diag_dir(axis.0, |ok| {
+            let dir = axis_to_diag_dir(axis, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }));
+            });
             DiagDirections::from_element(dir)
-                | DiagDirections::from_element(DiagDirection(reverse_diag_dir(dir.0, |ok| {
+                | DiagDirections::from_element(reverse_diag_dir(dir, |ok| {
                     crate::movement::native_assert(self.shared, ok);
-                })))
+                }))
         } else {
             DiagDirections::from_element(ddir)
         };
@@ -3348,9 +3351,9 @@ impl Ctx<'_> {
         if !is_drive_through && road_type_is_tram(rt.0) {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let axis = Axis(diag_dir_to_axis(ddir.0, |ok| {
+        let axis = diag_dir_to_axis(ddir, |ok| {
             crate::movement::native_assert(self.shared, ok);
-        }));
+        });
         self.check_if_authority_allows_new_station(cost, tile, flags);
         if !cost.ok() {
             return;
@@ -4921,9 +4924,9 @@ impl Ctx<'_> {
         if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }
-        let direction = DiagDirection(reverse_diag_dir(direction.0, |ok| {
+        let direction = reverse_diag_dir(direction, |ok| {
             crate::movement::native_assert(self.shared, ok);
-        }));
+        });
         /* Docks cannot be placed on rapids */
         if (self.shared.has_water_ground)(tile.0) {
             return cost.error(self.s.strings.unsuitable);
@@ -4955,9 +4958,10 @@ impl Ctx<'_> {
             StationType::Dock,
             StationGfx(
                 GFX_DOCK_BASE_WATER_PART
-                    + diag_dir_to_axis(direction.0, |ok| {
+                    + diag_dir_to_axis(direction, |ok| {
                         crate::movement::native_assert(self.shared, ok);
-                    }),
+                    })
+                    .0,
             ),
         );
         if !ret.ok() {

@@ -12,7 +12,7 @@
 #![allow(unsafe_code, clippy::many_single_char_names)]
 use crate::bitmath_func::{has_bit, sb, set_bit};
 use crate::direction_func::dir_to_diag_dir;
-use crate::direction_type::{Axis, DiagDirection};
+use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::road::State as RoadState;
 use crate::roadstop_base::{RoadStopStatusFlag as StatusFlag, RoadStopStatusFlags as StatusFlags};
 use crate::roadveh::{
@@ -406,9 +406,9 @@ pub(crate) unsafe fn enter(
     // Vehicles entering a drive-through stop from the 'normal' side use first bay (bay 0).
     let e = entry(
         state,
-        DiagDirection(dir_to_diag_dir(v.direction(), |ok| {
+        dir_to_diag_dir(Direction(v.direction()), |ok| {
             crate::movement::native_assert(s, ok);
-        })),
+        }),
     );
     enter_entry(e, total_length(v));
     // Indicate a drive-through stop
@@ -452,9 +452,9 @@ pub(crate) unsafe fn leave(
         // Otherwise just leave the drive through's entry cache.
         let e = entry(
             state,
-            DiagDirection(dir_to_diag_dir(v.direction(), |ok| {
+            dir_to_diag_dir(Direction(v.direction()), |ok| {
                 crate::movement::native_assert(s, ok);
-            })),
+            }),
         );
         leave_entry(e, total_length(v));
     }
@@ -512,9 +512,9 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
         vehicle.for_each_on_tile(tile.0, |v| {
             // Not a RV or not in the right direction or crashed :(
             if v.vehicle_type() != VehicleType::ROAD.0
-                || DiagDirection(dir_to_diag_dir(v.direction(), |ok| {
+                || dir_to_diag_dir(Direction(v.direction()), |ok| {
                     crate::movement::native_assert(s, ok);
-                })) != entry_dir
+                }) != entry_dir
                 || !v.is_front_engine()
                 || v.status() & VS_CRASHED != 0
             {

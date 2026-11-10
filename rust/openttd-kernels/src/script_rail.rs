@@ -121,7 +121,7 @@ fn rail_tracks(s: &Services, tile: u32) -> u32 {
         return u32::from(track_to_track_bits(track, c));
     }
     if level_crossing_tile(s, tile) {
-        let axis = crate::direction_func::other_axis(w.crossing_road_axis(tile), c);
+        let axis = crate::direction_func::other_axis_raw(w.crossing_road_axis(tile), c);
         return u32::from(axis_to_track_bits(axis, c));
     }
     if rail_depot_tile(s, tile) {
