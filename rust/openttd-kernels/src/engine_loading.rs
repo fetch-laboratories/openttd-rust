@@ -1077,12 +1077,17 @@ pub unsafe extern "C" fn openttd_rust_engine_file_badge(
     file: File,
     badge: u32,
 ) -> u32 {
-    finalise_file_badges(s, file, crate::newgrf_badge_type::BadgeID(badge))
+    finalise_file_badges(s, file, crate::newgrf_badge_type::BadgeID(badge)).0
 }
 /// `FinaliseBadges`' engine loop for one GRF file's badge: append the badge to every engine
-/// from `file`, returning the feature mask (`GrfSpecFeatures`) of those engines' types.
-fn finalise_file_badges(s: &Services, file: File, badge: crate::newgrf_badge_type::BadgeID) -> u32 {
-    let mut features = 0;
+/// from `file`, returning the features of those engines' types.
+fn finalise_file_badges(
+    s: &Services,
+    file: File,
+    badge: crate::newgrf_badge_type::BadgeID,
+) -> crate::newgrf::GrfSpecFeatures {
+    use crate::newgrf::{GrfSpecFeature, GrfSpecFeatures};
+    let mut features = GrfSpecFeatures::EMPTY;
     let mut from = 0;
     loop {
         let e = next(s, from);
@@ -1096,7 +1101,7 @@ fn finalise_file_badges(s: &Services, file: File, badge: crate::newgrf_badge_typ
         unsafe {
             (*e.shell.cast_mut()).bindings.badges.push(badge.0);
         }
-        features |= 1 << e.kind.0;
+        features.set(GrfSpecFeature(GrfSpecFeature::GSF_TRAINS.0 + e.kind.0));
     }
     features
 }
