@@ -13,6 +13,8 @@
 # with the income loop's last spec (payment INT64_MAX, periods 255 and 255, callback failed). Output: profit,
 # visual_transfer after, profit-callback calls, the last callback's argument.
 # invalid: an invalid spec's income for UINT32_MAX pieces, distance UINT32_MAX, 65535 periods; profit-callback calls.
+# Recipe: tools/oracle-recipes/income.patch applied to that fixture; `python3 tools/oracle-capture.py income` rebuilds
+# the capture against the pinned sources only and checks this file byte for byte.
 # Conversion (#736 oracle compaction): the income stream splits into two columns, each in its own nesting
 # order (outermost first) over the same domain; the test runs every case in the original order above, so
 # the never-reset var18 carries exactly as captured, then reorders. income ("income calls"): pieces,

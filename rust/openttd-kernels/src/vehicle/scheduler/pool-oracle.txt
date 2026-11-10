@@ -5,6 +5,8 @@
 # whose user-provided constructor keeps the pool-assigned index and whose destructor deletes its chain successor
 # (Vehicle::~Vehicle). Each case replays the fixture's mutation script with `for (T *v : T::Iterate())`;
 # c++ -std=c++20 -O0|-O2 -DNDEBUG -DUNIX -DFMT_HEADER_ONLY -I $R/src capture.cpp $R/src/core/pool_func.cpp.
+# Recipe: tools/oracle-recipes/pool.patch creates that program; `python3 tools/oracle-capture.py pool` rebuilds it
+# against the pinned sources only and checks this file byte for byte.
 # Both streams are identical. g is the pool's data.size() when the script allocates past it (growth).
 # lifetime ("production deletion, reuse and growth order"): items left | visits over a mutating then a plain pass.
 # cursor ("live cursor equals unchanged PoolIterator"), with then without growth: first_unused after the first
