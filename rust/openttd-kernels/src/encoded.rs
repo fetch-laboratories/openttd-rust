@@ -7,6 +7,7 @@
 
 //! Encoded-string compatibility and serialization; results own all returned storage.
 
+use crate::consumer::SeparatorUsage;
 use crate::control_codes::{
     SCC_ENCODED, SCC_ENCODED_INTERNAL, SCC_ENCODED_NUMERIC, SCC_ENCODED_STRING,
     SCC_RECORD_SEPARATOR,
@@ -285,7 +286,11 @@ pub(super) fn fix_scc_encoded_negative(src: &[u8]) -> Output {
     let separator = utf8::encode(SCC_RECORD_SEPARATOR);
     while position < src.len() {
         /* Copy until next record. */
-        let copied = consumer::separator(&src[position..], &separator.bytes[..separator.length], 1);
+        let copied = consumer::until(
+            &src[position..],
+            &separator.bytes[..separator.length],
+            SeparatorUsage::READ_ONE_SEPARATOR,
+        );
         result.append(&src[position..position + copied.result_length]);
         position += copied.consumed_length;
         /* Check whether this is a numeric parameter. */
@@ -344,8 +349,11 @@ pub(super) fn replace_param<'a>(
     let separator = utf8::encode(SCC_RECORD_SEPARATOR);
     let mut parameters = Vec::new();
     while position < src.len() {
-        let lengths =
-            consumer::separator(&src[position..], &separator.bytes[..separator.length], 3);
+        let lengths = consumer::until(
+            &src[position..],
+            &separator.bytes[..separator.length],
+            SeparatorUsage::SKIP_ONE_SEPARATOR,
+        );
         let start = position;
         let record = &src[start..start + lengths.result_length];
         position += lengths.consumed_length;
