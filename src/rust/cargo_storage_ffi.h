@@ -66,9 +66,7 @@ void openttd_rust_cargo_packet_tile(OpenTTDCargoPacket *, const OpenTTDCargoStor
 void openttd_rust_cargo_packet_feeder(OpenTTDCargoPacket *, int64_t);
 int64_t openttd_rust_cargo_packet_share(const OpenTTDCargoPacket *, uint32_t);
 uint32_t openttd_rust_cargo_packet_distance(const OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t);
-void *openttd_rust_cargo_packet_split(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, uint32_t);
 void openttd_rust_cargo_packet_merge(OpenTTDCargoPacket *, const OpenTTDCargoStorageServices *, void *);
-void openttd_rust_cargo_packet_reduce(OpenTTDCargoPacket *, uint32_t);
 OpenTTDCargoList *openttd_rust_cargo_list_new(uint8_t);
 void openttd_rust_cargo_list_destroy(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 void openttd_rust_cargo_list_clear(OpenTTDCargoList *);
@@ -91,7 +89,6 @@ void openttd_rust_cargo_list_rebuild(OpenTTDCargoList *, const OpenTTDCargoStora
 void openttd_rust_cargo_list_append(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, void *, uint16_t);
 uint16_t openttd_rust_cargo_list_first(const OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 uint8_t openttd_rust_cargo_list_has(const OpenTTDCargoList *, const uint16_t *, size_t);
-void openttd_rust_cargo_list_age(OpenTTDCargoList *, const OpenTTDCargoStorageServices *);
 void openttd_rust_cargo_list_keep(OpenTTDCargoList *);
 uint8_t openttd_rust_cargo_list_stage(OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint16_t, const uint16_t *, size_t, uint8_t, const void *, uint8_t, void *, uint32_t);
 uint32_t openttd_rust_cargo_list_move(OpenTTDCargoList *, OpenTTDCargoList *, const OpenTTDCargoStorageServices *, uint8_t, uint32_t, uint16_t, uint16_t, const uint16_t *, size_t, const void *, uint8_t, void *, uint32_t);

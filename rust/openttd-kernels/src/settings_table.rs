@@ -298,10 +298,7 @@ fn train_acceleration_model_changed(s: &Services) {
                 crate::train::openttd_rust_train_curve_limit(id, train_leaves(s), s.shared)
             };
             id.set_cached_max_curve_speed(u64::from(limit));
-            // SAFETY: As above.
-            unsafe {
-                crate::train::openttd_rust_train_update_acceleration(id);
-            }
+            crate::train::update_acceleration(id);
         }
     });
     acceleration_windows(s);

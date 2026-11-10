@@ -1424,33 +1424,6 @@ void Vehicle::ReleaseUnitNumber()
  */
 
 /**
- * Check if the current vehicle has a full load order.
- * @return true Iff this vehicle has a full load order.
- */
-bool Vehicle::HasFullLoadOrder() const
-{
-	return openttd_rust_has_full_load(const_cast<Vehicle *>(this), &GetRustOrdersLeaves()) != 0;
-}
-
-/**
- * Check if the current vehicle has a conditional order.
- * @return true Iff this vehicle has a conditional order.
- */
-bool Vehicle::HasConditionalOrder() const
-{
-	return openttd_rust_has_conditional(const_cast<Vehicle *>(this), &GetRustOrdersLeaves()) != 0;
-}
-
-/**
- * Check if the current vehicle has an unbunching order.
- * @return true Iff this vehicle has an unbunching order.
- */
-bool Vehicle::HasUnbunchingOrder() const
-{
-	return openttd_rust_has_unbunching(const_cast<Vehicle *>(this), &GetRustOrdersLeaves()) != 0;
-}
-
-/**
  * Check if the previous order is a depot unbunching order.
  * @return true Iff the previous order is a depot order with the unbunch flag.
  */
@@ -1609,14 +1582,6 @@ void Vehicle::SetNext(Vehicle *next)
 void Vehicle::AddToShared(Vehicle *shared_chain)
 {
 	openttd_rust_add_shared(this, shared_chain, &GetRustOrdersLeaves());
-}
-
-/**
- * Removes the vehicle from the shared order list.
- */
-void Vehicle::RemoveFromShared()
-{
-	openttd_rust_remove_shared(this, &GetRustOrdersLeaves());
 }
 
 static const IntervalTimer<TimerGameEconomy> _economy_vehicles_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::VEHICLE}, [](auto)

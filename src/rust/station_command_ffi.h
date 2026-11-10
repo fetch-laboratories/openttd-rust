@@ -228,7 +228,6 @@ void openttd_rust_station_check_buildable(const OpenTTDStationCommandServices *,
 void openttd_rust_station_road_bridge_ok(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, const RoadStopSpec *, uint8_t, uint8_t);
 void openttd_rust_station_build_above(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, int32_t);
 uint8_t openttd_rust_station_airport_noise(const OpenTTDStationCommandServices *, const AirportSpec *, uint32_t);
-void openttd_rust_station_tiles_changed(const OpenTTDStationCommandServices *, BaseStation *, bool, uint8_t);
 void openttd_rust_station_rename(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, const uint8_t *, size_t);
 uint16_t openttd_rust_station_move_name(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);
 void openttd_rust_station_open_close_airport(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t);

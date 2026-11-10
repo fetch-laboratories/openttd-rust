@@ -5,7 +5,7 @@ For issue, PR, commit and review procedures, see [change workflow](workflow.md).
 
 ## Integration
 
-A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2026-11-10; #860). Nobody merges by hand, bypasses the queue or uses `--admin`. Open PRs whose heads predate the switch (2026-11-10 08:22 UTC) keep a pending `Full validation` status until their next push, which the queue-mode invalidator then marks as satisfied.
+A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2026-11-10; #860). Nobody merges by hand, bypasses the queue or uses `--admin`.
 
 - Each ownership port has one open PR at a time, targeting `rust-migration` directly.
 - Queue an owner's checkpoint only once it meets all of the following:
@@ -19,7 +19,7 @@ A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2
 - Keep at most six unmerged component branches, including drafts and WIP (#157). Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is never such a dependency. The first PR to merge adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by multiple drafts once in its own small PR from `rust-migration`. Drafts do not build parallel copies.
 - A sweep across most of `src/`, such as #581 PR-B, merges before any other `src/` change. Other drafts continue implementation and review but queue only after it merges, because each merge ahead of it would force a new sweep. No draft waits for another draft's services. A reviewed PR gains no new scope before it merges.
-- Spot-check reviewers' fix commits before a PR is queued ([review](workflow.md#review)). Under a Claude Code root, each finding's reviewer verifies them instead ([review loop](team.md#review-loop)).
+- Spot-check reviewers' fix commits before a PR is queued ([report](review-checklist.md#report)). Under a Claude Code root, each finding's reviewer verifies them instead ([review loop](team.md#review-loop)).
 
 To merge a PR, its implementer follows these steps:
 
