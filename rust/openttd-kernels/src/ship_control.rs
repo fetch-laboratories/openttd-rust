@@ -659,7 +659,7 @@ impl Game<'_> {
                 (u32::from(self.vehicle().max_speed())) as u16,
                 (self.leaves.order_max_speed)(id) as u16,
             );
-            crate::vehicle_effect::openttd_rust_visual_show(v, maximum as u32);
+            crate::vehicle_effect::show_visual_effect(v, maximum as u32);
         }
         let observed_direction = u32::from(self.vehicle().direction());
         let observed_tick = u32::from(self.vehicle().tick());

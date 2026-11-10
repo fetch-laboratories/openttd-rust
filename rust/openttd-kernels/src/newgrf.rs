@@ -164,6 +164,21 @@ impl GrfSpecFeature {
     pub const GSF_INVALID: Self = Self(0xFF);
 }
 
+/// Native `newgrf.h::GrfSpecFeatures`, `EnumBitSet<GrfSpecFeature, uint32_t, GSF_END>`,
+/// retaining every underlying `u32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GrfSpecFeatures(pub u32);
+
+impl GrfSpecFeatures {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Native `BaseBitSet::Set`, with an element rather than a set mask.
+    pub const fn set(&mut self, element: GrfSpecFeature) {
+        self.0 |= 1_u32 << element.0;
+    }
+}
+
 // Feature identities from newgrf.h, pinned by native static assertions.
 pub const GSF_SOUNDFX: u8 = GrfSpecFeature::GSF_SOUNDFX.0;
 pub const GSF_CARGOES: u8 = GrfSpecFeature::GSF_CARGOES.0;

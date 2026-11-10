@@ -14,8 +14,6 @@ forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngin
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
 forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
 forwarded | src/rust/company_identity_adapter.cpp | vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo
-forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices().company_valid
-forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
 forwarded | src/rust/engine_capabilities_services.hpp | resolver = GetRustVehicleServices().newgrf
 forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandServices().infrastructure_dirty
@@ -23,9 +21,6 @@ forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRu
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
-rebound | Engine_next | src/rust/engine_adapter.hpp | next
-rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
-rebound | Engine_next | src/rust/engine_loading_services.hpp | next
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context
@@ -37,8 +32,6 @@ rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
 rebound | OpenTTDCargoSpecValid | src/subsidy.cpp | cargo_valid
-rebound | OpenTTDCompanyIsValid | src/rust/services.cpp | company_valid
-rebound | OpenTTDCompanyIsValid | src/rust/vehicle_services_newgrf.h | valid_company
 rebound | OpenTTDDistanceManhattan | src/newgrf_object.cpp | manhattan
 rebound | OpenTTDDistanceManhattan | src/rust/ship_control_services.h | dist_manhattan
 rebound | OpenTTDDistanceSquare | src/newgrf_object.cpp | square
@@ -53,7 +46,6 @@ rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking_tile
 rebound | OpenTTDIsTileFlat | src/rust/station_command_services.hpp | tile_flat
 rebound | OpenTTDIsTileFlat | src/town_cmd.cpp | flat
 rebound | OpenTTDLandscapeValue | src/industry_cmd.cpp | landscape
-rebound | OpenTTDLandscapeValue | src/rust/engine_loading_services.hpp | climate
 rebound | OpenTTDLandscapeValue | src/town_cmd.cpp | climate
 rebound | OpenTTDLargerTowns | src/newgrf_house.cpp | larger_towns
 rebound | OpenTTDLargerTowns | src/town_cmd.cpp | larger_towns
@@ -107,10 +99,6 @@ rebound | RustClosestWaterDistance | src/town_cmd.cpp | water_distance
 rebound | RustCompanyInfo | src/newgrf_roadstop.cpp | company
 rebound | RustCompanyInfo | src/newgrf_station.cpp | company
 rebound | RustCompanyInfo | src/rust/vehicle_services_newgrf.h | company_info
-rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
-rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes | 2
-rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
-rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
@@ -251,8 +239,6 @@ rebound | RustStationWaitingTriggers | src/newgrf_station.cpp | waiting
 rebound | RustSubsidyServices | src/economy.cpp | subsidies
 rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
-rebound | RustTileRailType | src/rust/vehicle_effect_services.hpp | tile_rail
-rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
 rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
@@ -269,8 +255,6 @@ rebound | RustUpdateSignals | src/rust/disaster_adapter.hpp | update_signals
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
-rebound | RustVehicleDetailsDirty | src/rust/ground_vehicle_services.cpp | details_dirty
-rebound | RustVehicleDetailsDirty | src/rust/vehicle_services.cpp | details_dirty
 rebound | RustVehicleDisplaySpeed | src/rust/ground_vehicle_services.cpp | display_max_speed
 rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
