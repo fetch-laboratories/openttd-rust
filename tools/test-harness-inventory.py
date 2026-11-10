@@ -158,6 +158,74 @@ class InventoryTests(unittest.TestCase):
             self.assertEqual(hi.unread_keys([scenario], [source]), ["chekc_signs"])
 
 
+class CaseNameTests(unittest.TestCase):
+    """The fork CTest name ratchet over registered native test sources (#856)."""
+
+    FILE = "src/tests/kept.cpp"
+    BASE = {"Kept - a": FILE, "Kept - b": FILE}
+
+    def errors(
+        self,
+        tree: dict[str, str],
+        retired: set[str],
+        base_retired: frozenset[str] = frozenset(),
+    ) -> str:
+        found = hi.ctest_case_errors(self.BASE, tree, retired, set(base_retired))
+        return "\n".join(found)
+
+    def test_kept_cases_pass(self) -> None:
+        self.assertEqual(self.errors(dict(self.BASE), set()), "")
+
+    def test_renamed_kept_case_fails(self) -> None:
+        tree = {"Kept - a": self.FILE, "Kept - b renamed": self.FILE}
+        self.assertIn(
+            "removed without a ctest: record: Kept - b", self.errors(tree, set())
+        )
+
+    def test_deleted_kept_case_needs_its_record(self) -> None:
+        tree = {"Kept - a": self.FILE}
+        self.assertIn(
+            "removed without a ctest: record: Kept - b", self.errors(tree, set())
+        )
+        self.assertEqual(self.errors(tree, {"ctest:Kept - b"}), "")
+
+    def test_whole_retired_source_needs_no_case_records(self) -> None:
+        self.assertEqual(self.errors({}, {f"source:{self.FILE}"}), "")
+
+    def test_misspelt_record_fails_twice(self) -> None:
+        found = self.errors({"Kept - a": self.FILE}, {"ctest:Kept - B"})
+        self.assertIn("removed without a ctest: record: Kept - b", found)
+        self.assertIn("names no CTest case at the base: Kept - B", found)
+
+    def test_record_of_a_kept_case_fails(self) -> None:
+        found = self.errors(dict(self.BASE), {"ctest:Kept - a"})
+        self.assertIn("retires a CTest case that still exists: Kept - a", found)
+
+    def test_records_at_the_base_are_not_rechecked(self) -> None:
+        retired = {"ctest:Gone long ago"}
+        self.assertEqual(self.errors(dict(self.BASE), retired, frozenset(retired)), "")
+
+    def test_names_are_exact_literals(self) -> None:
+        text = (
+            'TEST_CASE("Plain - one, two")\n'
+            'TEST_CASE("Tagged", "[tag]")\n'
+            'TEST_CASE_METHOD(Fixture, "Method \\"quoted\\"")\n'
+        )
+        names, found = hi.case_names(text, "x.cpp")
+        self.assertEqual(names, ["Plain - one, two", "Tagged", 'Method "quoted"'])
+        self.assertEqual(found, [])
+        for text in ("TEST_CASE(NAME)\n", 'TEST_CASE("a" "b")\nTEST_CASE(X)\n'):
+            self.assertIn("without a plain", " ".join(hi.case_names(text, "x.cpp")[1]))
+        self.assertIn(
+            "escape", " ".join(hi.case_names('TEST_CASE("a\\n")', "x.cpp")[1])
+        )
+
+    def test_tree_cases_parse(self) -> None:
+        cases, found = hi.native_cases()
+        self.assertEqual(found, [])
+        self.assertIn("Vehicle maintenance consumed native ABI", cases)
+
+
 class ReplacementTests(unittest.TestCase):
     # This existing production test checks the unchanged Monocypher vectors,
     # rather than a test invented to echo the replacement manifest.
