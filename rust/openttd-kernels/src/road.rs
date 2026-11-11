@@ -2654,7 +2654,8 @@ mod map_context_tests {
     /// `tick_counter`. The native ABI fixture leaves map services unused here.
     #[test]
     fn articulated_tick_keeps_early_return_without_map_metadata() {
-        let shared = SHARED;
+        let mut shared = SHARED;
+        shared.map = std::ptr::null();
         let vehicle = VEHICLE;
         let ground = GroundServices {
             physics: &GROUND_VEHICLE,
