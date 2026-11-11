@@ -45,8 +45,8 @@ pub(crate) fn map_read_probe(
     for pass in 0..2 {
         let mut expected = MapLeafOracle::default();
         observe(tile, &raw mut expected);
-        let (slope, z) = world.tile_slope_z(tile);
-        if u32::from(slope) != expected.slope || z != expected.z {
+        let (slope, z) = world.tile_slope_z(crate::tile_type::TileIndex(tile));
+        if u32::from(slope.0) != expected.slope || z != expected.z {
             return false;
         }
         let kind = (shared.tile_type)(tile);

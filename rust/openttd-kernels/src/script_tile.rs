@@ -42,7 +42,7 @@ pub(crate) fn world(s: &Services) -> World<'_> {
 
 /// `::IsValidTile`.
 pub(crate) fn valid(w: &World<'_>, tile: u32) -> bool {
-    w.asserted(|m| crate::tile_map::is_valid_tile(m, tile, m.count()))
+    w.asserted(|m| crate::tile_map::is_valid_tile(m, TileIndex(tile), m.count()))
 }
 
 /// `::IsTileType` after a successful `IsValidTile`.
@@ -355,7 +355,7 @@ pub extern "C" fn openttd_rust_script_tile_slope(s: &Services, tile: u32) -> u32
         return SLOPE_INVALID;
     }
     let (x, y) = w.size();
-    u32::from(w.asserted(|m| crate::tile_map::get_tile_slope(m, tile, x, y)))
+    u32::from((w.asserted(|m| crate::tile_map::get_tile_slope(m, TileIndex(tile), x, y))).0)
 }
 
 /// `ScriptTile::GetComplementSlope`.
@@ -378,7 +378,7 @@ pub extern "C" fn openttd_rust_script_tile_min_height(s: &Services, tile: u32) -
         return -1;
     }
     let (x, y) = w.size();
-    i64::from(w.asserted(|m| crate::tile_map::get_tile_z(m, tile, x, y)))
+    i64::from(w.asserted(|m| crate::tile_map::get_tile_z(m, TileIndex(tile), x, y)))
 }
 
 /// `ScriptTile::GetMaxHeight`.
@@ -389,7 +389,7 @@ pub extern "C" fn openttd_rust_script_tile_max_height(s: &Services, tile: u32) -
         return -1;
     }
     let (x, y) = w.size();
-    i64::from(w.asserted(|m| crate::tile_map::get_tile_max_z(m, tile, x, y)))
+    i64::from(w.asserted(|m| crate::tile_map::get_tile_max_z(m, TileIndex(tile), x, y)))
 }
 
 /// `ScriptTile::GetCornerHeight`; `(::Corner)corner` truncates to the `uint8_t` enum.
@@ -406,10 +406,11 @@ pub extern "C" fn openttd_rust_script_tile_corner_height(
         return -1;
     }
     let (size_x, size_y) = map.size();
-    let (slope, z) = map.asserted(|m| crate::tile_map::get_tile_slope_z(m, tile, size_x, size_y));
+    let (slope, z) =
+        map.asserted(|m| crate::tile_map::get_tile_slope_z(m, TileIndex(tile), size_x, size_y));
     let check = |condition| map.check(condition);
     i64::from(z.wrapping_add(crate::landscape::get_slope_z_in_corner(
-        slope, corner, check,
+        slope.0, corner, check,
     )))
 }
 
@@ -420,8 +421,8 @@ pub extern "C" fn openttd_rust_script_tile_owner(s: &Services, tile: u32) -> i32
     if !valid(&w, tile) || is_type(&w, tile, MP_HOUSE) || is_type(&w, tile, MP_INDUSTRY) {
         return COMPANY_INVALID;
     }
-    let owner = w.owner(tile);
-    resolve_company_id(s, to_script_company_id(owner))
+    let owner = w.owner(TileIndex(tile));
+    resolve_company_id(s, to_script_company_id(owner.0))
 }
 
 /// `ScriptCompany::ToScriptCompanyID`.

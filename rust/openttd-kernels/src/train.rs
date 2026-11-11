@@ -35,7 +35,7 @@ use crate::station_type::StationHadVehicleOfType;
 const HVOT_TRAIN: StationHadVehicleOfType = StationHadVehicleOfType::HVOT_TRAIN;
 use crate::station_type::StationID;
 use crate::tile_map::is_tile_type;
-use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE, TILE_SIZE, TileIndex};
+use crate::tile_type::{TILE_SIZE, TileIndex};
 use crate::track_type::TrackBits;
 use crate::train_state::State;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
@@ -989,11 +989,13 @@ impl Game<'_> {
         (self.leaves.veh_exit_dir)(id, (id).vehicle().direction(), id.track()) as u8
     }
     fn compatible(&self, id: Handle, tile: u32) -> bool {
-        crate::tile_map::is_tile_owner(self.services, tile, (id).vehicle().owner())
-            && ((id).front() == 0
-                || id.get_compatible_railtypes()
-                    & (1 << (self.leaves.rail_type)(Handle::NONE, tile))
-                    != 0)
+        crate::tile_map::is_tile_owner(
+            self.services,
+            TileIndex(tile),
+            crate::company_type::CompanyID((id).vehicle().owner()),
+        ) && ((id).front() == 0
+            || id.get_compatible_railtypes() & (1 << (self.leaves.rail_type)(Handle::NONE, tile))
+                != 0)
     }
     fn can_leave(&self, id: Handle) -> bool {
         let v_tile: u32 = id.vehicle().tile();
@@ -1002,8 +1004,11 @@ impl Game<'_> {
         if track == WORMHOLE || track == DEPOT {
             return false;
         }
-        if is_tile_type(self.services, v_tile, MP_TUNNELBRIDGE)
-            && self.world().tunnel_bridge_dir(v_tile) * 2 + 1 == v_direction
+        if is_tile_type(
+            self.services,
+            TileIndex(v_tile),
+            crate::tile_type::TileType::MP_TUNNELBRIDGE,
+        ) && self.world().tunnel_bridge_dir(v_tile) * 2 + 1 == v_direction
         {
             return false;
         }
@@ -1244,7 +1249,11 @@ impl Game<'_> {
             self.movement_enter(id, v_tile, (v_x as u64) as i32, (v_y as u64) as i32);
         } else {
             let vt = (self.leaves.tile_virt)((v_x as u64) as i32, (v_y as u64) as i32);
-            if is_tile_type(self.services, vt, MP_TUNNELBRIDGE) {
+            if is_tile_type(
+                self.services,
+                TileIndex(vt),
+                crate::tile_type::TileType::MP_TUNNELBRIDGE,
+            ) {
                 self.movement_enter(id, vt, (v_x as u64) as i32, (v_y as u64) as i32);
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (id).vehicle().tile()) != 0
@@ -1460,7 +1469,11 @@ impl Game<'_> {
         let tile = (id).vehicle().tile();
         let mut dir = self.exitdir(id);
         if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-            || is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
+            || is_tile_type(
+                self.services,
+                TileIndex(tile),
+                crate::tile_type::TileType::MP_TUNNELBRIDGE,
+            )
         {
             dir = u8::MAX;
         }
@@ -1468,8 +1481,11 @@ impl Game<'_> {
             || (self.leaves.reserve_paths)()
         {
             let td = self.trackdir(id);
-            let mut okay = !(is_tile_type(self.services, tile, MP_RAILWAY)
-                && (self.leaves.has_signal_td)(id, tile, td) != 0
+            let mut okay = !(is_tile_type(
+                self.services,
+                TileIndex(tile),
+                crate::tile_type::TileType::MP_RAILWAY,
+            ) && (self.leaves.has_signal_td)(id, tile, td) != 0
                 && (self.leaves.signal_pbs)(
                     id,
                     (self.leaves.signal_type)(id, tile, id.track().trailing_zeros() as u8) as u8,
@@ -1622,18 +1638,22 @@ impl Game<'_> {
         }
     }
     fn moved_signals(&self, id: Handle, tile: u32, dir: u8) -> bool {
-        if is_tile_type(self.services, tile, MP_RAILWAY)
-            && (self.leaves.has_signals)(Handle::NONE, tile) != 0
+        if is_tile_type(
+            self.services,
+            TileIndex(tile),
+            crate::tile_type::TileType::MP_RAILWAY,
+        ) && (self.leaves.has_signals)(Handle::NONE, tile) != 0
         {
             let tracks = (self.leaves.track_bits)(Handle::NONE, tile) as u16;
             let tds = (tracks | tracks << 8) & (self.leaves.trackdir_reaches)(id, dir) as u16;
             let td = tds.trailing_zeros() as u8;
             let exit = (self.leaves.trackdir_exit)(id, td);
             // Tile owner is used here, rather than the moving train's owner.
-            if u64::from(
-                self.signal_context()
-                    .segment(tile, exit as u8, self.world().owner(tile)),
-            ) == (self.leaves.sigseg_pbs)(id)
+            if u64::from(self.signal_context().segment(
+                tile,
+                exit as u8,
+                self.world().owner(TileIndex(tile)).0,
+            )) == (self.leaves.sigseg_pbs)(id)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
             {
                 if (self.leaves.signal_pbs)(id, (self.leaves.signal_type)(id, tile, td & 7) as u8)
@@ -1891,8 +1911,11 @@ impl Game<'_> {
                 }
             }
         } else {
-            if is_tile_type(self.services, new, MP_TUNNELBRIDGE)
-                && self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
+            if is_tile_type(
+                self.services,
+                TileIndex(new),
+                crate::tile_type::TileType::MP_TUNNELBRIDGE,
+            ) && self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
             {
                 if (id).front() != 0 {
                     crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
@@ -1997,7 +2020,11 @@ impl Game<'_> {
             while u != Handle::NONE {
                 let tile = (u).vehicle().tile();
                 (self.leaves.clear_reservation)(u, tile, self.trackdir(u));
-                if is_tile_type(self.services, tile, MP_TUNNELBRIDGE) {
+                if is_tile_type(
+                    self.services,
+                    TileIndex(tile),
+                    crate::tile_type::TileType::MP_TUNNELBRIDGE,
+                ) {
                     (self.leaves.set_tunnel_res)(
                         u,
                         (self.leaves.other_end)(Handle::NONE, tile) as u32,
@@ -2191,8 +2218,11 @@ impl Game<'_> {
             crate::pbs::Pbs::acquire(self.services).platform(tile, dir, occupied);
             crate::pbs::Pbs::acquire(self.services).platform(tile, dir ^ 2, occupied);
         }
-        if is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
-            || (self.leaves.is_depot)(Handle::NONE, tile) != 0
+        if is_tile_type(
+            self.services,
+            TileIndex(tile),
+            crate::tile_type::TileType::MP_TUNNELBRIDGE,
+        ) || (self.leaves.is_depot)(Handle::NONE, tile) != 0
         {
             self.signal_context().segment(tile, u8::MAX, owner);
         } else {
@@ -2389,7 +2419,11 @@ impl Game<'_> {
             let tile = (id).vehicle().tile();
             let mut dir = self.exitdir(id);
             if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-                || is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
+                || is_tile_type(
+                    self.services,
+                    TileIndex(tile),
+                    crate::tile_type::TileType::MP_TUNNELBRIDGE,
+                )
             {
                 dir = u8::MAX;
             }
@@ -2638,7 +2672,11 @@ impl Game<'_> {
             )
             .0;
         if tile == INVALID_TILE
-            || !is_tile_type(self.services, tile, MP_RAILWAY)
+            || !is_tile_type(
+                self.services,
+                TileIndex(tile),
+                crate::tile_type::TileType::MP_RAILWAY,
+            )
             || (self.leaves.has_signals)(Handle::NONE, tile) == 0
         {
             return 1;

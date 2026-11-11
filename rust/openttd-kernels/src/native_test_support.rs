@@ -93,10 +93,11 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;
-    if crate::tile_map::is_tile_flat(&map, tile, x, y)
+    let index = crate::tile_type::TileIndex(tile);
+    if crate::tile_map::is_tile_flat(&map, index, x, y)
         != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
-        || get_tile_z(&map, tile, x, y) != Some((s.tile_z)(tile))
-        || get_tropic_zone(&map, tile) != Some((s.tropic_zone)(tile))
+        || get_tile_z(&map, index, x, y) != Some((s.tile_z)(tile))
+        || get_tropic_zone(&map, index) != Some(crate::tile_type::TropicZone((s.tropic_zone)(tile)))
     {
         return u8::from(false);
     }

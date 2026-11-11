@@ -33,7 +33,7 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
     let world = World::new(shared);
     let valid =
         |tile| world.asserted(|m| crate::tile_map::is_valid_tile(m, tile, world.types.count()));
-    if !valid(tile) {
+    if !valid(TileIndex(tile)) {
         return RoadBits(crate::road_type::ROAD_NONE);
     }
     let check = |ok| world.check(ok);
@@ -49,7 +49,7 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
         let target = crate::road_func::diag_dir_to_road_bits_raw(dir, check);
         if bits.0 & target != 0 {
             let mirrored = crate::road_func::mirror_road_bits(target, check);
-            let connective = valid(neighbour)
+            let connective = valid(TileIndex(neighbour))
                 && match world.kind(TileIndex(neighbour)) {
                     TileType::MP_CLEAR | TileType::MP_TREES => true,
                     TileType::MP_TUNNELBRIDGE | TileType::MP_STATION | TileType::MP_ROAD => {

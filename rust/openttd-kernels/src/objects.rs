@@ -529,7 +529,9 @@ impl<'a> World<'a> {
                     y << 20 | x << 16 | y << 8 | x
                 }
                 0x41 => {
-                    u32::from(crate::map_func::World::new(self.shared).tile_slope(tile)) << 8
+                    u32::from(
+                        (crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile))).0,
+                    ) << 8
                         | (self.shared.terrain_type)(tile)
                 }
                 0x42 => (q.date)(obj) as u32,
@@ -766,8 +768,15 @@ impl<'a> World<'a> {
                 /* Update company infrastructure counts for objects build on canals owned by nobody. */
                 if wc.0 == 1
                     && owner != OWNER_NONE
-                    && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)
-                        || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
+                    && (crate::tile_map::is_tile_owner(
+                        self.shared,
+                        TileIndex(t),
+                        crate::company_type::Owner::NONE,
+                    ) || crate::tile_map::is_tile_owner(
+                        self.shared,
+                        TileIndex(t),
+                        crate::company_type::Owner::WATER,
+                    ))
                 {
                     let infrastructure = {
                         if infrastructure_ptr.is_null() {
@@ -1066,7 +1075,11 @@ impl<'a> World<'a> {
                         }
                         if !(kind == HQ
                             && (self.shared.tile_type)(t) == MP_OBJECT
-                            && crate::tile_map::is_tile_owner(self.shared, t, self.current())
+                            && crate::tile_map::is_tile_owner(
+                                self.shared,
+                                TileIndex(t),
+                                crate::company_type::CompanyID(self.current()),
+                            )
                             && self.object_type_is(t, HQ))
                         {
                             crate::landscape_cmd::clear_command(
@@ -1079,8 +1092,9 @@ impl<'a> World<'a> {
                         }
                     }
                 }
-                let (slope, mut z) = crate::map_func::World::new(self.shared).tile_slope_z(tile);
-                if slope != 0 {
+                let (slope, mut z) =
+                    crate::map_func::World::new(self.shared).tile_slope_z(TileIndex(tile));
+                if slope != crate::slope_type::Slope::SLOPE_FLAT {
                     z += 1;
                 }
                 for t in self.tiles(area) {
@@ -1093,7 +1107,11 @@ impl<'a> World<'a> {
                         let diff = t.wrapping_sub(tile);
                         result.callback = self.callback(
                             crate::newgrf_callbacks::CBID_OBJECT_LAND_SLOPE_CHECK.0,
-                            u32::from(crate::map_func::World::new(self.shared).tile_slope(t)),
+                            u32::from(
+                                crate::map_func::World::new(self.shared)
+                                    .tile_slope(TileIndex(t))
+                                    .0,
+                            ),
                             self.map.tile_y(TileIndex(diff)) << 4
                                 | self.map.tile_x(TileIndex(diff)),
                             spec,
@@ -1180,7 +1198,11 @@ impl<'a> World<'a> {
                 }
                 OWNED => {
                     if (self.shared.tile_type)(tile) == MP_OBJECT
-                        && crate::tile_map::is_tile_owner(self.shared, tile, self.current())
+                        && crate::tile_map::is_tile_owner(
+                            self.shared,
+                            TileIndex(tile),
+                            crate::company_type::CompanyID(self.current()),
+                        )
                         && self.object_type_is(tile, OWNED)
                     {
                         out.error(self.s.strings.own);
@@ -1349,8 +1371,9 @@ impl World<'_> {
                     return;
                 }
             } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
-                let old_slope = crate::map_func::World::new(self.shared).tile_slope(tile);
-                if !is_steep_slope_raw(old_slope)
+                let old_slope =
+                    crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
+                if !is_steep_slope_raw(old_slope.0)
                     && !is_steep_slope_raw(slope)
                     && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
                 {
@@ -1402,7 +1425,11 @@ impl World<'_> {
         }
     }
     fn change_owner(&self, ownership: &crate::tile_owner::Context, tile: u32, old: u8, new: u8) {
-        if !crate::tile_map::is_tile_owner(self.shared, tile, old) {
+        if !crate::tile_map::is_tile_owner(
+            self.shared,
+            TileIndex(tile),
+            crate::company_type::CompanyID(old),
+        ) {
             return;
         }
         unsafe {

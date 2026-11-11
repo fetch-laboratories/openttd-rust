@@ -565,7 +565,9 @@ impl Search {
         let shared = unsafe { &*self.input.shared };
         crate::bridge::has_bridge_flat_ramp(
             shared,
-            crate::map_func::World::new(shared).tile_slope(tile),
+            crate::map_func::World::new(shared)
+                .tile_slope(crate::tile_type::TileIndex(tile))
+                .0,
             crate::direction_func::diag_dir_to_axis_raw(direction, |ok| {
                 crate::movement::native_assert(shared, ok);
             }),

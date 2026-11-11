@@ -183,7 +183,8 @@ impl<'a> World<'a> {
         get_tunnel_bridge_length(self.map, start, end)
     }
     fn slope_z(&self, tile: u32) -> (u8, i32) {
-        crate::map_func::World::new(self.s).tile_slope_z(tile)
+        let (slope, z) = crate::map_func::World::new(self.s).tile_slope_z(TileIndex(tile));
+        (slope.0, z)
     }
     fn editor(&self) -> bool {
         (self.town.environment.editor)()
@@ -627,7 +628,7 @@ impl<'a> World<'a> {
             if crate::road::road_type_is_road(roadtype) {
                 road = roadtype;
             }
-            if crate::road::road_type_is_tram((RoadType(roadtype)).0) {
+            if crate::road::road_type_is_tram(RoadType(roadtype).0) {
                 tram = roadtype;
             }
         }
@@ -1018,7 +1019,7 @@ impl<'a> World<'a> {
                 } else {
                     INVALID_ROADTYPE
                 };
-                let tram = if crate::road::road_type_is_tram((RoadType(roadtype)).0) {
+                let tram = if crate::road::road_type_is_tram(RoadType(roadtype).0) {
                     roadtype
                 } else {
                     INVALID_ROADTYPE
@@ -1322,7 +1323,7 @@ impl<'a> World<'a> {
                     middle,
                     (height as u32).wrapping_sub(crate::tile_map::tile_height_in(
                         &crate::map_func::World::new(self.s),
-                        middle,
+                        TileIndex(middle),
                     )) as i32,
                 );
                 middle = middle.wrapping_add(delta);

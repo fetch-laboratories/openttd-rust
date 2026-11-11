@@ -1425,7 +1425,7 @@ impl Engine<'_> {
                     TOWN_GROWTH_WINTER => {
                         if crate::tile_map::tile_height_in(
                             &crate::map_func::World::new(self.services),
-                            self.xy().0,
+                            self.xy(),
                         ) >= u32::from(crate::snow_line::get(self.services))
                             && self.received_old_act(i) == 0
                             && self.population() > 90
@@ -2516,7 +2516,7 @@ impl Engine<'_> {
             for ptr in TOWN_COORD_MOD {
                 /* Only work with plain land that not already has a house */
                 if !self.is_tile_type(tile, TileType::MP_HOUSE)
-                    && crate::map_func::World::new(self.services).tile_flat(tile.0)
+                    && crate::map_func::World::new(self.services).tile_flat(tile)
                     && self.cmd_landscape_clear(DC_AUTO_NO_WATER, tile).success
                 {
                     let rt = self.get_town_road_type();

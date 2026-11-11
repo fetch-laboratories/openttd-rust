@@ -15,7 +15,7 @@ use crate::town::house::HouseServices;
 pub fn increment_house_age(s: &crate::services::Services, h: &HouseServices, t: TileIndex) {
     let world = crate::map_func::World::new(s);
     world.assert_with(|| {
-        crate::tile_map::is_tile_type(s, t.0, crate::tile_type::TileType::MP_HOUSE.0)
+        crate::tile_map::is_tile_type(s, TileIndex(t.0), crate::tile_type::TileType::MP_HOUSE)
     });
     let house = (h.age)(t.0);
     if house.completed && house.age < 0xFF {

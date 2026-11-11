@@ -14,15 +14,16 @@ use crate::tile_type::TileType;
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
 #[inline]
 pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
-    let (slope, z) = crate::map_func::World::new(s).tile_slope_z(tile);
+    let (slope, z) = crate::map_func::World::new(s).tile_slope_z(TileIndex(tile));
     let foundation = crate::bridge::get_bridge_foundation(
-        slope,
+        slope.0,
         diag_dir_to_axis_raw((s.tunnel_bridge_direction)(tile), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
-    z.wrapping_add(1)
-        .wrapping_add((s.apply_foundation)(Foundation(foundation), crate::services::Slope(slope)).z)
+    z.wrapping_add(1).wrapping_add(
+        (s.apply_foundation)(Foundation(foundation), crate::services::Slope(slope.0)).z,
+    )
 }
 /// `GetBridgePixelHeight`.
 #[inline]

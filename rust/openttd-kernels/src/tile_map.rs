@@ -8,13 +8,16 @@
 //! Helpers of `tile_map.h` for the audited map view.
 //! `None` denotes an unavailable raw backend or a failed native precondition.
 use crate::map_func::TileTypeAccess;
+use crate::slope_type::Slope;
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
+use crate::tile_type::TropicZone;
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -> bool {
-    (s.tile_type)(tile) == kind
+/// `IsTileType`: whether `GetTileType` of the tile is `kind`.
+pub(crate) fn is_tile_type(s: &crate::services::Services, tile: TileIndex, kind: TileType) -> bool {
+    crate::map_func::World::new(s).kind(tile) == kind
 }
 
 #[allow(clippy::inline_always)]
@@ -27,47 +30,52 @@ pub(crate) fn get_tile_type(m: &TileTypeAccess, t: TileIndex) -> Option<TileType
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> TileType {
-    TileType(fields.kind() >> 4)
+    TileType(crate::bitmath_func::gb_u8(fields.kind(), 4, 4))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    Some(m.kind(TileIndex(t))? & 3)
+pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: TileIndex) -> Option<TropicZone> {
+    Some(TropicZone(crate::bitmath_func::gb_u8(m.kind(t)?, 0, 2)))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bool> {
+pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: TileIndex, count: u32) -> Option<bool> {
     m.available(TileIndex(0))?;
-    Some(t < count && get_tile_type(m, TileIndex(t))? != TileType::MP_VOID)
+    Some(t < TileIndex(count) && get_tile_type(m, t)? != TileType::MP_VOID)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
-    let fields = m.require_range(TileIndex(t))?;
+fn tile_height(m: &TileTypeAccess, t: TileIndex) -> Option<i32> {
+    let fields = m.require_range(t)?;
     Some(i32::from(fields.height()))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 #[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
-fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
-    m.available(TileIndex(t))?;
+fn corners(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> Option<[i32; 4]> {
+    m.available(t)?;
     let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
-    let x1 = map.tile_x(TileIndex(t));
-    let y1 = map.tile_y(TileIndex(t));
+    let x1 = map.tile_x(t);
+    let y1 = map.tile_y(t);
     let x2 = (x1 + 1).min(map.max_x());
     let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
     Some([
-        tile_height(m, t)?,
-        tile_height(m, map.tile_xy(x2, y1).0)?,
-        tile_height(m, map.tile_xy(x1, y2).0)?,
-        tile_height(m, map.tile_xy(x2, y2).0)?,
+        tile_height(m, t)?,                   // N corner
+        tile_height(m, map.tile_xy(x2, y1))?, // W corner
+        tile_height(m, map.tile_xy(x1, y2))?, // E corner
+        tile_height(m, map.tile_xy(x2, y2))?, // S corner
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
+fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (Slope, i32) {
     use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
+    /* Due to the fact that tiles must connect with each other without leaving gaps, the
+     * biggest difference in height between any corner and 'min' is between 0, 1, or 2.
+     *
+     * Also, there is at most 1 corner with height difference of 2.
+     */
     let low = n.min(w).min(e.min(s));
     let high = n.max(w).max(e.max(s));
     let mut slope = SLOPE_FLAT;
@@ -79,36 +87,66 @@ fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
     if high - low == 2 {
         slope |= SLOPE_STEEP;
     }
-    (slope, low)
+    (Slope(slope), low)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_slope_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<(u8, i32)> {
+pub(crate) fn get_tile_slope_z(
+    m: &TileTypeAccess,
+    t: TileIndex,
+    x: u32,
+    y: u32,
+) -> Option<(Slope, i32)> {
     Some(get_tile_slope_given_height(corners(m, t, x, y)?))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_slope(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<u8> {
+pub(crate) fn get_tile_slope(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> Option<Slope> {
     Some(get_tile_slope_z(m, t, x, y)?.0)
 }
-/// `IsTileFlat` without the height output.
+/// `IsTileFlat` without the height output: each corner is read only while the
+/// earlier ones match, as the original returns at the first difference.
 #[inline]
-pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<bool> {
-    let [height, x2_y1, x1_y2, x2_y2] = corners(m, t, x, y)?;
-    Some(x2_y1 == height && x1_y2 == height && x2_y2 == height)
+pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> Option<bool> {
+    m.available(t)?;
+    let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
+    let x1 = map.tile_x(t);
+    let y1 = map.tile_y(t);
+    let x2 = (x1 + 1).min(map.max_x());
+    let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
+    let height = tile_height(m, t)?;
+    for corner in [
+        map.tile_xy(x2, y1),
+        map.tile_xy(x1, y2),
+        map.tile_xy(x2, y2),
+    ] {
+        if tile_height(m, corner)? != height {
+            return Some(false);
+        }
+    }
+    Some(true)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<i32> {
+pub(crate) fn get_tile_z(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(m, t, x, y)?;
-    Some(north.min(west).min(east.min(south)))
+    Some(
+        north // N corner
+            .min(west) // W corner
+            .min(east) // E corner
+            .min(south), // S corner
+    )
 }
 
 /// `IsTileOwner`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> bool {
-    (s.tile_owner)(tile) == owner
+pub fn is_tile_owner(
+    s: &crate::services::Services,
+    tile: TileIndex,
+    owner: crate::company_type::Owner,
+) -> bool {
+    crate::map_func::World::new(s).owner(tile) == owner
 }
 
 /// `TileHash`, preserving the source unsigned subtraction.
@@ -122,7 +160,7 @@ pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
-    tile_hash(x, y) & 3
+    crate::bitmath_func::gb(tile_hash(x, y), 0, 2)
 }
 
 /// `GetTilePixelSlope`, preserving unsigned `TILE_HEIGHT` multiplication.
@@ -130,10 +168,10 @@ pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
 #[inline(always)]
 pub(crate) fn get_tile_pixel_slope(
     map: &TileTypeAccess,
-    tile: u32,
+    tile: TileIndex,
     x: u32,
     y: u32,
-) -> Option<(u8, i32)> {
+) -> Option<(Slope, i32)> {
     let (slope, height_z) = get_tile_slope_z(map, tile, x, y)?;
     Some((
         slope,
@@ -146,14 +184,24 @@ pub(crate) fn get_tile_pixel_slope(
 /// `GetTileMaxZ`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_max_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
+pub(crate) fn get_tile_max_z(map: &TileTypeAccess, tile: TileIndex, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(map, tile, x, y)?;
-    Some(north.max(west).max(east.max(south)))
+    Some(
+        north // N corner
+            .max(west) // W corner
+            .max(east) // E corner
+            .max(south), // S corner
+    )
 }
 /// `GetTileMaxPixelZ`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_max_pixel_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
+pub(crate) fn get_tile_max_pixel_z(
+    map: &TileTypeAccess,
+    tile: TileIndex,
+    x: u32,
+    y: u32,
+) -> Option<i32> {
     Some(
         get_tile_max_z(map, tile, x, y)?
             .cast_unsigned()
@@ -174,12 +222,24 @@ pub(crate) fn tile_height_outside_map(
     let map = crate::map_func::Map::from_log_x(width.trailing_zeros());
     tile_height(
         tiles,
-        map.tile_xy(
-            x.clamp(0, map.max_x().cast_signed()).cast_unsigned(),
-            y.clamp(0, crate::map_func::Map::max_y(height).cast_signed())
+        TileIndex(
+            map.tile_xy(
+                crate::math::clamp(x, 0, map.max_x().cast_signed(), |ok| {
+                    let _ = tiles.check(ok);
+                })
                 .cast_unsigned(),
-        )
-        .0,
+                crate::math::clamp(
+                    y,
+                    0,
+                    crate::map_func::Map::max_y(height).cast_signed(),
+                    |ok| {
+                        let _ = tiles.check(ok);
+                    },
+                )
+                .cast_unsigned(),
+            )
+            .0,
+        ),
     )
 }
 /// `GetTilePixelSlopeOutsideMap`.
@@ -191,11 +251,11 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
     y: i32,
     width: u32,
     height: u32,
-) -> Option<(u8, i32)> {
-    let north = tile_height_outside_map(map, x, y, width, height)?;
-    let west = tile_height_outside_map(map, x.wrapping_add(1), y, width, height)?;
-    let east = tile_height_outside_map(map, x, y.wrapping_add(1), width, height)?;
-    let south = tile_height_outside_map(map, x.wrapping_add(1), y.wrapping_add(1), width, height)?;
+) -> Option<(Slope, i32)> {
+    let north = tile_height_outside_map(map, x, y, width, height)?; // N corner.
+    let west = tile_height_outside_map(map, x.wrapping_add(1), y, width, height)?; // W corner.
+    let east = tile_height_outside_map(map, x, y.wrapping_add(1), width, height)?; // E corner.
+    let south = tile_height_outside_map(map, x.wrapping_add(1), y.wrapping_add(1), width, height)?; // S corner.
     let (slope, height_z) = get_tile_slope_given_height([north, west, east, south]);
     Some((
         slope,
@@ -227,22 +287,21 @@ impl TileTypeAccess {
 impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn owner(&self, t: u32) -> u8 {
-        self.check(t < self.types.count() && self.kind(TileIndex(t)) != TileType::MP_VOID);
-        self.check(
-            self.kind(TileIndex(t)) != TileType::MP_HOUSE
-                && self.kind(TileIndex(t)) != TileType::MP_INDUSTRY,
-        );
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(TileIndex(t)))), 0, 5) as u8
+    pub(crate) fn owner(&self, t: TileIndex) -> crate::company_type::Owner {
+        self.assert_with(|| self.is_valid_tile(t));
+        self.assert_with(|| self.kind(t) != TileType::MP_HOUSE);
+        self.assert_with(|| self.kind(t) != TileType::MP_INDUSTRY);
+        crate::company_type::CompanyID(crate::bitmath_func::gb(
+            u32::from(Self::byte(self.types.m1(t))),
+            0,
+            5,
+        ) as u8)
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn size(&self) -> (u32, u32) {
-        (
-            self.dimensions.size_x(),
-            self.types.count() >> self.dimensions.log_x,
-        )
+        (self.dimensions.size_x(), self.size_y())
     }
     /// Run a header helper with the entry's native handler at each source assertion.
     #[allow(clippy::inline_always)]
@@ -253,38 +312,38 @@ impl crate::map_func::World<'_> {
     /// `GetTilePixelSlope`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_pixel_slope(&self, t: u32) -> (u8, i32) {
+    pub(crate) fn tile_pixel_slope(&self, t: TileIndex) -> (Slope, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_pixel_slope(m, t, x, y))
     }
     /// `GetTilePixelSlopeOutsideMap`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
+    pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (Slope, i32) {
         let (width, height) = self.size();
         self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
     }
     /// `GetTileSlopeZ`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_slope_z(&self, t: u32) -> (u8, i32) {
+    pub(crate) fn tile_slope_z(&self, t: TileIndex) -> (Slope, i32) {
         let (_, size_y) = self.size();
-        if t < self.types.count() {
+        if t.0 < self.types.count() {
             // Clamped corners of an in-range tile are in range: no `TileHeight` assertion fails.
             let map = self.dimensions;
-            let (x1, y1) = (map.tile_x(TileIndex(t)), map.tile_y(TileIndex(t)));
+            let (x1, y1) = (map.tile_x(t), map.tile_y(t));
             let x2 = (x1 + 1).min(map.max_x());
             let y2 = (y1 + 1).min(crate::map_func::Map::max_y(size_y));
-            let height = |c: u32| {
+            let height = |c: TileIndex| {
                 self.types
-                    .require_range(TileIndex(c))
+                    .require_range(c)
                     .map_or(0, |f| i32::from(f.height()))
             };
             return get_tile_slope_given_height([
-                height(t),
-                height(map.tile_xy(x2, y1).0),
-                height(map.tile_xy(x1, y2).0),
-                height(map.tile_xy(x2, y2).0),
+                height(t),                   // Height of the North corner.
+                height(map.tile_xy(x2, y1)), // Height of the West corner.
+                height(map.tile_xy(x1, y2)), // Height of the East corner.
+                height(map.tile_xy(x2, y2)), // Height of the South corner.
             ]);
         }
         self.tile_slope_z_outside(t)
@@ -292,31 +351,31 @@ impl crate::map_func::World<'_> {
     // An out-of-range tile keeps the native assertion policy of each `TileHeight`.
     #[cold]
     #[inline(never)]
-    fn tile_slope_z_outside(&self, t: u32) -> (u8, i32) {
+    fn tile_slope_z_outside(&self, t: TileIndex) -> (Slope, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_slope_z(m, t, x, y))
     }
     /// `GetTileSlope`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_slope(&self, t: u32) -> u8 {
+    pub(crate) fn tile_slope(&self, t: TileIndex) -> Slope {
         self.tile_slope_z(t).0
     }
     /// `IsValidTile`: checks if a tile is valid, i.e. inside the map and not a void tile.
-    pub(crate) fn is_valid_tile(&self, t: u32) -> bool {
+    pub(crate) fn is_valid_tile(&self, t: TileIndex) -> bool {
         self.asserted(|m| is_valid_tile(m, t, m.count()))
     }
     /// `IsTileFlat` without the height output.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_flat(&self, t: u32) -> bool {
+    pub(crate) fn tile_flat(&self, t: TileIndex) -> bool {
         let (x, y) = self.size();
         self.asserted(|m| is_tile_flat(m, t, x, y))
     }
     /// `GetTileMaxPixelZ`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn tile_max_pixel_z(&self, t: u32) -> i32 {
+    pub(crate) fn tile_max_pixel_z(&self, t: TileIndex) -> i32 {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_max_pixel_z(m, t, x, y))
     }
@@ -324,7 +383,7 @@ impl crate::map_func::World<'_> {
 
 /// `TileHeight`; a failed `tile < Map::Size()` calls the native assertion.
 #[allow(clippy::cast_sign_loss)] // `tile_height` reads a byte, so its i32 is nonnegative.
-pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
+pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: TileIndex) -> u32 {
     tile_height(&w.types, t).map_or_else(
         || {
             w.check(false);
@@ -333,38 +392,46 @@ pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
         |height| height as u32,
     )
 }
-/// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
-pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
-    w.check(w.types.available(TileIndex(t)).is_some());
+/// `IsInnerTile`; `freeform_edges` reads `construction.freeform_edges`, only in the
+/// final operand and only for a tile on the upper edges, as the original does.
+pub(crate) fn is_inner_tile(
+    w: &crate::map_func::World<'_>,
+    t: TileIndex,
+    freeform_edges: impl FnOnce() -> bool,
+) -> bool {
+    w.check(t.0 < w.types.count());
     let map = w.dimensions;
-    let x = map.tile_x(TileIndex(t));
-    let y = map.tile_y(TileIndex(t));
+    let x = map.tile_x(t);
+    let y = map.tile_y(t);
     x < map.max_x()
         && y < crate::map_func::Map::max_y(w.size_y())
-        && ((x > 0 && y > 0) || !freeform_edges)
+        && ((x > 0 && y > 0) || !freeform_edges())
 }
 /// `SetTileHeight`.
 #[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
-pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: u32, height: u32) {
-    w.check(w.types.available(TileIndex(t)).is_some());
+pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: TileIndex, height: u32) {
+    w.check(t.0 < w.types.count());
     w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
-    let _ = w.types.set_height(TileIndex(t), height as u8);
+    let _ = w.types.set_height(t, height as u8);
 }
 /// `SetTileType`; the inner-tile assertion reads `freeform_edges` only in assertion builds.
 #[allow(clippy::cast_possible_truncation)] // `SB` assigns the promoted result to a byte.
 pub(crate) fn set_tile_type(
     w: &crate::map_func::World<'_>,
-    t: u32,
-    kind: u8,
+    t: TileIndex,
+    kind: TileType,
     freeform_edges: impl FnOnce() -> bool,
 ) {
-    w.check(w.types.available(TileIndex(t)).is_some());
+    w.check(t.0 < w.types.count());
+    /* VOID tiles (and no others) are exactly allowed at the lower left and right
+     * edges of the map. If _settings_game.construction.freeform_edges is true,
+     * the upper edges of the map are also VOID tiles. */
     if w.types.assertions() {
-        w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
+        w.check(is_inner_tile(w, t, freeform_edges) == (kind != TileType::MP_VOID));
     }
-    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(TileIndex(t))));
-    crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind));
-    let _ = w.types.set_kind(TileIndex(t), value as u8);
+    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(t)));
+    crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind.0));
+    let _ = w.types.set_kind(t, value as u8);
 }
 
 #[cfg(test)]
@@ -509,8 +576,8 @@ mod tests {
             (
                 "GetTileSlopeZ",
                 |w, t| {
-                    let (slope, z) = w.tile_slope_z(t);
-                    [slope.into(), z]
+                    let (slope, z) = w.tile_slope_z(crate::tile_type::TileIndex(t));
+                    [slope.0.into(), z]
                 },
                 [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 3],
                 2,
@@ -518,15 +585,15 @@ mod tests {
             (
                 "GetTilePixelSlope",
                 |w, t| {
-                    let (slope, z) = w.tile_pixel_slope(t);
-                    [slope.into(), z]
+                    let (slope, z) = w.tile_pixel_slope(crate::tile_type::TileIndex(t));
+                    [slope.0.into(), z]
                 },
                 [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 24],
                 2,
             ),
             (
                 "GetTileMaxPixelZ",
-                |w, t| [w.tile_max_pixel_z(t), 0],
+                |w, t| [w.tile_max_pixel_z(crate::tile_type::TileIndex(t)), 0],
                 [40, 0],
                 2,
             ),
@@ -534,7 +601,7 @@ mod tests {
                 "GetTilePixelSlopeOutsideMap",
                 |w, _| {
                     let (slope, z) = w.tile_pixel_slope_outside_map(0, 64);
-                    [slope.into(), z]
+                    [slope.0.into(), z]
                 },
                 [(SLOPE_W | SLOPE_S).into(), 32],
                 0,
@@ -586,6 +653,72 @@ mod tests {
                     );
                 }
             }
+        }
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 0,
+                assertions: true,
+            },
+            6,
+        );
+    }
+
+    /// `IsInnerTile`, `SetTileHeight` and `SetTileType` assert `tile < Map::Size()`
+    /// themselves: tile 4096 of the 64 by 64 map fails that range assertion once each,
+    /// although these backing arrays extend past it, and a returning handler resumes.
+    #[test]
+    fn setters_assert_the_map_size_range() {
+        let (base, extended) = tiles();
+        let shared = crate::services::Services {
+            movement: MOVEMENT.with(std::ptr::from_ref),
+            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+        };
+        let allocation = TileTypeAllocation {
+            base: base.as_ptr(),
+            extended: extended.as_ptr(),
+            count: 4096,
+            assertions: true,
+        };
+        crate::map_func::fixture::set(allocation, 6);
+        let world = World::new(&shared);
+        let outside = crate::tile_type::TileIndex(4096);
+        ASSERTS.set(0);
+        let _ = super::is_inner_tile(&world, outside, || false);
+        assert_eq!(ASSERTS.get(), 1, "IsInnerTile");
+        ASSERTS.set(0);
+        super::set_tile_height(&world, outside, 2);
+        assert_eq!(ASSERTS.get(), 1, "SetTileHeight");
+        ASSERTS.set(0);
+        // The range assertion, then the inner-tile assertion's own range assertion; a void
+        // type is not inner, so the type assertion holds.
+        super::set_tile_type(&world, outside, crate::tile_type::TileType::MP_VOID, || {
+            false
+        });
+        assert_eq!(ASSERTS.get(), 2, "SetTileType");
+        // The setting is read only for an upper-edge tile inside the lower borders.
+        let reads = std::cell::Cell::new(0);
+        let read = || {
+            reads.set(reads.get() + 1);
+            true
+        };
+        for (tile, inner, expected) in [
+            (65, true, 0),
+            (63, false, 0),
+            (4032, false, 0),
+            (1, false, 1),
+        ] {
+            reads.set(0);
+            assert_eq!(
+                super::is_inner_tile(&world, crate::tile_type::TileIndex(tile), read),
+                inner
+            );
+            assert_eq!(
+                reads.get(),
+                expected,
+                "IsInnerTile setting reads, tile {tile}"
+            );
         }
         crate::map_func::fixture::set(
             TileTypeAllocation {

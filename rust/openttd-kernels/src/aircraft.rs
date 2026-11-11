@@ -496,7 +496,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         engine_reliability(self; v: Vehicle) => (self.vs.engine)(v.base()).reliability();
         slope(self; x: i64, y: i64) => self.movement.get().pixel_z_at(x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
-        tile_height(self; tile: i64) => crate::tile_map::tile_height_in(&crate::map_func::World::new(self.ss), tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
+        tile_height(self; tile: i64) => crate::tile_map::tile_height_in(&crate::map_func::World::new(self.ss), TileIndex(tile as u32)).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
         airport_entry(self; ap: *const c_void, direction: i64) => unsafe { (self.leaves.airport_entry)(ap, direction as u8) };
         direction_towards(self; v: Vehicle, x: i64, y: i64) => unsafe { (self.leaves.direction_towards)(v, x as i32, y as i32) };
         terminal_count(self; ap: *const c_void, index: i64) => unsafe { (self.leaves.terminal_count)(ap, index as u32) };

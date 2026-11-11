@@ -100,8 +100,8 @@ pub(crate) unsafe fn restore(
     let map = crate::map_func::World::new(s);
     let mut class = map.water_class(tile);
     /* Autoslope might turn an originally canal or river tile into land */
-    let (slope, z) = map.tile_slope_z(tile);
-    if slope != 0 {
+    let (slope, z) = map.tile_slope_z(TileIndex(tile));
+    if slope != crate::slope_type::Slope::SLOPE_FLAT {
         if class == 1 {
             /* If we clear the canal, we have to remove it from the infrastructure count as well. */
             if (s.company_valid)(owner) {
@@ -116,7 +116,7 @@ pub(crate) unsafe fn restore(
             class = 3;
         }
         /* Only river water should be restored on appropriate slopes. Other water would be invalid on slopes */
-        if class != 2 || !is_inclined_slope_raw(slope) {
+        if class != crate::water_map::WaterClass::River.0 || !is_inclined_slope_raw(slope.0) {
             class = 3;
         }
     }
@@ -266,9 +266,15 @@ impl<'a> World<'a> {
                     .asserted(self.s, |m| crate::water_map::is_coast(m, tile))
                 {
                     return if is_slope_with_one_corner_raised_raw(
-                        self.types.asserted(self.s, |m| {
-                            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
-                        }),
+                        (self.types.asserted(self.s, |m| {
+                            crate::tile_map::get_tile_slope(
+                                m,
+                                TileIndex(tile),
+                                self.size_x,
+                                self.size_y,
+                            )
+                        }))
+                        .0,
                     ) {
                         1
                     } else {
@@ -292,9 +298,17 @@ impl<'a> World<'a> {
                     .asserted(self.s, |m| crate::rail_map::get_rail_ground_type(m, tile))
                     == 13
                 {
-                    if is_slope_with_one_corner_raised_raw(self.types.asserted(self.s, |m| {
-                        crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
-                    })) {
+                    if is_slope_with_one_corner_raised_raw(
+                        (self.types.asserted(self.s, |m| {
+                            crate::tile_map::get_tile_slope(
+                                m,
+                                TileIndex(tile),
+                                self.size_x,
+                                self.size_y,
+                            )
+                        }))
+                        .0,
+                    ) {
                         1
                     } else {
                         3
@@ -344,11 +358,11 @@ impl<'a> World<'a> {
             return false;
         }
         let slope = self.types.asserted(self.s, |m| {
-            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+            crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
         let mut tracks = (self.r().tracks)(tile).0;
-        if is_slope_with_one_corner_raised_raw(slope) {
-            let corner = (slope.trailing_zeros() ^ 2) as usize;
+        if is_slope_with_one_corner_raised_raw(slope.0) {
+            let corner = (slope.0.trailing_zeros() ^ 2) as usize;
             let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
                 crate::movement::native_assert(self.s, ok);
             });
@@ -373,7 +387,7 @@ impl<'a> World<'a> {
                     return true;
                 }
             }
-            if (5..10).contains(&crate::movement::rail_foundation(slope, tracks, |ok| {
+            if (5..10).contains(&crate::movement::rail_foundation(slope.0, tracks, |ok| {
                 crate::movement::native_assert(self.s, ok);
             })) {
                 flooded = true;
@@ -383,10 +397,10 @@ impl<'a> World<'a> {
             }
         } else {
             let foundation = (self.s.apply_foundation)(
-                Foundation(crate::movement::rail_foundation(slope, tracks, |ok| {
+                Foundation(crate::movement::rail_foundation(slope.0, tracks, |ok| {
                     crate::movement::native_assert(self.s, ok);
                 })),
-                Slope(slope),
+                Slope(slope.0),
             );
             if foundation.z == 0
                 && (is_steep_slope_raw(foundation.slope.0)
@@ -502,11 +516,23 @@ impl<'a> World<'a> {
         let company = (self.s.current_company)();
         (self.co().finance.set_current_company)(17);
         let slope = self.types.asserted(self.s, |m| {
-            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+            crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
-        let flooded = if slope != 0 {
+        let flooded = if slope == crate::slope_type::Slope::SLOPE_FLAT {
+            /* Flood vehicles */
+            self.flood_vehicles(tile);
+            /* flood flat tile */
+            if self.clear(tile, call) {
+                (self.w.make_sea)(tile);
+                (self.s.mark_dirty)(tile);
+                true
+            } else {
+                false
+            }
+        } else {
+            /* make coast.. */
             match self.tile_type(tile) {
-                1 => {
+                crate::tile_type::MP_RAILWAY => {
                     if (self.s.is_plain_rail)(tile) {
                         self.flood_vehicles(tile);
                         self.half_flood(tile, call)
@@ -514,7 +540,7 @@ impl<'a> World<'a> {
                         false
                     }
                 }
-                4 if !is_slope_with_one_corner_raised_raw(slope) => {
+                crate::tile_type::MP_TREES if !is_slope_with_one_corner_raised_raw(slope.0) => {
                     (self.w.set_tree_ground)(
                         tile,
                         TreeGround(crate::tree_map::TREE_GROUND_SHORE),
@@ -523,7 +549,7 @@ impl<'a> World<'a> {
                     (self.s.mark_dirty)(tile);
                     true
                 }
-                0 | 4 => {
+                crate::tile_type::MP_CLEAR | crate::tile_type::MP_TREES => {
                     if self.clear(tile, call) {
                         (self.s.make_shore)(tile);
                         (self.s.mark_dirty)(tile);
@@ -533,15 +559,6 @@ impl<'a> World<'a> {
                     }
                 }
                 _ => false,
-            }
-        } else {
-            self.flood_vehicles(tile);
-            if self.clear(tile, call) {
-                (self.w.make_sea)(tile);
-                (self.s.mark_dirty)(tile);
-                true
-            } else {
-                false
             }
         };
         if flooded {
