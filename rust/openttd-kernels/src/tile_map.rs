@@ -133,7 +133,12 @@ pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> 
 #[inline(always)]
 pub(crate) fn get_tile_z(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(m, t, x, y)?;
-    Some(north.min(west).min(east.min(south)))
+    Some(
+        north // N corner
+            .min(west) // W corner
+            .min(east) // E corner
+            .min(south), // S corner
+    )
 }
 
 /// `IsTileOwner`.
@@ -184,7 +189,12 @@ pub(crate) fn get_tile_pixel_slope(
 #[inline(always)]
 pub(crate) fn get_tile_max_z(map: &TileTypeAccess, tile: TileIndex, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(map, tile, x, y)?;
-    Some(north.max(west).max(east.max(south)))
+    Some(
+        north // N corner
+            .max(west) // W corner
+            .max(east) // E corner
+            .max(south), // S corner
+    )
 }
 /// `GetTileMaxPixelZ`.
 #[allow(clippy::inline_always)]
