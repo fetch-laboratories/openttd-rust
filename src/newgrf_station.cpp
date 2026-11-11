@@ -68,7 +68,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.loading = RustRealLoading,
 		.loaded = RustRealLoaded,
 		.axis = RustRailStationAxis,
-		.tile_add = RustTileAdd,
 		.tile_random = RustStationTileRandomBits,
 		.station_random = RustStationRandomBits<BaseStation>,
 		.waiting = RustStationWaitingTriggers<BaseStation>,

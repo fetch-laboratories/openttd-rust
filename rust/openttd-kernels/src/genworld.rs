@@ -418,13 +418,12 @@ impl World<'_> {
                         if remaining == 0 {
                             break 'patch;
                         }
-                        let next = map
-                            .tile_add_by_diag_dir(
-                                TileIndex(tile),
+                        let next = (TileIndex(tile)
+                            + map.tile_offs_by_diag_dir(
                                 DiagDirection(gb(shared.random(), 0, 2) as u8),
                                 crate::map_func::native_check,
-                            )
-                            .0;
+                            ))
+                        .0;
                         if (shared.tile_type)(next) == MP_CLEAR
                             && (shared.clear_ground)(next).0 != CLEAR_DESERT
                         {

@@ -7,6 +7,8 @@ license.workspace = true
 
 [features]
 native-test-support = []
+# Native `_DEBUG` (CMake Debug configuration): `TileAdd` reconstructs and asserts.
+native-debug = []
 
 [lib]
 crate-type = ["staticlib"]

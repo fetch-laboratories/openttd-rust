@@ -381,7 +381,7 @@ pub(crate) unsafe fn do_create_new_industry(
                 unsafe {
                     (*state).prod_level = res as u8;
                 }
-                super::recompute_production_multipliers(owner);
+                super::recompute_production_multipliers(owner, prod);
             } else {
                 unsafe {
                     (cons.callback_error)(

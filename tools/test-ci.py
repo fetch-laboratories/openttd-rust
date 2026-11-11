@@ -400,14 +400,12 @@ def runs(
     step: dict[str, Any],
     cache_only: bool,
     steps: dict[str, Any],
-    rust_only: bool = False,
 ) -> object:
     """Evaluate a ci-linux or ci-windows step condition on a protected push."""
     return evaluate(
         step.get("if", True),
         inputs={
             "cache-only": cache_only,
-            "rust-only": rust_only,
             "rust": True,
             "compiler": "gcc",
             "semantic-subset": False,
@@ -1550,17 +1548,17 @@ class PolicyTests(unittest.TestCase):
         jobs = workflow("ci-build.yml")["jobs"]
         # A direct dispatch is the cadence; controller dispatches carry a checkout.
         dispatch = "workflow_dispatch"
-        all_linux, both_windows = ["clang", "sdl2", "dedicated"], ["x86", "x64"]
-        for profile, checkout, event, heavy, covered, linux, windows, macos in (
-            ("full", "merge", dispatch, "", "", all_linux, both_windows, False),
-            ("native", "merge", dispatch, "", "", ["sdl2"], [], False),
-            ("platform", "merge", dispatch, "", "", all_linux, both_windows, True),
-            ("", "", dispatch, "", "", ["clang", "dedicated"], both_windows, True),
-            # A covered push refreshes every cached flavour Full restores:
-            # Full builds no Windows x86 (#896), so only x64.
-            ("", "", "push", "false", "true", ["sdl2", "dedicated"], ["x64"], False),
-            ("", "", "push", "true", "", all_linux, both_windows, True),
-            ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
+        all_linux, x64 = ["clang", "sdl2", "dedicated"], ["x64"]
+        for profile, checkout, event, heavy, covered, linux, windows, macos, rust32 in (
+            ("full", "merge", dispatch, "", "", all_linux, x64, False, True),
+            # Native adds Clang and the 32-bit Rust job before the queue (#904).
+            ("native", "merge", dispatch, "", "", ["clang", "sdl2"], [], False, True),
+            ("platform", "merge", dispatch, "", "", all_linux, x64, True, True),
+            ("", "", dispatch, "", "", ["clang", "dedicated"], x64, True, True),
+            # A covered push refreshes every cached flavour Full restores and tests nothing.
+            ("", "", "push", "false", "true", ["sdl2", "dedicated"], x64, False, False),
+            ("", "", "push", "true", "", all_linux, x64, True, True),
+            ("", "", "pull_request", "true", "", ["sdl2"], x64, True, False),
         ):
             contexts: dict[str, Any] = {
                 "inputs": {"checkout-ref": checkout, "profile": profile},
@@ -1573,22 +1571,18 @@ class PolicyTests(unittest.TestCase):
                     ("windows", "arch", windows),
                 ):
                     body = jobs[name]
+                    matrix = body["strategy"]["matrix"][axis]
                     selected = (
-                        evaluate(body["strategy"]["matrix"][axis], **contexts)
+                        (
+                            matrix
+                            if isinstance(matrix, list)
+                            else evaluate(matrix, **contexts)
+                        )
                         if evaluate(body["if"], **contexts)
                         else []
                     )
                     self.assertEqual(selected, expected)
-                for arch in ("x86", "x64"):
-                    # Only Full narrows x86 to its Rust checks (#896).
-                    self.assertEqual(
-                        evaluate(
-                            jobs["windows"]["with"]["rust-only"],
-                            matrix={"arch": arch},
-                            **contexts,
-                        ),
-                        profile == "full" and arch == "x86",
-                    )
+                self.assertEqual(evaluate(jobs["rust-32bit"]["if"], **contexts), rust32)
                 self.assertEqual(evaluate(jobs["macos"]["if"], **contexts), macos)
                 self.assertEqual(
                     evaluate(jobs["emscripten"]["if"], **contexts),
@@ -1636,7 +1630,6 @@ class PolicyTests(unittest.TestCase):
             )
         for name, matrix, selected in (
             ("windows", {"arch": "x64"}, True),
-            ("windows", {"arch": "x86"}, False),
             ("macos", {"name": "arm64 - Release"}, True),
             ("macos", {"name": "arm64 - Debug"}, False),
         ):
@@ -1708,26 +1701,28 @@ class PolicyTests(unittest.TestCase):
             inputs = {"cache-only": cache_only, "compiler": compiler}
             self.assertEqual(evaluate(linux, inputs=inputs), expected)
 
-    def test_rust_only_windows_stops_after_the_rust_checks(self) -> None:
-        """Full's x86 job keeps the step that failed on x86 and builds nothing (#896)."""
-        steps = job("ci-windows.yml", "windows")["steps"]
-        outputs = {step["id"]: {"outputs": {}} for step in steps if "id" in step}
-        names = [str(step.get("name", step.get("uses"))) for step in steps]
-        last = names.index("Rust checks for actual selected target")
-        observed = [
-            name
-            for name, step in zip(names, steps, strict=True)
-            if runs(step, False, outputs, rust_only=True)
-        ]
-        evidence = "Retain native Windows Rust and test evidence"
-        self.assertEqual(observed, names[: last + 1] + [evidence])
+    def test_windows_targets_x64_alone(self) -> None:
+        """Windows x86 is retired (#899), with no Rust-only path left."""
+        windows = workflow("ci-build.yml")["jobs"]["windows"]
+        self.assertEqual(windows["strategy"]["matrix"]["arch"], ["x64"])
+        self.assertNotIn("rust-only", windows["with"])
+        # PyYAML reads the `on:` key as True.
+        triggers = cast(dict[Any, Any], workflow("ci-windows.yml"))[True]
+        inputs = triggers["workflow_call"]["inputs"]
+        self.assertNotIn("rust-only", inputs)
+
+    def test_rust_32bit_job_targets_i686_on_a_free_runner(self) -> None:
+        """Its execution is shown by CI and root's width-dependent negative control (#899)."""
+        body = workflow("ci-build.yml")["jobs"]["rust-32bit"]
+        self.assertEqual(body["runs-on"], "ubuntu-24.04")
+        self.assertEqual(body["env"]["RUST_TARGET"], "i686-unknown-linux-gnu")
 
     def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(
         self,
     ) -> None:
         dispatch = "workflow_dispatch"
         for filename, names in (
-            ("ci-build.yml", ("emscripten", "linux", "macos", "windows")),
+            ("ci-build.yml", ("emscripten", "linux", "macos", "windows", "rust-32bit")),
             ("rust-migration.yml", ("build", "comparisons", "simulation")),
         ):
             jobs = workflow(filename)["jobs"]
@@ -1749,6 +1744,16 @@ class PolicyTests(unittest.TestCase):
                     cases = [
                         (False, "head", "", "full", dispatch, False),
                         (False, "head", "", "platform", dispatch, True),
+                        (False, "", "true", "", "push", True),
+                        (False, "", "false", "", "push", False),
+                        (False, "", "", "", dispatch, True),
+                        (True, "", "", "", dispatch, False),
+                    ]
+                if name == "rust-32bit":
+                    cases = [
+                        (False, "head", "", "full", dispatch, True),
+                        (False, "head", "", "platform", dispatch, True),
+                        (False, "head", "", "native", dispatch, True),
                         (False, "", "true", "", "push", True),
                         (False, "", "false", "", "push", False),
                         (False, "", "", "", dispatch, True),
@@ -1832,6 +1837,7 @@ class PolicyTests(unittest.TestCase):
                 "check_annotations",
                 *platforms,
                 *[f"annotations_{name}" for name in platforms],
+                "rust-32bit",
             ]
             cases = [
                 (None, "success"),

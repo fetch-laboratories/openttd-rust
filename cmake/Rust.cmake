@@ -81,13 +81,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(RUST_PLATFORM_CHECK "defined(__APPLE__) && TARGET_OS_OSX && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ == ${RUST_MIN_MACRO}")
     set(RUST_CHECK_HEADERS "#include <TargetConditionals.h>")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    # WindowsRust selected CRT before target creation; compiler macros below
-    # validate its target independently of the runner's Rust host architecture.
-    if(NOT RUST_HOST MATCHES "^(i686|x86_64)-pc-windows-msvc$")
-        message(FATAL_ERROR "Windows Rust requires a Windows MSVC Rust host")
+    # WindowsRust selected CRT and x64 before target creation; compiler macros
+    # below validate that target.
+    if(NOT RUST_HOST STREQUAL "x86_64-pc-windows-msvc")
+        message(FATAL_ERROR "Windows Rust requires an x86_64 Windows MSVC Rust host; 32-bit Windows is unsupported")
     endif()
     set(RUST_TARGET "${RUST_WINDOWS_TARGET}")
-    set(RUST_REQUIRED_POINTER_BYTES "${CMAKE_SIZEOF_VOID_P}")
+    set(RUST_REQUIRED_POINTER_BYTES 8)
     set(RUST_ARCH_CHECK "${RUST_WINDOWS_ARCH_CHECK}")
     set(RUST_PLATFORM_CHECK "defined(_WIN32) && defined(_MSC_VER) && _MSC_VER >= 1930 && _MSC_VER < 1950")
     set(RUST_CHECK_HEADERS "")
@@ -137,6 +137,15 @@ file(WRITE "${CMAKE_BINARY_DIR}/rust-toolchain.txt" "${RUST_VERSION}\ntarget=${R
 # Generate a content-stable configuration file and invalidate the release crate
 # only when its effective configuration changes, including SDK-only changes.
 set(RUST_CONFIGURATION "compiler=${RUSTC_EXECUTABLE}\ncargo=${CARGO_EXECUTABLE}\n${RUST_VERSION}target=${RUST_TARGET}\ncrt=${RUST_CRT}\nflags=${RUST_EFFECTIVE_FLAGS}\nsdk=${RUST_SDKROOT}\ndeployment=${CMAKE_OSX_DEPLOYMENT_TARGET}\n")
+# Native _DEBUG is a build-time choice in Rust too: Debug selects the original
+# TileAdd's coordinate reconstruction and assertions (map.cpp). services_ffi.h
+# rejects a translation unit whose _DEBUG differs from the archive's feature.
+set(RUST_FEATURES "")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(RUST_FEATURES "native-debug")
+    string(APPEND RUST_CONFIGURATION "features=native-debug\n")
+    add_compile_definitions(OPENTTD_RUST_NATIVE_DEBUG)
+endif()
 string(TOUPPER "${RUST_TARGET}" RUST_TARGET_ENV)
 string(REPLACE "-" "_" RUST_TARGET_ENV "${RUST_TARGET_ENV}")
 set(RUST_CONFIGURATION_ENV RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_WRAPPER
@@ -180,7 +189,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS}
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
     "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
     "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
-    "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
+    "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "-DFEATURES=${RUST_FEATURES}"
+    -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE RUST_RESULT)
 if(NOT RUST_RESULT EQUAL 0)
     message(FATAL_ERROR "Cannot obtain native static libraries for ${RUST_TARGET}; see rust-build.log")
@@ -203,7 +213,8 @@ add_custom_command(OUTPUT "${RUST_ARCHIVE}"
     COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
         "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
         "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
-        "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
+        "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "-DFEATURES=${RUST_FEATURES}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     DEPENDS ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
         "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
@@ -253,12 +264,16 @@ endif()
 if(NOT OPTION_TOOLS_ONLY)
     set(RUST_TEST_TARGET_DIR "${CMAKE_BINARY_DIR}/cargo-native-test-support")
     set(RUST_TEST_ARCHIVE "${RUST_TEST_TARGET_DIR}/${RUST_TARGET}/release/${RUST_ARCHIVE_NAME}")
+    set(RUST_TEST_FEATURES "native-test-support")
+    if(RUST_FEATURES)
+        string(APPEND RUST_TEST_FEATURES ",${RUST_FEATURES}")
+    endif()
     file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
-        CONTENT "${RUST_CONFIGURATION}features=native-test-support\n")
+        CONTENT "${RUST_CONFIGURATION}features=${RUST_TEST_FEATURES}\n")
     add_custom_command(OUTPUT "${RUST_TEST_ARCHIVE}"
         COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}" "${CMAKE_COMMAND}"
             "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
-            "-DFEATURES=native-test-support" "-DLOG=${CMAKE_BINARY_DIR}/rust-native-test-build.log"
+            "-DFEATURES=${RUST_TEST_FEATURES}" "-DLOG=${CMAKE_BINARY_DIR}/rust-native-test-build.log"
             "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
             -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

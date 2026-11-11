@@ -4384,13 +4384,15 @@ impl Ctx<'_> {
         &self,
         tile: TileIndex,
         nearest: *const crate::services::TownHandle,
-        noise_reached: *mut u16,
         newnoise_level: u32,
     ) -> (StringID, *const crate::services::TownHandle) {
         let mut authority_refuse_message = StringID::STR_NULL;
         let mut authority_refuse_town = std::ptr::null();
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
+            // `nearest` is read only with the setting on: with no towns the original
+            // returns the estimate without dereferencing it.
+            let noise_reached = self.noise_reached(nearest);
             if u32::from(unsafe { noise_reached.read() }) + newnoise_level
                 > u32::from((self.s.town_max_noise)(nearest))
             {
@@ -4547,11 +4549,10 @@ impl Ctx<'_> {
                 .map(|t| TileIndex(t.tile)),
         );
         let newnoise_level = u32::from(self.get_airport_noise_level_for_distance(spec, dist));
-        let noise_reached = self.noise_reached(nearest);
         let authority = unsafe { &*self.s.authority };
         /* Check if local auth would allow a new airport */
         let (authority_refuse_message, authority_refuse_town) =
-            self.check_local_authority_allows_airport(tile, nearest, noise_reached, newnoise_level);
+            self.check_local_authority_allows_airport(tile, nearest, newnoise_level);
         if authority_refuse_message != StringID::STR_NULL {
             (self.cost.error_param)(
                 cost.0,
@@ -4601,6 +4602,7 @@ impl Ctx<'_> {
             return;
         }
         /* Always add the noise, so there will be no need to recalculate when option toggles */
+        let noise_reached = self.noise_reached(nearest);
         unsafe {
             noise_reached.write(noise_reached.read().wrapping_add(newnoise_level as u16));
         }
@@ -4837,7 +4839,7 @@ impl Ctx<'_> {
     fn check_for_docking_tile(&self, t: TileIndex) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+            let tile = t + self.map().tile_offs_by_diag_dir(DiagDirection(d), |ok| {
                 crate::movement::native_assert(self.shared, ok);
             });
             if !(self.shared.tile_valid)(tile.0) {
@@ -4898,7 +4900,7 @@ impl Ctx<'_> {
     /// `RemoveDockingTile`.
     fn remove_docking_tile(&self, t: TileIndex) {
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+            let tile = t + self.map().tile_offs_by_diag_dir(DiagDirection(d), |ok| {
                 crate::movement::native_assert(self.shared, ok);
             });
             if !(self.shared.tile_valid)(tile.0) {
@@ -4927,9 +4929,8 @@ impl Ctx<'_> {
     fn clear_docking_tiles_checking_neighbours(&self, tile: TileIndex) {
         /* Clear and maybe re-set docking tile */
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let docking_tile = self
-                .map()
-                .tile_add_by_diag_dir(tile, DiagDirection(d), |ok| {
+            let docking_tile = tile
+                + self.map().tile_offs_by_diag_dir(DiagDirection(d), |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });
             if !(self.shared.tile_valid)(docking_tile.0) {
@@ -4956,9 +4957,10 @@ impl Ctx<'_> {
         let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         let world = crate::map_func::World::new(self.shared);
         self.area_add((self.s.ship_station_area)(st), tile);
-        let flat_tile = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        });
+        let flat_tile = tile
+            + self.map().tile_offs_by_diag_dir(direction, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
         self.area_add((self.s.ship_station_area)(st), flat_tile);
         crate::station_lifecycle::add_facility(st, StationFacility::Dock, tile, unsafe {
             &*self.s.lifecycle
@@ -5060,9 +5062,10 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         cost.add_money(ret.money());
-        let tile_cur = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        });
+        let tile_cur = tile
+            + self.map().tile_offs_by_diag_dir(direction, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
         if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur.0) {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -5091,9 +5094,10 @@ impl Ctx<'_> {
         if add_cost {
             cost.add_money(ret.money());
         }
-        let tile_cur = self.map().tile_add_by_diag_dir(tile_cur, direction, |ok| {
-            crate::movement::native_assert(self.shared, ok);
-        });
+        let tile_cur = tile_cur
+            + self.map().tile_offs_by_diag_dir(direction, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
             || !world.tile_flat(tile_cur.0)
         {
@@ -5148,7 +5152,7 @@ impl Ctx<'_> {
             return t;
         }
         for d in DiagDirection::DIAGDIR_BEGIN.0..DiagDirection::DIAGDIR_END.0 {
-            let tile = self.map().tile_add_by_diag_dir(t, DiagDirection(d), |ok| {
+            let tile = t + self.map().tile_offs_by_diag_dir(DiagDirection(d), |ok| {
                 crate::movement::native_assert(self.shared, ok);
             });
             if !(self.shared.tile_valid)(tile.0) {
@@ -5158,11 +5162,12 @@ impl Ctx<'_> {
                 continue;
             }
             if world.get_station_gfx(tile).0 < GFX_DOCK_BASE_WATER_PART
-                && self
-                    .map()
-                    .tile_add_by_diag_dir(tile, world.get_dock_direction(tile), |ok| {
-                        crate::movement::native_assert(self.shared, ok);
-                    })
+                && tile
+                    + self
+                        .map()
+                        .tile_offs_by_diag_dir(world.get_dock_direction(tile), |ok| {
+                            crate::movement::native_assert(self.shared, ok);
+                        })
                     == t
             {
                 return tile;
@@ -5245,11 +5250,11 @@ impl Ctx<'_> {
         if tile1 == TileIndex::INVALID {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let tile2 = self.map().tile_add_by_diag_dir(
-            tile1,
-            crate::map_func::World::new(self.shared).get_dock_direction(tile1),
-            |ok| crate::movement::native_assert(self.shared, ok),
-        );
+        let tile2 = tile1
+            + self.map().tile_offs_by_diag_dir(
+                crate::map_func::World::new(self.shared).get_dock_direction(tile1),
+                |ok| crate::movement::native_assert(self.shared, ok),
+            );
         unsafe {
             self.command.no_vehicle(cost.0, tile1.0);
         }
@@ -5405,10 +5410,10 @@ impl Ctx<'_> {
         /* The oil rig station is not supposed to be shared with anything else */
         let expected_facility = StationFacilities::from_element(StationFacility::Airport)
             | StationFacilities::from_element(StationFacility::Dock);
-        assert!(
+        crate::map_func::World::new(self.shared).assert_with(|| {
             StationFacilities((self.world().facilities)(st)) == expected_facility
                 && (self.s.airport_type)(st) == AT_OILRIG
-        );
+        });
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
             /* Don't leave dangling neutral station pointer */
@@ -5430,7 +5435,12 @@ impl Ctx<'_> {
             if orderlist.is_null() {
                 continue;
             }
-            let v = unsafe { (self.links().order_vehicle)(orderlist).unwrap_unchecked() };
+            let v = (self.links().order_vehicle)(orderlist);
+            crate::movement::native_assert(self.shared, v.is_some());
+            // Past a returning assertion the original dereferences null; stop natively.
+            let Some(v) = v else {
+                crate::services_assert::not_reached()
+            };
             if (CompanyID(v.owner()) == company) != include_company {
                 continue;
             }
@@ -5942,7 +5952,8 @@ impl Ctx<'_> {
         } else if world.drive_through_stop_tile(tile.0) {
             /* Remove the drive-through road stop */
             self.remove_drive_through_stop_for_bankrupt(cost, ret, error, tile);
-            assert_eq!(TileType((self.shared.tile_type)(tile.0)), TileType::MP_ROAD);
+            crate::map_func::World::new(self.shared)
+                .assert_with(|| TileType((self.shared.tile_type)(tile.0)) == TileType::MP_ROAD);
             /* Change owner of tile and all roadtypes */
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe {
@@ -6325,4 +6336,82 @@ crate::abi::layouts! {
         tile,
         gfx,
     };
+}
+
+#[cfg(test)]
+mod docking_tests {
+    use crate::direction_type::DiagDirection;
+    use crate::map_func::{TileTypeAllocation, fixture};
+    use crate::tile_type::TileIndex;
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static VALIDITY_READS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+        static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
+    }
+    /// `IsValidTile`, recording each neighbour `CheckForDockingTile` observes; no
+    /// neighbour is a dock, industry or oil rig, so no other map read follows.
+    extern "C" fn record_validity(tile: u32) -> bool {
+        VALIDITY_READS.with_borrow_mut(|reads| reads.push(tile));
+        false
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.set(FAILED_ASSERTIONS.get() + 1);
+        }
+    }
+
+    /// A buoy on a 64x64 map with freeform edges off may sit at x = 0 or y = 0.
+    /// Pinned `water_cmd.cpp:197` adds `TileOffsByDiagDir` by hand, so at the native
+    /// `_DEBUG` projection the north-east neighbour of (0, 5) is the void tile
+    /// (63, 4) and that of (0, 0) wraps past the map, both without assertions;
+    /// `TileAdd` would assert on the same steps.
+    #[test]
+    fn docking_neighbours_wrap_at_the_north_edge_under_native_debug() {
+        fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 64 * 64,
+                assertions: true,
+            },
+            6,
+        );
+        let mut movement = crate::test_tables::MOVEMENT;
+        movement.native_assert = record_assertion;
+        let mut shared = crate::test_tables::SHARED;
+        shared.map = fixture::statics();
+        shared.tile_valid = record_validity;
+        shared.movement = Box::leak(Box::new(movement));
+        let mut table = crate::test_tables::STATION_COMMANDS;
+        table.shared = Box::leak(Box::new(shared));
+        table.cost = &crate::test_tables::COMMAND_COSTS;
+        table.command = &crate::test_tables::COMMANDS;
+        // SAFETY: Every table outlives the context; no map reset occurs.
+        let ctx = unsafe { super::Ctx::new(&raw const table) };
+        let cases: [(u32, [u32; 4]); 2] = [
+            // (0, 5): NE wraps to (63, 4), then SE, SW and NW.
+            (320, [319, 384, 321, 256]),
+            // (0, 0): NE and NW leave the map below tile 0.
+            (0, [u32::MAX, 64, 1, 0xffff_ffc0]),
+        ];
+        for (buoy, neighbours) in cases {
+            VALIDITY_READS.with_borrow_mut(Vec::clear);
+            FAILED_ASSERTIONS.set(0);
+            crate::map_func::with_native_debug(true, || {
+                ctx.check_for_docking_tile(TileIndex(buoy));
+            });
+            assert_eq!(VALIDITY_READS.with_borrow(Clone::clone), neighbours);
+            assert_eq!(FAILED_ASSERTIONS.get(), 0, "buoy {buoy}");
+        }
+        // The same north-east step through TileAdd fails its x assertion.
+        crate::map_func::with_native_debug(true, || {
+            let _ =
+                ctx.map()
+                    .tile_add_by_diag_dir(TileIndex(320), DiagDirection::DIAGDIR_NE, |ok| {
+                        crate::movement::native_assert(ctx.shared, ok);
+                    });
+        });
+        assert_eq!(FAILED_ASSERTIONS.get(), 1);
+    }
 }
