@@ -832,7 +832,8 @@ mod tests {
         RustAuthenticationClientHandler, Services, SingleArgs, new_single, receive_request,
         receive_response, send_request, send_response,
     };
-    use crate::network_crypto::NetworkAuthenticationMethod;
+    use crate::network_config::COMPAT_MTU;
+    use crate::network_crypto::{NetworkAuthenticationMethod, RequestResult, ResponseResult};
     use crate::network_crypto_internal::X25519_KEY_SIZE;
     use crate::packet;
     use std::ptr;
@@ -877,7 +878,7 @@ mod tests {
 
     /// Upstream `Authentication_PAKE` sections on the single PAKE handlers, including the
     /// empty server password that the production server factory never offers.
-    fn pake(server: &'static [u8], client: &'static [u8]) -> u8 {
+    fn pake(server: &'static [u8], client: &'static [u8]) -> ResponseResult {
         let services = Services {
             allowed: unused_allowed,
             ask_password: ask,
@@ -906,14 +907,15 @@ mod tests {
         };
         let mut server = new(true, 1);
         let mut client = new(false, 2);
-        let mut request = packet::State::new(1460, ptr::null_mut());
-        let mut response = packet::State::new(1460, ptr::null_mut());
+        let mut request = packet::State::new(COMPAT_MTU, ptr::null_mut());
+        let mut response = packet::State::new(COMPAT_MTU, ptr::null_mut());
         unsafe {
             send_request(&raw mut server, &raw mut request, check);
-            // RequestResult::AwaitUserInput.
-            assert_eq!(receive_request(&raw mut client, &raw mut request).0, 0);
+            assert!(
+                receive_request(&raw mut client, &raw mut request) == RequestResult::AwaitUserInput
+            );
             assert!(send_response(&raw mut client, &raw mut response));
-            receive_response(&raw mut server, &raw mut response).0
+            receive_response(&raw mut server, &raw mut response)
         }
     }
 
@@ -925,10 +927,9 @@ mod tests {
         ) {
             return;
         }
-        // ResponseResult::Authenticated, then NotAuthenticated.
-        assert_eq!(pake(b"", b""), 0);
-        assert_eq!(pake(b"sikrit", b"sikrit"), 0);
-        assert_eq!(pake(b"sikrit", b"secret"), 1);
-        assert_eq!(pake(b"", b"secret"), 1);
+        assert!(pake(b"", b"") == ResponseResult::Authenticated);
+        assert!(pake(b"sikrit", b"sikrit") == ResponseResult::Authenticated);
+        assert!(pake(b"sikrit", b"secret") == ResponseResult::NotAuthenticated);
+        assert!(pake(b"", b"secret") == ResponseResult::NotAuthenticated);
     }
 }
