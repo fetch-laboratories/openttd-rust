@@ -146,17 +146,6 @@ uint8_t GetCommandType(Commands cmd) noexcept
 	return to_underlying(_command_proc_table[cmd].type);
 }
 
-/**
- * Returns whether the command is allowed while the game is paused.
- * @param cmd The command to check.
- * @return True if the command is allowed while paused, false otherwise.
- */
-bool IsCommandAllowedWhilePaused(Commands cmd)
-{
-	assert(IsValidCommand(cmd));
-	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), GetCommandType(cmd)) != 0;
-}
-
 /** Helper to make a desync log for a command. */
 void CommandHelperBase::LogCommandExecution(Commands cmd, StringID err_message, std::span<const uint8_t> args, bool failed)
 {

@@ -246,15 +246,6 @@ pub(crate) fn allowed_while_paused(s: &CommandServices, command_type: u8) -> boo
         || COMMAND_TYPE_PAUSE_LEVEL[usize::from(command_type)] <= (s.pause_level)()
 }
 
-/// `IsCommandAllowedWhilePaused` facade for native network queue admission.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_allowed_while_paused(
-    s: &CommandServices,
-    command_type: u8,
-) -> u8 {
-    u8::from(allowed_while_paused(s, command_type))
-}
-
 /// `RecursiveCommandCounter` construction from a native command template.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_command_enter() -> u8 {
