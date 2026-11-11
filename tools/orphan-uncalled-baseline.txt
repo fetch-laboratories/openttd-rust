@@ -1,0 +1,23 @@
+openttd_rust_airport_town | #634
+openttd_rust_auth_handler_method | #736
+openttd_rust_auth_handler_receive_enable | #730
+openttd_rust_auth_handler_receive_request | #730
+openttd_rust_backup_clear_user | #906
+openttd_rust_delete_implicit | #906
+openttd_rust_goods_convert_state | #634
+openttd_rust_industry_resolver_town | #635
+openttd_rust_list_insert | #906
+openttd_rust_order_implicit | #906
+openttd_rust_order_loading | #634, #656
+openttd_rust_override_reset | #635
+openttd_rust_override_substitute | #635
+openttd_rust_packet_get_type | #730
+openttd_rust_packet_packet_type | #730
+openttd_rust_roadstop_town | #634
+openttd_rust_schedule_dequeue | #736
+openttd_rust_schedule_queue | #634
+openttd_rust_station_town_scope | #634
+openttd_rust_train_curve_limit | #736
+openttd_rust_train_update_speed | #656
+openttd_rust_vehicle_scope_set | #656
+openttd_rust_visual_update | #656

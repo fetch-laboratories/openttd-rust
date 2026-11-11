@@ -1,6 +1,7 @@
 """Shared shrinking-baseline CLI for source scanners."""
 
 import argparse
+import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -28,12 +29,18 @@ def main(
         if p.is_file() and p.suffix in suffixes
     }
     hits = violations(files)
-    baseline = set((root / baseline_path).read_text().splitlines())
+    # A row may name the issue that removes it after its key: `KEY | #N[, #N]`.
+    baseline = {key(row) for row in (root / baseline_path).read_text().splitlines()}
     tracked = git(
         "ls-tree", "--name-only", args.base_ref, baseline_path, cwd=root
     ).strip()
     previous = (
-        set(git("show", f"{args.base_ref}:{baseline_path}", cwd=root).splitlines())
+        {
+            key(row)
+            for row in git(
+                "show", f"{args.base_ref}:{baseline_path}", cwd=root
+            ).splitlines()
+        }
         if tracked
         else baseline
     )
@@ -48,6 +55,11 @@ def main(
     count = sum(len(names) for _, names in errors)
     print(f"{summary.format(count=len(hits))}; {count} errors")
     return int(count > 0)
+
+
+def key(row: str) -> str:
+    """A baseline row without its trailing owner issues."""
+    return re.sub(r" \| #\d+(?:, #\d+)*$", "", row)
 
 
 def debt_errors(

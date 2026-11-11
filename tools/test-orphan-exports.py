@@ -133,6 +133,7 @@ class OrphanTests(unittest.TestCase):
                     "rust/lib.rs": export("orphan"),
                     "src/rust/ffi.h": "void openttd_rust_orphan();\n",
                     ORPHANS.BASELINE: "no production user | openttd_rust_orphan\n",
+                    ORPHANS.UNCALLED: "",
                 },
             )
 
@@ -158,6 +159,58 @@ class OrphanTests(unittest.TestCase):
             self.assertEqual(check(), 1)  # Retired exemptions must disappear.
             (root / ORPHANS.BASELINE).write_text("")
             self.assertEqual(check(), 0)
+
+    def test_uncalled_rows_shrink_and_name_their_owner(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ORPHANS, "ROOT", Path(directory)),
+        ):
+            root = Path(directory)
+            initialize(
+                root,
+                {
+                    "rust/lib.rs": export("age"),
+                    "src/rust/ffi.h": "void openttd_rust_age(List *);\n",
+                    "src/cargopacket.h": "class L {\n\tvoid AgeCargo();\n};\n",
+                    "src/rust/storage.hpp": "void L::AgeCargo() "
+                    "{ openttd_rust_age(this->state); }\n",
+                    ORPHANS.BASELINE: "",
+                    ORPHANS.UNCALLED: "openttd_rust_age | #656\n",
+                },
+            )
+            output = io.StringIO()
+
+            def check() -> int:
+                output.seek(0)
+                output.truncate()
+                with (
+                    patch.object(
+                        sys, "argv", ["orphan-exports.py", "--base-ref", "HEAD"]
+                    ),
+                    contextlib.redirect_stdout(output),
+                ):
+                    return ORPHANS.main()
+
+            self.assertEqual(check(), 0)
+            (root / ORPHANS.UNCALLED).write_text("openttd_rust_age\n")
+            self.assertEqual(check(), 1)
+            self.assertIn(
+                "row names no owner issue: openttd_rust_age", output.getvalue()
+            )
+            (root / ORPHANS.UNCALLED).write_text("openttd_rust_age | #656\n")
+            (root / "src/vehicle.cpp").write_text("void T(L &l) { l.AgeCargo(); }\n")
+            self.assertEqual(
+                check(), 1
+            )  # The owner that adds the caller removes the row.
+            self.assertIn("remove retired: openttd_rust_age", output.getvalue())
+            (root / ORPHANS.UNCALLED).write_text("")
+            self.assertEqual(check(), 0)
+            (root / "src/vehicle.cpp").unlink()
+            self.assertEqual(check(), 1)
+            self.assertIn(
+                "new export held only by uncalled members: openttd_rust_age",
+                output.getvalue(),
+            )
 
 
 if __name__ == "__main__":

@@ -4,8 +4,11 @@
 A reference inside an out-of-class member definition does not count when that
 member has an explicit template instantiation and no caller: its definition,
 declarations and instantiations are not callers (#856). --report-uncalled lists,
-without failing, exports whose only references sit in any uncalled member;
-script API members count as called, through their generated Squirrel bindings.
+exports whose only references sit in any uncalled member; script API members
+count as called, through their generated Squirrel bindings. Those rows are held
+against tools/orphan-uncalled-baseline.txt, which only shrinks: each row names
+the pool or reader owner issue that retires its evidence caller and removes the
+row (#737 batch O).
 """
 
 import re
@@ -18,6 +21,8 @@ from code_lines import RUST_EXPORT, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/orphan-export-baseline.txt"
+UNCALLED = "tools/orphan-uncalled-baseline.txt"
+SUFFIXES = {".cpp", ".h", ".hpp", ".inc", ".rs"}
 NAME = r"openttd_rust_\w+"
 DECLARATION = re.compile(
     rf'(?m)^[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
@@ -157,8 +162,18 @@ def scan(files: dict[str, str], broad: bool = False) -> dict[str, set[str]]:
     return result
 
 
+def uncalled(files: dict[str, str]) -> dict[str, set[str]]:
+    """Exports held only by uncalled members, with those members."""
+    enforced = violations(files)
+    return {
+        row.split(" | ")[1]: members
+        for row, members in scan(files, broad=True).items()
+        if row not in enforced
+    }
+
+
 def report_uncalled() -> int:
-    """List, without failing, exports held only by uncalled members (#737 batch O)."""
+    """List exports held only by uncalled members, with each row's owner."""
     paths = subprocess.run(
         ["git", "ls-files", "src", "rust"],
         cwd=ROOT,
@@ -169,33 +184,48 @@ def report_uncalled() -> int:
     files = {
         path: (ROOT / path).read_text(errors="replace")
         for path in paths
-        if Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".rs"}
+        if Path(path).suffix in SUFFIXES
     }
-    enforced = violations(files)
-    rows = sorted(
-        (row.split(" | ")[1], ", ".join(sorted(members)))
-        for row, members in scan(files, broad=True).items()
-        if row not in enforced
+    owners = dict(
+        row.split(" | ", 1) for row in (ROOT / UNCALLED).read_text().splitlines()
     )
+    rows = sorted(uncalled(files).items())
     for name, members in rows:
-        print(f"{name} | {members}")
-    print(f"Exports held only by uncalled members: {len(rows)} (not enforced)")
+        print(f"{name} | {', '.join(sorted(members))} | {owners.get(name, 'no owner')}")
+    print(f"Exports held only by uncalled members: {len(rows)} (baseline {UNCALLED})")
     return 0
 
 
 def main() -> int:
     if sys.argv[1:] == ["--report-uncalled"]:
         return report_uncalled()
-    return baseline_ratchet.main(
-        __doc__,
-        ROOT,
+    common = (__doc__, ROOT)
+    orphans = baseline_ratchet.main(
+        *common,
         BASELINE,
         ("src", "rust"),
-        {".cpp", ".h", ".hpp", ".inc", ".rs"},
+        SUFFIXES,
         violations,
         new_label="new orphan",
         summary="Orphan exports: {count} baselined violations",
     )
+    held = baseline_ratchet.main(
+        *common,
+        UNCALLED,
+        ("src", "rust"),
+        SUFFIXES,
+        lambda files: set(uncalled(files)),
+        new_label="new export held only by uncalled members",
+        summary="Exports held only by uncalled members: {count} baselined",
+    )
+    unowned = [
+        row
+        for row in (ROOT / UNCALLED).read_text().splitlines()
+        if baseline_ratchet.key(row) == row
+    ]
+    for row in unowned:
+        print(f"{UNCALLED}: row names no owner issue: {row}")
+    return orphans | held | int(bool(unowned))
 
 
 if __name__ == "__main__":
