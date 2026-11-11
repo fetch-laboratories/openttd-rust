@@ -260,6 +260,16 @@ static void Inspect(bool reload)
 	Require(GetGRFConfig(ID("E471"))->status == GCS_ACTIVATED && GetFileByGRFID(ID("E471"))->param.empty(), "skip-after-action8");
 	GRFConfig *graph_broken = GetGRFConfig(ID("B485"));
 	Require(graph_broken != nullptr && graph_broken->status == GCS_DISABLED && graph_broken->errors.size() == 1 && graph_broken->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "action2-file-truncated");
+	/* B485's truncated deterministic node keeps its one adjust and no ranges, and the callback
+	 * result its range read allocated stays pooled right after it (#156). */
+	bool partial_pooled = false;
+	for (const SpriteGroup *group : SpriteGroup::Iterate()) {
+		const auto *partial = dynamic_cast<const DeterministicSpriteGroup *>(group);
+		if (partial == nullptr || !partial->ranges.empty() || partial->adjusts.size() != 1 || partial->adjusts[0].variable != 0x0C || partial->adjusts[0].and_mask != 255) continue;
+		const auto *cached = dynamic_cast<const CallbackResultSpriteGroup *>(SpriteGroup::GetIfValid(group->index.base() + 1));
+		partial_pooled |= cached != nullptr && cached->result == 4;
+	}
+	Require(partial_pooled, "action2-partial-pooled");
 	const auto *graph = dynamic_cast<const DeterministicSpriteGroup *>(FixtureEngineSprite(Engine::Get(id), CargoGRFFileProps::SG_DEFAULT));
 	Require(graph != nullptr && std::ranges::any_of(graph->ranges, [](const auto &r) { return r.low == 21 && r.high == 32 && dynamic_cast<const DeterministicSpriteGroup *>(r.result.group) != nullptr; }), "action2-file-graph");
 	const auto &range = *std::ranges::find_if(graph->ranges, [](const auto &r) { return r.low == 21; });
