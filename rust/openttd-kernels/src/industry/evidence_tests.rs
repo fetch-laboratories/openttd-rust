@@ -28,7 +28,9 @@ use crate::test_tables::{
     unreachable1, unreachable3,
 };
 use crate::tile_type::MP_INDUSTRY;
-use std::cell::{Cell, RefCell};
+use std::fmt::Write as _;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 const ORACLE: &str = include_str!("lifecycle-oracle.txt");
 
@@ -68,13 +70,14 @@ struct World {
     owner: usize,
 }
 
-thread_local! {
-    static WORLD: RefCell<World> = RefCell::new(World::default());
-    static AMBIENT: Cell<bool> = const { Cell::new(false) };
-}
+/// Process-wide, as the probe's globals were; each test holds `GLOBAL_LOCK`.
+static WORLD: LazyLock<Mutex<World>> = LazyLock::new(|| Mutex::new(World::default()));
+/// `_settings_client.sound.ambient`.
+static AMBIENT: AtomicBool = AtomicBool::new(false);
 
+/// No stub calls another while the world is borrowed.
 fn with<R>(f: impl FnOnce(&mut World) -> R) -> R {
-    WORLD.with(|world| f(&mut world.borrow_mut()))
+    f(&mut WORLD.lock().unwrap_or_else(PoisonError::into_inner))
 }
 fn record(entry: [u32; 4]) {
     with(|w| w.trace.push(entry));
@@ -205,7 +208,7 @@ extern "C" fn animation_info(spec: *const TileSpec) -> Info {
         enabled: false,
     }
 }
-/// The animation trigger callback: recorded, and it fails as no NewGRF answers it.
+/// The animation trigger callback: recorded, and it fails as no `NewGRF` answers it.
 extern "C" fn animation_callback(
     callback: u16,
     random: u32,
@@ -309,7 +312,7 @@ fn leak<T>(value: T) -> &'static T {
 }
 fn tables() -> Tables {
     let mut settings = crate::settings_type::SettingAddresses::NULL;
-    settings.ambient = AMBIENT.with(Cell::as_ptr);
+    settings.ambient = AMBIENT.as_ptr();
     let mut shared = SHARED;
     shared.random = random;
     shared.mark_dirty = mark_dirty;
@@ -368,10 +371,7 @@ fn trace() -> String {
             if entry[0] == 0 {
                 out.push_str(" 0");
             } else {
-                out.push_str(&format!(
-                    " {}:{}:{}:{}",
-                    entry[0], entry[1], entry[2], entry[3]
-                ));
+                let _ = write!(out, " {}:{}:{}:{}", entry[0], entry[1], entry[2], entry[3]);
             }
         }
         out
@@ -410,11 +410,101 @@ impl Drop for AnimationScope {
 const SEEDS: [u32; 4] = [0, 1, 0x1234_5678, u32::MAX];
 const MASKS: [u32; 7] = [0, 1, 0x55, 0xFFFF, 0x10000, 0x1234_5678, u32::MAX];
 
-#[test]
+/// One lifecycle case on the fixture's industry: `[seed, mask, variant]`, the trigger and
+/// the operation (tile and industry randomisation, industry and tile animation).
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the fixture's per-tile bytes and the industry's random word wrap as its uint8_t and uint16_t fields do"
 )]
+fn lifecycle_case(
+    industries: &Services,
+    owner: *mut Industry,
+    [seed, mask, variant]: [u32; 3],
+    trigger: u8,
+    operation: u8,
+) -> String {
+    with(|w| {
+        (w.rng, w.mask) = (seed, mask);
+        w.trace.clear();
+        for tile in 0..7_u32 {
+            w.tiles[tile as usize] = Tile {
+                triggers: (tile * 7 + variant) as u8,
+                bits: (tile * 23 + variant) as u8,
+                belongs: tile != 1 && (variant != 7 || tile != 4),
+            };
+            w.enabled[tile as usize] = (variant >> (tile % 3)) & 1 != 0;
+            w.spec_triggers[tile as usize] = (tile * 13 + variant) as u8;
+        }
+    });
+    // SAFETY: The caller's live owner.
+    let metadata = unsafe { &mut *openttd_rust_industry_metadata(owner) };
+    metadata.random = seed as u16;
+    let mut result = true;
+    // SAFETY: The live owner and the fixture's tables; serialized by the lock.
+    unsafe {
+        match operation {
+            0 => trigger_industry_randomisation(
+                shell(),
+                owner,
+                IndustryID(0),
+                IndustryRandomTrigger(trigger),
+                4,
+                industries,
+                &LIFECYCLE,
+            ),
+            1 => trigger_industry_tile_randomisation(
+                TileIndex(2),
+                IndustryRandomTrigger(trigger),
+                shell(),
+                owner,
+                industries,
+                &LIFECYCLE,
+            ),
+            // `TriggerIndustryTileAnimation_ConstructionStageChanged`
+            // passes 0x100 for a first shape.
+            3 => {
+                let extra = if trigger == 0 && variant & 1 != 0 {
+                    0x100
+                } else {
+                    0
+                };
+                result = trigger_industry_tile_animation(
+                    TileIndex(2),
+                    IndustryAnimationTrigger(trigger),
+                    extra,
+                    industries,
+                    &LIFECYCLE,
+                );
+            }
+            _ => {
+                result = trigger_industry_animation(
+                    owner,
+                    IndustryID(0),
+                    IndustryAnimationTrigger(trigger),
+                    4,
+                    industries,
+                    &LIFECYCLE,
+                );
+            }
+        }
+    }
+    // Tiles the call changed, as index:triggers:bits.
+    let mut out = format!("{} {} {}", u8::from(result), draws(), metadata.random);
+    with(|w| {
+        for tile in 0..7_u32 {
+            let now = w.tiles[tile as usize];
+            if now.triggers != (tile * 7 + variant) as u8 || now.bits != (tile * 23 + variant) as u8
+            {
+                let _ = write!(out, " {tile}:{}:{}", now.triggers, now.bits);
+            }
+        }
+    });
+    out.push_str(" |");
+    out.push_str(&trace());
+    out
+}
+
+#[test]
 fn lifecycle_triggers_match_original() {
     let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
     let t = tables();
@@ -422,8 +512,10 @@ fn lifecycle_triggers_match_original() {
     let sections = oracle::parse(ORACLE);
     let owner = openttd_rust_industry_new();
     // SAFETY: The live owner allocated above.
-    let metadata = unsafe { &mut *openttd_rust_industry_metadata(owner) };
-    (metadata.tile, metadata.width, metadata.height) = (0, 3, 2);
+    unsafe {
+        let metadata = &mut *openttd_rust_industry_metadata(owner);
+        (metadata.tile, metadata.width, metadata.height) = (0, 3, 2);
+    }
     let mut cases = Vec::new();
     for seed in SEEDS {
         for mask in MASKS {
@@ -433,91 +525,18 @@ fn lifecycle_triggers_match_original() {
                         if operation != 2 && trigger >= 3 {
                             continue;
                         }
-                        with(|w| {
-                            (w.rng, w.mask) = (seed, mask);
-                            w.trace.clear();
-                            for tile in 0..7_u32 {
-                                w.tiles[tile as usize] = Tile {
-                                    triggers: (tile * 7 + variant) as u8,
-                                    bits: (tile * 23 + variant) as u8,
-                                    belongs: tile != 1 && (variant != 7 || tile != 4),
-                                };
-                                w.enabled[tile as usize] = (variant >> (tile % 3)) & 1 != 0;
-                                w.spec_triggers[tile as usize] = (tile * 13 + variant) as u8;
-                            }
-                        });
-                        metadata.random = seed as u16;
-                        let mut result = true;
-                        // SAFETY: The live owner and the fixture's tables; serialized by the lock.
-                        unsafe {
-                            match operation {
-                                0 => trigger_industry_randomisation(
-                                    shell(),
-                                    owner,
-                                    IndustryID(0),
-                                    IndustryRandomTrigger(trigger),
-                                    4,
-                                    t.industries,
-                                    &LIFECYCLE,
-                                ),
-                                1 => trigger_industry_tile_randomisation(
-                                    TileIndex(2),
-                                    IndustryRandomTrigger(trigger),
-                                    shell(),
-                                    owner,
-                                    t.industries,
-                                    &LIFECYCLE,
-                                ),
-                                // `TriggerIndustryTileAnimation_ConstructionStageChanged`
-                                // passes 0x100 for a first shape.
-                                3 => {
-                                    let extra = if trigger == 0 && variant & 1 != 0 {
-                                        0x100
-                                    } else {
-                                        0
-                                    };
-                                    result = trigger_industry_tile_animation(
-                                        TileIndex(2),
-                                        IndustryAnimationTrigger(trigger),
-                                        extra,
-                                        t.industries,
-                                        &LIFECYCLE,
-                                    );
-                                }
-                                _ => {
-                                    result = trigger_industry_animation(
-                                        owner,
-                                        IndustryID(0),
-                                        IndustryAnimationTrigger(trigger),
-                                        4,
-                                        t.industries,
-                                        &LIFECYCLE,
-                                    );
-                                }
-                            }
-                        }
-                        let changed: String = with(|w| {
-                            (0..7_u32)
-                                .filter_map(|tile| {
-                                    let now = w.tiles[tile as usize];
-                                    let changed = now.triggers != (tile * 7 + variant) as u8
-                                        || now.bits != (tile * 23 + variant) as u8;
-                                    changed
-                                        .then(|| format!(" {tile}:{}:{}", now.triggers, now.bits))
-                                })
-                                .collect()
-                        });
+                        let output = lifecycle_case(
+                            t.industries,
+                            owner,
+                            [seed, mask, variant],
+                            trigger,
+                            operation,
+                        );
                         cases.push((
                             format!(
                                 "seed {seed} mask {mask} variant {variant} trigger {trigger} operation {operation}"
                             ),
-                            format!(
-                                "{} {} {}{changed} |{}",
-                                u8::from(result),
-                                draws(),
-                                metadata.random,
-                                trace()
-                            ),
+                            output,
                         ));
                     }
                 }
@@ -527,6 +546,47 @@ fn lifecycle_triggers_match_original() {
     // SAFETY: The owner allocated above; no view of it remains.
     unsafe { openttd_rust_industry_destroy(owner) };
     assert_eq!(oracle::check(&sections, "lifecycle", cases), 3136);
+}
+
+/// One builtin animation case on tile 2.
+fn builtin_case(
+    gfx: u16,
+    frame: u8,
+    animation_loop: u8,
+    ambient: bool,
+    seed: u32,
+    tick: u64,
+) -> String {
+    crate::animated_tile::openttd_rust_animation_initialize();
+    crate::animated_tile::openttd_rust_animation_append(2);
+    with(|w| {
+        w.state = AnimatedTileState::ANIMATED.0;
+        w.rng = seed;
+        w.trace.clear();
+        (w.gfx, w.frame, w.animation_loop, w.stage) = (gfx, frame, animation_loop, 0);
+        w.tick = tick;
+    });
+    AMBIENT.store(ambient, Ordering::SeqCst);
+    crate::animated_tile::openttd_rust_animate_tile(2);
+    assert!(
+        crate::animated_tile::openttd_rust_animation_count() == 1
+            && crate::animated_tile::openttd_rust_animation_at(0) == 2,
+        "the queue keeps its one tile"
+    );
+    let mut fields: Vec<String> = with(|w| {
+        [
+            (w.gfx != gfx).then(|| format!("g={}", w.gfx)),
+            (w.frame != frame).then(|| format!("f={}", w.frame)),
+            (w.animation_loop != animation_loop).then(|| format!("l={}", w.animation_loop)),
+            (w.stage != 0).then(|| format!("s={}", w.stage)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    });
+    fields.push(draws().to_string());
+    fields.push(with(|w| w.state).to_string());
+    format!("{} |{}", fields.join(" "), trace())
 }
 
 #[test]
@@ -598,42 +658,13 @@ fn builtin_animation_matches_original() {
                     for animation_loop in [0, 7, 255] {
                         for ambient in [false, true] {
                             for seed in SEEDS {
-                                crate::animated_tile::openttd_rust_animation_initialize();
-                                crate::animated_tile::openttd_rust_animation_append(2);
-                                with(|w| {
-                                    w.state = AnimatedTileState::ANIMATED.0;
-                                    w.rng = seed;
-                                    w.trace.clear();
-                                    (w.gfx, w.frame, w.animation_loop, w.stage) =
-                                        (gfx, frame, animation_loop, 0);
-                                    w.tick = tick;
-                                });
-                                AMBIENT.set(ambient);
-                                crate::animated_tile::openttd_rust_animate_tile(2);
-                                assert!(
-                                    crate::animated_tile::openttd_rust_animation_count() == 1
-                                        && crate::animated_tile::openttd_rust_animation_at(0) == 2,
-                                    "the queue keeps its one tile"
-                                );
-                                let mut fields: Vec<String> = with(|w| {
-                                    [
-                                        (w.gfx != gfx).then(|| format!("g={}", w.gfx)),
-                                        (w.frame != frame).then(|| format!("f={}", w.frame)),
-                                        (w.animation_loop != animation_loop)
-                                            .then(|| format!("l={}", w.animation_loop)),
-                                        (w.stage != 0).then(|| format!("s={}", w.stage)),
-                                    ]
-                                    .into_iter()
-                                    .flatten()
-                                    .collect()
-                                });
-                                fields.push(draws().to_string());
-                                fields.push(with(|w| w.state).to_string());
+                                let output =
+                                    builtin_case(gfx, frame, animation_loop, ambient, seed, tick);
                                 cases.push((
                                     format!(
                                         "custom {custom} gfx {gfx} tick {tick} frame {frame} loop {animation_loop} ambient {ambient} seed {seed}"
                                     ),
-                                    format!("{} |{}", fields.join(" "), trace()),
+                                    output,
                                 ));
                             }
                         }
@@ -650,16 +681,70 @@ fn builtin_animation_matches_original() {
     assert_eq!(oracle::check(&sections, "builtin", cases), 400_224);
 }
 
+/// One acceptance case on tile 2, spec 2: `[flags, pattern]` select the spec's flags,
+/// masks and accepted cargoes, `[accept, amounts]` the two callback results.
+fn acceptance_case(
+    tiles: &TileServices,
+    owner: *mut Industry,
+    [flags, pattern]: [u8; 2],
+    [accept, amounts]: [u16; 2],
+    amount: i8,
+    mutation: bool,
+) -> String {
+    let spec = get_industry_tile_spec(IndustryGfx(2));
+    with(|w| {
+        w.trace.clear();
+        (w.accept_result, w.amount_result, w.mutate_accepted) = (accept, amounts, mutation);
+    });
+    // SAFETY: The live owner and spec; serialized by the lock.
+    unsafe {
+        openttd_rust_industry_accepted_resize(owner, 4);
+        for (slot, cargo) in [2, 5, 255, 2].into_iter().enumerate() {
+            (*accepted(owner, slot)).cargo = cargo;
+        }
+        (*spec).special_flags = (flags & 1) << 1;
+        (*spec).callback_mask = ((flags & 2) << 2) | (flags & 4);
+        for n in 0..16_u8 {
+            (*spec).accepts_cargo[usize::from(n)] = match pattern {
+                0 => CargoType::INVALID_CARGO.0,
+                1 => n,
+                2 => 2,
+                _ if n % 3 == 0 => CargoType::INVALID_CARGO.0,
+                _ => n,
+            };
+            (*spec).acceptance[usize::from(n)] = amount;
+        }
+        (*spec).grf_prop.grffile = ptr::null();
+    }
+    let initial = u32::MAX - 4;
+    let mut acceptance: CargoArray = [initial; 64];
+    let mut always = CargoTypes(4);
+    // SAFETY: The fixture's tile, owner and tables.
+    unsafe {
+        add_accepted_cargo_industry(TileIndex(2), &mut acceptance, &mut always, tiles);
+    }
+    // The always-accepted mask, then the cargoes the call changed as cargo=amount.
+    let mut out = always.0.to_string();
+    for (cargo, value) in acceptance.iter().enumerate() {
+        if *value != initial {
+            let _ = write!(out, " {cargo}={value}");
+        }
+    }
+    out.push_str(" |");
+    out.push_str(&trace());
+    out
+}
+
 #[test]
 fn tile_acceptance_matches_original() {
     /// The fixture's cargo translation: slot `n` is label `(n * 3 + 2) % 64 + 1`, which
     /// is cargo `(n * 3 + 2) % 64`; slot 31 is the invalid label.
     static LABELS: [u32; 32] = {
         let mut labels = [u32::MAX; 32];
-        let mut n = 0;
-        while n < 31 {
-            labels[n] = (n as u32 * 3 + 2) % 64 + 1;
-            n += 1;
+        let mut slot = 0_u32;
+        while slot < 31 {
+            labels[slot as usize] = (slot * 3 + 2) % 64 + 1;
+            slot += 1;
         }
         labels
     };
@@ -668,7 +753,7 @@ fn tile_acceptance_matches_original() {
     let sections = oracle::parse(ORACLE);
     let cargos: Vec<u8> = LABELS[..31]
         .iter()
-        .map(|&label| (label - 1) as u8)
+        .map(|&label| u8::try_from(label - 1).unwrap())
         .collect();
     crate::cargo_registry::install_test_labels(&LABELS, &cargos);
     let owner = openttd_rust_industry_new();
@@ -691,54 +776,19 @@ fn tile_acceptance_matches_original() {
                 for amounts in [0, 0x0FFF, 0x0312, 0xFFFF] {
                     for amount in [-128, -9, -8, -1, 0, 1, 119, 120, 127_i8] {
                         for mutation in [false, true] {
-                            with(|w| {
-                                w.trace.clear();
-                                (w.accept_result, w.amount_result, w.mutate_accepted) =
-                                    (accept, amounts, mutation);
-                            });
-                            // SAFETY: The live owner and spec; serialized by the lock.
-                            unsafe {
-                                openttd_rust_industry_accepted_resize(owner, 4);
-                                for (slot, cargo) in [2, 5, 255, 2].into_iter().enumerate() {
-                                    (*accepted(owner, slot)).cargo = cargo;
-                                }
-                                (*spec).special_flags = (flags & 1) << 1;
-                                (*spec).callback_mask = ((flags & 2) << 2) | (flags & 4);
-                                for n in 0..16_u8 {
-                                    (*spec).accepts_cargo[usize::from(n)] = match pattern {
-                                        0 => CargoType::INVALID_CARGO.0,
-                                        1 => n,
-                                        2 => 2,
-                                        _ if n % 3 == 0 => CargoType::INVALID_CARGO.0,
-                                        _ => n,
-                                    };
-                                    (*spec).acceptance[usize::from(n)] = amount;
-                                }
-                                (*spec).grf_prop.grffile = ptr::null();
-                            }
-                            let initial = u32::MAX - 4;
-                            let mut acceptance: CargoArray = [initial; 64];
-                            let mut always = CargoTypes(4);
-                            // SAFETY: The fixture's tile, owner and tables.
-                            unsafe {
-                                add_accepted_cargo_industry(
-                                    TileIndex(2),
-                                    &mut acceptance,
-                                    &mut always,
-                                    t.tiles,
-                                );
-                            }
-                            let changed: String = acceptance
-                                .iter()
-                                .enumerate()
-                                .filter(|&(_, &value)| value != initial)
-                                .map(|(cargo, value)| format!(" {cargo}={value}"))
-                                .collect();
+                            let output = acceptance_case(
+                                t.tiles,
+                                owner,
+                                [flags, pattern],
+                                [accept, amounts],
+                                amount,
+                                mutation,
+                            );
                             cases.push((
                                 format!(
                                     "flags {flags} pattern {pattern} result {accept}/{amounts} amount {amount} mutation {mutation}"
                                 ),
-                                format!("{}{changed} |{}", always.0, trace()),
+                                output,
                             ));
                         }
                     }
