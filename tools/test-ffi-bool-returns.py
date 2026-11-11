@@ -65,6 +65,23 @@ unsafe extern "C" fn callback<T>(x: extern "C" fn(bool) -> bool) -> Result { x(t
                     )
                     self.assertEqual(len(self.check(source)), failures)
 
+    def test_file_test_modules_are_mocks(self) -> None:
+        mock = 'extern "C" fn belongs() -> bool { true }'
+        for parent, child, declaration, failures in (
+            (
+                "a/industry.rs",
+                "a/industry/evidence.rs",
+                "#[cfg(test)]\nmod evidence;",
+                0,
+            ),
+            ("a/lib.rs", "a/evidence.rs", "#[cfg(test)] mod evidence;", 0),
+            ("a/industry.rs", "a/industry/evidence.rs", "mod evidence;", 1),
+            ("a/industry.rs", "a/evidence.rs", "#[cfg(test)]\nmod evidence;", 1),
+        ):
+            with self.subTest(parent=parent, child=child, declaration=declaration):
+                found = checker.violations({parent: declaration, child: mock})
+                self.assertEqual(len(found), failures)
+
     def test_declarations_parameters_out_pointers_and_comments_are_allowed(
         self,
     ) -> None:
