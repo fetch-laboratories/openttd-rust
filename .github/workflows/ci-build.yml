@@ -75,7 +75,10 @@ jobs:
       compiler: ${{ matrix.flavour == 'clang' && 'clang' || 'gcc' }}
       cxxcompiler: ${{ matrix.flavour == 'clang' && 'clang++' || 'g++' }}
       libraries: ${{ matrix.flavour == 'dedicated' && 'grfcodec' || 'libsdl2-dev' }}
-      extra-cmake-parameters: ${{ matrix.flavour == 'dedicated' && '-DOPTION_DEDICATED=ON -DCMAKE_CXX_FLAGS_INIT="-DRANDOM_DEBUG" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON' || '' }}
+      # SDL2 configures CMake's default Debug with assertions, as macOS Debug does, so a
+      # _DEBUG-only assertion fails before the queue; without them Options.cmake adds
+      # NDEBUG and compiles every assert out (#911).
+      extra-cmake-parameters: ${{ matrix.flavour == 'dedicated' && '-DOPTION_DEDICATED=ON -DCMAKE_CXX_FLAGS_INIT="-DRANDOM_DEBUG" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON' || matrix.flavour == 'sdl2' && '-DOPTION_USE_ASSERTS=ON' || '' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   platform-reference:

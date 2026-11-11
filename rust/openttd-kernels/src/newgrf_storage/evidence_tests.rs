@@ -99,6 +99,47 @@ fn switch(mode: u8, ignore: bool) {
 fn get(owner: Owner, pos: u32) -> i32 {
     unsafe { openttd_rust_storage256_get(owner, pos) }
 }
+/// A resolver object: the file `ResolverObject::grffile` names.
+struct Resolver {
+    grf: *const c_void,
+}
+static RESOLVER_FILE_READS: AtomicUsize = AtomicUsize::new(0);
+extern "C" fn resolver_grf_file(ro: *const c_void) -> *const c_void {
+    RESOLVER_FILE_READS.fetch_add(1, Ordering::SeqCst);
+    // SAFETY: the test passes a live `Resolver`.
+    unsafe { (*ro.cast::<Resolver>()).grf }
+}
+/// `TownScopeResolver::StorePSA` through its production port.
+unsafe fn store_town(
+    resolver: &crate::town::resolver::ResolverServices,
+    town: *mut c_void,
+    grf: *const c_void,
+    readonly: bool,
+    pos: u32,
+    value: i32,
+) {
+    let ro = Resolver { grf };
+    let scope = crate::town::resolver::test_scope(town.cast(), readonly);
+    // SAFETY: `town` is the test's live world and `ro` outlives the call.
+    unsafe {
+        crate::town::resolver::town_store_psa(
+            resolver,
+            &raw const scope,
+            (&raw const ro).cast(),
+            pos,
+            value,
+        );
+    }
+}
+fn reset_observations() {
+    FAILED_CHECKS.store(0, Ordering::SeqCst);
+    DISCARDED.lock().unwrap().clear();
+    RESOLVER_FILE_READS.store(0, Ordering::SeqCst);
+}
+/// Resolver-file reads since the last call.
+fn file_reads() -> usize {
+    RESOLVER_FILE_READS.swap(0, Ordering::SeqCst)
+}
 fn register(value: i32) {
     unsafe { openttd_rust_storage_temp_store(0x100, value) };
 }
@@ -136,17 +177,18 @@ fn store_rollback_and_ownership_policy() {
     let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
     let mut shared = SHARED;
     shared.grf_file_id = grf_id;
+    shared.resolver_grf_file = resolver_grf_file;
     let table = table(&raw const shared);
     let s = &table;
     let mut w = World::new();
     let scope: *mut c_void = addr_of_mut!(w).cast();
     let (own, other) = (0x3931_2345_u32, 0x3935_4321_u32);
-    let (grf, other_grf) = (
-        (&raw const own).cast::<c_void>(),
-        (&raw const other).cast::<c_void>(),
-    );
+    let grf = (&raw const own).cast::<c_void>();
+    let other_grf = (&raw const other).cast::<c_void>();
+    // Town writes enter through `TownScopeResolver::StorePSA`'s port, the production caller.
+    let resolver = crate::town::resolver::test_storage_table(&raw const shared, s);
     let town = |grf, readonly, pos, value| unsafe {
-        openttd_rust_storage_town(s, scope, readonly, grf, pos, value);
+        store_town(&resolver, scope, grf, readonly, pos, value);
     };
     let town_get =
         |grf, pos| unsafe { openttd_rust_storage_town_get(s, scope.cast_const(), grf, pos) };
@@ -154,16 +196,18 @@ fn store_rollback_and_ownership_policy() {
     let air = |station, grf, pos, value| unsafe {
         openttd_rust_storage_airport(s, station, grf, pos, value);
     };
-    FAILED_CHECKS.store(0, Ordering::SeqCst);
-    DISCARDED.lock().unwrap().clear();
+    reset_observations();
 
     switch(PSM_LEAVE_GAMELOOP, true);
     switch(PSM_ENTER_COMMAND, false);
 
-    // Null station, read-only town, absent file and another file's register write nothing.
+    // Null station, read-only town (before reading its file), absent file and another
+    // file's register write nothing.
     air(null_mut(), grf, 0, 7);
     town(grf, true, 0, 7);
+    assert_eq!(file_reads(), 0);
     town(null(), false, 0, 7);
+    assert_eq!(file_reads(), 1);
     register(123);
     town(grf, false, 0, 7);
     // Zero never creates an industry or airport array.

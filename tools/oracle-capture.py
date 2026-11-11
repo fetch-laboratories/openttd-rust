@@ -143,6 +143,41 @@ def production(lines: Sequence[str]) -> list[str]:
     return section("I", outputs)
 
 
+# The builtin animation nest: seed, tick, gfx, frame, loop, ambient, custom.
+BUILTIN = (4, 22, 15, 26, 3, 2, 2)
+
+
+def builtin_skipped(index: Sequence[int]) -> bool:
+    """The capture skips the toffee quarry (gfx 165, index 12) past its 70-entry table
+    (frame 70, index 15, onwards)."""
+    return index[2] == 12 and index[3] >= 15
+
+
+def industry_lifecycle(lines: Sequence[str]) -> list[str]:
+    s = streams(lines)
+    present = [
+        i
+        for i in itertools.product(*(range(n) for n in BUILTIN))
+        if not builtin_skipped(i)
+    ]
+    cases = dict(zip(present, s["B"], strict=True))
+    # Stored custom, gfx, tick, frame, loop, ambient, seed outermost-first, for long runs.
+    order = (6, 2, 1, 3, 4, 5, 0)
+    stored = []
+    for digits in itertools.product(*(range(BUILTIN[d]) for d in order)):
+        index = [0] * len(BUILTIN)
+        for d, v in zip(order, digits, strict=True):
+            index[d] = v
+        if not builtin_skipped(index):
+            stored.append(cases[tuple(index)])
+    return [
+        *section("toffee", s["T"]),
+        *section("lifecycle", s["L"]),
+        *section("builtin", stored),
+        *section("acceptance", s["A"]),
+    ]
+
+
 def policy(lines: Sequence[str]) -> list[str]:
     s = streams(lines)
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
@@ -222,6 +257,71 @@ RECIPE: dict[str, Recipe] = {
                 "src/newgrf_industries.cpp",
                 "void IndustryProductionCallback(Industry *ind, int reason)",
                 "/**\n * Check whether an industry temporarily",
+            ),
+        ),
+        flags=("-DUNIX", "-fno-strict-overflow"),
+    ),
+    "industry_lifecycle": Recipe(
+        oracle="industry/lifecycle-oracle.txt",
+        fixture="a30091d652:tools/migration/industry-lifecycle-gap.cpp",
+        convert=industry_lifecycle,
+        extract=tuple(
+            (
+                "industry-lifecycle-reference.inc",
+                "src/newgrf_industrytiles.cpp",
+                signature,
+                "",
+            )
+            for signature in (
+                "static bool DoTriggerIndustryTileAnimation(",
+                "bool TriggerIndustryTileAnimation_ConstructionStageChanged(",
+                "bool TriggerIndustryTileAnimation(",
+                "bool TriggerIndustryAnimation(",
+                "static void DoTriggerIndustryTileRandomisation(",
+                "static void DoReseedIndustry(",
+                "void TriggerIndustryTileRandomisation(",
+                "void TriggerIndustryRandomisation(",
+            )
+        )
+        + (
+            (
+                "industry-acceptance-reference.inc",
+                "src/industry_cmd.cpp",
+                "static void AddAcceptedCargo_Industry(",
+                "",
+            ),
+            (
+                "industry-animation-reference.inc",
+                "src/table/industry_land.h",
+                "static const uint8_t _industry_anim_offs_toffee[]",
+                "\n\n/* this is ONLY used for the Bubble Generator*/",
+            ),
+        )
+        + tuple(
+            (
+                "industry-animation-reference.inc",
+                "src/industry_cmd.cpp",
+                f"static void {name}(",
+                "",
+            )
+            for name in (
+                "AnimateSugarSieve",
+                "AnimateToffeeQuarry",
+                "AnimateBubbleCatcher",
+                "AnimatePowerPlantSparks",
+                "AnimateToyFactory",
+                "AnimatePlasticFountain",
+                "AnimateOilWell",
+                "AnimateMineTower",
+                "AnimateTile_Industry",
+            )
+        )
+        + (
+            (
+                "industry-graphics-reference.inc",
+                "src/industry_map.h",
+                "enum IndustryGraphics :",
+                "\n\n/**\n * Get the industry ID of the given tile",
             ),
         ),
         flags=("-DUNIX", "-fno-strict-overflow"),

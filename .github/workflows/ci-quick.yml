@@ -155,6 +155,10 @@ jobs:
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/orphan-exports.py --base-ref "$BASE_REF"
+    - name: Reject new residue in finished files
+      env:
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
+      run: python3 tools/code-standards-inventory.py --gate "$BASE_REF"
     - name: Reject rebound service-table callees
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}

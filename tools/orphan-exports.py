@@ -3,11 +3,14 @@
 
 A reference inside an out-of-class member definition does not count when that
 member has an explicit template instantiation and no caller: its definition,
-declarations and instantiations are not callers (#856). --report-uncalled lists,
-without failing, exports whose only references sit in any uncalled member;
-script API members count as called, through their generated Squirrel bindings.
+declarations and instantiations are not callers (#856). --report-uncalled lists
+exports whose only references sit in any uncalled member; script API members
+count as called, through their generated Squirrel bindings. The check enforces
+that list against tools/uncalled-export-baseline.txt, which only shrinks: each
+row names the owner issue that retires the fixture calling those members (#737).
 """
 
+import argparse
 import re
 import subprocess
 import sys
@@ -18,6 +21,7 @@ from code_lines import RUST_EXPORT, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/orphan-export-baseline.txt"
+UNCALLED = "tools/uncalled-export-baseline.txt"
 NAME = r"openttd_rust_\w+"
 DECLARATION = re.compile(
     rf'(?m)^[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
@@ -157,8 +161,7 @@ def scan(files: dict[str, str], broad: bool = False) -> dict[str, set[str]]:
     return result
 
 
-def report_uncalled() -> int:
-    """List, without failing, exports held only by uncalled members (#737 batch O)."""
+def tracked_sources() -> dict[str, str]:
     paths = subprocess.run(
         ["git", "ls-files", "src", "rust"],
         cwd=ROOT,
@@ -166,27 +169,94 @@ def report_uncalled() -> int:
         capture_output=True,
         text=True,
     ).stdout.split()
-    files = {
+    return {
         path: (ROOT / path).read_text(errors="replace")
         for path in paths
         if Path(path).suffix in {".cpp", ".h", ".hpp", ".inc", ".rs"}
     }
+
+
+def uncalled(files: dict[str, str]) -> dict[str, str]:
+    """Exports held only by uncalled members, each with those members."""
     enforced = violations(files)
-    rows = sorted(
-        (row.split(" | ")[1], ", ".join(sorted(members)))
+    return {
+        row.split(" | ")[1]: ", ".join(sorted(members))
         for row, members in scan(files, broad=True).items()
         if row not in enforced
-    )
-    for name, members in rows:
+    }
+
+
+def report_uncalled() -> int:
+    """List exports held only by uncalled members (#737 batch O)."""
+    rows = uncalled(tracked_sources())
+    for name, members in sorted(rows.items()):
         print(f"{name} | {members}")
-    print(f"Exports held only by uncalled members: {len(rows)} (not enforced)")
+    print(f"Exports held only by uncalled members: {len(rows)}")
     return 0
+
+
+def owners(text: str) -> dict[str, str]:
+    """Baseline rows: export name to the owner that retires its evidence caller."""
+    rows = {}
+    for line in text.splitlines():
+        if line.strip() and not line.startswith("#"):
+            name, _, owner = line.partition(" | ")
+            rows[name.strip()] = owner.strip()
+    return rows
+
+
+def uncalled_errors(found: dict[str, str], baseline: str, previous: str) -> list[str]:
+    """The uncalled-member baseline only shrinks, and each row names its owner (#737 O).
+
+    A row is an export held only by uncalled members; the owner issue that retires
+    the fixture calling those members removes it.
+    """
+    rows, before = owners(baseline), owners(previous)
+    errors = [
+        f"new export held only by uncalled members: {name} ({found[name]})"
+        for name in sorted(found.keys() - rows.keys())
+    ]
+    errors += [
+        f"remove retired row: {name}" for name in sorted(rows.keys() - found.keys())
+    ]
+    errors += [
+        f"uncalled baseline cannot grow: {name}"
+        for name in sorted(rows.keys() - before.keys())
+    ]
+    errors += [
+        f"row names no owner issue: {name}"
+        for name, owner in sorted(rows.items())
+        if not re.search(r"#\d+", owner)
+    ]
+    return errors
+
+
+def check_uncalled(base_ref: str) -> int:
+    path = ROOT / UNCALLED
+    baseline = path.read_text() if path.exists() else ""
+    shown = subprocess.run(
+        ["git", "show", f"{base_ref}:{UNCALLED}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    previous = shown.stdout if shown.returncode == 0 else baseline
+    errors = uncalled_errors(uncalled(tracked_sources()), baseline, previous)
+    for error in errors:
+        print(error)
+    print(
+        f"Exports held only by uncalled members: {len(owners(baseline))} baselined; {len(errors)} errors"
+    )
+    return int(bool(errors))
 
 
 def main() -> int:
     if sys.argv[1:] == ["--report-uncalled"]:
         return report_uncalled()
-    return baseline_ratchet.main(
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--base-ref", default="origin/rust-migration")
+    base_ref = parser.parse_known_args()[0].base_ref
+    return check_uncalled(base_ref) | baseline_ratchet.main(
         __doc__,
         ROOT,
         BASELINE,

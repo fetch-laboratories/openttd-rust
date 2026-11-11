@@ -51,6 +51,8 @@ mod generation;
 pub use generation::*;
 pub(crate) mod policy;
 pub use policy::*;
+#[cfg(test)]
+mod evidence_tests;
 mod lifecycle;
 pub use lifecycle::*;
 const RECORDS: usize = crate::history_type::HISTORY_RECORDS;

@@ -10,10 +10,15 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 - transparent wrapper types and named constants;
 - literal sites that stand for a named value;
 - Rust functions with more than seven parameters, as FFI exports, commands
-  (taking the command's `flags: u16`) and helpers (#874), outside test code
+  (taking the command's `flags`, as `u16` or `DoCommandFlags`) and helpers (#874), outside test code
   and `#[cfg(test)]` modules.
 
-With file paths it prints those files' residue instead of the totals. The Rust
+With file paths it prints those files' residue instead of the totals, including
+the finished-file residue classes (#901): calls to `*_raw` adapters and
+`openttd_rust_*` exports outside export shims, Rust-internal `execute: bool`
+parameters and `GameState<Vec<...>>` scratch pools. `--gate BASE_REF` fails when
+a file that migration/finished-files.txt lists gains one of those, or a command
+over seven parameters, against the merge base; existing occurrences pass. The Rust
 and the candidate C++ come from the revision's archive, the original from the
 baseline commit that the revision's own migration/baseline.json pins. Counts are estimates for stocktakes,
 not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
@@ -544,7 +549,10 @@ def long_functions(path: str, source: str) -> list[Site]:
         elif any(
             p.type == "parameter"
             and text(p.child_by_field_name("pattern"), data) == "flags"
-            and text(p.child_by_field_name("type"), data) == "u16"
+            and re.fullmatch(
+                r"u16|(?:[\w:]+::)?DoCommandFlags",
+                text(p.child_by_field_name("type"), data),
+            )
             for p in parameters.named_children
         ):
             kind = "command"
@@ -554,6 +562,190 @@ def long_functions(path: str, source: str) -> list[Site]:
             Site(path, node.start_point[0] + 1, kind, f"{name}: {count} parameters")
         )
     return found
+
+
+# Residue classes the finished-file gate checks (#901), keyed by identifier, never by line.
+RESIDUE = (
+    "raw adapter call",
+    "export call",
+    "execute flag",
+    "scratch pool",
+    "long command",
+)
+FINISHED = "migration/finished-files.txt"
+
+
+def export_shim(node: Node, data: bytes) -> bool:
+    """Whether the innermost function around node is an FFI export."""
+    current: Node | None = node
+    while current and current.type != "function_item":
+        current = current.parent
+    if current is None:
+        return False
+    head = text(current, data).split("fn ", 1)[0]
+    return "no_mangle" in leading(current, data) or 'extern "C"' in head
+
+
+def callee(call: Node, data: bytes) -> str:
+    function = call.child_by_field_name("function")
+    if function is not None and function.type == "field_expression":
+        function = function.child_by_field_name("field")
+    elif function is not None and function.type == "generic_function":
+        function = function.child_by_field_name("function")
+    return re.split(r"::|\.", text(function, data))[-1]
+
+
+def residue(path: str, source: str) -> list[Site]:
+    """Finished-file residue of one non-test Rust file, outside test code.
+
+    Calls to a `*_raw` adapter or an `openttd_rust_*` export outside export shims,
+    Rust-internal functions taking `execute: bool`, `GameState<Vec<...>>` scratch
+    pools and commands over LONG_PARAMETERS parameters.
+    """
+    data = source.encode()
+    found = [s for s in long_functions(path, source) if s.kind == "command"]
+    found = [
+        Site(s.path, s.line, "long command", s.detail.split(":")[0]) for s in found
+    ]
+    for node in walk(PARSERS["rust"].parse(data).root_node):
+        line = node.start_point[0] + 1
+        if node.type == "call_expression":
+            name = callee(node, data)
+            kind = (
+                "raw adapter call"
+                if name.endswith("_raw")
+                else "export call"
+                if name.startswith("openttd_rust_")
+                else None
+            )
+            if kind and not in_test(node, data, path) and not export_shim(node, data):
+                found.append(Site(path, line, kind, name))
+        elif node.type == "function_item":
+            parameters = node.child_by_field_name("parameters")
+            if parameters is None or in_test(node, data, path):
+                continue
+            if export_shim(node, data):
+                continue
+            if any(
+                p.type == "parameter"
+                and text(p.child_by_field_name("pattern"), data) == "execute"
+                and text(p.child_by_field_name("type"), data) == "bool"
+                for p in parameters.named_children
+            ):
+                name = text(node.child_by_field_name("name"), data)
+                found.append(Site(path, line, "execute flag", name))
+        elif node.type == "generic_type" and re.match(
+            r"GameState\s*<\s*Vec\s*<", text(node, data)
+        ):
+            if not in_test(node, data, path):
+                found.append(Site(path, line, "scratch pool", pool_name(node, data)))
+    return sorted(found, key=lambda s: (s.line, s.kind))
+
+
+def pool_name(node: Node, data: bytes) -> str:
+    """The static, field or binding a `GameState<Vec<...>>` type declares."""
+    item = node.parent
+    while item and item.type not in (
+        "static_item",
+        "const_item",
+        "field_declaration",
+        "let_declaration",
+    ):
+        item = item.parent
+    if item is None:
+        return text(node, data)
+    named = item.child_by_field_name("name") or item.child_by_field_name("pattern")
+    return text(named, data)
+
+
+def finished_files(revision: str) -> list[str]:
+    """The finished-file list at revision (empty before the list exists)."""
+    listed = show(revision, FINISHED) or ""
+    return [
+        line.strip()
+        for line in listed.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def show(revision: str, path: str) -> str | None:
+    """A file's text at revision, or None where it does not exist."""
+    shown = subprocess.run(
+        ["git", "show", f"{revision}:{path}"], cwd=ROOT, capture_output=True
+    )
+    return shown.stdout.decode() if shown.returncode == 0 else None
+
+
+def renamed_from(base: str, head: str) -> dict[str, str]:
+    """Head path to base path for files Git sees as renamed."""
+    names = subprocess.check_output(
+        ["git", "diff", "--name-status", "-M", base, head, "--", RUST],
+        cwd=ROOT,
+        text=True,
+    )
+    return {
+        parts[2]: parts[1]
+        for parts in (line.split("\t") for line in names.splitlines())
+        if parts[0].startswith("R")
+    }
+
+
+def growth(path: str, before: str, after: str) -> list[Site]:
+    """Residue sites a file gained, per class; a renamed occurrence is not growth."""
+    old, new = residue(path, before), residue(path, after)
+    found = []
+    for kind in RESIDUE:
+        was = [s.detail for s in old if s.kind == kind]
+        now = [s for s in new if s.kind == kind]
+        if len(now) <= len(was):
+            continue
+        added = []
+        for site in now:
+            if site.detail in was:
+                was.remove(site.detail)
+            else:
+                added.append(site)
+        found += added or now
+    return found
+
+
+def gate(base_ref: str, head: str) -> int:
+    """Fail when a finished file gains residue of a RESIDUE class (#901).
+
+    A file's existing occurrences, read at the merge base, are its baseline; per
+    class only growth fails, so renaming or moving an occurrence passes.
+    """
+    base = subprocess.check_output(
+        ["git", "merge-base", base_ref, head], cwd=ROOT, text=True
+    ).strip()
+    files = finished_files(head)
+    renames = renamed_from(base, head)
+    missing = [path for path in files if show(head, path) is None]
+    for path in missing:
+        print(f"{FINISHED}: listed file is missing at {head}: {path}")
+    failures = [
+        site
+        for path in files
+        if (after := show(head, path)) is not None
+        for site in growth(path, show(base, renames.get(path, path)) or "", after)
+    ]
+    for site in failures:
+        print(
+            f"{site.path}:{site.line}: new {site.kind} in a finished file: {site.detail}"
+        )
+    print(
+        f"Finished-file residue gate: {len(files)} finished files, "
+        f"{len(failures)} new residue sites"
+    )
+    return int(bool(failures or missing))
+
+
+def print_residue(rust: dict[str, str], paths: set[str]) -> None:
+    """The residue classes of paths, except long commands, which print above."""
+    for path in sorted(paths):
+        for site in residue(path, rust[path]):
+            if site.kind != "long command":
+                print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
 
 
 def main() -> int:
@@ -566,7 +758,14 @@ def main() -> int:
     parser.add_argument(
         "files", nargs="*", help="print these Rust files' residue instead of totals"
     )
+    parser.add_argument(
+        "--gate",
+        metavar="BASE_REF",
+        help=f"fail on new residue in the files {FINISHED} lists, against the merge base with BASE_REF",
+    )
     args = parser.parse_args()
+    if args.gate:
+        return gate(args.gate, args.head)
     rust = {
         path: data.decode()
         for path, data in archive(args.head, RUST).items()
@@ -607,6 +806,7 @@ def main() -> int:
                 print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
         for site in long:
             print(f"{site.path}:{site.line}: long {site.kind}: {site.detail}")
+        print_residue(rust, selected - tests)
     counts = {
         kind: sum(s.kind == kind for s in sites)
         for kind in ("bare integer", "wrapper", "constant", "literal")
