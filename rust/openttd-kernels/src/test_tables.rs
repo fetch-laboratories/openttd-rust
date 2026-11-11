@@ -1711,3 +1711,17 @@ pub(crate) const CARGO_STORAGE: crate::cargo_storage::Services = crate::cargo_st
     shared: ptr::null(),
     packet_next: unreachable1,
 };
+
+/// `crate::signs_cmd::Services` with every entry unreachable.
+pub(crate) const SIGN_COMMANDS: crate::signs_cmd::Services = crate::signs_cmd::Services {
+    shared: &SHARED,
+    costs: &COMMAND_COSTS,
+    sign: unreachable1,
+    owner: unreachable1,
+    can_allocate: unreachable0,
+    place: unreachable5,
+    rename: unreachable3,
+    relocate: unreachable5,
+    remove: unreachable1,
+    too_many_signs: 0,
+};
