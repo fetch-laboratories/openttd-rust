@@ -12,7 +12,7 @@ Readers: Root and user-invoked skills that spawn agents.
 | Role | Under Claude Code root | Under Codex root |
 | --- | --- | --- |
 | Implementation and fixes | `claude-opus-5-5`, medium; high for difficult analysis | `gpt-6.1-sol`, high |
-| Planning | `claude-fable-5-2`, high | `gpt-6-astra`, high |
+| Planning | `claude-fable-5-2`, medium (user, 2026-11-11; high before) | `gpt-6-astra`, high |
 | Independent review | `gpt-6.1-sol`, high | `gpt-6.1-sol`, high |
 | Routine runs, measurements and tracker edits | `claude-sonnet-5-5`, medium | `gpt-6.1-terra`, high |
 
@@ -21,6 +21,7 @@ Under a Claude Code root, Opus handles all code-touching work; Sonnet handles on
 ## Spawning
 
 - Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order, and reviewers at the [review brief](review-brief.md); those agents read further docs only where these point.
+- Every message root sends an implementer, the spawn brief included, contains the phrase "complete the whole task" (user, 2026-11-11).
 - Children send mid-task messages to their own `parentThreadId`, read from their thread metadata; never find root by searching thread titles. A reviewer and its PR's implementer message each other directly, by the thread IDs their briefs give ([review loop](#review-loop)).
 - Every agent-to-agent `t3_thread_send`, root's included, uses `mode: "queue"` unless the sender means to interrupt: the default steers a running turn, and a steer arriving during a Claude Code agent's tool call cancels the call with a notice to stop and wait for the user. On 2026-11-10 three reviewer messages within five seconds stopped an implementer mid-fix that way until root restarted it (#860). An agent whose call is cancelled as a message arrives reads the message, reruns the call and carries on unless the message says to stop.
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work.
