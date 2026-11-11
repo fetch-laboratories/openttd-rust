@@ -5,13 +5,13 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Inline helpers of `map_func.h` over map dimensions read once per entry.
+//! Inline helpers of `map_func.h` over map metadata captured per entry.
 #![allow(unsafe_code)]
 use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
 use crate::tile_type::{TileIndex, TileType};
 
-/// Map dimensions read once per entry.
+/// Map width and native build policy captured per entry.
 #[derive(Clone, Copy)]
 pub struct Map {
     /// `Map::LogX()` captured for this synchronous entry.
@@ -19,9 +19,9 @@ pub struct Map {
     // Native build choices are distinct: WITH_ASSERT does not enable _DEBUG.
     native_debug: bool,
     native_assertions: bool,
-    // Address of Map::size, live across each entry and any cached road context.
-    // Only native-debug TileAdd assertions read it, at the original assertion sites.
-    size: *const u32,
+    // Address of Map::log_y, live across each entry and cached road context.
+    // Geometry remains available when a fixture uses the callback backend.
+    log_y: *const u32,
 }
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
@@ -39,7 +39,7 @@ impl Map {
             log_x,
             native_debug: false,
             native_assertions: false,
-            size: std::ptr::null(),
+            log_y: std::ptr::null(),
         }
     }
     /// `Map::SizeX()`, from the dimension captured at entry.
@@ -274,14 +274,15 @@ impl Map {
             if x >= size_x {
                 check(false);
             }
-            // SAFETY: Native contexts retain the canonical Map::size address;
-            // no reset/load/mutex yield occurs in this entry. No owner is resolved.
-            let size_y = unsafe { self.size.read() } >> self.log_x;
+            // SAFETY: Native contexts retain the canonical Map::log_y address;
+            // no reset/load/mutex yield occurs in this entry. Map dimensions are
+            // powers of two, even when the reader uses a callback-only backend.
+            let size_y = 1_u32 << unsafe { self.log_y.read() };
             if y >= size_y {
                 check(false);
             }
             // The original WrapToMap observes the map mask at this assertion.
-            let size_y = unsafe { self.size.read() } >> self.log_x;
+            let size_y = 1_u32 << unsafe { self.log_y.read() };
             if self.tile_xy(x, y)
                 != self.wrap_to_map(
                     TileIndex(tile.0.wrapping_add(offset.cast_unsigned())),
@@ -422,7 +423,7 @@ pub struct MapStatics {
 impl MapStatics {
     /// Capture the map width and native `TileAdd` policy from the canonical metadata.
     /// # Safety
-    /// `log_x` is readable now; `size` stays readable throughout this context.
+    /// `log_x` is readable now; `log_y` stays readable throughout this context.
     /// Native map accesses are serialized and each use excludes reset/load/mutex yield.
     #[inline]
     pub(crate) unsafe fn dimensions(&self) -> Map {
@@ -430,7 +431,7 @@ impl MapStatics {
             log_x: unsafe { self.log_x.read() },
             native_debug: self.debug,
             native_assertions: self.assertions,
-            size: self.size,
+            log_y: self.log_y,
         }
     }
 
@@ -852,18 +853,18 @@ mod assertion_tests {
         }
     }
 
-    fn native_map(size: &u32, debug: bool, assertions: bool) -> Map {
+    fn native_map(size: &u32, log_y: &u32, debug: bool, assertions: bool) -> Map {
         const LOG_X: u32 = 6;
         let statics = super::MapStatics {
             base: std::ptr::null(),
             extended: std::ptr::null(),
             size: std::ptr::from_ref(size),
             log_x: &LOG_X,
-            log_y: &LOG_X,
+            log_y: std::ptr::from_ref(log_y),
             assertions,
             debug,
         };
-        // SAFETY: The width is live for capture; the caller retains size while
+        // SAFETY: The width is live for capture; the caller retains log_y while
         // using the context. dimensions neither loads nor accesses tile arrays.
         unsafe { statics.dimensions() }
     }
@@ -883,7 +884,7 @@ mod assertion_tests {
         ];
         for debug in [false, true] {
             for assertions in [false, true] {
-                let map = native_map(&size, debug, assertions);
+                let map = native_map(&size, &6, debug, assertions);
                 assert_eq!(
                     (map.native_debug, map.native_assertions),
                     (debug, assertions)
@@ -904,6 +905,22 @@ mod assertion_tests {
         }
     }
 
+    /// A callback-only backend has no tile allocation, but keeps the original
+    /// map geometry. On 64x128, (10,63) + (0,1) is (10,64), tile 4106.
+    #[test]
+    fn zero_backend_native_debug_uses_map_geometry() {
+        use crate::tile_type::TileIndex;
+        for debug in [false, true] {
+            for assertions in [false, true] {
+                let map = native_map(&0, &7, debug, assertions);
+                let calls = Cell::new(0);
+                let result = map.tile_add(TileIndex(4042), 64, |_| calls.set(calls.get() + 1));
+                assert_eq!(result, TileIndex(4106));
+                assert_eq!(calls.get(), 0);
+            }
+        }
+    }
+
     /// All three composed helpers reach `TileAdd`'s native-debug assertions;
     /// release-with-asserts still performs only the original direct addition.
     #[test]
@@ -917,7 +934,7 @@ mod assertion_tests {
         }
         let size = 4096;
         for debug in [false, true] {
-            let map = native_map(&size, debug, true);
+            let map = native_map(&size, &6, debug, true);
             TILE_ADD_ASSERTS.set(0);
             let results = [
                 map.tile_add_xy(TileIndex(0), -1, 0),
