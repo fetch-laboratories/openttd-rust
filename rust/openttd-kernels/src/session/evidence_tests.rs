@@ -15,6 +15,8 @@ static OBSERVATIONS: Mutex<Observations> = Mutex::new(Observations {
     events: String::new(),
 });
 
+// Rust-only service mock; no caller returns from this callback to C++.
+#[cfg(test)]
 extern "C" fn networking() -> bool {
     OBSERVATIONS.lock().unwrap().networking
 }
