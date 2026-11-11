@@ -565,7 +565,7 @@ impl World<'_> {
             let slope =
                 crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile));
             if slope != crate::slope_type::Slope::SLOPE_FLAT
-                && (wc.0 != 2 || !is_inclined_slope_raw(slope.0))
+                && (wc != crate::water_map::WaterClass::River || !is_inclined_slope_raw(slope.0))
             {
                 self.error(out, self.a.strings.flat);
                 return;

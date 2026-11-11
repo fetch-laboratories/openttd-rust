@@ -116,7 +116,7 @@ pub(crate) unsafe fn restore(
             class = 3;
         }
         /* Only river water should be restored on appropriate slopes. Other water would be invalid on slopes */
-        if class != 2 || !is_inclined_slope_raw(slope.0) {
+        if class != crate::water_map::WaterClass::River.0 || !is_inclined_slope_raw(slope.0) {
             class = 3;
         }
     }
@@ -519,7 +519,9 @@ impl<'a> World<'a> {
             crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
         let flooded = if slope == crate::slope_type::Slope::SLOPE_FLAT {
+            /* Flood vehicles */
             self.flood_vehicles(tile);
+            /* flood flat tile */
             if self.clear(tile, call) {
                 (self.w.make_sea)(tile);
                 (self.s.mark_dirty)(tile);
@@ -528,8 +530,9 @@ impl<'a> World<'a> {
                 false
             }
         } else {
+            /* make coast.. */
             match self.tile_type(tile) {
-                1 => {
+                crate::tile_type::MP_RAILWAY => {
                     if (self.s.is_plain_rail)(tile) {
                         self.flood_vehicles(tile);
                         self.half_flood(tile, call)
@@ -537,7 +540,7 @@ impl<'a> World<'a> {
                         false
                     }
                 }
-                4 if !is_slope_with_one_corner_raised_raw(slope.0) => {
+                crate::tile_type::MP_TREES if !is_slope_with_one_corner_raised_raw(slope.0) => {
                     (self.w.set_tree_ground)(
                         tile,
                         TreeGround(crate::tree_map::TREE_GROUND_SHORE),
@@ -546,7 +549,7 @@ impl<'a> World<'a> {
                     (self.s.mark_dirty)(tile);
                     true
                 }
-                0 | 4 => {
+                crate::tile_type::MP_CLEAR | crate::tile_type::MP_TREES => {
                     if self.clear(tile, call) {
                         (self.s.make_shore)(tile);
                         (self.s.mark_dirty)(tile);
