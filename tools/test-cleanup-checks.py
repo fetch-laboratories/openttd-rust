@@ -744,6 +744,47 @@ class GrowthTests(unittest.TestCase):
             reviewed(changed, [report("/review", "head")], "/implementation", "head")
         )
 
+    def test_growth_acceptance_binds_added_keys_not_counter_totals(self) -> None:
+        reviewed_delta = {
+            "counter": "tests_cpp",
+            "old": 4786,
+            "new": 4795,
+            "added": {"src/tests/x.cpp": 9},
+        }
+        proposal = dict(
+            reviewed_delta,
+            kind="growth",
+            reason="source contract",
+            existing_alternatives="none available",
+            retiring_owner="owner",
+            retirement_condition="native shell removed",
+        )
+        totals_free = {k: v for k, v in proposal.items() if k not in ("old", "new")}
+
+        def accepted(
+            delta: Mapping[str, object], offered: Mapping[str, object]
+        ) -> bool:
+            return GROWTH.accepted(
+                dict(delta),
+                (
+                    "/implementation",
+                    [dict(offered)],
+                    [acceptance_comment("head", offered)],
+                    "head",
+                ),
+            )
+
+        # Another PR's merge moved the counter's totals, not this PR's keys.
+        moved = dict(reviewed_delta, old=4790, new=4799)
+        self.assertTrue(accepted(moved, proposal))
+        self.assertTrue(accepted(moved, totals_free))
+        for changed in (
+            dict(moved, added={"src/tests/x.cpp": 10}),
+            dict(moved, added={"src/tests/x.cpp": 9, "src/tests/y.cpp": 1}),
+            dict(moved, counter="tools_cpp"),
+        ):
+            self.assertFalse(accepted(changed, proposal))
+
     def test_growth_acceptance_holds_while_its_source_is_unchanged(self) -> None:
         earlier, missing = "a" * 40, "b" * 40
         records = {
