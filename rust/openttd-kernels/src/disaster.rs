@@ -1296,6 +1296,105 @@ crate::abi::layouts! {
 
 #[cfg(test)]
 mod tests {
+    use crate::map_func::{TileTypeAllocation, fixture};
+    use crate::tile_type::TileIndex;
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static VALIDITY_READS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+        static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
+        static AGE: Cell<i32> = const { Cell::new(0) };
+    }
+    extern "C" fn record_validity(tile: u32) -> bool {
+        VALIDITY_READS.with_borrow_mut(|reads| reads.push(tile));
+        false
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.set(FAILED_ASSERTIONS.get() + 1);
+        }
+    }
+    extern "C" fn age(_: crate::vehicle::VehicleRef) -> i32 {
+        AGE.get()
+    }
+    extern "C" fn write_age(_: crate::vehicle::VehicleRef, value: i32) {
+        AGE.set(value);
+    }
+    extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+        0
+    }
+    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        unreachable!("unexpected industry lookup")
+    }
+
+    /// A submarine on row 0 of a 64x64 map heading north-west. Pinned
+    /// disaster_vehicle.cpp:685 adds `TileOffsByDiagDir` by hand, so at the native
+    /// `_DEBUG` projection the step leaves the map without an assertion and the
+    /// submarine turns; `TileAdd` would fail its y and wrap assertions instead.
+    #[test]
+    fn submarine_leaves_row_zero_without_assertion_under_native_debug() {
+        if crate::services_assert::isolate_test_check(
+            "disaster::tests::submarine_leaves_row_zero_without_assertion_under_native_debug",
+            record_assertion,
+        ) {
+            return;
+        }
+        fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 64 * 64,
+                assertions: true,
+            },
+            6,
+        );
+        let mut shared = crate::services::fixture(std::ptr::null_mut(), random, no_industry);
+        shared.map = fixture::statics();
+        shared.tile_valid = record_validity;
+        let mut services = crate::test_tables::DISASTER;
+        services.shared = Box::leak(Box::new(shared));
+        services.vehicles = &crate::test_tables::VEHICLE;
+        services.age = age;
+        services.write_age = write_age;
+        // The test owns the fresh record until it is reclaimed below.
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            crate::vehicle_type::VehicleType::DISASTER,
+        );
+        let vehicle = crate::vehicle::VehicleRef::of(record);
+        vehicle.write_tile(10); // (10, 0)
+        vehicle.write_direction(crate::direction_type::DIR_NW);
+        vehicle.write_tick(0); // Incremented to an odd tick, which moves.
+        let v = super::Vehicle {
+            handle: record,
+            state: std::ptr::null_mut(),
+            id: 0,
+        };
+        // SAFETY: Every table outlives the context; no map reset occurs.
+        let world = unsafe { super::World::new(&services) };
+        FAILED_ASSERTIONS.set(0);
+        let alive = crate::map_func::with_native_debug(true, || world.submarine(v));
+        assert!(alive);
+        assert_eq!(
+            VALIDITY_READS.with_borrow(Clone::clone),
+            [10_u32.wrapping_sub(64)]
+        );
+        assert_eq!(FAILED_ASSERTIONS.get(), 0);
+        // Random bit 0 is clear: DIRDIFF_90LEFT turns north-west to south-west.
+        assert_eq!(vehicle.direction(), crate::direction_type::DIR_SW);
+        // The same step through TileAdd fails the y and wrap assertions.
+        crate::map_func::with_native_debug(true, || {
+            let _ = world.map().tile_add_by_diag_dir(
+                TileIndex(10),
+                crate::direction_type::DiagDirection::DIAGDIR_NW,
+                crate::map_func::native_check,
+            );
+        });
+        assert_eq!(FAILED_ASSERTIONS.get(), 2);
+        // SAFETY: The record came from Box::into_raw and nothing else retains it.
+        drop(unsafe { Box::from_raw(record) });
+    }
+
     #[test]
     fn persisted_delay_is_process_wide_across_serialized_threads() {
         let address = super::openttd_rust_disaster_delay() as usize;

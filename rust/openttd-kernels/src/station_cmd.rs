@@ -6329,3 +6329,81 @@ crate::abi::layouts! {
         gfx,
     };
 }
+
+#[cfg(test)]
+mod docking_tests {
+    use crate::direction_type::DiagDirection;
+    use crate::map_func::{TileTypeAllocation, fixture};
+    use crate::tile_type::TileIndex;
+    use std::cell::{Cell, RefCell};
+
+    thread_local! {
+        static VALIDITY_READS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+        static FAILED_ASSERTIONS: Cell<u32> = const { Cell::new(0) };
+    }
+    /// `IsValidTile`, recording each neighbour `CheckForDockingTile` observes; no
+    /// neighbour is a dock, industry or oil rig, so no other map read follows.
+    extern "C" fn record_validity(tile: u32) -> bool {
+        VALIDITY_READS.with_borrow_mut(|reads| reads.push(tile));
+        false
+    }
+    extern "C" fn record_assertion(condition: bool) {
+        if !condition {
+            FAILED_ASSERTIONS.set(FAILED_ASSERTIONS.get() + 1);
+        }
+    }
+
+    /// A buoy on a 64x64 map with freeform edges off may sit at x = 0 or y = 0.
+    /// Pinned water_cmd.cpp:197 adds `TileOffsByDiagDir` by hand, so at the native
+    /// `_DEBUG` projection the north-east neighbour of (0, 5) is the void tile
+    /// (63, 4) and that of (0, 0) wraps past the map, both without assertions;
+    /// `TileAdd` would assert on the same steps.
+    #[test]
+    fn docking_neighbours_wrap_at_the_north_edge_under_native_debug() {
+        fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 64 * 64,
+                assertions: true,
+            },
+            6,
+        );
+        let mut movement = crate::test_tables::MOVEMENT;
+        movement.native_assert = record_assertion;
+        let mut shared = crate::test_tables::SHARED;
+        shared.map = fixture::statics();
+        shared.tile_valid = record_validity;
+        shared.movement = Box::leak(Box::new(movement));
+        let mut table = crate::test_tables::STATION_COMMANDS;
+        table.shared = Box::leak(Box::new(shared));
+        table.cost = &crate::test_tables::COMMAND_COSTS;
+        table.command = &crate::test_tables::COMMANDS;
+        // SAFETY: Every table outlives the context; no map reset occurs.
+        let ctx = unsafe { super::Ctx::new(&raw const table) };
+        let cases: [(u32, [u32; 4]); 2] = [
+            // (0, 5): NE wraps to (63, 4), then SE, SW and NW.
+            (320, [319, 384, 321, 256]),
+            // (0, 0): NE and NW leave the map below tile 0.
+            (0, [u32::MAX, 64, 1, 0xffff_ffc0]),
+        ];
+        for (buoy, neighbours) in cases {
+            VALIDITY_READS.with_borrow_mut(Vec::clear);
+            FAILED_ASSERTIONS.set(0);
+            crate::map_func::with_native_debug(true, || {
+                ctx.check_for_docking_tile(TileIndex(buoy));
+            });
+            assert_eq!(VALIDITY_READS.with_borrow(Clone::clone), neighbours);
+            assert_eq!(FAILED_ASSERTIONS.get(), 0, "buoy {buoy}");
+        }
+        // The same north-east step through TileAdd fails its x assertion.
+        crate::map_func::with_native_debug(true, || {
+            let _ =
+                ctx.map()
+                    .tile_add_by_diag_dir(TileIndex(320), DiagDirection::DIAGDIR_NE, |ok| {
+                        crate::movement::native_assert(ctx.shared, ok);
+                    });
+        });
+        assert_eq!(FAILED_ASSERTIONS.get(), 1);
+    }
+}
