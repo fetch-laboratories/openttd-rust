@@ -64,12 +64,13 @@ impl Map {
     #[must_use]
     #[inline]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
-        // Subtract 12 to avoid overflow for large n; the minimum map is 64 by 64.
+        // Subtract 12 from the shift to prevent integer overflow
+        // for large n; this is safe since the minimum map size is 64x64.
         let scaled = n.wrapping_shl(self.log_x + size_y.ilog2() - 12);
         crate::math::ceil_div(scaled, 1 << 4)
     }
     /// `AddTileIndexDiffCWrap`: add a coordinate offset, returning invalid if it
-    /// would leave the map. A negative coordinate becomes large when cast unsigned.
+    /// would leave the map.
     #[must_use]
     #[inline]
     pub fn add_tile_index_diff_c_wrap(
@@ -80,6 +81,7 @@ impl Map {
     ) -> TileIndex {
         let x = self.tile_x(tile).wrapping_add_signed(i32::from(diff.x));
         let y = self.tile_y(tile).wrapping_add_signed(i32::from(diff.y));
+        // A negative value becomes a large positive value after the unsigned cast.
         if x >= self.size_x() || y >= size_y {
             TileIndex::INVALID
         } else {
@@ -177,12 +179,14 @@ impl Map {
             y: self.tile_y(tile_a).wrapping_sub(self.tile_y(tile_b)) as i16,
         }
     }
-    /// `TileDiffXY`: coordinate offsets can be negative. Multiplication optimizes
-    /// better on MSVC than shifting: zero shifted by a variable is not optimized
-    /// properly. Constant x/y often eliminate the multiplication entirely.
+    /// `TileDiffXY`: calculate a tile offset; the coordinates can be negative.
     #[must_use]
     #[inline]
     pub fn diff(self, x: i32, y: i32) -> TileIndexDiff {
+        // Multiplication gives much better optimization on MSVC than shifting.
+        // 0 << shift is not optimized to 0 properly.
+        // Typically x and y are constants, so this does not result
+        // in any actual multiplication in the assembly code.
         y.cast_unsigned()
             .wrapping_mul(self.size_x())
             .wrapping_add(x.cast_unsigned())
