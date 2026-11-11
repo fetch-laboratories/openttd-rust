@@ -104,6 +104,29 @@ pub(crate) const TEST_TABLE: ResolverServices = ResolverServices {
     evaluate: crate::test_tables::unreachable3,
     reseed: crate::test_tables::unreachable4,
 };
+/// Test-only: `TEST_TABLE` over the given shared and storage tables, for callers of
+/// `town_store_psa` in other modules' tests.
+#[cfg(test)]
+pub(crate) const fn test_storage_table(
+    shared: *const Services,
+    storage: *const newgrf_storage::Services,
+) -> ResolverServices {
+    ResolverServices {
+        shared,
+        storage,
+        ..TEST_TABLE
+    }
+}
+/// Test-only: a town scope over `town`, for callers of `town_store_psa` in other modules' tests.
+#[cfg(test)]
+pub(crate) const fn test_scope(town: *mut TownHandle, readonly: bool) -> TownScope {
+    TownScope {
+        town,
+        owner: std::ptr::null_mut(),
+        id: 0,
+        readonly,
+    }
+}
 impl ResolverServices {
     pub(crate) fn shared(&self) -> &Services {
         // SAFETY: `GetHouseResolverServices` points at the process-lifetime shared table.

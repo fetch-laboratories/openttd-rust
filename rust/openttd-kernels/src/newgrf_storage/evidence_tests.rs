@@ -99,6 +99,36 @@ fn switch(mode: u8, ignore: bool) {
 fn get(owner: Owner, pos: u32) -> i32 {
     unsafe { openttd_rust_storage256_get(owner, pos) }
 }
+/// A resolver object: the file `ResolverObject::grffile` names.
+struct Resolver {
+    grf: *const c_void,
+}
+extern "C" fn resolver_grf_file(ro: *const c_void) -> *const c_void {
+    // SAFETY: the test passes a live `Resolver`.
+    unsafe { (*ro.cast::<Resolver>()).grf }
+}
+/// `TownScopeResolver::StorePSA` through its production port.
+unsafe fn store_town(
+    resolver: &crate::town::resolver::ResolverServices,
+    town: *mut c_void,
+    grf: *const c_void,
+    readonly: bool,
+    pos: u32,
+    value: i32,
+) {
+    let ro = Resolver { grf };
+    let scope = crate::town::resolver::test_scope(town.cast(), readonly);
+    // SAFETY: `town` is the test's live world and `ro` outlives the call.
+    unsafe {
+        crate::town::resolver::town_store_psa(
+            resolver,
+            &raw const scope,
+            (&raw const ro).cast(),
+            pos,
+            value,
+        );
+    }
+}
 fn register(value: i32) {
     unsafe { openttd_rust_storage_temp_store(0x100, value) };
 }
@@ -136,6 +166,7 @@ fn store_rollback_and_ownership_policy() {
     let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
     let mut shared = SHARED;
     shared.grf_file_id = grf_id;
+    shared.resolver_grf_file = resolver_grf_file;
     let table = table(&raw const shared);
     let s = &table;
     let mut w = World::new();
@@ -145,8 +176,11 @@ fn store_rollback_and_ownership_policy() {
         (&raw const own).cast::<c_void>(),
         (&raw const other).cast::<c_void>(),
     );
+    // Town writes enter through the production caller, `TownScopeResolver::StorePSA`'s
+    // port, which returns for a read-only scope and maps its resolver object to its file.
+    let resolver = crate::town::resolver::test_storage_table(&raw const shared, s);
     let town = |grf, readonly, pos, value| unsafe {
-        openttd_rust_storage_town(s, scope, readonly, grf, pos, value);
+        store_town(&resolver, scope, grf, readonly, pos, value);
     };
     let town_get =
         |grf, pos| unsafe { openttd_rust_storage_town_get(s, scope.cast_const(), grf, pos) };
