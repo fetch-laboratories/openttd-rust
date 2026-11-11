@@ -5410,10 +5410,10 @@ impl Ctx<'_> {
         /* The oil rig station is not supposed to be shared with anything else */
         let expected_facility = StationFacilities::from_element(StationFacility::Airport)
             | StationFacilities::from_element(StationFacility::Dock);
-        assert!(
+        crate::map_func::World::new(self.shared).assert_with(|| {
             StationFacilities((self.world().facilities)(st)) == expected_facility
                 && (self.s.airport_type)(st) == AT_OILRIG
-        );
+        });
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
             /* Don't leave dangling neutral station pointer */
@@ -5435,7 +5435,12 @@ impl Ctx<'_> {
             if orderlist.is_null() {
                 continue;
             }
-            let v = unsafe { (self.links().order_vehicle)(orderlist).unwrap_unchecked() };
+            let v = (self.links().order_vehicle)(orderlist);
+            crate::movement::native_assert(self.shared, v.is_some());
+            // Past a returning assertion the original dereferences null; stop natively.
+            let Some(v) = v else {
+                crate::services_assert::not_reached()
+            };
             if (CompanyID(v.owner()) == company) != include_company {
                 continue;
             }
@@ -5947,7 +5952,8 @@ impl Ctx<'_> {
         } else if world.drive_through_stop_tile(tile.0) {
             /* Remove the drive-through road stop */
             self.remove_drive_through_stop_for_bankrupt(cost, ret, error, tile);
-            assert_eq!(TileType((self.shared.tile_type)(tile.0)), TileType::MP_ROAD);
+            crate::map_func::World::new(self.shared)
+                .assert_with(|| TileType((self.shared.tile_type)(tile.0)) == TileType::MP_ROAD);
             /* Change owner of tile and all roadtypes */
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe {
