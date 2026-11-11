@@ -34,6 +34,8 @@ mod command_func;
 mod command_post;
 pub mod command_type;
 mod company;
+mod company_base;
+mod company_cmd;
 mod company_identity;
 mod company_manager_face;
 pub mod company_type;

@@ -469,6 +469,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.generating_world = OpenTTDGeneratingWorld,
 	},
 	.company_human = OpenTTDCompanyIsValidHuman,
+	.company_infrastructure = RustCompanyInfrastructure,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,

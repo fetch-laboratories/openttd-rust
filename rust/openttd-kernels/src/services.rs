@@ -279,6 +279,9 @@ pub struct Services {
     pub clear_square_services: ClearSquareServices,
     /// Whether this company pool ID is a live human company.
     pub company_human: extern "C" fn(u8) -> bool,
+    /// Canonical live infrastructure of a source-valid native company.
+    pub company_infrastructure:
+        extern "C" fn(u8) -> *mut crate::company_base::CompanyInfrastructure,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
@@ -758,6 +761,7 @@ crate::abi::layouts! {
         build_on_slopes,
         clear_square_services,
         company_human,
+        company_infrastructure,
         company_valid,
         context,
         cost_animation,
@@ -1087,6 +1091,7 @@ pub fn fixture(
             generating_world: flag0,
         },
         company_human: unused_company_valid,
+        company_infrastructure: unused_company_infrastructure,
         company_valid: unused_company_valid,
         context,
         cost_animation: fixture_cost_animation,
@@ -1498,4 +1503,12 @@ extern "C" fn fixture_kdtree_partition(_: *mut crate::kdtree::SplitKey<u16>, _: 
 #[cfg(test)]
 extern "C" fn fixture_cost_animation(_: i32, _: i32, _: i32, _: i64) {
     panic!("unused cost animation")
+}
+
+/// Fixture leaf for entries that do not observe company infrastructure.
+#[cfg(test)]
+pub(crate) extern "C" fn unused_company_infrastructure(
+    _: u8,
+) -> *mut crate::company_base::CompanyInfrastructure {
+    panic!("unexpected company infrastructure access")
 }

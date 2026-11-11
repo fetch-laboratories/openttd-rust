@@ -158,22 +158,6 @@ static void Co_company_graphs_dirty() noexcept
 	SetWindowDirty(WC_COMPANY_VALUE, 0);
 	SetWindowDirty(WC_COMPANY_LEAGUE, 0);
 }
-static void Co_company_infrastructure(uint8_t id, OpenTTDCompanyInfrastructure *out) noexcept
-{
-	const CompanyInfrastructure &i = Company::Get(id)->infrastructure;
-	for (RailType rt = RAILTYPE_BEGIN; rt < RAILTYPE_END; rt++) out->rail[rt] = i.rail[rt];
-	out->road_is_road = 0;
-	for (RoadType rt = ROADTYPE_BEGIN; rt < ROADTYPE_END; rt++) {
-		out->road[rt] = i.road[rt];
-		if (RustRoadTypeIsRoad(rt)) out->road_is_road |= uint64_t{1} << rt;
-	}
-	out->rail_total = i.GetRailTotal();
-	out->road_total = i.GetRoadTotal();
-	out->tram_total = i.GetTramTotal();
-	out->signal = i.signal;
-	out->water = i.water;
-	out->station = i.station;
-}
 static int64_t Co_rail_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RailMaintenanceCost(static_cast<RailType>(rt), num, total).base(); }
 static int64_t Co_signal_maintenance_cost(uint32_t num) noexcept { return SignalMaintenanceCost(num).base(); }
 static int64_t Co_road_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RoadMaintenanceCost(static_cast<RoadType>(rt), num, total).base(); }
@@ -350,7 +334,6 @@ static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_own
 }
 static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
-static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
 static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
 static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
 {
@@ -420,7 +403,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
-		.company_infrastructure = Co_company_infrastructure,
 		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,
 		.road_maintenance_cost = Co_road_maintenance_cost, .canal_maintenance_cost = Co_canal_maintenance_cost,
 		.station_maintenance_cost = Co_station_maintenance_cost, .station_lifecycle = RustStationLifecycleServices,
@@ -456,7 +438,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
-		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
+		.update_signals_in_buffer = RustUpdateSignals,
 		.station_next_owned = Co_station_next_owned,
 		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
 		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,

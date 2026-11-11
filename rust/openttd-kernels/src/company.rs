@@ -96,20 +96,6 @@ pub struct VehicleCounts {
     pub ships: u16,
     pub aircraft: u16,
 }
-/// `CompanyInfrastructure` counts read once per maintenance payment.
-#[repr(C)]
-pub struct Infrastructure {
-    pub rail: [u32; 64],
-    pub road: [u32; 63],
-    pub rail_total: u32,
-    pub road_total: u32,
-    pub tram_total: u32,
-    pub signal: u32,
-    pub water: u32,
-    pub station: u32,
-    /// Bit `rt` set when `RoadTypeIsRoad(rt)`.
-    pub road_is_road: u64,
-}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VehicleGroupFlags {
@@ -250,7 +236,6 @@ pub struct Services {
     pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
     pub company_graphs_dirty: extern "C" fn(),
-    pub company_infrastructure: extern "C" fn(u8, *mut Infrastructure),
     pub rail_maintenance_cost: extern "C" fn(u8, u32, u32) -> i64,
     pub signal_maintenance_cost: extern "C" fn(u32) -> i64,
     pub road_maintenance_cost: extern "C" fn(u8, u32, u32) -> i64,
@@ -317,7 +302,6 @@ pub struct Services {
     pub update_autoreplace: extern "C" fn(u8),
     pub add_track_to_signal_buffer: extern "C" fn(u32, u8, u8),
     pub update_signals_in_buffer: extern "C" fn(),
-    pub add_airport_infrastructure: extern "C" fn(u8, u8),
     pub station_next_owned: extern "C" fn(u8, u32) -> u32,
     pub station_times: extern "C" fn(u32) -> StationTimes,
     pub set_station_owner: extern "C" fn(u32, u8),
@@ -940,31 +924,42 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
     }
 }
 fn maintenance(s: &Services, p: *mut Finances, id: u8) {
-    let mut infra: Infrastructure = unsafe { std::mem::zeroed() };
-    (s.company_infrastructure)(id, &raw mut infra);
+    use crate::company_base::CompanyInfrastructure;
+    use crate::rail_type::{RAILTYPE_BEGIN, RAILTYPE_END};
+    use crate::road_type::{ROADTYPE_BEGIN, ROADTYPE_END};
+    let infra = CompanyInfrastructure::get(s.shared, CompanyID(id));
     let mut cost = 0_i64;
-    for rt in 0..64 {
-        if infra.rail[rt] != 0 {
+    // SAFETY: This company is live throughout its serialized maintenance entry.
+    let rail_total = unsafe { CompanyInfrastructure::get_rail_total(infra) };
+    for rt in RAILTYPE_BEGIN..RAILTYPE_END {
+        if read_field!(infra, rail[usize::from(rt)]) != 0 {
             cost = cost.saturating_add((s.rail_maintenance_cost)(
-                rt as u8,
-                infra.rail[rt],
-                infra.rail_total,
+                rt,
+                read_field!(infra, rail[usize::from(rt)]),
+                rail_total,
             ));
         }
     }
-    cost = cost.saturating_add((s.signal_maintenance_cost)(infra.signal));
-    for rt in 0..63 {
-        if infra.road[rt] != 0 {
-            let total = if infra.road_is_road & (1 << rt) != 0 {
-                infra.road_total
+    cost = cost.saturating_add((s.signal_maintenance_cost)(read_field!(infra, signal)));
+    // SAFETY: Field reads end within each original total calculation, before callbacks.
+    let road_total = unsafe { CompanyInfrastructure::get_road_total(infra) };
+    let tram_total = unsafe { CompanyInfrastructure::get_tram_total(infra) };
+    for rt in ROADTYPE_BEGIN..ROADTYPE_END {
+        if read_field!(infra, road[usize::from(rt)]) != 0 {
+            let total = if crate::road::road_type_is_road(rt) {
+                road_total
             } else {
-                infra.tram_total
+                tram_total
             };
-            cost = cost.saturating_add((s.road_maintenance_cost)(rt as u8, infra.road[rt], total));
+            cost = cost.saturating_add((s.road_maintenance_cost)(
+                rt,
+                read_field!(infra, road[usize::from(rt)]),
+                total,
+            ));
         }
     }
-    cost = cost.saturating_add((s.canal_maintenance_cost)(infra.water));
-    cost = cost.saturating_add((s.station_maintenance_cost)(infra.station));
+    cost = cost.saturating_add((s.canal_maintenance_cost)(read_field!(infra, water)));
+    cost = cost.saturating_add((s.station_maintenance_cost)(read_field!(infra, station)));
     cost = cost.saturating_add(crate::station_lifecycle::airport_maintenance(
         unsafe { &*(s.station_lifecycle)() },
         id,
@@ -1386,7 +1381,17 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     }
     (s.update_signals_in_buffer)();
     if new != INVALID_OWNER {
-        (s.add_airport_infrastructure)(new, old);
+        // The compound assignment evaluates the old company's count before the destination.
+        let old_infrastructure =
+            crate::company_base::CompanyInfrastructure::get(s.shared, CompanyID(old));
+        let airports = read_field!(old_infrastructure, airport);
+        let new_infrastructure =
+            crate::company_base::CompanyInfrastructure::get(s.shared, CompanyID(new));
+        write_field!(
+            new_infrastructure,
+            airport,
+            read_field!(new_infrastructure, airport).wrapping_add(airports)
+        );
     }
     let owner = if new == INVALID_OWNER {
         OWNER_NONE
@@ -2238,7 +2243,6 @@ crate::abi::layouts! {
         object_services,
         performance_detail_dirty,
         company_graphs_dirty,
-        company_infrastructure,
         rail_maintenance_cost,
         signal_maintenance_cost,
         road_maintenance_cost,
@@ -2305,7 +2309,6 @@ crate::abi::layouts! {
         update_autoreplace,
         add_track_to_signal_buffer,
         update_signals_in_buffer,
-        add_airport_infrastructure,
         station_next_owned,
         station_times,
         set_station_owner,
@@ -2328,17 +2331,6 @@ crate::abi::layouts! {
         road,
         ships,
         aircraft,
-    };
-    "OpenTTDCompanyInfrastructure" ["company_economy"] => Infrastructure {
-        rail,
-        road,
-        rail_total,
-        road_total,
-        tram_total,
-        signal,
-        water,
-        station,
-        road_is_road,
     };
     "OpenTTDCompanyVehicleGroupFlags" ["company_economy"] => VehicleGroupFlags {
         engine_countable,
