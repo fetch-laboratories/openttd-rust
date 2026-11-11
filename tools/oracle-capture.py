@@ -148,6 +148,33 @@ def policy(lines: Sequence[str]) -> list[str]:
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
 
 
+ANIMATION_FRAMES = (0, 1, 3, 4, 5, 6, 7, 14, 23, 28, 39, 49, 50, 56, 69, 70, 96, 127, 128, 130)
+ANIMATION_FRAMES += (191, 192, 194, 195, 254, 255)
+ANIMATION_GFX = (1, 10, 30, 31, 32, 48, 88, 143, 148, 151, 155, 162, 165, 174, 175)
+
+
+def industry_lifecycle(lines: Sequence[str]) -> list[str]:
+    s = streams(lines)
+    # The builtin animation stream is captured seed, tick, gfx, frame, loop, ambient,
+    # custom (outermost first), skipping toffee quarry frames past its 70-entry table.
+    # Its output never depends on the seed, so the oracle nests gfx, frame, loop,
+    # custom, tick, ambient, seed instead, turning repeats into runs.
+    order = {}
+    for seed, tick, gfx, frame, loop, ambient, custom in itertools.product(
+        range(4), range(22), ANIMATION_GFX, ANIMATION_FRAMES, range(3), range(2), range(2)
+    ):
+        if gfx != 165 or frame < 70:
+            key = (gfx, frame, loop, custom, tick, ambient, seed)
+            order[key] = len(order)
+    animation = [s["A"][order[key]] for key in sorted(order)]
+    return [
+        *section("T", s["T"]),
+        *section("L", s["L"]),
+        *section("A", animation),
+        *section("C", s["C"]),
+    ]
+
+
 @dataclass(frozen=True)
 class Recipe:
     oracle: str
@@ -264,6 +291,59 @@ RECIPE: dict[str, Recipe] = {
         convert=pool,
         sources=("src/core/pool_func.cpp",),
         flags=("-DUNIX", "-DFMT_HEADER_ONLY"),
+    ),
+    "industry_lifecycle": Recipe(
+        oracle="industry/lifecycle-oracle.txt",
+        fixture="a8ff5d3287:tools/migration/industry-lifecycle-gap.cpp",
+        convert=industry_lifecycle,
+        extract=(
+            *(
+                ("industry-lifecycle-reference.inc", "src/newgrf_industrytiles.cpp", signature, "")
+                for signature in (
+                    "static bool DoTriggerIndustryTileAnimation(",
+                    "bool TriggerIndustryTileAnimation_ConstructionStageChanged(",
+                    "bool TriggerIndustryTileAnimation(",
+                    "bool TriggerIndustryAnimation(",
+                    "static void DoTriggerIndustryTileRandomisation(",
+                    "static void DoReseedIndustry(",
+                    "void TriggerIndustryTileRandomisation(",
+                    "void TriggerIndustryRandomisation(",
+                )
+            ),
+            (
+                "industry-acceptance-reference.inc",
+                "src/industry_cmd.cpp",
+                "static void AddAcceptedCargo_Industry(",
+                "",
+            ),
+            (
+                "industry-animation-reference.inc",
+                "src/table/industry_land.h",
+                "static const uint8_t _industry_anim_offs_toffee[]",
+                "\n\n/* this is ONLY used for the Bubble Generator*/",
+            ),
+            *(
+                ("industry-animation-reference.inc", "src/industry_cmd.cpp", f"static void {name}(", "")
+                for name in (
+                    "AnimateSugarSieve",
+                    "AnimateToffeeQuarry",
+                    "AnimateBubbleCatcher",
+                    "AnimatePowerPlantSparks",
+                    "AnimateToyFactory",
+                    "AnimatePlasticFountain",
+                    "AnimateOilWell",
+                    "AnimateMineTower",
+                    "AnimateTile_Industry",
+                )
+            ),
+            (
+                "industry-graphics-reference.inc",
+                "src/industry_map.h",
+                "enum IndustryGraphics :",
+                "\n\n/**\n * Get the industry ID of the given tile",
+            ),
+        ),
+        flags=("-DUNIX", "-fno-strict-overflow"),
     ),
     "income": Recipe(
         oracle="cargo_payment/income-oracle.txt",
