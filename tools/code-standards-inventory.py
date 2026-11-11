@@ -10,7 +10,7 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 - transparent wrapper types and named constants;
 - literal sites that stand for a named value;
 - Rust functions with more than seven parameters, as FFI exports, commands
-  (taking the command's `flags: u16`) and helpers (#874), outside test code
+  (taking the command's `flags`, as `u16` or `DoCommandFlags`) and helpers (#874), outside test code
   and `#[cfg(test)]` modules.
 
 With file paths it prints those files' residue instead of the totals, including
@@ -549,7 +549,10 @@ def long_functions(path: str, source: str) -> list[Site]:
         elif any(
             p.type == "parameter"
             and text(p.child_by_field_name("pattern"), data) == "flags"
-            and text(p.child_by_field_name("type"), data) == "u16"
+            and re.fullmatch(
+                r"u16|(?:[\w:]+::)?DoCommandFlags",
+                text(p.child_by_field_name("type"), data),
+            )
             for p in parameters.named_children
         ):
             kind = "command"

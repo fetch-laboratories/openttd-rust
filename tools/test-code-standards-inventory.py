@@ -143,6 +143,8 @@ impl X {
     fn build(&mut self, tile: u32, flags: u16, a: u8, b: u8, c: u8, d: u8, e: u8) {}
     fn walk(&self, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, flags: u32) {}
     fn seven(&self, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) {}
+    fn typed(&self, flags: DoCommandFlags, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) {}
+    fn qualified(flags: crate::command_type::DoCommandFlags, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8) {}
 }
 #[cfg(test)]
 mod tests {
@@ -162,6 +164,8 @@ mod tests {
                 ("ffi export", "openttd_rust_b: 8 parameters"),
                 ("command", "build: 8 parameters"),
                 ("helper", "walk: 8 parameters"),
+                ("command", "typed: 8 parameters"),
+                ("command", "qualified: 8 parameters"),
             ],
         )
 
@@ -261,6 +265,13 @@ mod tests {
             "tile: TileIndex)", "tile: TileIndex, execute: bool)"
         )
         self.assertEqual(self.gate(True, FINISHED_BASE, flagged), 1)
+        typed = "pub(crate) fn cmd_build(flags: DoCommandFlags) {}\n"
+        long = typed.replace(
+            "flags: DoCommandFlags",
+            "flags: DoCommandFlags, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8",
+        )
+        self.assertEqual(self.gate(True, typed, long), 1)
+        self.assertEqual(self.gate(False, typed, long), 0)
 
     def test_existing_and_renamed_occurrences_pass(self) -> None:
         self.assertEqual(self.gate(True, FINISHED_BASE, FINISHED_BASE), 0)
