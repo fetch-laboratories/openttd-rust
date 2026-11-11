@@ -669,7 +669,6 @@ mod tests {
     /// themselves: tile 4096 of the 64 by 64 map fails that range assertion once each,
     /// although these backing arrays extend past it, and a returning handler resumes.
     #[test]
-    #[allow(unsafe_code)] // The raw reader over this test's arrays only.
     fn setters_assert_the_map_size_range() {
         let (base, extended) = tiles();
         let shared = crate::services::Services {
