@@ -670,7 +670,7 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
         let map = crate::map_func::World::new(shared);
         let types = &map.types;
         let tile_type = types.read(TileIndex(tile));
-        let ambient = tile_type == TileType(6) && crate::newgrf_generic::ambient_enabled();
+        let ambient = tile_type == TileType::MP_WATER && crate::newgrf_generic::ambient_enabled();
         water_tile_loop(
             tile,
             tile_type.0,
