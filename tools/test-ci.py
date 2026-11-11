@@ -435,6 +435,21 @@ class GateTests(unittest.TestCase):
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
 
+    def test_requested_plan_bases_gates_on_the_merges_first_parent(self) -> None:
+        # PULL's base SHA predates what merged into base since its last push; the
+        # gates must count only the PR's own changes in the tested merge (#919).
+        for profile in ("native", "full"):
+            with self.subTest(profile=profile):
+                env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
+                result = execute_script("ci-request.yml", "plan", PULL, env=env)
+                self.assertEqual(result["outputs"]["base"], PARENT)
+                self.assertNotEqual(PULL["base"]["sha"], PARENT)
+        orphan = {MERGE: {"parents": [], "commit": {"tree": {"sha": TREE}}}}
+        env = {"PR": "170", "HEAD": HEAD, "PROFILE": "native"}
+        world = {"commits": orphan}
+        result = execute_script("ci-request.yml", "plan", PULL, env=env, world=world)
+        self.assertIn("no first parent", result["error"])
+
     def test_checker_only_full_requests_skip_builds(self) -> None:
         checker = [
             {"filename": "tools/lint-ratchet.py"},
