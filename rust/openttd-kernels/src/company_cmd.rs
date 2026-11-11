@@ -10,7 +10,7 @@ use crate::company_base::CompanyInfrastructure;
 use crate::road_type::RoadTramType;
 
 /// Get total sum of all owned road bits.
-/// `rtt` is the RoadTramType to get the combined total for.
+/// `rtt` is the `RoadTramType` to get the combined total for.
 ///
 /// # Safety
 /// The native record is live and serialized throughout this non-reentrant calculation.
