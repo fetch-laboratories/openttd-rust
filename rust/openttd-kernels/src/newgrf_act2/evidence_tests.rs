@@ -9,7 +9,9 @@
 //! leaf-call order, not the pool or `SpriteGroup` internals. The file-loaded graph and
 //! resolver consumers stay native; `install_test_labels` stands in for the cargo table.
 use super::*;
+use crate::cargo_type::INVALID_CARGO;
 use crate::newgrf_bytereader::Cursor;
+use crate::newgrf_config::GCS_DISABLED;
 use crate::newgrf_loading::{TEST_TABLE as LOADING_TEST_TABLE, openttd_rust_grf_execution};
 use crate::test_tables::{SHARED, unreachable1, unreachable2, unreachable3};
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -60,11 +62,13 @@ struct World {
     nodes: Vec<Node>,
     errors: Vec<u32>,
     error_data: Vec<Vec<u8>>,
+    statuses: Vec<u8>,
 }
 static WORLD: GameState<World> = GameState::new(World {
     nodes: Vec::new(),
     errors: Vec::new(),
     error_data: Vec::new(),
+    statuses: Vec::new(),
 });
 static VERSION: AtomicU8 = AtomicU8::new(8);
 
@@ -188,7 +192,9 @@ extern "C" fn error_data(_: *mut c_void, data: *const u8, length: usize) {
     let text = unsafe { std::slice::from_raw_parts(data, length) };
     world().error_data.push(text.to_vec());
 }
-extern "C" fn set_status(_: *mut c_void, _: u8) {}
+extern "C" fn set_status(_: *mut c_void, status: u8) {
+    world().statuses.push(status);
+}
 extern "C" fn error(_: *mut c_void, _: u32, message: u32, _: bool) -> *mut c_void {
     world().errors.push(message);
     std::ptr::dangling_mut()
@@ -259,6 +265,7 @@ impl Fixture {
         world().nodes.clear();
         world().errors.clear();
         world().error_data.clear();
+        world().statuses.clear();
         VERSION.store(8, Ordering::SeqCst);
         unsafe {
             let state = openttd_rust_grf_execution();
@@ -388,6 +395,7 @@ fn partial_reads_publication_and_interner() {
         b"too many inputs (max 16)"
     );
     assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
+    assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(206).is_null());
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);
 
@@ -395,6 +403,7 @@ fn partial_reads_publication_and_interner() {
     unsafe { (*openttd_rust_grf_execution()).skip_sprites = 0 };
     assert!(f.parse(&[9, 209, 0x41, 1, 0, 0, 0, 16, 0]).0);
     assert_eq!(world().errors.last(), Some(&INVALID_LAYOUT));
+    assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(209).is_null());
 }
 
@@ -416,6 +425,7 @@ fn production_duplicate_and_invalid_cargo() {
     assert!(f.parse(&[10, 207, 2, 2, 0, 9, 0]).0);
     assert_eq!(world().error_data.last().unwrap(), b"duplicate input cargo");
     assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
+    assert_eq!(world().statuses.last(), Some(&GCS_DISABLED));
     assert!(slot(207).is_null());
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);
 
@@ -424,7 +434,7 @@ fn production_duplicate_and_invalid_cargo() {
     assert!(f.parse(&[10, 208, 2, 1, 255, 9, 0, 0]).0);
     let invalid = production_of(slot(208));
     assert_eq!(invalid.version, 255);
-    assert_eq!(invalid.cargo_input[0], 0xFF);
+    assert_eq!(invalid.cargo_input[0], INVALID_CARGO);
     assert_eq!(invalid.subtract_input[0], 9);
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, 0);
 
