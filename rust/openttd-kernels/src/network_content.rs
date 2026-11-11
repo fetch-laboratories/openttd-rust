@@ -28,6 +28,7 @@ use crate::tcp_content_type::{
 };
 use std::collections::BTreeMap;
 use std::ffi::c_void;
+use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct ContentCallback {
@@ -612,10 +613,9 @@ fn download_selected_content(s: &Services, files: &mut u32, bytes: &mut u32, fal
 }
 
 fn download_selected_content_http(s: &Services, content: &[ContentID]) {
-    let mut content_request = Vec::new();
+    let mut content_request = String::new();
     for id in content {
-        content_request.extend_from_slice(id.0.to_string().as_bytes());
-        content_request.push(b'\n');
+        let _ = writeln!(content_request, "{}", id.0);
     }
 
     with(|c| c.http_response_index = -1);
