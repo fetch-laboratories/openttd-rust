@@ -112,7 +112,7 @@ pub(crate) fn cmd_industry_set_production(
                 IndustryControlFlags::from_element(IndustryControlFlag::ExternalProdLevel).0;
             (*owner).fields.prod_level = args.prod_level;
         }
-        super::recompute_production_multipliers_checked(owner, production);
+        super::recompute_production_multipliers(owner, production);
         /* Show news message if requested. */
         // `prod_level != ind->prod_level` is false after the assignment above, so the
         // original adds no news item.

@@ -99,14 +99,18 @@ impl<'a> Pbs<'a> {
     pub(crate) fn platform(self, start: u32, dir: u8, reserved: bool) {
         (self.0.assert_platform)(start, dir);
         let map = self.shared().map();
-        let diff = map
-            .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
-            .cast_unsigned();
+        let diff = map.tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check);
         let mut tile = start;
         loop {
             (self.0.set_station)(tile, reserved);
             (self.shared().mark_dirty)(tile);
-            tile = tile.wrapping_add(diff);
+            tile = map
+                .tile_add(
+                    crate::tile_type::TileIndex(tile),
+                    diff,
+                    crate::map_func::native_check,
+                )
+                .0;
             if !World::new(self.shared()).compatible_station(tile, start) {
                 break;
             }

@@ -562,13 +562,12 @@ pub extern "C" fn openttd_rust_script_road_depot_front_tile(s: &Services, depot:
         return crate::tile_type::INVALID_TILE;
     }
     let w = world(s);
-    w.dimensions
-        .tile_add_by_diag_dir(
-            TileIndex(depot),
+    (TileIndex(depot)
+        + w.dimensions.tile_offs_by_diag_dir(
             DiagDirection(w.road_depot_dir(depot)),
             crate::map_func::native_check,
-        )
-        .0
+        ))
+    .0
 }
 
 /// `ScriptRoad::GetRoadStationFrontTile`.
@@ -579,14 +578,12 @@ pub extern "C" fn openttd_rust_script_road_station_front_tile(s: &Services, stat
     }
     let w = world(s);
     if w.bay_stop(station) {
-        return w
-            .dimensions
-            .tile_add_by_diag_dir(
-                TileIndex(station),
+        return (TileIndex(station)
+            + w.dimensions.tile_offs_by_diag_dir(
                 DiagDirection(w.bay_dir(station)),
                 crate::map_func::native_check,
-            )
-            .0;
+            ))
+        .0;
     }
     station.wrapping_sub(
         w.dimensions

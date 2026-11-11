@@ -884,16 +884,14 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(s.tile),
+        let tile = (TileIndex(s.tile)
+            + self.map().tile_offs_by_diag_dir(
                 DiagDirection(diag(s.direction, |ok| {
                     crate::movement::native_assert(self.ss, ok);
                 })),
                 crate::map_func::native_check,
-            )
-            .0;
+            ))
+        .0;
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
@@ -1507,14 +1505,11 @@ impl Game<'_> {
         );
         let entry = rd.0 & 3;
         if rd.0 & 128 != 0 {
-            let mut tile = self
-                .map()
-                .tile_add_by_diag_dir(
-                    TileIndex(s.tile),
-                    DiagDirection(entry),
-                    crate::map_func::native_check,
-                )
-                .0;
+            let mut tile = (TileIndex(s.tile)
+                + self
+                    .map()
+                    .tile_offs_by_diag_dir(DiagDirection(entry), crate::map_func::native_check))
+            .0;
             let mut dir = if s.front {
                 if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)

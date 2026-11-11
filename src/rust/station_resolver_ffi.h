@@ -28,7 +28,6 @@ struct OpenTTDStationResolverServices {
 	const SpriteGroup *(*loading)(const RealSpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	const SpriteGroup *(*loaded)(const RealSpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(loaded);
 	Axis (*axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(axis);
-	uint32_t (*tile_add)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add);
 	uint8_t (*tile_random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
 	uint16_t (*station_random)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_random);
 	uint8_t (*waiting)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);

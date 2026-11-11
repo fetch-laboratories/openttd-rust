@@ -58,6 +58,30 @@ impl TileIndex {
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(u32::MAX);
 }
+/// `tile + TileIndexDiff`: the `StrongType` unsigned addition the original writes
+/// by hand, distinct from `TileAdd`'s native `_DEBUG` assertions.
+impl std::ops::Add<crate::map_type::TileIndexDiff> for TileIndex {
+    type Output = Self;
+    #[inline]
+    fn add(self, offset: crate::map_type::TileIndexDiff) -> Self {
+        Self(self.0.wrapping_add_signed(offset))
+    }
+}
+/// `tile - TileIndexDiff`, the unsigned subtraction.
+impl std::ops::Sub<crate::map_type::TileIndexDiff> for TileIndex {
+    type Output = Self;
+    #[inline]
+    fn sub(self, offset: crate::map_type::TileIndexDiff) -> Self {
+        Self(self.0.wrapping_sub(offset.cast_unsigned()))
+    }
+}
+/// `tile += TileIndexDiff`.
+impl std::ops::AddAssign<crate::map_type::TileIndexDiff> for TileIndex {
+    #[inline]
+    fn add_assign(&mut self, offset: crate::map_type::TileIndexDiff) {
+        *self = *self + offset;
+    }
+}
 
 /// Native `TileType`, including unnamed uint8 values.
 #[repr(transparent)]

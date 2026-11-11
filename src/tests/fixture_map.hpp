@@ -25,11 +25,6 @@ struct OpenTTDFixtureMap {
 		.log_x = &this->log_x,
 		.log_y = &this->log_y,
 		.assertions = true,
-#ifdef _DEBUG
-		.debug = true,
-#else
-		.debug = false,
-#endif
 	};
 	explicit OpenTTDFixtureMap(uint32_t log_x, uint32_t size = 0) : base(std::make_unique<TileBaseStorage[]>(size)), extended(std::make_unique<TileExtendedStorage[]>(size)), size(size), log_x(log_x), log_y(size == 0 ? log_x : std::countr_zero(size) - log_x) {}
 	void Resize(uint32_t log_x, uint32_t size)

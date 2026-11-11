@@ -52,8 +52,11 @@ struct OpenTTDMapStatics {
 	const uint32_t *log_x;
 	const uint32_t *log_y;
 	bool assertions;
-	bool debug;
 };
+/* Rust's TileAdd projects native _DEBUG at build time (cargo feature native-debug). */
+#if defined(_DEBUG) != defined(OPENTTD_RUST_NATIVE_DEBUG)
+#	error "The Rust archive's native-debug feature must match this configuration's _DEBUG"
+#endif
 extern const OpenTTDMapStatics _rust_map_statics;
 
 /* Immutable table of world services; context may be null in the game, while test fixtures supply

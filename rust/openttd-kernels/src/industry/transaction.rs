@@ -550,7 +550,7 @@ impl Engine<'_> {
                 && (coordinates.tile_x(tile_walk) == 0
                     || coordinates.tile_y(tile_walk) == 0
                     || !self.check_can_terraform_surrounding_tiles(
-                        self.tile_add_xy(tile_walk, -1, -1),
+                        tile_walk + coordinates.diff(-1, -1),
                         height,
                         internal.wrapping_add(1),
                     ))
@@ -598,13 +598,9 @@ impl Engine<'_> {
         // are no obstructing items. TileArea::Expand is not used here as we need to abort
         // instead of clamping if the bounds cannot expanded.
         let ta = TileArea {
-            tile: self
-                .tile_add_xy(
-                    tile,
-                    -(industry_platform as i32),
-                    -(industry_platform as i32),
-                )
-                .0,
+            tile: (tile
+                + coordinates.diff(-(industry_platform as i32), -(industry_platform as i32)))
+            .0,
             w: (max_x
                 .wrapping_add(2)
                 .wrapping_add((2 * industry_platform) as i32)) as u16,

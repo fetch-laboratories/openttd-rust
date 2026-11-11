@@ -13,8 +13,7 @@ use crate::network_frame::{
 };
 use crate::network_socket::{self as socket, GameSocket};
 use crate::network_type::{
-    NETWORK_ERROR_NOT_EXPECTED, NETWORK_ERROR_NOT_ON_ALLOW_LIST, NETWORK_ERROR_WRONG_PASSWORD,
-    NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
+    NETWORK_ERROR_NOT_EXPECTED, NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
 };
 use crate::packet::State;
 use crate::raw_field::write_field;
@@ -120,6 +119,19 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
     crate::network_client::send_identify(s, f)
 }
 
+/// `GetErrorForAuthenticationMethod` (`network_server.cpp`).
+fn get_error_for_authentication_method(
+    method: NetworkAuthenticationMethod,
+) -> crate::network_type::NetworkErrorCode {
+    use crate::network_type::NetworkErrorCode;
+    match method {
+        NetworkAuthenticationMethod::X25519_PAKE => NetworkErrorCode::NETWORK_ERROR_WRONG_PASSWORD,
+        NetworkAuthenticationMethod::X25519_AuthorizedKey => {
+            NetworkErrorCode::NETWORK_ERROR_NOT_ON_ALLOW_LIST
+        }
+        _ => crate::services_assert::not_reached(),
+    }
+}
 pub(crate) fn receive_response(
     f: &Services,
     game: *mut GameSocket,
@@ -150,18 +162,11 @@ pub(crate) fn receive_response(
         ResponseResult::Authenticated => (),
         ResponseResult::RetryNextMethod => return send_request(f, game, work),
         _ => {
-            let error = match method {
-                NetworkAuthenticationMethod::X25519_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
-                NetworkAuthenticationMethod::X25519_AuthorizedKey => {
-                    NETWORK_ERROR_NOT_ON_ALLOW_LIST
-                }
-                _ => unreachable!(),
-            };
             return crate::network_connection::send_error(
                 s,
                 f,
                 game,
-                error,
+                get_error_for_authentication_method(method).0,
                 crate::network_connection::EMPTY_TEXT,
                 work,
             );

@@ -19,8 +19,8 @@ namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
 inline uint8_t WaterType(uint32_t tile) noexcept
 {
-	/* The real follower also queries the tile just beyond this fixture's map. */
-	if (tile >= water.size()) return MP_VOID;
+	/* The follower queries past this fixture's map; its Map::MaxX column is void, as generated. */
+	if (tile >= water.size() || tile % 32 == 31) return MP_VOID;
 	return water[tile] ? MP_WATER : MP_CLEAR;
 }
 inline uint32_t OPENTTD_RUST_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
@@ -36,7 +36,7 @@ template <typename Check> void Run(Check check)
 	auto &world = map.shared;
 	world.tile_type = WaterType;
 	const OpenTTDWaterLeaves leaves{.shared = &world, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
-	const auto fill = [&](bool value) { water.fill(value); for (uint32_t t = 0; t < water.size(); ++t) map.Tile(t, value ? MP_WATER : MP_CLEAR); };
+	const auto fill = [&](bool value) { water.fill(value); for (uint32_t t = 0; t < water.size(); ++t) map.Tile(t, t % 32 == 31 ? MP_VOID : value ? MP_WATER : MP_CLEAR); };
 	using Owner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 	using Cursor = std::unique_ptr<OpenTTDWaterVisit, decltype(&openttd_rust_water_visit_destroy)>;
 	Owner owner{openttd_rust_water_new(32, 32), openttd_rust_water_destroy};

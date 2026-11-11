@@ -965,8 +965,9 @@ unsafe fn transport_industry_goods(
     }
     moved_cargo
 }
-/// `Industry::RecomputeProductionMultipliers`, with its `UsesOriginalEconomy` assertion.
-fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services) {
+/// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
+/// `prod_level`. This function is only valid when not using smooth economy.
+fn recompute_production_multipliers(owner: *mut Industry, svc: &Services) {
     let indspec = spec_of(owner);
     svc.assert_with(|| {
         uses_original_economy(
@@ -974,15 +975,15 @@ fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services
             svc.economy_type(),
         )
     });
-    recompute_production_multipliers(owner);
+    recompute_production_rates(owner);
 }
-/// `Industry::RecomputeProductionMultipliers`: recompute `production_rate` for the current
-/// `prod_level`. This function is only valid when not using smooth economy.
+/// The body of `Industry::RecomputeProductionMultipliers` after its assertion, which
+/// the native method evaluates before calling the export below.
 #[allow(
     clippy::cast_possible_truncation,
     reason = "Industry::RecomputeProductionMultipliers keeps the original's implicit C++ integer conversions"
 )]
-fn recompute_production_multipliers(owner: *mut Industry) {
+fn recompute_production_rates(owner: *mut Industry) {
     let f = fields(owner);
     // Rates are rounded up, so e.g. oilrig always produces some passengers
     for n in 0..produced_count(owner) {
@@ -1000,7 +1001,7 @@ fn recompute_production_multipliers(owner: *mut Industry) {
 /// Live industry and its owner; the original `UsesOriginalEconomy` precondition applies.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_recompute(owner: *mut Industry) {
-    recompute_production_multipliers(owner);
+    recompute_production_rates(owner);
 }
 /// `UpdateIndustryStatistics`.
 fn update_industry_statistics(owner: *mut Industry) {
@@ -1332,7 +1333,7 @@ fn change_industry_production(
     // Recalculate production_rate
     // For non-smooth economy these should always be synchronized with prod_level
     if recalculate_multipliers {
-        recompute_production_multipliers(obs.owner);
+        recompute_production_multipliers(obs.owner, svc);
     }
     // Close if needed and allowed
     if closeit
