@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Values from `network/core/config.h`.
-/// `NETWORK_MAX_GRF_COUNT`.
+/// Maximum number of GRFs that can be sent. This prevents `SERVER_INFO` from
+/// exceeding `TCP_MTU` (32767): its game info occupies 142 bytes plus at most
+/// 100 per `NewGRF`, allowing roughly 326. Round down to 255 to avoid an odd limit.
+/// Raising it also requires considering the uint8 `NetworkGameInfo` GRF count.
 pub const NETWORK_MAX_GRF_COUNT: u32 = 255;
 
 /// Revision string capacity, including its NUL.
@@ -23,7 +26,19 @@ pub const NETWORK_CONTENT_DESC_LENGTH: usize = 512;
 /// The maximum length of a content's tag, in bytes including '\0'.
 pub const NETWORK_CONTENT_TAG_LENGTH: usize = 32;
 
-/// `COMPAT_MTU`.
+/// Number of bytes in a single packet for backward compatibility (`COMPAT_MTU`).
 pub const COMPAT_MTU: usize = 1460;
-/// `TCP_MTU`.
+/* Technically a TCP packet could be 64 KiB, but the high bit is reserved for
+ * significantly larger packets in the future, using a strategy like UTF-8.
+ *
+ * Packets up to 32 KiB have the high bit clear:
+ * 00000000 00000000 0bbbbbbb aaaaaaaa -> aaaaaaaa 0bbbbbbb
+ * Send_uint16(GB(size, 0, 15))
+ *
+ * Up to 1 GiB, the first uint16_t has a high bit set to request the next uint16_t:
+ * 00dddddd cccccccc bbbbbbbb aaaaaaaa -> cccccccc 10dddddd aaaaaaaa bbbbbbbb
+ * Send_uint16(GB(size, 16, 14) | 0b10 << 14)
+ * Send_uint16(GB(size, 0, 16))
+ */
+/// Number of bytes in a single TCP packet (`TCP_MTU`).
 pub const TCP_MTU: usize = 32767;

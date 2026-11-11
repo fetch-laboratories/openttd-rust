@@ -118,29 +118,6 @@ pub(crate) fn exchange(
     true
 }
 
-/// Raw adapter for unfinished `auth.rs` callers until its pass.
-pub(crate) fn derive(
-    keys: &mut [u8; 64],
-    secret: &[u8; 32],
-    public: &[u8; 32],
-    peer: &[u8; 32],
-    server: bool,
-    extra: &[u8],
-) -> bool {
-    exchange(
-        keys,
-        secret,
-        public,
-        peer,
-        if server {
-            X25519KeyExchangeSide::SERVER
-        } else {
-            X25519KeyExchangeSide::CLIENT
-        },
-        extra,
-    )
-}
-
 /// `crypto_aead_ctx`.
 #[derive(Clone)]
 pub(crate) struct Aead {

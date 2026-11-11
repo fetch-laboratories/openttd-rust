@@ -128,9 +128,11 @@ pub(crate) fn send(
     work: Actions,
 ) -> crate::network_tcp::Send {
     let result = unsafe {
-        crate::network_tcp::openttd_rust_tcp_send(
-            s.tcp,
-            tcp(socket),
+        crate::network_tcp::send_packets(
+            crate::network_tcp::Context {
+                services: s.tcp,
+                socket: tcp(socket),
+            },
             false,
             crate::network_frame::packet_check(s),
         )
@@ -144,9 +146,11 @@ pub(crate) fn send(
 
 pub(crate) fn send_closing(s: &Services, socket: *mut GameSocket) {
     unsafe {
-        crate::network_tcp::openttd_rust_tcp_send(
-            s.tcp,
-            tcp(socket),
+        crate::network_tcp::send_packets(
+            crate::network_tcp::Context {
+                services: s.tcp,
+                socket: tcp(socket),
+            },
             true,
             crate::network_frame::packet_check(s),
         )
