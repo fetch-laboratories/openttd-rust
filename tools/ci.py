@@ -11,6 +11,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
 
 import vcs
 
@@ -347,11 +348,40 @@ query($owner: String!, $name: String!, $number: Int!) {
 """
 
 
+class Commit(TypedDict):
+    oid: str
+
+
+class QueueEntry(TypedDict):
+    state: str
+    position: int
+
+
+class QueueState(TypedDict):
+    """The fields of QUEUE_STATE's pull request that queue_wait reads."""
+
+    state: str
+    mergeCommit: Commit | None
+    mergeQueueEntry: QueueEntry | None
+    autoMergeRequest: dict[str, str] | None
+
+
+class QueueRun(TypedDict):
+    """The fields of a merge-group workflow run that removal reports."""
+
+    id: int
+    head_branch: str
+    created_at: str
+    status: str
+    conclusion: str | None
+    html_url: str
+
+
 class QueueRemoved(Exception):
     """The PR left the merge queue without merging."""
 
 
-def queue_state(repository: str, pr: int) -> dict:
+def queue_state(repository: str, pr: int) -> QueueState:
     owner, name = repository.split("/", 1)
     answer = json.loads(
         gh(
@@ -370,13 +400,13 @@ def queue_state(repository: str, pr: int) -> dict:
     return answer["data"]["repository"]["pullRequest"]
 
 
-def queue_run(repository: str, pr: int) -> dict | None:
+def queue_run(repository: str, pr: int) -> QueueRun | None:
     """The PR's latest merge-group run of the CI request workflow."""
-    runs = api(
+    runs: list[QueueRun] = api(
         repository, f"actions/workflows/{WORKFLOW}/runs?event=merge_group&per_page=100"
     )["workflow_runs"]
     prefix = f"gh-readonly-queue/{PROTECTED_REF}/pr-{pr}-"
-    ours = [run for run in runs if run.get("head_branch", "").startswith(prefix)]
+    ours = [run for run in runs if (run["head_branch"] or "").startswith(prefix)]
     return max(ours, key=lambda run: run["created_at"]) if ours else None
 
 
@@ -386,7 +416,7 @@ def removal(repository: str, pr: int, state: str) -> str:
         return f"PR #{pr} left the merge queue ({state}); no merge-group run found"
     lines = [
         f"PR #{pr} left the merge queue ({state}); merge-group run "
-        f"{run['status']}/{run.get('conclusion')}: {run['html_url']}"
+        f"{run['status']}/{run['conclusion']}: {run['html_url']}"
     ]
     lines += [
         f"failed job: {job['name']} ({job['html_url']})"
@@ -401,10 +431,11 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
     previous = None
     while True:
         pull = queue_state(repository, pr)
-        if pull["state"] == "MERGED":
-            return pull["mergeCommit"]["oid"]
-        entry = pull.get("mergeQueueEntry")
-        if pull["state"] != "OPEN" or not entry and not pull.get("autoMergeRequest"):
+        commit = pull["mergeCommit"]
+        if pull["state"] == "MERGED" and commit:
+            return commit["oid"]
+        entry = pull["mergeQueueEntry"]
+        if pull["state"] != "OPEN" or not entry and not pull["autoMergeRequest"]:
             raise QueueRemoved(removal(repository, pr, pull["state"].lower()))
         state = (
             f"queued {entry['state'].lower()} at position {entry['position']}"
@@ -417,7 +448,7 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         if time.monotonic() >= deadline:
             raise WaitTimeout(
                 f"PR #{pr} still queued after {timeout} seconds; "
-                f"resume with: python3 tools/ci.py queue-wait {pr}"
+                f"resume with: python3 tools/ci.py queue-wait {pr} --repo {repository}"
             )
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 

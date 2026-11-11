@@ -2457,7 +2457,7 @@ class QueueWaitTests(unittest.TestCase):
     ]
 
     def run_main(
-        self, states: list[dict[str, Any]], *extra: str
+        self, states: list[dict[str, Any]], *extra: str, argv: list[str] | None = None
     ) -> tuple[int, str, list[tuple[str, ...]]]:
         answers = iter(states)
         calls: list[tuple[str, ...]] = []
@@ -2475,7 +2475,7 @@ class QueueWaitTests(unittest.TestCase):
             raise AssertionError(args)
 
         clock = itertools.count(0, 15)
-        argv = ["ci.py", "queue-wait", "170", "--repo", "example/fork", *extra]
+        argv = argv or ["ci.py", "queue-wait", "170", "--repo", "example/fork", *extra]
         with (
             patch.object(ci, "gh", side_effect=answer),
             patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
@@ -2526,12 +2526,20 @@ class QueueWaitTests(unittest.TestCase):
     def test_still_queued_times_out_with_resume_command(self) -> None:
         code, output, _ = self.run_main([self.QUEUED] * 5, "--timeout", "30")
         self.assertEqual(code, 2)
-        self.assertTrue(
-            output.endswith(
-                "PR #170 still queued after 30 seconds; "
-                "resume with: python3 tools/ci.py queue-wait 170"
-            )
+        prefix = "resume with: python3 tools/ci.py "
+        last = output.splitlines()[-1]
+        self.assertEqual(
+            last,
+            "PR #170 still queued after 30 seconds; "
+            + prefix
+            + "queue-wait 170 --repo example/fork",
         )
+        # The printed command resumes on the same repository.
+        resume = ["ci.py", *last.split(prefix, 1)[1].split()]
+        code, _, calls = self.run_main([self.MERGED], argv=resume)
+        self.assertEqual(code, 0)
+        self.assertIn("owner=example", calls[0])
+        self.assertIn("name=fork", calls[0])
 
 
 if __name__ == "__main__":
