@@ -693,11 +693,9 @@ fn tgen_set_tile_height(
         crate::tile_type::TileIndex(tile),
         height.cast_unsigned(),
     );
-    if crate::tile_map::is_inner_tile(
-        view,
-        crate::tile_type::TileIndex(tile),
-        world.freeform_edges(),
-    ) {
+    if crate::tile_map::is_inner_tile(view, crate::tile_type::TileIndex(tile), || {
+        world.freeform_edges()
+    }) {
         (world.clear.make_clear)(
             tile,
             crate::services::ClearGroundType(crate::clear_map::CLEAR_GRASS),

@@ -392,11 +392,12 @@ pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: TileIndex) -> u3
         |height| height as u32,
     )
 }
-/// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
+/// `IsInnerTile`; `freeform_edges` reads `construction.freeform_edges`, only in the
+/// final operand and only for a tile on the upper edges, as the original does.
 pub(crate) fn is_inner_tile(
     w: &crate::map_func::World<'_>,
     t: TileIndex,
-    freeform_edges: bool,
+    freeform_edges: impl FnOnce() -> bool,
 ) -> bool {
     w.check(t.0 < w.types.count());
     let map = w.dimensions;
@@ -404,7 +405,7 @@ pub(crate) fn is_inner_tile(
     let y = map.tile_y(t);
     x < map.max_x()
         && y < crate::map_func::Map::max_y(w.size_y())
-        && ((x > 0 && y > 0) || !freeform_edges)
+        && ((x > 0 && y > 0) || !freeform_edges())
 }
 /// `SetTileHeight`.
 #[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
@@ -426,7 +427,7 @@ pub(crate) fn set_tile_type(
      * edges of the map. If _settings_game.construction.freeform_edges is true,
      * the upper edges of the map are also VOID tiles. */
     if w.types.assertions() {
-        w.check(is_inner_tile(w, t, freeform_edges()) == (kind != TileType::MP_VOID));
+        w.check(is_inner_tile(w, t, freeform_edges) == (kind != TileType::MP_VOID));
     }
     let mut value = u32::from(crate::map_func::World::byte(w.types.kind(t)));
     crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind.0));
@@ -685,7 +686,7 @@ mod tests {
         let world = World::new(&shared);
         let outside = crate::tile_type::TileIndex(4096);
         ASSERTS.set(0);
-        let _ = super::is_inner_tile(&world, outside, false);
+        let _ = super::is_inner_tile(&world, outside, || false);
         assert_eq!(ASSERTS.get(), 1, "IsInnerTile");
         ASSERTS.set(0);
         super::set_tile_height(&world, outside, 2);
@@ -697,6 +698,29 @@ mod tests {
             false
         });
         assert_eq!(ASSERTS.get(), 2, "SetTileType");
+        // The setting is read only for an upper-edge tile inside the lower borders.
+        let reads = std::cell::Cell::new(0);
+        let read = || {
+            reads.set(reads.get() + 1);
+            true
+        };
+        for (tile, inner, expected) in [
+            (65, true, 0),
+            (63, false, 0),
+            (4032, false, 0),
+            (1, false, 1),
+        ] {
+            reads.set(0);
+            assert_eq!(
+                super::is_inner_tile(&world, crate::tile_type::TileIndex(tile), read),
+                inner
+            );
+            assert_eq!(
+                reads.get(),
+                expected,
+                "IsInnerTile setting reads, tile {tile}"
+            );
+        }
         crate::map_func::fixture::set(
             TileTypeAllocation {
                 base: std::ptr::null(),

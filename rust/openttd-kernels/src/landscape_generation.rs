@@ -204,7 +204,7 @@ impl<'a> World<'a> {
                     let tile = self.map.tile_xy(x, y).0;
                     if tile_height_in(&view, TileIndex(tile)) >= current + 2 {
                         set_tile_height(&view, TileIndex(tile), current + 1);
-                        if is_inner_tile(&view, TileIndex(tile), self.freeform_edges())
+                        if is_inner_tile(&view, TileIndex(tile), || self.freeform_edges())
                             && self.s.random_range(u32::from(max_height)) <= current
                         {
                             (self.clear.make_clear)(tile, ClearGroundType(CLEAR_ROCKS), 3);
@@ -330,7 +330,7 @@ impl World<'_> {
                     }
                     set_tile_height(&view, TileIndex(tile), level);
                 }
-                if is_inner_tile(&view, TileIndex(tile), self.freeform_edges()) {
+                if is_inner_tile(&view, TileIndex(tile), || self.freeform_edges()) {
                     (self.clear.make_clear)(tile, ClearGroundType(CLEAR_GRASS), 3);
                 }
             }
