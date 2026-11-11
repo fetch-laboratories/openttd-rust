@@ -11,13 +11,20 @@ At a revision (default HEAD) it counts, over rust/openttd-kernels/src:
 - literal sites that stand for a named value;
 - Rust functions with more than seven parameters, as FFI exports, commands
   (taking the command's `flags: u16`) and helpers (#874), outside test code
-  and `#[cfg(test)]` modules.
+  and `#[cfg(test)]` modules;
+- finished-file residue (#901): calls to `*_raw` adapters and `openttd_rust_*`
+  exports outside export shims and test code, Rust-internal functions taking
+  `execute: bool`, and `GameState<Vec<...>>` scratch pools.
 
 With file paths it prints those files' residue instead of the totals. The Rust
 and the candidate C++ come from the revision's archive, the original from the
 baseline commit that the revision's own migration/baseline.json pins. Counts are estimates for stocktakes,
 not a gate: matching is by facade, export and name, as the 2026-11-06 overhaul
 measured them.
+
+`--gate --base-ref REF` is the Quick gate (#901): it fails when a file listed in
+migration/finished-files.txt has more sites of a residue class, or of commands
+over seven parameters, than at the merge base, and names each new site.
 """
 
 import argparse
@@ -28,7 +35,7 @@ import re
 import subprocess
 import sys
 import tarfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -36,6 +43,7 @@ from typing import Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = "rust/openttd-kernels/src"
+FINISHED = "migration/finished-files.txt"
 COMMENTS = ("comment", "line_comment", "block_comment")
 
 try:
@@ -538,8 +546,7 @@ def long_functions(path: str, source: str) -> list[Site]:
         if count <= LONG_PARAMETERS or in_test(node, data, path):
             continue
         name = text(node.child_by_field_name("name"), data)
-        head = text(node, data).split("fn ", 1)[0]
-        if "no_mangle" in leading(node, data) or 'extern "C"' in head:
+        if exported(node, data):
             kind = "ffi export"
         elif any(
             p.type == "parameter"
@@ -556,6 +563,105 @@ def long_functions(path: str, source: str) -> list[Site]:
     return found
 
 
+def exported(node: Node, data: bytes) -> bool:
+    """An FFI export: `#[no_mangle]` or an `extern "C"` function."""
+    head = text(node, data).split("fn ", 1)[0]
+    return "no_mangle" in leading(node, data) or 'extern "C"' in head
+
+
+def residue_sites(path: str, source: str) -> list[Site]:
+    """#901's finished-file residue classes in one file, outside test code."""
+    data = source.encode()
+    found = []
+    for node in walk(PARSERS["rust"].parse(data).root_node):
+        line = node.start_point[0] + 1
+        if node.type == "call_expression":
+            called = text(node.child_by_field_name("function"), data)
+            name = re.split(r"::|\.", re.sub(r"::<.*", "", called, flags=re.S))[-1]
+            if not (name.endswith("_raw") or name.startswith("openttd_rust_")):
+                continue
+            owner = node.parent
+            while owner and owner.type != "function_item":
+                owner = owner.parent
+            if (owner and exported(owner, data)) or in_test(node, data, path):
+                continue
+            kind = "export call" if name.startswith("openttd_rust_") else "raw call"
+            found.append(Site(path, line, kind, name))
+        elif node.type == "function_item":
+            parameters = node.child_by_field_name("parameters")
+            if parameters is None or exported(node, data) or in_test(node, data, path):
+                continue
+            if any(
+                p.type == "parameter"
+                and text(p.child_by_field_name("pattern"), data) == "execute"
+                and text(p.child_by_field_name("type"), data) == "bool"
+                for p in parameters.named_children
+            ):
+                name = text(node.child_by_field_name("name"), data)
+                found.append(Site(path, line, "execute flag", name))
+    code = code_only(source)
+    for match in re.finditer(r"\bstatic\s+(\w+)\s*:\s*GameState\s*<\s*Vec\s*<", code):
+        line = code.count("\n", 0, match.start()) + 1
+        found.append(Site(path, line, "scratch pool", match[1]))
+    return found
+
+
+def gate_sites(path: str, source: str) -> list[Site]:
+    """Residue and commands over seven parameters, keyed by identifier."""
+    long = [
+        Site(s.path, s.line, "long command", s.detail.split(":")[0])
+        for s in long_functions(path, source)
+        if s.kind == "command"
+    ]
+    return residue_sites(path, source) + long
+
+
+def gate(base_ref: str) -> int:
+    """Fail when a finished file gains a residue site over the merge base (#901).
+
+    Sites are counted per file and class, so moving or renaming an existing
+    occurrence passes; only growth fails, and it names the head sites whose
+    identifier outnumbers the base's (all of the class's sites when none does).
+    """
+    base = subprocess.check_output(
+        ["git", "merge-base", base_ref, "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    listed = [
+        line.strip()
+        for line in (ROOT / FINISHED).read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    errors = 0
+    for path in listed:
+        if not (ROOT / path).is_file():
+            print(f"{FINISHED}: listed file is missing: {path}")
+            errors += 1
+            continue
+        before = subprocess.run(
+            ["git", "show", f"{base}:{path}"], cwd=ROOT, capture_output=True, text=True
+        )
+        old = gate_sites(path, before.stdout) if before.returncode == 0 else []
+        new = gate_sites(path, (ROOT / path).read_text())
+        for kind in sorted({s.kind for s in new}):
+            head = [s for s in new if s.kind == kind]
+            allowed = Counter(s.detail for s in old if s.kind == kind)
+            if len(head) <= sum(allowed.values()):
+                continue
+            seen: Counter[str] = Counter()
+            added = []
+            for site in head:
+                seen[site.detail] += 1
+                if seen[site.detail] > allowed[site.detail]:
+                    added.append(site)
+            for site in added or head:
+                print(
+                    f"{site.path}:{site.line}: new {site.kind} in a finished file: {site.detail}"
+                )
+                errors += 1
+    print(f"Finished-file residue: {len(listed)} files; {errors} errors")
+    return int(errors > 0)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -566,7 +672,13 @@ def main() -> int:
     parser.add_argument(
         "files", nargs="*", help="print these Rust files' residue instead of totals"
     )
+    parser.add_argument(
+        "--gate", action="store_true", help=f"fail on residue growth in {FINISHED}"
+    )
+    parser.add_argument("--base-ref", default="origin/rust-migration")
     args = parser.parse_args()
+    if args.gate:
+        return gate(args.base_ref)
     rust = {
         path: data.decode()
         for path, data in archive(args.head, RUST).items()
@@ -594,6 +706,12 @@ def main() -> int:
         if (not selected or path in selected) and path not in tests
         for site in long_functions(path, source)
     ]
+    residue = [
+        site
+        for path, source in sorted(rust.items())
+        if (not selected or path in selected) and path not in tests
+        for site in residue_sites(path, source)
+    ]
     missing = [
         (r, o, o.comments - r.comments) for r, o in pairs if o.comments > r.comments
     ]
@@ -607,6 +725,8 @@ def main() -> int:
                 print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
         for site in long:
             print(f"{site.path}:{site.line}: long {site.kind}: {site.detail}")
+        for site in residue:
+            print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
     counts = {
         kind: sum(s.kind == kind for s in sites)
         for kind in ("bare integer", "wrapper", "constant", "literal")
@@ -619,7 +739,11 @@ def main() -> int:
         f"{len(long)} functions over {LONG_PARAMETERS} parameters "
         f"({sum(s.kind == 'ffi export' for s in long)} FFI exports, "
         f"{sum(s.kind == 'helper' for s in long)} helpers, "
-        f"{sum(s.kind == 'command' for s in long)} commands)"
+        f"{sum(s.kind == 'command' for s in long)} commands), "
+        + ", ".join(
+            f"{sum(s.kind == kind for s in residue)} {kind}s"
+            for kind in ("raw call", "export call", "execute flag", "scratch pool")
+        )
     )
     return 0
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Seed each pattern the code-standards inventory counts and check its count."""
 
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import tempfile
@@ -179,6 +181,88 @@ mod tests {
                 "src/a/stubs/mod.rs",
             },
         )
+
+
+class ResidueTests(unittest.TestCase):
+    SOURCE = """
+static IDLE: GameState<Vec<u32>> = GameState::new(Vec::new());
+pub(crate) fn refit(execute: bool, label: u32) -> u8 {
+    let cargo = openttd_rust_cargo_by_label(label);
+    crate::slope_func::is_steep_slope_raw(cargo)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_refit(execute: bool) -> u8 {
+    openttd_rust_cargo_by_label(is_steep_slope_raw(0))
+}
+#[cfg(test)]
+mod tests {
+    fn stub(execute: bool) { openttd_rust_refit(execute); }
+}
+"""
+
+    def test_each_class_outside_export_shims_and_tests(self) -> None:
+        found = [
+            (s.line, s.kind, s.detail)
+            for s in INVENTORY.residue_sites(RUST, self.SOURCE)
+        ]
+        self.assertEqual(
+            sorted(found),
+            [
+                (2, "scratch pool", "IDLE"),
+                (3, "execute flag", "refit"),
+                (4, "export call", "openttd_rust_cargo_by_label"),
+                (5, "raw call", "is_steep_slope_raw"),
+            ],
+        )
+
+    def gate(self, edit: str) -> tuple[int, str]:
+        """Commit a finished and an unfinished file, apply edit to both, run the gate."""
+        clean = "pub(crate) fn refit(label: u32) -> u8 {\n    get(label)\n}\n"
+        clean += "fn keep() -> u8 {\n    is_steep_slope_raw(0)\n}\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "migration").mkdir()
+            (root / "migration/finished-files.txt").write_text("# Finished\ndone.rs\n")
+            for name in ("done.rs", "open.rs"):
+                (root / name).write_text(clean)
+
+            def git(*command: str) -> str:
+                return subprocess.run(
+                    ["git", "-c", "user.name=t", "-c", "user.email=t@t", *command],
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("add", ".")
+            git("commit", "-qm", "base")
+            base = git("rev-parse", "HEAD")
+            for name in ("done.rs", "open.rs"):
+                (root / name).write_text(edit)
+            git("commit", "-qam", "head")
+            output = io.StringIO()
+            with patch.object(INVENTORY, "ROOT", root):
+                with contextlib.redirect_stdout(output):
+                    status = INVENTORY.gate(base)
+            return status, output.getvalue()
+
+    def test_seeded_violation_fails_only_in_a_finished_file(self) -> None:
+        seeded = "pub(crate) fn refit(label: u32) -> u8 {\n    get_raw(label)\n}\n"
+        seeded += "fn keep() -> u8 {\n    is_steep_slope_raw(0)\n}\n"
+        status, output = self.gate(seeded)
+        self.assertEqual(status, 1)
+        self.assertIn("done.rs:2: new raw call in a finished file: get_raw", output)
+        self.assertNotIn("open.rs", output)
+        self.assertNotIn("is_steep_slope_raw", output)
+
+    def test_renamed_or_moved_occurrence_passes(self) -> None:
+        renamed = "fn kept() -> u8 {\n    is_steep_slope_raw(0)\n}\n"
+        renamed += "pub(crate) fn refit_cargo(label: u32) -> u8 {\n    get(label)\n}\n"
+        self.assertEqual(self.gate(renamed)[0], 0)
+        callee = "fn keep() -> u8 {\n    is_flat_slope_raw(0)\n}\n"
+        self.assertEqual(self.gate(callee)[0], 0)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,8 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 A pass is ready for review when a reviewer would have nothing left on the [every-line list](review-brief.md#what-to-examine-in-your-group). #883 reached review with ten standards findings; the same classes recurred across most passes on 11-10/11. Before marking the PR ready, for each file:
 
-- Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
+- Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports, including calls to `*_raw` adapters and `openttd_rust_*` exports, `execute: bool` parameters and `GameState<Vec<...>>` scratch pools.
+- Add each finished file to `migration/finished-files.txt`. From then on Quick fails when a PR adds one of those classes, or a command over seven parameters, to it.
 - Search the file for `_raw(`, `openttd_rust_` calls and scratch pools, and check each original callee name against existing Rust definitions.
 - Compare each body with its original, comments and assertions included.
 
