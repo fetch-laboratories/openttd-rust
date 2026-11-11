@@ -6,10 +6,8 @@
 #include "../core/backup_type.hpp"
 #include "../rust/session_native.hpp"
 #include <thread>
-static bool session_networking;
-static uint session_queries, session_changes, session_dirty;
-static uint8_t session_previous;
-TEST_CASE("Session pause - all command inputs and unsaved native aliases")
+static uint session_queries;
+TEST_CASE("Session pause - native aliases and serialized commands")
 {
 	AutoRestoreBackup<GameMode> mode(_game_mode, _game_mode);
 	AutoRestoreBackup<SwitchMode> switching(_switch_mode, _switch_mode);
@@ -25,27 +23,10 @@ TEST_CASE("Session pause - all command inputs and unsaved native aliases")
 		CHECK(_game_mode == GM_EDITOR); CHECK(_switch_mode == SM_RELOADGAME); CHECK(_pause_mode == PauseMode::Normal);
 	}); second.join();
 	auto services = GetRustSessionServices();
-	auto company = *services.company;
-	auto finance = *company.finance;
-	finance.networking = []() noexcept { return session_networking; };
-	company.finance = &finance; services.company = &company;
+	session_queries = 0;
 	services.pause_query = []() noexcept { session_queries++; };
-	services.pause_change = [](uint8_t previous, PauseMode) noexcept { session_changes++; session_previous = previous; };
-	services.pause_dirty = []() noexcept { session_dirty++; };
-	for (bool network : {false, true}) for (uint value = 0; value < 256; value++) for (bool execute : {false, true}) {
-		session_networking = network; session_queries = session_changes = session_dirty = 0;
-		_pause_mode = PauseMode::CommandDuringPause;
-		const bool valid = value < 7 && (network || (value != 2 && value != 4));
-		const auto selected = static_cast<PauseMode>(value);
-		CHECK(openttd_rust_session_pause(&services, selected, true, execute) == valid);
-		CHECK(_pause_mode.base() == (valid && execute ? 0x80 | (1U << value) : 0x80));
-		CHECK(session_changes == uint(valid && execute)); CHECK(session_dirty == uint(valid && execute)); CHECK(session_queries == 0);
-		if (valid && execute) {
-			CHECK(session_previous == 0x80);
-			CHECK(openttd_rust_session_pause(&services, selected, false, true));
-			CHECK(_pause_mode.None());
-		}
-	}
+	services.pause_change = [](uint8_t, PauseMode) noexcept {};
+	services.pause_dirty = []() noexcept {};
 	_pause_mode = PauseMode::Normal;
 	std::thread command([&] { CHECK(openttd_rust_session_pause(&services, PauseMode::GameScript, true, true)); }); command.join();
 	CHECK(_pause_mode.base() == 0x21);

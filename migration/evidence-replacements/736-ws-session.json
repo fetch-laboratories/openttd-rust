@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "ctest:Session pause - all command inputs and unsaved native aliases"
+    ],
+    "oracle": "PARTIAL TRANSFER of src/tests/session.cpp (#736 W-s), which stays in the build. The retired identity is the reduced test case, now \"Session pause - native aliases and serialized commands\". Before reduction, the unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 CmdPause from src/misc_cmd.cpp was compiled with its original PauseModes and DoCommandFlags at -O0 and -O2 -DNDEBUG (GCC 13.3.0, GNU/Linux x86_64); both 1025-row streams agree. tools/oracle-recipes/session_pause.patch supplies only the command-cost/query/window/network leaf scaffold, tools/oracle-capture.py session_pause extracts the pinned body and types and byte-checks rust/openttd-kernels/src/session/pause-oracle.txt. No candidate body or output supplies an expectation. The 1024 cases keep the old network/value/execute order, all uint8_t mode inputs, CommandDuringPause initial bits, and the following unpause of each valid executed case; the extra unsafe-unpause query case preserves Error bits. Ordered pause-change previous/mode payloads and the status-bar then toolbar dirty requests are frozen independently. Rust services use the existing plain aborting table contract. Kept in C++: the same actual mode/switch/pause alias addresses and values across two serialized native threads, the native Rust storage pointer binding, the worker-thread GameScript command and unsafe-unpause native callback, the separate native callback live-state/reentry case, and the native load callback mode/restoration/partial-effects/dedicated-exit case. Each retires with the corresponding native session aliases, callback ABI or load boundary; Rust substitutes do not claim those observations. session-console.cpp and threaded-console.cpp retain their real game settings/reset/load/save/map/RNG, exception and GUI main-thread/mutex observations, and session-fixture.hpp retains every other live consumer. No platform field: frozen outputs use only fixed-width values and semantic window labels.",
+    "observations": {
+      "Exhaustive network/value/execute pause acceptance, no test-mode side effects, previous pause bits and selected reason, command-during-pause clearing, unsafe-unpause query state, and ordered pause-change/query then both dirty requests": [
+        "rust:lib:session::evidence_tests::pause_input_matrix_matches_original_and_callback_order"
+      ]
+    }
+  }
+]

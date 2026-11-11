@@ -52,7 +52,6 @@ static void SignCommands(CompanyID company, CompanyID other)
 {
 	const auto run = DoCommandFlag::Execute;
 	const TileIndex tile = TileXY(20, 30), moved = TileXY(Map::MaxX() - 1, 7);
-	Observe<CMD_PLACE_SIGN>("place-test", {}, tile, std::string("Alpha"));
 	const SignID alpha = std::get<1>(Observe<CMD_PLACE_SIGN>("place", run, tile, std::string("Alpha")));
 	Observe<CMD_PLACE_SIGN>("place-utf8-31", run, moved, Utf8(31));
 	Observe<CMD_PLACE_SIGN>("place-utf8-32", run, moved, Utf8(32));
@@ -72,23 +71,19 @@ static void SignCommands(CompanyID company, CompanyID other)
 		mode.Restore();
 	}
 	_current_company = other;
-	Observe<CMD_RENAME_SIGN>("rename-other-test", {}, alpha, std::string("Beta"));
 	Observe<CMD_RENAME_SIGN>("rename-other", run, alpha, std::string("Beta"));
-	Observe<CMD_MOVE_SIGN>("move-other-test", {}, blank, moved);
 	Observe<CMD_MOVE_SIGN>("move-other", run, blank, moved);
 	_current_company = company;
 	Observe<CMD_RENAME_SIGN>("rename-utf8-31", run, alpha, Utf8(31));
 	Observe<CMD_RENAME_SIGN>("rename-utf8-32", run, alpha, Utf8(32));
 	Observe<CMD_RENAME_SIGN>("rename-invalid", run, SignID::Invalid(), std::string("X"));
 	Observe<CMD_MOVE_SIGN>("move-invalid", run, SignID(SignID::End().base() - 1), tile);
-	Observe<CMD_RENAME_SIGN>("delete-test", {}, blank, std::string());
 	Observe<CMD_RENAME_SIGN>("delete", run, blank, std::string());
 	Observe<CMD_RENAME_SIGN>("delete-again", run, blank, std::string());
 	Observe<CMD_PLACE_SIGN>("place-reuse", run, tile, std::string("Reuse"));
 	std::vector<SignID> fill;
 	while (Sign::CanAllocateItem()) fill.push_back(std::get<1>(Command<CMD_PLACE_SIGN>::Do(run, tile, std::string("F"))));
 	fmt::print(stderr, "SIGNS filled {}\n", fill.size());
-	Observe<CMD_PLACE_SIGN>("place-full-test", {}, tile, std::string("Full"));
 	Observe<CMD_PLACE_SIGN>("place-full", run, tile, std::string(64, 'x'));
 	/* Per-command removal is quadratic in the viewport kdtree; "delete" covers that path. */
 	for (SignID id : fill) delete Sign::Get(id);

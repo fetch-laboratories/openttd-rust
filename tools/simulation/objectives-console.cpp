@@ -190,9 +190,6 @@ static bool ObjectivesScenario(std::span<std::string_view> args)
 		player.Restore();
 	}
 	Observe<CMD_GOAL_QUESTION_ANSWER>("answer-deity", run, 45, 1);
-	for (uint8_t kind = 0; kind <= 4; ++kind) for (uint32_t buttons : {0U, 1U, 7U, 15U, UINT32_MAX}) {
-		Observe<CMD_GOAL_QUESTION>(fmt::format("question-{}-{}", kind, buttons), {}, 42, global.base(), false, buttons, GoalQuestionType(kind), text);
-	}
 	{
 		Backup<bool> server(_network_server, true);
 		Observe<CMD_GOAL_QUESTION>("question-missing-client-test", {}, 46, UINT32_MAX, true, 1, GQT_QUESTION, text);

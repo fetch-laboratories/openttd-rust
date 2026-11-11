@@ -922,12 +922,16 @@ pub unsafe extern "C" fn openttd_rust_remove_league_table_element_abi(
 }
 
 #[cfg(test)]
+mod evidence_tests;
+
+#[cfg(test)]
 mod tests {
     use super::openttd_rust_story_storage;
 
     #[test]
     fn story_storage_is_shared_between_serialized_threads() {
-        // SAFETY: This test is the sole story-state user; spawn/join serializes each access.
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+        // SAFETY: The game-state test lock excludes other owners; spawn/join serializes each access.
         unsafe {
             let state = openttd_rust_story_storage();
             let page = std::ptr::addr_of_mut!((*state).page_next_sort);

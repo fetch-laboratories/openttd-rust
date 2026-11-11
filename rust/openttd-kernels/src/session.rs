@@ -1134,3 +1134,6 @@ pub unsafe extern "C" fn openttd_rust_session_generate_abi(
     }
     u8::from((Session::new(s, frame)).generate(kind, x, y, reset).is_ok())
 }
+
+#[cfg(test)]
+mod evidence_tests;
