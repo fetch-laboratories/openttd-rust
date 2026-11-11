@@ -19,15 +19,15 @@ pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_range(TileIndex(t))?;
+pub(crate) fn get_tile_type(m: &TileTypeAccess, t: TileIndex) -> Option<TileType> {
+    let fields = m.require_range(t)?;
     Some(get_tile_type_from_fields(&fields))
 }
 /// `GetTileType`'s bit extraction after the caller's original range assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> u8 {
-    fields.kind() >> 4
+pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> TileType {
+    TileType(fields.kind() >> 4)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -38,7 +38,7 @@ pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: u32) -> Option<u8> {
 #[inline(always)]
 pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bool> {
     m.available(TileIndex(0))?;
-    Some(t < count && get_tile_type(m, t)? != crate::tile_type::MP_VOID)
+    Some(t < count && get_tile_type(m, TileIndex(t))? != TileType::MP_VOID)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]

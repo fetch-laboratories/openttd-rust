@@ -10,8 +10,8 @@
 use crate::direction_type::DiagDirection;
 use crate::industry_type::IndustryID;
 use crate::map_func::{TileFields, TileTypeAccess};
+use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
-use crate::tile_type::{MP_CLEAR, TileIndex};
 /// `ClearGround::CLEAR_GRASS`.
 pub(crate) const CLEAR_GRASS: u8 = ClearGround::CLEAR_GRASS.0;
 /// `ClearGround::CLEAR_ROUGH`.
@@ -122,7 +122,7 @@ pub(crate) fn get_fence(
 #[inline(always)]
 pub(crate) fn is_field_tile(m: &TileTypeAccess, t: TileIndex) -> Option<bool> {
     Some(
-        crate::tile_map::get_tile_type(m, t.0)? == MP_CLEAR
+        crate::tile_map::get_tile_type(m, t)? == TileType::MP_CLEAR
             && get_clear_ground(m, t)? == ClearGround::CLEAR_FIELDS,
     )
 }

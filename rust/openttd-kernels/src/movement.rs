@@ -22,6 +22,7 @@
     clippy::cast_sign_loss
 )]
 use crate::direction_func::diag_dir_to_axis_raw;
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::rail_map::{
     RAIL_GROUND_HALF_TILE_WATER, RAIL_TILE_DEPOT, RAIL_TILE_NORMAL, RAIL_TILE_SIGNALS,
@@ -827,7 +828,12 @@ impl Context<'_> {
                                             let t = self
                                                 .world
                                                 .dimensions
-                                                .tile_add_by_diag_dir_raw(tile, dir);
+                                                .tile_add_by_diag_dir(
+                                                    TileIndex(tile),
+                                                    DiagDirection(dir),
+                                                    crate::map_func::native_check,
+                                                )
+                                                .0;
                                             if self.world.level_crossing_tile(t)
                                                 && self.world.crossing_barred(t)
                                             {

@@ -264,7 +264,11 @@ impl<'a> World<'a> {
             return OWNER_NONE;
         }
         let edge = (self.road.town_edge)(town);
-        if self.map.distance_square_raw(tile, edge.tile) > edge.radius {
+        if self
+            .map
+            .distance_square(TileIndex(tile), TileIndex(edge.tile))
+            > edge.radius
+        {
             OWNER_NONE
         } else {
             OWNER_TOWN
@@ -872,7 +876,10 @@ impl<'a> World<'a> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let delta = self.map.tile_offs_by_diag_dir_raw(direction);
+        let delta = self
+            .map
+            .tile_offs_by_diag_dir(DiagDirection(direction), crate::map_func::native_check)
+            .cast_unsigned();
         // Both source branches deliberately compare against Map::MaxX().
         let in_way = if diag_dir_to_axis_raw(direction, |ok| {
             crate::movement::native_assert(self.s, ok);
@@ -1215,7 +1222,10 @@ impl<'a> World<'a> {
             return cost.take(ret);
         }
         let direction = (self.s.tunnel_bridge_direction)(tile);
-        let delta = self.map.tile_offs_by_diag_dir_raw(direction);
+        let delta = self
+            .map
+            .tile_offs_by_diag_dir(DiagDirection(direction), crate::map_func::native_check)
+            .cast_unsigned();
         let mut town = std::ptr::null();
         if (self.s.tile_owner)(tile) == OWNER_TOWN && !self.editor() {
             town = crate::town::spatial::closest(self.s, tile, u32::MAX);

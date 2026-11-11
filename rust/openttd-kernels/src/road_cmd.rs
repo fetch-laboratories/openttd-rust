@@ -23,6 +23,7 @@ use crate::company_type::CompanyID;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
+use crate::direction_type::DiagDirection;
 use crate::rail_cmd::{
     CROSSING_SLOPES, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR, RailCommandServices,
     TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -446,8 +447,16 @@ impl<'a> Ctx<'a> {
         let mut neighbours = 0;
         for dir in 0..4 {
             if present & dir_bit(dir) != 0
-                && self.any_bits(self.map.tile_add_by_diag_dir_raw(tile, dir), rtt)
-                    & dir_bit(dir ^ 2)
+                && self.any_bits(
+                    self.map
+                        .tile_add_by_diag_dir(
+                            TileIndex(tile),
+                            DiagDirection(dir),
+                            crate::map_func::native_check,
+                        )
+                        .0,
+                    rtt,
+                ) & dir_bit(dir ^ 2)
                     != 0
             {
                 neighbours |= dir_bit(dir);
@@ -847,7 +856,11 @@ impl<'a> Ctx<'a> {
                     company = OWNER_NONE;
                 } else {
                     let edge = (self.s.town_edge)(town);
-                    if self.map.distance_square_raw(tile, edge.tile) > edge.radius {
+                    if self
+                        .map
+                        .distance_square(TileIndex(tile), TileIndex(edge.tile))
+                        > edge.radius
+                    {
                         company = OWNER_NONE;
                     }
                 }
@@ -1250,7 +1263,14 @@ impl<'a> Ctx<'a> {
         }
     }
     fn connect(&self, tile: u32, rt: u8, dir: u8) -> bool {
-        let tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
+        let tile = self
+            .map
+            .tile_add_by_diag_dir(
+                TileIndex(tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
@@ -1376,7 +1396,14 @@ impl<'a> Ctx<'a> {
             if tile == end {
                 break;
             }
-            tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
+            tile = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                )
+                .0;
         }
         if !success {
             cost.take(last);

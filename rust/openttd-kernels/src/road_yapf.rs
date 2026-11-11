@@ -17,6 +17,7 @@
     clippy::similar_names
 )]
 use crate::binaryheap::BinaryHeap;
+use crate::direction_type::DiagDirection;
 use crate::game_state::GameState;
 use crate::map_func::Map;
 use crate::node_hash::NodeMap;
@@ -379,7 +380,13 @@ impl Search<'_> {
                 if !crate::road_stop::continuation(
                     shared,
                     tile,
-                    tile.wrapping_sub(map.tile_offs_by_diag_dir_raw(dir)),
+                    tile.wrapping_sub(
+                        map.tile_offs_by_diag_dir(
+                            DiagDirection(dir),
+                            crate::map_func::native_check,
+                        )
+                        .cast_unsigned(),
+                    ),
                 ) {
                     let entry = crate::road_stop::entry_read_raw(rs, dir);
                     cost = cost.wrapping_add(

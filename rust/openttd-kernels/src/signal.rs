@@ -9,8 +9,10 @@
 //! callbacks can reenter.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
 use crate::debug::debug;
+use crate::direction_type::DiagDirection;
 use crate::game_state::GameState;
 use crate::rail_map::is_pbs_signal as pbs;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
@@ -391,7 +393,14 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         crate::witness::hit(crate::witness::SIGNAL_DEPOT);
                         train_on_tile(w, tile, &mut flags);
                         exitdir = w.view().rail_depot_dir(tile);
-                        tile = w.map.tile_add_by_diag_dir_raw(tile, exitdir);
+                        tile = w
+                            .map
+                            .tile_add_by_diag_dir(
+                                TileIndex(tile),
+                                DiagDirection(exitdir),
+                                crate::map_func::native_check,
+                            )
+                            .0;
                         dir = reverse_diag_dir_raw(exitdir, |ok| native_assert(w.shared, ok));
                     } else if dir == w.view().rail_depot_dir(tile) {
                         // Entered a depot.
@@ -490,7 +499,14 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                                 != TrackBits::TRACK_BIT_NONE
                         {
                             let next = Item {
-                                tile: w.map.tile_add_by_diag_dir_raw(tile, exit),
+                                tile: w
+                                    .map
+                                    .tile_add_by_diag_dir(
+                                        TileIndex(tile),
+                                        DiagDirection(exit),
+                                        crate::map_func::native_check,
+                                    )
+                                    .0,
                                 dir: reverse_diag_dir_raw(exit, |ok| native_assert(w.shared, ok)),
                             };
                             if !maybe_add_to_todo_set(w, next, Item { tile, dir: exit }) {
@@ -513,7 +529,14 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                 }
                 crate::witness::hit(crate::witness::SIGNAL_STATION);
                 train_on_tile(w, tile, &mut flags);
-                tile = w.map.tile_add_by_diag_dir_raw(tile, exitdir);
+                tile = w
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(tile),
+                        DiagDirection(exitdir),
+                        crate::map_func::native_check,
+                    )
+                    .0;
             }
             MP_ROAD => {
                 // The crossing road axis must differ from our entering axis.
@@ -523,7 +546,14 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                 }
                 crate::witness::hit(crate::witness::SIGNAL_CROSSING);
                 train_on_tile(w, tile, &mut flags);
-                tile = w.map.tile_add_by_diag_dir_raw(tile, exitdir);
+                tile = w
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(tile),
+                        DiagDirection(exitdir),
+                        crate::map_func::native_check,
+                    )
+                    .0;
             }
             MP_TUNNELBRIDGE => {
                 let wormhole = read!(w, rail, wormhole_admission, tile, owner);
@@ -539,7 +569,14 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     train_on_tile(w, tile, &mut flags);
                     dir = direction;
                     exitdir = reverse_diag_dir_raw(direction, |ok| native_assert(w.shared, ok));
-                    tile = w.map.tile_add_by_diag_dir_raw(tile, exitdir);
+                    tile = w
+                        .map
+                        .tile_add_by_diag_dir(
+                            TileIndex(tile),
+                            DiagDirection(exitdir),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                 } else {
                     if reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)) != direction {
                         continue;
@@ -685,11 +722,25 @@ fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
         {
             add_tbd(Item { tile, dir });
             add_tbd(Item {
-                tile: w.map.tile_add_by_diag_dir_raw(tile, dir),
+                tile: w
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(tile),
+                        DiagDirection(dir),
+                        crate::map_func::native_check,
+                    )
+                    .0,
                 dir: reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok)),
             });
         } else {
-            tile = w.map.tile_add_by_diag_dir_raw(tile, dir);
+            tile = w
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                )
+                .0;
             dir = reverse_diag_dir_raw(dir, |ok| native_assert(w.shared, ok));
             if (track_status_to_track_bits(crate::movement::track_status(
                 w.shared,

@@ -104,11 +104,10 @@ pub(crate) fn has_road_works(m: &crate::map_func::TileTypeAccess, tile: u32) -> 
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn may_have_road(m: &crate::map_func::TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-    Some(match crate::tile_map::get_tile_type(m, tile.0)? {
-        MP_ROAD => true,
-        MP_STATION => crate::station_map::is_any_road_stop(m, tile)?,
-        MP_TUNNELBRIDGE => {
+    Some(match crate::tile_map::get_tile_type(m, tile)? {
+        TileType::MP_ROAD => true,
+        TileType::MP_STATION => crate::station_map::is_any_road_stop(m, tile)?,
+        TileType::MP_TUNNELBRIDGE => {
             crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, tile)?.0
                 == crate::transport_type::TRANSPORT_ROAD
         }
@@ -226,7 +225,7 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
-        self.asserted(|m| crate::tile_map::get_tile_type(m, t)) == crate::tile_type::MP_ROAD
+        self.asserted(|m| crate::tile_map::get_tile_type(m, TileIndex(t))) == TileType::MP_ROAD
             && self.is_normal_road(t)
     }
     /// `GetDisallowedRoadDirections`.

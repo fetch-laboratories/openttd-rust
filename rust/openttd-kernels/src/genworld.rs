@@ -10,6 +10,7 @@
     clippy::cast_possible_truncation
 )]
 /// `GenWorldProgress : uint8_t`.
+use crate::direction_type::DiagDirection;
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct Progress(pub u8);
@@ -416,8 +417,13 @@ impl World<'_> {
                         if remaining == 0 {
                             break 'patch;
                         }
-                        let next =
-                            map.tile_add_by_diag_dir_raw(tile, gb(shared.random(), 0, 2) as u8);
+                        let next = map
+                            .tile_add_by_diag_dir(
+                                TileIndex(tile),
+                                DiagDirection(gb(shared.random(), 0, 2) as u8),
+                                crate::map_func::native_check,
+                            )
+                            .0;
                         if (shared.tile_type)(next) == MP_CLEAR
                             && (shared.clear_ground)(next).0 != CLEAR_DESERT
                         {

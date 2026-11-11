@@ -14,6 +14,7 @@
 )]
 use crate::cargo_type::{CargoType, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::debug::debug;
+use crate::direction_type::Direction;
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
 use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
@@ -384,7 +385,13 @@ fn continuation(native: &Services, tile: u32) -> u32 {
     let map = native.map();
     let mut result = 0;
     for i in 0..8 {
-        let neighbour = map.tile_add_by_dir_raw(tile, dirs[i]);
+        let neighbour = map
+            .tile_add_by_dir(
+                TileIndex(tile),
+                Direction(dirs[i]),
+                crate::map_func::native_check,
+            )
+            .0;
         let bits = crate::track_func::track_status_to_track_bits(crate::movement::track_status(
             native.shared(),
             neighbour,

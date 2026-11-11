@@ -30,6 +30,7 @@ use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
 use crate::debug::debug;
+use crate::direction_type::DiagDirection;
 use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::game_state::GameState;
@@ -1636,7 +1637,14 @@ impl World<'_> {
                     crate::witness::hit(crate::witness::OBJECT_LIGHTHOUSE);
                     return true;
                 }
-                tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
+                tile = self
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(tile),
+                        DiagDirection(dir),
+                        crate::map_func::native_check,
+                    )
+                    .0;
                 if !(self.shared.tile_valid)(tile) {
                     return false;
                 }

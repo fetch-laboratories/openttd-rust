@@ -17,6 +17,8 @@ use crate::clear_map::{CLEAR_GRASS, CLEAR_ROCKS};
 use crate::command_type::DoCommandFlag as F;
 use crate::direction_func::{change_diag_dir_raw, diag_dir_to_axis_raw, reverse_diag_dir_raw};
 use crate::direction_type::AXIS_Y;
+use crate::direction_type::DiagDirection;
+use crate::direction_type::Direction;
 use crate::direction_type::{
     DIAGDIRDIFF_90LEFT, DIAGDIRDIFF_90RIGHT, DIAGDIRDIFF_END, DIAGDIRDIFF_REVERSE, DIAGDIRDIFF_SAME,
 };
@@ -242,7 +244,14 @@ impl World<'_> {
                     if mask & (1 << dir) == 0 {
                         continue;
                     }
-                    let dest = self.map.tile_add_by_dir_raw(tile, dir);
+                    let dest = self
+                        .map
+                        .tile_add_by_dir(
+                            TileIndex(tile),
+                            Direction(dir),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                     let other = crate::map_func::World::new(self.s).tile_slope(dest) & !SLOPE_STEEP;
                     if other == SLOPE_FLAT
                         || is_slope_with_one_corner_raised_raw(other)
@@ -296,7 +305,7 @@ impl World<'_> {
                 } else {
                     self.map.tile_xy(row, col).0
                 };
-                if (!freeform && self.map.distance_from_edge_raw(tile, self.size_y) <= 1)
+                if (!freeform && self.map.distance_from_edge(TileIndex(tile), self.size_y) <= 1)
                     || row < row_pad
                     || row >= height - row_pad - u32::from(!freeform)
                     || col < col_pad
@@ -755,7 +764,15 @@ impl World<'_> {
                     return;
                 }
                 for dir in 0..4 {
-                    if self.water(self.map.tile_add_by_diag_dir_raw(tile, dir)) {
+                    if self.water(
+                        self.map
+                            .tile_add_by_diag_dir(
+                                TileIndex(tile),
+                                DiagDirection(dir),
+                                crate::map_func::native_check,
+                            )
+                            .0,
+                    ) {
                         self.river_tile(tile);
                         break;
                     }
@@ -773,7 +790,9 @@ impl World<'_> {
                 return;
             }
             let radius = diameter / 2;
-            if self.map.distance_square_raw(tile, center) > radius * radius && self.chance(3, 4) {
+            if self.map.distance_square(TileIndex(tile), TileIndex(center)) > radius * radius
+                && self.chance(3, 4)
+            {
                 return;
             }
             if self.chance(1, 3) {
@@ -850,7 +869,7 @@ impl World<'_> {
         {
             return false;
         }
-        if self.map.distance_from_edge_raw(tile, self.size_y) <= 1 {
+        if self.map.distance_from_edge(TileIndex(tile), self.size_y) <= 1 {
             w::hit(w::GENERATION_SEA_EDGE);
             return true;
         }
@@ -860,7 +879,14 @@ impl World<'_> {
             return false;
         }
         for dir in 0..4 {
-            let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
+            let other = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                )
+                .0;
             if self.valid(other)
                 && !(self.a.sea_contains)(frame, other)
                 && self.connected_sea(frame, other, limit)
@@ -931,7 +957,14 @@ impl World<'_> {
                 }
             }
             for dir in 0..4 {
-                let other = self.map.tile_add_by_diag_dir_raw(end, dir);
+                let other = self
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(end),
+                        DiagDirection(dir),
+                        crate::map_func::native_check,
+                    )
+                    .0;
                 if self.valid(other) && !marks.contains(&other) && self.flows_down(end, other) {
                     marks.insert(other);
                     queue.push(other);
@@ -1165,7 +1198,14 @@ impl World<'_> {
             let mut flat_river = false;
             let mut sloped_river = false;
             for dir in 0..4 {
-                let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
+                let other = self
+                    .map
+                    .tile_add_by_diag_dir(
+                        TileIndex(tile),
+                        DiagDirection(dir),
+                        crate::map_func::native_check,
+                    )
+                    .0;
                 let slope = crate::map_func::World::new(self.s).tile_slope(other);
                 if self.water(other) && (self.a.river)(other) {
                     if is_inclined_slope_raw(slope)
@@ -1196,7 +1236,14 @@ impl World<'_> {
             }
             if desired == SLOPE_FLAT && is_slope_with_three_corners_raised_raw(current) {
                 for dir in 0..4 {
-                    let other = self.map.tile_add_by_diag_dir_raw(tile, dir);
+                    let other = self
+                        .map
+                        .tile_add_by_diag_dir(
+                            TileIndex(tile),
+                            DiagDirection(dir),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                     if is_inclined_slope_raw(crate::map_func::World::new(self.s).tile_slope(other))
                         && self.water(other)
                     {
@@ -1221,12 +1268,16 @@ impl World<'_> {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
                     }
-                    let other = self.map.tile_add_by_diag_dir_raw(
-                        tile,
-                        change_diag_dir_raw(direction, diff, |ok| {
-                            crate::movement::native_assert(self.a.shared(), ok);
-                        }),
-                    );
+                    let other = self
+                        .map
+                        .tile_add_by_diag_dir(
+                            TileIndex(tile),
+                            DiagDirection(change_diag_dir_raw(direction, diff, |ok| {
+                                crate::movement::native_assert(self.a.shared(), ok);
+                            })),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                     if self.water(other) && (self.a.river)(other) && self.flat(other) {
                         return;
                     }
@@ -1249,13 +1300,24 @@ impl World<'_> {
         if is_inclined_slope_raw(current) {
             w::hit(w::GENERATION_WIDEN_SLOPE);
             let direction = get_inclined_slope_direction_raw(current);
-            let upstream = self.map.tile_add_by_diag_dir_raw(tile, direction);
-            let downstream = self.map.tile_add_by_diag_dir_raw(
-                tile,
-                reverse_diag_dir_raw(direction, |ok| {
-                    crate::movement::native_assert(self.a.shared(), ok);
-                }),
-            );
+            let upstream = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(direction),
+                    crate::map_func::native_check,
+                )
+                .0;
+            let downstream = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(reverse_diag_dir_raw(direction, |ok| {
+                        crate::movement::native_assert(self.a.shared(), ok);
+                    })),
+                    crate::map_func::native_check,
+                )
+                .0;
             if !self.valid(upstream) || !self.valid(downstream) {
                 return;
             }
@@ -1436,7 +1498,12 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
             let tile = self
                 .world
                 .map
-                .tile_add_by_diag_dir_raw(self.nodes[old].get_tile(), dir);
+                .tile_add_by_diag_dir(
+                    TileIndex(self.nodes[old].get_tile()),
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                )
+                .0;
             if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile(), tile) {
                 self.add_new_node(RiverNode::set(Some(old), tile));
             }

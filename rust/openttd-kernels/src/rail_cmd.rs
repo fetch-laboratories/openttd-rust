@@ -19,6 +19,7 @@
 )]
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
+use crate::direction_type::DiagDirection;
 use crate::rail_map::is_pbs_signal as is_pbs;
 use crate::tile_type::TileIndex;
 use crate::track_func::{
@@ -1785,10 +1786,14 @@ impl<'a> Ctx<'a> {
                 while v.is_null() && i < 2 {
                     if crate::map_func::World::new(self.shared).has_signal_on_trackdir(tile, td ^ 8)
                     {
-                        let next = self.map.tile_add_by_diag_dir_raw(
-                            tile,
-                            crate::track_func::trackdir_to_exitdir(td),
-                        );
+                        let next = self
+                            .map
+                            .tile_add_by_diag_dir(
+                                TileIndex(tile),
+                                DiagDirection(crate::track_func::trackdir_to_exitdir(td)),
+                                crate::map_func::native_check,
+                            )
+                            .0;
                         let tracks = trackdir_tracks(reaches(td));
                         let reserved = self.reserved(next);
                         if reserved & tracks != 0 {

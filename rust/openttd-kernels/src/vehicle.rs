@@ -420,16 +420,57 @@ impl VehicleServices {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::direction_type::{DiagDirection, Direction};
     use crate::services::Map;
     use crate::tile_type::TileIndex;
     #[test]
     fn map_offsets_follow_the_original_tables() {
         let map = Map { log_x: 8 };
-        assert_eq!(map.tile_add_by_diag_dir_raw(0x1010, 0), 0x100f);
-        assert_eq!(map.tile_add_by_diag_dir_raw(0x1010, 1), 0x1110);
-        assert_eq!(map.tile_add_by_dir_raw(0x1010, 0), 0x0f0f);
-        assert_eq!(map.tile_add_by_dir_raw(0x1010, 5), 0x1011);
-        assert_eq!(map.tile_add_by_dir_raw(0, 0), 0_u32.wrapping_sub(257));
+        assert_eq!(
+            map.tile_add_by_diag_dir(
+                TileIndex(0x1010),
+                DiagDirection::DIAGDIR_NE,
+                crate::map_func::native_check
+            )
+            .0,
+            0x100f
+        );
+        assert_eq!(
+            map.tile_add_by_diag_dir(
+                TileIndex(0x1010),
+                DiagDirection::DIAGDIR_SE,
+                crate::map_func::native_check
+            )
+            .0,
+            0x1110
+        );
+        assert_eq!(
+            map.tile_add_by_dir(
+                TileIndex(0x1010),
+                Direction::DIR_N,
+                crate::map_func::native_check
+            )
+            .0,
+            0x0f0f
+        );
+        assert_eq!(
+            map.tile_add_by_dir(
+                TileIndex(0x1010),
+                Direction::DIR_SW,
+                crate::map_func::native_check
+            )
+            .0,
+            0x1011
+        );
+        assert_eq!(
+            map.tile_add_by_dir(
+                TileIndex(0),
+                Direction::DIR_N,
+                crate::map_func::native_check
+            )
+            .0,
+            0_u32.wrapping_sub(257)
+        );
         assert_eq!(
             (map.tile_x(TileIndex(0x1234)), map.tile_y(TileIndex(0x1234))),
             (0x34, 0x12)

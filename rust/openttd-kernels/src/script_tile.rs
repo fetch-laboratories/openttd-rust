@@ -151,7 +151,7 @@ pub extern "C" fn openttd_rust_script_map_distance_max(s: &Services, a: u32, b: 
 /// `ScriptMap::DistanceSquare`, also `ScriptTile::GetDistanceSquareToTile`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_map_distance_square(s: &Services, a: u32, b: u32) -> i64 {
-    distance(s, a, b, |m| m.distance_square_raw(a, b))
+    distance(s, a, b, |m| m.distance_square(TileIndex(a), TileIndex(b)))
 }
 
 /// `ScriptMap::DistanceFromEdge`.
@@ -161,7 +161,7 @@ pub extern "C" fn openttd_rust_script_map_distance_from_edge(s: &Services, tile:
     if !valid(&w, tile) {
         return -1;
     }
-    i64::from(w.dimensions.distance_from_edge_raw(tile, w.size_y()))
+    i64::from(w.dimensions.distance_from_edge(TileIndex(tile), w.size_y()))
 }
 
 /// `ScriptTile::IsBuildable`.

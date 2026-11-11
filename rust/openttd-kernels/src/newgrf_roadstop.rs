@@ -256,7 +256,7 @@ unsafe fn variable(
                         .distance_manhattan(TileIndex(c.tile), TileIndex(xy))
                         .min(65535)
             } else {
-                s.map().distance_square_raw(c.tile, xy)
+                s.map().distance_square(TileIndex(c.tile), TileIndex(xy))
             };
         }
         0x47 => {

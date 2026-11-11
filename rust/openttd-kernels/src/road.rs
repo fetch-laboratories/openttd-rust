@@ -29,8 +29,10 @@
     clippy::if_not_else
 )]
 
+use crate::direction_type::DiagDirection;
 /// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
 /// The other enumerators join with their first Rust user.
+use crate::direction_type::Direction;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RoadTypeFlag(pub u8);
@@ -876,12 +878,16 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self.map.tile_add_by_diag_dir_raw(
-            s.tile,
-            diag(s.direction, |ok| {
-                crate::movement::native_assert(self.ss, ok);
-            }),
-        );
+        let tile = self
+            .map
+            .tile_add_by_diag_dir(
+                TileIndex(s.tile),
+                DiagDirection(diag(s.direction, |ok| {
+                    crate::movement::native_assert(self.ss, ok);
+                })),
+                crate::map_func::native_check,
+            )
+            .0;
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
@@ -1495,7 +1501,14 @@ impl Game<'_> {
         );
         let entry = rd.0 & 3;
         if rd.0 & 128 != 0 {
-            let mut tile = self.map.tile_add_by_diag_dir_raw(s.tile, entry);
+            let mut tile = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(s.tile),
+                    DiagDirection(entry),
+                    crate::map_func::native_check,
+                )
+                .0;
             let mut dir = if s.front {
                 if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)
@@ -1734,7 +1747,14 @@ impl Game<'_> {
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile) {
-                    let next = self.map.tile_add_by_dir_raw(s.tile, s.direction);
+                    let next = self
+                        .map
+                        .tile_add_by_dir(
+                            TileIndex(s.tile),
+                            Direction(s.direction),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                     if crate::road_stop::continuation(self.ss, s.tile, next)
                         && self.has_road(v.v, next)
                     {

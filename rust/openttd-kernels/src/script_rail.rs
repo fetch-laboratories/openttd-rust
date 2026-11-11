@@ -11,6 +11,7 @@
 //! company-mode macro first and call these entries for the remaining checks.
 #![allow(unsafe_code)] // Exported symbol attributes only.
 
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::script_host::{self, ERR_PRECONDITION_INVALID_COMPANY, Services};
 use crate::script_tile::{
@@ -240,7 +241,11 @@ pub extern "C" fn openttd_rust_script_rail_depot_front_tile(s: &Services, depot:
     let w = world(s);
     depot.wrapping_add(
         w.dimensions
-            .tile_offs_by_diag_dir_raw(w.rail_depot_dir(depot)),
+            .tile_offs_by_diag_dir(
+                DiagDirection(w.rail_depot_dir(depot)),
+                crate::map_func::native_check,
+            )
+            .cast_unsigned(),
     )
 }
 

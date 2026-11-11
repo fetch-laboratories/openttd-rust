@@ -98,11 +98,15 @@ impl Map {
     ) -> TileIndex {
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
-        if ((x == 0 || y == 0) && freeform) || x >= self.max_x() || y >= Self::max_y(size_y) {
-            TileIndex::INVALID
-        } else {
-            self.tile_xy(x, y)
+        // Disallow void tiles at the north border.
+        if (x == 0 || y == 0) && freeform {
+            return TileIndex::INVALID;
         }
+        // Are we about to wrap?
+        if x >= self.max_x() || y >= Self::max_y(size_y) {
+            return TileIndex::INVALID;
+        }
+        self.tile_xy(x, y)
     }
     /// `Map::MaxX`.
     #[must_use]
@@ -128,7 +132,8 @@ impl Map {
     pub fn tile_y(self, tile: TileIndex) -> u32 {
         tile.0 >> self.log_x
     }
-    /// Original `DistanceManhattan`.
+    /// `DistanceManhattan`: sum of the delta of the X and Y components.
+    /// Also known as the L1 norm: the shortest distance over diagonal tracks or roads.
     #[must_use]
     #[inline]
     pub fn distance_manhattan(self, a: TileIndex, b: TileIndex) -> u32 {
@@ -280,42 +285,6 @@ impl Map {
                 .wrapping_add(self.tile_offs_by_diag_dir(dir, check).cast_unsigned()),
         )
     }
-    /// Raw adapter: `DistanceFromEdge` over a base tile, for files no pass has
-    /// finished yet.
-    #[must_use]
-    pub fn distance_from_edge_raw(self, tile: u32, size_y: u32) -> u32 {
-        self.distance_from_edge(TileIndex(tile), size_y)
-    }
-    /// Raw adapter: `DistanceSquare` over base tiles.
-    #[must_use]
-    #[inline]
-    pub fn distance_square_raw(self, a: u32, b: u32) -> u32 {
-        self.distance_square(TileIndex(a), TileIndex(b))
-    }
-    /// Raw adapter: `TileOffsByDiagDir` as the unsigned pattern of its
-    /// `TileIndexDiff`; the precondition fails through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_offs_by_diag_dir_raw(self, dir: u8) -> u32 {
-        self.tile_offs_by_diag_dir(DiagDirection(dir), native_check)
-            .cast_unsigned()
-    }
-    /// Raw adapter: `TileAddByDiagDir` over base values; the precondition fails
-    /// through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_add_by_diag_dir_raw(self, tile: u32, dir: u8) -> u32 {
-        self.tile_add_by_diag_dir(TileIndex(tile), DiagDirection(dir), native_check)
-            .0
-    }
-    /// Raw adapter: `TileAddByDir` over base values; the precondition fails
-    /// through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_add_by_dir_raw(self, tile: u32, dir: u8) -> u32 {
-        self.tile_add_by_dir(TileIndex(tile), Direction(dir), native_check)
-            .0
-    }
     /// `AddTileIndexDiffCWrap(tile, TileIndexDiffCByDiagDir(dir))`.
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
     #[must_use]
@@ -326,13 +295,15 @@ impl Map {
     }
 }
 
-/// The canonical native assertion, for the raw adapters' header preconditions.
-fn native_check(ok: bool) {
+/// The canonical native assertion for header preconditions.
+pub(crate) fn native_check(ok: bool) {
     crate::services_assert::check(ok);
 }
 /// `_tileoffs_by_axis`: southern (SW/SE) coordinate offset for each axis.
-const TILEOFFS_BY_AXIS: [TileIndexDiffC; Axis::AXIS_END.0 as usize] =
-    [TileIndexDiffC { x: 1, y: 0 }, TileIndexDiffC { x: 0, y: 1 }];
+const TILEOFFS_BY_AXIS: [TileIndexDiffC; Axis::AXIS_END.0 as usize] = [
+    TileIndexDiffC { x: 1, y: 0 }, // AXIS_X
+    TileIndexDiffC { x: 0, y: 1 }, // AXIS_Y
+];
 /// `_tileoffs_by_diagdir`: `TileIndexDiffC` for each `DiagDirection`.
 const TILEOFFS_BY_DIAGDIR: [TileIndexDiffC; DiagDirection::DIAGDIR_END.0 as usize] = [
     TileIndexDiffC { x: -1, y: 0 }, // DIAGDIR_NE
@@ -425,26 +396,41 @@ pub struct TileTypeAllocation {
     pub assertions: bool,
 }
 
-/// Layout-only shell for the actual native base tile. Never create a reference,
-/// read or copy a value of this type; it supplies stride/ABI metadata only.
+/// Data stored per tile, together with `ExtendedTileLayout`.
+/// See the original `docs/landscape.html` for the exact meaning of the members.
+/// This layout-only shell supplies native stride/ABI metadata. Never create a
+/// reference, or read or copy a value of this type.
 #[repr(C)]
 #[allow(missing_docs)]
 pub struct BaseTileLayout {
+    /// The type (bits 4..7), bridges (2..3), rainforest/desert (0..1).
     pub kind: u8,
+    /// The height of the northern corner.
     pub height: u8,
+    /// Primarily used for indices to towns, industries and stations.
     pub m2: u16,
+    /// Primarily used for ownership information.
     pub m1: u8,
+    /// General purpose.
     pub m3: u8,
+    /// General purpose.
     pub m4: u8,
+    /// General purpose.
     pub m5: u8,
 }
 
-/// Layout-only native extended tile. Never read a whole value or form a reference.
+/// Data stored per tile, together with `BaseTileLayout`.
+/// See the original `docs/landscape.html` for the exact meaning of the members.
+/// This native layout supplies stride/ABI metadata only; never read a whole
+/// value or form a reference.
 #[repr(C)]
 #[allow(missing_docs)]
 pub struct ExtendedTileLayout {
+    /// General purpose.
     pub m6: u8,
+    /// Primarily used for `NewGRF` support.
     pub m7: u8,
+    /// General purpose.
     pub m8: u16,
 }
 
@@ -467,9 +453,12 @@ macro_rules! map_fields {
         }
     )*};
 }
-/// Field addresses for one tile after its header getter checks the backend and
-/// source preconditions. The borrow keeps allocation metadata live; scalars are
-/// loaded afresh, never copied or referenced as a tile record.
+/// `Tile`: wrapper for access to the map data of a single tile, expected to be
+/// optimized away except when optimizations are disabled.
+/// Field addresses follow the header getter's backend and source checks. The
+/// borrow keeps allocation metadata live; scalars are loaded afresh, never
+/// copied or referenced as a tile record. Field meanings are in the original
+/// `docs/landscape.html`.
 pub(crate) struct TileFields<'a> {
     base: *const BaseTileLayout,
     extended: *const ExtendedTileLayout,
@@ -527,11 +516,9 @@ impl TileTypeAccess {
     /// go through the native accessor; asserts-off reads add no range rejection.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn read(&self, tile: TileIndex) -> TileType {
-        TileType(
-            crate::tile_map::get_tile_type(self, tile.0).unwrap_or_else(|| (self.callback)(tile.0)),
-        )
+        crate::tile_map::get_tile_type(self, tile)
+            .unwrap_or_else(|| TileType((self.callback)(tile.0)))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -629,9 +616,7 @@ impl TileTypeAccess {
     #[inline(always)]
     pub(crate) fn require_type(&self, tile: TileIndex, kind: TileType) -> Option<TileFields<'_>> {
         let fields = self.require_range(tile)?;
-        if self.assertions()
-            && TileType(crate::tile_map::get_tile_type_from_fields(&fields)) != kind
-        {
+        if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
             self.failed_check()?;
         }
         Some(fields)

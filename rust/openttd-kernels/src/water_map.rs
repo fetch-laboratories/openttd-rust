@@ -11,7 +11,6 @@ use crate::map_func::{TileFields, TileTypeAccess};
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
 
-use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
 /// `WaterTileType::Lock`.
 pub(crate) const WATER_TILE_LOCK: u8 = 2;
 /// `WaterTileType::Depot`.
@@ -39,11 +38,11 @@ pub(crate) fn has_tile_water_class(m: &TileTypeAccess, t: u32) -> Option<bool> {
 #[inline(never)]
 fn has_tile_water_class_slow(m: &TileTypeAccess, t: u32) -> Option<bool> {
     Some(
-        crate::tile_map::get_tile_type(m, t)? == MP_WATER
-            || crate::tile_map::get_tile_type(m, t)? == MP_STATION
-            || crate::tile_map::get_tile_type(m, t)? == MP_INDUSTRY
-            || crate::tile_map::get_tile_type(m, t)? == MP_OBJECT
-            || crate::tile_map::get_tile_type(m, t)? == MP_TREES,
+        crate::tile_map::get_tile_type(m, TileIndex(t))? == TileType::MP_WATER
+            || crate::tile_map::get_tile_type(m, TileIndex(t))? == TileType::MP_STATION
+            || crate::tile_map::get_tile_type(m, TileIndex(t))? == TileType::MP_INDUSTRY
+            || crate::tile_map::get_tile_type(m, TileIndex(t))? == TileType::MP_OBJECT
+            || crate::tile_map::get_tile_type(m, TileIndex(t))? == TileType::MP_TREES,
     )
 }
 #[allow(clippy::inline_always)]
@@ -51,7 +50,11 @@ fn has_tile_water_class_slow(m: &TileTypeAccess, t: u32) -> Option<bool> {
 fn has_tile_water_class_from_fields(fields: &TileFields<'_>) -> bool {
     matches!(
         crate::tile_map::get_tile_type_from_fields(fields),
-        MP_WATER | MP_STATION | MP_INDUSTRY | MP_OBJECT | MP_TREES
+        TileType::MP_WATER
+            | TileType::MP_STATION
+            | TileType::MP_INDUSTRY
+            | TileType::MP_OBJECT
+            | TileType::MP_TREES
     )
 }
 #[allow(clippy::inline_always)]

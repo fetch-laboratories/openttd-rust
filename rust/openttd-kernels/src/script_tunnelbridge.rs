@@ -13,6 +13,7 @@
 //! through the integrated tunnel/bridge command table at each original call.
 #![allow(unsafe_code)] // Exported symbol attributes and the list owner.
 
+use crate::direction_type::DiagDirection;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, company_mode_valid, enforce, valid, world};
 use crate::script_vehicle::{VT_RAIL, VT_ROAD, VT_WATER};
@@ -146,7 +147,10 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
     if direction == crate::direction_type::INVALID_DIAGDIR {
         return crate::tile_type::INVALID_TILE;
     }
-    let delta = w.dimensions.tile_offs_by_diag_dir_raw(direction);
+    let delta = w
+        .dimensions
+        .tile_offs_by_diag_dir(DiagDirection(direction), crate::map_func::native_check)
+        .cast_unsigned();
     loop {
         tile = tile.wrapping_add(delta);
         if !valid(&w, tile) {
@@ -237,7 +241,11 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     };
     check(dir < 4);
     RoadPiece {
-        tile: tile.wrapping_add(w.dimensions.tile_offs_by_diag_dir_raw(dir)),
+        tile: tile.wrapping_add(
+            w.dimensions
+                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
+                .cast_unsigned(),
+        ),
         bits: crate::road_func::diag_dir_to_road_bits_raw(bits_dir, check),
     }
 }

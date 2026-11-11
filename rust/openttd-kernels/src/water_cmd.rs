@@ -20,6 +20,7 @@ use crate::command_type::DoCommandFlag;
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
+use crate::direction_type::DiagDirection;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Cost, Map, Services, WaterClass,
@@ -343,7 +344,10 @@ impl World<'_> {
         dir: u8,
     ) {
         self.expense(out, 0);
-        let delta = self.map.tile_offs_by_diag_dir_raw(dir);
+        let delta = self
+            .map
+            .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
+            .cast_unsigned();
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
@@ -452,7 +456,11 @@ impl World<'_> {
             self.error(out, self.a.strings.sloped_wrong);
             return;
         }
-        let lower = tile.wrapping_sub(self.map.tile_offs_by_diag_dir_raw(dir));
+        let lower = tile.wrapping_sub(
+            self.map
+                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
+                .cast_unsigned(),
+        );
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;
@@ -468,7 +476,8 @@ impl World<'_> {
         }
         let delta = self
             .map
-            .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
+            .tile_offs_by_diag_dir((self.a.lock_direction)(tile), crate::map_func::native_check)
+            .cast_unsigned();
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
@@ -671,7 +680,11 @@ impl World<'_> {
                 let part = (self.a.lock_part)(tile).0;
                 let delta = self
                     .map
-                    .tile_offs_by_diag_dir_raw((self.a.lock_direction)(tile).0);
+                    .tile_offs_by_diag_dir(
+                        (self.a.lock_direction)(tile),
+                        crate::map_func::native_check,
+                    )
+                    .cast_unsigned();
                 let middle = match part {
                     0 => tile,
                     1 => tile.wrapping_add(delta),

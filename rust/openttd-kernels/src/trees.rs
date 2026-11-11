@@ -293,7 +293,7 @@ impl Trees<'_> {
         self.map
             .and_then(|m| {
                 let mut p = PlantObservation {
-                    tile_type: crate::tile_map::get_tile_type(m, tile)?,
+                    tile_type: crate::tile_map::get_tile_type(m, TileIndex(tile))?.0,
                     zone: crate::tile_map::get_tropic_zone(m, tile)?,
                     ..PlantObservation::default()
                 };
@@ -1168,7 +1168,8 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         area.expand(radius.cast_signed(), map, size_y);
         for target in area.tiles(map) {
             if world.kind(TileIndex(target)) != TileType::MP_VOID
-                && map.distance_square_raw(tile, target) < radius.wrapping_mul(radius)
+                && map.distance_square(TileIndex(tile), TileIndex(target))
+                    < radius.wrapping_mul(radius)
             {
                 (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
             }

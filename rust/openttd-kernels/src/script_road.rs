@@ -11,6 +11,7 @@
 //! Command wrappers keep their native mode macro first.
 #![allow(unsafe_code)] // Exported symbol attributes and the borrowed tile span.
 
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::road_type::{
     DRD_BOTH, DRD_NONE, DRD_NORTHBOUND, DRD_SOUTHBOUND, ROAD_E, ROAD_N, ROAD_NE, ROAD_NONE,
@@ -502,7 +503,14 @@ pub extern "C" fn openttd_rust_script_road_can_build_parts_here(
 
 /// `NeighbourHasReachableRoad`.
 fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbour: u8) -> bool {
-    let neighbour_tile = w.dimensions.tile_add_by_diag_dir_raw(start_tile, neighbour);
+    let neighbour_tile = w
+        .dimensions
+        .tile_add_by_diag_dir(
+            TileIndex(start_tile),
+            DiagDirection(neighbour),
+            crate::map_func::native_check,
+        )
+        .0;
     if !has_present(w, neighbour_tile, rt) {
         return false;
     }
@@ -555,7 +563,12 @@ pub extern "C" fn openttd_rust_script_road_depot_front_tile(s: &Services, depot:
     }
     let w = world(s);
     w.dimensions
-        .tile_add_by_diag_dir_raw(depot, w.road_depot_dir(depot))
+        .tile_add_by_diag_dir(
+            TileIndex(depot),
+            DiagDirection(w.road_depot_dir(depot)),
+            crate::map_func::native_check,
+        )
+        .0
 }
 
 /// `ScriptRoad::GetRoadStationFrontTile`.
@@ -568,7 +581,12 @@ pub extern "C" fn openttd_rust_script_road_station_front_tile(s: &Services, stat
     if w.bay_stop(station) {
         return w
             .dimensions
-            .tile_add_by_diag_dir_raw(station, w.bay_dir(station));
+            .tile_add_by_diag_dir(
+                TileIndex(station),
+                DiagDirection(w.bay_dir(station)),
+                crate::map_func::native_check,
+            )
+            .0;
     }
     station.wrapping_sub(
         w.dimensions
