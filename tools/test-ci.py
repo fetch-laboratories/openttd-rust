@@ -396,12 +396,18 @@ def inventory_cases() -> list[tuple[dict[str, object], str]]:
     ]
 
 
-def runs(step: dict[str, Any], cache_only: bool, steps: dict[str, Any]) -> object:
+def runs(
+    step: dict[str, Any],
+    cache_only: bool,
+    steps: dict[str, Any],
+    rust_only: bool = False,
+) -> object:
     """Evaluate a ci-linux or ci-windows step condition on a protected push."""
     return evaluate(
         step.get("if", True),
         inputs={
             "cache-only": cache_only,
+            "rust-only": rust_only,
             "rust": True,
             "compiler": "gcc",
             "semantic-subset": False,
@@ -1550,17 +1556,9 @@ class PolicyTests(unittest.TestCase):
             ("native", "merge", dispatch, "", "", ["sdl2"], [], False),
             ("platform", "merge", dispatch, "", "", all_linux, both_windows, True),
             ("", "", dispatch, "", "", ["clang", "dedicated"], both_windows, True),
-            # A covered push refreshes every cached flavour Full restores.
-            (
-                "",
-                "",
-                "push",
-                "false",
-                "true",
-                ["sdl2", "dedicated"],
-                both_windows,
-                False,
-            ),
+            # A covered push refreshes every cached flavour Full restores:
+            # Full builds no Windows x86 (#896), so only x64.
+            ("", "", "push", "false", "true", ["sdl2", "dedicated"], ["x64"], False),
             ("", "", "push", "true", "", all_linux, both_windows, True),
             ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
         ):
@@ -1581,6 +1579,16 @@ class PolicyTests(unittest.TestCase):
                         else []
                     )
                     self.assertEqual(selected, expected)
+                for arch in ("x86", "x64"):
+                    # Only Full narrows x86 to its Rust checks (#896).
+                    self.assertEqual(
+                        evaluate(
+                            jobs["windows"]["with"]["rust-only"],
+                            matrix={"arch": arch},
+                            **contexts,
+                        ),
+                        profile == "full" and arch == "x86",
+                    )
                 self.assertEqual(evaluate(jobs["macos"]["if"], **contexts), macos)
                 self.assertEqual(
                     evaluate(jobs["emscripten"]["if"], **contexts),
@@ -1699,6 +1707,20 @@ class PolicyTests(unittest.TestCase):
         ):
             inputs = {"cache-only": cache_only, "compiler": compiler}
             self.assertEqual(evaluate(linux, inputs=inputs), expected)
+
+    def test_rust_only_windows_stops_after_the_rust_checks(self) -> None:
+        """Full's x86 job keeps the step that failed on x86 and builds nothing (#896)."""
+        steps = job("ci-windows.yml", "windows")["steps"]
+        outputs = {step["id"]: {"outputs": {}} for step in steps if "id" in step}
+        names = [str(step.get("name", step.get("uses"))) for step in steps]
+        last = names.index("Rust checks for actual selected target")
+        observed = [
+            name
+            for name, step in zip(names, steps, strict=True)
+            if runs(step, False, outputs, rust_only=True)
+        ]
+        evidence = "Retain native Windows Rust and test evidence"
+        self.assertEqual(observed, names[: last + 1] + [evidence])
 
     def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(
         self,
