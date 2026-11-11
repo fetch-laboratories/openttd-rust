@@ -248,11 +248,15 @@ fn store_rollback_and_ownership_policy() {
     assert_eq!(visited.len(), 3);
     assert_eq!(FAILED_CHECKS.load(Ordering::SeqCst), 0);
 
+    release(w_ptr, industry_owner, airport_owner);
+}
+
+fn release(world: *mut World, industry: Owner, airport: Owner) {
     unsafe {
-        for (owner, _) in std::mem::take(&mut *addr_of_mut!((*w_ptr).town)) {
+        for (owner, _) in std::mem::take(&mut *addr_of_mut!((*world).town)) {
             openttd_rust_storage256_delete(owner);
         }
-        openttd_rust_storage256_delete(industry_owner);
-        openttd_rust_storage256_delete(airport_owner);
+        openttd_rust_storage256_delete(industry);
+        openttd_rust_storage256_delete(airport);
     }
 }

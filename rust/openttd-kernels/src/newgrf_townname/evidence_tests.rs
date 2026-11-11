@@ -209,7 +209,7 @@ impl Fixture {
                 id,
                 gen_,
                 seed,
-            )
+            );
         };
         out
     }
