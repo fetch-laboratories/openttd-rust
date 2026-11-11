@@ -471,6 +471,7 @@ impl World<'_> {
                 crate::map_func::native_check,
             )
             .0;
+        /* If freeform edges are disabled, don't allow building on edge tiles. */
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;
