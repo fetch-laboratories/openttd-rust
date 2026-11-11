@@ -28,10 +28,11 @@ static bool ThreadedStart(std::span<std::string_view>)
 	for (const Company *c : Company::Iterate()) {
 #ifdef WITH_RUST
 		const auto &f = c->Finances();
+		const auto &s = _settings_game.construction.limits;
 #else
 		const auto &f = *c;
+		const auto &s = _settings_game.construction;
 #endif
-		const auto &s = _settings_game.construction.limits;
 		credits &= f.terraform_limit == uint32_t(s.terraform_frame_burst) << 16;
 		credits &= f.clear_limit == uint32_t(s.clear_frame_burst) << 16;
 		credits &= f.tree_limit == uint32_t(s.tree_frame_burst) << 16;
