@@ -28,8 +28,9 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 A pass is ready for review when a reviewer would have nothing left on the [every-line list](review-brief.md#what-to-examine-in-your-group). #883 reached review with ten standards findings; the same classes recurred across most passes on 11-10/11. Before marking the PR ready, for each file:
 
-- Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
-- Search the file for `_raw(`, `openttd_rust_` calls and scratch pools, and check each original callee name against existing Rust definitions.
+- Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports, including its raw adapter calls, export calls, `execute` flags, scratch pools and long commands.
+- Check each original callee name against existing Rust definitions.
+- Add each file the pass finishes to `migration/finished-files.txt`. Quick's residue gate then fails any later PR that adds one of those classes to it.
 - Compare each body with its original, comments and assertions included.
 
 List anything you leave in the PR body with its reason. Residue not listed there is a finding.
