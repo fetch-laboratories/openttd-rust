@@ -13,6 +13,11 @@
 
 use crate::debug::debug;
 use crate::network_crypto::{NetworkAuthenticationMethod, NetworkAuthenticationMethodMask};
+use crate::network_crypto_internal::{
+    X25519_KEY_EXCHANGE_MESSAGE_SIZE, X25519_KEY_SIZE, X25519_MAC_SIZE, X25519_NONCE_SIZE,
+    X25519DerivedKeys, X25519KeyExchangeMessage, X25519Mac, X25519Nonce, X25519PublicKey,
+    X25519SecretKey, create_random_nonce,
+};
 use crate::{
     crypto::{self, Aead},
     packet,
@@ -64,18 +69,20 @@ unsafe fn bytes_mut<'a>(data: *mut u8, length: usize) -> &'a mut [u8] {
 }
 
 struct Session {
-    secret: [u8; 32],
-    public: [u8; 32],
-    exchange_nonce: [u8; 24],
-    keys: [u8; 64],
-    peer: [u8; 32],
-    encryption_nonce: [u8; 24],
+    secret: X25519SecretKey,
+    public: X25519PublicKey,
+    exchange_nonce: X25519Nonce,
+    keys: X25519DerivedKeys,
+    peer: X25519PublicKey,
+    encryption_nonce: X25519Nonce,
 }
 impl Drop for Session {
     fn drop(&mut self) {
+        // Ensure the nonce does not get leaked when we are done with it.
         self.encryption_nonce.zeroize();
         self.peer.zeroize();
         self.keys.zeroize();
+        // Ensure the nonce does not get leaked when we are done with it.
         self.exchange_nonce.zeroize();
         self.public.zeroize();
         self.secret.zeroize();
@@ -116,11 +123,11 @@ impl Stream {
     /// `mac` is writable for the native 16-byte authentication tag.
     pub(crate) unsafe fn encrypt(&mut self, mac: *mut u8, message: &mut [u8]) {
         let tag = self.context.write(message, &[]);
-        unsafe { ptr::copy_nonoverlapping(tag.as_ptr(), mac, 16) };
+        unsafe { ptr::copy_nonoverlapping(tag.as_ptr(), mac, X25519_MAC_SIZE) };
     }
 
     /// `NetworkEncryptionHandler::Decrypt`: authenticate and decrypt the message.
-    pub(crate) fn decrypt(&mut self, mac: &[u8; 16], message: &mut [u8]) -> bool {
+    pub(crate) fn decrypt(&mut self, mac: &X25519Mac, message: &mut [u8]) -> bool {
         self.context.read(message, mac, &[])
     }
 }
@@ -185,18 +192,22 @@ unsafe fn single_mut<'a>(owner: *mut Handler) -> &'a mut Single {
     single
 }
 
-unsafe fn session_new(secret: &[u8; 32], services: *const Services) -> Session {
+unsafe fn session_new(secret: &X25519SecretKey, services: *const Services) -> Session {
     let mut session = Session {
         secret: *secret,
         public: crypto::public_key(secret),
-        exchange_nonce: [0; 24],
-        keys: [0; 64],
-        peer: [0; 32],
-        encryption_nonce: [0; 24],
+        exchange_nonce: [0; X25519_NONCE_SIZE],
+        keys: [0; X25519_KEY_SIZE + X25519_KEY_SIZE],
+        peer: [0; X25519_KEY_SIZE],
+        encryption_nonce: [0; X25519_NONCE_SIZE],
     };
     unsafe {
-        ((*services).random_bytes)(session.exchange_nonce.as_mut_ptr(), 24);
-        ((*services).random_bytes)(session.encryption_nonce.as_mut_ptr(), 24);
+        create_random_nonce(&mut session.exchange_nonce, |nonce| {
+            ((*services).random_bytes)(nonce.as_mut_ptr(), X25519_NONCE_SIZE);
+        });
+        create_random_nonce(&mut session.encryption_nonce, |nonce| {
+            ((*services).random_bytes)(nonce.as_mut_ptr(), X25519_NONCE_SIZE);
+        });
     }
     session
 }
@@ -206,7 +217,7 @@ unsafe fn new_single(
     services: *const Services,
     method: NetworkAuthenticationMethod,
     server: bool,
-    secret: &[u8; 32],
+    secret: &X25519SecretKey,
     client_password: *mut RustAuthenticationClientHandler,
     server_password: *const NetworkAuthenticationPasswordProvider,
     authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
@@ -326,14 +337,15 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
         );
         return false;
     }
-    let mut message = Zeroizing::new([0; 8]);
+    let mut message: Zeroizing<X25519KeyExchangeMessage> =
+        Zeroizing::new([0; X25519_KEY_EXCHANGE_MESSAGE_SIZE]);
     unsafe {
-        ((*services).random_bytes)(message.as_mut_ptr(), 8);
+        ((*services).random_bytes)(message.as_mut_ptr(), X25519_KEY_EXCHANGE_MESSAGE_SIZE);
     }
     unsafe {
         let single = single_mut(owner);
         let mut context = Aead::new(
-            single.session.keys[..32].try_into().unwrap(),
+            single.session.keys[..X25519_KEY_SIZE].try_into().unwrap(),
             &single.session.exchange_nonce,
         );
         let mac = context.write(message.as_mut(), &single.session.public);
@@ -375,8 +387,9 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
         );
         return 1;
     }
-    let mut message = Zeroizing::new([0; 8]);
-    let mut mac = [0; 16];
+    let mut message: Zeroizing<X25519KeyExchangeMessage> =
+        Zeroizing::new([0; X25519_KEY_EXCHANGE_MESSAGE_SIZE]);
+    let mut mac: X25519Mac = [0; X25519_MAC_SIZE];
     let valid = unsafe {
         let single = single_mut(owner);
         (*packet).recv_bytes(&mut single.session.peer);
@@ -401,7 +414,7 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
     let valid = unsafe {
         let single = single_mut(owner);
         Aead::new(
-            single.session.keys[..32].try_into().unwrap(),
+            single.session.keys[..X25519_KEY_SIZE].try_into().unwrap(),
             &single.session.exchange_nonce,
         )
         .read(message.as_mut(), &mac, &single.session.peer)
@@ -414,11 +427,11 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
             let single = single_mut(owner);
             (single.authorized, single.session.peer.as_ptr())
         };
-        let mut encoded = [0; 64];
+        let mut encoded = [0; X25519_KEY_SIZE + X25519_KEY_SIZE];
         unsafe {
             // SAFETY: The live fixed-size public key is disjoint from encoded output.
             crate::byte_strings::format_array_as_hex(
-                std::slice::from_raw_parts(peer, 32),
+                std::slice::from_raw_parts(peer, X25519_KEY_SIZE),
                 &mut encoded,
             );
         }
@@ -443,7 +456,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
                 services,
                 NetworkAuthenticationMethod(method),
                 false,
-                &*secret.cast::<[u8; 32]>(),
+                &*secret.cast::<X25519SecretKey>(),
                 password,
                 ptr::null(),
                 ptr::null(),
@@ -466,9 +479,9 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
     mask: u16,
 ) -> *mut Handler {
     let mask = NetworkAuthenticationMethodMask(mask);
-    let mut secret = Zeroizing::new([0; 32]);
+    let mut secret = Zeroizing::new([0; X25519_KEY_SIZE]);
     unsafe {
-        ((*services).random_bytes)(secret.as_mut_ptr(), 32);
+        ((*services).random_bytes)(secret.as_mut_ptr(), X25519_KEY_SIZE);
     }
     let mut handlers = Vec::new();
     if !password.is_null() && mask.test(NetworkAuthenticationMethod::X25519_PAKE) {
@@ -607,7 +620,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_enable(
 ) -> u8 {
     unsafe {
         let session = &mut single_mut(Handler::active(owner)).session;
-        u8::from((*packet).recv_bytes(&mut session.encryption_nonce) == 24)
+        u8::from((*packet).recv_bytes(&mut session.encryption_nonce) == X25519_NONCE_SIZE)
     }
 }
 #[unsafe(no_mangle)]
@@ -619,7 +632,8 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
         let session = &(*owner).single().session;
         Box::into_raw(Box::new(Stream {
             context: Aead::new(
-                session.keys[usize::from(side) * 32..usize::from(side) * 32 + 32]
+                session.keys[usize::from(side) * X25519_KEY_SIZE
+                    ..usize::from(side) * X25519_KEY_SIZE + X25519_KEY_SIZE]
                     .try_into()
                     .unwrap(),
                 &session.encryption_nonce,
@@ -654,7 +668,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_decrypt(
     length: usize,
 ) -> u8 {
     assert!(isize::try_from(length).is_ok());
-    unsafe { u8::from((*owner).decrypt(&*mac.cast::<[u8; 16]>(), bytes_mut(message, length))) }
+    unsafe { u8::from((*owner).decrypt(&*mac.cast::<X25519Mac>(), bytes_mut(message, length))) }
 }
 
 crate::abi::layouts! {
@@ -672,6 +686,8 @@ mod tests {
         RustAuthenticationClientHandler, Services, new_single,
         openttd_rust_auth_handler_send_request, receive_request, receive_response, send_response,
     };
+    use crate::network_crypto::NetworkAuthenticationMethod;
+    use crate::network_crypto_internal::X25519_KEY_SIZE;
     use crate::packet;
     use std::ptr;
 
@@ -733,7 +749,7 @@ mod tests {
                     &raw const services,
                     NetworkAuthenticationMethod::X25519_PAKE,
                     is_server,
-                    &[secret; 32],
+                    &[secret; X25519_KEY_SIZE],
                     (&raw const client_password).cast_mut().cast(),
                     (&raw const server_password).cast(),
                     ptr::null(),

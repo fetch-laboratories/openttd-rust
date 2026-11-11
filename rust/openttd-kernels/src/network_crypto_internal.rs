@@ -3,6 +3,30 @@
 
 /// Number of bytes in X25519 public and secret keys.
 pub(crate) const X25519_KEY_SIZE: usize = 32;
+/// Number of bytes in X25519 nonces.
+pub(crate) const X25519_NONCE_SIZE: usize = 24;
+/// Number of bytes in X25519 message authentication codes.
+pub(crate) const X25519_MAC_SIZE: usize = 16;
+/// Number of random payload bytes in the authentication message.
+pub(crate) const X25519_KEY_EXCHANGE_MESSAGE_SIZE: usize = 8;
+
+/// Nonce storage projected into the existing session owner. The owner preserves
+/// X25519Nonce's destruction-time crypto wipe, just as it does for the key projections.
+pub(crate) type X25519Nonce = [u8; X25519_NONCE_SIZE];
+/// Container for an X25519 message authentication code.
+pub(crate) type X25519Mac = [u8; X25519_MAC_SIZE];
+/// Container for an X25519 key-exchange message.
+pub(crate) type X25519KeyExchangeMessage = [u8; X25519_KEY_EXCHANGE_MESSAGE_SIZE];
+
+/// `X25519Nonce::CreateRandom`: fill a nonce with random bytes. Initialize the
+/// existing owner field in place, retaining its generation and wipe lifetime.
+pub(crate) fn create_random_nonce(
+    nonce: &mut X25519Nonce,
+    random_bytes: impl FnOnce(&mut X25519Nonce),
+) {
+    random_bytes(nonce);
+}
+
 /// The borrowed key buffers keep their owner's existing wipe-on-destruction policy.
 pub(crate) type X25519Key = [u8; X25519_KEY_SIZE];
 /// Container for an X25519 public key.
