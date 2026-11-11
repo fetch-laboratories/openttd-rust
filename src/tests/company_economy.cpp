@@ -94,8 +94,8 @@ TEST_CASE("Company control - native owned-by error encodings")
  * type's interval is read from the native VehicleDefaultSettings record they return; the
  * per-type field selection and the ignored percent flag are company::control_tests (#736 F).
  * With no human company, GetFirstPlayableCompanyID's Company::CanAllocateItem grants the
- * allocation credit that constructing the company it returns consumes (#156: the selector,
- * not this test, calls the real binding). Retires with the native settings-table services
+ * allocation credit that the unindexed construction of the company it returns consumes
+ * (#156: the selector, not this test, calls the real binding). Retires with the native settings-table services
  * and the native company pool. */
 TEST_CASE("Company control - company or client service-interval defaults")
 {
@@ -107,7 +107,9 @@ TEST_CASE("Company control - company or client service-interval defaults")
 #ifdef WITH_ASSERT
 	CHECK(_company_pool.checked == 1);
 #endif
-	std::unique_ptr<Company> company(new (vacant) Company(STR_SV_UNNAMED, false));
+	/* Pool::GetNew(size) asserts and consumes the credit; placement at an index would not. */
+	std::unique_ptr<Company> company(new Company(STR_SV_UNNAMED, false));
+	CHECK(company->index == vacant);
 #ifdef WITH_ASSERT
 	CHECK(_company_pool.checked == 0);
 #endif
