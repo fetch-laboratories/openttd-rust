@@ -39,7 +39,7 @@ Under a Claude Code root, Opus handles all code-touching work; Sonnet handles on
 
 ## Delegation (user, 2026-11-08)
 
-Under either Claude Code or Codex, these rules move routine work off root, so that root's turns go to selection, policy rulings, briefs and the roadmap (user, 2026-11-10). Where they differ from [spawning](#spawning), they replace it. Implementers queue their own PRs; root keeps [CI administration](root-workflow.md#ci-administration) with the platform cadence, [cleanup](root-workflow.md#cleanup) and the stocktake, and neither batches nor merges PRs (user, 2026-11-10). Root watches each queued PR with the host's PR watch, counts each merge, and tells the implementer when the queue removes its PR.
+Under either Claude Code or Codex, these rules move routine work off root, so that root's turns go to selection, policy rulings, briefs and the roadmap (user, 2026-11-10). Where they differ from [spawning](#spawning), they replace it. Implementers queue their own PRs and wait on them in the queue; root keeps [CI administration](root-workflow.md#ci-administration) with the platform cadence, [cleanup](root-workflow.md#cleanup) and the stocktake, and neither batches, merges nor watches PRs (user, 2026-11-10 and 2026-11-11). Root counts merges from the first-parent history of `origin/rust-migration` and learns of a removal from the implementer's one-line report ([integration](root-workflow.md#integration)).
 
 ### Review loop
 
@@ -47,7 +47,7 @@ Under either Claude Code or Codex, these rules move routine work off root, so th
 - A PR has at most two review stages (steering 34). Root added a third on 11-10; in the ten hours that followed, its 11 acceptance sessions found no defect, while 16 re-checks found one.
   - The **source review**: one reviewer per function group where the PR's size calls for it.
   - One **re-check** of the fixing commits, only when a fix changed behaviour, evidence or a body's operations. It covers all fixing commits in one task and writes the PR's final disposition. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.
-- No agent is started to observe a CI run. An acceptance covers the source at the reviewed head. The implementer records the passing `native` run at that head in the status comment, then queues; the queue's Full repeats the tier on the merged tree.
+- An acceptance covers the source at the reviewed head. The implementer waits on its own `native` run in the background ([checks](workflow.md#checks)), records the passing run at that head in the status comment, then queues the PR and waits on the queue itself ([integration](root-workflow.md#integration)). No separate reviewer is started to re-verify a CI run. The queue's Full repeats the tier on the merged tree.
 - Root spawns reviewers from the [review brief](review-brief.md). The spawn adds only the PR, the reviewer's name, its function group, the other groups, the points the PR body flags, and the implementer's thread ID.
 - Reviewers rule on policy questions themselves, from the decisions recorded on the stream issues, and state each ruling in the report. Only a question no recorded decision answers waits for root.
 - Reviewer and implementer message each other directly, and root relays nothing (user, 2026-11-10). On 11-09, relays were 88 of root's 164 outgoing actions.
@@ -57,7 +57,7 @@ Under either Claude Code or Codex, these rules move routine work off root, so th
 
 ### Ready queue and pipelining
 
-- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each is a dispatch contract of at most five lines: its scope, its size, its file set checked against open PRs' actual edits, and what it waits on. The whole section stays under about 30 lines (provisional; steering 34 measured 19 lines at steering 33 and 32 lines of 1,118 words by 11-11). Fan-in, held-caller and retained-observation analysis, downstream sequencing and PR state go on the stream issue or PR.
+- The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each gives its scope, its size, its file set checked against open PRs' actual edits, what it waits on, and the constraints its implementer needs. Fan-in and held-caller analysis goes on the stream issue. PR state lives on the PR, not in the queue: copied there, it goes stale within hours (steering 34).
 - A planner refreshes the queue when no entry is ready for the next slot to free, and writes up to three entries at once (provisional; seven refreshes in the Codex root's ten hours cost about 610,000 uncached tokens). It edits only that roadmap section, in docs-only commits; these are the one exception to roadmap commits only at stocktakes, course changes and wind-down. An entry becomes selected when root dispatches it, and then leaves the queue: its state lives on its PR, not in the roadmap.
 - An implementer whose PR waits on review or the merge queue takes the next ready entry on a new branch, within the six-branch limit. Findings on its earlier PR come first. It keeps its agent path; each PR's title names the work. The two implementer slots therefore count agents that stay busy, not PRs.
 

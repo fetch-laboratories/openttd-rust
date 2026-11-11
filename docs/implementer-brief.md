@@ -48,5 +48,5 @@ Each reviewer tells you in one line when its report is posted, and gives its thr
 
 - Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - If a fix changed behaviour, evidence or a body's operations, ask root for one re-check, in one line naming the fixing commits ([review loop](team.md#review-loop)). For fixes limited to names, comments, types or argument structs with unchanged operations, say so in the status comment instead.
-- Record the passing `native` run at the reviewed head in the status comment, then queue the PR under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
+- Record the passing `native` run at the reviewed head in the status comment, then queue the PR and wait on the queue yourself under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
 - Otherwise ask root only for a fresh reviewer after a substantive rewrite or a base update that needs one, or when you and a reviewer disagree.
