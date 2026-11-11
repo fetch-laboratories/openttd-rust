@@ -26,13 +26,15 @@ pub(crate) fn get_tile_type(m: &TileTypeAccess, t: TileIndex) -> Option<TileType
 /// `GetTileType`'s bit extraction after the caller's original range assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
+#[allow(clippy::cast_possible_truncation)] // GB of a byte's high nibble.
 pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> TileType {
-    TileType(fields.kind() >> 4)
+    TileType(crate::bitmath_func::gb(u32::from(fields.kind()), 4, 4) as u8)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
+#[allow(clippy::cast_possible_truncation)] // GB of the type byte's low two bits.
 pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    Some(m.kind(TileIndex(t))? & 3)
+    Some(crate::bitmath_func::gb(u32::from(m.kind(TileIndex(t))?), 0, 2) as u8)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -57,10 +59,10 @@ fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     let x2 = (x1 + 1).min(map.max_x());
     let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
     Some([
-        tile_height(m, t)?,
-        tile_height(m, map.tile_xy(x2, y1).0)?,
-        tile_height(m, map.tile_xy(x1, y2).0)?,
-        tile_height(m, map.tile_xy(x2, y2).0)?,
+        tile_height(m, t)?,                     // N corner
+        tile_height(m, map.tile_xy(x2, y1).0)?, // W corner
+        tile_height(m, map.tile_xy(x1, y2).0)?, // E corner
+        tile_height(m, map.tile_xy(x2, y2).0)?, // S corner
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
@@ -68,6 +70,11 @@ fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
 #[inline(always)]
 fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
     use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
+    /* Due to the fact that tiles must connect with each other without leaving gaps, the
+     * biggest difference in height between any corner and 'min' is between 0, 1, or 2.
+     *
+     * Also, there is at most 1 corner with height difference of 2.
+     */
     let low = n.min(w).min(e.min(s));
     let high = n.max(w).max(e.max(s));
     let mut slope = SLOPE_FLAT;
@@ -91,11 +98,27 @@ pub(crate) fn get_tile_slope_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Op
 pub(crate) fn get_tile_slope(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<u8> {
     Some(get_tile_slope_z(m, t, x, y)?.0)
 }
-/// `IsTileFlat` without the height output.
+/// `IsTileFlat` without the height output: each corner is read only while the
+/// earlier ones match, as the original returns at the first difference.
 #[inline]
 pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<bool> {
-    let [height, x2_y1, x1_y2, x2_y2] = corners(m, t, x, y)?;
-    Some(x2_y1 == height && x1_y2 == height && x2_y2 == height)
+    m.available(TileIndex(t))?;
+    let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
+    let x1 = map.tile_x(TileIndex(t));
+    let y1 = map.tile_y(TileIndex(t));
+    let x2 = (x1 + 1).min(map.max_x());
+    let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
+    let z = tile_height(m, t)?;
+    for corner in [
+        map.tile_xy(x2, y1),
+        map.tile_xy(x1, y2),
+        map.tile_xy(x2, y2),
+    ] {
+        if tile_height(m, corner.0)? != z {
+            return Some(false);
+        }
+    }
+    Some(true)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -175,9 +198,19 @@ pub(crate) fn tile_height_outside_map(
     tile_height(
         tiles,
         map.tile_xy(
-            x.clamp(0, map.max_x().cast_signed()).cast_unsigned(),
-            y.clamp(0, crate::map_func::Map::max_y(height).cast_signed())
-                .cast_unsigned(),
+            crate::math::clamp(x, 0, map.max_x().cast_signed(), |ok| {
+                let _ = tiles.check(ok);
+            })
+            .cast_unsigned(),
+            crate::math::clamp(
+                y,
+                0,
+                crate::map_func::Map::max_y(height).cast_signed(),
+                |ok| {
+                    let _ = tiles.check(ok);
+                },
+            )
+            .cast_unsigned(),
         )
         .0,
     )
@@ -192,10 +225,10 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
     width: u32,
     height: u32,
 ) -> Option<(u8, i32)> {
-    let north = tile_height_outside_map(map, x, y, width, height)?;
-    let west = tile_height_outside_map(map, x.wrapping_add(1), y, width, height)?;
-    let east = tile_height_outside_map(map, x, y.wrapping_add(1), width, height)?;
-    let south = tile_height_outside_map(map, x.wrapping_add(1), y.wrapping_add(1), width, height)?;
+    let north = tile_height_outside_map(map, x, y, width, height)?; // N corner.
+    let west = tile_height_outside_map(map, x.wrapping_add(1), y, width, height)?; // W corner.
+    let east = tile_height_outside_map(map, x, y.wrapping_add(1), width, height)?; // E corner.
+    let south = tile_height_outside_map(map, x.wrapping_add(1), y.wrapping_add(1), width, height)?; // S corner.
     let (slope, height_z) = get_tile_slope_given_height([north, west, east, south]);
     Some((
         slope,
@@ -229,10 +262,8 @@ impl crate::map_func::World<'_> {
     #[inline(always)]
     pub(crate) fn owner(&self, t: u32) -> u8 {
         self.check(t < self.types.count() && self.kind(TileIndex(t)) != TileType::MP_VOID);
-        self.check(
-            self.kind(TileIndex(t)) != TileType::MP_HOUSE
-                && self.kind(TileIndex(t)) != TileType::MP_INDUSTRY,
-        );
+        self.check(self.kind(TileIndex(t)) != TileType::MP_HOUSE);
+        self.check(self.kind(TileIndex(t)) != TileType::MP_INDUSTRY);
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(TileIndex(t)))), 0, 5) as u8
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
@@ -281,10 +312,10 @@ impl crate::map_func::World<'_> {
                     .map_or(0, |f| i32::from(f.height()))
             };
             return get_tile_slope_given_height([
-                height(t),
-                height(map.tile_xy(x2, y1).0),
-                height(map.tile_xy(x1, y2).0),
-                height(map.tile_xy(x2, y2).0),
+                height(t),                     // Height of the North corner.
+                height(map.tile_xy(x2, y1).0), // Height of the West corner.
+                height(map.tile_xy(x1, y2).0), // Height of the East corner.
+                height(map.tile_xy(x2, y2).0), // Height of the South corner.
             ]);
         }
         self.tile_slope_z_outside(t)
@@ -359,6 +390,9 @@ pub(crate) fn set_tile_type(
     freeform_edges: impl FnOnce() -> bool,
 ) {
     w.check(w.types.available(TileIndex(t)).is_some());
+    /* VOID tiles (and no others) are exactly allowed at the lower left and right
+     * edges of the map. If _settings_game.construction.freeform_edges is true,
+     * the upper edges of the map are also VOID tiles. */
     if w.types.assertions() {
         w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
     }
