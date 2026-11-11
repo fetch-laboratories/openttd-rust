@@ -11,6 +11,7 @@ use crate::services::{ByteSpan, CommandCost, CommandCostServices, Cost, Services
 use crate::signs_type::{MAX_LENGTH_SIGN_NAME_CHARS, Sign, SignID};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::TILE_SIZE;
+use crate::tile_type::TileIndex;
 
 #[repr(C)]
 pub struct Services {
@@ -71,8 +72,14 @@ fn place(s: &Services, out: Cost<'_>, flags: u16, tile: u32, text: ByteSpan) -> 
             CompanyID((s.shared.current_company)())
         };
         let map = s.shared.map();
-        let x = map.tile_x(tile).wrapping_mul(TILE_SIZE).cast_signed();
-        let y = map.tile_y(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let x = map
+            .tile_x(TileIndex(tile))
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed();
+        let y = map
+            .tile_y(TileIndex(tile))
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed();
         let z = crate::movement::pixel_z(s.shared, x, y, false);
         return (s.place)(owner, x, y, z, text);
     }
@@ -106,8 +113,14 @@ fn relocate(s: &Services, out: Cost<'_>, flags: u16, id: SignID, tile: u32) {
     let si = editable(s, out, id);
     if !si.is_null() && flags & DoCommandFlag::EXECUTE != 0 {
         let map = s.shared.map();
-        let x = map.tile_x(tile).wrapping_mul(TILE_SIZE).cast_signed();
-        let y = map.tile_y(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let x = map
+            .tile_x(TileIndex(tile))
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed();
+        let y = map
+            .tile_y(TileIndex(tile))
+            .wrapping_mul(TILE_SIZE)
+            .cast_signed();
         let z = crate::movement::pixel_z(s.shared, x, y, false);
         unsafe { (s.relocate)(si, new_owner(s, si), x, y, z) };
     }

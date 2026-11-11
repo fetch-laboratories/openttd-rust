@@ -6,15 +6,15 @@
  */
 
 //! Planned road connectivity over the canonical map; `road.cpp`.
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::services::{RoadBits, Services};
-use crate::tile_type::{
-    MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TREES, MP_TUNNELBRIDGE, MP_WATER,
-};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// `IsPossibleCrossing`, including the foundation-adjusted surface.
 pub(crate) fn is_possible_crossing(world: &World<'_>, tile: u32, axis: u8) -> bool {
-    world.kind(tile) == MP_RAILWAY
+    world.kind(TileIndex(tile)) == TileType::MP_RAILWAY
         && world.rail_tile_type(tile) == crate::rail_map::RAIL_TILE_NORMAL
         && world.tracks(tile)
             == if axis == crate::direction_type::AXIS_X {
@@ -38,14 +38,21 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
     }
     let check = |ok| world.check(ok);
     for dir in crate::direction_type::DIAGDIR_BEGIN..crate::direction_type::DIAGDIR_END {
-        let neighbour = world.dimensions.tile_add_by_diag_dir_raw(tile, dir);
+        let neighbour = world
+            .dimensions
+            .tile_add_by_diag_dir(
+                TileIndex(tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         let target = crate::road_func::diag_dir_to_road_bits_raw(dir, check);
         if bits.0 & target != 0 {
             let mirrored = crate::road_func::mirror_road_bits(target, check);
             let connective = valid(neighbour)
-                && match world.kind(neighbour) {
-                    MP_CLEAR | MP_TREES => true,
-                    MP_TUNNELBRIDGE | MP_STATION | MP_ROAD => {
+                && match world.kind(TileIndex(neighbour)) {
+                    TileType::MP_CLEAR | TileType::MP_TREES => true,
+                    TileType::MP_TUNNELBRIDGE | TileType::MP_STATION | TileType::MP_ROAD => {
                         if world.is_normal_road_tile(neighbour) {
                             true
                         } else {
@@ -54,12 +61,14 @@ pub(crate) fn clean_up_road_bits(shared: &Services, tile: u32, mut bits: RoadBit
                             (road | tram) & mirrored != crate::road_type::ROAD_NONE
                         }
                     }
-                    MP_RAILWAY => is_possible_crossing(
+                    TileType::MP_RAILWAY => is_possible_crossing(
                         &world,
                         neighbour,
                         crate::direction_func::diag_dir_to_axis_raw(dir, check),
                     ),
-                    MP_WATER => !world.asserted(|m| crate::water_map::is_water(m, neighbour)),
+                    TileType::MP_WATER => {
+                        !world.asserted(|m| crate::water_map::is_water(m, neighbour))
+                    }
                     _ => false,
                 };
             if !connective {

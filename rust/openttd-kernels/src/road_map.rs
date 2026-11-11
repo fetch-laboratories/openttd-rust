@@ -7,6 +7,7 @@
 
 //! Shared `road_map.h` values.
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 /// `Roadside::Trees`.
 pub const ROADSIDE_TREES: Roadside = Roadside::Trees;
 /// `Roadside::Paved`.
@@ -42,7 +43,7 @@ pub(crate) fn get_road_tile_type(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<crate::services::RoadTileKind> {
-    let fields = m.require_type(tile, crate::tile_type::MP_ROAD)?;
+    let fields = m.require_type(TileIndex(tile), TileType::MP_ROAD)?;
     Some(crate::services::RoadTileKind(fields.m5() >> 6))
 }
 /// `IsNormalRoad`.
@@ -54,7 +55,7 @@ pub(crate) fn is_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> 
 #[allow(clippy::inline_always)]
 #[inline(always)]
 fn require_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
-    m.available(tile)?;
+    m.available(TileIndex(tile))?;
     if m.assertions() {
         m.check(is_normal_road(m, tile)?)?;
     }
@@ -71,9 +72,9 @@ pub(crate) fn get_road_bits(
     require_normal_road(m, tile)?;
     Some(crate::services::RoadBits(
         if kind.0 == crate::road_type::RTT_TRAM.0 {
-            m.m3(tile)?
+            m.m3(TileIndex(tile))?
         } else {
-            m.m5(tile)?
+            m.m5(TileIndex(tile))?
         } & 15,
     ))
 }
@@ -85,13 +86,13 @@ pub(crate) fn get_disallowed_road_directions(
     tile: u32,
 ) -> Option<u8> {
     require_normal_road(m, tile)?;
-    Some((m.m5(tile)? >> 4) & 3)
+    Some((m.m5(TileIndex(tile))? >> 4) & 3)
 }
 /// `GetRoadside`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_roadside(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<Roadside> {
-    Some(Roadside((m.m6(tile)? >> 3) & 7))
+    Some(Roadside((m.m6(TileIndex(tile))? >> 3) & 7))
 }
 /// `HasRoadWorks`.
 #[allow(clippy::inline_always)]
@@ -103,11 +104,10 @@ pub(crate) fn has_road_works(m: &crate::map_func::TileTypeAccess, tile: u32) -> 
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn may_have_road(m: &crate::map_func::TileTypeAccess, tile: TileIndex) -> Option<bool> {
-    use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-    Some(match crate::tile_map::get_tile_type(m, tile.0)? {
-        MP_ROAD => true,
-        MP_STATION => crate::station_map::is_any_road_stop(m, tile)?,
-        MP_TUNNELBRIDGE => {
+    Some(match crate::tile_map::get_tile_type(m, tile)? {
+        TileType::MP_ROAD => true,
+        TileType::MP_STATION => crate::station_map::is_any_road_stop(m, tile)?,
+        TileType::MP_TUNNELBRIDGE => {
             crate::tunnelbridge_map::get_tunnel_bridge_transport_type(m, tile)?.0
                 == crate::transport_type::TRANSPORT_ROAD
         }
@@ -117,7 +117,7 @@ pub(crate) fn may_have_road(m: &crate::map_func::TileTypeAccess, tile: TileIndex
 #[allow(clippy::inline_always)]
 #[inline(always)]
 fn require_may_have_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
-    m.available(tile)?;
+    m.available(TileIndex(tile))?;
     if m.assertions() {
         m.check(may_have_road(m, TileIndex(tile))?)?;
     }
@@ -131,7 +131,7 @@ pub(crate) fn get_road_type_road(
     tile: u32,
 ) -> Option<crate::services::RoadType> {
     require_may_have_road(m, tile)?;
-    Some(crate::services::RoadType(m.m4(tile)? & 63))
+    Some(crate::services::RoadType(m.m4(TileIndex(tile))? & 63))
 }
 /// `GetRoadTypeTram`, with the canonical `MayHaveRoad` precondition.
 #[allow(clippy::inline_always)]
@@ -142,7 +142,7 @@ pub(crate) fn get_road_type_tram(
 ) -> Option<crate::services::RoadType> {
     require_may_have_road(m, tile)?;
     Some(crate::services::RoadType(
-        u8::try_from((m.m8(tile)? >> 6) & 63).expect("six-bit road type"),
+        u8::try_from((m.m8(TileIndex(tile))? >> 6) & 63).expect("six-bit road type"),
     ))
 }
 /// `GetRoadType`.
@@ -187,7 +187,8 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn level_crossing_tile(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_ROAD && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
+        self.kind(TileIndex(t)) == TileType::MP_ROAD
+            && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
     }
     /// `IsLevelCrossing`, with `GetRoadTileType`'s tile-type assertion.
     pub(crate) fn level_crossing(&self, t: u32) -> bool {
@@ -196,7 +197,7 @@ impl crate::map_func::World<'_> {
     /// `IsCrossingBarred`.
     pub(crate) fn crossing_barred(&self, t: u32) -> bool {
         self.check(self.level_crossing(t));
-        crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 5)
+        crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 5)
     }
     /// `GetCrossingRailBits`: `AxisToTrackBits(GetCrossingRailAxis(t))`.
     pub(crate) fn crossing_rail_bits(&self, t: u32) -> u8 {
@@ -212,7 +213,7 @@ impl crate::map_func::World<'_> {
     /// `GetCrossingRoadAxis`, with its `IsLevelCrossing` assertion.
     pub(crate) fn crossing_road_axis(&self, t: u32) -> u8 {
         self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
-        Self::byte(self.types.m5(t)) & 1
+        Self::byte(self.types.m5(TileIndex(t))) & 1
     }
     /// `IsNormalRoad`.
     #[allow(clippy::inline_always)]
@@ -224,7 +225,7 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
-        self.asserted(|m| crate::tile_map::get_tile_type(m, t)) == crate::tile_type::MP_ROAD
+        self.asserted(|m| crate::tile_map::get_tile_type(m, TileIndex(t))) == TileType::MP_ROAD
             && self.is_normal_road(t)
     }
     /// `GetDisallowedRoadDirections`.
@@ -248,14 +249,14 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn road_depot(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_ROAD
+        self.kind(TileIndex(t)) == TileType::MP_ROAD
             && get_road_tile_type(&self.types, t).is_some_and(|kind| kind.0 == ROAD_TILE_DEPOT)
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
         self.check(self.road_depot(t));
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 0, 2) as u8
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -268,15 +269,15 @@ impl crate::map_func::World<'_> {
         self.asserted(|m| require_may_have_road(m, t));
         if !tram {
             let field = if self.is_normal_road_tile(t) {
-                Self::byte(self.types.m1(t))
+                Self::byte(self.types.m1(TileIndex(t)))
             } else {
-                Self::byte(self.types.m7(t))
+                Self::byte(self.types.m7(TileIndex(t)))
             };
             return field & 0x1F;
         }
         /* Trams don't need OWNER_TOWN, and remapping OWNER_NONE
          * to OWNER_TOWN makes it use one bit less */
-        let o = (Self::byte(self.types.m3(t)) >> 4) & 0xF;
+        let o = (Self::byte(self.types.m3(TileIndex(t))) >> 4) & 0xF;
         if o == crate::company_type::OWNER_TOWN {
             crate::company_type::OWNER_NONE
         } else {

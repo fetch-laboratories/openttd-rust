@@ -577,11 +577,12 @@ impl Services {
             &*self.newgrf_specs
         }
     }
-    /// Capture `Map::LogX()` once for a synchronous entry.
+    /// Capture `Map::LogX()` and native `TileAdd` policy for a synchronous entry.
     #[must_use]
     pub fn map(&self) -> Map {
-        // SAFETY: The table's statics address the live canonical `Map::log_x`.
-        Map::from_log_x(unsafe { (*self.map).log_x.read() })
+        // SAFETY: The immutable table and canonical statics outlive the entry;
+        // map reset/load/mutex yield is excluded while its dimensions are used.
+        unsafe { (*self.map).dimensions() }
     }
     /// Draw one shared random word.
     #[must_use]
@@ -640,6 +641,7 @@ crate::abi::layouts! {
         log_x,
         log_y,
         assertions,
+        debug,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
         kind => type,

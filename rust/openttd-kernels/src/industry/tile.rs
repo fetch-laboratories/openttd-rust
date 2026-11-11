@@ -351,8 +351,8 @@ pub(crate) fn animate_tile_industry(
     reason = "CreateChimneySmoke keeps the original's implicit C++ integer conversions"
 )]
 fn create_chimney_smoke(tile: TileIndex, map: crate::services::Map, t: &TileServices) {
-    let x = map.tile_x(tile.0).wrapping_mul(TILE_SIZE);
-    let y = map.tile_y(tile.0).wrapping_mul(TILE_SIZE);
+    let x = map.tile_x(tile).wrapping_mul(TILE_SIZE);
+    let y = map.tile_y(tile).wrapping_mul(TILE_SIZE);
     let z = unsafe { (t.pixel_max_z)(tile.0) };
     crate::effect::openttd_rust_effect_create(
         x.wrapping_add(15) as i32,
@@ -406,7 +406,7 @@ fn make_industry_tile_bigger(
             // Do not require an industry tile to be after the first two GFX_OILRIG_1 tiles
             // (like the default oil rig). Do a proper check to ensure the tiles belong to
             // the same industry and based on that build the oil rig's station.
-            let other = TileIndex(tile.0.wrapping_add(map.diff(0, 1)));
+            let other = TileIndex(tile.0.wrapping_add(map.diff(0, 1).cast_unsigned()));
             if TileType((s.shared().tile_type)(other.0)) == TileType::MP_INDUSTRY
                 && t.get_industry_gfx(other) == IndustryGfx::GFX_OILRIG_1
                 && unsafe { (t.industry_index)(tile.0) == (t.industry_index)(other.0) }
@@ -442,10 +442,10 @@ fn tile_loop_industry_bubble_generator(tile: TileIndex, s: &Services, map: crate
     ambient_sound(tile, SoundFx::SND_2E_BUBBLE_GENERATOR, s);
     let dir = (s.shared().random() & 3) as usize;
     let v = crate::effect::openttd_rust_effect_create_above(
-        map.tile_x(tile.0)
+        map.tile_x(tile)
             .wrapping_mul(TILE_SIZE)
             .wrapping_add(i32::from(BUBBLE_SPAWN_LOCATION[0][dir]) as u32) as i32,
-        map.tile_y(tile.0)
+        map.tile_y(tile)
             .wrapping_mul(TILE_SIZE)
             .wrapping_add(i32::from(BUBBLE_SPAWN_LOCATION[1][dir]) as u32) as i32,
         i32::from(BUBBLE_SPAWN_LOCATION[2][dir]),
@@ -607,8 +607,8 @@ pub(crate) unsafe fn tile_loop(
         }
         IndustryGfx::GFX_COPPER_MINE_CHIMNEY => {
             crate::effect::openttd_rust_effect_create_above(
-                map.tile_x(tile.0).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
-                map.tile_y(tile.0).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
+                map.tile_x(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
+                map.tile_y(tile).wrapping_mul(TILE_SIZE).wrapping_add(6) as i32,
                 43,
                 EV_COPPER_MINE_SMOKE,
             );

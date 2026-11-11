@@ -15,6 +15,7 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
 use super::{VehicleRef, VehicleServices, VehicleType};
 use crate::debug::debug;
+use crate::tile_type::TileIndex;
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
@@ -480,7 +481,8 @@ impl Refresher {
                 EdgeUpdateModes::RESTRICTED
             };
             // Travel time at half the consist's maximum speed, in tiles/tick.
-            let distance = map.distance_manhattan((s.location)(st), (s.location)(st_to));
+            let distance =
+                map.distance_manhattan(TileIndex((s.location)(st)), TileIndex((s.location)(st_to)));
             let time_estimate = distance.wrapping_mul(4096) / (s.display_speed)(v).cast_unsigned();
 
             // While full loading, add an estimate of what would have been

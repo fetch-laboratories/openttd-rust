@@ -814,7 +814,7 @@ unsafe fn patch_variable(s: &Services, pn: u8) -> u32 {
             },
             0x11 => s.colourmap_sprite,
             0x13 => {
-                let x = u32::from(s.shared().map().log_x).wrapping_sub(6) as u8;
+                let x = s.shared().map().log_x.wrapping_sub(6) as u8;
                 let y = s.shared().map_log_y().wrapping_sub(6) as u8;
                 let bits = if x == y {
                     1

@@ -8,6 +8,8 @@
 //! Helpers of `tile_map.h` for the audited map view.
 //! `None` denotes an unavailable raw backend or a failed native precondition.
 use crate::map_func::TileTypeAccess;
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -17,48 +19,48 @@ pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
+pub(crate) fn get_tile_type(m: &TileTypeAccess, t: TileIndex) -> Option<TileType> {
     let fields = m.require_range(t)?;
     Some(get_tile_type_from_fields(&fields))
 }
 /// `GetTileType`'s bit extraction after the caller's original range assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> u8 {
-    fields.kind() >> 4
+pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> TileType {
+    TileType(fields.kind() >> 4)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    Some(m.kind(t)? & 3)
+    Some(m.kind(TileIndex(t))? & 3)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bool> {
-    m.available(0)?;
-    Some(t < count && get_tile_type(m, t)? != crate::tile_type::MP_VOID)
+    m.available(TileIndex(0))?;
+    Some(t < count && get_tile_type(m, TileIndex(t))? != TileType::MP_VOID)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
-    let fields = m.require_range(t)?;
+    let fields = m.require_range(TileIndex(t))?;
     Some(i32::from(fields.height()))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 #[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
-    m.available(t)?;
+    m.available(TileIndex(t))?;
     let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
-    let x1 = map.tile_x(t);
-    let y1 = map.tile_y(t);
+    let x1 = map.tile_x(TileIndex(t));
+    let y1 = map.tile_y(TileIndex(t));
     let x2 = (x1 + 1).min(map.max_x());
     let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
     Some([
         tile_height(m, t)?,
-        tile_height(m, map.tile_xy(x2, y1))?,
-        tile_height(m, map.tile_xy(x1, y2))?,
-        tile_height(m, map.tile_xy(x2, y2))?,
+        tile_height(m, map.tile_xy(x2, y1).0)?,
+        tile_height(m, map.tile_xy(x1, y2).0)?,
+        tile_height(m, map.tile_xy(x2, y2).0)?,
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
@@ -176,7 +178,8 @@ pub(crate) fn tile_height_outside_map(
             x.clamp(0, map.max_x().cast_signed()).cast_unsigned(),
             y.clamp(0, crate::map_func::Map::max_y(height).cast_signed())
                 .cast_unsigned(),
-        ),
+        )
+        .0,
     )
 }
 /// `GetTilePixelSlopeOutsideMap`.
@@ -225,12 +228,12 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn owner(&self, t: u32) -> u8 {
-        self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
+        self.check(t < self.types.count() && self.kind(TileIndex(t)) != TileType::MP_VOID);
         self.check(
-            self.kind(t) != crate::tile_type::MP_HOUSE
-                && self.kind(t) != crate::tile_type::MP_INDUSTRY,
+            self.kind(TileIndex(t)) != TileType::MP_HOUSE
+                && self.kind(TileIndex(t)) != TileType::MP_INDUSTRY,
         );
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(TileIndex(t)))), 0, 5) as u8
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
     #[allow(clippy::inline_always)]
@@ -269,19 +272,19 @@ impl crate::map_func::World<'_> {
         if t < self.types.count() {
             // Clamped corners of an in-range tile are in range: no `TileHeight` assertion fails.
             let map = self.dimensions;
-            let (x1, y1) = (map.tile_x(t), map.tile_y(t));
+            let (x1, y1) = (map.tile_x(TileIndex(t)), map.tile_y(TileIndex(t)));
             let x2 = (x1 + 1).min(map.max_x());
             let y2 = (y1 + 1).min(crate::map_func::Map::max_y(size_y));
             let height = |c: u32| {
                 self.types
-                    .require_range(c)
+                    .require_range(TileIndex(c))
                     .map_or(0, |f| i32::from(f.height()))
             };
             return get_tile_slope_given_height([
                 height(t),
-                height(map.tile_xy(x2, y1)),
-                height(map.tile_xy(x1, y2)),
-                height(map.tile_xy(x2, y2)),
+                height(map.tile_xy(x2, y1).0),
+                height(map.tile_xy(x1, y2).0),
+                height(map.tile_xy(x2, y2).0),
             ]);
         }
         self.tile_slope_z_outside(t)
@@ -332,10 +335,10 @@ pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
 }
 /// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
 pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
-    w.check(w.types.available(t).is_some());
+    w.check(w.types.available(TileIndex(t)).is_some());
     let map = w.dimensions;
-    let x = map.tile_x(t);
-    let y = map.tile_y(t);
+    let x = map.tile_x(TileIndex(t));
+    let y = map.tile_y(TileIndex(t));
     x < map.max_x()
         && y < crate::map_func::Map::max_y(w.size_y())
         && ((x > 0 && y > 0) || !freeform_edges)
@@ -343,9 +346,9 @@ pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edg
 /// `SetTileHeight`.
 #[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
 pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: u32, height: u32) {
-    w.check(w.types.available(t).is_some());
+    w.check(w.types.available(TileIndex(t)).is_some());
     w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
-    let _ = w.types.set_height(t, height as u8);
+    let _ = w.types.set_height(TileIndex(t), height as u8);
 }
 /// `SetTileType`; the inner-tile assertion reads `freeform_edges` only in assertion builds.
 #[allow(clippy::cast_possible_truncation)] // `SB` assigns the promoted result to a byte.
@@ -355,13 +358,13 @@ pub(crate) fn set_tile_type(
     kind: u8,
     freeform_edges: impl FnOnce() -> bool,
 ) {
-    w.check(w.types.available(t).is_some());
+    w.check(w.types.available(TileIndex(t)).is_some());
     if w.types.assertions() {
         w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
     }
-    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(t)));
+    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(TileIndex(t))));
     crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind));
-    let _ = w.types.set_kind(t, value as u8);
+    let _ = w.types.set_kind(TileIndex(t), value as u8);
 }
 
 #[cfg(test)]

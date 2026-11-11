@@ -22,6 +22,7 @@
     clippy::collapsible_if,
     clippy::verbose_bit_mask
 )]
+use crate::direction_type::DiagDirection;
 use crate::direction_type::{DirDiff, Direction};
 use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
@@ -1089,25 +1090,57 @@ impl Game<'_> {
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
                 state |= self.check_crossing(t);
-                t = self.services.map().tile_add_by_diag_dir_raw(t, d);
+                t = self
+                    .services
+                    .map()
+                    .tile_add_by_diag_dir(
+                        TileIndex(t),
+                        DiagDirection(d),
+                        crate::map_func::native_check,
+                    )
+                    .0;
             }
         }
         self.update_crossing_tile(tile, sound, state);
         for d in [dir, dir ^ 2] {
-            let mut t = self.services.map().tile_add_by_diag_dir_raw(tile, d);
+            let mut t = self
+                .services
+                .map()
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(d),
+                    crate::map_func::native_check,
+                )
+                .0;
             while t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
             {
                 self.update_crossing_tile(t, sound, state);
-                t = self.services.map().tile_add_by_diag_dir_raw(t, d);
+                t = self
+                    .services
+                    .map()
+                    .tile_add_by_diag_dir(
+                        TileIndex(t),
+                        DiagDirection(d),
+                        crate::map_func::native_check,
+                    )
+                    .0;
             }
         }
     }
     fn adjacent_crossing_dirty(&self, tile: u32, axis: u64) {
         let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
         for d in [dir, dir ^ 2] {
-            let t = self.services.map().tile_add_by_diag_dir_raw(tile, d);
+            let t = self
+                .services
+                .map()
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(d),
+                    crate::map_func::native_check,
+                )
+                .0;
             if t < self.services.map_size()
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
                 && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
@@ -1724,7 +1757,15 @@ impl Game<'_> {
                                     < self.wait_twoway() * (self.leaves.day_ticks)(id) * 2
                             {
                                 let dir = (self.leaves.trackdir_exit)(id, td) as u8;
-                                let tile = self.services.map().tile_add_by_diag_dir_raw(new, dir);
+                                let tile = self
+                                    .services
+                                    .map()
+                                    .tile_add_by_diag_dir(
+                                        TileIndex(new),
+                                        DiagDirection(dir),
+                                        crate::map_func::native_check,
+                                    )
+                                    .0;
                                 let mut waiting = false;
                                 self.visit_tile(tile, |u| {
                                     let other_speed: u16 = u.vehicle().speed();
@@ -2587,7 +2628,15 @@ impl Game<'_> {
             };
         }
         let dir = (self.leaves.trackdir_exit)(id, self.trackdir(id)) as u8;
-        let tile = self.services.map().tile_add_by_diag_dir_raw(v_tile, dir);
+        let tile = self
+            .services
+            .map()
+            .tile_add_by_diag_dir(
+                TileIndex(v_tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if tile == INVALID_TILE
             || !is_tile_type(self.services, tile, MP_RAILWAY)
             || (self.leaves.has_signals)(Handle::NONE, tile) == 0

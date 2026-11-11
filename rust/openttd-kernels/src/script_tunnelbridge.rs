@@ -13,9 +13,12 @@
 //! through the integrated tunnel/bridge command table at each original call.
 #![allow(unsafe_code)] // Exported symbol attributes and the list owner.
 
+use crate::direction_type::DiagDirection;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, company_mode_valid, enforce, valid, world};
 use crate::script_vehicle::{VT_RAIL, VT_ROAD, VT_WATER};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tunnelbridge_cmd::TunnelBridgeServices;
 
 /// `ScriptBridge::IsValidBridge`: `bridge_type < MAX_BRIDGES` and the type is
@@ -27,12 +30,12 @@ fn valid_bridge(tb: &TunnelBridgeServices, bridge_type: u32) -> bool {
 
 fn bridge_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile)
 }
 
 fn tunnel_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.tunnel(tile)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.tunnel(tile)
 }
 
 /// `ScriptBridge::GetBridgeType`; `(BridgeType)-1` for other tiles.
@@ -144,7 +147,10 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
     if direction == crate::direction_type::INVALID_DIAGDIR {
         return crate::tile_type::INVALID_TILE;
     }
-    let delta = w.dimensions.tile_offs_by_diag_dir_raw(direction);
+    let delta = w
+        .dimensions
+        .tile_offs_by_diag_dir(DiagDirection(direction), crate::map_func::native_check)
+        .cast_unsigned();
     loop {
         tile = tile.wrapping_add(delta);
         if !valid(&w, tile) {
@@ -187,7 +193,8 @@ fn build_bridge(s: &Services, vehicle_type: u32, start: u32, end: u32) -> bool {
     enforce(start != end, ERR_PRECONDITION_FAILED)
         && enforce(valid(&w, start) && valid(&w, end), ERR_PRECONDITION_FAILED)
         && enforce(
-            m.tile_x(start) == m.tile_x(end) || m.tile_y(start) == m.tile_y(end),
+            m.tile_x(TileIndex(start)) == m.tile_x(TileIndex(end))
+                || m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)),
             ERR_PRECONDITION_FAILED,
         )
         && vehicle_preconditions(s, vehicle_type, true)
@@ -222,7 +229,10 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
 ) -> RoadPiece {
     let w = world(s);
     let check = |ok| w.check(ok);
-    let dir_1 = w.dimensions.diagdir_between_tiles(end, start);
+    let dir_1 = w
+        .dimensions
+        .diagdir_between_tiles(TileIndex(end), TileIndex(start))
+        .0;
     let dir_2 = crate::direction_func::reverse_diag_dir_raw(dir_1, check);
     let (tile, dir, bits_dir) = if first != 0 {
         (start, dir_1, dir_2)
@@ -231,7 +241,11 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     };
     check(dir < 4);
     RoadPiece {
-        tile: tile.wrapping_add(w.dimensions.tile_offs_by_diag_dir_raw(dir)),
+        tile: tile.wrapping_add(
+            w.dimensions
+                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
+                .cast_unsigned(),
+        ),
         bits: crate::road_func::diag_dir_to_road_bits_raw(bits_dir, check),
     }
 }

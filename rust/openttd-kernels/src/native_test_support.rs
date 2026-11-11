@@ -9,6 +9,7 @@
 #![allow(unsafe_code, clippy::too_many_lines)]
 use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
+use crate::tile_type::{TileIndex, TileType};
 
 /// Observe the production edge timestamp calculation in the original graph trace.
 /// # Safety
@@ -67,7 +68,9 @@ pub unsafe extern "C" fn openttd_rust_shared_tile_type(
     callback: extern "C" fn(u32) -> u8,
     tile: u32,
 ) -> u8 {
-    unsafe { TileTypeAccess::raw((*statics).load().0, callback) }.read(tile)
+    unsafe { TileTypeAccess::raw((*statics).load().0, callback) }
+        .read(TileIndex(tile))
+        .0
 }
 
 /// Native default probe: compare audited reads with the unchanged typed services.
@@ -97,8 +100,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     {
         return u8::from(false);
     }
-    match map.read(tile) {
-        0 => {
+    match map.read(TileIndex(tile)) {
+        TileType::MP_CLEAR => {
             use crate::clear_map::{
                 get_clear_counter_raw, get_clear_density_raw, get_clear_ground_raw, get_fence_raw,
                 get_field_type, get_industry_index_of_field_raw, is_snow_tile_raw,
@@ -137,7 +140,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 return u8::from(false);
             }
         }
-        4 => {
+        TileType::MP_TREES => {
             use crate::tree_map::{
                 get_tree_count_raw, get_tree_density_raw, get_tree_ground_raw, get_tree_growth_raw,
                 get_tree_type_raw,
@@ -154,16 +157,16 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         }
         _ => {}
     }
-    let kind = map.read(tile);
+    let kind = map.read(TileIndex(tile));
     u8::from(
         (!allocation.assertions
-            || kind == 0
+            || kind == TileType::MP_CLEAR
             || crate::clear_map::is_snow_tile_raw(&map, tile).is_none())
             && (!allocation.assertions
-                || kind == 4
+                || kind == TileType::MP_TREES
                 || crate::tree_map::get_tree_type_raw(&map, tile).is_none())
             && (!allocation.assertions
-                || kind == 6
+                || kind == TileType::MP_WATER
                 || crate::water_map::is_coast(&map, tile).is_none())
             && (allocation.assertions || crate::clear_map::is_snow_tile_raw(&map, tile).is_some())
             && crate::movement::native_test_support::map_read_probe(

@@ -23,6 +23,7 @@ use crate::company_type::CompanyID;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
+use crate::direction_type::DiagDirection;
 use crate::rail_cmd::{
     CROSSING_SLOPES, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR, RailCommandServices,
     TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -35,6 +36,7 @@ use crate::slope_func::{
     get_slope_max_z_raw, is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 use crate::witness as w;
 /// Opaque caller-owned native affected-road-vehicle list.
@@ -263,11 +265,7 @@ impl<'a> Ctx<'a> {
         let company = unsafe { &*(self.commands.company)() };
         error.make_error(company.owned_by);
         if (company.local_company)() == (company.finance.current_company)() {
-            (error.1.encode_owned_by)(
-                error.0,
-                crate::company_type::Owner::TOWN,
-                crate::tile_type::TileIndex(tile),
-            );
+            (error.1.encode_owned_by)(error.0, crate::company_type::Owner::TOWN, TileIndex(tile));
         }
     }
 
@@ -449,8 +447,16 @@ impl<'a> Ctx<'a> {
         let mut neighbours = 0;
         for dir in 0..4 {
             if present & dir_bit(dir) != 0
-                && self.any_bits(self.map.tile_add_by_diag_dir_raw(tile, dir), rtt)
-                    & dir_bit(dir ^ 2)
+                && self.any_bits(
+                    self.map
+                        .tile_add_by_diag_dir(
+                            TileIndex(tile),
+                            DiagDirection(dir),
+                            crate::map_func::native_check,
+                        )
+                        .0,
+                    rtt,
+                ) & dir_bit(dir ^ 2)
                     != 0
             {
                 neighbours |= dir_bit(dir);
@@ -801,8 +807,8 @@ impl<'a> Ctx<'a> {
         cost.error(INVALID_STRING_ID);
     }
     fn length(&self, tile: u32, end: u32) -> u32 {
-        let a = (self.map.tile_x(tile) + self.map.tile_y(tile)) as i32;
-        let b = (self.map.tile_x(end) + self.map.tile_y(end)) as i32;
+        let a = (self.map.tile_x(TileIndex(tile)) + self.map.tile_y(TileIndex(tile))) as i32;
+        let b = (self.map.tile_x(TileIndex(end)) + self.map.tile_y(TileIndex(end))) as i32;
         a.abs_diff(b).wrapping_sub(1)
     }
     fn dirty_wormhole(&self, tile: u32, end: u32) {
@@ -850,7 +856,11 @@ impl<'a> Ctx<'a> {
                     company = OWNER_NONE;
                 } else {
                     let edge = (self.s.town_edge)(town);
-                    if self.map.distance_square_raw(tile, edge.tile) > edge.radius {
+                    if self
+                        .map
+                        .distance_square(TileIndex(tile), TileIndex(edge.tile))
+                        > edge.radius
+                    {
                         company = OWNER_NONE;
                     }
                 }
@@ -1253,7 +1263,14 @@ impl<'a> Ctx<'a> {
         }
     }
     fn connect(&self, tile: u32, rt: u8, dir: u8) -> bool {
-        let tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
+        let tile = self
+            .map
+            .tile_add_by_diag_dir(
+                TileIndex(tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
@@ -1271,9 +1288,9 @@ impl<'a> Ctx<'a> {
             && crate::road::val_param_road_type(self.shared, rt)
             && axis < 2
             && (if axis == 0 {
-                self.map.tile_y(start) == self.map.tile_y(end)
+                self.map.tile_y(TileIndex(start)) == self.map.tile_y(TileIndex(end))
             } else {
-                self.map.tile_x(start) == self.map.tile_x(end)
+                self.map.tile_x(TileIndex(start)) == self.map.tile_x(TileIndex(end))
             })
     }
     fn build_long(
@@ -1379,7 +1396,14 @@ impl<'a> Ctx<'a> {
             if tile == end {
                 break;
             }
-            tile = self.map.tile_add_by_diag_dir_raw(tile, dir);
+            tile = self
+                .map
+                .tile_add_by_diag_dir(
+                    TileIndex(tile),
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                )
+                .0;
         }
         if !success {
             cost.take(last);

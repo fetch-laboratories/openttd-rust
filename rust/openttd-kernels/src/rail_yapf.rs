@@ -147,8 +147,8 @@ impl TrainFacts {
         let tile = v.tile();
         let rear_tile = rear.tile();
         let map = crate::map_func::Map::from_log_x(input.map_x.trailing_zeros());
-        let virtual_tile = map.tile_virt_xy(v.x() as u32, v.y() as u32);
-        let rear_virtual_tile = map.tile_virt_xy(rear.x() as u32, rear.y() as u32);
+        let virtual_tile = map.tile_virt_xy(v.x() as u32, v.y() as u32).0;
+        let rear_virtual_tile = map.tile_virt_xy(rear.x() as u32, rear.y() as u32).0;
         let dest_tile = v.dest_tile();
         let length = u32::from(read_field!(v.ground_cache(), cached_total_length));
         let speed = u32::from(v.max_speed().min(v.current_order().max_speed()));

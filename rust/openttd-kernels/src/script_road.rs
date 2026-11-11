@@ -11,6 +11,7 @@
 //! Command wrappers keep their native mode macro first.
 #![allow(unsafe_code)] // Exported symbol attributes and the borrowed tile span.
 
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::road_type::{
     DRD_BOTH, DRD_NONE, DRD_NORTHBOUND, DRD_SOUTHBOUND, ROAD_E, ROAD_N, ROAD_NE, ROAD_NONE,
@@ -23,6 +24,8 @@ use crate::script_tile::{
 use crate::slope_func::{
     SLOPE_EW, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, SLOPE_W, SLOPE_WSE,
 };
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// `ScriptRoad::ROADVEHTYPE_BUS` and `ROADVEHTYPE_TRUCK`.
 const ROADVEHTYPE_BUS: u32 = 0;
@@ -121,7 +124,7 @@ fn current_road_tile(s: &Services, tile: u32, read: impl Fn(&World<'_>, u8) -> b
 
 fn road_depot_tile(s: &Services, tile: u32) -> bool {
     current_road_tile(s, tile, |w, rt| {
-        w.kind(tile) == crate::tile_type::MP_ROAD
+        w.kind(TileIndex(tile)) == TileType::MP_ROAD
             && w.road_tile_type(tile).0 == crate::road_map::ROAD_TILE_DEPOT
             && has_present(w, tile, rt)
     })
@@ -144,7 +147,7 @@ fn road_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(tile) == crate::tile_type::MP_ROAD
+    (w.kind(TileIndex(tile)) == TileType::MP_ROAD
         && w.road_tile_type(tile).0 != crate::road_map::ROAD_TILE_DEPOT)
         || drive_through_station_tile(s, tile)
 }
@@ -196,16 +199,20 @@ fn tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     }
     let m = w.dimensions;
     /* Tiles not neighbouring */
-    if m.distance_manhattan(t1, t2) != 1 {
+    if m.distance_manhattan(TileIndex(t1), TileIndex(t2)) != 1 {
         return false;
     }
     let tram = crate::road::availability::get_road_tram_type(script_host::active_road_type()).0;
     let r1 = any_road_bits(s, t1, tram);
     let r2 = any_road_bits(s, t2, tram);
     #[allow(clippy::comparison_chain)]
-    let dir_1: u8 = if m.tile_x(t1) == m.tile_x(t2) {
-        if m.tile_y(t1) < m.tile_y(t2) { 2 } else { 0 }
-    } else if m.tile_x(t1) < m.tile_x(t2) {
+    let dir_1: u8 = if m.tile_x(TileIndex(t1)) == m.tile_x(TileIndex(t2)) {
+        if m.tile_y(TileIndex(t1)) < m.tile_y(TileIndex(t2)) {
+            2
+        } else {
+            0
+        }
+    } else if m.tile_x(TileIndex(t1)) < m.tile_x(TileIndex(t2)) {
         1
     } else {
         3
@@ -461,7 +468,9 @@ pub extern "C" fn openttd_rust_script_road_can_build_parts_here(
         return -1;
     }
     let m = w.dimensions;
-    if m.distance_manhattan(tile, start) != 1 || m.distance_manhattan(tile, end) != 1 {
+    if m.distance_manhattan(TileIndex(tile), TileIndex(start)) != 1
+        || m.distance_manhattan(TileIndex(tile), TileIndex(end)) != 1
+    {
         return -1;
     }
     let index = |x, y| crate::script_tile::openttd_rust_script_map_tile_index(s, x, y);
@@ -494,15 +503,20 @@ pub extern "C" fn openttd_rust_script_road_can_build_parts_here(
 
 /// `NeighbourHasReachableRoad`.
 fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbour: u8) -> bool {
-    let neighbour_tile = w.dimensions.tile_add_by_diag_dir_raw(start_tile, neighbour);
+    let neighbour_tile = w
+        .dimensions
+        .tile_add_by_diag_dir(
+            TileIndex(start_tile),
+            DiagDirection(neighbour),
+            crate::map_func::native_check,
+        )
+        .0;
     if !has_present(w, neighbour_tile, rt) {
         return false;
     }
-    match w.kind(neighbour_tile) {
-        crate::tile_type::MP_ROAD => {
-            w.road_tile_type(neighbour_tile).0 != crate::road_map::ROAD_TILE_DEPOT
-        }
-        crate::tile_type::MP_STATION => {
+    match w.kind(TileIndex(neighbour_tile)) {
+        TileType::MP_ROAD => w.road_tile_type(neighbour_tile).0 != crate::road_map::ROAD_TILE_DEPOT,
+        TileType::MP_STATION => {
             w.drive_through_stop_tile(neighbour_tile)
                 && crate::direction_func::diag_dir_to_axis_raw(neighbour, check(w))
                     == w.drive_through_axis(neighbour_tile)
@@ -526,7 +540,7 @@ pub extern "C" fn openttd_rust_script_road_neighbour_count(s: &Services, tile: u
     let rt = current_road_type() as u8;
     let m = w.dimensions;
     let mut neighbour = 0;
-    if m.tile_x(tile) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NE) {
+    if m.tile_x(TileIndex(tile)) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NE) {
         neighbour += 1;
     }
     if neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_SE) {
@@ -535,7 +549,7 @@ pub extern "C" fn openttd_rust_script_road_neighbour_count(s: &Services, tile: u
     if neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_SW) {
         neighbour += 1;
     }
-    if m.tile_y(tile) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NW) {
+    if m.tile_y(TileIndex(tile)) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NW) {
         neighbour += 1;
     }
     neighbour
@@ -549,7 +563,12 @@ pub extern "C" fn openttd_rust_script_road_depot_front_tile(s: &Services, depot:
     }
     let w = world(s);
     w.dimensions
-        .tile_add_by_diag_dir_raw(depot, w.road_depot_dir(depot))
+        .tile_add_by_diag_dir(
+            TileIndex(depot),
+            DiagDirection(w.road_depot_dir(depot)),
+            crate::map_func::native_check,
+        )
+        .0
 }
 
 /// `ScriptRoad::GetRoadStationFrontTile`.
@@ -562,9 +581,21 @@ pub extern "C" fn openttd_rust_script_road_station_front_tile(s: &Services, stat
     if w.bay_stop(station) {
         return w
             .dimensions
-            .tile_add_by_diag_dir_raw(station, w.bay_dir(station));
+            .tile_add_by_diag_dir(
+                TileIndex(station),
+                DiagDirection(w.bay_dir(station)),
+                crate::map_func::native_check,
+            )
+            .0;
     }
-    station.wrapping_sub(w.dimensions.offs_by_axis(w.drive_through_axis(station)))
+    station.wrapping_sub(
+        w.dimensions
+            .offs_by_axis(
+                crate::direction_type::Axis(w.drive_through_axis(station)),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned(),
+    )
 }
 
 /// `ScriptRoad::GetDriveThroughBackTile`.
@@ -577,7 +608,14 @@ pub extern "C" fn openttd_rust_script_road_drive_through_back_tile(
         return crate::tile_type::INVALID_TILE;
     }
     let w = world(s);
-    station.wrapping_add(w.dimensions.offs_by_axis(w.drive_through_axis(station)))
+    station.wrapping_add(
+        w.dimensions
+            .offs_by_axis(
+                crate::direction_type::Axis(w.drive_through_axis(station)),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned(),
+    )
 }
 
 /// `ScriptRoad::ConvertRoadType` preconditions after the native company-mode check.
@@ -597,7 +635,8 @@ fn straight_pair(s: &Services, start: u32, end: u32) -> bool {
         && enforce(valid(&w, start), ERR_PRECONDITION_FAILED)
         && enforce(valid(&w, end), ERR_PRECONDITION_FAILED)
         && enforce(
-            m.tile_x(start) == m.tile_x(end) || m.tile_y(start) == m.tile_y(end),
+            m.tile_x(TileIndex(start)) == m.tile_x(TileIndex(end))
+                || m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)),
             ERR_PRECONDITION_FAILED,
         )
 }
@@ -625,7 +664,7 @@ pub extern "C" fn openttd_rust_script_road_build(
         return REFUSED;
     }
     let m = world(s).dimensions;
-    if m.tile_y(start) == m.tile_y(end) {
+    if m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)) {
         crate::direction_type::AXIS_X
     } else {
         crate::direction_type::AXIS_Y
@@ -647,13 +686,13 @@ fn entrance_dir(w: &World<'_>, tile: u32, front: u32) -> u8 {
     use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
     let m = w.dimensions;
     #[allow(clippy::if_same_then_else, clippy::comparison_chain)]
-    if m.tile_x(tile) == m.tile_x(front) {
-        if m.tile_y(tile) < m.tile_y(front) {
+    if m.tile_x(TileIndex(tile)) == m.tile_x(TileIndex(front)) {
+        if m.tile_y(TileIndex(tile)) < m.tile_y(TileIndex(front)) {
             DIAGDIR_SE
         } else {
             DIAGDIR_NW
         }
-    } else if m.tile_x(tile) < m.tile_x(front) {
+    } else if m.tile_x(TileIndex(tile)) < m.tile_x(TileIndex(front)) {
         DIAGDIR_SW
     } else {
         DIAGDIR_NE
@@ -694,7 +733,9 @@ pub extern "C" fn openttd_rust_script_road_station(
         return REFUSED;
     }
     let w = world(s);
-    w.dimensions.diagdir_between_tiles(tile, front)
+    w.dimensions
+        .diagdir_between_tiles(TileIndex(tile), TileIndex(front))
+        .0
 }
 
 /// `ScriptRoad::RemoveRoadDepot` preconditions after the native company-mode check.
@@ -702,7 +743,7 @@ fn remove_road_depot(s: &Services, tile: u32) -> bool {
     let w = world(s);
     enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         && enforce(
-            w.kind(tile) == crate::tile_type::MP_ROAD,
+            w.kind(TileIndex(tile)) == TileType::MP_ROAD,
             ERR_PRECONDITION_FAILED,
         )
         && enforce(
@@ -718,7 +759,7 @@ pub extern "C" fn openttd_rust_script_road_remove_station(s: &Services, tile: u3
     let w = world(s);
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(
-            w.kind(tile) == crate::tile_type::MP_STATION,
+            w.kind(TileIndex(tile)) == TileType::MP_STATION,
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(w.station_road_stop(tile), ERR_PRECONDITION_FAILED)

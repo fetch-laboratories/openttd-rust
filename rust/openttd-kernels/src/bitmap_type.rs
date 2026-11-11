@@ -15,6 +15,7 @@
 use crate::geometry_type::{rect_height, rect_width};
 use crate::map_func::Map;
 use crate::tile_type::INVALID_TILE;
+use crate::tile_type::TileIndex;
 use crate::tilearea::{OrthogonalTileIterator, TileArea};
 
 /// `BitmapTileArea`: the inherited `TileArea` followed by one bit per tile.
@@ -49,8 +50,10 @@ impl BitmapTileArea {
     /// `Index(tile)` relative to the live base tile.
     fn index(&self, tile: u32, map: Map) -> usize {
         self.index_xy(
-            map.tile_x(tile).wrapping_sub(map.tile_x(self.area.tile)),
-            map.tile_y(tile).wrapping_sub(map.tile_y(self.area.tile)),
+            map.tile_x(TileIndex(tile))
+                .wrapping_sub(map.tile_x(TileIndex(self.area.tile))),
+            map.tile_y(TileIndex(tile))
+                .wrapping_sub(map.tile_y(TileIndex(self.area.tile))),
         ) as usize
     }
     /// `Reset`.
@@ -66,7 +69,7 @@ impl BitmapTileArea {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     pub fn initialize_rect(&mut self, left: i32, top: i32, right: i32, bottom: i32, map: Map) {
         self.initialize(TileArea {
-            tile: map.tile_xy(left as u32, top as u32),
+            tile: map.tile_xy(left as u32, top as u32).0,
             w: rect_width(left, right) as u16,
             h: rect_height(top, bottom) as u16,
         });
@@ -205,15 +208,15 @@ mod tests {
         let m = map();
         let mut b = BitmapTileArea::new();
         b.initialize_rect(2, 3, 4, 5, m);
-        assert_eq!((b.area.tile, b.area.w, b.area.h), (m.tile_xy(2, 3), 3, 3));
+        assert_eq!((b.area.tile, b.area.w, b.area.h), (m.tile_xy(2, 3).0, 3, 3));
         // `Index(w, h) == w * (h + 1)`.
         assert_eq!(b.data.len(), 12);
-        b.set_tile(m.tile_xy(4, 5), m, |ok| assert!(ok));
-        assert!(b.has_tile(m.tile_xy(4, 5), m, |ok| assert!(ok)));
-        assert!(!b.has_tile(m.tile_xy(5, 5), m, |ok| assert!(ok)));
+        b.set_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok));
+        assert!(b.has_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok)));
+        assert!(!b.has_tile(m.tile_xy(5, 5).0, m, |ok| assert!(ok)));
         b.reset();
         assert_eq!((b.area.tile, b.area.w, b.area.h), (INVALID_TILE, 0, 0));
-        assert!(!b.has_tile(m.tile_xy(4, 5), m, |ok| assert!(ok)));
+        assert!(!b.has_tile(m.tile_xy(4, 5).0, m, |ok| assert!(ok)));
     }
 
     #[test]
@@ -221,12 +224,12 @@ mod tests {
         let m = map();
         let mut b = BitmapTileArea::new();
         b.initialize(TileArea {
-            tile: m.tile_xy(1, 1),
+            tile: m.tile_xy(1, 1).0,
             w: 3,
             h: 2,
         });
         for (x, y) in [(3, 1), (2, 1)] {
-            b.set_tile(m.tile_xy(x, y), m, |ok| assert!(ok));
+            b.set_tile(m.tile_xy(x, y).0, m, |ok| assert!(ok));
         }
         let ptr = &raw mut b;
         let mut it = unsafe { BitmapTileIterator::new(ptr, m, |ok| assert!(ok)) };
@@ -234,12 +237,12 @@ mod tests {
         while it.tile() != INVALID_TILE {
             seen.push(it.tile());
             // Setting a later tile during iteration shows it, as the native pointer does.
-            unsafe { (*ptr).set_tile(m.tile_xy(1, 2), m, |ok| assert!(ok)) };
+            unsafe { (*ptr).set_tile(m.tile_xy(1, 2).0, m, |ok| assert!(ok)) };
             unsafe { it.advance(ptr, m, |ok| assert!(ok)) };
         }
         assert_eq!(
             seen,
-            vec![m.tile_xy(2, 1), m.tile_xy(3, 1), m.tile_xy(1, 2)]
+            vec![m.tile_xy(2, 1).0, m.tile_xy(3, 1).0, m.tile_xy(1, 2).0]
         );
     }
 

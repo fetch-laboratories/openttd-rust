@@ -29,6 +29,7 @@
     clippy::if_not_else
 )]
 
+use crate::direction_type::{DiagDirection, Direction};
 /// Roadtype flags (`road.h`), as bit numbers, retaining every underlying byte.
 /// The other enumerators join with their first Rust user.
 #[repr(transparent)]
@@ -66,6 +67,7 @@ use crate::roadveh::{
     RVSB_WORMHOLE,
 };
 use crate::services::{Map, RoadStopType, Services};
+use crate::tile_type::TileIndex;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
@@ -483,7 +485,8 @@ struct Game<'a> {
     // Entry dimensions last only for this synchronous controller call.
     // Orders, sound/GRF, movement, crash and viewport callbacks cannot load/reset
     // the map or yield the game-state mutex; nested entries have their own Game.
-    map: Map,
+    map: std::cell::OnceCell<Map>,
+    map_log_x: u32,
 }
 
 fn in_range(value: u8, start: u8, end: u8) -> bool {
@@ -563,9 +566,17 @@ impl Game<'_> {
                 acceleration_model,
                 road_side,
                 queue,
-                map: Map { log_x },
+                map: std::cell::OnceCell::new(),
+                map_log_x: u32::from(log_x),
             }
         }
+    }
+    fn map(&self) -> Map {
+        *self.map.get_or_init(|| {
+            let mut map = self.ss.map();
+            map.log_x = self.map_log_x;
+            map
+        })
     }
     fn can_build_tram(&self, v: VehicleRef, tile: u32, bits: u8) -> bool {
         let owner = v.owner();
@@ -605,8 +616,8 @@ impl Game<'_> {
     }
     fn tile_xy(&self, tile: u32, pos: (u8, u8)) -> (i32, i32) {
         (
-            (self.map.tile_x(tile) * 16 + u32::from(pos.0)) as i32,
-            (self.map.tile_y(tile) * 16 + u32::from(pos.1)) as i32,
+            (self.map().tile_x(TileIndex(tile)) * 16 + u32::from(pos.0)) as i32,
+            (self.map().tile_y(TileIndex(tile)) * 16 + u32::from(pos.1)) as i32,
         )
     }
     fn set_speed(v: Part, s: &mut Step, speed: u16) {
@@ -873,12 +884,16 @@ impl Game<'_> {
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self.map.tile_add_by_diag_dir_raw(
-            s.tile,
-            diag(s.direction, |ok| {
-                crate::movement::native_assert(self.ss, ok);
-            }),
-        );
+        let tile = self
+            .map()
+            .tile_add_by_diag_dir(
+                TileIndex(s.tile),
+                DiagDirection(diag(s.direction, |ok| {
+                    crate::movement::native_assert(self.ss, ok);
+                })),
+                crate::map_func::native_check,
+            )
+            .0;
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
@@ -931,7 +946,7 @@ impl Game<'_> {
         let m = crate::ground_vehicle::move_incline(
             self.gs,
             &self.movement,
-            self.map,
+            self.map(),
             v.v,
             ground,
             pos,
@@ -1349,7 +1364,7 @@ impl Game<'_> {
         v.v.write_y(y);
         // SAFETY: The newly visible shell survives depot exit.
         unsafe {
-            crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
+            crate::vehicle::occupancy::update_position(self.vs, v.v, self.map());
         }
         crate::ground_vehicle::inclination_owned(
             self.gs.physics,
@@ -1473,7 +1488,7 @@ impl Game<'_> {
             service!(v.v).write_xy(gp.x, gp.y);
             // SAFETY: The live road shell survives the synchronous index update.
             unsafe {
-                crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
+                crate::vehicle::occupancy::update_position(self.vs, v.v, self.map());
             }
             let status = (v.v).status();
             s.x = gp.x;
@@ -1492,7 +1507,14 @@ impl Game<'_> {
         );
         let entry = rd.0 & 3;
         if rd.0 & 128 != 0 {
-            let mut tile = self.map.tile_add_by_diag_dir_raw(s.tile, entry);
+            let mut tile = self
+                .map()
+                .tile_add_by_diag_dir(
+                    TileIndex(s.tile),
+                    DiagDirection(entry),
+                    crate::map_func::native_check,
+                )
+                .0;
             let mut dir = if s.front {
                 if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)
@@ -1731,7 +1753,14 @@ impl Game<'_> {
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
                 if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile) {
-                    let next = self.map.tile_add_by_dir_raw(s.tile, s.direction);
+                    let next = self
+                        .map()
+                        .tile_add_by_dir(
+                            TileIndex(s.tile),
+                            Direction(s.direction),
+                            crate::map_func::native_check,
+                        )
+                        .0;
                     if crate::road_stop::continuation(self.ss, s.tile, next)
                         && self.has_road(v.v, next)
                     {
@@ -1794,7 +1823,7 @@ impl Game<'_> {
         let m = crate::ground_vehicle::move_incline(
             self.gs,
             &self.movement,
-            self.map,
+            self.map(),
             v.v,
             ground,
             (x, y),
@@ -1999,7 +2028,8 @@ impl Game<'_> {
         self.acceleration_model = entry.acceleration_model;
         self.road_side = entry.road_side;
         self.queue = entry.queue;
-        self.map.log_x = entry.map_log_x;
+        self.map_log_x = u32::from(entry.map_log_x);
+        self.map.take();
         let running = if v.v.status() & VS_STOPPED == 0 {
             v.v.running().wrapping_add(1)
         } else {
@@ -2614,3 +2644,51 @@ pub const ROTSG_END: u8 = 12;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod map_context_tests {
+    use super::*;
+    use crate::test_tables::{GROUND_VEHICLE, ROAD_LEAVES, SHARED, VEHICLE, unreachable1};
+
+    /// Pinned `RoadVehicle::Tick` returns for an articulated part after wrapping
+    /// `tick_counter`. The native ABI fixture leaves map services unused here.
+    #[test]
+    fn articulated_tick_keeps_early_return_without_map_metadata() {
+        let mut shared = SHARED;
+        shared.map = std::ptr::null();
+        let vehicle = VEHICLE;
+        let ground = GroundServices {
+            physics: &GROUND_VEHICLE,
+            update_viewport: unreachable1,
+            has_articulated: unreachable1,
+        };
+        let mut leaves = ROAD_LEAVES;
+        leaves.shared = &raw const shared;
+        leaves.vehicle = &raw const vehicle;
+        leaves.ground = &raw const ground;
+        let record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            std::ptr::null_mut(),
+            crate::vehicle_type::VehicleType::VEH_ROAD,
+        );
+        let mut state = State::default();
+        // SAFETY: The record, owner, entry and tables remain live throughout this
+        // call. The original articulated branch reads no orders, ground or map.
+        unsafe {
+            (*record).road = std::ptr::from_mut(&mut state.fields);
+            (*record).tick_counter = u8::MAX;
+            (*record).running_ticks = 7;
+            let part = Part::new(VehicleRef::of(record), std::ptr::from_mut(&mut state));
+            let entry = Entry {
+                ground: std::ptr::null_mut(),
+                acceleration_model: 0,
+                road_side: 0,
+                queue: false,
+                map_log_x: 8,
+            };
+            let mut game = Game::new(&raw const leaves, None);
+            assert!(game.tick(part, &entry));
+            assert_eq!(((*record).tick_counter, (*record).running_ticks), (0, 7));
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(record);
+        }
+    }
+}

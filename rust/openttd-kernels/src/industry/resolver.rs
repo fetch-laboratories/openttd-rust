@@ -252,8 +252,8 @@ pub(crate) fn get_relative_position(
     ind_tile: TileIndex,
     map: crate::map_func::Map,
 ) -> u32 {
-    let x = map.tile_x(tile.0).wrapping_sub(map.tile_x(ind_tile.0)) as u8;
-    let y = map.tile_y(tile.0).wrapping_sub(map.tile_y(ind_tile.0)) as u8;
+    let x = map.tile_x(tile).wrapping_sub(map.tile_x(ind_tile)) as u8;
+    let y = map.tile_y(tile).wrapping_sub(map.tile_y(ind_tile)) as u8;
     (u32::from(y & 0xF) << 20) | (u32::from(x & 0xF) << 16) | (u32::from(y) << 8) | u32::from(x)
 }
 /// `Industry::industries[type].size()`.
@@ -284,7 +284,7 @@ fn get_closest_industry(
             continue;
         }
         let other = unsafe { (s.get)(industry.0) };
-        best_dist = best_dist.min(map.distance_manhattan(tile.0, location_tile(other.owner).0));
+        best_dist = best_dist.min(map.distance_manhattan(tile, location_tile(other.owner)));
     }
     best_dist
 }
@@ -359,7 +359,7 @@ fn get_count_and_distance_of_closest_instance(
                 && (!town_filter || i.town == current.town)
             {
                 closest_dist =
-                    closest_dist.min(map.distance_manhattan(tile.0, location_tile(i.owner).0));
+                    closest_dist.min(map.distance_manhattan(tile, location_tile(i.owner)));
                 count = count.wrapping_add(1);
             }
         }
@@ -440,7 +440,7 @@ fn industries_get_variable(
             0x89 => {
                 return s
                     .map()
-                    .distance_manhattan(town_xy(c.town, s).0, c.tile().0)
+                    .distance_manhattan(town_xy(c.town, s), c.tile())
                     .min(u32::from(u8::MAX));
             }
             // Lowest height of the tile
@@ -581,7 +581,7 @@ fn industries_get_variable(
                 .0,
             ) << 16)
                 | s.map()
-                    .distance_manhattan(tile.0, town_xy(c.town, s).0)
+                    .distance_manhattan(tile, town_xy(c.town, s))
                     .min(u32::from(u16::MAX))
         }
         // Get square of Euclidean distance of closest town

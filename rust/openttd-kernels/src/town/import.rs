@@ -87,7 +87,7 @@ impl ImportServices {
         match rotation {
             HeightmapRotation::HM_CLOCKWISE => {
                 // Tile coordinates align with what we expect.
-                TileIndex(map.tile_xy((x_proportion * max_x) as u32, (y_proportion * max_y) as u32))
+                map.tile_xy((x_proportion * max_x) as u32, (y_proportion * max_y) as u32)
             }
             HeightmapRotation::HM_COUNTER_CLOCKWISE => {
                 // Tile coordinates are rotated and must be adjusted.
@@ -102,7 +102,7 @@ impl ImportServices {
                 // x86 compilers truncate through a signed integer, retaining the low 32 bits.
                 #[cfg(not(any(target_os = "emscripten", target_arch = "aarch64")))]
                 let tile_x = (rotated_x as i64) as u32;
-                TileIndex(map.tile_xy(tile_x, (x_proportion * max_y) as u32))
+                map.tile_xy(tile_x, (x_proportion * max_y) as u32)
             }
             _ => {
                 (s.not_reached)();
@@ -118,8 +118,8 @@ impl ImportServices {
         let map = s.map();
         let size_y = crate::map_func::World::new(s).size_y();
         let mut spiral = crate::spiral::hole(
-            map.tile_x(target_tile.0),
-            map.tile_y(target_tile.0),
+            map.tile_x(target_tile),
+            map.tile_y(target_tile),
             16,
             0,
             0,
@@ -130,7 +130,7 @@ impl ImportServices {
         // Try founding on the target tile, and if that doesn't work, find the nearest suitable tile up to 16 tiles away.
         // The target might be on water, blocked somehow, or on a steep slope that can't be terraformed by the founding command.
         while !spiral.is_end() {
-            let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
+            let tile = map.tile_xy(spiral.x, spiral.y);
             town_id = (self.found)(
                 frame,
                 tile,

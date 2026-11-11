@@ -12,6 +12,7 @@
 //! in C++ loops. Diagonal areas and [`TileIterator`] serve Rust loops only.
 #![allow(unsafe_code)]
 use crate::map_func::Map;
+use crate::tile_type::TileIndex;
 /// Native `OrthogonalTileArea` scalar fields.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -33,12 +34,12 @@ impl TileArea {
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn between(map: Map, a: u32, b: u32) -> Self {
-        let x = map.tile_x(a).min(map.tile_x(b));
-        let y = map.tile_y(a).min(map.tile_y(b));
+        let x = map.tile_x(TileIndex(a)).min(map.tile_x(TileIndex(b)));
+        let y = map.tile_y(TileIndex(a)).min(map.tile_y(TileIndex(b)));
         Self {
             tile: (y << map.log_x) + x,
-            w: (map.tile_x(a).max(map.tile_x(b)) - x + 1) as u16,
-            h: (map.tile_y(a).max(map.tile_y(b)) - y + 1) as u16,
+            w: (map.tile_x(TileIndex(a)).max(map.tile_x(TileIndex(b))) - x + 1) as u16,
+            h: (map.tile_y(TileIndex(a)).max(map.tile_y(TileIndex(b))) - y + 1) as u16,
         }
     }
     /// Original `OrthogonalTileArea(start, end)`, asserting both corners are on the map.
@@ -59,14 +60,14 @@ impl TileArea {
             };
             return;
         }
-        let sx = map.tile_x(self.tile);
-        let sy = map.tile_y(self.tile);
+        let sx = map.tile_x(TileIndex(self.tile));
+        let sy = map.tile_y(TileIndex(self.tile));
         let ex = sx.wrapping_add(u32::from(self.w)).wrapping_sub(1);
         let ey = sy.wrapping_add(u32::from(self.h)).wrapping_sub(1);
-        let ax = map.tile_x(to_add);
-        let ay = map.tile_y(to_add);
+        let ax = map.tile_x(TileIndex(to_add));
+        let ay = map.tile_y(TileIndex(to_add));
         let (sx, sy, ex, ey) = (ax.min(sx), ay.min(sy), ax.max(ex), ay.max(ey));
-        self.tile = map.tile_xy(sx, sy);
+        self.tile = map.tile_xy(sx, sy).0;
         self.w = ex.wrapping_sub(sx).wrapping_add(1) as u16;
         self.h = ey.wrapping_sub(sy).wrapping_add(1) as u16;
     }
@@ -77,12 +78,12 @@ impl TileArea {
             return false;
         }
         check(other.h != 0 && self.h != 0);
-        let left1 = map.tile_x(self.tile);
-        let top1 = map.tile_y(self.tile);
+        let left1 = map.tile_x(TileIndex(self.tile));
+        let top1 = map.tile_y(TileIndex(self.tile));
         let right1 = left1.wrapping_add(u32::from(self.w)).wrapping_sub(1);
         let bottom1 = top1.wrapping_add(u32::from(self.h)).wrapping_sub(1);
-        let left2 = map.tile_x(other.tile);
-        let top2 = map.tile_y(other.tile);
+        let left2 = map.tile_x(TileIndex(other.tile));
+        let top2 = map.tile_y(TileIndex(other.tile));
         let right2 = left2.wrapping_add(u32::from(other.w)).wrapping_sub(1);
         let bottom2 = top2.wrapping_add(u32::from(other.h)).wrapping_sub(1);
         !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
@@ -95,8 +96,13 @@ impl TileArea {
         }
         check(self.w != 0 && self.h != 0);
         // `IsInsideBS` in unsigned arithmetic.
-        map.tile_x(tile).wrapping_sub(map.tile_x(self.tile)) < u32::from(self.w)
-            && map.tile_y(tile).wrapping_sub(map.tile_y(self.tile)) < u32::from(self.h)
+        map.tile_x(TileIndex(tile))
+            .wrapping_sub(map.tile_x(TileIndex(self.tile)))
+            < u32::from(self.w)
+            && map
+                .tile_y(TileIndex(tile))
+                .wrapping_sub(map.tile_y(TileIndex(self.tile)))
+                < u32::from(self.h)
     }
     /// Original `Expand`, including its clipping to the full map dimensions.
     #[allow(
@@ -105,8 +111,8 @@ impl TileArea {
         clippy::cast_sign_loss
     )]
     pub fn expand(&mut self, radius: i32, map: Map, size_y: u32) {
-        let x = map.tile_x(self.tile) as i32;
-        let y = map.tile_y(self.tile) as i32;
+        let x = map.tile_x(TileIndex(self.tile)) as i32;
+        let y = map.tile_y(TileIndex(self.tile)) as i32;
         let sx = x.wrapping_sub(radius).max(0);
         let sy = y.wrapping_sub(radius).max(0);
         let ex = x
@@ -117,7 +123,7 @@ impl TileArea {
             .wrapping_add(i32::from(self.h))
             .wrapping_add(radius)
             .min(size_y as i32);
-        self.tile = map.tile_xy(sx as u32, sy as u32);
+        self.tile = map.tile_xy(sx as u32, sy as u32).0;
         self.w = ex.wrapping_sub(sx) as u16;
         self.h = ey.wrapping_sub(sy) as u16;
     }
@@ -130,8 +136,9 @@ impl TileArea {
     pub fn clamp_to_map(&mut self, map: Map, size: u32, check: impl FnOnce(bool)) {
         check(self.tile < size);
         let size_y = size >> map.log_x;
-        let w = i32::from(self.w).min(map.size_x().wrapping_sub(map.tile_x(self.tile)) as i32);
-        let h = i32::from(self.h).min(size_y.wrapping_sub(map.tile_y(self.tile)) as i32);
+        let w = i32::from(self.w)
+            .min(map.size_x().wrapping_sub(map.tile_x(TileIndex(self.tile))) as i32);
+        let h = i32::from(self.h).min(size_y.wrapping_sub(map.tile_y(TileIndex(self.tile))) as i32);
         self.w = w as u16;
         self.h = h as u16;
     }
@@ -186,7 +193,9 @@ impl OrthogonalTileIterator {
             self.y -= 1;
             if self.y > 0 {
                 self.x = self.w;
-                self.tile = self.tile.wrapping_add(map.diff(1 - self.w, 1));
+                self.tile = self
+                    .tile
+                    .wrapping_add(map.diff(1 - self.w, 1).cast_unsigned());
             } else {
                 self.tile = crate::tile_type::INVALID_TILE;
             }
@@ -213,10 +222,10 @@ impl DiagonalTileArea {
         check(start < size);
         check(end < size);
         let (sx, sy, ex, ey) = (
-            map.tile_x(start),
-            map.tile_y(start),
-            map.tile_x(end),
-            map.tile_y(end),
+            map.tile_x(TileIndex(start)),
+            map.tile_y(TileIndex(start)),
+            map.tile_x(TileIndex(end)),
+            map.tile_y(TileIndex(end)),
         );
         let a = ey.wrapping_add(ex).wrapping_sub(sy).wrapping_sub(sx) as i16;
         let b = ey.wrapping_sub(ex).wrapping_sub(sy).wrapping_add(sx) as i16;
@@ -239,8 +248,10 @@ impl DiagonalTileArea {
     pub fn contains(self, tile: u32, map: Map) -> bool {
         let rotated = |t: u32| {
             (
-                map.tile_y(t).wrapping_add(map.tile_x(t)) as i32,
-                map.tile_y(t).wrapping_sub(map.tile_x(t)) as i32,
+                map.tile_y(TileIndex(t))
+                    .wrapping_add(map.tile_x(TileIndex(t))) as i32,
+                map.tile_y(TileIndex(t))
+                    .wrapping_sub(map.tile_x(TileIndex(t))) as i32,
             )
         };
         let (a, b) = rotated(tile);
@@ -324,7 +335,7 @@ impl DiagonalTileCursor {
             tile = if x >= map.size_x() || y >= size_y {
                 crate::tile_type::INVALID_TILE
             } else {
-                map.tile_xy(x, y)
+                map.tile_xy(x, y).0
             };
             if !(tile > size && self.b_max != self.b_cur) {
                 break;
@@ -343,8 +354,8 @@ impl DiagonalTileCursor {
     #[must_use]
     pub fn new(area: DiagonalTileArea, map: Map) -> Self {
         Self {
-            base_x: map.tile_x(area.tile),
-            base_y: map.tile_y(area.tile),
+            base_x: map.tile_x(TileIndex(area.tile)),
+            base_y: map.tile_y(TileIndex(area.tile)),
             a_cur: 0,
             b_cur: 0,
             a_max: i32::from(area.a),
@@ -481,7 +492,7 @@ mod tests {
     use crate::tile_type::INVALID_TILE;
 
     // A 16x8 map; expectations come from the pinned `tilearea.cpp` bodies.
-    const MAP: Map = Map { log_x: 4 };
+    const MAP: Map = Map::from_log_x(4);
     const SIZE: u32 = 128;
 
     fn on_map(ok: bool) {
@@ -555,14 +566,14 @@ mod tests {
 
     #[test]
     fn orthogonal_corners_add_and_clamp_follow_the_original() {
-        let a = TileArea::from_corners(MAP, SIZE, MAP.tile_xy(7, 5), MAP.tile_xy(2, 1), on_map);
+        let a = TileArea::from_corners(MAP, SIZE, MAP.tile_xy(7, 5).0, MAP.tile_xy(2, 1).0, on_map);
         assert_eq!((a.tile, a.w, a.h), (18, 6, 5));
         // Reversed corners iterate x-fast from the north corner.
         let mut iter = TileIterator::create(
             MAP,
             SIZE,
-            MAP.tile_xy(3, 2),
-            MAP.tile_xy(2, 1),
+            MAP.tile_xy(3, 2).0,
+            MAP.tile_xy(2, 1).0,
             false,
             on_map,
         );
@@ -578,11 +589,11 @@ mod tests {
             h: 0,
         };
         for (x, y) in [(9, 3), (4, 6), (6, 1)] {
-            b.add(MAP.tile_xy(x, y), MAP);
+            b.add(MAP.tile_xy(x, y).0, MAP);
         }
         assert_eq!((b.tile, b.w, b.h), (20, 6, 6));
         let mut c = TileArea {
-            tile: MAP.tile_xy(12, 6),
+            tile: MAP.tile_xy(12, 6).0,
             w: 9,
             h: 5,
         };
@@ -611,7 +622,7 @@ mod tests {
         // INT_MAX: starts clip to 0; ends wrap to -2147483642/-2147483644.
         for (radius, expected) in [(i32::MIN, (0, 7, 5)), (i32::MAX, (0, 6, 4))] {
             let mut area = TileArea {
-                tile: MAP.tile_xy(3, 2),
+                tile: MAP.tile_xy(3, 2).0,
                 w: 4,
                 h: 3,
             };

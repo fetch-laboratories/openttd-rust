@@ -426,7 +426,7 @@ pub(crate) unsafe fn road_context(
 ) -> (u8, HouseZone, u32) {
     // SAFETY: Immediate reads only, caller establishes owner lifetime.
     let state = unsafe { &*state };
-    let distance = map.distance_manhattan(tile.0, state.simulation.xy);
+    let distance = map.distance_manhattan(tile, TileIndex(state.simulation.xy));
     let zone = unsafe { get_town_radius_group(state, tile, map) };
     (state.growth.road, zone, distance)
 }
@@ -1083,9 +1083,11 @@ impl Engine<'_> {
         unsafe { self.services.settings().allow_town_level_crossings.read() }
     }
     fn map(&self) -> Map {
-        *self
-            .map
-            .get_or_init(|| Map::from_log_x((self.leaves.map_log_x)()))
+        *self.map.get_or_init(|| {
+            let mut map = self.services.map();
+            map.log_x = (self.leaves.map_log_x)();
+            map
+        })
     }
     /// `Map::SizeY()`, read at each original observation point.
     fn size_y(&self) -> u32 {
@@ -1906,8 +1908,8 @@ impl Engine<'_> {
         if slope != Slope::SLOPE_FLAT {
             let map = self.map();
             let mut search = crate::spiral::hole(
-                map.tile_x(tile.0),
-                map.tile_y(tile.0),
+                map.tile_x(tile),
+                map.tile_y(tile),
                 bridge_length,
                 0,
                 0,
@@ -1915,7 +1917,7 @@ impl Engine<'_> {
                 self.size_y(),
             );
             while !search.is_end() {
-                let at = TileIndex(map.tile_xy(search.x, search.y));
+                let at = map.tile_xy(search.x, search.y);
                 /* Only consider bridge head tiles. */
                 /* Only consider road bridges. */
                 /* If the bridge is facing the same direction as the proposed bridge, we've found a redundant bridge. */
@@ -4527,6 +4529,7 @@ mod tunnel_tests {
         leaves.resolve_owner = resolve_owner;
         leaves.build_tunnel = build_tunnel;
         let mut services = SHARED;
+        services.map = crate::map_func::fixture::statics();
         services.settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
             allow_town_level_crossings: Box::leak(Box::new(with(|w| w.allow_crossings))),
             ..crate::settings_type::SettingAddresses::NULL

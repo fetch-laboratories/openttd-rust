@@ -14,8 +14,8 @@ pub(crate) fn get_industry_index(
     m: &crate::map_func::TileTypeAccess,
     t: TileIndex,
 ) -> Option<IndustryID> {
-    m.require_type(t.0, TileType::MP_INDUSTRY.0)?;
-    Some(IndustryID(m.m2(t.0)?))
+    m.require_type(t, TileType::MP_INDUSTRY)?;
+    Some(IndustryID(m.m2(t)?))
 }
 /// `Industry::GetByTile` (`industry.h`): get the industry of the given tile.
 pub(crate) fn get_industry_by_tile(
@@ -24,7 +24,7 @@ pub(crate) fn get_industry_by_tile(
     get: extern "C" fn(IndustryID) -> *mut ShellHandle,
     check: extern "C" fn(bool),
 ) -> *mut ShellHandle {
-    check(TileType(m.read(tile.0)) == TileType::MP_INDUSTRY);
+    check(m.read(tile) == TileType::MP_INDUSTRY);
     get(get_industry_index(m, tile).unwrap())
 }
 /// `GetIndustryType`: retrieve the type for this industry. Although it is called
@@ -37,7 +37,7 @@ pub(crate) fn get_industry_type(
     owner: extern "C" fn(*mut ShellHandle) -> *mut crate::industry::Industry,
     check: extern "C" fn(bool),
 ) -> IndustryType {
-    check(TileType(m.read(tile.0)) == TileType::MP_INDUSTRY);
+    check(m.read(tile) == TileType::MP_INDUSTRY);
     let ind = get_industry_by_tile(m, tile, get, check);
     check(!ind.is_null());
     IndustryType(unsafe { (*crate::industry::openttd_rust_industry_metadata(owner(ind))).kind })

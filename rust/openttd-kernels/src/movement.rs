@@ -22,6 +22,7 @@
     clippy::cast_sign_loss
 )]
 use crate::direction_func::diag_dir_to_axis_raw;
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::rail_map::{
     RAIL_GROUND_HALF_TILE_WATER, RAIL_TILE_DEPOT, RAIL_TILE_NORMAL, RAIL_TILE_SIGNALS,
@@ -38,9 +39,11 @@ use crate::slope_func::{
     special_rail_foundation_raw,
 };
 use crate::tile_cmd::{CANNOT_ENTER, ENTERED_STATION, ENTERED_WORMHOLE};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tile_type::{
     INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
-    MP_TUNNELBRIDGE, MP_VOID, MP_WATER,
+    MP_TUNNELBRIDGE, MP_VOID,
 };
 use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 use crate::witness as w;
@@ -202,9 +205,9 @@ impl MovementServices {
 impl Context<'_> {
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         w::hit(w::MOVE_FOUNDATION);
-        let kind = self.world.kind(tile);
+        let kind = self.world.kind(TileIndex(tile));
         match kind {
-            MP_RAILWAY => {
+            TileType::MP_RAILWAY => {
                 if self.world.is_plain_rail(tile) {
                     rail_foundation(slope, self.world.tracks(tile), |ok| {
                         (self.native_assert)(ok);
@@ -213,7 +216,7 @@ impl Context<'_> {
                     flattening_foundation_raw(slope)
                 }
             }
-            MP_ROAD => {
+            TileType::MP_ROAD => {
                 if self.world.is_normal_road(tile) {
                     road_foundation(slope, self.world.all_road_bits(tile), |ok| {
                         (self.native_assert)(ok);
@@ -222,8 +225,8 @@ impl Context<'_> {
                     flattening_foundation_raw(slope)
                 }
             }
-            MP_STATION => flattening_foundation_raw(slope),
-            MP_TUNNELBRIDGE => {
+            TileType::MP_STATION => flattening_foundation_raw(slope),
+            TileType::MP_TUNNELBRIDGE => {
                 if self.world.tunnel(tile) {
                     FOUNDATION_NONE
                 } else {
@@ -235,8 +238,8 @@ impl Context<'_> {
                     )
                 }
             }
-            MP_HOUSE | MP_INDUSTRY => {
-                let house = kind == MP_HOUSE;
+            TileType::MP_HOUSE | TileType::MP_INDUSTRY => {
+                let house = kind == TileType::MP_HOUSE;
                 let p = if house {
                     (self.house_foundation)(tile)
                 } else {
@@ -244,12 +247,7 @@ impl Context<'_> {
                 };
                 if p.callback {
                     let result = if house {
-                        unsafe {
-                            crate::town::resolver::foundation(
-                                crate::tile_type::TileIndex(tile),
-                                p.kind,
-                            )
-                        }
+                        unsafe { crate::town::resolver::foundation(TileIndex(tile), p.kind) }
                     } else {
                         (self.industry_callback)(tile, p.kind)
                     };
@@ -277,7 +275,7 @@ impl Context<'_> {
                 }
                 flattening_foundation_raw(slope)
             }
-            MP_OBJECT => {
+            TileType::MP_OBJECT => {
                 let p = (self.object_foundation)(tile);
                 if p.enabled && p.no_foundation {
                     FOUNDATION_NONE
@@ -293,14 +291,15 @@ impl Context<'_> {
         let tile = self
             .world
             .dimensions
-            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned());
-        let kind = self.world.kind(tile);
+            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned())
+            .0;
+        let kind = self.world.kind(TileIndex(tile));
         // One named body for constant Rust callers and the dynamic native entry.
         // Observe the live tile type before selecting the ground specialization.
         if ground {
-            self.pixel_z::<true>(tile, x as u32, y as u32, kind)
+            self.pixel_z::<true>(tile, x as u32, y as u32, kind.0)
         } else {
-            self.pixel_z::<false>(tile, x as u32, y as u32, kind)
+            self.pixel_z::<false>(tile, x as u32, y as u32, kind.0)
         }
     }
     #[inline]
@@ -646,11 +645,11 @@ use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
 impl Context<'_> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
         let map = self.world.dimensions;
-        if map.tile_x(tile) == 0 {
+        if map.tile_x(TileIndex(tile)) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
         }
-        if map.tile_y(tile) == 0 {
+        if map.tile_y(TileIndex(tile)) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_Y | TRACK_BIT_LEFT | TRACK_BIT_UPPER);
         }
@@ -663,8 +662,8 @@ impl Context<'_> {
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
-        match self.world.kind(tile) {
-            MP_RAILWAY => {
+        match self.world.kind(TileIndex(tile)) {
+            TileType::MP_RAILWAY => {
                 w::hit(w::MOVE_TRACK_RAIL);
                 if mode == TRANSPORT_WATER
                     && self.world.is_plain_rail(tile)
@@ -729,7 +728,7 @@ impl Context<'_> {
                     _ => unreachable!("native rail tile type"),
                 }
             }
-            MP_ROAD => {
+            TileType::MP_ROAD => {
                 w::hit(w::MOVE_TRACK_ROAD);
                 match mode {
                     TRANSPORT_RAIL => {
@@ -829,7 +828,12 @@ impl Context<'_> {
                                             let t = self
                                                 .world
                                                 .dimensions
-                                                .tile_add_by_diag_dir_raw(tile, dir);
+                                                .tile_add_by_diag_dir(
+                                                    TileIndex(tile),
+                                                    DiagDirection(dir),
+                                                    crate::map_func::native_check,
+                                                )
+                                                .0;
                                             if self.world.level_crossing_tile(t)
                                                 && self.world.crossing_barred(t)
                                             {
@@ -853,7 +857,7 @@ impl Context<'_> {
                     _ => {}
                 }
             }
-            MP_STATION => {
+            TileType::MP_STATION => {
                 w::hit(w::MOVE_TRACK_STATION);
                 match mode {
                     TRANSPORT_RAIL => {
@@ -897,7 +901,7 @@ impl Context<'_> {
                     _ => {}
                 }
             }
-            MP_WATER => {
+            TileType::MP_WATER => {
                 w::hit(w::MOVE_TRACK_WATER);
                 if mode != TRANSPORT_WATER {
                     return 0;
@@ -947,7 +951,7 @@ impl Context<'_> {
                 };
                 bits = self.water_edges(tile, bits);
             }
-            MP_TUNNELBRIDGE => {
+            TileType::MP_TUNNELBRIDGE => {
                 w::hit(w::MOVE_TRACK_WORMHOLE);
                 let transport = self.world.tunnel_bridge_transport(tile);
                 if transport != mode
