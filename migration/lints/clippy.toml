@@ -1,1 +1,13 @@
 too-many-arguments-threshold = 7
+# #891: production assertion and fatal macros the original may lack (#892).
+# tools/lint-ratchet.py counts only the non-test build's diagnostics.
+disallowed-macros = [
+    "std::assert",
+    "std::assert_eq",
+    "std::assert_ne",
+    "std::debug_assert",
+    "std::debug_assert_eq",
+    "std::debug_assert_ne",
+    "std::panic",
+    "std::unreachable",
+]

@@ -28,6 +28,8 @@ import migration
 ROOT = Path(__file__).resolve().parents[1]
 CLIPPY = migration.CLIPPY_DEBT_LINTS
 ITEM = hashlib.sha256(b"item").hexdigest()[:20]
+# Counted only in production code: tests assert legitimately.
+PRODUCTION = '"code":"clippy::disallowed_macros"'
 RUFF = ("C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915")
 VERSIONS = {"clippy": "1.99.0", "ruff": "0.16.8"}
 
@@ -87,6 +89,9 @@ def clippy_rows(raw: str, root: Path) -> dict[str, list[int]]:
             if not span["is_primary"]:
                 continue
             path = span["file_name"]
+            # A debug_assert*! also reports the std assert*! it expands to.
+            if lint == "disallowed_macros" and path.startswith("/rustc/"):
+                continue
             if not path.startswith("rust/") or not (root / path).is_file():
                 raise ValueError(f"unclassified Clippy source: {path}")
             data = (root / path).read_bytes()
@@ -183,6 +188,23 @@ def collect(kind: str, root: Path) -> tuple[str, str]:
                 + "".join(clippy_errors(run.stdout))
                 + run.stderr[-4000:]
             )
+        # Cargo's diagnostics do not say which unit, test or not, reported
+        # them. Production macro sites come from the non-test library unit,
+        # which the gate built too, so Cargo replays it (#891).
+        library = subprocess.run(
+            migration.clippy_command("--message-format=json", targets="--lib"),
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        run.stdout = "".join(
+            line
+            for output, production in ((run.stdout, False), (library.stdout, True))
+            for line in output.splitlines(keepends=True)
+            if (PRODUCTION in line) == production
+        )
     if VERSIONS[kind] not in version or run.returncode not in (
         (0, 1) if kind == "ruff" else (0,)
     ):
@@ -404,6 +426,21 @@ def reviewed_debt(
     return allowed
 
 
+def measurement(revision: str | None) -> list[str]:
+    """The lint selection, Clippy command and configuration at a revision."""
+
+    def read(path: str) -> str:
+        if revision is None:
+            return (ROOT / path).read_text()
+        return git("show", f"{revision}:{path}")
+
+    source = read("tools/migration.py")
+    definitions = re.findall(
+        r"^CLIPPY_DEBT_LINTS = [^\n]*$|^def clippy_command\(.*?(?=^\S)", source, re.M | re.S
+    )
+    return [*definitions, read(f"{migration.CLIPPY_CONFIGURATION}/clippy.toml")]
+
+
 def merge_base(base_ref: str) -> str:
     """The base the change started from, not a base tip that moved since.
 
@@ -502,6 +539,11 @@ def main() -> int:
     base = merge_base(args.base_ref)
     tracked = git("ls-tree", "--name-only", base, path).strip()
     previous = json.loads(git("show", f"{base}:{path}")) if tracked else recorded
+    if kind == "clippy" and measurement(base) != measurement(None):
+        # An explicit, reviewed inventory migration: the measured debt may not
+        # exceed the recorded file, which this change re-records (#891).
+        print("Clippy measurement differs from the merge base; recorded debt is the inventory")
+        previous = recorded
     measured, stored = check(
         kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
     )
