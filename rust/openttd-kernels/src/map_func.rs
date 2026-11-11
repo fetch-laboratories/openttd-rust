@@ -163,7 +163,6 @@ impl Map {
     pub fn offs_by_axis(self, axis: Axis, check: impl Fn(bool)) -> TileIndexDiff {
         if !crate::direction_func::is_valid_axis(axis) {
             check(false);
-            std::process::abort();
         }
         self.to_tile_index_diff(TILEOFFS_BY_AXIS[usize::from(axis.0)])
     }
@@ -345,7 +344,6 @@ const TILEOFFS_BY_DIR: [TileIndexDiffC; Direction::DIR_END.0 as usize] = [
 pub fn tile_index_diff_c_by_diag_dir(dir: DiagDirection, check: impl Fn(bool)) -> TileIndexDiffC {
     if !crate::direction_func::is_valid_diag_direction(dir) {
         check(false);
-        std::process::abort();
     }
     TILEOFFS_BY_DIAGDIR[usize::from(dir.0)]
 }
@@ -355,7 +353,6 @@ pub fn tile_index_diff_c_by_diag_dir(dir: DiagDirection, check: impl Fn(bool)) -
 pub fn tile_index_diff_c_by_dir(dir: Direction, check: impl Fn(bool)) -> TileIndexDiffC {
     if !crate::direction_func::is_valid_direction(dir) {
         check(false);
-        std::process::abort();
     }
     TILEOFFS_BY_DIR[usize::from(dir.0)]
 }
@@ -759,5 +756,46 @@ pub(crate) mod fixture {
             // SAFETY: Thread-local cell; no reference to it is live.
             unsafe { (*s.as_ptr()).assertions = allocation.assertions };
         });
+    }
+}
+
+#[cfg(test)]
+mod assertion_tests {
+    use super::{Map, tile_index_diff_c_by_diag_dir, tile_index_diff_c_by_dir};
+    use crate::direction_type::{Axis, DiagDirection, Direction};
+    use std::cell::Cell;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    type InvalidDirection = fn(&dyn Fn(bool));
+
+    /// The native assertion stops before an invalid table index is used. The
+    /// recording mock stops in test code; production helpers contain no test trap.
+    #[test]
+    fn direction_preconditions_dispatch_the_original_assertion() {
+        let operations: [InvalidDirection; 3] = [
+            |check| {
+                let _ = Map::from_log_x(6).offs_by_axis(Axis::AXIS_END, check);
+            },
+            |check| {
+                let _ = tile_index_diff_c_by_diag_dir(DiagDirection::DIAGDIR_END, check);
+            },
+            |check| {
+                let _ = tile_index_diff_c_by_dir(Direction::DIR_END, check);
+            },
+        ];
+        for operation in operations {
+            let calls = Cell::new(0);
+            let observed = Cell::new(None);
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                operation(&|condition| {
+                    calls.set(calls.get() + 1);
+                    observed.set(Some(condition));
+                    panic!("recorded native assertion");
+                });
+            }));
+            assert!(result.is_err());
+            assert_eq!(calls.get(), 1);
+            assert_eq!(observed.get(), Some(false));
+        }
     }
 }
