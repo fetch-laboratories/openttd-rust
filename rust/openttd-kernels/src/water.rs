@@ -97,9 +97,11 @@ pub(crate) unsafe fn restore(
 ) {
     let map = crate::map_func::World::new(s);
     let mut class = map.water_class(tile);
+    /* Autoslope might turn an originally canal or river tile into land */
     let (slope, z) = map.tile_slope_z(tile);
     if slope != 0 {
         if class == 1 {
+            /* If we clear the canal, we have to remove it from the infrastructure count as well. */
             if (s.company_valid)(owner) {
                 let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
                 unsafe {
@@ -108,13 +110,16 @@ pub(crate) unsafe fn restore(
                 // SAFETY: Shared command tables are immutable and live for this call.
                 unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
             }
+            /* Sloped canals are locks and no natural water remains whatever the slope direction */
             class = 3;
         }
+        /* Only river water should be restored on appropriate slopes. Other water would be invalid on slopes */
         if class != 2 || !is_inclined_slope_raw(slope) {
             class = 3;
         }
     }
     if class == 0 && z > 0 {
+        /* Update company infrastructure count. */
         if (s.company_valid)(owner) {
             let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
             unsafe { CompanyInfrastructure::add_water(infrastructure, 1) };

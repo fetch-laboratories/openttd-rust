@@ -664,6 +664,7 @@ impl<'a> World<'a> {
                 }
                 ROAD => {
                     if new_owner {
+                        /* Also give unowned present roadtypes to new owner */
                         if hasroad
                             && crate::map_func::World::new(self.s).road_owner(start, false)
                                 == OWNER_NONE
@@ -678,7 +679,9 @@ impl<'a> World<'a> {
                         }
                     }
                     if valid_company {
+                        /* Add all new road types to the company infrastructure counter. */
                         if !hasroad && road != INVALID_ROADTYPE {
+                            /* A full diagonal road tile has two road bits. */
                             unsafe {
                                 CompanyInfrastructure::add_road(
                                     infrastructure,
@@ -688,6 +691,7 @@ impl<'a> World<'a> {
                             };
                         }
                         if !hastram && tram != INVALID_ROADTYPE {
+                            /* A full diagonal road tile has two road bits. */
                             unsafe {
                                 CompanyInfrastructure::add_road(
                                     infrastructure,
@@ -1354,6 +1358,8 @@ impl<'a> World<'a> {
         let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::TB_OWNER);
         let end = (self.rail.other_tunnel_bridge_end)(tile);
+        /* Set number of pieces to zero if it's the southern tile as we
+         * don't want to update the infrastructure counts twice. */
         let pieces = if tile < end {
             self.length(tile, end)
                 .wrapping_add(2)
@@ -1364,6 +1370,7 @@ impl<'a> World<'a> {
         let transport = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile);
         if transport == ROAD {
             for rtt in [0, 1] {
+                /* Update all roadtypes, no matter if they are present */
                 let owner = if rtt == 0 {
                     crate::map_func::World::new(self.s).road_owner(tile, false)
                 } else {
@@ -1376,6 +1383,8 @@ impl<'a> World<'a> {
                         (self.s.tram_type)(tile).0
                     };
                     if kind != INVALID_ROADTYPE {
+                        /* Update company infrastructure counts. A full diagonal road tile has two road bits.
+                         * No need to dirty windows here, we'll redraw the whole screen anyway. */
                         unsafe {
                             CompanyInfrastructure::add_road(
                                 {
@@ -1420,7 +1429,8 @@ impl<'a> World<'a> {
         if (self.s.tile_owner)(tile) != old {
             return;
         }
-        // No need to dirty windows here; the whole screen will be redrawn.
+        /* Update company infrastructure counts for rail and water as well.
+         * No need to dirty windows here, we'll redraw the whole screen anyway. */
         let old_infrastructure = {
             if old_infrastructure_ptr.is_null() {
                 old_infrastructure_ptr = CompanyInfrastructure::get(self.s, CompanyID(old));

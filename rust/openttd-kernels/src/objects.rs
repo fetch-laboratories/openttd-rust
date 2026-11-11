@@ -761,6 +761,7 @@ impl<'a> World<'a> {
                 } else {
                     INVALID_WATER_CLASS
                 };
+                /* Update company infrastructure counts for objects build on canals owned by nobody. */
                 if wc.0 == 1
                     && owner != OWNER_NONE
                     && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)

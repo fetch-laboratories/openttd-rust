@@ -392,11 +392,13 @@ impl World<'_> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
+            /* Update company infrastructure counts. */
             let owner = (self.s.current_company)();
             if (self.s.company_valid)(owner) {
                 let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
                 // SAFETY: Serialized field-sized writes; no native-state borrow crosses the tile reads.
                 unsafe {
+                    /* Counts for the water. */
                     if !(self.s.is_water_tile)(lower) {
                         CompanyInfrastructure::add_water(infrastructure, 1);
                     }
@@ -695,7 +697,9 @@ impl World<'_> {
                 return;
             }
             let middle = (self.s.water_middle_lock)(tile);
+            /* No need to dirty company windows here, we'll redraw the whole screen anyway. */
             if middle {
+                // Lock has three parts.
                 CompanyInfrastructure::add_water(
                     {
                         if old_infrastructure_ptr.is_null() {
@@ -709,6 +713,7 @@ impl World<'_> {
             }
             if new != INVALID_OWNER {
                 if middle {
+                    // Lock has three parts.
                     CompanyInfrastructure::add_water(
                         {
                             if new_infrastructure_ptr.is_null() {
@@ -720,6 +725,8 @@ impl World<'_> {
                         3 * FACTOR,
                     );
                 }
+                /* Only subtract from the old owner here if the new owner is valid,
+                 * otherwise we clear ship depots and canal water below. */
                 if self.class(tile) == 1 && !middle {
                     CompanyInfrastructure::add_water(
                         {
@@ -767,9 +774,12 @@ impl World<'_> {
                 (self.s.set_tile_owner)(tile, new);
                 return;
             }
+            /* Remove depot */
             if self.kind(tile) == 3 {
                 self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
             }
+            /* Set owner of canals and locks ... and also canal under dock there was before.
+             * Check if the new owner after removing depot isn't OWNER_WATER. */
             if (self.s.tile_owner)(tile) == old {
                 if self.class(tile) == 1 && !middle {
                     CompanyInfrastructure::add_water(
