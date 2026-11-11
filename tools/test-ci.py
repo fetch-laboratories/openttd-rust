@@ -1551,7 +1551,8 @@ class PolicyTests(unittest.TestCase):
         all_linux, x64 = ["clang", "sdl2", "dedicated"], ["x64"]
         for profile, checkout, event, heavy, covered, linux, windows, macos, rust32 in (
             ("full", "merge", dispatch, "", "", all_linux, x64, False, True),
-            ("native", "merge", dispatch, "", "", ["sdl2"], [], False, False),
+            # Native adds Clang and the 32-bit Rust job before the queue (#904).
+            ("native", "merge", dispatch, "", "", ["clang", "sdl2"], [], False, True),
             ("platform", "merge", dispatch, "", "", all_linux, x64, True, True),
             ("", "", dispatch, "", "", ["clang", "dedicated"], x64, True, True),
             # A covered push refreshes every cached flavour Full restores and tests nothing.
@@ -1768,7 +1769,7 @@ class PolicyTests(unittest.TestCase):
                     cases = [
                         (False, "head", "", "full", dispatch, True),
                         (False, "head", "", "platform", dispatch, True),
-                        (False, "head", "", "native", dispatch, False),
+                        (False, "head", "", "native", dispatch, True),
                         (False, "", "true", "", "push", True),
                         (False, "", "false", "", "push", False),
                         (False, "", "", "", dispatch, True),
@@ -1852,7 +1853,7 @@ class PolicyTests(unittest.TestCase):
                 "check_annotations",
                 *platforms,
                 *[f"annotations_{name}" for name in platforms],
-                *([] if profile == "native" else ["rust-32bit"]),
+                "rust-32bit",
             ]
             cases = [
                 (None, "success"),
