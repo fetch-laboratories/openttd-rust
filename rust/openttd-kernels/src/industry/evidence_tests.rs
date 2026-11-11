@@ -24,8 +24,8 @@ use crate::newgrf_animation_type::AnimationStatus;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_INDTILE_ANIMATION_TRIGGER, CallbackID};
 use crate::oracle;
 use crate::test_tables::{
-    ANIMATION, INDUSTRY_TILES, SHARED, unreachable0, unreachable1, unreachable2, unreachable3,
-    unreachable4, unreachable5,
+    ANIMATION, INDUSTRIES, INDUSTRY_CONSTRUCTION, INDUSTRY_LIFECYCLE, INDUSTRY_TILES, SHARED,
+    unreachable1, unreachable3,
 };
 use crate::tile_type::MP_INDUSTRY;
 use std::cell::{Cell, RefCell};
@@ -150,7 +150,17 @@ unsafe extern "C" fn set_random_triggers(tile: u32, bits: u8) {
     clippy::cast_possible_truncation,
     reason = "the used triggers are the waiting byte's masked bits"
 )]
-unsafe extern "C" fn resolve_reseed(tile: u32, _: u16, _: *mut c_void, waiting: u8) -> Reseed {
+unsafe extern "C" fn resolve_reseed(
+    tile: u32,
+    _: u16,
+    industry: *mut c_void,
+    waiting: u8,
+) -> Reseed {
+    assert_eq!(
+        industry,
+        shell(),
+        "the resolver receives the industry shell"
+    );
     let (triggers, mask) = with(|w| (w.tiles[tile as usize].triggers, w.mask));
     record([4, tile, waiting.into(), triggers.into()]);
     // Resolver may affect live tile state before the source reads it.
@@ -275,57 +285,8 @@ unsafe extern "C" fn tile_callback(tile: u32, _: u16, callback: u16, _: u32, _: 
     }
 }
 
-/// `crate::industry::Services` with the fixture's sound leaf; every other entry unreachable.
-const INDUSTRIES: Services = Services {
-    shared: ptr::null(),
-    next_tick: unreachable1,
-    industry_sound: unreachable2,
-    play_sound,
-    special_effect: unreachable3,
-    tick_trigger: unreachable1,
-    production_callback: unreachable2,
-    scale_cargo: unreachable1,
-    environment: ptr::null(),
-    farm_tile: unreachable1,
-    make_field: unreachable4,
-    fence_wanted: unreachable2,
-    tile_completed: unreachable2,
-    harvest: unreachable1,
-    change_callback: unreachable3,
-    text: ptr::null(),
-    news: unreachable4,
-    production_news: unreachable4,
-    callback_error: unreachable2,
-    set_dirty: unreachable1,
-    destroy: unreachable1,
-    opening_news: unreachable1,
-    opening_events: unreachable1,
-    create: unreachable2,
-    num_items: unreachable0,
-    get: unreachable1,
-    resolver: ptr::null(),
-    company_none: unreachable0,
-    restore_company: unreachable1,
-    directory_dirty: unreachable1,
-};
 /// `LifecycleServices` with the fixture's trigger and randomisation leaves.
 const LIFECYCLE: LifecycleServices = LifecycleServices {
-    neutral_station: unreachable1,
-    cleanup_tile: unreachable1,
-    delete_tile_inspect: unreachable1,
-    restoration: ptr::null(),
-    delete_oilrig: unreachable1,
-    clear_docking: unreachable1,
-    industry_field: unreachable2,
-    disassociate_field: unreachable1,
-    release_disasters: unreachable1,
-    delete_storage: unreachable1,
-    delete_news: unreachable1,
-    close_view: unreachable1,
-    close_production: unreachable1,
-    delete_inspect: unreachable1,
-    subsidies: unreachable0,
-    invalidate_cargo: unreachable1,
     belongs,
     randomisation_spec,
     random_triggers,
@@ -334,19 +295,7 @@ const LIFECYCLE: LifecycleServices = LifecycleServices {
     random_bits,
     set_random_bits,
     animation_spec,
-};
-/// `ConstructionServices` with the fixture's stage leaf.
-const CONSTRUCTION: ConstructionServices = ConstructionServices {
-    set_town: unreachable2,
-    callback: unreachable4,
-    callback_error: unreachable3,
-    water_class: unreachable1,
-    clear_tile: unreachable2,
-    make_industry: unreachable5,
-    set_construction_counter: unreachable2,
-    set_construction_stage,
-    translated_gfx: unreachable1,
-    build_window_dirty: unreachable0,
+    ..INDUSTRY_LIFECYCLE
 };
 
 /// The fixture's tables, leaked so the installed animation table outlives the test.
@@ -371,6 +320,7 @@ fn tables() -> Tables {
     let shared = leak(shared);
     let mut industries = INDUSTRIES;
     industries.shared = shared;
+    industries.play_sound = play_sound;
     let industries = leak(industries);
     let mut tiles = INDUSTRY_TILES;
     tiles.shared = shared;
@@ -394,7 +344,10 @@ fn tables() -> Tables {
     let mut animation = ANIMATION;
     animation.shared = shared;
     animation.industries = industries;
-    animation.construction = leak(CONSTRUCTION);
+    animation.construction = leak(ConstructionServices {
+        set_construction_stage,
+        ..INDUSTRY_CONSTRUCTION
+    });
     animation.industry_tiles = tiles;
     animation.industry = binding;
     animation.state = animation_state;
