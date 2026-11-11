@@ -11,17 +11,43 @@ use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
 use crate::tile_type::{TileIndex, TileType};
 
-/// Map width and native build policy captured per entry.
+/// Map width captured per entry. Native `_DEBUG` builds also keep the address
+/// of `Map::log_y` for `TileAdd`'s assertions; release builds carry only the width.
 #[derive(Clone, Copy)]
 pub struct Map {
     /// `Map::LogX()` captured for this synchronous entry.
     pub log_x: u32,
-    // Native build choices are distinct: WITH_ASSERT does not enable _DEBUG.
-    native_debug: bool,
-    native_assertions: bool,
     // Address of Map::log_y, live across each entry and cached road context.
     // Geometry remains available when a fixture uses the callback backend.
+    #[cfg(any(feature = "native-debug", test))]
     log_y: *const u32,
+}
+// Release callers copy the width alone, as before the `_DEBUG` projection.
+#[cfg(not(any(feature = "native-debug", test)))]
+const _: () = assert!(std::mem::size_of::<Map>() == std::mem::size_of::<u32>());
+/// Native `_DEBUG`, a build-time choice: CMake enables `native-debug` exactly
+/// for the configurations that define `_DEBUG` (checked in `services_ffi.h`).
+#[cfg(all(feature = "native-debug", not(test)))]
+#[inline]
+const fn native_debug() -> bool {
+    true
+}
+#[cfg(test)]
+thread_local! {
+    static TEST_NATIVE_DEBUG: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+/// Unit tests project either native build on the current thread.
+#[cfg(test)]
+fn native_debug() -> bool {
+    TEST_NATIVE_DEBUG.get()
+}
+/// Run `body` at the native `_DEBUG` projection (or not) on this test thread.
+#[cfg(test)]
+pub(crate) fn with_native_debug<T>(debug: bool, body: impl FnOnce() -> T) -> T {
+    let previous = TEST_NATIVE_DEBUG.replace(debug);
+    let result = body();
+    TEST_NATIVE_DEBUG.set(previous);
+    result
 }
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
@@ -37,8 +63,7 @@ impl Map {
     pub const fn from_log_x(log_x: u32) -> Self {
         Self {
             log_x,
-            native_debug: false,
-            native_assertions: false,
+            #[cfg(any(feature = "native-debug", test))]
             log_y: std::ptr::null(),
         }
     }
@@ -258,9 +283,24 @@ impl Map {
         offset: TileIndexDiff,
         check: impl Fn(bool),
     ) -> TileIndex {
-        if !self.native_debug {
-            return TileIndex(tile.0.wrapping_add(offset.cast_unsigned()));
+        #[cfg(any(feature = "native-debug", test))]
+        if native_debug() && !self.log_y.is_null() {
+            return self.tile_add_debug(tile, offset, &check);
         }
+        let _ = &check;
+        TileIndex(tile.0.wrapping_add(offset.cast_unsigned()))
+    }
+    /// The `_DEBUG` body of `TileAdd` (`map.cpp`). The check is the native
+    /// `assert`, so a build without assertions evaluates nothing observable.
+    #[cfg(any(feature = "native-debug", test))]
+    #[cold]
+    #[inline(never)]
+    fn tile_add_debug(
+        self,
+        tile: TileIndex,
+        offset: TileIndexDiff,
+        check: &dyn Fn(bool),
+    ) -> TileIndex {
         let size_x = self.size_x();
         let mut dx = (offset.cast_unsigned() & self.max_x()).cast_signed();
         if dx >= size_x.cast_signed() / 2 {
@@ -270,27 +310,25 @@ impl Map {
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
 
-        if self.native_assertions {
-            if x >= size_x {
-                check(false);
-            }
-            // SAFETY: Native contexts retain the canonical Map::log_y address;
-            // no reset/load/mutex yield occurs in this entry. Map dimensions are
-            // powers of two, even when the reader uses a callback-only backend.
-            let size_y = 1_u32 << unsafe { self.log_y.read() };
-            if y >= size_y {
-                check(false);
-            }
-            // The original WrapToMap observes the map mask at this assertion.
-            let size_y = 1_u32 << unsafe { self.log_y.read() };
-            if self.tile_xy(x, y)
-                != self.wrap_to_map(
-                    TileIndex(tile.0.wrapping_add(offset.cast_unsigned())),
-                    size_y,
-                )
-            {
-                check(false);
-            }
+        if x >= size_x {
+            check(false);
+        }
+        // SAFETY: Native contexts retain the canonical Map::log_y address;
+        // no reset/load/mutex yield occurs in this entry. Map dimensions are
+        // powers of two, even when the reader uses a callback-only backend.
+        let size_y = 1_u32 << unsafe { self.log_y.read() };
+        if y >= size_y {
+            check(false);
+        }
+        // The original WrapToMap observes the map mask at this assertion.
+        let size_y = 1_u32 << unsafe { self.log_y.read() };
+        if self.tile_xy(x, y)
+            != self.wrap_to_map(
+                TileIndex(tile.0.wrapping_add(offset.cast_unsigned())),
+                size_y,
+            )
+        {
+            check(false);
         }
         self.tile_xy(x, y)
     }
@@ -417,11 +455,10 @@ pub struct MapStatics {
     pub log_y: *const u32,
     /// Native assert policy of the C++ build.
     pub assertions: bool,
-    /// Native `_DEBUG`, independently of native assertion enablement.
-    pub debug: bool,
 }
 impl MapStatics {
-    /// Capture the map width and native `TileAdd` policy from the canonical metadata.
+    /// Capture the map width (and, for native `_DEBUG`, the height's address)
+    /// from the canonical metadata.
     /// # Safety
     /// `log_x` is readable now; `log_y` stays readable throughout this context.
     /// Native map accesses are serialized and each use excludes reset/load/mutex yield.
@@ -429,8 +466,7 @@ impl MapStatics {
     pub(crate) unsafe fn dimensions(&self) -> Map {
         Map {
             log_x: unsafe { self.log_x.read() },
-            native_debug: self.debug,
-            native_assertions: self.assertions,
+            #[cfg(any(feature = "native-debug", test))]
             log_y: self.log_y,
         }
     }
@@ -812,7 +848,6 @@ pub(crate) mod fixture {
             log_x: LOG_X.with(Cell::as_ptr),
             log_y: LOG_Y.with(Cell::as_ptr),
             assertions: true,
-            debug: false,
         });
     }
     /// This thread's statics, valid for the thread's lifetime.
@@ -853,7 +888,7 @@ mod assertion_tests {
         }
     }
 
-    fn native_map(size: &u32, log_y: &u32, debug: bool, assertions: bool) -> Map {
+    fn native_map(size: &u32, log_y: &u32) -> Map {
         const LOG_X: u32 = 6;
         let statics = super::MapStatics {
             base: std::ptr::null(),
@@ -861,8 +896,7 @@ mod assertion_tests {
             size: std::ptr::from_ref(size),
             log_x: &LOG_X,
             log_y: std::ptr::from_ref(log_y),
-            assertions,
-            debug,
+            assertions: true,
         };
         // SAFETY: The width is live for capture; the caller retains log_y while
         // using the context. dimensions neither loads nor accesses tile arrays.
@@ -870,9 +904,10 @@ mod assertion_tests {
     }
 
     /// Cases derived from pinned map.cpp:90-104 on a 64x64 map. Returning
-    /// assertion handlers preserve the original result and failure count.
+    /// assertion handlers preserve the original result and failure count;
+    /// release builds perform only the original direct addition.
     #[test]
-    fn native_debug_tile_add_is_independent_of_assertion_enablement() {
+    fn native_debug_tile_add_reconstructs_and_asserts() {
         use crate::tile_type::TileIndex;
         use std::cell::RefCell;
         let size = 4096;
@@ -883,24 +918,20 @@ mod assertion_tests {
             (0, -65, 0xffff_ffbf, 3),  // (0,0) + (-1,-1): all three assertions.
         ];
         for debug in [false, true] {
-            for assertions in [false, true] {
-                let map = native_map(&size, &6, debug, assertions);
-                assert_eq!(
-                    (map.native_debug, map.native_assertions),
-                    (debug, assertions)
-                );
-                for (tile, offset, expected, failures) in cases {
-                    let calls = RefCell::new(Vec::new());
-                    let result = map.tile_add(TileIndex(tile), offset, |condition| {
+            let map = native_map(&size, &6);
+            for (tile, offset, expected, failures) in cases {
+                let calls = RefCell::new(Vec::new());
+                let result = super::with_native_debug(debug, || {
+                    map.tile_add(TileIndex(tile), offset, |condition| {
                         calls.borrow_mut().push(condition);
-                    });
-                    assert_eq!(result, TileIndex(expected));
-                    assert_eq!(
-                        *calls.borrow(),
-                        vec![false; if debug && assertions { failures } else { 0 }],
-                        "debug={debug} assertions={assertions} tile={tile} offset={offset}",
-                    );
-                }
+                    })
+                });
+                assert_eq!(result, TileIndex(expected));
+                assert_eq!(
+                    *calls.borrow(),
+                    vec![false; if debug { failures } else { 0 }],
+                    "debug={debug} tile={tile} offset={offset}",
+                );
             }
         }
     }
@@ -911,13 +942,13 @@ mod assertion_tests {
     fn zero_backend_native_debug_uses_map_geometry() {
         use crate::tile_type::TileIndex;
         for debug in [false, true] {
-            for assertions in [false, true] {
-                let map = native_map(&0, &7, debug, assertions);
-                let calls = Cell::new(0);
-                let result = map.tile_add(TileIndex(4042), 64, |_| calls.set(calls.get() + 1));
-                assert_eq!(result, TileIndex(4106));
-                assert_eq!(calls.get(), 0);
-            }
+            let map = native_map(&0, &7);
+            let calls = Cell::new(0);
+            let result = super::with_native_debug(debug, || {
+                map.tile_add(TileIndex(4042), 64, |_| calls.set(calls.get() + 1))
+            });
+            assert_eq!(result, TileIndex(4106));
+            assert_eq!(calls.get(), 0);
         }
     }
 
@@ -934,17 +965,19 @@ mod assertion_tests {
         }
         let size = 4096;
         for debug in [false, true] {
-            let map = native_map(&size, &6, debug, true);
+            let map = native_map(&size, &6);
             TILE_ADD_ASSERTS.set(0);
-            let results = [
-                map.tile_add_xy(TileIndex(0), -1, 0),
-                map.tile_add_by_dir(TileIndex(0), Direction::DIR_NE, super::native_check),
-                map.tile_add_by_diag_dir(
-                    TileIndex(0),
-                    DiagDirection::DIAGDIR_NE,
-                    super::native_check,
-                ),
-            ];
+            let results = super::with_native_debug(debug, || {
+                [
+                    map.tile_add_xy(TileIndex(0), -1, 0),
+                    map.tile_add_by_dir(TileIndex(0), Direction::DIR_NE, super::native_check),
+                    map.tile_add_by_diag_dir(
+                        TileIndex(0),
+                        DiagDirection::DIAGDIR_NE,
+                        super::native_check,
+                    ),
+                ]
+            });
             assert_eq!(results, [TileIndex(u32::MAX); 3]);
             assert_eq!(TILE_ADD_ASSERTS.get(), if debug { 6 } else { 0 });
         }
