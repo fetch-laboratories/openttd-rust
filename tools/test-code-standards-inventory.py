@@ -181,5 +181,90 @@ mod tests {
         )
 
 
+FINISHED_BASE = """
+pub(crate) fn cmd_build_thing(flags: DoCommandFlags, tile: TileIndex) -> CommandCost {
+    slope_raw(tile);
+    CommandCost::default()
+}
+"""
+SEEDS = {
+    "raw adapter call": "    is_steep_slope_raw(tile);\n",
+    "export call": "    unsafe { openttd_rust_cargo_by_label(label) };\n",
+}
+
+
+class ResidueGateTests(unittest.TestCase):
+    """#901: growth of a residue class in a finished file fails; elsewhere it passes."""
+
+    def test_each_class_is_found_outside_tests_and_export_shims(self) -> None:
+        source = """
+static POOL: GameState<Vec<u32>> = GameState::new(Vec::new());
+fn set_flags(tile: TileIndex, execute: bool) { helper_raw(tile); openttd_rust_x(); s.get_raw(); }
+fn cmd_long(flags: u16, a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8) {}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_shim(tile: u32) { typed_raw(tile); openttd_rust_y(); }
+#[cfg(test)]
+mod tests {
+    fn probe(execute: bool) { openttd_rust_z(); helper_raw(1); }
+}
+"""
+        found = {(s.kind, s.detail) for s in INVENTORY.residue(RUST, source.lstrip())}
+        self.assertEqual(
+            found,
+            {
+                ("scratch pool", "POOL"),
+                ("execute flag", "set_flags"),
+                ("raw adapter call", "helper_raw"),
+                ("raw adapter call", "get_raw"),
+                ("export call", "openttd_rust_x"),
+                ("long command", "cmd_long"),
+            },
+        )
+
+    def gate(self, finished: bool, base: str, head: str) -> int:
+        def show(revision: str, path: str) -> str | None:
+            if path == INVENTORY.FINISHED:
+                return (
+                    RUST + "\n" if finished else "rust/openttd-kernels/src/other.rs\n"
+                )
+            if path != RUST:
+                return None
+            return base if revision == "base" else head
+
+        with (
+            patch.object(INVENTORY, "show", side_effect=show),
+            patch.object(INVENTORY, "renamed_from", return_value={}),
+            patch.object(INVENTORY.subprocess, "check_output", return_value="base\n"),
+            patch("builtins.print"),
+        ):
+            return INVENTORY.gate("origin/rust-migration", "head")
+
+    def test_seeded_violation_fails_only_in_a_finished_file(self) -> None:
+        for kind, line in SEEDS.items():
+            seeded = FINISHED_BASE.replace(
+                "    slope_raw(tile);\n", "    slope_raw(tile);\n" + line
+            )
+            with self.subTest(kind=kind):
+                self.assertEqual(self.gate(True, FINISHED_BASE, seeded), 1)
+                self.assertEqual(self.gate(False, FINISHED_BASE, seeded), 0)
+        flagged = FINISHED_BASE.replace(
+            "tile: TileIndex)", "tile: TileIndex, execute: bool)"
+        )
+        self.assertEqual(self.gate(True, FINISHED_BASE, flagged), 1)
+
+    def test_existing_and_renamed_occurrences_pass(self) -> None:
+        self.assertEqual(self.gate(True, FINISHED_BASE, FINISHED_BASE), 0)
+        moved = (
+            FINISHED_BASE.replace("cmd_build_thing", "cmd_build_other") + "\n// moved\n"
+        )
+        self.assertEqual(self.gate(True, FINISHED_BASE, moved), 0)
+        renamed = """
+static SCRATCH: GameState<Vec<u8>> = GameState::new(Vec::new());
+"""
+        pool = renamed.replace("SCRATCH", "POOL")
+        self.assertEqual(self.gate(True, pool, renamed), 0)
+        self.assertEqual(self.gate(True, pool, pool + renamed), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
