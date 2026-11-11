@@ -390,9 +390,9 @@ impl<'a> World<'a> {
     fn destruct_industry(&self, industry: *mut c_void) {
         let count = self.map().size_x() * self.size_y();
         for tile in Map::iterate(count) {
-            if (self.s.industry_belongs)(industry, tile) {
-                (self.s.reset_industry_tile)(tile);
-                (self.shared.mark_dirty)(tile);
+            if (self.s.industry_belongs)(industry, tile.0) {
+                (self.s.reset_industry_tile)(tile.0);
+                (self.shared.mark_dirty)(tile.0);
             }
         }
     }

@@ -513,7 +513,7 @@ impl<'a> Commands<'a> {
         // directly have an owner so we need to check adjacent tiles. This won't work
         // correctly in the same loop if the adjacent tile was already deleted earlier in
         // the loop.
-        for current_tile in crate::map_func::Map::iterate(self.map_size()).map(TileIndex) {
+        for current_tile in crate::map_func::Map::iterate(self.map_size()) {
             if self.tile_type(current_tile) == TileType::MP_TUNNELBRIDGE
                 && self.test_town_owns_bridge(current_tile, t)
             {
@@ -524,7 +524,7 @@ impl<'a> Commands<'a> {
             }
         }
         // Check all remaining tiles for town ownership.
-        for current_tile in crate::map_func::Map::iterate(self.map_size()).map(TileIndex) {
+        for current_tile in crate::map_func::Map::iterate(self.map_size()) {
             let try_clear = match self.tile_type(current_tile) {
                 TileType::MP_ROAD => {
                     self.town_owned_road(current_tile)
@@ -1121,7 +1121,7 @@ unsafe fn town_destruct(s: &CommandServices, t: TownRef) {
             );
         }
         // Check no tile is related to us.
-        for tile in crate::map_func::Map::iterate(c.map_size()).map(TileIndex) {
+        for tile in crate::map_func::Map::iterate(c.map_size()) {
             match c.tile_type(tile) {
                 TileType::MP_HOUSE => {
                     native_assert(c.shared, TownId((c.shared.town_index)(tile.0)) != t.id);

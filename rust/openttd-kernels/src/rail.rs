@@ -3,6 +3,7 @@
 #![allow(unsafe_code)]
 use crate::rail_type::RAILTYPE_END;
 use crate::services::Services as Shared;
+use crate::tile_type::TileIndex;
 use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
 use crate::vehicle::{RailVehicleTypes, VehicleType};
@@ -125,10 +126,10 @@ pub extern "C" fn openttd_rust_rail_types(s: &Services, introduces: bool) -> u64
 
 impl crate::map_func::World<'_> {
     pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
-        use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-        match self.kind(t) {
-            MP_RAILWAY => return self.rail_type(t),
-            MP_ROAD
+        use crate::tile_type::TileType;
+        match self.kind(TileIndex(t)) {
+            TileType::MP_RAILWAY => return self.rail_type(t),
+            TileType::MP_ROAD
                 if crate::road_map::get_road_tile_type(&self.types, t)
                     .expect("road tile")
                     .0
@@ -136,8 +137,8 @@ impl crate::map_func::World<'_> {
             {
                 return self.rail_type(t);
             }
-            MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
-            MP_TUNNELBRIDGE
+            TileType::MP_STATION if self.station_rail_raw(t) => return self.rail_type(t),
+            TileType::MP_TUNNELBRIDGE
                 if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
                     &self.types,
                     crate::tile_type::TileIndex(t),

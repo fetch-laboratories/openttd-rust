@@ -524,19 +524,19 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
         return;
     }
     for tile in crate::map_func::Map::iterate(count) {
-        let convert = match (s.tile_type)(tile) {
+        let convert = match (s.tile_type)(tile.0) {
             MP_RAILWAY => true,
-            MP_ROAD => crate::map_func::World::new(s).level_crossing_tile(tile),
-            MP_STATION => crate::map_func::World::new(s).station_has_rail(tile),
+            MP_ROAD => crate::map_func::World::new(s).level_crossing_tile(tile.0),
+            MP_STATION => crate::map_func::World::new(s).station_has_rail(tile.0),
             MP_TUNNELBRIDGE => {
-                crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL
+                crate::map_func::World::new(s).tunnel_bridge_transport(tile.0) == TRANSPORT_RAIL
             }
             _ => false,
         };
         if convert {
             (map.set_rail_type)(
-                tile,
-                conversion[usize::from(crate::map_func::World::new(s).rail_type(tile))],
+                tile.0,
+                conversion[usize::from(crate::map_func::World::new(s).rail_type(tile.0))],
             );
         }
     }
@@ -573,24 +573,24 @@ pub unsafe extern "C" fn openttd_rust_road_saved_convert(
         return;
     }
     for tile in crate::map_func::Map::iterate(count) {
-        let convert = match (s.tile_type)(tile) {
+        let convert = match (s.tile_type)(tile.0) {
             MP_ROAD => true,
-            MP_STATION => crate::map_func::World::new(s).any_road_stop_tile(tile),
+            MP_STATION => crate::map_func::World::new(s).any_road_stop_tile(tile.0),
             MP_TUNNELBRIDGE => {
-                crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_ROAD
+                crate::map_func::World::new(s).tunnel_bridge_transport(tile.0) == TRANSPORT_ROAD
             }
             _ => false,
         };
         if !convert {
             continue;
         }
-        let rt = (s.road_type)(tile);
+        let rt = (s.road_type)(tile.0);
         if rt != INVALID_ROADTYPE {
-            crate::road_map::set_road_type_road(s, tile, conversion[usize::from(rt)]);
+            crate::road_map::set_road_type_road(s, tile.0, conversion[usize::from(rt)]);
         }
-        let rt = (s.tram_type)(tile).0;
+        let rt = (s.tram_type)(tile.0).0;
         if rt != INVALID_ROADTYPE {
-            crate::road_map::set_road_type_tram(s, tile, conversion[usize::from(rt)]);
+            crate::road_map::set_road_type_tram(s, tile.0, conversion[usize::from(rt)]);
         }
     }
 }

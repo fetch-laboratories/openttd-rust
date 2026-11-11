@@ -8,6 +8,8 @@
 //! Read helpers of `water_map.h` for the audited map reader.
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::{TileFields, TileTypeAccess};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
 /// `WaterTileType::Lock`.
@@ -19,14 +21,14 @@ const COAST: u8 = 1;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    let fields = m.require_type(t, MP_WATER)?;
+    let fields = m.require_type(TileIndex(t), TileType::MP_WATER)?;
     Some(fields.m5() >> 4)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn has_tile_water_class(m: &TileTypeAccess, t: u32) -> Option<bool> {
     let probe = m.without_native_assert();
-    if let Some(fields) = probe.require_range(t) {
+    if let Some(fields) = probe.require_range(TileIndex(t)) {
         return Some(has_tile_water_class_from_fields(&fields));
     }
     has_tile_water_class_slow(m, t)
@@ -57,13 +59,13 @@ fn has_tile_water_class_from_fields(fields: &TileFields<'_>) -> bool {
 pub(crate) fn get_water_class(m: &TileTypeAccess, t: u32) -> Option<u8> {
     if m.assertions() {
         let probe = m.without_native_assert();
-        if let Some(fields) = probe.require_range(t) {
+        if let Some(fields) = probe.require_range(TileIndex(t)) {
             m.check(has_tile_water_class_from_fields(&fields))?;
             return Some((fields.m1() >> 5) & 3);
         }
         m.check(has_tile_water_class_slow(m, t)?)?;
     }
-    Some((m.fields(t)?.m1() >> 5) & 3)
+    Some((m.fields(TileIndex(t))?.m1() >> 5) & 3)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -73,7 +75,7 @@ pub(crate) fn is_coast(m: &TileTypeAccess, t: u32) -> Option<bool> {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    let fields = m.require_type(t, MP_WATER)?;
+    let fields = m.require_type(TileIndex(t), TileType::MP_WATER)?;
     Some(fields.m3() & 1 != 0)
 }
 
@@ -117,12 +119,15 @@ impl crate::map_func::World<'_> {
     /// `GetLockDirection`, with its `IsLock` assertion.
     pub(crate) fn lock_direction(&self, t: u32) -> u8 {
         self.check(self.water_tile_type(t) == WATER_TILE_LOCK);
-        Self::byte(self.types.m5(t)) & 3
+        Self::byte(self.types.m5(TileIndex(t))) & 3
     }
     /// `GetShipDepotAxis`, with its `IsShipDepotTile` assertion.
     pub(crate) fn ship_depot_axis(&self, t: u32) -> u8 {
-        self.check(self.kind(t) == MP_WATER && self.water_tile_type(t) == WATER_TILE_DEPOT);
-        (Self::byte(self.types.m5(t)) >> 1) & 1
+        self.check(
+            self.kind(TileIndex(t)) == TileType::MP_WATER
+                && self.water_tile_type(t) == WATER_TILE_DEPOT,
+        );
+        (Self::byte(self.types.m5(TileIndex(t))) >> 1) & 1
     }
 }
 

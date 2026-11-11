@@ -194,7 +194,7 @@ pub(crate) fn is_tile_forest_industry(tile: TileIndex, s: &Services) -> bool {
     let shared = s.shared();
     let world = crate::map_func::World::new(shared);
     // Check for industry tile
-    if TileType(world.types.read(tile.0)) != TileType::MP_INDUSTRY {
+    if world.types.read(tile) != TileType::MP_INDUSTRY {
         return false;
     }
     let catchment = unsafe { &*(shared.station_catchment)() };

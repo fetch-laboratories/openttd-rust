@@ -9,11 +9,13 @@
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::bitmath_func::gb;
 use crate::map_func::TileTypeAccess;
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// `GetRailGroundType` has no tile-type precondition in the original.
 #[inline]
 pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    Some(m.m4(t)? & 15)
+    Some(m.m4(TileIndex(t))? & 15)
 }
 
 /// `RailTileType::Normal`, asserted by native compilation.
@@ -35,27 +37,29 @@ pub const RAIL_TILE_DEPOT: u8 = RailTileType::Depot.0;
 impl crate::map_func::World<'_> {
     /// `GetRailTileType`, retaining the native tile-type assertion.
     pub(crate) fn rail_tile_type(&self, tile: u32) -> u8 {
-        self.asserted(|m| Some(m.require_type(tile, crate::tile_type::MP_RAILWAY)?.m5() >> 6))
+        self.asserted(|m| Some(m.require_type(TileIndex(tile), TileType::MP_RAILWAY)?.m5() >> 6))
     }
 
     #[inline]
     pub(crate) fn plain_rail(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_RAILWAY
-            && gb(u32::from(Self::byte(self.types.m5(t))), 6, 2) <= u32::from(RAIL_TILE_SIGNALS)
+        self.kind(TileIndex(t)) == TileType::MP_RAILWAY
+            && gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 6, 2)
+                <= u32::from(RAIL_TILE_SIGNALS)
     }
     #[inline]
     pub(crate) fn rail_depot(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_RAILWAY
-            && gb(u32::from(Self::byte(self.types.m5(t))), 6, 2) == u32::from(RAIL_TILE_DEPOT)
+        self.kind(TileIndex(t)) == TileType::MP_RAILWAY
+            && gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 6, 2)
+                == u32::from(RAIL_TILE_DEPOT)
     }
     #[inline]
     pub(crate) fn rail_type(&self, t: u32) -> u8 {
-        gb(u32::from(Self::word(self.types.m8(t))), 0, 6) as u8
+        gb(u32::from(Self::word(self.types.m8(TileIndex(t)))), 0, 6) as u8
     }
     #[inline]
     pub(crate) fn tracks(&self, t: u32) -> u8 {
         self.check(self.plain_rail(t));
-        gb(u32::from(Self::byte(self.types.m5(t))), 0, 6) as u8
+        gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 0, 6) as u8
     }
     /// `HasSignals`.
     pub(crate) fn has_signals(&self, t: u32) -> bool {
@@ -75,11 +79,11 @@ impl crate::map_func::World<'_> {
     }
     /// `GetPresentSignals`.
     pub(crate) fn present_signals(&self, t: u32) -> u8 {
-        (Self::byte(self.types.m3(t)) >> 4) & 0xF
+        (Self::byte(self.types.m3(TileIndex(t))) >> 4) & 0xF
     }
     /// `GetSignalStates`.
     pub(crate) fn signal_states(&self, t: u32) -> u8 {
-        (Self::byte(self.types.m4(t)) >> 4) & 0xF
+        (Self::byte(self.types.m4(TileIndex(t))) >> 4) & 0xF
     }
     /// `GetSignalStateByTrackdir`: 1 is `SIGNAL_STATE_GREEN`.
     pub(crate) fn signal_state_by_trackdir(&self, t: u32, trackdir: u8) -> u8 {
@@ -122,11 +126,11 @@ impl crate::map_func::World<'_> {
             } else {
                 0
             };
-        gb(u32::from(Self::word(self.types.m2(t))), pos, 3) as u8
+        gb(u32::from(Self::word(self.types.m2(TileIndex(t)))), pos, 3) as u8
     }
     #[inline]
     pub(crate) fn rail_depot_dir(&self, t: u32) -> u8 {
-        gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
+        gb(u32::from(Self::byte(self.types.m5(TileIndex(t)))), 0, 2) as u8
     }
 }
 

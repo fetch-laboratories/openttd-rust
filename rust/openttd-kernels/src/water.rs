@@ -22,6 +22,8 @@ use crate::slope_func::{
     is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
     is_slope_with_three_corners_raised_raw, is_steep_slope_raw,
 };
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// `RIVER_OFFSET_DESERT_DISTANCE`: diameter of the non-desert search around a river tile.
 pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
@@ -247,7 +249,7 @@ impl<'a> World<'a> {
         unsafe { &*self.w.company }
     }
     fn tile_type(&self, tile: u32) -> u8 {
-        self.types.read(tile)
+        self.types.read(TileIndex(tile)).0
     }
     /// Original `IsValidTile`: `tile < Map::Size() && !IsTileType(tile, MP_VOID)`.
     /// Legal map dimensions are powers of two whose product fits in u32.
@@ -667,9 +669,19 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
         let shared = &*s;
         let map = crate::map_func::World::new(shared);
         let types = &map.types;
-        let tile_type = types.read(tile);
-        let ambient = tile_type == 6 && crate::newgrf_generic::ambient_enabled();
-        water_tile_loop(tile, tile_type, ambient, size_x, size_y, call, w, s, types);
+        let tile_type = types.read(TileIndex(tile));
+        let ambient = tile_type == TileType(6) && crate::newgrf_generic::ambient_enabled();
+        water_tile_loop(
+            tile,
+            tile_type.0,
+            ambient,
+            size_x,
+            size_y,
+            call,
+            w,
+            s,
+            types,
+        );
     };
 }
 /// Original `TileLoop_Water` after its caller has read `GetTileType(tile)`; `ambient` is

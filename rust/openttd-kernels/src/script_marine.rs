@@ -14,6 +14,7 @@ use crate::map_func::World;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, enforce, valid, world};
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tile_type::{MP_STATION, MP_WATER};
 use crate::water_map::{WATER_TILE_DEPOT, WATER_TILE_LOCK};
 
@@ -23,7 +24,7 @@ const REFUSED: u8 = 0xFF;
 /// `IsTileType(tile, kind)` and `read` on a valid tile.
 fn on_type(s: &Services, tile: u32, kind: u8, read: impl Fn(&World<'_>) -> bool) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == kind && read(&w)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType(kind) && read(&w)
 }
 
 fn water_tile_type(w: &World<'_>, tile: u32) -> u8 {

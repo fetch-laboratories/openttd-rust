@@ -19,6 +19,7 @@ use crate::map_func::World;
 use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::track_func::{
     diagdir_reaches_trackdirs, reverse_trackdir, track_bits_to_trackdir_bits,
     track_status_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
@@ -244,7 +245,7 @@ impl State {
         self.is_bridge = false;
         self.is_tunnel = false;
         self.tiles_skipped = 0;
-        if w.kind(self.old_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+        if w.kind(self.old_tile) == TileType::MP_TUNNELBRIDGE {
             let dir = w.tunnel_bridge_dir(self.old_tile.0);
             if dir == self.exitdir {
                 if w.tunnel(self.old_tile.0) {
@@ -331,7 +332,7 @@ impl State {
                 return false;
             }
         }
-        if w.kind(self.new_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+        if w.kind(self.new_tile) == TileType::MP_TUNNELBRIDGE {
             if w.tunnel(self.new_tile.0) {
                 if !self.is_tunnel && w.tunnel_bridge_dir(self.new_tile.0) != self.exitdir {
                     self.err = EC_NO_WAY;
@@ -468,7 +469,7 @@ pub(crate) fn speed_limit_with_road(
     let w = World::new(s);
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
-    if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
+    if mode != WATER && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile) {
         speed = i32::from((m.tunnel_bridge().speed)(w.bridge_type(tile)));
         if mode == ROAD {
             speed *= 2;

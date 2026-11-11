@@ -24,7 +24,8 @@ use crate::slope_func::{
     is_steep_slope_raw,
 };
 use crate::tile_type::TileIndex;
-use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_ROAD, MP_STATION, MP_TREES, MP_WATER};
+use crate::tile_type::TileType;
+use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_STATION, MP_TREES, MP_WATER};
 
 /// `ScriptError::ERR_PRECONDITION_FAILED`.
 pub(crate) const ERR_PRECONDITION_FAILED: u32 = 2;
@@ -46,7 +47,7 @@ pub(crate) fn valid(w: &World<'_>, tile: u32) -> bool {
 
 /// `::IsTileType` after a successful `IsValidTile`.
 fn is_type(w: &World<'_>, tile: u32, kind: u8) -> bool {
-    w.kind(tile) == kind
+    w.kind(TileIndex(tile)) == TileType(kind)
 }
 
 /// `ScriptCompanyMode::IsValid`.
@@ -172,10 +173,10 @@ fn is_buildable(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    match w.kind(tile) {
-        MP_CLEAR | MP_TREES => true,
-        MP_WATER => w.asserted(|m| crate::water_map::is_coast(m, tile)),
-        MP_ROAD => {
+    match w.kind(TileIndex(tile)) {
+        TileType::MP_CLEAR | TileType::MP_TREES => true,
+        TileType::MP_WATER => w.asserted(|m| crate::water_map::is_coast(m, tile)),
+        TileType::MP_ROAD => {
             /* Tram bits aren't considered buildable */
             if w.road_type(tile, true) != crate::road_type::INVALID_ROADTYPE {
                 return false;

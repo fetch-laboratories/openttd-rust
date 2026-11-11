@@ -10,6 +10,7 @@
 use crate::direction_type::DiagDirection;
 use crate::industry_type::IndustryID;
 use crate::map_func::{TileFields, TileTypeAccess};
+use crate::tile_type::TileType;
 use crate::tile_type::{MP_CLEAR, TileIndex};
 /// `ClearGround::CLEAR_GRASS`.
 pub(crate) const CLEAR_GRASS: u8 = ClearGround::CLEAR_GRASS.0;
@@ -25,7 +26,9 @@ pub(crate) const CLEAR_FIELDS: u8 = ClearGround::CLEAR_FIELDS.0;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_snow_tile(m: &TileTypeAccess, t: TileIndex) -> Option<bool> {
-    Some(is_snow_tile_from_fields(&m.require_type(t.0, MP_CLEAR)?))
+    Some(is_snow_tile_from_fields(
+        &m.require_type(t, TileType::MP_CLEAR)?,
+    ))
 }
 /// `IsSnowTile` over fields already checked as `MP_CLEAR`.
 #[allow(clippy::inline_always)]
@@ -38,7 +41,7 @@ pub(crate) fn is_snow_tile_from_fields(fields: &TileFields<'_>) -> bool {
 #[inline(always)]
 pub(crate) fn get_clear_ground(m: &TileTypeAccess, t: TileIndex) -> Option<ClearGround> {
     Some(get_clear_ground_from_fields(
-        &m.require_type(t.0, MP_CLEAR)?,
+        &m.require_type(t, TileType::MP_CLEAR)?,
     ))
 }
 /// `GetClearGround` over fields already checked as `MP_CLEAR`.
@@ -52,7 +55,7 @@ pub(crate) fn get_clear_ground_from_fields(fields: &TileFields<'_>) -> ClearGrou
 #[inline(always)]
 pub(crate) fn get_clear_density(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
     Some(get_clear_density_from_fields(
-        &m.require_type(t.0, MP_CLEAR)?,
+        &m.require_type(t, TileType::MP_CLEAR)?,
     ))
 }
 /// `GetClearDensity` over fields already checked as `MP_CLEAR`.
@@ -65,7 +68,7 @@ pub(crate) fn get_clear_density_from_fields(fields: &TileFields<'_>) -> u8 {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
-    let fields = m.require_type(t.0, MP_CLEAR)?;
+    let fields = m.require_type(t, TileType::MP_CLEAR)?;
     Some(fields.m5() >> 5)
 }
 /// The fields of a tile, checked as `IsClearGround(t, CLEAR_FIELDS)` when asserting.
@@ -73,13 +76,13 @@ pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: TileIndex) -> Option<u8> 
 #[inline(always)]
 pub(crate) fn require_field(m: &TileTypeAccess, t: TileIndex) -> Option<TileFields<'_>> {
     let fields = if m.assertions() {
-        let fields = m.require_type(t.0, MP_CLEAR)?;
+        let fields = m.require_type(t, TileType::MP_CLEAR)?;
         if get_clear_ground_from_fields(&fields) != ClearGround::CLEAR_FIELDS {
             return None;
         }
         fields
     } else {
-        m.fields(t.0)?
+        m.fields(t)?
     };
     Some(fields)
 }

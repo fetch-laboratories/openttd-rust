@@ -22,6 +22,7 @@ use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_map::{set_tile_height, set_tile_type, tile_height_in};
 use crate::tile_type::MP_WATER;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::timer_game_calendar::{
     DEF_MINUTES_PER_YEAR, FROZEN_MINUTES_PER_YEAR, MAX_MINUTES_PER_YEAR,
 };
@@ -412,7 +413,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
     let w = World::new(s.shared);
     let max_x = map.max_x();
     let max_y = Map::max_y(w.size_y());
-    let water = |t: u32| w.kind(t) == MP_WATER;
+    let water = |t: u32| w.kind(TileIndex(t)) == TileType::MP_WATER;
     let edges_land = (0..max_x).any(|i| tile_height_in(&w, map.tile_xy(i, 1).0) != 0)
         || (1..max_x).any(|i| {
             !water(map.tile_xy(i, max_y - 1).0) || tile_height_in(&w, map.tile_xy(1, max_y).0) != 0
@@ -479,7 +480,8 @@ fn check_max_height_level(s: &Services, new_value: i32) -> bool {
     let w = World::new(s.shared);
     // `(int32_t)TileHeight(t)` of a byte height.
     #[allow(clippy::cast_possible_wrap)]
-    let too_high = Map::iterate(w.types.count()).any(|t| tile_height_in(&w, t) as i32 > new_value);
+    let too_high =
+        Map::iterate(w.types.count()).any(|t| tile_height_in(&w, t.0) as i32 > new_value);
     if too_high {
         hit(witness::SETTINGS_HEIGHT_REFUSED);
         return refuse(s, s.too_high_mountain);

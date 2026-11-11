@@ -26,6 +26,7 @@ use crate::economy_type::EXPENSES_OTHER;
 use crate::raw_field::{read_field, write_field};
 use crate::tile_owner::change_tile_owner;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -1349,7 +1350,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             // `IsTileType(MP_RAILWAY)`, then `IsLevelCrossingTile` off rail; only those two
             // kinds read `GetTileOwner`. `HasSignals` follows the owner test.
             let world = crate::map_func::World::new(s.shared);
-            let railway = world.kind(tile) == crate::tile_type::MP_RAILWAY;
+            let railway = world.kind(TileIndex(tile)) == TileType::MP_RAILWAY;
             let crossing = !railway && world.level_crossing_tile(tile);
             let owner = if railway || crossing {
                 world.owner(tile)

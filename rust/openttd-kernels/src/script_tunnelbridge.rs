@@ -17,6 +17,7 @@ use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, company_mode_valid, enforce, valid, world};
 use crate::script_vehicle::{VT_RAIL, VT_ROAD, VT_WATER};
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tunnelbridge_cmd::TunnelBridgeServices;
 
 /// `ScriptBridge::IsValidBridge`: `bridge_type < MAX_BRIDGES` and the type is
@@ -28,12 +29,12 @@ fn valid_bridge(tb: &TunnelBridgeServices, bridge_type: u32) -> bool {
 
 fn bridge_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile)
 }
 
 fn tunnel_tile(s: &Services, tile: u32) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.tunnel(tile)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.tunnel(tile)
 }
 
 /// `ScriptBridge::GetBridgeType`; `(BridgeType)-1` for other tiles.

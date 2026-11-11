@@ -1755,7 +1755,7 @@ impl Ctx<'_> {
          * so station points to StationID::Invalid() if we can build on any station.
          * Or it points to a station if we're only allowed to build on exactly that station. */
         let world = crate::map_func::World::new(self.shared);
-        if world.kind(tile_cur.0) == TileType::MP_STATION.0 {
+        if world.kind(tile_cur) == TileType::MP_STATION {
             if !world.is_rail_station(tile_cur) {
                 return self.auto_clear(cost, tile_cur); // get error message
             }

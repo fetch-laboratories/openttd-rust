@@ -22,6 +22,7 @@ use crate::services::{
 };
 use crate::slope_func::{is_slope_with_three_corners_raised_raw, is_steep_slope_raw};
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
 pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
@@ -369,7 +370,7 @@ pub(crate) unsafe fn clear_tile_loop(
         // precondition; a failed probe leaves the original assertion sequence to
         // the native group, including handlers that return.
         let probe = map.without_native_assert();
-        let Some(fields) = probe.require_type(tile, crate::tile_type::MP_CLEAR) else {
+        let Some(fields) = probe.require_type(TileIndex(tile), TileType::MP_CLEAR) else {
             break 'surface None;
         };
         let snow = crate::clear_map::is_snow_tile_from_fields(&fields);

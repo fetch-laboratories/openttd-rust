@@ -17,6 +17,7 @@ use crate::script_tile::{
     ERR_PRECONDITION_FAILED, deity_or_company_mode_valid, enforce, has_transport_type, valid, world,
 };
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::track_type::{
     INVALID_TRACK, INVALID_TRACKDIR, TRACK_BIT_ALL, TRACK_LEFT, TRACK_LOWER, TRACK_RIGHT,
     TRACK_UPPER, TRACK_X, TRACK_Y, TRACKDIR_LEFT_N, TRACKDIR_LEFT_S, TRACKDIR_LOWER_E,
@@ -84,7 +85,7 @@ fn rail_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(tile) == crate::tile_type::MP_RAILWAY && !w.rail_depot(tile))
+    (w.kind(TileIndex(tile)) == TileType::MP_RAILWAY && !w.rail_depot(tile))
         || (w.station_rail_raw(tile) && !w.station_blocked(tile))
         || w.level_crossing_tile(tile)
 }
@@ -625,7 +626,7 @@ pub extern "C" fn openttd_rust_script_rail_signal_type(s: &Services, tile: u32, 
         return SIGNALTYPE_NONE;
     }
     let w = world(s);
-    if w.kind(tile) != crate::tile_type::MP_RAILWAY || !w.has_signals(tile) {
+    if w.kind(TileIndex(tile)) != TileType::MP_RAILWAY || !w.has_signals(tile) {
         return SIGNALTYPE_NONE;
     }
     for (track, trackdir, _) in POSSIBLE_TRACKDIRS[data_index(&w, tile, front)] {

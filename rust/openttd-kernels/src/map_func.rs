@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
-use crate::tile_type::TileIndex;
+use crate::tile_type::{TileIndex, TileType};
 
 /// Map dimensions read once per entry.
 #[derive(Clone, Copy)]
@@ -19,10 +19,9 @@ pub struct Map {
 }
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
-    #[must_use]
     #[inline]
-    pub fn iterate(count: u32) -> std::ops::Range<u32> {
-        0..count
+    pub fn iterate(count: u32) -> impl DoubleEndedIterator<Item = TileIndex> + ExactSizeIterator {
+        (0..count).map(TileIndex)
     }
 
     /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
@@ -464,7 +463,7 @@ macro_rules! map_fields {
     ($array:ident: $layout:ty => $($field:ident: $scalar:ty),*) => {$ (
         #[allow(clippy::inline_always)]
     #[inline(always)]
-        pub(crate) fn $field(&self, tile: u32) -> Option<$scalar> {
+        pub(crate) fn $field(&self, tile: TileIndex) -> Option<$scalar> {
             Some(self.fields(tile)?.$field())
         }
     )*};
@@ -497,10 +496,10 @@ impl TileFields<'_> {
 macro_rules! map_stores {
     ($array:ident: $layout:ty => $($setter:ident . $field:ident: $scalar:ty),*) => {$ (
         #[inline]
-        pub(crate) fn $setter(&self, tile: u32, value: $scalar) -> Option<()> {
+        pub(crate) fn $setter(&self, tile: TileIndex, value: $scalar) -> Option<()> {
             self.available(tile)?;
             // SAFETY: Live allocation under the entry contract, one scalar only.
-            unsafe { std::ptr::addr_of_mut!((*self.allocation.$array.cast_mut().add(tile as usize)).$field).write(value) };
+            unsafe { std::ptr::addr_of_mut!((*self.allocation.$array.cast_mut().add(tile.0 as usize)).$field).write(value) };
             Some(())
         }
     )*};
@@ -530,22 +529,24 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn read(&self, tile: u32) -> u8 {
-        crate::tile_map::get_tile_type(self, tile).unwrap_or_else(|| (self.callback)(tile))
+    pub(crate) fn read(&self, tile: TileIndex) -> TileType {
+        TileType(
+            crate::tile_map::get_tile_type(self, tile.0).unwrap_or_else(|| (self.callback)(tile.0)),
+        )
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn field_addresses(&self, tile: u32) -> TileFields<'_> {
+    fn field_addresses(&self, tile: TileIndex) -> TileFields<'_> {
         TileFields {
-            base: self.allocation.base.wrapping_add(tile as usize),
-            extended: self.allocation.extended.wrapping_add(tile as usize),
+            base: self.allocation.base.wrapping_add(tile.0 as usize),
+            extended: self.allocation.extended.wrapping_add(tile.0 as usize),
             _metadata: std::marker::PhantomData,
         }
     }
     /// Raw Tile fields have no source assertions; callback-only readers use None.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn fields(&self, tile: u32) -> Option<TileFields<'_>> {
+    pub(crate) fn fields(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         self.available(tile)?;
         Some(self.field_addresses(tile))
     }
@@ -553,8 +554,8 @@ impl TileTypeAccess {
     /// Raw backend availability; assertion-disabled builds add no range rejection.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        if tile < self.allocation.count {
+    pub(crate) fn available(&self, tile: TileIndex) -> Option<()> {
+        if tile.0 < self.allocation.count {
             return Some(());
         }
         if self.allocation.count == 0 {
@@ -618,18 +619,20 @@ impl TileTypeAccess {
     /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
+    pub(crate) fn require_range(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         // A successful source bounds check also proves a nonempty backend.
-        if tile < self.count() {
+        if tile.0 < self.count() {
             return Some(self.field_addresses(tile));
         }
         self.outside_range(tile)
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
+    pub(crate) fn require_type(&self, tile: TileIndex, kind: TileType) -> Option<TileFields<'_>> {
         let fields = self.require_range(tile)?;
-        if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
+        if self.assertions()
+            && TileType(crate::tile_map::get_tile_type_from_fields(&fields)) != kind
+        {
             self.failed_check()?;
         }
         Some(fields)
@@ -639,7 +642,7 @@ impl TileTypeAccess {
     // are disabled or the native handler returns.
     #[cold]
     #[inline(never)]
-    fn outside_range(&self, tile: u32) -> Option<TileFields<'_>> {
+    fn outside_range(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         if self.count() == 0 {
             return None;
         }
@@ -649,19 +652,19 @@ impl TileTypeAccess {
         Some(self.field_addresses(tile))
     }
     /// Field-sized stores under the same serialized allocation contract as reads.
-    pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
+    pub(crate) fn set_m3(&self, tile: TileIndex, value: u8) -> Option<()> {
         self.available(tile)?;
         unsafe {
-            std::ptr::addr_of!((*self.allocation.base.add(tile as usize)).m3)
+            std::ptr::addr_of!((*self.allocation.base.add(tile.0 as usize)).m3)
                 .cast_mut()
                 .write(value);
         }
         Some(())
     }
-    pub(crate) fn set_m8(&self, tile: u32, value: u16) -> Option<()> {
+    pub(crate) fn set_m8(&self, tile: TileIndex, value: u16) -> Option<()> {
         self.available(tile)?;
         unsafe {
-            std::ptr::addr_of!((*self.allocation.extended.add(tile as usize)).m8)
+            std::ptr::addr_of!((*self.allocation.extended.add(tile.0 as usize)).m8)
                 .cast_mut()
                 .write(value);
         }
@@ -714,7 +717,7 @@ impl<'a> World<'a> {
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn kind(&self, t: u32) -> u8 {
+    pub(crate) fn kind(&self, t: TileIndex) -> TileType {
         self.types.read(t)
     }
     /// `Map::SizeY()`, derived from the descriptor's tile count.

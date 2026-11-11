@@ -139,7 +139,7 @@ fn count_map_square_around(
 /// `CMSAMine`: whether the tile is a mine.
 fn cmsa_mine(tile: TileIndex, m: &TileTypeAccess, s: &Services) -> bool {
     /* No industry */
-    if TileType(m.read(tile.0)) != TileType::MP_INDUSTRY {
+    if m.read(tile) != TileType::MP_INDUSTRY {
         return false;
     }
     let shell = get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
@@ -171,11 +171,11 @@ fn cmsa_mine(tile: TileIndex, m: &TileTypeAccess, s: &Services) -> bool {
 }
 /// `CMSAWater`: whether the tile is a water tile.
 fn cmsa_water(tile: TileIndex, m: &TileTypeAccess) -> bool {
-    TileType(m.read(tile.0)) == TileType::MP_WATER && crate::water_map::is_water(m, tile.0).unwrap()
+    m.read(tile) == TileType::MP_WATER && crate::water_map::is_water(m, tile.0).unwrap()
 }
 /// `CMSATree`: whether the tile is a tree tile.
 fn cmsa_tree(tile: TileIndex, m: &TileTypeAccess) -> bool {
-    TileType(m.read(tile.0)) == TileType::MP_TREES
+    m.read(tile) == TileType::MP_TREES
 }
 /// `GenerateStationName`'s scan of the other stations of the same town: their
 /// industry types and used default names.
@@ -240,7 +240,7 @@ pub(crate) fn generate_station_name(
     while !spiral.is_end() {
         let indtile = map.tile_xy(spiral.x, spiral.y);
         spiral = spiral.advance(map.size_x(), size_y);
-        if TileType(m.read(indtile.0)) != TileType::MP_INDUSTRY {
+        if m.read(indtile) != TileType::MP_INDUSTRY {
             continue;
         }
         /* If the station name is undefined it means that it doesn't name a station */

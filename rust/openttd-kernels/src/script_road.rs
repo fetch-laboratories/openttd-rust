@@ -24,6 +24,7 @@ use crate::slope_func::{
     SLOPE_EW, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, SLOPE_W, SLOPE_WSE,
 };
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// `ScriptRoad::ROADVEHTYPE_BUS` and `ROADVEHTYPE_TRUCK`.
 const ROADVEHTYPE_BUS: u32 = 0;
@@ -122,7 +123,7 @@ fn current_road_tile(s: &Services, tile: u32, read: impl Fn(&World<'_>, u8) -> b
 
 fn road_depot_tile(s: &Services, tile: u32) -> bool {
     current_road_tile(s, tile, |w, rt| {
-        w.kind(tile) == crate::tile_type::MP_ROAD
+        w.kind(TileIndex(tile)) == TileType::MP_ROAD
             && w.road_tile_type(tile).0 == crate::road_map::ROAD_TILE_DEPOT
             && has_present(w, tile, rt)
     })
@@ -145,7 +146,7 @@ fn road_tile(s: &Services, tile: u32) -> bool {
     if !valid(&w, tile) {
         return false;
     }
-    (w.kind(tile) == crate::tile_type::MP_ROAD
+    (w.kind(TileIndex(tile)) == TileType::MP_ROAD
         && w.road_tile_type(tile).0 != crate::road_map::ROAD_TILE_DEPOT)
         || drive_through_station_tile(s, tile)
 }
@@ -505,11 +506,9 @@ fn neighbour_has_reachable_road(w: &World<'_>, rt: u8, start_tile: u32, neighbou
     if !has_present(w, neighbour_tile, rt) {
         return false;
     }
-    match w.kind(neighbour_tile) {
-        crate::tile_type::MP_ROAD => {
-            w.road_tile_type(neighbour_tile).0 != crate::road_map::ROAD_TILE_DEPOT
-        }
-        crate::tile_type::MP_STATION => {
+    match w.kind(TileIndex(neighbour_tile)) {
+        TileType::MP_ROAD => w.road_tile_type(neighbour_tile).0 != crate::road_map::ROAD_TILE_DEPOT,
+        TileType::MP_STATION => {
             w.drive_through_stop_tile(neighbour_tile)
                 && crate::direction_func::diag_dir_to_axis_raw(neighbour, check(w))
                     == w.drive_through_axis(neighbour_tile)
@@ -726,7 +725,7 @@ fn remove_road_depot(s: &Services, tile: u32) -> bool {
     let w = world(s);
     enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         && enforce(
-            w.kind(tile) == crate::tile_type::MP_ROAD,
+            w.kind(TileIndex(tile)) == TileType::MP_ROAD,
             ERR_PRECONDITION_FAILED,
         )
         && enforce(
@@ -742,7 +741,7 @@ pub extern "C" fn openttd_rust_script_road_remove_station(s: &Services, tile: u3
     let w = world(s);
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(
-            w.kind(tile) == crate::tile_type::MP_STATION,
+            w.kind(TileIndex(tile)) == TileType::MP_STATION,
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(w.station_road_stop(tile), ERR_PRECONDITION_FAILED)

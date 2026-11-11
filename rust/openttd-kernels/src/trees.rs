@@ -26,6 +26,7 @@ use crate::openttd::GameMode;
 use crate::random_func::chance16_i;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 use crate::tree_map::TREE_GROUND_SHORE as GROUND_SHORE;
 
@@ -1144,7 +1145,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         if target == INVALID_TILE {
             continue;
         }
-        if world.kind(target) == MP_TREES
+        if world.kind(TileIndex(target)) == TileType::MP_TREES
             && world.asserted(|m| crate::tree_map::get_tree_count_raw(m, target)) < 4
         {
             (services.add_count)(target, 1);
@@ -1166,7 +1167,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
         area.expand(radius.cast_signed(), map, size_y);
         for target in area.tiles(map) {
-            if world.kind(target) != crate::tile_type::MP_VOID
+            if world.kind(TileIndex(target)) != TileType::MP_VOID
                 && map.distance_square_raw(tile, target) < radius.wrapping_mul(radius)
             {
                 (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
