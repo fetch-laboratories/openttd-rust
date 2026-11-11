@@ -109,6 +109,8 @@ def prepare(
     )
     if traces["reference"] != traces["candidate"] or differences:
         raise RuntimeError("objectives production results, events or save state differ")
+    # Keep the independently executed original trace for #736's capture-before-retirement.
+    core.findings(result)["objectives_original_trace"] = traces["reference"]
     core.findings(result)["objectives_state"] = [
         line
         for line in traces["reference"]
