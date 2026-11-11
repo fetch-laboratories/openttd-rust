@@ -425,7 +425,7 @@ mod tests {
     use crate::tile_type::TileIndex;
     #[test]
     fn map_offsets_follow_the_original_tables() {
-        let map = Map { log_x: 8 };
+        let map = Map::from_log_x(8);
         assert_eq!(
             map.tile_add_by_diag_dir(
                 TileIndex(0x1010),

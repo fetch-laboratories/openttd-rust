@@ -847,9 +847,11 @@ unsafe fn world<'a>(
             shared: &*shared,
             rail: &*rail,
             native: &*native,
-            // Native allocation constrains LogX to 6..=12 (or zero before allocation);
-            // adapt once to the existing shared Map representation without guards.
-            map: Map::from_log_x(log_x),
+            map: {
+                let mut map = (&*shared).map();
+                map.log_x = log_x;
+                map
+            },
         }
     }
 }

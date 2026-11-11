@@ -115,7 +115,11 @@ impl World<'_> {
             water,
             size_x,
             size_y: (s.map_max_y)() + 1,
-            map: Map::from_log_x(size_x.trailing_zeros()),
+            map: {
+                let mut map = s.map();
+                map.log_x = size_x.trailing_zeros();
+                map
+            },
         }
     }
     fn error(&self, out: *mut CommandCost, string: u32) {

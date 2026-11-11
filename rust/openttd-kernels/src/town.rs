@@ -1083,9 +1083,11 @@ impl Engine<'_> {
         unsafe { self.services.settings().allow_town_level_crossings.read() }
     }
     fn map(&self) -> Map {
-        *self
-            .map
-            .get_or_init(|| Map::from_log_x((self.leaves.map_log_x)()))
+        *self.map.get_or_init(|| {
+            let mut map = self.services.map();
+            map.log_x = (self.leaves.map_log_x)();
+            map
+        })
     }
     /// `Map::SizeY()`, read at each original observation point.
     fn size_y(&self) -> u32 {

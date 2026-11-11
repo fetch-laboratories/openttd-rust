@@ -566,8 +566,10 @@ impl Game<'_> {
                 acceleration_model,
                 road_side,
                 queue,
-                map: Map {
-                    log_x: u32::from(log_x),
+                map: {
+                    let mut map = (&*l.shared).map();
+                    map.log_x = u32::from(log_x);
+                    map
                 },
             }
         }

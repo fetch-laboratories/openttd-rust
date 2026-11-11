@@ -122,6 +122,7 @@ struct IndustryCandidate {
 }
 struct Engine<'a> {
     context: &'a TransactionContext,
+    coordinates: crate::map_func::Map,
     s: &'a Services,
     g: &'a GenerationServices,
     c: &'a ConstructionServices,
@@ -169,7 +170,7 @@ impl Engine<'_> {
         self.map().coordinates().distance_max(a, b)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        self.map().coordinates().tile_add_xy(tile, x, y)
+        self.coordinates.tile_add_xy(tile, x, y)
     }
     fn tile_type(&self, tile: TileIndex) -> TileType {
         TileType((self.s.shared().tile_type)(tile.0))
@@ -934,6 +935,11 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
     unsafe {
         Engine {
             context,
+            coordinates: {
+                let mut map = (&*context.production).shared().map();
+                map.log_x = context.map.size_x.trailing_zeros();
+                map
+            },
             s: &*context.production,
             g: &*context.generation,
             c: &*context.construction,

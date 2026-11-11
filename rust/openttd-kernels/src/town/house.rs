@@ -315,9 +315,11 @@ pub(super) fn get_house_north_part(
 }
 impl<'a> House<'a> {
     fn map(&self) -> Map {
-        *self
-            .map
-            .get_or_init(|| Map::from_log_x((self.l.map_log_x)()))
+        *self.map.get_or_init(|| {
+            let mut map = self.s.map();
+            map.log_x = (self.l.map_log_x)();
+            map
+        })
     }
     fn engine(&self, town: TownRef) -> super::Engine<'_> {
         let mut engine = engine(self.l, self.s);

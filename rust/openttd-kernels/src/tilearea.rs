@@ -492,7 +492,7 @@ mod tests {
     use crate::tile_type::INVALID_TILE;
 
     // A 16x8 map; expectations come from the pinned `tilearea.cpp` bodies.
-    const MAP: Map = Map { log_x: 4 };
+    const MAP: Map = Map::from_log_x(4);
     const SIZE: u32 = 128;
 
     fn on_map(ok: bool) {
