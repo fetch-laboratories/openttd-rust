@@ -478,7 +478,7 @@ Entry 4 shares no file with #921, so #921 may take the other slot before #922 if
 
 #924 (root's question on dropping eight lapsed retained-worktree lines from the resume checkpoint, about 24 GB of SSD) is not work to dispatch. The user's answer brings it back; until then root leaves the listed worktrees and the checkpoint's list alone and reruns housekeeping after each merge.
 
-#892 is macro-only and rides remaining passes and closure; recorded `unwrap`/`expect` and release-overflow gaps belong to #734's passes and closure. #893 runs after closure and before the first phase-3 dispatch. Full phase-3 planning remains untriggered: of #734's 319 files, 98 are on the finished-file list, seven are dispatched and five are in this queue, leaving 209 files in 20 worksets with no entry.
+#892 is macro-only and rides remaining passes and closure; recorded `unwrap`/`expect` and release-overflow gaps belong to #734's passes and closure. #893 runs after closure and before the first phase-3 dispatch. #925 (two host faults that stop the threaded thread-sanitizer member: the reference build's address randomization and an unparseable Mesa driver race; filed from #891's trial) is fixed in a small tools PR before #893's all-member deep check, which cannot run that member without it; it waits for #916, which fixes the threaded adapter. Full phase-3 planning remains untriggered: of #734's 319 files, 98 are on the finished-file list, seven are dispatched and five are in this queue, leaving 209 files in 20 worksets with no entry.
 
 ## Resume checkpoint
 
