@@ -143,6 +143,7 @@ See [speed](speed.md) for benchmarks and profiles and [deep checks](deep-checks.
 - CMake checks the pinned Rust host against the C++ platform, architecture and 64-bit pointers. macOS requires `CMAKE_OSX_ARCHITECTURES=arm64`, deployment minimum 11.0 or newer, and matching `SDKROOT` and `MACOSX_DEPLOYMENT_TARGET` for Rust. Intel packaging is separate work.
 - Emscripten requires `wasm32-unknown-emscripten` std as well as host std. Use emsdk 4.0.23 and `-fwasm-exceptions` for C++ compilation and linking. CI runs `openttd_rust_abi` with emsdk node 22.16.0.
 - The archive is `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`; `rust_configuration(build)` and `rust_archive(build)` in `tools/migration.py` locate it. Imported `HOST_BINARY_DIR` tools remain host executables.
+- Linux GCC SDL2, in `native` and Full, builds CMake's default Debug with `OPTION_USE_ASSERTS`, as macOS Debug does, so a `_DEBUG`-only assertion fails before the queue (#911). Without that option `cmake/Options.cmake` adds `NDEBUG`, which compiles every `assert` out; GCC Dedicated and Clang keep that configuration.
 - macOS Debug uses `OPTION_USE_ASSERTS`; Release defines `NDEBUG`. Both run Cargo checks, nonempty CTest and scripted regressions, and fresh native tools. `tools/check-rust-platform.py` checks linkage, flags and archive rebuilds. Linux results do not establish Darwin support.
 
 ## Native Windows MSVC Rust linkage
