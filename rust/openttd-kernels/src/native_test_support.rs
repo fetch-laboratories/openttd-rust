@@ -590,18 +590,6 @@ pub unsafe extern "C" fn openttd_test_grf_text_dump(
     unsafe { crate::newgrf_text::visit(context, visitor) }
 }
 
-/// Exercise the production Action 2 parser with a native reader.
-/// # Safety
-/// The services and reader satisfy the Action 2 module's serialized lifetime contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_action2_parse(
-    s: &crate::newgrf_act2::Services,
-    l: &crate::newgrf_loading::Services,
-    reader: &mut crate::newgrf_bytereader::Cursor,
-) -> u8 {
-    u8::from(unsafe { crate::newgrf_act2::parse_action(s, l, reader) })
-}
-
 /// Exercise the aircraft controller over native fixture handles.
 /// # Safety
 /// Handles and immutable services satisfy the aircraft module's synchronous contract.

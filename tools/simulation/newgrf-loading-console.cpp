@@ -217,46 +217,6 @@ static void GrfTownNameTowns()
 		fmt::print(stderr, "LOADING townname town {} {} {:08X} {} {:08X} {}\n", gen, id.base(), t->townnamegrfid, t->townnametype, t->townnameparts, Hex(GetTownName(t)));
 	}
 }
-static void ResetAction2Callbacks(bool final)
-{
-#ifdef WITH_RUST
-	openttd_rust_action2_reset(final);
-#else
-	ResetCallbacks(final);
-#endif
-}
-/** Production parses needing the native cargo registry; the rest moved to newgrf_act2::evidence_tests. */
-static void Action2ProductionCargo()
-{
-	auto groups = _cur_gps.spritegroups;
-	AutoRestoreBackup file(_cur_gps.grffile, GetFileByGRFID(ID("R471")));
-	AutoRestoreBackup line(_cur_gps.nfo_line, 485U);
-	ResetAction2Callbacks(false);
-	auto parse = [](std::initializer_list<uint8_t> bytes) {
-#ifdef WITH_RUST
-		OpenTTDGrfCursor reader{bytes.begin(), bytes.size(), 0};
-		bool success = openttd_test_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
-		return std::pair{!success, reader.len - reader.pos};
-#else
-		ByteReader reader(bytes.begin(), bytes.size());
-		try {
-			NewSpriteGroup(reader);
-			return std::pair{false, reader.Remaining()};
-		}
-		catch (const OTTDByteReaderSignal &) { return std::pair{true, reader.Remaining()}; }
-#endif
-	};
-	GRFConfig errors("action2-parser-probe");
-	AutoRestoreBackup config(_cur_gps.grfconfig, &errors);
-	AutoRestoreBackup skip(_cur_gps.skip_sprites, 0);
-	Require(!parse({10, 207, 2, 2, 0, 9, 0}).first && errors.errors.back().data == "duplicate input cargo" && _cur_gps.spritegroups[207] == nullptr, "action2-production-duplicate-error");
-	_cur_gps.skip_sprites = 0;
-	Require(!parse({10, 208, 2, 1, 255, 9, 0, 0}).first, "action2-invalid-cargo-parse");
-	const auto *invalid = static_cast<const IndustryProductionSpriteGroup *>(_cur_gps.spritegroups[208]);
-	Require(invalid->version == 255 && invalid->cargo_input[0] == INVALID_CARGO && invalid->subtract_input[0] == 9, "action2-invalid-cargo-version");
-	ResetAction2Callbacks(true);
-	_cur_gps.spritegroups = groups;
-}
 static void Inspect(bool reload)
 {
 	Require(_cur_gps.file == nullptr && _cur_gps.grffile == nullptr && _cur_gps.grfconfig == nullptr && _cur_gps.nfo_line == 0 && _cur_gps.skip_sprites == 0 && std::ranges::all_of(_cur_gps.spritegroups, [](const auto *group) { return group == nullptr; }), "execution-restored");
@@ -312,7 +272,6 @@ static void Inspect(bool reload)
 			Require(found, "action2-industry-reload");
 		}
 	}
-	Action2ProductionCargo();
 	if (!reload) Require(GetGRFConfig(ID("MISS"))->status == GCS_NOT_FOUND, "missing");
 	fmt::print(stderr, "LOADING state {} {} {} {} {}\n", id.base(), partial_id.base(), file->GetParam(3), broken->errors.front().nfo_line, broken->errors.front().param_value[0]);
 	fmt::print(stderr, "LOADING {} true\n", reload ? "reload" : "complete");

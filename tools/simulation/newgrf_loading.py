@@ -491,8 +491,6 @@ def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) ->
         "LOADING case action2-file-graph true",
         "LOADING case action2-normalized-graph true",
         "LOADING case action2-layout-consumer true",
-        "LOADING case action2-production-duplicate-error true",
-        "LOADING case action2-invalid-cargo-version true",
     )
     if scenario["newgrf_loading"] != "reload":
         expected += ("LOADING case townname-found true",)

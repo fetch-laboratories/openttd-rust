@@ -6,8 +6,8 @@
 //! expectations are that fixture's, which passed on the unchanged original's
 //! `NewSpriteGroup` (the reference role runs the fixture). The real Rust parser drives
 //! recording leaves in place of the native pool, so these tests prove its decisions and
-//! leaf-call order, not the pool or `SpriteGroup` internals. The file-loaded graph,
-//! resolver consumers and the production cases that need the cargo registry stay native.
+//! leaf-call order, not the pool or `SpriteGroup` internals. The file-loaded graph and
+//! resolver consumers stay native; `install_test_labels` stands in for the cargo table.
 use super::*;
 use crate::newgrf_bytereader::Cursor;
 use crate::newgrf_loading::{TEST_TABLE as LOADING_TEST_TABLE, openttd_rust_grf_execution};
@@ -396,6 +396,39 @@ fn partial_reads_publication_and_interner() {
     assert!(f.parse(&[9, 209, 0x41, 1, 0, 0, 0, 16, 0]).0);
     assert_eq!(world().errors.last(), Some(&INVALID_LAYOUT));
     assert!(slot(209).is_null());
+}
+
+fn production_of(group: Handle) -> &'static Production {
+    match &world().nodes[index(group)] {
+        Node::Production(node) => node,
+        _ => panic!("group is not a production"),
+    }
+}
+
+#[test]
+fn production_duplicate_and_invalid_cargo() {
+    static LABELS: [u32; 1] = [0x4C49_414D];
+    let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+    crate::cargo_registry::install_test_labels(&LABELS, &[0]);
+    let f = Fixture::new();
+
+    // A repeated input cargo disables the file; the group is never published.
+    assert!(f.parse(&[10, 207, 2, 2, 0, 9, 0]).0);
+    assert_eq!(world().error_data.last().unwrap(), b"duplicate input cargo");
+    assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
+    assert!(slot(207).is_null());
+    assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);
+
+    // A cargo outside the file's list marks the group's version invalid and publishes it.
+    unsafe { (*openttd_rust_grf_execution()).skip_sprites = 0 };
+    assert!(f.parse(&[10, 208, 2, 1, 255, 9, 0, 0]).0);
+    let invalid = production_of(slot(208));
+    assert_eq!(invalid.version, 255);
+    assert_eq!(invalid.cargo_input[0], 0xFF);
+    assert_eq!(invalid.subtract_input[0], 9);
+    assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, 0);
+
+    crate::cargo_registry::clear_test_labels();
 }
 
 #[test]
