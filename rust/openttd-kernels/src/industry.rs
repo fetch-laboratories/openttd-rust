@@ -53,6 +53,8 @@ pub(crate) mod policy;
 pub use policy::*;
 mod lifecycle;
 pub use lifecycle::*;
+#[cfg(test)]
+mod lifecycle_oracle;
 const RECORDS: usize = crate::history_type::HISTORY_RECORDS;
 const TYPES: usize = IndustryType::NUM_INDUSTRYTYPES.0 as usize;
 /// `Industry::ProducedHistory` (`first` is `production`, `second` is `transported`) and

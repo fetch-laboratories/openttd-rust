@@ -1,0 +1,19 @@
+[
+  {
+    "retires": [
+      "source:tools/migration/industry-lifecycle-gap.cpp"
+    ],
+    "oracle": "Original-only capture (#736 W): the probe's synthetic 3x2 industry, its tile, spec, resolver and animation models and nested input domains at a8ff5d3287, around the bodies the retired lifecycle_gap() extracted unchanged from the pinned 14ec60f248547d4d062a1160f0fc26d742319888 tree (src/newgrf_industrytiles.cpp's tile and industry animation triggers, randomisation and DoReseedIndustry; src/industry_cmd.cpp's AddAcceptedCargo_Industry, the eight builtin Animate* helpers and AnimateTile_Industry; src/table/industry_land.h's _industry_anim_offs_toffee; src/industry_map.h's IndustryGraphics), with every candidate part removed, built against the pinned tree at -O0 and -O2 -DNDEBUG -fno-strict-overflow (GCC 13.3.0, GNU/Linux x86_64); both streams are identical, and the recipe tools/oracle-recipes/industry_lifecycle.patch and the domains are in the oracle header. No candidate output supplies expectations. Oracle rust/openttd-kernels/src/industry/lifecycle-oracle.txt: the toffee offset table, 3136 lifecycle cases (889 distinct outputs), 400224 builtin animation cases (3830 distinct outputs, nested with the seed innermost because no output depends on it) and 9216 acceptance cases (216 distinct outputs), each output being the case's observations and its ordered fixture-call trace, a Random() draw written as R because the test regenerates the fixture's LCG; 389329 bytes raw, 52168 gzip -9. No platform field: the observed values are fixed-width integers. The test drives the production entries trigger_industry_randomisation, trigger_industry_tile_randomisation, trigger_industry_animation, trigger_industry_tile_animation, the animated-tile dispatch openttd_rust_animate_tile into animate_tile_industry, and add_accepted_cargo_industry through Rust service tables that model the fixture exactly as the probe's candidate bindings did, and also keeps the probe's candidate-only checks (the animation queue keeps its one tile; the frame callback receives the tile's spec and industry). Every observed call is a fixture service; nothing crossed a live C++ binding, so nothing stays native.",
+    "observations": {
+      "TriggerIndustryRandomisation and TriggerIndustryTileRandomisation: trigger storage around the resolver, rerandomised tile bits under the resolver's own and parent masks, the industry reseed, membership and stride over a 3x2 industry with an outside tile, and Random() order; TriggerIndustryAnimation and tile animation triggers (stage changed and plain): per-tile trigger tests, frame-callback random and parameter values, the SB redraw and the result": [
+        "rust:lib:industry::lifecycle_oracle::lifecycle_animation_and_acceptance_match_the_original_capture"
+      ],
+      "AnimateTile_Industry and the builtin animations of the sugar sieve, toffee quarry, bubble catcher, power plant sparks, toy factory, plastic fountain, oil well and mine tower over gfx, frame, loop, tick boundaries, ambient sound and custom animation: frames, loops, gfx and stage writes, sounds, tile deletion from the animation state, dirty marks and Random() order": [
+        "rust:lib:industry::lifecycle_oracle::lifecycle_animation_and_acceptance_match_the_original_capture"
+      ],
+      "AddAcceptedCargo_Industry without custom GRFs: accepts-all copying of the industry's cargo, both callbacks with cargo translation and 4-bit amounts, signed acceptance, the always-accepted mask and an acceptance callback that changes the accepted list": [
+        "rust:lib:industry::lifecycle_oracle::lifecycle_animation_and_acceptance_match_the_original_capture"
+      ]
+    }
+  }
+]
