@@ -1,6 +1,17 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared container helpers from `core/container_func.hpp`.
 
+/// `include`: append an item if it is not already contained. Returns whether
+/// the item was already present. The original container must support `emplace_back`;
+/// consider a set, unordered set or flat set in new code.
+pub(crate) fn include<T: PartialEq + Clone>(container: &mut Vec<T>, item: &T) -> bool {
+    let is_member = container.contains(item);
+    if !is_member {
+        container.push(item.clone());
+    }
+    is_member
+}
+
 /// `find_index`: helper function to get the index of an item. Returns the index of the
 /// first matching element if found, otherwise -1.
 #[allow(

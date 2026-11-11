@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::consumer::{self, SeparatorUsage};
+use crate::container_func::include;
 use crate::debug::{Bytes, debug};
 use crate::game_state::GameState;
 use crate::network_config::{
@@ -1062,9 +1063,7 @@ fn reverse_lookup_tree_dependency(child: *mut ContentInfo) -> Vec<*mut ContentIn
         let mut parents = Vec::new();
         reverse_lookup_dependency(&mut parents, tree[i]);
         for ci in parents {
-            if !tree.contains(&ci) {
-                tree.push(ci);
-            }
+            include(&mut tree, &ci);
         }
         i += 1;
     }
@@ -1391,9 +1390,7 @@ pub extern "C" fn openttd_rust_content_infos(count: &mut usize) -> *const *mut C
 
 fn add_callback(cb: *mut ContentCallback) {
     with(|c| {
-        if !c.callbacks.contains(&cb) {
-            c.callbacks.push(cb);
-        }
+        include(&mut c.callbacks, &cb);
     });
 }
 
