@@ -512,12 +512,15 @@ class Execution:
 def sanitized_rust_tests(execution: Execution, name: str, build: Path) -> None:
     """Every Cargo test under the sanitized flags (#891). Its own output
     directory keeps the ordinary build-rust/cargo cache intact; --target keeps
-    build scripts and proc macros uninstrumented."""
+    build scripts and proc macros uninstrumented. Test fixtures leak their
+    service tables on purpose, so leak detection is off, as in the games."""
     if not execution.args.sanitize or name != "candidate":
         return
     execution.run(
         "candidate-rust-tests",
         [
+            "env",
+            "ASAN_OPTIONS=detect_leaks=0",
             "cargo",
             "test",
             "--workspace",
