@@ -21,7 +21,7 @@ Everything else is here ([delegation](team.md#review-loop)).
 
 ## Report only
 
-Do not commit, push, request Full or merge. The PR's implementer fixes each finding in its own commits ending `Found-by: review`. When the implementer asks, verify the fixing commits for your own findings and post the verification, also report only.
+Do not commit, push, request Full or merge. The PR's implementer fixes each finding in its own commits ending `Found-by: review`. A re-check reviewer verifies the fixing commits its brief names and posts the PR's final disposition, also report only ([review loop](team.md#review-loop)).
 
 ## What to examine in your group
 
@@ -40,7 +40,9 @@ Do not commit, push, request Full or merge. The PR's implementer fixes each find
   - a non-command helper above seven parameters (the Clippy ratchet already rejects a new or longer one);
   - a command or helper body written inside an FFI export, or a Rust-internal `Cmd*` body without one argument struct;
   - a Rust call to a `_raw` adapter or an `openttd_rust_*` export where a typed Rust form exists;
-  - a [boundary design fault](review-checklist.md#code-standards): a Rust-to-C++-to-Rust bounce, a moved field behind a service, per-call allocation the original lacks, or an owner resolved once per field instead of once per entry.
+  - a [boundary design fault](review-checklist.md#code-standards): a Rust-to-C++-to-Rust bounce, a moved field behind a service, per-call allocation the original lacks, a process-wide scratch pool where the original uses a local container, opcode dispatch (a `mode` parameter choosing among operations), or an owner resolved once per field instead of once per entry;
+  - a projected flag (`execute: bool`) in an internal signature where the original takes `DoCommandFlags`;
+  - a native assertion the original has and the Rust omits, or a check the original lacks: `tile + offset` is not `TileAdd`.
 
   Literals the original itself writes as literals stay. Operators and control flow follow the original's: a `switch` with `NOT_REACHED` stays a match with the native unreachable path, not an ordering comparison.
 - **Adapters and boundary.** Each raw adapter delegates to one typed definition and serves only callers in files no pass has finished. A pass converts callers in finished files to the typed form. Each touched orphan export is a finding; tests and the orphan baseline do not keep an export alive.
@@ -67,7 +69,7 @@ Post one report on the PR, with the PR template's review skeleton, starting `Rev
   - the check or reading that found it;
   - the suggested remedy.
 - End with the disposition: accepted, or findings to remediate.
-- Findings do not wait for CI: post the report when the source review is done. Only an acceptance needs the passing `native` result at the reviewed head ([checks](workflow.md#checks)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
+- Findings and acceptances do not wait for CI: post the report when the source review is done. An acceptance covers the source at the reviewed head; the implementer records the passing `native` run ([review loop](team.md#review-loop)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
 
 After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"` ([spawning](team.md#spawning)): your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
 

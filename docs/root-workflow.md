@@ -19,7 +19,7 @@ A merge is one merged PR. Every merge goes through GitHub's merge queue (user, 2
 - Keep at most six unmerged component branches, including drafts and WIP (#157). Queue reviewed work before starting a component. Start from current `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is never such a dependency. The first PR to merge adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by multiple drafts once in its own small PR from `rust-migration`. Drafts do not build parallel copies.
 - A sweep across most of `src/`, such as #581 PR-B, merges before any other `src/` change. Other drafts continue implementation and review but queue only after it merges, because each merge ahead of it would force a new sweep. No draft waits for another draft's services. A reviewed PR gains no new scope before it merges.
-- Reviewers verify the implementer's fixing commits before a PR is queued; root reads their dispositions ([review loop](team.md#review-loop)).
+- A fix that changes behaviour, evidence or a body's operations gets its re-check before the PR is queued; root reads the disposition ([review loop](team.md#review-loop)).
 
 To merge a PR, its implementer follows these steps:
 
@@ -29,7 +29,7 @@ To merge a PR, its implementer follows these steps:
 
    Record the applicable condition on the PR. Such an update needs only CI: no recount, local build, proof or new evidence. Record metrics once, at the head that merges. Otherwise ask root for a fresh reviewer, who checks only the conflict resolution.
 2. A PR that changes `.github/workflows/` queues only after root's reviewed bootstrap Full on its head ([CI administration](#ci-administration)).
-3. When every reviewer accepts, or each finding's reviewer has verified its fix, queue the PR at its head: `gh pr merge N --merge --match-head-commit SHA`. Its required checks, `Quick validation` included, must be green on that head. Do not combine it with other PRs or request Full for it. The queue tests the base, the PRs queued ahead and this PR, and merges on a pass. A head that does not change keeps its reviews' head-bound acceptances.
+3. When every reviewer accepts, and any re-check due has accepted, and the status comment records the passing `native` run at that head, queue the PR at its head: `gh pr merge N --merge --match-head-commit SHA`. Its required checks, `Quick validation` included, must be green on that head. Do not combine it with other PRs or request Full for it. The queue tests the base, the PRs queued ahead and this PR, and merges on a pass. A head that does not change keeps its reviews' head-bound acceptances.
 4. Tell root in one line, with the PR and its head, and take your next work. Root watches queued PRs and tells you when the queue removes yours ([delegation](team.md#delegation-user-2026-11-08)).
 5. A PR that fails in the queue leaves it; PRs behind it are retested automatically. Read the failed run and fix the cause under [review](workflow.md#review). Queue it again once, without a fix, after a runner or network failure: a step before any build or test, such as package install, checkout or cache download, or a lost runner with no test output. A second failure of the same job goes to root. A network-protocol scenario hang is such a failure; record its evidence on #693.
 
