@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import runpy
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +18,39 @@ import migration
 platform = runpy.run_path(str(Path(__file__).with_name("check-rust-platform.py")))
 freshness = platform["freshness"]
 check_windows_link = platform["check_windows_link"]
+
+
+class WindowsTargetTests(unittest.TestCase):
+    def test_32_bit_windows_is_refused_before_any_other_guard(self) -> None:
+        script = Path(__file__).parents[1] / "cmake/WindowsRust.cmake"
+
+        def configure(width: int) -> str:
+            result = subprocess.run(
+                ["cmake", f"-DCMAKE_SIZEOF_VOID_P={width}", "-P", str(script)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            return " ".join(result.stderr.split())
+
+        self.assertIn(
+            "32-bit Windows (x86, i686-pc-windows-msvc) is unsupported", configure(4)
+        )
+        # In script mode x64 passes the width check and stops at the next guard.
+        self.assertIn("Windows Rust requires native Windows", configure(8))
+
+    def test_metadata_accepts_neither_windows_i686_nor_the_linux_test_proxy(
+        self,
+    ) -> None:
+        for target in ("i686-pc-windows-msvc", "i686-unknown-linux-gnu"):
+            with (
+                self.subTest(target=target),
+                patch.object(
+                    migration, "cmake_cache", return_value={"RUST_TARGET": target}
+                ),
+                self.assertRaisesRegex(RuntimeError, "supported validated target"),
+            ):
+                migration.rust_configuration(Path("build"))
 
 
 class WindowsLinkTests(unittest.TestCase):

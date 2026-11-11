@@ -192,7 +192,6 @@ def rust_configuration(build: Path) -> dict[str, Any]:
         "x86_64-unknown-linux-gnu": ("Linux", 8),
         "aarch64-unknown-linux-gnu": ("Linux", 8),
         "aarch64-apple-darwin": ("Darwin", 8),
-        "i686-pc-windows-msvc": ("Windows", 4),
         "x86_64-pc-windows-msvc": ("Windows", 8),
     }
     if target not in supported:

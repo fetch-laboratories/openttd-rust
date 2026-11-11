@@ -62,7 +62,9 @@ jobs:
       matrix:
         # Full runs every flavour (#860): each red cadence from 11-05 to 11-09 came from
         # Clang, GCC Dedicated or Windows x86. A covered push refreshes both ccache flavours.
-        flavour: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["clang","sdl2","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["clang","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'push') && '["sdl2","dedicated"]' || '["sdl2"]') }}
+        # Native adds Clang so its annotation check sees Clang-only C++ test warnings before
+        # the queue (#904: #885's -Wmissing-field-initializers).
+        flavour: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["clang","sdl2","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["clang","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'push') && '["sdl2","dedicated"]' || inputs.profile == 'native' && '["clang","sdl2"]' || '["sdl2"]') }}
 
     name: Linux (${{ matrix.flavour == 'clang' && 'Clang' || matrix.flavour == 'dedicated' && 'GCC - Dedicated' || 'GCC - SDL2' }})
 
@@ -148,9 +150,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Full runs x86 for its Rust checks only (#896); the cadence, the platform profile
-        # and an uncovered push build it. A covered push refreshes the x64 cache Full restores.
-        arch: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (inputs.checkout-ref == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push' && needs.policy.outputs.heavy == 'true'))) && '["x86","x64"]' || '["x64"]') }}
+        # x64 is the only supported Windows target (#899). A covered push refreshes the cache Full restores.
+        arch: [x64]
 
     name: Windows (${{ matrix.arch }})
 
@@ -159,9 +160,40 @@ jobs:
     with:
       checkout-ref: ${{ inputs.checkout-ref }}
       arch: ${{ matrix.arch }}
-      semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.arch == 'x64' }}
-      rust-only: ${{ inputs.profile == 'full' && matrix.arch == 'x86' }}
+      semantic-subset: ${{ needs.platform-reference.result == 'success' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
+
+  # Keeps the 32-bit Rust tests Windows x86 supplied, wherever that job ran them (#899),
+  # and in native, so 32-bit-only Clippy findings fail before the queue (#904).
+  # A test proxy on a free runner, not a game target: cmake/Rust.cmake refuses this host.
+  rust-32bit:
+    needs: policy
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || (github.event_name == 'workflow_dispatch' || github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) }}
+    name: Rust tests (32-bit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUST_TARGET: i686-unknown-linux-gnu
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.checkout-ref }}
+        persist-credentials: false
+    - name: Install the 32-bit C runtime
+      uses: ./.github/actions/apt-install
+      with:
+        packages: gcc-multilib
+    - name: Install pinned Rust and the 32-bit target
+      run: |
+        channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+        rustup toolchain install "$channel" --profile minimal --component clippy --target "$RUST_TARGET"
+        rustc -vV
+    - name: Require 32-bit pointers
+      run: rustc --print cfg --target "$RUST_TARGET" | grep -Fx 'target_pointer_width="32"'
+    - name: Clippy at 32 bits
+      run: cargo clippy --workspace --all-targets --locked --target "$RUST_TARGET" -- -D warnings
+    - name: Workspace Rust tests at 32 bits
+      run: cargo test --workspace --locked --target "$RUST_TARGET"
 
   annotations_emscripten:
     name: Check emscripten annotations
@@ -223,7 +255,7 @@ jobs:
 
   complete:
     if: always() && inputs.checkout-ref != ''
-    needs: [emscripten, linux, macos, windows, check_annotations, annotations_emscripten, annotations_linux, annotations_macos, annotations_windows]
+    needs: [emscripten, linux, macos, windows, rust-32bit, check_annotations, annotations_emscripten, annotations_linux, annotations_macos, annotations_windows]
     runs-on: ubuntu-latest
     outputs:
       validated: ${{ steps.complete.outputs.validated }}
@@ -245,6 +277,7 @@ jobs:
         elif os.environ['PROFILE'] != 'native':
             raise SystemExit('Unsupported platform profile')
         required += [f'annotations_{job}' for job in required if job != 'check_annotations']
+        required.append('rust-32bit')
         failed = [job for job in required if results.get(job, {}).get('result') != 'success']
         if failed:
             raise SystemExit(f'Required builds/checks did not succeed: {failed}')

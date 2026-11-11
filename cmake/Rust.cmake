@@ -81,13 +81,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(RUST_PLATFORM_CHECK "defined(__APPLE__) && TARGET_OS_OSX && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ == ${RUST_MIN_MACRO}")
     set(RUST_CHECK_HEADERS "#include <TargetConditionals.h>")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    # WindowsRust selected CRT before target creation; compiler macros below
-    # validate its target independently of the runner's Rust host architecture.
-    if(NOT RUST_HOST MATCHES "^(i686|x86_64)-pc-windows-msvc$")
-        message(FATAL_ERROR "Windows Rust requires a Windows MSVC Rust host")
+    # WindowsRust selected CRT and x64 before target creation; compiler macros
+    # below validate that target.
+    if(NOT RUST_HOST STREQUAL "x86_64-pc-windows-msvc")
+        message(FATAL_ERROR "Windows Rust requires an x86_64 Windows MSVC Rust host; 32-bit Windows is unsupported")
     endif()
     set(RUST_TARGET "${RUST_WINDOWS_TARGET}")
-    set(RUST_REQUIRED_POINTER_BYTES "${CMAKE_SIZEOF_VOID_P}")
+    set(RUST_REQUIRED_POINTER_BYTES 8)
     set(RUST_ARCH_CHECK "${RUST_WINDOWS_ARCH_CHECK}")
     set(RUST_PLATFORM_CHECK "defined(_WIN32) && defined(_MSC_VER) && _MSC_VER >= 1930 && _MSC_VER < 1950")
     set(RUST_CHECK_HEADERS "")
