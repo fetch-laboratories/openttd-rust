@@ -1,48 +1,160 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `PacketGameType` from `network/core/tcp_game.h`.
-#![allow(dead_code)]
-pub const PACKET_SERVER_FULL: u8 = 0;
-pub const PACKET_SERVER_BANNED: u8 = 1;
-pub const PACKET_CLIENT_JOIN: u8 = 2;
-pub const PACKET_SERVER_ERROR: u8 = 3;
-pub const PACKET_CLIENT_UNUSED: u8 = 4;
-pub const PACKET_SERVER_UNUSED: u8 = 5;
-pub const PACKET_SERVER_GAME_INFO: u8 = 6;
-pub const PACKET_CLIENT_GAME_INFO: u8 = 7;
-pub const PACKET_SERVER_NEWGAME: u8 = 8;
-pub const PACKET_SERVER_SHUTDOWN: u8 = 9;
-pub const PACKET_SERVER_AUTH_REQUEST: u8 = 10;
-pub const PACKET_CLIENT_AUTH_RESPONSE: u8 = 11;
-pub const PACKET_SERVER_ENABLE_ENCRYPTION: u8 = 12;
-pub const PACKET_CLIENT_IDENTIFY: u8 = 13;
-pub const PACKET_SERVER_CHECK_NEWGRFS: u8 = 14;
-pub const PACKET_CLIENT_NEWGRFS_CHECKED: u8 = 15;
-pub const PACKET_SERVER_WELCOME: u8 = 16;
-pub const PACKET_SERVER_CLIENT_INFO: u8 = 17;
-pub const PACKET_CLIENT_GETMAP: u8 = 18;
-pub const PACKET_SERVER_WAIT: u8 = 19;
-pub const PACKET_SERVER_MAP_BEGIN: u8 = 20;
-pub const PACKET_SERVER_MAP_SIZE: u8 = 21;
-pub const PACKET_SERVER_MAP_DATA: u8 = 22;
-pub const PACKET_SERVER_MAP_DONE: u8 = 23;
-pub const PACKET_CLIENT_MAP_OK: u8 = 24;
-pub const PACKET_SERVER_JOIN: u8 = 25;
-pub const PACKET_SERVER_FRAME: u8 = 26;
-pub const PACKET_CLIENT_ACK: u8 = 27;
-pub const PACKET_SERVER_SYNC: u8 = 28;
-pub const PACKET_CLIENT_COMMAND: u8 = 29;
-pub const PACKET_SERVER_COMMAND: u8 = 30;
-pub const PACKET_CLIENT_CHAT: u8 = 31;
-pub const PACKET_SERVER_CHAT: u8 = 32;
-pub const PACKET_SERVER_EXTERNAL_CHAT: u8 = 33;
-pub const PACKET_CLIENT_RCON: u8 = 34;
-pub const PACKET_SERVER_RCON: u8 = 35;
-pub const PACKET_CLIENT_MOVE: u8 = 36;
-pub const PACKET_SERVER_MOVE: u8 = 37;
-pub const PACKET_CLIENT_SET_NAME: u8 = 38;
-pub const PACKET_SERVER_CONFIG_UPDATE: u8 = 39;
-pub const PACKET_CLIENT_QUIT: u8 = 40;
-pub const PACKET_SERVER_QUIT: u8 = 41;
-pub const PACKET_CLIENT_ERROR: u8 = 42;
-pub const PACKET_SERVER_ERROR_QUIT: u8 = 43;
-pub const PACKET_END: u8 = 44;
+
+/// Enum with all types of TCP packets, retaining every underlying byte.
+/// For the exact meaning, look at `NetworkGameSocketHandler`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PacketGameType(pub u8);
+
+#[allow(dead_code)] // Complete original enumerator vocabulary.
+impl PacketGameType {
+    /*
+     * These first ten packets must remain in this order for backward and forward compatibility
+     * between clients that are trying to join directly. These packets can be received and/or sent
+     * by the server before the server has processed the 'join' packet from the client.
+     */
+
+    /* Packets sent by socket accepting code without ever constructing a client socket instance. */
+    /// The server is full and has no place for you.
+    pub const PACKET_SERVER_FULL: Self = Self(0);
+    /// The server has banned you.
+    pub const PACKET_SERVER_BANNED: Self = Self(1);
+
+    /* Packets used by the client to join and an error message when the revision is wrong. */
+    /// The client telling the server it wants to join.
+    pub const PACKET_CLIENT_JOIN: Self = Self(2);
+    /// Server sending an error message to the client.
+    pub const PACKET_SERVER_ERROR: Self = Self(3);
+
+    /* Unused packet types, formerly used for the pre-game lobby. */
+    /// Unused.
+    pub const PACKET_CLIENT_UNUSED: Self = Self(4);
+    /// Unused.
+    pub const PACKET_SERVER_UNUSED: Self = Self(5);
+
+    /* Packets used to get the game info. */
+    /// Information about the server.
+    pub const PACKET_SERVER_GAME_INFO: Self = Self(6);
+    /// Request information about the server.
+    pub const PACKET_CLIENT_GAME_INFO: Self = Self(7);
+
+    /* A server quitting this game. */
+    /// The server is preparing to start a new game.
+    pub const PACKET_SERVER_NEWGAME: Self = Self(8);
+    /// The server is shutting down.
+    pub const PACKET_SERVER_SHUTDOWN: Self = Self(9);
+
+    /*
+     * Packets after here assume that the client
+     * and server are running the same version. As
+     * such ordering is unimportant from here on.
+     *
+     * The following is the remainder of the packets
+     * sent as part of authenticating and getting
+     * the map and other important data.
+     */
+
+    /* After the join step, the first perform game authentication and enabling encryption. */
+    /// The server requests the client to authenticate using a number of methods.
+    pub const PACKET_SERVER_AUTH_REQUEST: Self = Self(10);
+    /// The client responds to the authentication request.
+    pub const PACKET_CLIENT_AUTH_RESPONSE: Self = Self(11);
+    /// The server tells that authentication has completed and requests to enable encryption with
+    /// the keys of the last `PACKET_CLIENT_AUTH_RESPONSE`.
+    pub const PACKET_SERVER_ENABLE_ENCRYPTION: Self = Self(12);
+
+    /* After the authentication is done, the next step is identification. */
+    /// Client telling the server the client's name and requested company.
+    pub const PACKET_CLIENT_IDENTIFY: Self = Self(13);
+
+    /* After the identify step, the next is checking NewGRFs. */
+    /// Server sends `NewGRF` IDs and MD5 checksums for the client to check.
+    pub const PACKET_SERVER_CHECK_NEWGRFS: Self = Self(14);
+    /// Client acknowledges that it has all required `NewGRFs`.
+    pub const PACKET_CLIENT_NEWGRFS_CHECKED: Self = Self(15);
+
+    /* The server welcomes the authenticated client and sends information of other clients. */
+    /// Server welcomes you and gives you your `ClientID`.
+    pub const PACKET_SERVER_WELCOME: Self = Self(16);
+    /// Server sends you information about a client.
+    pub const PACKET_SERVER_CLIENT_INFO: Self = Self(17);
+
+    /* Getting the savegame/map. */
+    /// Client requests the actual map.
+    pub const PACKET_CLIENT_GETMAP: Self = Self(18);
+    /// Server tells the client there are some people waiting for the map as well.
+    pub const PACKET_SERVER_WAIT: Self = Self(19);
+    /// Server tells the client that it is beginning to send the map.
+    pub const PACKET_SERVER_MAP_BEGIN: Self = Self(20);
+    /// Server tells the client what the (compressed) size of the map is.
+    pub const PACKET_SERVER_MAP_SIZE: Self = Self(21);
+    /// Server sends bits of the map to the client.
+    pub const PACKET_SERVER_MAP_DATA: Self = Self(22);
+    /// Server tells it has just sent the last bits of the map to the client.
+    pub const PACKET_SERVER_MAP_DONE: Self = Self(23);
+    /// Client tells the server that it received the whole map.
+    pub const PACKET_CLIENT_MAP_OK: Self = Self(24);
+
+    /// Tells clients that a new client has joined.
+    pub const PACKET_SERVER_JOIN: Self = Self(25);
+
+    /*
+     * At this moment the client has the map and
+     * the client is fully authenticated. Now the
+     * normal communication starts.
+     */
+
+    /* Game progress monitoring. */
+    /// Server tells the client what frame it is in, and thus to where the client may progress.
+    pub const PACKET_SERVER_FRAME: Self = Self(26);
+    /// The client tells the server which frame it has executed.
+    pub const PACKET_CLIENT_ACK: Self = Self(27);
+    /// Server tells the client what the random state should be.
+    pub const PACKET_SERVER_SYNC: Self = Self(28);
+
+    /* Sending commands around. */
+    /// Client executed a command and sends it to the server.
+    pub const PACKET_CLIENT_COMMAND: Self = Self(29);
+    /// Server distributes a command to (all) the clients.
+    pub const PACKET_SERVER_COMMAND: Self = Self(30);
+
+    /* Human communication! */
+    /// Client said something that should be distributed.
+    pub const PACKET_CLIENT_CHAT: Self = Self(31);
+    /// Server distributing the message of a client (or itself).
+    pub const PACKET_SERVER_CHAT: Self = Self(32);
+    /// Server distributing the message from external source.
+    pub const PACKET_SERVER_EXTERNAL_CHAT: Self = Self(33);
+
+    /* Remote console. */
+    /// Client asks the server to execute some command.
+    pub const PACKET_CLIENT_RCON: Self = Self(34);
+    /// Response of the executed command on the server.
+    pub const PACKET_SERVER_RCON: Self = Self(35);
+
+    /* Moving a client.*/
+    /// A client would like to be moved to another company.
+    pub const PACKET_CLIENT_MOVE: Self = Self(36);
+    /// Server tells everyone that someone is moved to another company.
+    pub const PACKET_SERVER_MOVE: Self = Self(37);
+
+    /* Configuration updates. */
+    /// A client changes its name.
+    pub const PACKET_CLIENT_SET_NAME: Self = Self(38);
+    /// Some network configuration important to the client changed.
+    pub const PACKET_SERVER_CONFIG_UPDATE: Self = Self(39);
+
+    /* A client quitting. */
+    /// A client tells the server it is going to quit.
+    pub const PACKET_CLIENT_QUIT: Self = Self(40);
+    /// A server tells that a client has quit.
+    pub const PACKET_SERVER_QUIT: Self = Self(41);
+    /// A client reports an error to the server.
+    pub const PACKET_CLIENT_ERROR: Self = Self(42);
+    /// A server tells that a client has hit an error and did quit.
+    pub const PACKET_SERVER_ERROR_QUIT: Self = Self(43);
+
+    /// Must ALWAYS be on the end of this list!! (period)
+    pub const PACKET_END: Self = Self(44);
+}

@@ -80,6 +80,8 @@ impl CompanyID {
     pub const WATER: Self = Self(0x11);
     /// Native `OWNER_DEITY`.
     pub const DEITY: Self = Self(0x12);
+    /// Native `COMPANY_NEW_COMPANY`: the client wants a new company.
+    pub const NEW_COMPANY: Self = Self(254);
     /// Native `COMPANY_SPECTATOR`.
     pub const SPECTATOR: Self = Self(0xFF);
 }
@@ -95,7 +97,7 @@ pub const CALCA_ADD: u8 = 0;
 pub const CALCA_REMOVE: u8 = 1;
 
 /// `COMPANY_NEW_COMPANY`.
-pub const COMPANY_NEW_COMPANY: u8 = 254;
+pub const COMPANY_NEW_COMPANY: u8 = CompanyID::NEW_COMPANY.0;
 
 /// `CompanyCtrlAction::CCA_NEW`.
 pub(crate) const CCA_NEW: u8 = 0;
