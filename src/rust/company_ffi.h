@@ -104,7 +104,6 @@ struct OpenTTDCompanyServices {
 	const OpenTTDObjectServices *(OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
 	void (OPENTTD_RUST_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
 	void (OPENTTD_RUST_CALL *company_graphs_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_graphs_dirty);
-	void (OPENTTD_RUST_CALL *company_infrastructure)(uint8_t, OpenTTDCompanyInfrastructure *) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);
 	int64_t (OPENTTD_RUST_CALL *rail_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *signal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
