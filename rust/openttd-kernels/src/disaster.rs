@@ -17,8 +17,8 @@
     clippy::struct_field_names,
     clippy::verbose_bit_mask
 )]
-use crate::direction_type::DiagDirection;
 use crate::direction_type::{DIR_NE, DIR_NW, DIR_SE, DIR_SW, DIRDIFF_90LEFT, DIRDIFF_90RIGHT};
+use crate::direction_type::{DiagDirection, DirDiff, Direction};
 use crate::disaster_vehicle::{
     ST_AIRPLANE, ST_AIRPLANE_SHADOW, ST_BIG_SUBMARINE, ST_BIG_UFO, ST_BIG_UFO_DESTROYER,
     ST_BIG_UFO_DESTROYER_SHADOW, ST_BIG_UFO_SHADOW, ST_HELICOPTER, ST_HELICOPTER_ROTORS,
@@ -864,19 +864,15 @@ impl<'a> World<'a> {
         if Self::tick(v) & 1 == 0 {
             return true;
         }
-        let dir = (v.vehicle()).direction();
-        let tile = self
-            .map()
-            .tile_add_by_diag_dir(
-                TileIndex(Self::tile(v)),
-                DiagDirection(crate::direction_func::dir_to_diag_dir_raw(dir, |valid| {
-                    if self.v.assertions {
-                        assert!(valid);
-                    }
-                })),
+        let tile = (TileIndex(Self::tile(v))
+            + self.map().tile_offs_by_diag_dir(
+                crate::direction_func::dir_to_diag_dir(
+                    Direction((v.vehicle()).direction()),
+                    crate::map_func::native_check,
+                ),
                 crate::map_func::native_check,
-            )
-            .0;
+            ))
+        .0;
         if (self.shared.tile_valid)(tile) {
             let bits = crate::movement::water_tracks(
                 self.shared,
@@ -894,15 +890,14 @@ impl<'a> World<'a> {
         } else {
             DIRDIFF_90LEFT
         };
-        (v.vehicle()).write_direction(crate::direction_func::change_dir_raw(
-            (v.vehicle()).direction(),
-            diff,
-            |valid| {
-                if self.v.assertions {
-                    assert!(valid);
-                }
-            },
-        ));
+        (v.vehicle()).write_direction(
+            crate::direction_func::change_dir(
+                Direction((v.vehicle()).direction()),
+                DirDiff(diff),
+                crate::map_func::native_check,
+            )
+            .0,
+        );
         true
     }
     fn tick_vehicle(&self, v: Vehicle) -> bool {

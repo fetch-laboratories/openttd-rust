@@ -460,11 +460,17 @@ impl World<'_> {
             self.error(out, self.a.strings.sloped_wrong);
             return;
         }
-        let lower = tile.wrapping_sub(
-            self.map
-                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check)
-                .cast_unsigned(),
-        );
+        let lower = self
+            .map
+            .tile_add_by_diag_dir(
+                crate::tile_type::TileIndex(tile),
+                crate::direction_func::reverse_diag_dir(
+                    DiagDirection(dir),
+                    crate::map_func::native_check,
+                ),
+                crate::map_func::native_check,
+            )
+            .0;
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;

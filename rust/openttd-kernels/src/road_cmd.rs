@@ -1263,14 +1263,11 @@ impl<'a> Ctx<'a> {
         }
     }
     fn connect(&self, tile: u32, rt: u8, dir: u8) -> bool {
-        let tile = self
-            .map
-            .tile_add_by_diag_dir(
-                TileIndex(tile),
-                DiagDirection(dir),
-                crate::map_func::native_check,
-            )
-            .0;
+        let tile = (TileIndex(tile)
+            + self
+                .map
+                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+        .0;
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
@@ -1396,14 +1393,11 @@ impl<'a> Ctx<'a> {
             if tile == end {
                 break;
             }
-            tile = self
-                .map
-                .tile_add_by_diag_dir(
-                    TileIndex(tile),
-                    DiagDirection(dir),
-                    crate::map_func::native_check,
-                )
-                .0;
+            tile = (TileIndex(tile)
+                + self
+                    .map
+                    .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+            .0;
         }
         if !success {
             cost.take(last);

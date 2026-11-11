@@ -387,13 +387,9 @@ fn continuation(native: &Services, tile: u32) -> u32 {
     let map = native.map();
     let mut result = 0;
     for i in 0..8 {
-        let neighbour = map
-            .tile_add_by_dir(
-                TileIndex(tile),
-                Direction(dirs[i]),
-                crate::map_func::native_check,
-            )
-            .0;
+        let neighbour = (TileIndex(tile)
+            + map.tile_offs_by_dir(Direction(dirs[i]), crate::map_func::native_check))
+        .0;
         let bits = crate::track_func::track_status_to_track_bits(crate::movement::track_status(
             native.shared(),
             neighbour,
