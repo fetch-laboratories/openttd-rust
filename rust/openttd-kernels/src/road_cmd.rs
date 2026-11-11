@@ -693,6 +693,7 @@ impl<'a> Ctx<'a> {
                         )
                         .0,
                     );
+                    /* A full diagonal road tile has two road bits. */
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
                     let track = crate::ground::crossing_rail_track(
                         tile,
@@ -720,6 +721,8 @@ impl<'a> Ctx<'a> {
                         if reserved {
                             (self.rail.set_track_reservation)(tile, tracks);
                         }
+                        /* Update rail count for level crossings. The plain track should still be accounted
+                         * for, so only subtract the difference to the level crossing cost. */
                         let owner = (self.shared.tile_owner)(tile);
                         if (self.shared.company_valid)(owner) {
                             unsafe {
@@ -1006,7 +1009,10 @@ impl<'a> Ctx<'a> {
                         if flags & DoCommandFlag::EXECUTE != 0 {
                             let track = axis ^ 1;
                             (self.r.layout_changed)(tile, track);
+                            /* Update company infrastructure counts. A level crossing has two road bits. */
                             self.infrastructure(rt, company, 2);
+                            /* Update rail count for level crossings. The plain track is already
+                             * counted, so only add the difference to the level crossing cost. */
                             let owner = (self.shared.tile_owner)(tile);
                             if (self.shared.company_valid)(owner) {
                                 unsafe {
@@ -1554,6 +1560,7 @@ impl<'a> Ctx<'a> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.shared.tile_owner)(tile);
             if (self.shared.company_valid)(owner) {
+                /* A road depot has two road bits. */
                 let mut rt = self.rt(tile, 0);
                 if rt == INVALID {
                     rt = self.rt(tile, 1);
@@ -1659,6 +1666,7 @@ impl<'a> Ctx<'a> {
                 if new == INVALID_OWNER {
                     self.clear(ret, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT, tile);
                 } else {
+                    /* A road depot has two road bits. No need to dirty windows here, we'll redraw the whole screen anyway. */
                     let mut rt = self.rt(tile, 0);
                     if rt == INVALID {
                         rt = self.rt(tile, 1);
@@ -1703,6 +1711,7 @@ impl<'a> Ctx<'a> {
             if self.owner(tile, rtt) == old {
                 let rt = self.rt(tile, rtt);
                 if rt != INVALID {
+                    /* A level crossing has two road bits. No need to dirty windows here, we'll redraw the whole screen anyway. */
                     let num = if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
                     {
                         2
@@ -1781,6 +1790,7 @@ impl<'a> Ctx<'a> {
                     },
                 );
             } else {
+                /* Update infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
                 let rt = crate::services::RailType(
                     crate::map_func::World::new(self.shared).rail_type(tile),
                 )

@@ -562,6 +562,7 @@ impl<'a> Ctx<'a> {
                     let bits = self.tracks(tile);
                     (self.rail.set_track_bits)(tile, bits | trackbit);
                     let owner = (self.shared.tile_owner)(tile);
+                    /* Subtract old infrastructure count. */
                     unsafe {
                         CompanyInfrastructure::add_rail(
                             {
@@ -581,6 +582,7 @@ impl<'a> Ctx<'a> {
                         );
                     };
                     let owner = (self.shared.tile_owner)(tile);
+                    /* Add new infrastructure count. */
                     unsafe {
                         CompanyInfrastructure::add_rail(
                             {
@@ -953,6 +955,7 @@ impl<'a> Ctx<'a> {
                         }
                     }
                     owner = (self.shared.tile_owner)(tile);
+                    /* Subtract old infrastructure count. */
                     unsafe {
                         CompanyInfrastructure::add_rail(
                             {
@@ -972,6 +975,7 @@ impl<'a> Ctx<'a> {
                         );
                     };
                     present ^= trackbit;
+                    /* Add new infrastructure count. */
                     unsafe {
                         CompanyInfrastructure::add_rail(
                             {
@@ -1329,6 +1333,7 @@ impl<'a> Ctx<'a> {
             (self.rail.set_signal_variant)(tile, track, sigvar);
         }
         let present = self.present_signals(tile);
+        /* Subtract old signal infrastructure count. */
         unsafe {
             CompanyInfrastructure::add_signal(
                 {
@@ -1398,6 +1403,7 @@ impl<'a> Ctx<'a> {
             (self.rail.set_signal_type)(tile, track, sigtype);
         }
         let present = self.present_signals(tile);
+        /* Add new signal infrastructure count. */
         unsafe {
             CompanyInfrastructure::add_signal(
                 {
@@ -1982,6 +1988,7 @@ impl<'a> Ctx<'a> {
                 if !crate::map_func::World::new(self.shared).rail_station(tile)
                     || !crate::map_func::World::new(self.shared).station_blocked(tile)
                 {
+                    /* Update the company infrastructure counters. */
                     let owner = (self.shared.tile_owner)(tile);
                     let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
                     let mut num =
@@ -2084,6 +2091,7 @@ impl<'a> Ctx<'a> {
                         affected[affected_len] = v;
                         affected_len += 1;
                     }
+                    /* Update the company infrastructure counters. */
                     let num = self
                         .tunnel_length(tile, endtile)
                         .wrapping_add(2)
@@ -2292,6 +2300,7 @@ impl<'a> Ctx<'a> {
             );
         }
         w::hit(w::RAIL_CMD_OWNER_TRANSFER);
+        /* Update company infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
         let num = if (self.shared.is_plain_rail)(tile) {
             pieces(self.tracks(tile))
         } else {
