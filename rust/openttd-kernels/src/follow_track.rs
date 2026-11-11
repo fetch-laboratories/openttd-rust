@@ -540,7 +540,12 @@ pub(crate) fn platform_length_full(
         let stations = unsafe { &*(w.shared.station_catchment)() };
         w.check(w.rail_station(tile) && w.station_index(tile) == (stations.id)(station));
     }
-    let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
+    let delta = w
+        .dimensions
+        .offs_by_axis(crate::direction_type::Axis(w.station_axis(tile)), |ok| {
+            crate::services_assert::check(ok);
+        })
+        .cast_unsigned();
     let mut t = tile;
     let mut len: u32 = 0;
     loop {

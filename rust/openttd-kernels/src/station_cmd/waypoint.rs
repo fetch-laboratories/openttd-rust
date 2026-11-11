@@ -417,12 +417,14 @@ impl Ctx<'_> {
     }
     /// `TileOffsByAxis(OtherAxis(axis))`, as the unsigned pattern of its `TileIndexDiff`.
     fn offs_by_other_axis(&self, axis: Axis) -> u32 {
-        self.map().offs_by_axis(
-            crate::direction_func::other_axis(axis, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            })
-            .0,
-        )
+        self.map()
+            .offs_by_axis(
+                crate::direction_func::other_axis(axis, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                }),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned()
     }
     /// The common checks of `CmdBuildRailWaypoint` and `CmdBuildRoadWaypoint` after
     /// their class checks: the number of parts to build, whether a deleted

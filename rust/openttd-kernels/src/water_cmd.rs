@@ -228,7 +228,11 @@ impl World<'_> {
             self.error(out, INVALID_STRING_ID);
             return;
         }
-        let tile2 = tile.wrapping_add(self.map.offs_by_axis(axis.0));
+        let tile2 = tile.wrapping_add(
+            self.map
+                .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
+                .cast_unsigned(),
+        );
         if !(self.s.has_water_ground)(tile) || !(self.s.has_water_ground)(tile2) {
             self.error(out, self.a.strings.built_on_water);
             return;

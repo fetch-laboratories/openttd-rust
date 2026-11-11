@@ -43,7 +43,13 @@ pub(crate) fn rail_tile_area(
         0 => TileArea { tile, w: 1, h: 1 },
         TA_PLATFORM => {
             let world = crate::map_func::World::new(shared);
-            let delta = world.dimensions.offs_by_axis(world.station_axis(tile));
+            let delta = world
+                .dimensions
+                .offs_by_axis(
+                    crate::direction_type::Axis(world.station_axis(tile)),
+                    |ok| crate::services_assert::check(ok),
+                )
+                .cast_unsigned();
             let (mut start, mut end) = (tile, tile);
             while world.rail_station(end.wrapping_add(delta))
                 && world.compatible_station(end.wrapping_add(delta), tile)

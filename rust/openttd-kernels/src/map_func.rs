@@ -7,7 +7,7 @@
 
 //! Inline helpers of `map_func.h` over map dimensions read once per entry.
 #![allow(unsafe_code)]
-use crate::direction_type::{DiagDirection, Direction};
+use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
 use crate::tile_type::TileIndex;
 
@@ -156,33 +156,42 @@ impl Map {
             .wrapping_mul(self.size_x())
             .wrapping_add(x.cast_unsigned())
     }
-    /// `TileOffsByAxis`, as the unsigned pattern of its `TileIndexDiff`.
+    /// `TileOffsByAxis`: convert an `Axis` to the tile offset in southern
+    /// direction (SW or SE).
     #[must_use]
     #[inline]
-    pub fn offs_by_axis(self, axis: u8) -> u32 {
-        const OFFSETS: [(i32, i32); 2] = [(1, 0), (0, 1)];
-        let (x, y) = OFFSETS[usize::from(axis)];
-        self.diff(x, y)
+    pub fn offs_by_axis(self, axis: Axis, check: impl Fn(bool)) -> TileIndexDiff {
+        if !crate::direction_func::is_valid_axis(axis) {
+            check(false);
+            std::process::abort();
+        }
+        self.to_tile_index_diff(TILEOFFS_BY_AXIS[usize::from(axis.0)])
     }
-    /// `DiagdirBetweenTiles`.
+    /// `DiagdirBetweenTiles`: direction from `from` towards `to`, or invalid
+    /// when the tiles do not lie on an axis.
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
-    pub fn diagdir_between_tiles(self, from: u32, to: u32) -> u8 {
-        use crate::direction_type::{
-            DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR,
-        };
-        let dx = (self.tile_x(to) as i32).wrapping_sub(self.tile_x(from) as i32);
-        let dy = (self.tile_y(to) as i32).wrapping_sub(self.tile_y(from) as i32);
+    pub fn diagdir_between_tiles(self, from: TileIndex, to: TileIndex) -> DiagDirection {
+        let dx = (self.tile_x(to.0) as i32).wrapping_sub(self.tile_x(from.0) as i32);
+        let dy = (self.tile_y(to.0) as i32).wrapping_sub(self.tile_y(from.0) as i32);
         if dx == 0 {
             if dy == 0 {
-                return INVALID_DIAGDIR;
+                return DiagDirection::INVALID_DIAGDIR;
             }
-            return if dy < 0 { DIAGDIR_NW } else { DIAGDIR_SE };
+            return if dy < 0 {
+                DiagDirection::DIAGDIR_NW
+            } else {
+                DiagDirection::DIAGDIR_SE
+            };
         }
         if dy != 0 {
-            return INVALID_DIAGDIR;
+            return DiagDirection::INVALID_DIAGDIR;
         }
-        if dx < 0 { DIAGDIR_NE } else { DIAGDIR_SW }
+        if dx < 0 {
+            DiagDirection::DIAGDIR_NE
+        } else {
+            DiagDirection::DIAGDIR_SW
+        }
     }
     /// `DistanceFromEdge`: gets the distance to the edge of the map. Returns
     /// the distance to the nearest edge of the map, in any direction.
@@ -308,15 +317,18 @@ impl Map {
 fn native_check(ok: bool) {
     crate::services_assert::check(ok);
 }
+/// `_tileoffs_by_axis`: southern (SW/SE) coordinate offset for each axis.
+const TILEOFFS_BY_AXIS: [TileIndexDiffC; Axis::AXIS_END.0 as usize] =
+    [TileIndexDiffC { x: 1, y: 0 }, TileIndexDiffC { x: 0, y: 1 }];
 /// `_tileoffs_by_diagdir`: `TileIndexDiffC` for each `DiagDirection`.
-const TILEOFFS_BY_DIAGDIR: [TileIndexDiffC; 4] = [
+const TILEOFFS_BY_DIAGDIR: [TileIndexDiffC; DiagDirection::DIAGDIR_END.0 as usize] = [
     TileIndexDiffC { x: -1, y: 0 }, // DIAGDIR_NE
     TileIndexDiffC { x: 0, y: 1 },  // DIAGDIR_SE
     TileIndexDiffC { x: 1, y: 0 },  // DIAGDIR_SW
     TileIndexDiffC { x: 0, y: -1 }, // DIAGDIR_NW
 ];
 /// `_tileoffs_by_dir`: `TileIndexDiffC` for each `Direction`.
-const TILEOFFS_BY_DIR: [TileIndexDiffC; 8] = [
+const TILEOFFS_BY_DIR: [TileIndexDiffC; Direction::DIR_END.0 as usize] = [
     TileIndexDiffC { x: -1, y: -1 }, // DIR_N
     TileIndexDiffC { x: -1, y: 0 },  // DIR_NE
     TileIndexDiffC { x: -1, y: 1 },  // DIR_E

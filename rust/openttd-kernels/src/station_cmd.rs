@@ -2113,13 +2113,19 @@ impl Ctx<'_> {
             }
         }
         let statspec = crate::newgrf_class::station::spec(spec_class.0, u32::from(spec_index));
-        let tile_delta = self.map().offs_by_axis(axis.0); // offset to go to the next platform tile
-        let track_delta = self.map().offs_by_axis(
-            other_axis(axis, |ok| {
-                crate::movement::native_assert(self.shared, ok);
-            })
-            .0,
-        ); // offset to go to the next track
+        let tile_delta = self
+            .map()
+            .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
+            .cast_unsigned(); // offset to go to the next platform tile
+        let track_delta = self
+            .map()
+            .offs_by_axis(
+                other_axis(axis, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                }),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned(); // offset to go to the next track
         let layout = (self.s.rail_layout)(
             statspec,
             crate::newgrf_station::get_station_layout_key(numtracks, plat_len),

@@ -222,7 +222,13 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
 ) -> RoadPiece {
     let w = world(s);
     let check = |ok| w.check(ok);
-    let dir_1 = w.dimensions.diagdir_between_tiles(end, start);
+    let dir_1 = w
+        .dimensions
+        .diagdir_between_tiles(
+            crate::tile_type::TileIndex(end),
+            crate::tile_type::TileIndex(start),
+        )
+        .0;
     let dir_2 = crate::direction_func::reverse_diag_dir_raw(dir_1, check);
     let (tile, dir, bits_dir) = if first != 0 {
         (start, dir_1, dir_2)

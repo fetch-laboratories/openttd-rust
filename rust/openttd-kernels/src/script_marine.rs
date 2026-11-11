@@ -78,7 +78,13 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
         let status = crate::movement::track_status(s.command.shared, tile, water, 0, side);
         track_status_to_track_bits(status) & diagdir_reaches_tracks(to_other)
     };
-    let to_other_tile = w.dimensions.diagdir_between_tiles(t2, t1);
+    let to_other_tile = w
+        .dimensions
+        .diagdir_between_tiles(
+            crate::tile_type::TileIndex(t2),
+            crate::tile_type::TileIndex(t1),
+        )
+        .0;
     /* Determine the reachable tracks from the shared edge */
     if reachable(t1, to_other_tile) == crate::track_type::TRACK_BIT_NONE {
         return false;

@@ -564,7 +564,14 @@ pub extern "C" fn openttd_rust_script_road_station_front_tile(s: &Services, stat
             .dimensions
             .tile_add_by_diag_dir_raw(station, w.bay_dir(station));
     }
-    station.wrapping_sub(w.dimensions.offs_by_axis(w.drive_through_axis(station)))
+    station.wrapping_sub(
+        w.dimensions
+            .offs_by_axis(
+                crate::direction_type::Axis(w.drive_through_axis(station)),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned(),
+    )
 }
 
 /// `ScriptRoad::GetDriveThroughBackTile`.
@@ -577,7 +584,14 @@ pub extern "C" fn openttd_rust_script_road_drive_through_back_tile(
         return crate::tile_type::INVALID_TILE;
     }
     let w = world(s);
-    station.wrapping_add(w.dimensions.offs_by_axis(w.drive_through_axis(station)))
+    station.wrapping_add(
+        w.dimensions
+            .offs_by_axis(
+                crate::direction_type::Axis(w.drive_through_axis(station)),
+                |ok| crate::services_assert::check(ok),
+            )
+            .cast_unsigned(),
+    )
 }
 
 /// `ScriptRoad::ConvertRoadType` preconditions after the native company-mode check.
@@ -694,7 +708,12 @@ pub extern "C" fn openttd_rust_script_road_station(
         return REFUSED;
     }
     let w = world(s);
-    w.dimensions.diagdir_between_tiles(tile, front)
+    w.dimensions
+        .diagdir_between_tiles(
+            crate::tile_type::TileIndex(tile),
+            crate::tile_type::TileIndex(front),
+        )
+        .0
 }
 
 /// `ScriptRoad::RemoveRoadDepot` preconditions after the native company-mode check.

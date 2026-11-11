@@ -584,7 +584,12 @@ impl<'a> World<'a> {
                     return cost.error(self.a.strings.demolish_bridge);
                 }
             }
-            let delta = self.map.offs_by_axis(axis);
+            let delta = self
+                .map
+                .offs_by_axis(crate::direction_type::Axis(axis), |ok| {
+                    crate::services_assert::check(ok);
+                })
+                .cast_unsigned();
             let mut tile = start.wrapping_add(delta);
             while tile != end {
                 if (self.s.tile_max_z)(tile) > start_z {
