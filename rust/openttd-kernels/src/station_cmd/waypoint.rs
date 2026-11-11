@@ -461,8 +461,6 @@ impl Ctx<'_> {
         layout: *mut WaypointLayout,
         args: CmdBuildRailWaypoint,
     ) {
-        // Resolve at the first original access; the raw pointer retains no Rust borrow.
-        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::WAYPOINT_BUILD_RAIL);
         let (cost, ret, flags) = (call.cost, call.ret, call.flags);
         let (start_tile, axis, width, height) =
@@ -617,6 +615,8 @@ impl Ctx<'_> {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
+        let infrastructure =
+            CompanyInfrastructure::get(self.shared, CompanyID((self.world().station_owner)(wp)));
         let id = (self.links().graphs.station_id)(wp);
         let world = || crate::map_func::World::new(self.shared);
         let mut tile = start_tile;
@@ -629,15 +629,7 @@ impl Ctx<'_> {
             };
             if !world().has_station_tile_rail(tile) {
                 unsafe {
-                    CompanyInfrastructure::add_station(
-                        {
-                            if infrastructure_ptr.is_null() {
-                                infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
-                            }
-                            infrastructure_ptr
-                        },
-                        1,
-                    );
+                    CompanyInfrastructure::add_station(infrastructure, 1);
                 };
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis.0), |ok| {
