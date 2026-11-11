@@ -466,7 +466,7 @@ Agent: /root | Model: gpt-6-astra | Reasoning effort: xhigh
 
 #900's first draft has 230 changed workflow/CMake/Python lines plus 19 documentation lines, against the revised 150–300 estimate (original removal-only 100–200). Its local i686 run passed 162 tests with the three justified #818 exclusions; this is not CI acceptance. #899 has not landed, Windows x86 remains in base CI and #896's free-runner trial window is not yet mixed with that change. Leave the trial and its author's one-day follow-up alone; record any later #899 cutover separately.
 
-Verified CI state at the pause: `CI_ON_DEMAND`, `CI_MERGE_QUEUE` and `MIGRATION_CCACHE` remain `true`; `CI_LINUX_SIMULATION`, `CI_LINUX_COMPARISONS`, `CI_LINUX_PLATFORM` and `CI_MACOS_HEAVY` are unset. No variable was changed during wind-down. The #896 author's trial and follow-up remain untouched.
+Verified CI state at the pause: `CI_ON_DEMAND`, `CI_MERGE_QUEUE` and `MIGRATION_CCACHE` remain `true`; `CI_LINUX_SIMULATION` is `blacksmith-4vcpu-ubuntu-2404` again (user, 2026-11-11, steering 34: 3 of 11 free-runner simulation tiers hit the #693 family against 3 of 75 on Blacksmith). `CI_LINUX_COMPARISONS`, `CI_LINUX_PLATFORM` and `CI_MACOS_HEAVY` stay unset, so comparisons and Clang remain on free runners.
 
 The old #898, #894 and #900 workers are stopped, and root released its PR watches before the requested steering thread. No tile-map continuation, F evidence, 9m, further #736 family, #891 item, planner or Ready refresh is started during this wind-down. Existing implementation selection on resume still uses `claude-opus-5-5`, medium; at most two implementers and six unmerged component branches.
 
