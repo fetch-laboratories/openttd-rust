@@ -1,0 +1,65 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,62 @@
++/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
++/** @file capture.cpp Original-only CmdPause input and callback-order capture (#736 W-s). */
++#include "stdafx.h"
++#include "openttd.h"
++#include <cstdio>
++#include <string>
++#include "session-pause-flags.inc"
++struct CommandCost {
++	bool success = true;
++};
++static constexpr CommandCost CMD_ERROR{false};
++static bool _networking;
++PauseModes _pause_mode;
++static std::string events;
++struct Window;
++static void AskUnsafeUnpauseCallback(Window *, bool) { std::abort(); }
++static constexpr int STR_NEWGRF_UNPAUSE_WARNING_TITLE = 1, STR_NEWGRF_UNPAUSE_WARNING = 2;
++static int GetEncodedString(int id) { return id; }
++static void ShowQuery(int title, int message, Window *window, void (*callback)(Window *, bool))
++{
++	if (title != STR_NEWGRF_UNPAUSE_WARNING_TITLE || message != STR_NEWGRF_UNPAUSE_WARNING || window != nullptr || callback != AskUnsafeUnpauseCallback) std::abort();
++	events += "query,";
++}
++static void NetworkHandlePauseChange(PauseModes previous, PauseMode mode)
++{
++	events += "change:" + std::to_string(previous.base()) + ":" + std::to_string(to_underlying(mode)) + ",";
++}
++enum { WC_STATUS_BAR, WC_MAIN_TOOLBAR };
++static void SetWindowDirty(int window, int number)
++{
++	if (number != 0) std::abort();
++	events += window == WC_STATUS_BAR ? "status," : "toolbar,";
++}
++#include "session-pause-original.inc"
++static void Observe(DoCommandFlags flags, PauseMode mode, bool paused)
++{
++	events.clear();
++	const auto result = CmdPause(flags, mode, paused);
++	std::printf("%u %u %s", result.success, _pause_mode.base(), events.empty() ? "-" : events.c_str());
++}
++int main()
++{
++	/* src/tests/session.cpp's original network/value/execute order and initial bits. */
++	for (bool network : {false, true}) for (unsigned value = 0; value < 256; value++) for (bool execute : {false, true}) {
++		_networking = network;
++		_pause_mode = PauseMode::CommandDuringPause;
++		const auto selected = static_cast<PauseMode>(value);
++		const DoCommandFlags flags = execute ? DoCommandFlag::Execute : DoCommandFlags{};
++		std::printf("pause ");
++		Observe(flags, selected, true);
++		const bool valid = value < 7 && (network || (value != 2 && value != 4));
++		if (valid && execute) {
++			std::printf(" | ");
++			Observe(DoCommandFlag::Execute, selected, false);
++		}
++		std::printf("\n");
++	}
++	_pause_mode = PauseMode::Error;
++	std::printf("query ");
++	Observe(DoCommandFlag::Execute, PauseMode::Normal, false);
++	std::printf("\n");
++}

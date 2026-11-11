@@ -162,6 +162,28 @@ class Recipe:
 
 
 RECIPE: dict[str, Recipe] = {
+    "session_pause": Recipe(
+        oracle="session/pause-oracle.txt",
+        fixture=None,
+        convert=lambda lines: [
+            *section("pause", streams(lines)["pause"]),
+            *section("query", streams(lines)["query"]),
+        ],
+        extract=(
+            (
+                "session-pause-original.inc",
+                "src/misc_cmd.cpp",
+                "CommandCost CmdPause(",
+                "",
+            ),
+            (
+                "session-pause-flags.inc",
+                "src/command_type.h",
+                "enum class DoCommandFlag : uint8_t {",
+                "/**\n * Command flags for the command table",
+            ),
+        ),
+    ),
     "policy": Recipe(
         oracle="town/policy-oracle.txt",
         fixture="45843e22f6:tools/simulation/town-reference-gaps.cpp",
