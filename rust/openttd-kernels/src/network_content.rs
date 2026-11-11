@@ -997,9 +997,10 @@ fn request_queued_content_info(s: &Services) {
         return;
     }
 
-    // Take the queue so more IDs can be queued, then drop IDs received since.
+    // Move the queue locally so more IDs can be queued for later.
     let queue = with(|c| {
         let mut queue = std::mem::take(&mut c.queued);
+        // Remove IDs received since the request was queued.
         queue.retain(|&id| !c.infos.iter().any(|&ci| info(ci).id() == id));
         queue
     });
@@ -1047,7 +1048,8 @@ fn reverse_lookup_dependency(parents: &mut Vec<*mut ContentInfo>, child: *const 
 
 fn reverse_lookup_tree_dependency(child: *mut ContentInfo) -> Vec<*mut ContentInfo> {
     let mut tree = vec![child];
-    // Indices, since the tree grows while it is walked.
+    // First find the direct parents. Adding items can reallocate and move the
+    // vector storage, invalidating a normal iterator, so walk by indices.
     let mut i = 0;
     while i < tree.len() {
         let mut parents = Vec::new();
