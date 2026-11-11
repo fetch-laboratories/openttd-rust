@@ -680,3 +680,45 @@ pub(crate) fn town_acceptance(cargo: u8) -> u8 {
     let cargo = CargoType(cargo);
     TownAcceptanceEffect((services().town_acceptance_effect)(cargo.0)).0
 }
+
+/// Test-only: the current file reports `labels` as its cargo list, and each maps to its cargo.
+#[cfg(test)]
+pub(crate) fn install_test_labels(labels: &'static [u32], cargos: &[u8]) {
+    static TABLE: GameState<Services> = GameState::new(TEST_TABLE);
+    static LABELS: GameState<&'static [u32]> = GameState::new(&[]);
+    extern "C" fn file(_: Handle) -> File {
+        // SAFETY: Serialized by the caller's test lock; no borrow outlives this read.
+        let labels = unsafe { *LABELS.get() };
+        File {
+            labels: Labels {
+                data: labels.as_ptr(),
+                size: labels.len(),
+            },
+            version: 8,
+            fallback: false,
+        }
+    }
+    // SAFETY: Serialized by the caller's test lock.
+    unsafe {
+        LABELS.get().write(labels);
+        (*TABLE.get()).file = file;
+        let registry = &mut *REGISTRY.get();
+        registry.services = TABLE.get();
+        registry.label_map.clear();
+        for (label, cargo) in labels.iter().zip(cargos) {
+            registry
+                .label_map
+                .insert(CargoLabel(*label), CargoType(*cargo));
+        }
+    }
+}
+/// Test-only: forget [`install_test_labels`].
+#[cfg(test)]
+pub(crate) fn clear_test_labels() {
+    // SAFETY: Serialized by the caller's test lock.
+    unsafe {
+        let registry = &mut *REGISTRY.get();
+        registry.services = std::ptr::null();
+        registry.label_map.clear();
+    }
+}

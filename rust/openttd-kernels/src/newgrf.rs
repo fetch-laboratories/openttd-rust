@@ -294,3 +294,16 @@ pub const GSF_ORIGINAL_STRINGS: u8 = GrfSpecFeature::GSF_ORIGINAL_STRINGS.0;
 pub const CF_END: u16 = 9;
 /// `GSF_DEFAULT`.
 pub const GSF_DEFAULT: u8 = GrfSpecFeature::GSF_DEFAULT.0;
+
+/// Test-only global-variable table with every leaf unreachable; its private fields keep it here.
+#[cfg(test)]
+pub(crate) const TEST_TABLE: Services = Services {
+    misc_bits: crate::test_tables::unreachable0,
+    newgrf_version: crate::test_tables::unreachable0,
+    palette: crate::test_tables::unreachable1,
+    pitch: crate::test_tables::unreachable1,
+    rail_cost: crate::test_tables::unreachable1,
+    road_side: crate::test_tables::unreachable0,
+    shared: std::ptr::null(),
+    width: crate::test_tables::unreachable1,
+};

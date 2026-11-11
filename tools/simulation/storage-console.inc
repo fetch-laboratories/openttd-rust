@@ -222,10 +222,10 @@ static bool StorageScenario(std::span<std::string_view> args)
 	for (Station *st : Station::Iterate()) if (st->facilities.Test(StationFacility::Airport)) { station = st; break; }
 	Require(station != nullptr);
 	GRFFile grf; grf.grfid = 0x39312345;
-	ResolverObject ro(&grf), anonymous(nullptr);
-	TownScopeResolver writable(ro, town, false), readonly(ro, nullptr, true), no_grf(anonymous, town, false);
+	ResolverObject ro(&grf);
+	TownScopeResolver writable(ro, town, false);
 	IndustriesScopeResolver ind(ro, industry->location.tile, industry, industry->type);
-	AirportScopeResolver airport(ro, station->airport.tile, station, nullptr, 0), preview(ro, TileIndex{}, nullptr, nullptr, 0);
+	AirportScopeResolver airport(ro, station->airport.tile, station, nullptr, 0);
 	bool available = true;
 	if (args[1] == "storage-inspect") {
 		ro.SetRegister(0x100, -1);
@@ -241,44 +241,17 @@ static bool StorageScenario(std::span<std::string_view> args)
 	Require(ind.GetVariable(0x7C, 15, available) == 0);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
-	preview.StorePSA(0, 7); readonly.StorePSA(0, 7); no_grf.StorePSA(0, 7);
-	ro.SetRegister(0x100, 123); writable.StorePSA(0, 7);
-	ind.StorePSA(0, 0); airport.StorePSA(0, 0);
-	{ Backup<IndustryID> invalid(industry->index, IndustryID::Invalid()); ind.StorePSA(0, 7); }
-	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
-	/* Airports without a GRF create the default-GRF array. */
-	AirportScopeResolver default_airport(anonymous, station->airport.tile, station, nullptr, 0);
-	default_airport.StorePSA(256, 7);
-	Require(station->airport.psa != nullptr && station->airport.psa->grfid == 0);
-	delete station->airport.psa; station->airport.psa = nullptr;
-	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
-	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
+	/* The store, rollback and ownership policy moved to newgrf_storage::evidence_tests;
+	 * these writes reach the native resolver facades and feed the PSAC save below. */
+	ro.SetRegister(0x100, -1);
+	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
 	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
 	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
-	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
-	Require(ind.GetVariable(0x7C, 0, available) == 0 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
-	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);
-	/* Invalid-ID construction scopes can read existing PSA, but cannot write it. */
-	{
-		Backup<IndustryID> invalid(industry->index, IndustryID::Invalid());
-		IndustriesScopeResolver temporary(ro, industry->location.tile, industry, industry->type);
-		temporary.StorePSA(15, 7);
-		Require(temporary.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
-	}
-	/* Another GRF gets a distinct array; explicit GRFID reads may cross GRFs. */
+	Require(ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
+	/* A second file's array, which the reload check counts. */
 	GRFFile other; other.grfid = 0x39354321;
 	TownResolverObject second(&other, town, false); second.SetRegister(0x100, -1); second.town_scope.StorePSA(0, 99);
-	ro.SetRegister(0x100, other.grfid); writable.StorePSA(0, 77);
-	Require(writable.GetVariable(0x7C, 0, available) == 99);
-	anonymous.SetRegister(0x100, grf.grfid); Require(no_grf.GetVariable(0x7C, 0, available) == 0x80000000);
-	anonymous.SetRegister(0x100, -1); Require(no_grf.GetVariable(0x7C, 0, available) == 0);
-	ro.SetRegister(0x100, -1); Require(writable.GetVariable(0x7C, 0, available) == 0x80000000);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_COMMAND);
-	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
-	writable.StorePSA(0, 1); ind.StorePSA(15, 2); airport.StorePSA(255, 3);
-	Require(ind.GetVariable(0x7C, 15, available) == 2);
-	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_TESTMODE);
-	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa->GetValue(255) == 393);
 	/* Destroy a registered array and require native pool ID reuse. */
 	Require(PersistentStorage::CanAllocateItem());
 	auto *pending = new PersistentStorage(0, GSF_INVALID, TileIndex{}); auto id = pending->index; pending->StoreValue(0, 1); delete pending;
@@ -290,6 +263,6 @@ static bool StorageScenario(std::span<std::string_view> args)
 	Require(args.size() == 3 && SaveOrLoad(args[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK);
 	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa->GetValue(255) == 393);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
-	fmt::print(stderr, "STORAGE policies rollback reuse saved true\n");
+	fmt::print(stderr, "STORAGE reuse saved true\n");
 	return true;
 }

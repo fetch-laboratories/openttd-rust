@@ -21,6 +21,8 @@ use crate::game_state::GameState;
 use crate::services::ByteSpan;
 use crate::strings_type::{TAB_SIZE_NEWGRF, grf_string_id};
 use std::ffi::c_void;
+#[cfg(test)]
+pub(crate) use translation::tests::services as test_services;
 pub(crate) use translation::translate;
 
 #[repr(C)]
@@ -303,7 +305,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_cleanup() {
 }
 
 /// Fixture-only table observation; the visitor may look up strings but cannot mutate the table.
-#[cfg(feature = "native-test-support")]
+#[cfg(any(test, feature = "native-test-support"))]
 pub(crate) unsafe fn visit(
     context: *const c_void,
     visitor: unsafe extern "C" fn(*const c_void, u32, u32, u8, u32, u32, ByteSpan),
@@ -382,6 +384,7 @@ mod tests {
     }
     #[test]
     fn language_priority_and_process_state() {
+        let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
         assert_eq!(select(9, [0, 1, 0x7f, 0x7f].into_iter()), Some(3));
         assert_eq!(select(1, [0x7f, 1, 0x7f].into_iter()), Some(1));
         assert_eq!(select(9, [1, 0].into_iter()), Some(0));

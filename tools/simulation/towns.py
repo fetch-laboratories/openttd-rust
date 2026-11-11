@@ -863,7 +863,7 @@ def prepare_founding(
             save = saves[role]
             if (
                 run["exit"]
-                or "STORAGE policies rollback reuse saved true" not in run["log"]
+                or "STORAGE reuse saved true" not in run["log"]
                 or not save.is_file()
             ):
                 raise RuntimeError(f"{role} nonempty storage capture failed")

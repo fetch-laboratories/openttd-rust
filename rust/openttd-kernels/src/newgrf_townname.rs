@@ -17,6 +17,9 @@ use crate::services::ByteSpan;
 use crate::strings_type::SPECSTR_TOWNNAME_START;
 use std::ffi::c_void;
 
+#[cfg(test)]
+mod evidence_tests;
+
 /// `GRFTownName::MAX_LISTS`.
 const MAX_LISTS: usize = 128;
 

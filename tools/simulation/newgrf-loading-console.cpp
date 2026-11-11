@@ -197,8 +197,8 @@ static void GrfBindings(const char *phase)
 	fmt::print(stderr, "LOADING binding {} rng {} {} {} {}\n", phase, rng[0], rng[1], rng[2], rng[3]);
 }
 
-/** Generator lists, style lookups and generated name bytes of the ActionF fixtures. */
-static void GrfTownNames(const char *phase, bool loaded)
+/** Native style lookup, display and loader state; parsing and name bytes moved to newgrf_townname::evidence_tests. */
+static void GrfTownStyles(const char *phase, bool loaded)
 {
 	auto names = GetGRFTownNameList();
 	auto params = [](uint16_t gen) { return TownNameParams(static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen)); };
@@ -207,30 +207,11 @@ static void GrfTownNames(const char *phase, bool loaded)
 		TownNameParams par = params(gen);
 		StringID name = GetGRFTownNameName(gen);
 		fmt::print(stderr, "LOADING townname {} style {} {:08X} {} {} {}\n", phase, gen, par.grfid, par.type, gen < names.size() && name == names[gen], Hex(GetString(name)));
-		for (uint32_t k = 0; k < 40; k++) {
-			uint32_t seed = k < 4 ? std::array<uint32_t, 4>{0, 1, 0x80000000, UINT32_MAX}[k] : k * 0x9E3779B9;
-			fmt::print(stderr, "LOADING townname {} name {} {:08X} {}\n", phase, gen, seed, Hex(GetTownName(&par, seed)));
-		}
 	}
 	if (!loaded) return;
-	Require(names.size() == 4 && params(0).grfid == ID("TNA5") && params(2).grfid == ID("TNB5") && params(3).grfid == ID("TNS5") && params(3).type == 0, "townname-style-order");
 	Require(params(4).grfid == 0 && params(4).type == SPECSTR_TOWNNAME_START && GetGRFTownNameName(4) == STR_UNDEFINED, "townname-fallback");
-	TownNameParams par(static_cast<uint8_t>(0));
-	par.grfid = ID("TNA5");
-	par.type = 0;
-	Require(GetTownName(&par, 0) == "Y Hill" && GetTownName(&par, 0xFFFFFFFF) == "Alton Hill" && GetTownName(&par, 0x00030000) == "Beton Hill", "townname-repeated-definition");
-	par.type = 1;
-	Require(GetTownName(&par, 0) == "Q" && GetTownName(&par, 0xFFFF) == "Y Hill", "townname-recursive-final");
-	par.grfid = ID("TNB5");
-	par.type = 0;
-	Require(GetTownName(&par, 0) == "Gam\u20ac", "townname-second-grf");
-	par.grfid = ID("TNX5");
-	Require(GetTownName(&par, 0).empty(), "townname-invalid-reference-deleted");
-	GRFConfig *bad = GetGRFConfig(ID("TNX5"));
-	Require(bad->status == GCS_DISABLED && bad->errors.size() == 1 && bad->errors.front().message == STR_NEWGRF_ERROR_INVALID_ID, "townname-invalid-reference");
 	GRFConfig *truncated = GetGRFConfig(ID("TNS5"));
-	par.grfid = ID("TNS5");
-	Require(truncated->status == GCS_DISABLED && truncated->errors.size() == 1 && truncated->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS && GetTownName(&par, 0) == "Shortort", "townname-partial-read");
+	Require(truncated->status == GCS_DISABLED && truncated->errors.size() == 1 && truncated->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "townname-partial-read");
 }
 /** Found one town per NewGRF style through the production name generator. */
 static void GrfTownNameTowns()
@@ -251,82 +232,6 @@ static void GrfTownNameTowns()
 		const Town *t = Town::Get(id);
 		fmt::print(stderr, "LOADING townname town {} {} {:08X} {} {:08X} {}\n", gen, id.base(), t->townnamegrfid, t->townnametype, t->townnameparts, Hex(GetTownName(t)));
 	}
-}
-static void ResetAction2Callbacks(bool final)
-{
-#ifdef WITH_RUST
-	openttd_rust_action2_reset(final);
-#else
-	ResetCallbacks(final);
-#endif
-}
-static void Action2PartialRead()
-{
-	auto groups = _cur_gps.spritegroups;
-	AutoRestoreBackup file(_cur_gps.grffile, GetFileByGRFID(ID("R471")));
-	AutoRestoreBackup line(_cur_gps.nfo_line, 485U);
-	ResetAction2Callbacks(false);
-	auto parse = [](std::initializer_list<uint8_t> bytes) {
-#ifdef WITH_RUST
-		OpenTTDGrfCursor reader{bytes.begin(), bytes.size(), 0};
-		bool success = openttd_test_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
-		return std::pair{!success, reader.len - reader.pos};
-#else
-		ByteReader reader(bytes.begin(), bytes.size());
-		try {
-			NewSpriteGroup(reader);
-			return std::pair{false, reader.Remaining()};
-		}
-		catch (const OTTDByteReaderSignal &) { return std::pair{true, reader.Remaining()}; }
-#endif
-	};
-	Require(!parse({1, 200, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127}).first, "action2-first-publication");
-	const auto *published = _cur_gps.spritegroups[200];
-	const auto *first = dynamic_cast<const DeterministicSpriteGroup *>(published);
-	Require(first != nullptr && first->ranges.size() == 1, "action2-first-range");
-	size_t before = SpriteGroup::GetNumItems();
-	size_t next = SpriteGroup::GetPoolSize();
-	auto failed = parse({1, 200, 0x81, 0x0C, 0, 255, 1, 4, 128});
-	Require(failed.first && failed.second == 0 && _cur_gps.spritegroups[200] == published && SpriteGroup::GetNumItems() == before + 2, "action2-partial-read");
-	const auto *partial = dynamic_cast<const DeterministicSpriteGroup *>(SpriteGroup::Get(SpriteGroupID(next)));
-	const auto *cached = dynamic_cast<const CallbackResultSpriteGroup *>(SpriteGroup::Get(SpriteGroupID(next + 1)));
-	Require(partial != nullptr && partial->adjusts.size() == 1 && partial->adjusts[0].and_mask == 255 && partial->ranges.empty() && cached != nullptr && cached->result == 4, "action2-partial-allocation-order");
-	before = SpriteGroup::GetNumItems();
-	Require(!parse({1, 201, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127}).first, "action2-repeat-parse");
-	const auto *repeat = dynamic_cast<const DeterministicSpriteGroup *>(_cur_gps.spritegroups[201]);
-	Require(repeat->ranges[0].result.group == first->ranges[0].result.group && SpriteGroup::GetNumItems() == before + 1, "action2-interned");
-	ResetAction2Callbacks(true);
-	before = SpriteGroup::GetNumItems();
-	Require(!parse({1, 202, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127}).first && SpriteGroup::GetNumItems() == before + 2, "action2-reset-cache");
-	Require(!parse({10, 200, 3}).first && _cur_gps.spritegroups[200] == nullptr, "action2-explicit-null");
-	AutoRestoreBackup version(_cur_gps.grffile->grf_version, uint8_t(7));
-	Require(!parse({1, 203, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127}).first, "action2-legacy-parse");
-	const auto *legacy = static_cast<const DeterministicSpriteGroup *>(_cur_gps.spritegroups[203]);
-	Require(static_cast<const CallbackResultSpriteGroup *>(legacy->ranges[0].result.group)->result == 3, "action2-legacy-ffxx");
-	_cur_gps.grffile->grf_version = 8;
-	Require(!parse({1, 204, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127}).first, "action2-modern-parse");
-	const auto *modern = static_cast<const DeterministicSpriteGroup *>(_cur_gps.spritegroups[204]);
-	Require(static_cast<const CallbackResultSpriteGroup *>(modern->ranges[0].result.group)->result == 0x7F03, "action2-modern-ffxx");
-	before = SpriteGroup::GetNumItems();
-	failed = parse({9, 205, 1, 1, 0, 0});
-	const auto *partial_layout = dynamic_cast<const TileLayoutSpriteGroup *>(SpriteGroup::Get(SpriteGroupID(SpriteGroup::GetPoolSize() - 1)));
-	Require(failed.first && failed.second == 1 && SpriteGroup::GetNumItems() == before + 1 && partial_layout != nullptr && partial_layout->dts.seq.size() == 1 && partial_layout->dts.ground.sprite == 1 && partial_layout->dts.ground.pal == 0 && _cur_gps.spritegroups[205] == nullptr, "action2-partial-layout");
-	GRFConfig errors("action2-parser-probe");
-	AutoRestoreBackup config(_cur_gps.grfconfig, &errors);
-	AutoRestoreBackup skip(_cur_gps.skip_sprites, 0);
-	Require(!parse({10, 206, 2, 17}).first && errors.status == GCS_DISABLED && errors.errors.back().data == "too many inputs (max 16)", "action2-production-count-error");
-	_cur_gps.skip_sprites = 0;
-	_cur_gps.nfo_line++;
-	Require(!parse({10, 207, 2, 2, 0, 9, 0}).first && errors.errors.back().data == "duplicate input cargo" && _cur_gps.spritegroups[207] == nullptr, "action2-production-duplicate-error");
-	_cur_gps.skip_sprites = 0;
-	Require(!parse({10, 208, 2, 1, 255, 9, 0, 0}).first, "action2-invalid-cargo-parse");
-	const auto *invalid = static_cast<const IndustryProductionSpriteGroup *>(_cur_gps.spritegroups[208]);
-	Require(invalid->version == 255 && invalid->cargo_input[0] == INVALID_CARGO && invalid->subtract_input[0] == 9, "action2-invalid-cargo-version");
-	_cur_gps.nfo_line++;
-	Require(!parse({9, 209, 0x41, 1, 0, 0, 0, 16, 0}).first && errors.errors.back().message == STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT && _cur_gps.spritegroups[209] == nullptr, "action2-layout-flag-error");
-
-	ResetAction2Callbacks(true);
-	_cur_gps.spritegroups = groups;
 }
 static void Inspect(bool reload)
 {
@@ -383,7 +288,6 @@ static void Inspect(bool reload)
 			Require(found, "action2-industry-reload");
 		}
 	}
-	Action2PartialRead();
 	if (!reload) Require(GetGRFConfig(ID("MISS"))->status == GCS_NOT_FOUND, "missing");
 	fmt::print(stderr, "LOADING state {} {} {} {} {}\n", id.base(), partial_id.base(), file->GetParam(3), broken->errors.front().nfo_line, broken->errors.front().param_value[0]);
 	fmt::print(stderr, "LOADING {} true\n", reload ? "reload" : "complete");
@@ -455,7 +359,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
 		_interactive_random.SetSeed(0x61700001);
 		if (GetGRFConfig(ID("TX52")) != nullptr) { Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack"); ReloadNewGRFData(); }
-		Inspect(true); GrfTownNames("inspect", false); GrfStrings("inspect"); GrfBindings("inspect"); SeasonalSnow("inspect", true); return true;
+		Inspect(true); GrfTownStyles("inspect", false); GrfStrings("inspect"); GrfBindings("inspect"); SeasonalSnow("inspect", true); return true;
 	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
@@ -483,12 +387,12 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	ReloadNewGRFData();
 	SeasonalSnow("reconstructed", true);
 	Inspect(false);
-	GrfTownNames("first", true);
+	GrfTownStyles("first", true);
 	GrfStrings("first");
 	GrfBindings("first");
 	ReloadNewGRFData();
 	Inspect(false);
-	GrfTownNames("reload", true);
+	GrfTownStyles("reload", true);
 	GrfStrings("reload");
 	GrfBindings("reload");
 	SeasonalSnow("reload", true);

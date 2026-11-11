@@ -162,6 +162,9 @@ crate::abi::layouts! {
 }
 
 const GROUPID_CALLBACK_FAILED: u16 = 0x7FFF;
+#[cfg(test)]
+mod evidence_tests;
+
 const GROUPID_CALCULATED_RESULT: u16 = 0x7FFE;
 static CALLBACKS: GameState<Vec<(u16, u32)>> = GameState::new(Vec::new());
 
