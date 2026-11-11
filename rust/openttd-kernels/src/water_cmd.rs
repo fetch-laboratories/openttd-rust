@@ -174,7 +174,11 @@ impl World<'_> {
         !(1..self.size_x - 2).contains(&x) || !(1..self.size_y - 2).contains(&y)
     }
     fn infra(&self, owner: u8, delta: u32, dirty: bool) {
-        (self.a.restoration.infrastructure)(owner, delta);
+        let infrastructure = crate::company_base::CompanyInfrastructure::get(
+            self.s,
+            crate::company_type::CompanyID(owner),
+        );
+        unsafe { crate::company_base::CompanyInfrastructure::add_water(infrastructure, delta) };
         if dirty {
             (self.cmd.infrastructure_dirty)(owner);
         }
@@ -305,11 +309,25 @@ impl World<'_> {
             (self.rail().delete_depot)(tile);
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
-                let mut amount = 0u32.wrapping_sub(2 * FACTOR);
+                let infrastructure = crate::company_base::CompanyInfrastructure::get(
+                    self.s,
+                    crate::company_type::CompanyID(owner),
+                );
+                unsafe {
+                    crate::company_base::CompanyInfrastructure::add_water(
+                        infrastructure,
+                        0u32.wrapping_sub(2 * FACTOR),
+                    )
+                };
                 if force && self.class(tile) == 1 {
-                    amount = amount.wrapping_sub(1);
+                    unsafe {
+                        crate::company_base::CompanyInfrastructure::add_water(
+                            infrastructure,
+                            u32::MAX,
+                        )
+                    };
                 }
-                self.infra(owner, amount, true);
+                (self.cmd.infrastructure_dirty)(owner);
             }
             if !force {
                 self.restore(tile, (self.s.tile_owner)(tile));
@@ -386,13 +404,28 @@ impl World<'_> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.s.current_company)();
             if (self.s.company_valid)(owner) {
+                let infrastructure = crate::company_base::CompanyInfrastructure::get(
+                    self.s,
+                    crate::company_type::CompanyID(owner),
+                );
                 if !(self.s.is_water_tile)(lower) {
-                    self.infra(owner, 1, false);
+                    unsafe {
+                        crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1)
+                    };
                 }
                 if !(self.s.is_water_tile)(upper) {
-                    self.infra(owner, 1, false);
+                    unsafe {
+                        crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1)
+                    };
                 }
-                self.infra(owner, 3 * FACTOR, true);
+                // Count for the lock itself. Lock is three tiles.
+                unsafe {
+                    crate::company_base::CompanyInfrastructure::add_water(
+                        infrastructure,
+                        3 * FACTOR,
+                    )
+                };
+                (self.cmd.infrastructure_dirty)(owner);
             }
             for (part, t) in [tile, lower, upper].into_iter().enumerate() {
                 let o = if part != 0 && (self.s.is_water_tile)(t) {

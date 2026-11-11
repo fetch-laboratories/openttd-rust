@@ -100,7 +100,13 @@ pub(crate) unsafe fn restore(
     if slope != 0 {
         if class == 1 {
             if (s.company_valid)(owner) {
-                (r.infrastructure)(owner, u32::MAX);
+                let infrastructure = crate::company_base::CompanyInfrastructure::get(
+                    s,
+                    crate::company_type::CompanyID(owner),
+                );
+                unsafe {
+                    crate::company_base::CompanyInfrastructure::add_water(infrastructure, u32::MAX)
+                };
                 // SAFETY: Shared command tables are immutable and live for this call.
                 unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
             }
@@ -112,7 +118,11 @@ pub(crate) unsafe fn restore(
     }
     if class == 0 && z > 0 {
         if (s.company_valid)(owner) {
-            (r.infrastructure)(owner, 1);
+            let infrastructure = crate::company_base::CompanyInfrastructure::get(
+                s,
+                crate::company_type::CompanyID(owner),
+            );
+            unsafe { crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1) };
             // SAFETY: Shared command tables are immutable and live for this call.
             unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
         }

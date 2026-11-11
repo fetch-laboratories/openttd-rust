@@ -378,8 +378,16 @@ impl<'a> World<'a> {
                 if (self.s.is_water_tile)(tile) && (self.a.canal)(tile) {
                     let owner = (self.s.tile_owner)(tile);
                     if (self.s.company_valid)(owner) {
-                        let w = unsafe { &*self.a.water };
-                        (w.restoration.infrastructure)(owner, u32::MAX);
+                        let infrastructure = crate::company_base::CompanyInfrastructure::get(
+                            self.s,
+                            crate::company_type::CompanyID(owner),
+                        );
+                        unsafe {
+                            crate::company_base::CompanyInfrastructure::add_water(
+                                infrastructure,
+                                u32::MAX,
+                            )
+                        };
                         (self.cmd.infrastructure_dirty)(owner);
                     }
                 }

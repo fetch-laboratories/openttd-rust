@@ -39,6 +39,17 @@ impl CompanyInfrastructure {
     pub(crate) fn get(shared: &crate::services::Services, id: CompanyID) -> *mut Self {
         (shared.company_infrastructure)(id.0)
     }
+    /// Add a wrapping count to the original water field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure.
+    pub(crate) unsafe fn add_water(this: *mut Self, delta: u32) {
+        // SAFETY: The caller keeps the native record live and serialized; no reference escapes.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).water);
+            field.write(field.read().wrapping_add(delta));
+        }
+    }
     /// Get total sum of all owned track bits (`GetRailTotal`).
     ///
     /// # Safety
