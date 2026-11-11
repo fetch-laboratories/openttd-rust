@@ -46,3 +46,13 @@ impl X25519KeyExchangeSide {
     /// We are the server.
     pub(crate) const SERVER: Self = Self(1);
 }
+
+/// `X25519DerivedKeys::ClientToServer`: raw key for client-to-server traffic.
+pub(crate) fn client_to_server(keys: &X25519DerivedKeys) -> &X25519Key {
+    keys[..X25519_KEY_SIZE].try_into().unwrap()
+}
+
+/// `X25519DerivedKeys::ServerToClient`: raw key for server-to-client traffic.
+pub(crate) fn server_to_client(keys: &X25519DerivedKeys) -> &X25519Key {
+    keys[X25519_KEY_SIZE..].try_into().unwrap()
+}

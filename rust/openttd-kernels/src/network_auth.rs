@@ -7,6 +7,7 @@ use crate::auth;
 use crate::debug::debug;
 use crate::network_action::Actions;
 use crate::network_client::status as client;
+use crate::network_crypto::{NetworkAuthenticationMethod, RequestResult, ResponseResult};
 use crate::network_frame::{
     Services, packet_check, packet_new, packet_send, server_status as server,
 };
@@ -60,7 +61,7 @@ pub(crate) fn send_response(f: &Services) -> u8 {
     let owner = (f.auth_owner)((s.auth)(socket::shell(game)));
     let mut p = packet_new(f, game, PACKET_CLIENT_AUTH_RESPONSE);
     unsafe {
-        auth::openttd_rust_auth_handler_send_response(owner, &raw mut p);
+        auth::send_response(owner, &raw mut p);
     }
     packet_send(f, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
@@ -79,9 +80,9 @@ pub(crate) fn receive_request(f: &Services, game: *mut GameSocket, p: *mut State
         (s.auth_create)(native);
     }
     let owner = (f.auth_owner)((s.auth)(native));
-    match unsafe { auth::openttd_rust_auth_handler_receive_request(owner, p) } {
-        crate::network_crypto::REQUEST_READY => send_response(f),
-        crate::network_crypto::REQUEST_AWAIT_INPUT => NETWORK_RECV_STATUS_OKAY,
+    match unsafe { auth::receive_request(owner, p) } {
+        RequestResult::ReadyForResponse => send_response(f),
+        RequestResult::AwaitUserInput => NETWORK_RECV_STATUS_OKAY,
         _ => NETWORK_RECV_STATUS_MALFORMED_PACKET,
     }
 }
@@ -144,14 +145,16 @@ pub(crate) fn receive_response(
         (f.dispatch.client_id)(game)
     );
     let owner = (f.auth_owner)((s.auth)(native));
-    let method = unsafe { auth::openttd_rust_auth_handler_method(owner) };
-    match unsafe { auth::openttd_rust_auth_handler_receive_response(owner, p) } {
-        crate::network_crypto::RESPONSE_AUTHENTICATED => (),
-        crate::network_crypto::RESPONSE_RETRY => return send_request(f, game, work),
+    let method = unsafe { (*owner).method() };
+    match unsafe { auth::receive_response(owner, p) } {
+        ResponseResult::Authenticated => (),
+        ResponseResult::RetryNextMethod => return send_request(f, game, work),
         _ => {
             let error = match method {
-                crate::network_crypto::METHOD_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
-                crate::network_crypto::METHOD_AUTHORIZED_KEY => NETWORK_ERROR_NOT_ON_ALLOW_LIST,
+                NetworkAuthenticationMethod::X25519_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
+                NetworkAuthenticationMethod::X25519_AuthorizedKey => {
+                    NETWORK_ERROR_NOT_ON_ALLOW_LIST
+                }
                 _ => unreachable!(),
             };
             return crate::network_connection::send_error(
@@ -178,7 +181,7 @@ pub(crate) fn receive_response(
         auth::send_enable(owner, &raw mut p);
     }
     packet_send(f, game, &mut p);
-    let peer = unsafe { auth::openttd_rust_auth_handler_peer(owner) };
+    let peer = unsafe { (*owner).peer() };
     let receive = unsafe {
         auth::stream_new(
             owner,

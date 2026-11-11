@@ -12,11 +12,13 @@
 #![allow(unsafe_code)]
 
 use crate::debug::debug;
-use crate::network_crypto::{NetworkAuthenticationMethod, NetworkAuthenticationMethodMask};
+use crate::network_crypto::{
+    NetworkAuthenticationMethod, NetworkAuthenticationMethodMask, RequestResult, ResponseResult,
+};
 use crate::network_crypto_internal::{
     X25519_KEY_EXCHANGE_MESSAGE_SIZE, X25519_KEY_SIZE, X25519_MAC_SIZE, X25519_NONCE_SIZE,
     X25519DerivedKeys, X25519KeyExchangeMessage, X25519KeyExchangeSide, X25519Mac, X25519Nonce,
-    X25519PublicKey, X25519SecretKey, create_random_nonce,
+    X25519PublicKey, X25519SecretKey, client_to_server, create_random_nonce, server_to_client,
 };
 use crate::{
     crypto::{self, Aead},
@@ -172,7 +174,12 @@ impl Handler {
             Kind::Server { handlers } => handlers.last().map_or("Unknown", Self::name),
         }
     }
-    fn method(&self) -> NetworkAuthenticationMethod {
+    /// Public key supplied by the peer; owner remains live across native adoption.
+    pub(crate) fn peer(&self) -> *const u8 {
+        unsafe { self.single().session.peer.as_ptr() }
+    }
+
+    pub(crate) fn method(&self) -> NetworkAuthenticationMethod {
         match &self.kind {
             Kind::Single(single) => single.method,
             Kind::Client { handlers, current } => {
@@ -212,16 +219,25 @@ unsafe fn session_new(secret: &X25519SecretKey, services: *const Services) -> Se
     session
 }
 
-#[allow(clippy::too_many_arguments)] // Typed constructor inputs follow the native handler interfaces.
-unsafe fn new_single(
-    services: *const Services,
+/// Constructor inputs for one original authentication sub-handler.
+struct SingleArgs<'a> {
     method: NetworkAuthenticationMethod,
     server: bool,
-    secret: &X25519SecretKey,
+    secret: &'a X25519SecretKey,
     client_password: *mut RustAuthenticationClientHandler,
     server_password: *const NetworkAuthenticationPasswordProvider,
     authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
-) -> Handler {
+}
+
+unsafe fn new_single(services: *const Services, args: SingleArgs<'_>) -> Handler {
+    let SingleArgs {
+        method,
+        server,
+        secret,
+        client_password,
+        server_password,
+        authorized,
+    } = args;
     Handler {
         services,
         kind: Kind::Single(Single {
@@ -256,7 +272,13 @@ unsafe fn can_be_used(owner: *const Handler) -> bool {
     }
 }
 
-unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8 {
+/// Read server key-exchange data, then request user input if needed.
+/// # Safety
+/// Handler, packet and synchronous leaves follow the module lifetime contract.
+pub(crate) unsafe fn receive_request(
+    owner: *mut Handler,
+    packet: *mut packet::State,
+) -> RequestResult {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Client { .. }) {
         let method = NetworkAuthenticationMethod(unsafe {
@@ -269,7 +291,7 @@ unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8
             .iter()
             .position(|handler| handler.method() == method)
         else {
-            return 2;
+            return RequestResult::Invalid;
         };
         *current = Some(index);
         debug!(net, 9, "Received {} authentication request", unsafe {
@@ -278,12 +300,12 @@ unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8
         let active = unsafe { Handler::active(owner) };
         return unsafe { receive_request(active, packet) };
     }
-    if unsafe { (*packet).remaining() } != 56 {
+    if unsafe { (*packet).remaining() } != X25519_KEY_SIZE + X25519_NONCE_SIZE {
         debug!(
             net,
             1, "[crypto] Received auth response of illegal size; authentication aborted."
         );
-        return 2;
+        return RequestResult::Invalid;
     }
     unsafe {
         let single = single_mut(owner);
@@ -298,13 +320,16 @@ unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8
         unsafe {
             ((*services).ask_password)(password_handler);
         }
-        0
+        RequestResult::AwaitUserInput
     } else {
-        1
+        RequestResult::ReadyForResponse
     }
 }
 
-unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool {
+/// Perform key exchange and fill the outgoing response when it succeeds.
+/// # Safety
+/// Handler, packet and synchronous leaves follow the module lifetime contract.
+pub(crate) unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Client { .. }) {
         debug!(net, 9, "Sending {} authentication response", unsafe {
@@ -345,7 +370,7 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
     unsafe {
         let single = single_mut(owner);
         let mut context = Aead::new(
-            single.session.keys[..X25519_KEY_SIZE].try_into().unwrap(),
+            client_to_server(&single.session.keys),
             &single.session.exchange_nonce,
         );
         let mac = context.write(message.as_mut(), &single.session.public);
@@ -356,21 +381,31 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
     true
 }
 
-unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u8 {
+/// Read client key-exchange data and check authentication.
+/// # Safety
+/// Handler, packet and synchronous leaves follow the module lifetime contract.
+pub(crate) unsafe fn receive_response(
+    owner: *mut Handler,
+    packet: *mut packet::State,
+) -> ResponseResult {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Server { .. }) {
         debug!(net, 9, "Receiving {} authentication response", unsafe {
             (*owner).name()
         });
         let result = unsafe { receive_response(Handler::active(owner), packet) };
-        if result != 1 {
+        if result != ResponseResult::NotAuthenticated {
             return result;
         }
         let Kind::Server { handlers } = (unsafe { &mut (*owner).kind }) else {
             unreachable!();
         };
         handlers.pop();
-        return if handlers.is_empty() { 1 } else { 2 };
+        return if handlers.is_empty() {
+            ResponseResult::NotAuthenticated
+        } else {
+            ResponseResult::RetryNextMethod
+        };
     }
     // The original PAKE handler queries the provider before checking packet size.
     let mut size = 0;
@@ -380,12 +415,14 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
     } else {
         ptr::null()
     };
-    if unsafe { (*packet).remaining() } != 56 {
+    if unsafe { (*packet).remaining() }
+        != X25519_KEY_SIZE + X25519_MAC_SIZE + X25519_KEY_EXCHANGE_MESSAGE_SIZE
+    {
         debug!(
             net,
             1, "[crypto] Received auth response of illegal size; authentication aborted."
         );
-        return 1;
+        return ResponseResult::NotAuthenticated;
     }
     let mut message: Zeroizing<X25519KeyExchangeMessage> =
         Zeroizing::new([0; X25519_KEY_EXCHANGE_MESSAGE_SIZE]);
@@ -409,18 +446,20 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
             net,
             0, "[crypto] Peer sent an illegal public key; authentication aborted."
         );
-        return 1;
+        return ResponseResult::NotAuthenticated;
     }
     let valid = unsafe {
         let single = single_mut(owner);
         Aead::new(
-            single.session.keys[..X25519_KEY_SIZE].try_into().unwrap(),
+            client_to_server(&single.session.keys),
             &single.session.exchange_nonce,
         )
         .read(message.as_mut(), &mac, &single.session.peer)
     };
     if !valid {
-        return 1;
+        /* The ciphertext and MAC do not match the encryption key. Most likely
+         * the password is invalid, or possibly the client has a bug. */
+        return ResponseResult::NotAuthenticated;
     }
     if unsafe { (*owner).method() } == NetworkAuthenticationMethod::X25519_AuthorizedKey {
         let (authorized, peer) = unsafe {
@@ -436,10 +475,10 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
             );
         }
         if unsafe { ((*services).allowed)(authorized, encoded.as_ptr(), encoded.len()) } == 0 {
-            return 1;
+            return ResponseResult::NotAuthenticated;
         }
     }
-    0
+    ResponseResult::Authenticated
 }
 
 // Entries share the module contract. Native success values are 0-or-1 u8 (#644).
@@ -456,12 +495,14 @@ pub(crate) unsafe fn client_new(
         handlers.push(unsafe {
             new_single(
                 services,
-                NetworkAuthenticationMethod(method),
-                false,
-                secret,
-                password,
-                ptr::null(),
-                ptr::null(),
+                SingleArgs {
+                    method: NetworkAuthenticationMethod(method),
+                    server: false,
+                    secret: secret,
+                    client_password: password,
+                    server_password: ptr::null(),
+                    authorized: ptr::null(),
+                },
             )
         });
     }
@@ -500,14 +541,17 @@ pub(crate) unsafe fn server_new(
         let handler = unsafe {
             new_single(
                 services,
-                NetworkAuthenticationMethod::X25519_PAKE,
-                true,
-                &secret,
-                ptr::null_mut(),
-                password,
-                ptr::null(),
+                SingleArgs {
+                    method: NetworkAuthenticationMethod::X25519_PAKE,
+                    server: true,
+                    secret: &secret,
+                    client_password: ptr::null_mut(),
+                    server_password: password,
+                    authorized: ptr::null(),
+                },
             )
         };
+        /* Is the handler configured correctly, e.g. does it have a password? */
         if unsafe { can_be_used(&raw const handler) } {
             handlers.push(handler);
         }
@@ -516,28 +560,35 @@ pub(crate) unsafe fn server_new(
         let handler = unsafe {
             new_single(
                 services,
-                NetworkAuthenticationMethod::X25519_AuthorizedKey,
-                true,
-                &secret,
-                ptr::null_mut(),
-                ptr::null(),
-                authorized,
+                SingleArgs {
+                    method: NetworkAuthenticationMethod::X25519_AuthorizedKey,
+                    server: true,
+                    secret: &secret,
+                    client_password: ptr::null_mut(),
+                    server_password: ptr::null(),
+                    authorized: authorized,
+                },
             )
         };
+        /* Is the handler configured correctly, e.g. does it have a password? */
         if unsafe { can_be_used(&raw const handler) } {
             handlers.push(handler);
         }
     }
     if handlers.is_empty() && mask.test(NetworkAuthenticationMethod::X25519_KeyExchangeOnly) {
+        /* Fall back to the plain handler when neither passwords nor authorized
+         * keys are configured. */
         handlers.push(unsafe {
             new_single(
                 services,
-                NetworkAuthenticationMethod::X25519_KeyExchangeOnly,
-                true,
-                &secret,
-                ptr::null_mut(),
-                ptr::null(),
-                ptr::null(),
+                SingleArgs {
+                    method: NetworkAuthenticationMethod::X25519_KeyExchangeOnly,
+                    server: true,
+                    secret: &secret,
+                    client_password: ptr::null_mut(),
+                    server_password: ptr::null(),
+                    authorized: ptr::null(),
+                },
             )
         });
     }
@@ -586,7 +637,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_method(owner: *const H
 }
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_peer(owner: *const Handler) -> *const u8 {
-    unsafe { (*owner).single().session.peer.as_ptr() }
+    unsafe { (*owner).peer() }
 }
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_can_be_used(owner: *const Handler) -> u8 {
@@ -597,7 +648,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_request(
     owner: *mut Handler,
     packet: *mut packet::State,
 ) -> u8 {
-    unsafe { receive_request(owner, packet) }
+    unsafe { receive_request(owner, packet).0 }
 }
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_response(
@@ -611,7 +662,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_response(
     owner: *mut Handler,
     packet: *mut packet::State,
 ) -> u8 {
-    unsafe { receive_response(owner, packet) }
+    unsafe { receive_response(owner, packet).0 }
 }
 /// Send the active server request, with its method prefix for combined handlers.
 /// # Safety
@@ -685,10 +736,10 @@ pub(crate) unsafe fn stream_new(owner: *const Handler, side: X25519KeyExchangeSi
         let session = &(*owner).single().session;
         Box::into_raw(Box::new(Stream {
             context: Aead::new(
-                session.keys[usize::from(side.0) * X25519_KEY_SIZE
-                    ..usize::from(side.0) * X25519_KEY_SIZE + X25519_KEY_SIZE]
-                    .try_into()
-                    .unwrap(),
+                [
+                    client_to_server(&session.keys),
+                    server_to_client(&session.keys),
+                ][usize::from(side.0)],
                 &session.encryption_nonce,
             ),
         }))
@@ -744,7 +795,7 @@ crate::abi::layouts! {
 mod tests {
     use super::{
         Handler, NetworkAuthenticationAuthorizedKeyHandler, NetworkAuthenticationPasswordProvider,
-        RustAuthenticationClientHandler, Services, new_single,
+        RustAuthenticationClientHandler, Services, SingleArgs, new_single,
         openttd_rust_auth_handler_send_request, receive_request, receive_response, send_response,
     };
     use crate::network_crypto::NetworkAuthenticationMethod;
@@ -808,12 +859,14 @@ mod tests {
             unsafe {
                 new_single(
                     &raw const services,
-                    NetworkAuthenticationMethod::X25519_PAKE,
-                    is_server,
-                    &[secret; X25519_KEY_SIZE],
-                    (&raw const client_password).cast_mut().cast(),
-                    (&raw const server_password).cast(),
-                    ptr::null(),
+                    SingleArgs {
+                        method: NetworkAuthenticationMethod::X25519_PAKE,
+                        server: is_server,
+                        secret: &[secret; X25519_KEY_SIZE],
+                        client_password: (&raw const client_password).cast_mut().cast(),
+                        server_password: (&raw const server_password).cast(),
+                        authorized: ptr::null(),
+                    },
                 )
             }
         };
@@ -824,9 +877,9 @@ mod tests {
         unsafe {
             openttd_rust_auth_handler_send_request(&raw mut server, &raw mut request, check);
             // RequestResult::AwaitUserInput.
-            assert_eq!(receive_request(&raw mut client, &raw mut request), 0);
+            assert_eq!(receive_request(&raw mut client, &raw mut request).0, 0);
             assert!(send_response(&raw mut client, &raw mut response));
-            receive_response(&raw mut server, &raw mut response)
+            receive_response(&raw mut server, &raw mut response).0
         }
     }
 
