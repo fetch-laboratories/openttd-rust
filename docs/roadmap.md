@@ -74,19 +74,19 @@ Counting commands:
 
 ### Speed
 
-The [merge-20 profile](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6783388958) on clean `65c62aeaa7` used `simulate --instructions --jobs 2`. All seven canonical exit saves and full logs match, and no anchor changed. Retained artifacts are in locked `t3-9bfeabfd-b8f486fd2881369f/.local/simulation/20261111T002248Z-186703/` and `.local/speed-pass/merge20-identity/`. The merge-32 profile of `985abab91f` is running; its record goes on #275 and replaces this table.
+The [merge-32 profile](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6810087211) on clean `985abab91f` used `simulate --instructions --jobs 2`. All seven canonical exit saves and full logs match. The driver exited 1 on its anchor identity guard for every scenario: #908 added a `native-debug` feature to `rust/openttd-kernels/Cargo.toml`, a file the identity hashes, and nothing else in the identity differs from merge 20. The merge-32 projections below are therefore computed from the report's instruction counts and the retained anchors by the [formula](speed.md#instruction-projections), not printed by the driver; the next quiet pass re-anchors ([#275](https://github.com/fetch-laboratories/openttd-rust/issues/275)). The profile's output is retained in locked `t3-656b5a85-5eedda484b0f05a1` and replaces the merge-20 profile in `t3-9bfeabfd-b8f486fd2881369f` as the previous tip for attribution.
 
-| Scenario | Original Ir | Candidate Ir (merge 20) | Projection (merge 8) | Projection (merge 20) |
-| --- | ---: | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,774,994,754 | 1.163070x | 1.161260x |
-| Opus | 21,773,343,583 | 27,411,470,613 | 1.345115x | 1.345115x |
-| Grok | 20,969,727,163 | 26,174,670,001 | 1.346652x | 1.346652x |
-| P1996 | 3,600,502,896 | 4,505,830,818 | 1.352193x | 1.352193x |
-| P2000 | 6,049,922,238 | 7,408,317,235 | 1.444531x | 1.444531x |
-| P2016 | 11,343,424,651 | 13,711,755,287 | 1.382593x | 1.382593x |
-| Drawing (diagnostic) | 2,149,015,961 | 2,154,439,219 | 1.004635x | 1.004635x |
+| Scenario | Original Ir | Candidate Ir (merge 20) | Projection (merge 8) | Projection (merge 20) | Candidate Ir (merge 32) | Projection (merge 32) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| TGP | 2,265,528,237 | 2,774,994,754 | 1.163070x | 1.161260x | 2,789,433,667 | 1.173339x |
+| Opus | 21,773,343,583 | 27,411,470,613 | 1.345115x | 1.345115x | 27,485,703,563 | 1.345115x |
+| Grok | 20,969,727,163 | 26,174,670,001 | 1.346652x | 1.346652x | 26,243,562,014 | 1.346652x |
+| P1996 | 3,600,502,896 | 4,505,830,818 | 1.352193x | 1.352193x | 4,514,871,657 | 1.352193x |
+| P2000 | 6,049,922,238 | 7,408,317,235 | 1.444531x | 1.444531x | 7,434,777,978 | 1.444531x |
+| P2016 | 11,343,424,651 | 13,711,755,287 | 1.382593x | 1.382593x | 13,729,352,305 | 1.382593x |
+| Drawing (diagnostic) | 2,149,015,961 | 2,154,439,219 | 1.004635x | 1.004635x | 2,154,418,251 | 1.004635x |
 
-No policy projection rose 3% or entered its band. Generation remains below 1.235x/1.3x band/ceiling; play remains below 1.52x/1.6x. No wall pass is due, and these instruction projections are not new wall-time measurements.
+No policy projection rose 3% or entered its band: generation rose 1.04% and stays below its 1.235x band and 1.3x ceiling, and the play records stay on their anchor floor, the highest at 1.444531x against the 1.52x band and 1.6x ceiling. No wall pass is due, and these instruction projections are not new wall-time measurements. `Map::tile_add` has no symbol of its own in the generation or Opus profiles, so it is inlined in release, which settles #903's instruction acceptance.
 
 ## Course (user, 2026-11-06)
 
@@ -465,7 +465,7 @@ Two or three undispatched work orders ([delegation](team.md#ready-queue-and-pipe
    - Size: about 450 to 550 changed lines, about half of them seeded tests: under 30 for #919, about 300 to 400 for #920 and about 100 for #923. Refine it at the first checkpoint.
    - Files: `.github/workflows/ci-quick.yml`, and `ci-request.yml` only where a requested profile passes its base; `tools/preflight.py`, `tools/test-preflight.py`, `tools/ci.py`, `tools/test-ci.py`, `tools/oracle-capture.py` and a hook installer with its two hook scripts. The docs that state the checkpoint rule (`AGENTS.md`, `docs/workflow.md`, `docs/implementer-brief.md`, `docs/rust-migration.md`) change in the same PR, with the text root rules on. #916 edits none of these; #923 calls `tools/probe.py` and `tools/migration.py` as they are and does not edit `migration.py`, which #916 edits.
    - It changes `.github/workflows/`, so it queues only after root's workflow review and a bootstrap Full on its head ([CI administration](root-workflow.md#ci-administration)).
-   - Waits on root's ruling on #920's checkpoint rule: whether the logged override skips the fast tier too, and whether the growth gate, at 37 to 81 seconds on this host, belongs in that tier. #919's and #923's parts need no ruling.
+   - Ready now. Root ruled on #920's checkpoint rule on 2026-11-11 ([#920](https://github.com/fetch-laboratories/openttd-rust/issues/920#issuecomment-6810043988)): the logged override skips the stamp and runs nothing slower than a few seconds, and the growth gate belongs to the stamped tier.
 
 **Later.** The rest of workset 09 follows 9m. 20e (`network_dispatch.rs`, `network_lifecycle.rs` and `admin_conversion.rs`; 1,421 raw lines, 68 `extern "C" fn` items, about 1,340 changed lines) follows 20d, under the same idle-slot rule. #736 follows the [classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013)'s order after the link graph schedule probe: the Catch2 files that delete whole (326 counted lines), the train and aircraft probes with `src/tests/train.cpp` (384), the authentication probe (160) and the ScriptList owner sections (120 to 200), then the end-state inventory. Each needs a new `oracle-capture.py` recipe. No console fixture moves by transfer: the 65 files and 14,273 counted lines of class 2 retire with their pool or reader owners, and the 33 files and 3,909 lines of class 3 with their boundaries. Earlier analysis for 7a and 9m is on [#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6787577538).
 
