@@ -13,6 +13,8 @@
     clippy::if_not_else
 )]
 use crate::command_type::DoCommandFlag as F;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::map_type::{LM_LEVEL, LM_LOWER, LM_RAISE};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
@@ -378,15 +380,9 @@ impl<'a> World<'a> {
                 if (self.s.is_water_tile)(tile) && (self.a.canal)(tile) {
                     let owner = (self.s.tile_owner)(tile);
                     if (self.s.company_valid)(owner) {
-                        let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                            self.s,
-                            crate::company_type::CompanyID(owner),
-                        );
+                        let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
                         unsafe {
-                            crate::company_base::CompanyInfrastructure::add_water(
-                                infrastructure,
-                                u32::MAX,
-                            )
+                            CompanyInfrastructure::add_water(infrastructure, u32::MAX);
                         };
                         (self.cmd.infrastructure_dirty)(owner);
                     }

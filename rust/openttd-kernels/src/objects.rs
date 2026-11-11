@@ -24,6 +24,8 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
@@ -762,11 +764,8 @@ impl<'a> World<'a> {
                     && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)
                         || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
                 {
-                    let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                        self.shared,
-                        crate::company_type::CompanyID(owner),
-                    );
-                    crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                    CompanyInfrastructure::add_water(infrastructure, 1);
                     ((*self.s.command).infrastructure_dirty)(owner);
                 }
                 let remove = (self.shared.clear_square_services.docking)(t);
@@ -1400,16 +1399,10 @@ impl World<'_> {
             if (kind == OWNED || kind >= NEW_OBJECT_OFFSET) && new != INVALID_OWNER {
                 (self.shared.set_tile_owner)(tile, new);
                 if crate::map_func::World::new(self.shared).water_class(tile) == 1 {
-                    let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                        self.shared,
-                        crate::company_type::CompanyID(old),
-                    );
-                    crate::company_base::CompanyInfrastructure::add_water(infrastructure, u32::MAX);
-                    let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                        self.shared,
-                        crate::company_type::CompanyID(new),
-                    );
-                    crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(old));
+                    CompanyInfrastructure::add_water(infrastructure, u32::MAX);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(new));
+                    CompanyInfrastructure::add_water(infrastructure, 1);
                 }
             } else if kind == STATUE {
                 let town = (self.s.statue_town)((self.query().by_tile)(tile));

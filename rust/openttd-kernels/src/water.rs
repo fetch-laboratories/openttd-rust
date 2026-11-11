@@ -15,6 +15,8 @@
     clippy::cast_possible_wrap,
     clippy::collapsible_match
 )]
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::services::TileTypeAccess;
 use crate::slope_func::{
     is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
@@ -100,12 +102,9 @@ pub(crate) unsafe fn restore(
     if slope != 0 {
         if class == 1 {
             if (s.company_valid)(owner) {
-                let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                    s,
-                    crate::company_type::CompanyID(owner),
-                );
+                let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
                 unsafe {
-                    crate::company_base::CompanyInfrastructure::add_water(infrastructure, u32::MAX)
+                    CompanyInfrastructure::add_water(infrastructure, u32::MAX);
                 };
                 // SAFETY: Shared command tables are immutable and live for this call.
                 unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
@@ -118,11 +117,8 @@ pub(crate) unsafe fn restore(
     }
     if class == 0 && z > 0 {
         if (s.company_valid)(owner) {
-            let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                s,
-                crate::company_type::CompanyID(owner),
-            );
-            unsafe { crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1) };
+            let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
+            unsafe { CompanyInfrastructure::add_water(infrastructure, 1) };
             // SAFETY: Shared command tables are immutable and live for this call.
             unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
         }

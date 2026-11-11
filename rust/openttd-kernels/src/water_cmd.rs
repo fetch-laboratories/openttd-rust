@@ -17,6 +17,8 @@
     clippy::if_not_else
 )]
 use crate::command_type::DoCommandFlag;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{
@@ -174,11 +176,8 @@ impl World<'_> {
         !(1..self.size_x - 2).contains(&x) || !(1..self.size_y - 2).contains(&y)
     }
     fn infra(&self, owner: u8, delta: u32, dirty: bool) {
-        let infrastructure = crate::company_base::CompanyInfrastructure::get(
-            self.s,
-            crate::company_type::CompanyID(owner),
-        );
-        unsafe { crate::company_base::CompanyInfrastructure::add_water(infrastructure, delta) };
+        let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
+        unsafe { CompanyInfrastructure::add_water(infrastructure, delta) };
         if dirty {
             (self.cmd.infrastructure_dirty)(owner);
         }
@@ -309,22 +308,13 @@ impl World<'_> {
             (self.rail().delete_depot)(tile);
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
-                let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                    self.s,
-                    crate::company_type::CompanyID(owner),
-                );
+                let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
                 unsafe {
-                    crate::company_base::CompanyInfrastructure::add_water(
-                        infrastructure,
-                        0u32.wrapping_sub(2 * FACTOR),
-                    )
+                    CompanyInfrastructure::add_water(infrastructure, 0u32.wrapping_sub(2 * FACTOR));
                 };
                 if force && self.class(tile) == 1 {
                     unsafe {
-                        crate::company_base::CompanyInfrastructure::add_water(
-                            infrastructure,
-                            u32::MAX,
-                        )
+                        CompanyInfrastructure::add_water(infrastructure, u32::MAX);
                     };
                 }
                 (self.cmd.infrastructure_dirty)(owner);
@@ -404,26 +394,17 @@ impl World<'_> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.s.current_company)();
             if (self.s.company_valid)(owner) {
-                let infrastructure = crate::company_base::CompanyInfrastructure::get(
-                    self.s,
-                    crate::company_type::CompanyID(owner),
-                );
-                if !(self.s.is_water_tile)(lower) {
-                    unsafe {
-                        crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1)
-                    };
-                }
-                if !(self.s.is_water_tile)(upper) {
-                    unsafe {
-                        crate::company_base::CompanyInfrastructure::add_water(infrastructure, 1)
-                    };
-                }
-                // Count for the lock itself. Lock is three tiles.
+                let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
+                // SAFETY: Serialized field-sized writes; no native-state borrow crosses the tile reads.
                 unsafe {
-                    crate::company_base::CompanyInfrastructure::add_water(
-                        infrastructure,
-                        3 * FACTOR,
-                    )
+                    if !(self.s.is_water_tile)(lower) {
+                        CompanyInfrastructure::add_water(infrastructure, 1);
+                    }
+                    if !(self.s.is_water_tile)(upper) {
+                        CompanyInfrastructure::add_water(infrastructure, 1);
+                    }
+                    // Count for the lock itself. Lock is three tiles.
+                    CompanyInfrastructure::add_water(infrastructure, 3 * FACTOR);
                 };
                 (self.cmd.infrastructure_dirty)(owner);
             }
