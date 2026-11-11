@@ -4,9 +4,9 @@
 //! Moved from `GrfTownNames` of `tools/simulation/newgrf-loading-console.cpp`. The action
 //! bytes are that fixture's, and `name-oracle.txt` is the unchanged original's log for
 //! them (see its header). The reload phase is exercised by parsing again after
-//! `clean_up`. Status and error leaves only record the Rust decision: the disabled
-//! status of a truncated file is set by the loader's error frame, which `Inspect` keeps,
-//! and founding towns with these styles stays in the console.
+//! `clean_up`. Status and error leaves only record the Rust decision. The console keeps
+//! native style lookup and display through `GetGRFTownNameName` and `GetString`, the
+//! truncated file's loader error, and founding towns with these styles.
 use super::*;
 use crate::newgrf_config::GCS_DISABLED;
 use crate::newgrf_loading::{Services as LoadingServices, TEST_TABLE};

@@ -474,9 +474,21 @@ def seasonal_observations(
     return observations
 
 
-def townname_observations(log: list[str]) -> list[str]:
-    """Town names founded through the production generator, compared across roles."""
-    return [line for line in log if line.startswith("LOADING townname town ")]
+def townname_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
+    """Require one native display line per style before comparing roles."""
+    names = [line for line in log if line.startswith("LOADING townname ")]
+    for phase in phases:
+        prefix = f"LOADING townname {phase} "
+        sizes = [line for line in names if line.startswith(prefix + "styles ")]
+        if len(sizes) != 1:
+            raise RuntimeError("file-loaded GRF style count missing: " + phase)
+        count = int(sizes[0].split()[-1])
+        styles = {
+            line.split()[4] for line in names if line.startswith(prefix + "style ")
+        }
+        if styles != {str(gen) for gen in range(count + 1)}:
+            raise RuntimeError("file-loaded GRF style display missing: " + phase)
+    return names
 
 
 def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
@@ -493,7 +505,10 @@ def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) ->
         "LOADING case action2-layout-consumer true",
     )
     if scenario["newgrf_loading"] != "reload":
-        expected += ("LOADING case townname-found true",)
+        expected += tuple(
+            f"LOADING case townname-{case} true"
+            for case in ("fallback", "partial-read", "found")
+        )
     if scenario["newgrf_loading"] != "reload":
         expected += (
             "LOADING case action2-station-command true",
@@ -527,7 +542,7 @@ def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) ->
         if scenario["newgrf_loading"] in ("bindings", "reload")
         else []
     )
-    names = townname_observations(run["log"]) + snow + text + bindings
+    names = townname_observations(run["log"], phases) + snow + text + bindings
     # Generated name bytes and style lookups are not saved; compare them across roles.
     key = (scenario["name"], mode)
     if role == "reference":

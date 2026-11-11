@@ -197,6 +197,22 @@ static void GrfBindings(const char *phase)
 	fmt::print(stderr, "LOADING binding {} rng {} {} {} {}\n", phase, rng[0], rng[1], rng[2], rng[3]);
 }
 
+/** Native style lookup, display and loader state; parsing and name bytes moved to newgrf_townname::evidence_tests. */
+static void GrfTownStyles(const char *phase, bool loaded)
+{
+	auto names = GetGRFTownNameList();
+	auto params = [](uint16_t gen) { return TownNameParams(static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen)); };
+	fmt::print(stderr, "LOADING townname {} styles {}\n", phase, names.size());
+	for (uint gen = 0; gen <= names.size(); gen++) {
+		TownNameParams par = params(gen);
+		StringID name = GetGRFTownNameName(gen);
+		fmt::print(stderr, "LOADING townname {} style {} {:08X} {} {} {}\n", phase, gen, par.grfid, par.type, gen < names.size() && name == names[gen], Hex(GetString(name)));
+	}
+	if (!loaded) return;
+	Require(params(4).grfid == 0 && params(4).type == SPECSTR_TOWNNAME_START && GetGRFTownNameName(4) == STR_UNDEFINED, "townname-fallback");
+	GRFConfig *truncated = GetGRFConfig(ID("TNS5"));
+	Require(truncated->status == GCS_DISABLED && truncated->errors.size() == 1 && truncated->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "townname-partial-read");
+}
 /** Found one town per NewGRF style through the production name generator. */
 static void GrfTownNameTowns()
 {
@@ -343,7 +359,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
 		_interactive_random.SetSeed(0x61700001);
 		if (GetGRFConfig(ID("TX52")) != nullptr) { Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack"); ReloadNewGRFData(); }
-		Inspect(true); GrfStrings("inspect"); GrfBindings("inspect"); SeasonalSnow("inspect", true); return true;
+		Inspect(true); GrfTownStyles("inspect", false); GrfStrings("inspect"); GrfBindings("inspect"); SeasonalSnow("inspect", true); return true;
 	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
@@ -371,10 +387,12 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	ReloadNewGRFData();
 	SeasonalSnow("reconstructed", true);
 	Inspect(false);
+	GrfTownStyles("first", true);
 	GrfStrings("first");
 	GrfBindings("first");
 	ReloadNewGRFData();
 	Inspect(false);
+	GrfTownStyles("reload", true);
 	GrfStrings("reload");
 	GrfBindings("reload");
 	SeasonalSnow("reload", true);
