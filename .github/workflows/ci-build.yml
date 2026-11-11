@@ -148,7 +148,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (inputs.checkout-ref == '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch'))) && '["x86","x64"]' || '["x64"]') }}
+        # Full runs x86 for its Rust checks only (#896); the cadence, the platform profile
+        # and an uncovered push build it. A covered push refreshes the x64 cache Full restores.
+        arch: ${{ fromJSON((inputs.profile == 'platform' || inputs.profile == 'full' || (inputs.checkout-ref == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push' && needs.policy.outputs.heavy == 'true'))) && '["x86","x64"]' || '["x64"]') }}
 
     name: Windows (${{ matrix.arch }})
 
@@ -158,6 +160,7 @@ jobs:
       checkout-ref: ${{ inputs.checkout-ref }}
       arch: ${{ matrix.arch }}
       semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.arch == 'x64' }}
+      rust-only: ${{ inputs.profile == 'full' && matrix.arch == 'x86' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   annotations_emscripten:
