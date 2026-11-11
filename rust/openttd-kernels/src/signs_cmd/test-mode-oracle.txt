@@ -1,0 +1,17 @@
+# Original-only reference trace captured before fixture reduction by Native42952287341.
+# Pin 14ec60f248547d4d062a1160f0fc26d742319888, fixture/harness d823ceb4a02e40a100b10444e7e8406527c483bf.
+# Tested merge 6e3d47edd4a6268e958071fc319897b274784db1; GCC, GNU/Linux x86_64.
+# Existing prepared_console/capture_pair run of migration/saves/padhattan-ridge-2000.sav.
+# Reproduce with the historical fixture and harness at that commit against the pinned original;
+# objectives.py/signs.py retain the independently executed reference trace in report.json.
+# No candidate field or output supplies these expectations. Native encoding/records stay in the scenario.
+# Full original trace SHA256: 214fc6f5d1ffdc46285ff1f731481057d49c4f8df319c524cd462bde787ddca3
+# test-mode: place Alpha at TileXY(20,30), rename sign0 Beta, move blank sign2 to TileXY(MaxX()-1,7),
+# delete blank sign2, then place Full at the original tile after exhaustion. All use test flags.
+# Each row retains the original success/error and, for placement, returned SignID.
+@@ test-mode
+true 65535 65535
+true 65535
+false 4258 65535
+%%
+0 1 1 1 2

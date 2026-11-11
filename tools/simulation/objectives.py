@@ -17,7 +17,7 @@ Run = core.Run
 def scenarios(soak: bool) -> list[Scenario]:
     return [
         Scenario(
-            name="objectives",
+            name="objectives-native-boundaries",
             kind="save",
             objectives=True,
             save=str(core.ROOT / "migration/saves/padhattan-ridge-2000.sav"),

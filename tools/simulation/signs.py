@@ -15,7 +15,6 @@ Run = core.Run
 
 
 REQUIRED = (
-    "result place-test true 65535 65535",
     "result place-utf8-32 false 65535 65535",
     "result rename-deity-refused false 65535",
     "result move-deity-refused false 65535",
@@ -26,7 +25,6 @@ REQUIRED = (
     "result rename-utf8-32 false 65535",
     "result rename-invalid false 65535",
     "result move-invalid false 65535",
-    "result delete-test true",
     "result delete-again false 65535",
     "result place-full false",
     "result depot-invalid false 65535",
@@ -43,7 +41,7 @@ REQUIRED = (
 def scenarios(soak: bool) -> list[Scenario]:
     return [
         Scenario(
-            name="signs",
+            name="signs-native-boundaries",
             kind="save",
             signs=True,
             save=str(core.ROOT / "migration/saves/padhattan-ridge-2000.sav"),
