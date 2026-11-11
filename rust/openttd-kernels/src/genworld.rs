@@ -9,8 +9,9 @@
     clippy::too_many_lines,
     clippy::cast_possible_truncation
 )]
-/// `GenWorldProgress : uint8_t`.
 use crate::direction_type::DiagDirection;
+
+/// `GenWorldProgress : uint8_t`.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct Progress(pub u8);
