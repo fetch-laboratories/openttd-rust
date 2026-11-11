@@ -215,8 +215,11 @@ mod tests {
             ],
         )
 
-    def gate(self, edit: str) -> tuple[int, str]:
-        """Commit a finished and an unfinished file, apply edit to both, run the gate."""
+    def gate(self, edit: str, rename: bool = False) -> tuple[int, str]:
+        """Commit a finished and an unfinished file, apply edit to both, run the gate.
+
+        With rename, the finished file moves to moved.rs and the list follows it.
+        """
         clean = "pub(crate) fn refit(label: u32) -> u8 {\n    get(label)\n}\n"
         clean += "fn keep() -> u8 {\n    is_steep_slope_raw(0)\n}\n"
         with tempfile.TemporaryDirectory() as directory:
@@ -241,6 +244,9 @@ mod tests {
             base = git("rev-parse", "HEAD")
             for name in ("done.rs", "open.rs"):
                 (root / name).write_text(edit)
+            if rename:
+                git("mv", "done.rs", "moved.rs")
+                (root / "migration/finished-files.txt").write_text("moved.rs\n")
             git("commit", "-qam", "head")
             output = io.StringIO()
             with patch.object(INVENTORY, "ROOT", root):
@@ -263,6 +269,36 @@ mod tests {
         self.assertEqual(self.gate(renamed)[0], 0)
         callee = "fn keep() -> u8 {\n    is_flat_slope_raw(0)\n}\n"
         self.assertEqual(self.gate(callee)[0], 0)
+        moved = "pub(crate) fn refit(label: u32) -> u8 {\n    get(label)\n}\n"
+        moved += "fn keep() -> u8 {\n    is_steep_slope_raw(0)\n}\n"
+        self.assertEqual(self.gate(moved, rename=True)[0], 0)
+
+    def test_a_listed_file_missing_at_head_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "migration").mkdir()
+            (root / "migration/finished-files.txt").write_text("gone.rs\n")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                    "commit",
+                    "-q",
+                    "--allow-empty",
+                    "-m",
+                    "base",
+                ],
+                cwd=root,
+                check=True,
+            )
+            with patch.object(INVENTORY, "ROOT", root):
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(INVENTORY.gate("HEAD"), 1)
+            self.assertIn("listed file is missing: gone.rs", output.getvalue())
 
 
 if __name__ == "__main__":

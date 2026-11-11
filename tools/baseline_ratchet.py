@@ -29,7 +29,7 @@ def main(
         if p.is_file() and p.suffix in suffixes
     }
     hits = violations(files)
-    # A row may name the issue that removes it after its key: `KEY | #N[, #N]`.
+    # A row may name the issue that removes it after its key: `KEY | #N ...`.
     baseline = {key(row) for row in (root / baseline_path).read_text().splitlines()}
     tracked = git(
         "ls-tree", "--name-only", args.base_ref, baseline_path, cwd=root
@@ -58,8 +58,8 @@ def main(
 
 
 def key(row: str) -> str:
-    """A baseline row without its trailing owner issues."""
-    return re.sub(r" \| #\d+(?:, #\d+)*$", "", row)
+    """A baseline row without its owner: ` | #N` and any note after it."""
+    return re.sub(r" \| #\d+.*$", "", row)
 
 
 def debt_errors(

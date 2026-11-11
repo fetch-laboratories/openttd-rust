@@ -631,6 +631,17 @@ def gate(base_ref: str) -> int:
         for line in (ROOT / FINISHED).read_text().splitlines()
         if line.strip() and not line.startswith("#")
     ]
+    # A finished file Git sees as renamed keeps its base occurrences.
+    names = subprocess.check_output(
+        ["git", "diff", "--name-status", "-M", "--diff-filter=R", base],
+        cwd=ROOT,
+        text=True,
+    )
+    renames = {
+        parts[2]: parts[1]
+        for parts in (line.split("\t") for line in names.splitlines())
+        if parts[0].startswith("R")
+    }
     errors = 0
     for path in listed:
         if not (ROOT / path).is_file():
@@ -638,7 +649,10 @@ def gate(base_ref: str) -> int:
             errors += 1
             continue
         before = subprocess.run(
-            ["git", "show", f"{base}:{path}"], cwd=ROOT, capture_output=True, text=True
+            ["git", "show", f"{base}:{renames.get(path, path)}"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
         )
         old = gate_sites(path, before.stdout) if before.returncode == 0 else []
         new = gate_sites(path, (ROOT / path).read_text())
