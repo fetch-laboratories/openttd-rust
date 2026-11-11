@@ -185,7 +185,11 @@ impl Engine<'_> {
         unsafe { (self.x.tile_height)(tile.0) }
     }
     fn tile_slope(&self, tile: TileIndex) -> Slope {
-        Slope(crate::map_func::World::new(self.s.shared()).tile_slope(tile))
+        Slope(
+            crate::map_func::World::new(self.s.shared())
+                .tile_slope(tile)
+                .0,
+        )
     }
     fn tropic_zone(&self, tile: TileIndex) -> TropicZone {
         TropicZone((self.s.shared().tropic_zone)(tile.0))

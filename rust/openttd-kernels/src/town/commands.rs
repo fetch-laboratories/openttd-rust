@@ -280,7 +280,7 @@ impl<'a> Commands<'a> {
             tile_count += 1;
             // Statues can be build on slopes, just like houses. Only the steep slopes is a no go.
             if is_steep_slope(crate::slope_type::Slope(
-                crate::map_func::World::new(self.shared).tile_slope(tile),
+                crate::map_func::World::new(self.shared).tile_slope(tile).0,
             )) {
                 continue;
             }

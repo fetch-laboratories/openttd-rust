@@ -467,7 +467,7 @@ pub(crate) unsafe fn tile_loop_station(
                 }
                 LandscapeType::Tropic => {
                     crate::tile_map::get_tropic_zone(m, tile).unwrap()
-                        == crate::tile_type::TROPICZONE_DESERT
+                        == crate::tile_type::TropicZone::TROPICZONE_DESERT
                         && !on_snow_or_desert()
                 }
                 _ => false,

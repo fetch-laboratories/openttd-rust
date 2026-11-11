@@ -345,14 +345,15 @@ pub(crate) unsafe fn clear_tile_loop(
         };
         let mut expected = 0;
         if crate::tile_map::get_tropic_zone(map, TileIndex(tile))
-            .unwrap_or_else(|| (s.tropic_zone)(tile))
-            == 1
+            .unwrap_or_else(|| crate::tile_type::TropicZone((s.tropic_zone)(tile)))
+            == crate::tile_type::TropicZone::TROPICZONE_DESERT
         {
             let normal = (0..4).any(|direction| {
                 let t = diagonal(tile, direction, size_x);
                 map.asserted(s, |m| {
                     crate::tile_map::is_valid_tile(m, TileIndex(t), m.count())
-                }) && (map.asserted(s, |m| crate::tile_map::get_tropic_zone(m, TileIndex(t))) != 1
+                }) && (map.asserted(s, |m| crate::tile_map::get_tropic_zone(m, TileIndex(t)))
+                    != crate::tile_type::TropicZone::TROPICZONE_DESERT
                     || (map.asserted(s, |m| crate::water_map::has_tile_water_class(m, t))
                         && map.asserted(s, |m| crate::water_map::get_water_class(m, t)) == 0))
             });

@@ -710,7 +710,7 @@ impl<'a> Ctx<'a> {
         if !out.ok() {
             return;
         }
-        let tileh = Slope(crate::map_func::World::new(self.shared).tile_slope(tile));
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
         let z = (self.shared.tile_z)(tile.0);
         /* Prohibit building if
          *   1) The tile is "steep" (i.e. stretches two height levels).
@@ -5032,7 +5032,7 @@ impl Ctx<'_> {
         {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let direction = get_inclined_slope_direction(Slope(world.tile_slope(tile)));
+        let direction = get_inclined_slope_direction(world.tile_slope(tile));
         if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }

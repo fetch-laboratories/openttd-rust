@@ -1652,7 +1652,7 @@ impl Game<'_> {
             if u64::from(self.signal_context().segment(
                 tile,
                 exit as u8,
-                self.world().owner(TileIndex(tile)),
+                self.world().owner(TileIndex(tile)).0,
             )) == (self.leaves.sigseg_pbs)(id)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
             {

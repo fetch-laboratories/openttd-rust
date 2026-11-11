@@ -380,7 +380,7 @@ pub(crate) fn check_tile_ownership(
     out: crate::services::Cost<'_>,
     tile: crate::tile_type::TileIndex,
 ) {
-    let owner = crate::company_type::CompanyID(crate::map_func::World::new(s.shared).owner(tile));
+    let owner = crate::map_func::World::new(s.shared).owner(tile);
     check_ownership(s, out, owner, tile);
 }
 
@@ -1355,9 +1355,9 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             let owner = if railway || crossing {
                 world.owner(TileIndex(tile))
             } else {
-                0
+                crate::company_type::CompanyID(0)
             };
-            if railway && owner == new && world.has_signals(tile) {
+            if railway && owner == crate::company_type::CompanyID(new) && world.has_signals(tile) {
                 let mut tracks = world.tracks(tile);
                 loop {
                     // RemoveFirstTrack: INVALID_TRACK leaves NONE/INVALID bits unchanged.
@@ -1375,7 +1375,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
                         break;
                     }
                 }
-            } else if crossing && owner == new {
+            } else if crossing && owner == crate::company_type::CompanyID(new) {
                 (s.shared.update_level_crossing)(tile, true);
             }
         }

@@ -605,7 +605,9 @@ impl<'a> Ctx<'a> {
         match self.kind(tile) {
             0 => {
                 let slope = simple_slope(
-                    crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile)),
+                    crate::map_func::World::new(self.shared)
+                        .tile_slope(TileIndex(tile))
+                        .0,
                 );
                 let mut present = self.bits(tile, rtt);
                 let other = self.bits(tile, rtt ^ 1);
@@ -968,7 +970,7 @@ impl<'a> Ctx<'a> {
                 _ => unreachable!(),
             },
             MP_RAILWAY => {
-                if is_steep_slope_raw(slope) || CROSSING_SLOPES & (1 << slope) == 0 {
+                if is_steep_slope_raw(slope.0) || CROSSING_SLOPES & (1 << slope.0) == 0 {
                     cost.error(self.r.strings.sloped_wrong);
                     return;
                 }
@@ -1131,7 +1133,7 @@ impl<'a> Ctx<'a> {
             cost.add_money(ret.money());
         }
         if other != pieces {
-            self.slope(ret, slope, &mut pieces, existing, other);
+            self.slope(ret, slope.0, &mut pieces, existing, other);
             if !ret.ok() || (ret.money() != 0 && !(self.shared.build_on_slopes)()) {
                 cost.error(self.r.strings.sloped_wrong);
                 return;
@@ -1144,12 +1146,12 @@ impl<'a> Ctx<'a> {
                 if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                     let slope =
                         crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-                    let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
+                    let new = crate::movement::road_foundation(slope.0, pieces | existing, |ok| {
                         crate::movement::native_assert(self.shared, ok);
                     });
                     let bits = self.bits(tile, rtt ^ 1);
                     if bits != 0
-                        && crate::movement::road_foundation(slope, bits, |ok| {
+                        && crate::movement::road_foundation(slope.0, bits, |ok| {
                             crate::movement::native_assert(self.shared, ok);
                         }) != new
                     {
@@ -1506,8 +1508,8 @@ impl<'a> Ctx<'a> {
         }
         cost.set(0);
         let slope = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-        if slope != 0 {
-            if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope) {
+        if slope != crate::slope_type::Slope::SLOPE_FLAT {
+            if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope.0) {
                 cost.error(self.r.strings.flat_land);
                 return;
             }
@@ -1884,13 +1886,13 @@ impl<'a> Ctx<'a> {
                             crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
                         let mut old_z = (self.shared.tile_z)(tile);
                         let old = (self.shared.apply_foundation)(
-                            Foundation(crate::movement::road_foundation(old_slope, bits, |ok| {
+                            Foundation(crate::movement::road_foundation(old_slope.0, bits, |ok| {
                                 crate::movement::native_assert(self.shared, ok);
                             })),
-                            Slope(old_slope),
+                            Slope(old_slope.0),
                         );
                         old_z += old.z;
-                        old_slope = old.slope.0;
+                        old_slope = crate::slope_type::Slope(old.slope.0);
                         let new = (self.shared.apply_foundation)(
                             Foundation(crate::movement::road_foundation(slope, bits, |ok| {
                                 crate::movement::native_assert(self.shared, ok);
@@ -1899,7 +1901,7 @@ impl<'a> Ctx<'a> {
                         );
                         z += new.z;
                         slope = new.slope.0;
-                        old_z == z && old_slope == slope
+                        old_z == z && old_slope == crate::slope_type::Slope(slope)
                     } else {
                         false
                     }

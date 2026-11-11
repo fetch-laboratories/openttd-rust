@@ -529,8 +529,9 @@ impl<'a> World<'a> {
                     y << 20 | x << 16 | y << 8 | x
                 }
                 0x41 => {
-                    u32::from(crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile)))
-                        << 8
+                    u32::from(
+                        (crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile))).0,
+                    ) << 8
                         | (self.shared.terrain_type)(tile)
                 }
                 0x42 => (q.date)(obj) as u32,
@@ -1093,7 +1094,7 @@ impl<'a> World<'a> {
                 }
                 let (slope, mut z) =
                     crate::map_func::World::new(self.shared).tile_slope_z(TileIndex(tile));
-                if slope != 0 {
+                if slope != crate::slope_type::Slope::SLOPE_FLAT {
                     z += 1;
                 }
                 for t in self.tiles(area) {
@@ -1107,7 +1108,9 @@ impl<'a> World<'a> {
                         result.callback = self.callback(
                             crate::newgrf_callbacks::CBID_OBJECT_LAND_SLOPE_CHECK.0,
                             u32::from(
-                                crate::map_func::World::new(self.shared).tile_slope(TileIndex(t)),
+                                crate::map_func::World::new(self.shared)
+                                    .tile_slope(TileIndex(t))
+                                    .0,
                             ),
                             self.map.tile_y(TileIndex(diff)) << 4
                                 | self.map.tile_x(TileIndex(diff)),
@@ -1370,7 +1373,7 @@ impl World<'_> {
             } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
                 let old_slope =
                     crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-                if !is_steep_slope_raw(old_slope)
+                if !is_steep_slope_raw(old_slope.0)
                     && !is_steep_slope_raw(slope)
                     && (self.shared.tile_max_z)(tile) == z + get_slope_max_z_raw(slope)
                 {

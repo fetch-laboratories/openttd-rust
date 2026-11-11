@@ -170,7 +170,8 @@ impl World<'_> {
         (self.a.water_type)(t).0
     }
     fn flat(&self, t: u32) -> bool {
-        crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(t)) == 0
+        crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(t))
+            == crate::slope_type::Slope::SLOPE_FLAT
     }
     fn canal(&self, t: u32) -> bool {
         self.kind(t) == 0 && self.class(t) == 1
@@ -455,7 +456,9 @@ impl World<'_> {
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         let dir = get_inclined_slope_direction_raw(
-            crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile)),
+            crate::map_func::World::new(self.s)
+                .tile_slope(crate::tile_type::TileIndex(tile))
+                .0,
         );
         if dir == INVALID_DIAGDIR {
             self.error(out, self.a.strings.sloped_wrong);
@@ -554,7 +557,9 @@ impl World<'_> {
             let tile = iter.tile();
             let slope =
                 crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile));
-            if slope != 0 && (wc.0 != 2 || !is_inclined_slope_raw(slope)) {
+            if slope != crate::slope_type::Slope::SLOPE_FLAT
+                && (wc.0 != 2 || !is_inclined_slope_raw(slope.0))
+            {
                 self.error(out, self.a.strings.flat);
                 return;
             }
@@ -668,7 +673,7 @@ impl World<'_> {
                 }
                 self.expense(
                     out,
-                    if is_slope_with_one_corner_raised_raw(slope) {
+                    if is_slope_with_one_corner_raised_raw(slope.0) {
                         crate::company::price(34)
                     } else {
                         crate::company::price(23)

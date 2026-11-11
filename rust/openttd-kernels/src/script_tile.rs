@@ -355,7 +355,7 @@ pub extern "C" fn openttd_rust_script_tile_slope(s: &Services, tile: u32) -> u32
         return SLOPE_INVALID;
     }
     let (x, y) = w.size();
-    u32::from(w.asserted(|m| crate::tile_map::get_tile_slope(m, TileIndex(tile), x, y)))
+    u32::from((w.asserted(|m| crate::tile_map::get_tile_slope(m, TileIndex(tile), x, y))).0)
 }
 
 /// `ScriptTile::GetComplementSlope`.
@@ -410,7 +410,7 @@ pub extern "C" fn openttd_rust_script_tile_corner_height(
         map.asserted(|m| crate::tile_map::get_tile_slope_z(m, TileIndex(tile), size_x, size_y));
     let check = |condition| map.check(condition);
     i64::from(z.wrapping_add(crate::landscape::get_slope_z_in_corner(
-        slope, corner, check,
+        slope.0, corner, check,
     )))
 }
 
@@ -422,7 +422,7 @@ pub extern "C" fn openttd_rust_script_tile_owner(s: &Services, tile: u32) -> i32
         return COMPANY_INVALID;
     }
     let owner = w.owner(TileIndex(tile));
-    resolve_company_id(s, to_script_company_id(owner))
+    resolve_company_id(s, to_script_company_id(owner.0))
 }
 
 /// `ScriptCompany::ToScriptCompanyID`.

@@ -326,7 +326,7 @@ impl Context<'_> {
         };
         let mut p = FoundationSlope {
             z,
-            slope: Slope(slope),
+            slope: Slope(slope.0),
         };
         if matches!(kind, MP_RAILWAY | MP_ROAD) {
             if p.slope.0 == SLOPE_FLAT {
@@ -459,9 +459,9 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
     let s = unsafe { &*s };
     let (slope, z, foundation) = s.with_context(|c| {
         let (slope, z) = c.world.tile_slope_z(TileIndex(tile));
-        (slope, z, c.foundation(tile, slope))
+        (slope, z, c.foundation(tile, slope.0))
     });
-    let a = (s.shared().apply_foundation)(Foundation(foundation), Slope(slope));
+    let a = (s.shared().apply_foundation)(Foundation(foundation), Slope(slope.0));
     FoundationSlope {
         z: z.wrapping_add(a.z),
         slope: a.slope,
@@ -668,7 +668,7 @@ impl Context<'_> {
                 if mode == TRANSPORT_WATER
                     && self.world.is_plain_rail(tile)
                     && self.world.rail_ground(tile) == RAIL_GROUND_HALF_TILE_WATER
-                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(TileIndex(tile)))
+                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(TileIndex(tile)).0)
                 {
                     w::hit(w::MOVE_HALF_WATER);
                     bits = match self.world.tracks(tile) {
@@ -933,7 +933,7 @@ impl Context<'_> {
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
-                        ][usize::from(self.world.tile_slope(TileIndex(tile)) & 15)]
+                        ][usize::from(self.world.tile_slope(TileIndex(tile)).0 & 15)]
                     }
                     2 => {
                         w::hit(w::MOVE_LOCK);

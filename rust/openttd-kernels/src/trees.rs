@@ -294,7 +294,7 @@ impl Trees<'_> {
             .and_then(|m| {
                 let mut p = PlantObservation {
                     tile_type: crate::tile_map::get_tile_type(m, TileIndex(tile))?.0,
-                    zone: crate::tile_map::get_tropic_zone(m, TileIndex(tile))?,
+                    zone: (crate::tile_map::get_tropic_zone(m, TileIndex(tile))?).0,
                     ..PlantObservation::default()
                 };
                 if p.tile_type == MP_CLEAR {
@@ -307,12 +307,13 @@ impl Trees<'_> {
                     p.coast = crate::water_map::is_coast(m, tile)? && {
                         let width = self.s.map().size_x();
                         !crate::slope_func::is_slope_with_one_corner_raised_raw(
-                            crate::tile_map::get_tile_slope(
+                            (crate::tile_map::get_tile_slope(
                                 m,
                                 TileIndex(tile),
                                 width,
                                 m.count() / width,
-                            )?,
+                            )?)
+                            .0,
                         )
                     };
                 }
@@ -351,7 +352,10 @@ impl Trees<'_> {
     fn zone(&self, tile: u32) -> u8 {
         self.field(
             tile,
-            |map, tile| crate::tile_map::get_tropic_zone(map, crate::tile_type::TileIndex(tile)),
+            |map, tile| {
+                crate::tile_map::get_tropic_zone(map, crate::tile_type::TileIndex(tile))
+                    .map(|z| z.0)
+            },
             |t| t.zone,
         )
     }
