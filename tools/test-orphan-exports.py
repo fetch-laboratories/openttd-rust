@@ -159,6 +159,63 @@ class OrphanTests(unittest.TestCase):
             (root / ORPHANS.BASELINE).write_text("")
             self.assertEqual(check(), 0)
 
+    def test_uncalled_baseline_only_shrinks_and_names_owners(self) -> None:
+        """#737 batch O: --report-uncalled is enforced against an owned baseline."""
+        found = {"openttd_rust_age": "VehicleCargoList::AgeCargo"}
+        row = "openttd_rust_age | #656 vehicle pool: fleet-console.cpp calls AgeCargo\n"
+        self.assertEqual(ORPHANS.uncalled_errors(found, row, row), [])
+        self.assertEqual(
+            ORPHANS.uncalled_errors(found, "", ""),
+            [
+                "new export held only by uncalled members: openttd_rust_age (VehicleCargoList::AgeCargo)"
+            ],
+        )
+        self.assertEqual(
+            ORPHANS.uncalled_errors({}, row, row),
+            ["remove retired row: openttd_rust_age"],
+        )
+        self.assertEqual(
+            ORPHANS.uncalled_errors(found, row, ""),
+            ["uncalled baseline cannot grow: openttd_rust_age"],
+        )
+        unowned = "openttd_rust_age | fleet-console.cpp calls AgeCargo\n"
+        self.assertEqual(
+            ORPHANS.uncalled_errors(found, unowned, unowned),
+            ["row names no owner issue: openttd_rust_age"],
+        )
+
+    def test_cli_enforces_the_uncalled_baseline(self) -> None:
+        files = {
+            "rust/lib.rs": export("age"),
+            "src/rust/ffi.h": "void openttd_rust_age(List *);\n",
+            "src/cargopacket.h": "class VehicleCargoList {\n\tvoid AgeCargo();\n};\n",
+            "src/rust/storage.hpp": "void VehicleCargoList::AgeCargo() "
+            "{ openttd_rust_age(this->state); }\n",
+            ORPHANS.BASELINE: "",
+            ORPHANS.UNCALLED: "",
+        }
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ORPHANS, "ROOT", Path(directory)),
+        ):
+            root = Path(directory)
+            initialize(root, files)
+
+            def check() -> int:
+                with (
+                    patch.object(
+                        sys, "argv", ["orphan-exports.py", "--base-ref", "HEAD"]
+                    ),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    return ORPHANS.main()
+
+            self.assertEqual(check(), 1)
+            (root / ORPHANS.UNCALLED).write_text(
+                "openttd_rust_age | #656 vehicle pool: fleet-console.cpp\n"
+            )
+            self.assertEqual(check(), 1)  # A new row is growth against the base.
+
 
 if __name__ == "__main__":
     unittest.main()
