@@ -28,17 +28,13 @@ pub(crate) fn get_tile_type(m: &TileTypeAccess, t: TileIndex) -> Option<TileType
 /// `GetTileType`'s bit extraction after the caller's original range assertion.
 #[allow(clippy::inline_always)]
 #[inline(always)]
-#[allow(clippy::cast_possible_truncation)] // GB of a byte's high nibble.
 pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> TileType {
-    TileType(crate::bitmath_func::gb(u32::from(fields.kind()), 4, 4) as u8)
+    TileType(crate::bitmath_func::gb_u8(fields.kind(), 4, 4))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
-#[allow(clippy::cast_possible_truncation)] // GB of the type byte's low two bits.
 pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: TileIndex) -> Option<TropicZone> {
-    Some(TropicZone(
-        crate::bitmath_func::gb(u32::from(m.kind(t)?), 0, 2) as u8,
-    ))
+    Some(TropicZone(crate::bitmath_func::gb_u8(m.kind(t)?, 0, 2)))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -117,13 +113,13 @@ pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: TileIndex, x: u32, y: u32) -> 
     let y1 = map.tile_y(t);
     let x2 = (x1 + 1).min(map.max_x());
     let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
-    let z = tile_height(m, t)?;
+    let height = tile_height(m, t)?;
     for corner in [
         map.tile_xy(x2, y1),
         map.tile_xy(x1, y2),
         map.tile_xy(x2, y2),
     ] {
-        if tile_height(m, corner)? != z {
+        if tile_height(m, corner)? != height {
             return Some(false);
         }
     }

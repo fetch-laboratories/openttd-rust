@@ -518,7 +518,16 @@ impl<'a> World<'a> {
         let slope = self.types.asserted(self.s, |m| {
             crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
-        let flooded = if slope != crate::slope_type::Slope::SLOPE_FLAT {
+        let flooded = if slope == crate::slope_type::Slope::SLOPE_FLAT {
+            self.flood_vehicles(tile);
+            if self.clear(tile, call) {
+                (self.w.make_sea)(tile);
+                (self.s.mark_dirty)(tile);
+                true
+            } else {
+                false
+            }
+        } else {
             match self.tile_type(tile) {
                 1 => {
                     if (self.s.is_plain_rail)(tile) {
@@ -547,15 +556,6 @@ impl<'a> World<'a> {
                     }
                 }
                 _ => false,
-            }
-        } else {
-            self.flood_vehicles(tile);
-            if self.clear(tile, call) {
-                (self.w.make_sea)(tile);
-                (self.s.mark_dirty)(tile);
-                true
-            } else {
-                false
             }
         };
         if flooded {
