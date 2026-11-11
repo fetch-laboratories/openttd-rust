@@ -286,7 +286,15 @@ fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
 
 /// `NetworkTCPSocketHandler::ReceivePacket` using the integrated TCP and packet owners.
 fn receive_packet(s: &Services) -> *mut Packet {
-    match unsafe { tcp::openttd_rust_tcp_receive(s.tcp, s.client, check) } {
+    match unsafe {
+        tcp::receive_packet(
+            tcp::Context {
+                services: s.tcp,
+                socket: s.client,
+            },
+            check,
+        )
+    } {
         tcp::Receive::None => std::ptr::null_mut(),
         tcp::Receive::Close => {
             close_connection(s);
@@ -1151,7 +1159,17 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
         with(|c| c.last_activity = now);
     }
 
-    if unsafe { tcp::openttd_rust_tcp_send(s.tcp, s.client, false, check) } == tcp::Send::Close {
+    if unsafe {
+        tcp::send_packets(
+            tcp::Context {
+                services: s.tcp,
+                socket: s.client,
+            },
+            false,
+            check,
+        )
+    } == tcp::Send::Close
+    {
         close_connection(s);
     }
 }

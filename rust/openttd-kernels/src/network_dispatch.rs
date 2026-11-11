@@ -304,9 +304,11 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
         return std::ptr::null_mut();
     }
     match unsafe {
-        tcp::openttd_rust_tcp_receive(
-            s.tcp,
-            socket::tcp(game),
+        tcp::receive_packet(
+            tcp::Context {
+                services: s.tcp,
+                socket: socket::tcp(game),
+            },
             crate::network_frame::packet_check(s),
         )
     } {

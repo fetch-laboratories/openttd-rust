@@ -48,14 +48,37 @@ pub struct Services {
     pub valid: extern "C" fn(*const NetworkTCPSocketHandler) -> bool,
     pub writable: extern "C" fn(*const NetworkTCPSocketHandler) -> bool,
 }
+/// Original `tcp.h` packet sending state, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SendPacketsState(pub u8);
+impl SendPacketsState {
+    /// The connection got closed.
+    pub const SPS_CLOSED: Self = Self(0);
+    /// The buffer is full; no packet part could be sent.
+    pub const SPS_NONE_SENT: Self = Self(1);
+    /// Packets were partly sent; the queue still has data.
+    pub const SPS_PARTLY_SENT: Self = Self(2);
+    /// All queued packets were sent.
+    pub const SPS_ALL_SENT: Self = Self(3);
+}
+
+/// Live native socket and its existing shared leaves.
+#[derive(Clone, Copy)]
+pub struct Context<'a> {
+    pub services: &'a Services,
+    pub socket: *mut NetworkTCPSocketHandler,
+}
+
+/// Existing boundary protocol: original send states plus a deferred virtual close.
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Send {
-    Closed,
-    None,
-    Partly,
-    All,
-    Close,
+    Closed = SendPacketsState::SPS_CLOSED.0,
+    None = SendPacketsState::SPS_NONE_SENT.0,
+    Partly = SendPacketsState::SPS_PARTLY_SENT.0,
+    All = SendPacketsState::SPS_ALL_SENT.0,
+    Close = 4,
 }
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,13 +91,16 @@ pub enum Receive {
 /// `SendPackets`, returning before a requested virtual close.
 /// # Safety
 /// The socket, queues, services and initialized packet records are live for the entry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tcp_send(
-    s: &Services,
-    socket: *mut NetworkTCPSocketHandler,
+pub unsafe fn send_packets(
+    context: Context<'_>,
     closing: bool,
     check: extern "C" fn(bool),
 ) -> Send {
+    let Context {
+        services: s,
+        socket,
+    } = context;
+    /* We cannot write to this socket! */
     if !(s.writable)(socket) {
         return Send::None;
     }
@@ -103,6 +129,7 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
             let mut storage = std::mem::MaybeUninit::<TcpErrorStorage>::uninit();
             let error = (s.error_begin)(storage.as_mut_ptr());
             let blocked = (s.error_would_block)(error);
+            /* Something went wrong: request client close unless already closing. */
             if !blocked && !closing {
                 debug!(
                     net,
@@ -121,9 +148,12 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
             };
         }
         if result == 0 {
+            /* Client/server has left us. */
             return if closing { Send::Closed } else { Send::Close };
         }
+        /* Is this packet sent? */
         if unsafe { (*p).remaining() } == 0 {
+            /* Go to the next packet. */
             unsafe {
                 std::ptr::drop_in_place(p);
             }
@@ -131,6 +161,28 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
         } else {
             return Send::Partly;
         }
+    }
+}
+
+/// Native positional shim; the module lifetime contract applies.
+/// # Safety
+/// The socket and all shared leaves remain live through the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_send(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    closing: bool,
+    check: extern "C" fn(bool),
+) -> Send {
+    unsafe {
+        send_packets(
+            Context {
+                services: s,
+                socket,
+            },
+            closing,
+            check,
+        )
     }
 }
 
@@ -153,6 +205,7 @@ unsafe fn read_bytes(
             let mut storage = std::mem::MaybeUninit::<TcpErrorStorage>::uninit();
             let error = (s.error_begin)(storage.as_mut_ptr());
             let blocked = (s.error_would_block)(error);
+            /* Something went wrong; connection reset needs no error message. */
             if !blocked && !(s.error_reset)(error) {
                 debug!(
                     net,
@@ -162,6 +215,7 @@ unsafe fn read_bytes(
                 );
             }
             (s.error_end)(error);
+            /* Connection would block, so stop for now. */
             return if blocked {
                 Receive::None
             } else {
@@ -169,6 +223,7 @@ unsafe fn read_bytes(
             };
         }
         if result == 0 {
+            /* Client/server has left. */
             return Receive::Close;
         }
     }
@@ -178,12 +233,11 @@ unsafe fn read_bytes(
 /// `ReceivePacket` through completion of the bytes, before decryption/virtual close.
 /// # Safety
 /// Same live socket/record contract as `openttd_rust_tcp_send`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tcp_receive(
-    s: &Services,
-    socket: *mut NetworkTCPSocketHandler,
-    check: extern "C" fn(bool),
-) -> Receive {
+pub unsafe fn receive_packet(context: Context<'_>, check: extern "C" fn(bool)) -> Receive {
+    let Context {
+        services: s,
+        socket,
+    } = context;
     if !(s.valid)(socket) {
         return Receive::None;
     }
@@ -191,22 +245,45 @@ pub unsafe extern "C" fn openttd_rust_tcp_receive(
     if p.is_null() {
         let mut value = State::new_receive(
             crate::network_config::TCP_MTU,
-            2,
+            packet::encoded_length_of_packet_size(),
             (s.base_socket)(socket),
             check,
         );
         p = (s.receive_create)(socket, &raw mut value);
     }
+    /* Read packet size. */
     if !unsafe { (*p).has_packet_size_data() } {
         let result = unsafe { read_bytes(s, socket, p, check) };
         if result != Receive::Ready {
             return result;
         }
+        /* Parse the received size; invalid size requests connection close. */
         if !unsafe { &mut *p }.parse_size() {
             return Receive::Close;
         }
     }
+    /* Read the rest of the packet. */
     unsafe { read_bytes(s, socket, p, check) }
+}
+
+/// Native positional shim; the module lifetime contract applies.
+/// # Safety
+/// The socket and all shared leaves remain live through the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_receive(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    check: extern "C" fn(bool),
+) -> Receive {
+    unsafe {
+        receive_packet(
+            Context {
+                services: s,
+                socket,
+            },
+            check,
+        )
+    }
 }
 
 /// Consume a native shell after dropping its canonical Rust packet allocation.
