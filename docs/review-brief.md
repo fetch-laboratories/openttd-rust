@@ -1,13 +1,10 @@
 # Review brief
 
-A reviewer reads this brief, then the spawn message. The spawn gives:
-- the reviewer's name;
-- the PR;
-- the function group to review, and who covers the other groups;
-- the points the PR body flags for review;
-- the implementer's thread ID.
+Everything a reviewer needs is here and in the PR ([delegation](team.md#review-loop)). The PR's implementer starts each reviewer with this fixed message and nothing more; it never says what to look for:
 
-Everything else is here ([delegation](team.md#review-loop)).
+> Review PR <URL> under `docs/review-brief.md`. You are <name>. Review <group N of the PR body's review groups | the whole PR>. The implementer's thread is <thread ID>.
+
+A re-check's message adds one sentence: `Re-check the fixing commits <SHAs> for the findings in <report URLs>.` Read the PR body, its review groups, its flagged points and its earlier reports yourself.
 
 ## Before reviewing
 
@@ -50,7 +47,7 @@ Do not commit, push, request Full or merge. The PR's implementer fixes each find
 
 ## Policy questions
 
-Rule on a policy question yourself, using the decisions recorded on the stream issues and in the docs. State your ruling and its source in the report. Only a question that no recorded decision answers waits for root: put it in the report and message your own `parentThreadId`.
+Rule on a policy question yourself, using the decisions recorded on the stream issues and in the docs. State your ruling and its source in the report. Only a question that no recorded decision answers goes to root: put it in the report and tell the implementer, who asks root.
 
 ## Checks
 

@@ -339,7 +339,11 @@ Actions:
 4. **Ready queue.** PR state stays on the PR, reservations name actual overlapping edits, and the planner refreshes when no entry is ready for the next slot to free ([team](team.md#ready-queue-and-pipelining)).
 5. **#903, one fidelity PR, comes first:** every caller of the tile-addition helpers matches its original, `RustTileAdd` goes, the `_DEBUG` body leaves the release hot path, the two reachable paths get `_DEBUG` tests, and the auth, airport and assertion items are fixed. The defects are `_DEBUG`-only or assertions-off, so #894 is fixed forward rather than rolled back.
 6. **The implementer waits on its own queued PR; root watches none** (user, 2026-11-11). Root counts merges from `origin/rust-migration` and hears of removals from the implementer. #902 adds the background wait the host allows a delegated agent ([integration](root-workflow.md#integration)).
-7. **Root's turns go to selection, rulings, spawns and the roadmap** ([delegation](team.md#delegation-user-2026-11-08)). Implementers read their own failures and check their own file overlaps; root checks a child's job by ID, never by process scans, and brokers no reservations.
+7. **Root's turns go to selection, rulings, briefs and the roadmap** ([delegation](team.md#delegation-user-2026-11-08)), at the user's direction (2026-11-11):
+   - implementers read their own failures, check their own file overlaps, and start their own reviewers and re-checks from a fixed spawn message that never says what to look for;
+   - root dispatches ready entries as the planner wrote them;
+   - a [routine agent](team.md#routine-agent) on the routine model runs housekeeping, the platform cadence, bootstrap Full steps and the missed-resume check, and root decides on its results;
+   - children check their own jobs before ending a turn; root makes no job checks or process scans.
 8. **The queue removes a PR only for its own defect** (#904): growth acceptances bind to the PR's own added keys, and the C++ test warning check and 32-bit Clippy run before the queue.
 
 No user direction is reversed. The re-check's trip through root is a host constraint on the 11-10 direct-messages rule, which otherwise stands. The planner trigger and #901's false-failure threshold are provisional. Steering 35 judges them, and whether defects escaped once the acceptance stage was gone.
