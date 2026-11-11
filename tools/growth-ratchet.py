@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Reject independent C++/boundary growth; require reviewed exceptions.
 
-An acceptance names the reviewed head. It also holds at a later head while the
-source of every added key is byte-identical, so a base update or an unrelated
-push keeps it. Identity counters (exports, callback slots) stay exact-head.
+An acceptance binds to the PR's own growth: the counter and its added keys and
+counts, not the counter's base and head totals, so another PR's merge does not
+void it (#904). It names the reviewed head, and also holds at a later head while
+the source of every added key is byte-identical, so a base update or an
+unrelated push keeps it. Identity counters (exports, callback slots) stay
+exact-head.
 """
 
 import argparse
@@ -52,6 +55,7 @@ def increases(
     return result
 
 
+BOUND = ("counter", "added")
 FILE_KEYED = {"tools_cpp", "tests_cpp", "outside_cpp"}
 
 
@@ -87,8 +91,9 @@ def accepted(
     """`contract` is `cleanup_contract.context()`: author, proposals, comments, head."""
     author, proposals, comments, head = contract
     for proposal in proposals:
+        # "old" and "new" are the counter's totals, which other merges move.
         if proposal.get("kind") != "growth" or any(
-            proposal.get(key) != value for key, value in growth.items()
+            proposal.get(key) != growth[key] for key in BOUND
         ):
             continue
         if not all(
