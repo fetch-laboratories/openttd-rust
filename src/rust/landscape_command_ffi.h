@@ -4,6 +4,7 @@
 #define RUST_LANDSCAPE_COMMAND_FFI_H
 #include "tile_owner_ffi.h"
 #include "trees_ffi.h"
+struct OpenTTDTownFoundingServices;
 struct OpenTTDLandscapeCommandStrings {
 	uint32_t canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high, tunnel, terraform_limit, levelled;
 };
@@ -32,7 +33,7 @@ struct OpenTTDLandscapeCommandServices {
 	uint8_t (*max_bridge_height)() noexcept OPENTTD_SERVICE_DEFAULT(max_bridge_height);
 	bool (*freeform_edges)() noexcept OPENTTD_SERVICE_DEFAULT(freeform_edges);
 	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
-	bool (*exchange_generating)(bool) noexcept OPENTTD_SERVICE_DEFAULT(exchange_generating);
+	const OpenTTDTownFoundingServices *founding;
 	bool (*tunnel_in_way)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_in_way);
 	void (*mark_dirty_height)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty_height);
 	void (*set_height)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_height);

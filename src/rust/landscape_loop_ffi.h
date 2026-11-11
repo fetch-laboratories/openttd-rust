@@ -53,7 +53,7 @@ struct OpenTTDLandscapeLoopServices {
 };
 const OpenTTDTreeServices &GetRustTreeServices() noexcept;
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept;
-OpenTTDIndustryLoopServices GetRustIndustryLoopServices() noexcept;
+const OpenTTDIndustryLoopServices &GetRustIndustryLoopServices() noexcept;
 extern "C" {
 /* Process-global raw u32; unchanged DATE/legacy descriptors access only at serial
  * save/load/reset boundaries. No C++ or Rust reference survives a scheduler call. */

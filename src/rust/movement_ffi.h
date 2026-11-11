@@ -38,7 +38,6 @@ struct OpenTTDMovementServices {
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
-	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
 	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);
 	OpenTTDMovementFoundation (*industry_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_foundation);

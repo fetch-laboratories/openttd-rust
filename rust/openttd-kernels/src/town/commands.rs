@@ -919,7 +919,7 @@ pub(crate) unsafe fn cmd_delete_town(
     let id = cmd.town_id.0;
     let c = unsafe { Commands::new(s) };
     let growth = unsafe { &*c.f.growth };
-    if !(growth.environment.editor)() && !(growth.generating_world)() {
+    if !(growth.environment.editor)() && !growth.generating_world() {
         c.error(out);
         return;
     }

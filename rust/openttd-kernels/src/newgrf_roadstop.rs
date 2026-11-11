@@ -383,7 +383,7 @@ unsafe fn variable(
     }
     if !c.station.is_null() {
         return unsafe {
-            crate::newgrf_station::openttd_rust_station_base_variable(
+            crate::newgrf_station::station_base_variable(
                 c.station,
                 file,
                 variable,

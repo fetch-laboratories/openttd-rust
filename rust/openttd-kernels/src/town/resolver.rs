@@ -186,7 +186,7 @@ pub(crate) unsafe fn initialize_building_counts(
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
     };
-    for id in super::iterate(|from| (l.next_town)(from)) {
+    for id in super::iterate(|from| l.next_town(from)) {
         let owner = (s.town_owner_by_id)(u32::from(id.0));
         unsafe { initialize_counts(owner, specs, classes) };
     }
@@ -535,7 +535,7 @@ pub(crate) unsafe fn house_get_variable(
             // Construction stage.
             0x40 => u32::from(TOWN_HOUSE_COMPLETED) | (scope.view as u32).wrapping_shl(2),
             0x41..=0x44 | 0x46 | 0x47 | 0x60..=0x65 | 0x67 => 0,
-            0x45 => u32::from((l.generating_world)()),
+            0x45 => u32::from(l.generating_world()),
             // Class and ID of nearby house.
             0x66 => u32::MAX,
             0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
@@ -582,7 +582,7 @@ pub(crate) unsafe fn house_get_variable(
             get_num_houses(scope.town.owner, scope.house, (l.house_class)(scope.house))
         },
         // Whether the town is being created or just expanded.
-        0x45 => u32::from((l.generating_world)()),
+        0x45 => u32::from(l.generating_world()),
         // Current animation frame.
         0x46 => {
             if is_house(tile) {

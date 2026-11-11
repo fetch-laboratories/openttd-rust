@@ -401,7 +401,7 @@ impl<'a> House<'a> {
             || company == CompanyID::WATER
             || company == CompanyID::NONE
             || (self.l.environment.editor)()
-            || (self.l.generating_world)()
+            || self.l.generating_world()
         {
             return true;
         }
@@ -1039,7 +1039,7 @@ impl<'a> House<'a> {
             let current =
                 i32::from(unsafe { (*t.state).simulation.ratings[usize::from(company.0)] });
             if rating > current
-                && TownCouncilAttitudes((authority.council_tolerance)())
+                && TownCouncilAttitudes(crate::town::council_tolerance(self.s))
                     != TownCouncilAttitudes::TOWN_COUNCIL_PERMISSIVE
             {
                 witness::hit(W_CLEAR_REFUSED);
@@ -1470,7 +1470,7 @@ impl<'a> House<'a> {
     }
     /// `Town::Iterate`.
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
-        for town in super::iterate(|from| (self.l.next_town)(from)) {
+        for town in super::iterate(|from| self.l.next_town(from)) {
             visit((self.l.resolve_owner)(u32::from(town.0)));
         }
     }

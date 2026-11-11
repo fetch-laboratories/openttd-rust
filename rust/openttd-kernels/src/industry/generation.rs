@@ -22,8 +22,6 @@ pub struct GenerationContext {
 #[repr(C)]
 pub struct GenerationServices {
     pub environment: crate::services::EnvironmentServices,
-    pub density: unsafe extern "C" fn() -> u8,
-    pub custom_number: unsafe extern "C" fn() -> u32,
     pub scale_by_size_1d: unsafe extern "C" fn(u32) -> u32,
     pub scale_by_land_proportion: unsafe extern "C" fn(u32) -> u32,
     pub set_progress: unsafe extern "C" fn(*mut GenerationContext, bool, u32) -> bool,
@@ -56,8 +54,7 @@ fn get_scaled_industry_generation_probability(
     let chance = unsafe { (*ind_spc).appear_creation[usize::from(landscape.0)] };
     if !enabled
         || !layouts
-        || (!(g.environment.editor)()
-            && IndustryDensity(unsafe { (g.density)() }) == IndustryDensity::ID_FUND_ONLY)
+        || (!(g.environment.editor)() && s.industry_density() == IndustryDensity::ID_FUND_ONLY)
     {
         *force_at_least_one = false;
         return 0;
@@ -143,10 +140,10 @@ fn get_number_of_industries(s: &Services, g: &GenerationServices) -> u32 {
     let difficulty = if (g.environment.editor)() {
         IndustryDensity::ID_VERY_LOW
     } else {
-        IndustryDensity(unsafe { (g.density)() })
+        s.industry_density()
     };
     if difficulty == IndustryDensity::ID_CUSTOM {
-        unsafe { (g.custom_number)() }.min(u32::from(IndustryID::END.0))
+        u32::from(s.custom_industry_number()).min(u32::from(IndustryID::END.0))
     } else {
         s.scale_by_map_size(u32::from(NUMOF_INDUSTRY_TABLE[usize::from(difficulty.0)]))
             .min(u32::from(IndustryID::END.0))
@@ -206,9 +203,7 @@ pub(crate) unsafe fn generate_industries(
     s: &Services,
     g: &GenerationServices,
 ) -> bool {
-    if !(g.environment.editor)()
-        && IndustryDensity(unsafe { (g.density)() }) == IndustryDensity::ID_FUND_ONLY
-    {
+    if !(g.environment.editor)() && s.industry_density() == IndustryDensity::ID_FUND_ONLY {
         return true; // No industries in the game.
     }
     // Get the probabilities for all industries. This is done first as we need the total of
@@ -227,7 +222,7 @@ pub(crate) unsafe fn generate_industries(
                 / total) as u32;
         }
         // Scale land-based industries to the land proportion, unless the player has set a custom industry count.
-        if !water && IndustryDensity(unsafe { (g.density)() }) != IndustryDensity::ID_CUSTOM {
+        if !water && s.industry_density() != IndustryDensity::ID_CUSTOM {
             total_amount = unsafe { (g.scale_by_land_proportion)(total_amount) };
         }
         // Ensure that forced industries are generated even if the scaled amounts are too low.

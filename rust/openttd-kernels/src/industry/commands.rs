@@ -15,11 +15,16 @@ use crate::services::ByteSpan;
 
 #[repr(C)]
 pub struct IndustryCommandServices {
-    pub deity: unsafe extern "C" fn() -> bool,
+    pub shared: *const crate::services::Services,
     pub get: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub owner: unsafe extern "C" fn(*mut ShellHandle) -> *mut Industry,
     pub valid_company: unsafe extern "C" fn(u8) -> bool,
     pub invalidate_view: unsafe extern "C" fn(u16),
+}
+/// `_current_company == OWNER_DEITY`.
+fn deity(s: &IndustryCommandServices) -> bool {
+    // SAFETY: The shared table is immutable for the process lifetime.
+    (unsafe { &*s.shared }.current_company)() == crate::company_type::OWNER_DEITY
 }
 /// `CmdIndustrySetFlags`'s arguments.
 #[derive(Clone, Copy)]
@@ -36,7 +41,7 @@ pub(crate) fn cmd_industry_set_flags(
     args: CmdIndustrySetFlags,
     s: &IndustryCommandServices,
 ) -> bool {
-    if !unsafe { (s.deity)() } {
+    if !deity(s) {
         return false;
     }
     let ind = unsafe { (s.get)(args.ind_id.0) };
@@ -90,7 +95,7 @@ pub(crate) fn cmd_industry_set_production(
     s: &IndustryCommandServices,
     production: &super::Services,
 ) -> bool {
-    if !unsafe { (s.deity)() } {
+    if !deity(s) {
         return false;
     }
     if args.prod_level < PRODLEVEL_MINIMUM || args.prod_level > PRODLEVEL_MAXIMUM {
@@ -154,7 +159,7 @@ pub(crate) fn cmd_industry_set_exclusivity(
     args: CmdIndustrySetExclusivity,
     s: &IndustryCommandServices,
 ) -> bool {
-    if !unsafe { (s.deity)() } {
+    if !deity(s) {
         return false;
     }
     let ind = unsafe { (s.get)(args.ind_id.0) };
@@ -216,7 +221,7 @@ pub(crate) fn cmd_industry_set_text(
     args: CmdIndustrySetText,
     s: &IndustryCommandServices,
 ) -> bool {
-    if !unsafe { (s.deity)() } {
+    if !deity(s) {
         return false;
     }
     let ind = unsafe { (s.get)(args.ind_id.0) };

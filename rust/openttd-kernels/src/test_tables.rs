@@ -483,14 +483,12 @@ pub(crate) const COMMAND_COSTS: crate::services::CommandCostServices =
 
 /// `crate::town::Leaves` with every entry unreachable.
 pub(crate) const TOWN_LEAVES: crate::town::Leaves = crate::town::Leaves {
+    shared: &SHARED,
     map_log_x: unreachable0,
-    growth_rate: unreachable0,
     environment: crate::services::EnvironmentServices {
         editor: unreachable0,
         freeform_edges: unreachable0,
     },
-    generating_world: unreachable0,
-    allow_crossings: unreachable0,
     climate: unreachable0,
     road_flags: unreachable1,
     house_availability: unreachable1,
@@ -511,7 +509,6 @@ pub(crate) const TOWN_LEAVES: crate::town::Leaves = crate::town::Leaves {
     population_changed: unreachable1,
     house_count: unreachable0,
     road_type_error: unreachable1,
-    next_town: unreachable1,
     build_bridge: unreachable5,
     build_tunnel: unreachable3,
     assert_clear_house: unreachable1,
@@ -672,7 +669,7 @@ pub(crate) const LANDSCAPE: crate::landscape_cmd::LandscapeServices =
         max_bridge_height: unreachable0,
         freeform_edges: unreachable0,
         editor: unreachable0,
-        exchange_generating: unreachable1,
+        founding: ptr::null(),
         tunnel_in_way: unreachable2,
         mark_dirty_height: unreachable2,
         set_height: unreachable2,
@@ -810,7 +807,7 @@ pub(crate) const OBJECTS: crate::objects::ObjectServices = crate::objects::Objec
     cargo: ptr::null(),
     town: ptr::null(),
     founding: ptr::null(),
-    industry_tiles: ptr::null(),
+    industry: ptr::null(),
     strings: crate::objects::Strings {
         too_many: 0,
         no_town: 0,
@@ -859,10 +856,7 @@ pub(crate) const OBJECTS: crate::objects::ObjectServices = crate::objects::Objec
     progress_set: unreachable2,
     progress_increase: unreachable1,
     normal: unreachable0,
-    bulldozer: unreachable0,
     restoration: ptr::null(),
-    set_owner: unreachable2,
-    scale_size_1d: unreachable1,
     scale_cargo: unreachable1,
 };
 
@@ -873,7 +867,6 @@ pub(crate) const INDUSTRY_TILES: crate::industry::tile::TileServices =
         gfx: unreachable1,
         set_gfx: unreachable2,
         frame: unreachable1,
-        set_frame: unreachable2,
         animation_loop: unreachable1,
         set_animation_loop: unreachable2,
         construction_counter: unreachable1,
@@ -905,7 +898,6 @@ pub(crate) const MOVEMENT: crate::movement::MovementServices = crate::movement::
     resolve: unreachable1,
     depot_invalidate: unreachable1,
     native_assert: unreachable1,
-    owned_land: unreachable1,
     object_foundation: unreachable1,
     house_foundation: unreachable1,
     industry_foundation: unreachable1,

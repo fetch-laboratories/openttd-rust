@@ -288,18 +288,9 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.environment = GetRustEnvironmentServices(),
 	.facilities = RustStationFacilitiesHandle<OpenTTDBaseStation *>,
-	.in_use = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->IsInUse();
-	},
 	.is_station = RustStationIsExpected<OpenTTDBaseStation *>,
-	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->owner == _local_company;
-	},
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->owner);
-	},
-	.select_goods = []() noexcept -> bool {
-		return _settings_game.order.selectgoods;
 	},
 	.rating_cheat = []() noexcept -> bool {
 		return _cheats.station_rating.value;
@@ -324,9 +315,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.acceptance_news = [](OpenTTDBaseStation *handle, uint64_t cargoes, bool reject) noexcept -> void {
 		ShowRejectOrAcceptNews(Station::From(static_cast<BaseStation *>(handle)), cargoes, reject);
-	},
-	.acceptance_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
-		SetWindowWidgetDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index, WID_SV_ACCEPT_RATING_LIST);
 	},
 	.delete_station = [](OpenTTDBaseStation *handle) noexcept -> void {
 		delete static_cast<BaseStation *>(handle);

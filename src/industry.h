@@ -313,7 +313,6 @@ struct IndustryTypeBuildData {
 
 	void Reset();
 
-	bool GetIndustryTypeData(IndustryType it);
 };
 
 /**
@@ -331,10 +330,7 @@ struct IndustryBuildData {
 
 	void Reset();
 
-	void SetupTargetCount();
-	void TryBuildNewIndustry();
 
-	void EconomyMonthlyLoop();
 };
 
 extern IndustryBuildData _industry_builder;

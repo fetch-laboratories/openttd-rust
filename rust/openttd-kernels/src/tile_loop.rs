@@ -411,7 +411,14 @@ mod comparison_tests {
         industry_tiles.on_water = not_on_water;
         let mut objects = OBJECTS;
         objects.shared = shared;
-        objects.industry_tiles = &raw const industry_tiles;
+        let object_industry = IndustryServices {
+            tiles: &raw const industry_tiles,
+            production: ptr::null(),
+            construction: ptr::null(),
+            lifecycle: ptr::null(),
+            generation: ptr::null(),
+        };
+        objects.industry = &raw const object_industry;
         objects.loop_policy = object_policy;
         let services = Services {
             shared,

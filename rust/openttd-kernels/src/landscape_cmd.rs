@@ -54,7 +54,7 @@ pub struct LandscapeServices {
     pub max_bridge_height: extern "C" fn() -> u8,
     pub freeform_edges: extern "C" fn() -> bool,
     pub editor: extern "C" fn() -> bool,
-    pub exchange_generating: extern "C" fn(bool) -> bool,
+    pub founding: *const crate::town::founding::FoundingServices,
     pub tunnel_in_way: extern "C" fn(u32, i32) -> bool,
     pub mark_dirty_height: extern "C" fn(u32, i32),
     pub set_height: extern "C" fn(u32, u32),
@@ -571,7 +571,7 @@ impl<'a> World<'a> {
                 let indirect = self.indirectly_cleared(t);
                 let old = (self.s.clear_square_services.generating_world)();
                 if (self.a.editor)() {
-                    (self.a.exchange_generating)(true);
+                    (unsafe { &*self.a.founding }.exchange_generating)(true);
                 }
                 let mut tile_flags = flags | F::AUTO | F::FORCE_CLEAR_TILE;
                 if pass == 0 {
@@ -586,7 +586,7 @@ impl<'a> World<'a> {
                         } else {
                             self.terraform_tile(ret, t, tile_flags, low, new_slope);
                         }
-                        (self.a.exchange_generating)(old);
+                        ((&*self.a.founding).exchange_generating)(old);
                         if !ret.ok() {
                             out.take(ret);
                             false
@@ -924,7 +924,7 @@ crate::abi::layouts! {
     };
     "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
         shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
-        max_bridge_height, freeform_edges, editor, exchange_generating,
+        max_bridge_height, freeform_edges, editor, founding,
         tunnel_in_way, mark_dirty_height, set_height, paused,
     };
     "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {

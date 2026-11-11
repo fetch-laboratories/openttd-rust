@@ -508,12 +508,6 @@ pub struct Services {
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
     pub directory_dirty: unsafe extern "C" fn(u8),
-    pub economy_month: unsafe extern "C" fn() -> u8,
-    pub economy_year: unsafe extern "C" fn() -> i32,
-    pub days_since_last_month: unsafe extern "C" fn() -> u32,
-    pub economy_type: unsafe extern "C" fn() -> u8,
-    pub fund_only: unsafe extern "C" fn() -> bool,
-    pub deity: unsafe extern "C" fn() -> bool,
 }
 impl Services {
     /// The immutable shared table outlives every synchronous industry entry.
@@ -523,6 +517,46 @@ impl Services {
     /// `assert(condition)`: evaluates the condition only where the native build asserts.
     pub(crate) fn assert_with(&self, condition: impl FnOnce() -> bool) {
         crate::map_func::World::new(self.shared()).assert_with(condition);
+    }
+    /// Reads one catalog setting with a field-sized load at the observation point.
+    fn setting<T: Copy>(
+        &self,
+        field: impl FnOnce(&crate::settings_type::SettingAddresses) -> *const T,
+    ) -> T {
+        // SAFETY: The catalog addresses process-wide settings; one field-sized load.
+        unsafe { field(self.shared().settings()).read() }
+    }
+    /// `_settings_game.economy.type`.
+    pub(crate) fn economy_type(&self) -> EconomyType {
+        EconomyType(self.setting(|s| s.economy_type))
+    }
+    /// `_settings_game.difficulty.industry_density`.
+    pub(crate) fn industry_density(&self) -> crate::settings_type::IndustryDensity {
+        crate::settings_type::IndustryDensity(self.setting(|s| s.industry_density))
+    }
+    /// `_settings_game.game_creation.custom_industry_number`.
+    pub(crate) fn custom_industry_number(&self) -> u16 {
+        self.setting(|s| s.custom_industry_number)
+    }
+    /// `_settings_game.construction.raw_industry_construction`.
+    pub(crate) fn raw_industry_construction(&self) -> u8 {
+        self.setting(|s| s.raw_industry_construction)
+    }
+    /// `_settings_game.economy.multiple_industry_per_town`.
+    pub(crate) fn multiple_industry_per_town(&self) -> bool {
+        self.setting(|s| s.multiple_industry_per_town)
+    }
+    /// `_settings_game.game_creation.oil_refinery_limit`.
+    pub(crate) fn oil_refinery_limit(&self) -> u8 {
+        self.setting(|s| s.oil_refinery_limit)
+    }
+    /// `_settings_game.game_creation.land_generator == LG_TERRAGENESIS`.
+    pub(crate) fn terragenesis(&self) -> bool {
+        self.setting(|s| s.land_generator) == crate::genworld::LG_TERRAGENESIS
+    }
+    /// `_settings_game.construction.industry_platform`.
+    pub(crate) fn industry_platform(&self) -> u8 {
+        self.setting(|s| s.industry_platform)
     }
     /// `_settings_game.game_creation.landscape`.
     pub(crate) fn landscape_type(&self) -> LandscapeType {
@@ -937,7 +971,7 @@ fn recompute_production_multipliers_checked(owner: *mut Industry, svc: &Services
     svc.assert_with(|| {
         uses_original_economy(
             crate::newgrf_callbacks::IndustryCallbackMasks(unsafe { (*indspec).callback_mask }),
-            EconomyType(unsafe { (svc.economy_type)() }),
+            svc.economy_type(),
         )
     });
     recompute_production_multipliers(owner);
@@ -969,9 +1003,9 @@ pub unsafe extern "C" fn openttd_rust_industry_recompute(owner: *mut Industry) {
     recompute_production_multipliers(owner);
 }
 /// `UpdateIndustryStatistics`.
-fn update_industry_statistics(owner: *mut Industry, s: &Services) {
+fn update_industry_statistics(owner: *mut Industry) {
     let f = fields(owner);
-    let month = u32::from(unsafe { (s.economy_month)() });
+    let month = u32::from(crate::timer_game_common::economy_month());
     unsafe {
         (*f).valid_history = update_valid_history_year((*f).valid_history, month);
     }
@@ -982,7 +1016,7 @@ fn update_industry_statistics(owner: *mut Industry, s: &Services) {
                 continue;
             }
             if (*p).history[usize::from(THIS_MONTH)].first != 0 {
-                (*f).last_prod_year = (s.economy_year)();
+                (*f).last_prod_year = crate::timer_game_common::economy_year().0;
             }
             rotate_history_year(&mut (*p).history, (*f).valid_history, month);
         }
@@ -996,7 +1030,7 @@ fn update_industry_statistics(owner: *mut Industry, s: &Services) {
             let history = (*a).history;
             (*history)[usize::from(THIS_MONTH)].second = get_and_reset_accumulated_average(
                 &mut (*a).accumulated_waiting,
-                (s.days_since_last_month)(),
+                crate::timer_game_common::days_since_last_month(),
             );
             rotate_history_year(&mut *history, (*f).valid_history, month);
         }
@@ -1051,8 +1085,7 @@ fn change_industry_production(
     // reinitialize production_rate to match prod_level
     let mut recalculate_multipliers = false;
     // use original economy for industries using production related callbacks
-    let original_economy =
-        uses_original_economy(obs.callbacks, EconomyType(unsafe { (svc.economy_type)() }));
+    let original_economy = uses_original_economy(obs.callbacks, svc.economy_type());
     let mut div = 0u8;
     let mut mul = 0u8;
     let mut increment = 0i8;
@@ -1114,8 +1147,7 @@ fn change_industry_production(
             }
         }
     } else if monthly == original_economy
-        || (!original_economy
-            && EconomyType(unsafe { (svc.economy_type)() }) == EconomyType::ET_FROZEN)
+        || (!original_economy && svc.economy_type() == EconomyType::ET_FROZEN)
         || obs.life == INDUSTRYLIFE_BLACK_HOLE
     {
         return;
@@ -1149,7 +1181,7 @@ fn change_industry_production(
                     div = 1;
                 }
             }
-        } else if EconomyType(unsafe { (svc.economy_type)() }) == EconomyType::ET_SMOOTH {
+        } else if svc.economy_type() == EconomyType::ET_SMOOTH {
             closeit = !ctlflags(state).any(
                 IndustryControlFlags::from_element(IndustryControlFlag::NoClosure).with(
                     IndustryControlFlags::from_element(IndustryControlFlag::NoProductionDecrease),
@@ -1247,7 +1279,9 @@ fn change_industry_production(
     if !callback_enabled
         && obs.life.test(IndustryLifeType::Processing)
         && unsafe {
-            (svc.economy_year)().wrapping_sub((*state).last_prod_year)
+            crate::timer_game_common::economy_year()
+                .0
+                .wrapping_sub((*state).last_prod_year)
                 >= PROCESSING_INDUSTRY_ABANDONMENT_YEARS.0
         }
         && crate::random_func::chance16(svc.shared(), 1, if original_economy { 2 } else { 180 })
@@ -1348,7 +1382,7 @@ fn get_industry_type_data(f: *mut BuildFields, it: IndustryType, s: &Services) -
     reason = "GetIndustryGamePlayProbability keeps the original's implicit C++ integer conversions"
 )]
 fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u8) {
-    if unsafe { (s.fund_only)() } {
+    if s.industry_density() == crate::settings_type::IndustryDensity::ID_FUND_ONLY {
         return (0, 0);
     }
     let ind_spc = get_industry_spec(it);
@@ -1382,18 +1416,6 @@ fn get_industry_game_play_probability(it: IndustryType, s: &Services) -> (u16, u
         u16::from(chance),
         u8::from(behaviour.test(IndustryBehaviour::CanCloseLastInstance)),
     )
-}
-/// # Safety
-/// Live build record; no reference is retained across the resolver service.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_type(
-    f: *mut BuildFields,
-    kind: u8,
-    s: *const Services,
-) -> u8 {
-    u8::from(get_industry_type_data(f, IndustryType(kind), unsafe {
-        &*s
-    }))
 }
 fn build_fields(builder: *mut Builder) -> *mut BuilderFields {
     unsafe { ptr::addr_of_mut!((*builder).fields) }
@@ -1437,7 +1459,7 @@ const NEWINDS_PER_MONTH: u32 = 0x38000 / (10 * 12);
 /// `IndustryBuildData::EconomyMonthlyLoop`: monthly update of industry build data.
 fn industry_build_data_economy_monthly_loop(builder: *mut Builder, s: &Services) {
     // 'no industries' setting.
-    if unsafe { (s.fund_only)() } {
+    if s.industry_density() == crate::settings_type::IndustryDensity::ID_FUND_ONLY {
         return;
     }
     let b = build_fields(builder);
@@ -1452,12 +1474,6 @@ fn industry_build_data_economy_monthly_loop(builder: *mut Builder, s: &Services)
             (*b).wanted_inds = (*b).wanted_inds.wrapping_add(increment);
         }
     }
-}
-/// # Safety
-/// Live builder; direct total/map observations preserve the original order.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_monthly(b: *mut Builder, s: *const Services) {
-    industry_build_data_economy_monthly_loop(b, unsafe { &*s });
 }
 /// `IndustryBuildData::SetupTargetCount`: decide how many industries of each type are needed.
 fn setup_target_count(builder: *mut Builder, s: &Services) {
@@ -1512,12 +1528,6 @@ fn setup_target_count(builder: *mut Builder, s: &Services) {
         }
         total_amount -= 1;
     }
-}
-/// # Safety
-/// Live builder; slot fields are read/written only between source services.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_targets(b: *mut Builder, s: *const Services) {
-    setup_target_count(b, unsafe { &*s });
 }
 /// `Industry::GetIndustryTypeCount`.
 #[allow(
@@ -1668,13 +1678,6 @@ fn try_build_new_industry(builder: *mut Builder, s: &Services) {
         }
     }
 }
-/// # Safety
-/// Live builder. Construction and news services run with raw owner fields only;
-/// recursive industry calls cannot alias a borrowed Rust owner or vector.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_build_try(b: *mut Builder, s: *const Services) {
-    try_build_new_industry(b, unsafe { &*s });
-}
 /// Every economy day handler for the industry changes (`_economy_industries_daily`).
 /// Taking the original map size of 256*256, the number of random changes was always of just
 /// one unit. But it cannot be the same on smaller or bigger maps. That number has to be
@@ -1744,7 +1747,7 @@ pub(crate) unsafe fn economy_industries_monthly(builder: *mut Builder, services:
             break;
         }
         from = u32::from(e.id) + 1;
-        update_industry_statistics(e.owner, s);
+        update_industry_statistics(e.owner);
         if unsafe { (*fields(e.owner)).prod_level == PRODLEVEL_CLOSURE } {
             unsafe { (s.destroy)(e.industry) };
         } else {
@@ -2542,15 +2545,12 @@ crate::abi::layouts! {
         too_many,
     };
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
-        raw_setting,
-        multiple_per_town,
         town,
         population,
         town_position,
         industry,
 
         edge_distance,
-        refinery_limit,
         tile_height,
         set_company,
         temporary_shell,
@@ -2558,9 +2558,7 @@ crate::abi::layouts! {
         resolve_shape,
         location_error,
         shape_error,
-        terragenesis,
         ignore_restrictions,
-        platform,
         can_allocate,
         allocate,
         local_company,
@@ -2575,7 +2573,6 @@ crate::abi::layouts! {
         construction,
         lifecycle,
         tiles,
-        tile_policy,
         commands,
         command_checks,
         costs,
@@ -2583,8 +2580,6 @@ crate::abi::layouts! {
         errors,
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
-        current_company,
-        magic_bulldozer,
         object_in_way,
         close_ai,
         close_game,
@@ -2599,7 +2594,7 @@ crate::abi::layouts! {
         success,
     };
     "OpenTTDIndustryCommandServices" ["industry"] => crate::industry::IndustryCommandServices {
-        deity,
+        shared,
         get,
         owner,
         valid_company,
@@ -2621,7 +2616,6 @@ crate::abi::layouts! {
         gfx,
         set_gfx,
         frame,
-        set_frame,
         animation_loop,
         set_animation_loop,
         construction_counter,
@@ -2664,7 +2658,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryConstructionServices" ["industry"] => crate::industry::ConstructionServices {
         set_town,
-        generating,
         callback,
         callback_error,
         water_class,
@@ -2674,12 +2667,9 @@ crate::abi::layouts! {
         set_construction_stage,
         translated_gfx,
         build_window_dirty,
-        serve_neutral,
     };
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
         environment,
-        density,
-        custom_number,
         scale_by_size_1d,
         scale_by_land_proportion,
         set_progress,
@@ -2818,12 +2808,6 @@ crate::abi::layouts! {
         company_none,
         restore_company,
         directory_dirty,
-        economy_month,
-        economy_year,
-        days_since_last_month,
-        economy_type,
-        fund_only,
-        deity,
     };
     "OpenTTDIndustryProductionStorage" ["industry"] => ProductionStorage { storage, };
     "OpenTTDIndustryDeliveryServices" ["industry"] => DeliveryServices { construct, destroy, resolve, };
@@ -3109,24 +3093,6 @@ mod production_policy_tests {
     extern "C" fn unexpected_directory_dirty(_: u8) {
         unreachable!("unexpected Services::directory_dirty")
     }
-    extern "C" fn unexpected_economy_month() -> u8 {
-        unreachable!("unexpected Services::economy_month")
-    }
-    extern "C" fn unexpected_economy_year() -> i32 {
-        unreachable!("unexpected Services::economy_year")
-    }
-    extern "C" fn unexpected_days_since_last_month() -> u32 {
-        unreachable!("unexpected Services::days_since_last_month")
-    }
-    extern "C" fn unexpected_economy_type() -> u8 {
-        unreachable!("unexpected Services::economy_type")
-    }
-    extern "C" fn unexpected_fund_only() -> bool {
-        unreachable!("unexpected Services::fund_only")
-    }
-    extern "C" fn unexpected_deity() -> bool {
-        unreachable!("unexpected Services::deity")
-    }
     fn services(shared: &crate::services::Services) -> Services {
         Services {
             shared,
@@ -3159,12 +3125,6 @@ mod production_policy_tests {
             company_none: unexpected_company_none,
             restore_company: unexpected_restore_company,
             directory_dirty: unexpected_directory_dirty,
-            economy_month: unexpected_economy_month,
-            economy_year: unexpected_economy_year,
-            days_since_last_month: unexpected_days_since_last_month,
-            economy_type: unexpected_economy_type,
-            fund_only: unexpected_fund_only,
-            deity: unexpected_deity,
         }
     }
 

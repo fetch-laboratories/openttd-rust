@@ -78,7 +78,6 @@ extern "C++" inline bool openttd_rust_station_rect_before_add_tile(OpenTTDStatio
 uint8_t openttd_rust_station_rect_before_add_rect_abi(OpenTTDStationRect *, uint32_t, int32_t, int32_t, uint8_t, const OpenTTDStationCatchmentServices *);
 extern "C++" inline bool openttd_rust_station_rect_before_add_rect(OpenTTDStationRect *a0, uint32_t a1, int32_t a2, int32_t a3, uint8_t a4, const OpenTTDStationCatchmentServices *a5) { return openttd_rust_station_rect_before_add_rect_abi(a0, a1, a2, a3, a4, a5) != 0; }
 void openttd_rust_station_recompute_catchment_for_all(const OpenTTDStationCatchmentServices *);
-void openttd_rust_station_remove_from_nearby_lists(BaseStation *, const OpenTTDStationCatchmentServices *);
 uint32_t openttd_rust_station_catchment_radius(BaseStation *, const OpenTTDStationCatchmentServices *);
 void openttd_rust_station_production_around(uint32_t, int32_t, int32_t, int32_t, uint32_t *, const OpenTTDStationCatchmentServices *);
 void openttd_rust_station_acceptance_around(uint32_t, int32_t, int32_t, int32_t, uint32_t *, uint64_t *, const OpenTTDStationCatchmentServices *);

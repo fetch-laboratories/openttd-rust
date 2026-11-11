@@ -1313,7 +1313,6 @@ pub(crate) mod tests {
             resolve: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
-            owned_land: unused(),
             object_foundation: unused(),
             house_foundation: unused(),
             industry_foundation: unused(),

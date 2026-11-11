@@ -117,12 +117,12 @@ static void Calls()
 	{
 		static OpenTTDTownState *owner = openttd_rust_town_new();
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};
-		founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs; founding.close_error = 0x87654321;
+		names.shared = &shared; leaves.shared = &shared; founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs; founding.close_error = 0x87654321;
 		costs.error = [](OpenTTDCommandCost *cost, uint32_t error) noexcept { *reinterpret_cast<uint32_t *>(cost) = error; };
 		leaves.environment.editor = []() noexcept { return false; };
 		leaves.environment.freeform_edges = []() noexcept { return false; };
 		names.next = [](uint from) noexcept -> OpenTTDTownRef { CHECK(from == 0 || from == UINT16_MAX); return from == 0 ? OpenTTDTownRef{reinterpret_cast<Town *>(uintptr_t{1}), owner, UINT16_MAX - 1} : OpenTTDTownRef{nullptr, nullptr, UINT16_MAX}; };
-		names.utf8_length = [](const uint8_t *data, size_t size) noexcept -> size_t { CHECK(size == 1 && *data == 'x'); return size; };
+		shared.utf8_length = [](const uint8_t *data, size_t size) noexcept -> size_t { CHECK(size == 1 && *data == 'x'); return size; };
 		founding.name_style = []() noexcept -> uint8_t { return 0; };
 		shared.current_company = []() noexcept -> uint8_t { return UINT8_MAX; };
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };

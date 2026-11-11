@@ -397,7 +397,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
             // BaseStation pool IDs are bounded by their u16 representation.
             #[allow(clippy::cast_possible_truncation)]
             let st = (stations.get)(id as u16);
-            if st.is_null() || !(stations.in_use)(st) {
+            if st.is_null() || !stations.in_use(st) {
                 continue;
             }
             let xy = (catchment.location)(st);

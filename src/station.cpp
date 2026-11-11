@@ -161,10 +161,6 @@ uint Station::GetCatchmentRadius() const
 	return openttd_rust_station_catchment_radius(const_cast<Station *>(this), &GetRustStationCatchmentServices());
 }
 
-void Station::RemoveFromAllNearbyLists()
-{
-	openttd_rust_station_remove_from_nearby_lists(this, &GetRustStationCatchmentServices());
-}
 
 /* static */ void Station::RecomputeCatchmentForAll()
 {

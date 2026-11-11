@@ -28,7 +28,6 @@ pub struct NameServices {
     pub next: extern "C" fn(u32) -> TownRef,
     pub render: extern "C" fn(*mut NameFrame, *const NameParams, u32, bool) -> ByteSpan,
     pub shared: *const crate::services::Services,
-    pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     pub random_next: extern "C" fn(*mut Randomizer) -> u32,
 }
 /// SAFETY: Input bytes live for the synchronous call; empty native spans may be null.
@@ -160,8 +159,10 @@ pub(super) unsafe fn verify_town_name(
     let mut other_text = Vec::new();
     let candidate = unsafe { get_town_name(s, frame, &*params, seed, false, &mut candidate_text) };
     // Check size and width.
-    if observed!((s.utf8_length)(candidate.data, candidate.size))
-        >= MAX_LENGTH_TOWN_NAME_CHARS as usize
+    if observed!((unsafe { &*s.shared }.utf8_length)(
+        candidate.data,
+        candidate.size
+    )) >= MAX_LENGTH_TOWN_NAME_CHARS as usize
     {
         return false;
     }
@@ -257,7 +258,6 @@ crate::abi::layouts! {
         next,
         render,
         shared,
-        utf8_length,
         random_next,
     };
     "TownNameParams" ["probe"] => NameParams { grfid, kind => type };

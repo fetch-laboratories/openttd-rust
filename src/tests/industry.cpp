@@ -28,6 +28,7 @@
 #include "../water_map.h"
 #include "../core/backup_type.hpp"
 #include "../economy_func.h"
+#include "../settings_type.h"
 #include <thread>
 extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
@@ -292,8 +293,6 @@ struct IndustryGenerationFixture {
 	{
 		return {
 			.environment = {.editor = []() noexcept -> bool { return false; }, .freeform_edges = []() noexcept -> bool { return false; }},
-			.density = []() noexcept -> uint8_t { return 4; },
-			.custom_number = []() noexcept -> uint32_t { return 0; },
 			.scale_by_size_1d = [](uint32_t n) noexcept -> uint32_t { return n; },
 			.scale_by_land_proportion = [](uint32_t n) noexcept -> uint32_t { return n; },
 			.set_progress = [](OpenTTDIndustryGenerationContext *, bool water, uint32_t total) noexcept -> bool { CHECK(company == 9); CHECK(total == 27); ++sets; return cancel_set != int(water); },
@@ -327,6 +326,9 @@ TEST_CASE("Industry - generation cancellation restores company before return")
 	using F = IndustryGenerationFixture;
 	/* On a 256x256 map ScaleByMapSize is the identity. */
 	Map::Allocate(256, 256);
+	/* Normal density selects the generation cancellation cases; the custom count is unused. */
+	AutoRestoreBackup density(_settings_game.difficulty.industry_density, uint8_t{4});
+	AutoRestoreBackup custom(_settings_game.game_creation.custom_industry_number, uint16_t{0});
 	const auto world = F::World();
 	const auto generation = F::Generation();
 	/* Borrowed views replace the owned specs only for this test; the originals return untouched. */
@@ -419,7 +421,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryConstructionServices construction{};
 	OpenTTDIndustryLifecycleServices lifecycle{};
 	OpenTTDIndustryTileServices tiles{};
-	OpenTTDIndustryTilePolicyServices policy{};
 	OpenTTDIndustryCommandServices commands{};
 	OpenTTDIndustryCostServices costs{};
 	OpenTTDIndustryTransactionServices transaction{};
@@ -454,7 +455,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		.map = {},
 		.builder = nullptr, .production = &production, .generation = &generation,
 		.construction = &construction, .lifecycle = &lifecycle, .tiles = &tiles,
-		.tile_policy = &policy, .commands = &commands, .command_checks = nullptr, .costs = &costs,
+		.commands = &commands, .command_checks = nullptr, .costs = &costs,
 		.transaction = &transaction, .errors = &errors,
 	};
 	const auto pool_count = Industry::GetNumItems();
