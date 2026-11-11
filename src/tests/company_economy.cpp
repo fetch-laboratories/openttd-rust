@@ -93,14 +93,24 @@ TEST_CASE("Company control - native owned-by error encodings")
 /* The company-or-client defaults choice goes through the native settings services, and each
  * type's interval is read from the native VehicleDefaultSettings record they return; the
  * per-type field selection and the ignored percent flag are company::control_tests (#736 F).
- * Retires with the native settings-table services. */
+ * With no human company, GetFirstPlayableCompanyID's Company::CanAllocateItem grants the
+ * allocation credit that constructing the company it returns consumes (#156: the selector,
+ * not this test, calls the real binding). Retires with the native settings-table services
+ * and the native company pool. */
 TEST_CASE("Company control - company or client service-interval defaults")
 {
 	REQUIRE(Company::GetNumItems() == 0);
 	AutoRestoreBackup<VehicleDefaultSettings> client(_settings_client.company.vehicle, {});
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
-	REQUIRE(Company::CanAllocateItem());
-	std::unique_ptr<Company> company(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
+	CompanyID vacant = GetFirstPlayableCompanyID();
+	CHECK(vacant == CompanyID::Begin());
+#ifdef WITH_ASSERT
+	CHECK(_company_pool.checked == 1);
+#endif
+	std::unique_ptr<Company> company(new (vacant) Company(STR_SV_UNNAMED, false));
+#ifdef WITH_ASSERT
+	CHECK(_company_pool.checked == 0);
+#endif
 	company->settings.vehicle = {.servint_ispercent = false, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
 	_settings_client.company.vehicle = {.servint_ispercent = true, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
 	for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
@@ -288,6 +298,37 @@ TEST_CASE("Commands - local cash error encoding")
 	}
 	fixture_current = 18;
 	fixture_companies[0].reset();
+}
+
+/* The production session loop reaches OnTick_Companies' port, whose competitor loop rereads
+ * max_no_competitors before each CCA_NEW_AI post and returns to the session caller for each
+ * Post (#156: company::competitor_tests drives on_tick with its own loop). Expected counts follow
+ * the original OnTick_Companies with competitors_interval 0 and no companies. Retires with the
+ * native session services. */
+TEST_CASE("Company economy - session loop posts each competitor through its caller")
+{
+	FixtureReset(false, false);
+	for (bool change_limit : {false, true}) {
+		fixture_trace.clear();
+		uint32_t cursor = *openttd_rust_company_tick();
+		static int posts;
+		posts = 0;
+		SessionFixture fixture;
+		auto companies = fixture_services;
+		companies.shared = &fixture.shared;
+		fixture.finance.networking = FixtureNetworking;
+		companies.network_server = FixtureServer;
+		companies.competitor_fired = []() noexcept { return true; };
+		companies.ai_can_start = []() noexcept { return true; };
+		companies.company_count = []() noexcept -> size_t { return 0; };
+		fixture.max_competitors = 2;
+		fixture.services.company = &companies;
+		fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; return true; };
+		if (change_limit) fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; SessionFixture::active->max_competitors = 1; return true; };
+		CHECK(fixture.Run(GM_NORMAL));
+		CHECK(posts == (change_limit ? 1 : 2));
+		CHECK(*openttd_rust_company_tick() == (cursor + 1) % MAX_COMPANIES);
+	}
 }
 
 /* Offline and server bankrupt deletions post through the native command and network service
