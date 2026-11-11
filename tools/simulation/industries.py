@@ -791,103 +791,31 @@ def production_gap() -> None:
     )
 
 
-def lifecycle_gap() -> None:
-    """Absent custom industry GRFs: unchanged tile/parent RNG and animation."""
-    import subprocess
+def lifecycle_oracle() -> None:
+    """Require the frozen original trigger, builtin animation and acceptance observations."""
+    import evidence_replacements
 
-    import probe
-
-    import migration
-
-    from .core import ROOT
-
-    out = ROOT / ".local/industry-lifecycle-gap"
-    out.mkdir(parents=True, exist_ok=True)
-    source = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/newgrf_industrytiles.cpp"],
-        cwd=ROOT,
-        text=True,
-    )
-    signatures = (
-        "static bool DoTriggerIndustryTileAnimation(",
-        "bool TriggerIndustryTileAnimation_ConstructionStageChanged(",
-        "bool TriggerIndustryTileAnimation(",
-        "bool TriggerIndustryAnimation(",
-        "static void DoTriggerIndustryTileRandomisation(",
-        "static void DoReseedIndustry(",
-        "void TriggerIndustryTileRandomisation(",
-        "void TriggerIndustryRandomisation(",
-    )
-    bodies: list[str] = []
-    for signature in signatures:
-        bodies.append(probe.body(source, signature))
-    (out / "industry-lifecycle-reference.inc").write_text("\n\n".join(bodies))
-    tile_source = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/industry_cmd.cpp"],
-        cwd=ROOT,
-        text=True,
-    )
-    (out / "industry-acceptance-reference.inc").write_text(
-        probe.body(tile_source, "static void AddAcceptedCargo_Industry(")
-    )
-    animation: list[str] = []
-    for name in (
-        "AnimateSugarSieve",
-        "AnimateToffeeQuarry",
-        "AnimateBubbleCatcher",
-        "AnimatePowerPlantSparks",
-        "AnimateToyFactory",
-        "AnimatePlasticFountain",
-        "AnimateOilWell",
-        "AnimateMineTower",
-        "AnimateTile_Industry",
+    for test, line in (
+        (
+            "lifecycle_triggers_match_original",
+            "Industry lifecycle absent-NewGRF reference cases: 3136",
+        ),
+        (
+            "builtin_animation_matches_original",
+            "Industry builtin animation reference cases: 400224",
+        ),
+        (
+            "tile_acceptance_matches_original",
+            "Industry acceptance absent-NewGRF reference cases: 9216",
+        ),
     ):
-        animation.append(probe.body(tile_source, "static void " + name + "("))
-    drawing = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/table/industry_land.h"],
-        cwd=ROOT,
-        text=True,
-    )
-    start = drawing.index("static const uint8_t _industry_anim_offs_toffee[]")
-    end = drawing.index("};", start) + 2
-    animation.insert(0, drawing[start:end])
-    (out / "industry-animation-reference.inc").write_text("\n\n".join(animation))
-    graphics = subprocess.check_output(
-        ["git", "show", migration.BASELINE["commit"] + ":src/industry_map.h"],
-        cwd=ROOT,
-        text=True,
-    )
-    start = graphics.index("enum IndustryGraphics :")
-    end = graphics.index("};", start) + 2
-    (out / "industry-graphics-reference.inc").write_text(graphics[start:end])
-    binary = out / "probe"
-    probe.compile(
-        [
-            probe.compiler(ROOT / "build-rust"),
-            "-std=c++20",
-            "-O2",
-            "-fno-strict-overflow",
-            *probe.target_flags(ROOT / "build-rust"),
-            "-I" + str(ROOT / "src"),
-            "-I" + str(ROOT / "build-rust/generated-abi"),
-            "-I" + str(out),
-            str(ROOT / "tools/migration/industry-lifecycle-gap.cpp"),
-            *probe.rust(ROOT / "build-rust", define=False),
-            "-o",
-            str(binary),
-        ],
-        out / "compile.log",
-        cwd=ROOT,
-        env=migration.environment(),
-    )
-    print(
-        probe.execute([binary], binary, cwd=ROOT, stderr="inherited").decode(), end=""
-    )
+        evidence_replacements.run_rust("rust:lib:industry::evidence_tests::" + test)
+        print(line)
 
 
 if __name__ == "__main__":
     production_gap()
-    lifecycle_gap()
+    lifecycle_oracle()
 
 
 def definition_grfs(folder: Path) -> None:
