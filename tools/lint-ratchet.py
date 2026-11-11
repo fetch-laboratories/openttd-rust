@@ -426,26 +426,14 @@ def reviewed_debt(
     return allowed
 
 
-def measurement(revision: str | None) -> list[str] | None:
-    """The lint selection, Clippy command and configuration at a revision, or
-    None where a revision lacks them."""
-
-    def read(path: str) -> str:
-        if revision is None:
-            return (ROOT / path).read_text()
-        return git("show", f"{revision}:{path}")
-
+def debt_lints(revision: str) -> frozenset[str] | None:
+    """The Clippy families the ratchet counted at a revision, or None."""
     try:
-        source = read("tools/migration.py")
-        configuration = read(f"{migration.CLIPPY_CONFIGURATION}/clippy.toml")
-    except (OSError, subprocess.CalledProcessError):
+        source = git("show", f"{revision}:tools/migration.py")
+    except subprocess.CalledProcessError:
         return None
-    definitions = re.findall(
-        r"^CLIPPY_DEBT_LINTS = [^\n]*$|^def clippy_command\(.*?(?=^\S)",
-        source,
-        re.M | re.S,
-    )
-    return [*definitions, configuration]
+    match = re.search(r"^CLIPPY_DEBT_LINTS = \(([^)]*)\)", source, re.M)
+    return frozenset(re.findall(r'"(\w+)"', match[1])) if match else None
 
 
 def merge_base(base_ref: str) -> str:
@@ -546,14 +534,18 @@ def main() -> int:
     base = merge_base(args.base_ref)
     tracked = git("ls-tree", "--name-only", base, path).strip()
     previous = json.loads(git("show", f"{base}:{path}")) if tracked else recorded
-    measured_at = measurement(base) if kind == "clippy" else None
-    if measured_at is not None and measured_at != measurement(None):
-        # An explicit, reviewed inventory migration: the measured debt may not
-        # exceed the recorded file, which this change re-records (#891).
+    counted = debt_lints(base) if kind == "clippy" else None
+    if introduced := set(CLIPPY) - (counted if counted is not None else set(CLIPPY)):
+        # A family this change adds to CLIPPY_DEBT_LINTS starts from its
+        # recorded first inventory (#891); every other family keeps the merge
+        # base's allowance.
         print(
-            "Clippy measurement differs from the merge base; recorded debt is the inventory"
+            f"first inventory of {', '.join(sorted(introduced))}: recorded rows allowed"
         )
-        previous = recorded
+        first = {
+            k: v for k, v in recorded["sites"].items() if lint_of(k)[0] in introduced
+        }
+        previous = {**previous, "sites": {**previous["sites"], **first}}
     measured, stored = check(
         kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
     )

@@ -1092,6 +1092,57 @@ class CarryTests(unittest.TestCase):
             recorded = json.loads((root / "migration/clippy-debt.json").read_text())
             self.assertEqual(recorded["sites"], {new: [8]})
 
+    def test_only_a_newly_counted_family_starts_from_its_recorded_rows(self) -> None:
+        """#891: the family a change adds to CLIPPY_DEBT_LINTS is admitted from
+        its recorded first inventory; existing families keep the base allowance."""
+        text = "fn a() { assert!(true); }\nfn b(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8, g: u8, h: u8) {}\n"
+        macro = "rust/a.rs | fn a | disallowed_macros | " + LINT.ITEM
+        arguments = "rust/a.rs | fn b | too_many_arguments | " + LINT.ITEM
+
+        def diagnostic(lint: str, start: int, message: str) -> str:
+            span: dict[str, object] = {"is_primary": True, "file_name": "rust/a.rs"}
+            span |= {"byte_start": start, "byte_end": start + 1}
+            body = {"code": {"code": "clippy::" + lint}, "message": message}
+            return json.dumps(
+                {"reason": "compiler-message", "message": body | {"spans": [span]}}
+            )
+
+        def run(counted: str, rows: dict[str, list[int]], replay: list[str]) -> int:
+            debt = {"schema": 1, "version": "1.99.0", "inventory_head": "x"}
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                initialize(
+                    root,
+                    {
+                        "rust/a.rs": text,
+                        "tools/migration.py": f"CLIPPY_DEBT_LINTS = ({counted})\n",
+                        "migration/clippy-debt.json": json.dumps(debt | {"sites": {}}),
+                    },
+                )
+                base = git("rev-parse", "HEAD", cwd=root).strip()
+                (root / "migration/clippy-debt.json").write_text(
+                    json.dumps(debt | {"sites": rows})
+                )
+                commit(root)
+                (root / "clippy.json").write_text("\n".join(replay))
+                argv = ["lint-ratchet.py", "clippy", "--base-ref", base, "--input"]
+                LINT.item_names.cache_clear()
+                with (
+                    patch.object(LINT, "ROOT", root),
+                    patch.object(LINT, "git", partial(git, cwd=root)),
+                    patch.object(LINT, "context", return_value=("", [], [], "h")),
+                    patch("sys.argv", [*argv, str(root / "clippy.json")]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    return LINT.main()
+
+        old = '"too_many_arguments", "missing_safety_doc"'
+        site = diagnostic("disallowed_macros", 9, "use of a disallowed macro")
+        grown = diagnostic("too_many_arguments", 30, "too many arguments (8/7)")
+        self.assertEqual(run(old, {macro: [1]}, [site]), 0)
+        self.assertEqual(run(old, {macro: [1], arguments: [8]}, [site, grown]), 1)
+        self.assertEqual(run(old + ', "disallowed_macros"', {macro: [1]}, [site]), 1)
+
     def test_attribute_and_signature_changes_invalidate_acceptance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
