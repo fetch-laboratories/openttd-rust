@@ -304,10 +304,7 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn size(&self) -> (u32, u32) {
-        (
-            self.dimensions.size_x(),
-            self.types.count() >> self.dimensions.log_x,
-        )
+        (self.dimensions.size_x(), self.size_y())
     }
     /// Run a header helper with the entry's native handler at each source assertion.
     #[allow(clippy::inline_always)]
