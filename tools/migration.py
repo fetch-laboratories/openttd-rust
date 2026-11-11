@@ -509,6 +509,27 @@ class Execution:
     select_role: Callable[[str], dict[str, str]]
 
 
+def sanitized_rust_tests(execution: Execution, name: str, build: Path) -> None:
+    """Every Cargo test under the sanitized flags (#891). Its own output
+    directory keeps the ordinary build-rust/cargo cache intact; --target keeps
+    build scripts and proc macros uninstrumented."""
+    if not execution.args.sanitize or name != "candidate":
+        return
+    execution.run(
+        "candidate-rust-tests",
+        [
+            "cargo",
+            "test",
+            "--workspace",
+            "--locked",
+            "--target",
+            execution.report["rust_configuration"]["target"],
+            "--target-dir",
+            str(build / "cargo-tests"),
+        ],
+    )
+
+
 def build_games(execution: Execution) -> None:
     args, run = execution.args, execution.run
     builds, report = execution.builds, execution.report
@@ -608,23 +629,7 @@ def build_games(execution: Execution) -> None:
                     else []
                 ),
             )
-            if args.sanitize and name == "candidate":
-                # Every Cargo test under the same flags (#891). Its own output
-                # directory keeps the ordinary build-rust/cargo cache intact;
-                # --target keeps build scripts and proc macros uninstrumented.
-                run(
-                    "candidate-rust-tests",
-                    [
-                        "cargo",
-                        "test",
-                        "--workspace",
-                        "--locked",
-                        "--target",
-                        report["rust_configuration"]["target"],
-                        "--target-dir",
-                        str(build / "cargo-tests"),
-                    ],
-                )
+            sanitized_rust_tests(execution, name, build)
             if instruction_mode:
                 from simulation.instructions import record_build
 

@@ -143,7 +143,11 @@ class DebtTests(unittest.TestCase):
             self.assertTrue(debt_errors(rows, rows, LINT.clippy_rows(records[0], root)))
 
     def test_only_retained_clippy_families_are_collected_and_ratcheted(self) -> None:
-        retained = {"too_many_arguments": 8, "missing_safety_doc": 1}
+        retained = {
+            "too_many_arguments": 8,
+            "missing_safety_doc": 1,
+            "disallowed_macros": 1,
+        }
         removed = (
             "too_many_lines",
             "cognitive_complexity",
@@ -1279,6 +1283,13 @@ class RetiredThresholdTests(unittest.TestCase):
         for key, before in (("too-many-arguments-threshold", 7), ("max-args", 5)):
             self.assertFalse(POLICY.permitted_change(key, before, None))
 
+    def test_disallowed_macros_may_only_grow(self) -> None:
+        key, macros = "disallowed-macros", ["std::assert", "std::panic"]
+        self.assertTrue(POLICY.permitted_change(key, None, macros))
+        self.assertTrue(POLICY.permitted_change(key, macros[:1], macros))
+        self.assertFalse(POLICY.permitted_change(key, macros, macros[:1]))
+        self.assertFalse(POLICY.permitted_change(key, macros, None))
+
 
 class ArchiveTests(unittest.TestCase):
     def test_local_relocation_targets_remain_in_their_object(self) -> None:
@@ -1400,8 +1411,13 @@ class OrdinaryRustTests(unittest.TestCase):
             ),
         ):
             LINT.collect("clippy", migration.ROOT)
-        ((command, options),) = calls
+        # The second replays only the non-test library unit (#891).
+        ((command, options), (library, _)) = calls
         self.assertEqual(command, migration.clippy_command("--message-format=json"))
+        self.assertEqual(
+            library,
+            migration.clippy_command("--message-format=json", targets="--lib"),
+        )
         self.assertEqual(
             [part for part in command if part != "--message-format=json"], gate
         )
@@ -1460,6 +1476,11 @@ class OrdinaryRustTests(unittest.TestCase):
                 "equal expressions",
             ),
             (
+                migration.clippy_command()[1:],
+                '#[cfg(feature = "native-test-support")]\npub fn x() -> u8 { "x" }\n',
+                "mismatched types",
+            ),
+            (
                 ["test", "--workspace", "--locked"],
                 '#[test]\nfn failure() { panic!("seeded"); }\n',
                 "seeded",
@@ -1469,7 +1490,8 @@ class OrdinaryRustTests(unittest.TestCase):
             root = Path(directory)
             (root / "src").mkdir()
             (root / "Cargo.toml").write_text(
-                '[package]\nname="seeded-checks"\nversion="0.1.0"\nedition="2024"\n'
+                '[package]\nname="openttd-kernels"\nversion="0.1.0"\nedition="2024"\n'
+                "[features]\nnative-test-support = []\n"
             )
             (root / "src/lib.rs").write_text("")
             lock = subprocess.run(

@@ -90,8 +90,13 @@ RETIRED_THRESHOLDS = {
 def permitted_change(key: str, before: object, after: object) -> bool:
     if key in RETIRED_THRESHOLDS and after is None:
         return True
-    if key in ("select", "extend-select") and isinstance(after, list):
-        return isinstance(before, list) and set(before) <= set(after)
+    if key in ("select", "extend-select", "disallowed-macros") and isinstance(
+        after, list
+    ):
+        # Adding a disallowed macro strengthens the policy (#891).
+        return (before is None and key == "disallowed-macros") or (
+            isinstance(before, list) and set(map(str, before)) <= set(map(str, after))
+        )
     if key in ("ignore", "extend-ignore", "exclude", "extend-exclude"):
         return (
             isinstance(before, list)

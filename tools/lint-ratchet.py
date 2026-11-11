@@ -426,19 +426,26 @@ def reviewed_debt(
     return allowed
 
 
-def measurement(revision: str | None) -> list[str]:
-    """The lint selection, Clippy command and configuration at a revision."""
+def measurement(revision: str | None) -> list[str] | None:
+    """The lint selection, Clippy command and configuration at a revision, or
+    None where a revision lacks them."""
 
     def read(path: str) -> str:
         if revision is None:
             return (ROOT / path).read_text()
         return git("show", f"{revision}:{path}")
 
-    source = read("tools/migration.py")
+    try:
+        source = read("tools/migration.py")
+        configuration = read(f"{migration.CLIPPY_CONFIGURATION}/clippy.toml")
+    except (OSError, subprocess.CalledProcessError):
+        return None
     definitions = re.findall(
-        r"^CLIPPY_DEBT_LINTS = [^\n]*$|^def clippy_command\(.*?(?=^\S)", source, re.M | re.S
+        r"^CLIPPY_DEBT_LINTS = [^\n]*$|^def clippy_command\(.*?(?=^\S)",
+        source,
+        re.M | re.S,
     )
-    return [*definitions, read(f"{migration.CLIPPY_CONFIGURATION}/clippy.toml")]
+    return [*definitions, configuration]
 
 
 def merge_base(base_ref: str) -> str:
@@ -539,10 +546,13 @@ def main() -> int:
     base = merge_base(args.base_ref)
     tracked = git("ls-tree", "--name-only", base, path).strip()
     previous = json.loads(git("show", f"{base}:{path}")) if tracked else recorded
-    if kind == "clippy" and measurement(base) != measurement(None):
+    measured_at = measurement(base) if kind == "clippy" else None
+    if measured_at is not None and measured_at != measurement(None):
         # An explicit, reviewed inventory migration: the measured debt may not
         # exceed the recorded file, which this change re-records (#891).
-        print("Clippy measurement differs from the merge base; recorded debt is the inventory")
+        print(
+            "Clippy measurement differs from the merge base; recorded debt is the inventory"
+        )
         previous = recorded
     measured, stored = check(
         kind, rows, collected(recorded["sites"]), collected(previous["sites"]), base
