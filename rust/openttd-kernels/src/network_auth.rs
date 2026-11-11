@@ -120,6 +120,15 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
     crate::network_client::send_identify(s, f)
 }
 
+/// `GetErrorForAuthenticationMethod` (`network_server.cpp`), as the native
+/// `NetworkErrorCode` byte `SendError` takes.
+fn get_error_for_authentication_method(method: NetworkAuthenticationMethod) -> u8 {
+    match method {
+        NetworkAuthenticationMethod::X25519_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
+        NetworkAuthenticationMethod::X25519_AuthorizedKey => NETWORK_ERROR_NOT_ON_ALLOW_LIST,
+        _ => crate::services_assert::not_reached(),
+    }
+}
 pub(crate) fn receive_response(
     f: &Services,
     game: *mut GameSocket,
@@ -150,18 +159,11 @@ pub(crate) fn receive_response(
         ResponseResult::Authenticated => (),
         ResponseResult::RetryNextMethod => return send_request(f, game, work),
         _ => {
-            let error = match method {
-                NetworkAuthenticationMethod::X25519_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
-                NetworkAuthenticationMethod::X25519_AuthorizedKey => {
-                    NETWORK_ERROR_NOT_ON_ALLOW_LIST
-                }
-                _ => unreachable!(),
-            };
             return crate::network_connection::send_error(
                 s,
                 f,
                 game,
-                error,
+                get_error_for_authentication_method(method),
                 crate::network_connection::EMPTY_TEXT,
                 work,
             );
