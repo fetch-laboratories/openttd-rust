@@ -99,7 +99,7 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
     }
     let owner = (f.auth_owner)(handler);
     debug!(net, 9, "Client::Receive_SERVER_ENABLE_ENCRYPTION()");
-    if unsafe { auth::receive_enable(owner, p) } == 0 {
+    if !unsafe { auth::receive_enable(owner, p) } {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let receive = unsafe {

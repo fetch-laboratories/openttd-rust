@@ -88,7 +88,9 @@ pub enum Receive {
     Ready,
 }
 
-/// `SendPackets`, returning before a requested virtual close.
+/// `SendPackets`: send the buffered packets until the queue is empty, the OS
+/// cannot send more (a full network buffer), or sending takes too long. Return
+/// before a requested virtual close so the native virtual call stays on its frame.
 /// # Safety
 /// The socket, queues, services and initialized packet records are live for the entry.
 pub unsafe fn send_packets(

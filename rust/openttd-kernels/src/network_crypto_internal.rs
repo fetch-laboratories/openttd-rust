@@ -27,6 +27,15 @@ pub(crate) fn create_random_nonce(
     random_bytes(nonce);
 }
 
+/// `X25519SecretKey::CreateRandom`: fill the existing secret-key owner with random
+/// bytes without changing its generation or destruction-time wipe lifetime.
+pub(crate) fn create_random_secret_key(
+    key: &mut X25519SecretKey,
+    random_bytes: impl FnOnce(&mut X25519SecretKey),
+) {
+    random_bytes(key);
+}
+
 /// The borrowed key buffers keep their owner's existing wipe-on-destruction policy.
 pub(crate) type X25519Key = [u8; X25519_KEY_SIZE];
 /// Container for an X25519 public key.

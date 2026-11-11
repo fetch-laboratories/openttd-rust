@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Values from `network/core/config.h`.
-/// `NETWORK_MAX_GRF_COUNT`.
+/// Maximum number of GRFs that can be sent. This prevents `SERVER_INFO` from
+/// exceeding `TCP_MTU` (32767): its game info occupies 142 bytes plus at most
+/// 100 per `NewGRF`, allowing roughly 326. Round down to 255 to avoid an odd limit.
+/// Raising it also requires considering the uint8 `NetworkGameInfo` GRF count.
 pub const NETWORK_MAX_GRF_COUNT: u32 = 255;
 
 /// Revision string capacity, including its NUL.

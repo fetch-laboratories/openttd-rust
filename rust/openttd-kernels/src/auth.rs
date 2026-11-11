@@ -18,7 +18,8 @@ use crate::network_crypto::{
 use crate::network_crypto_internal::{
     X25519_KEY_EXCHANGE_MESSAGE_SIZE, X25519_KEY_SIZE, X25519_MAC_SIZE, X25519_NONCE_SIZE,
     X25519DerivedKeys, X25519KeyExchangeMessage, X25519KeyExchangeSide, X25519Mac, X25519Nonce,
-    X25519PublicKey, X25519SecretKey, client_to_server, create_random_nonce, server_to_client,
+    X25519PublicKey, X25519SecretKey, client_to_server, create_random_nonce,
+    create_random_secret_key, server_to_client,
 };
 use crate::{
     crypto::{self, Aead},
@@ -70,6 +71,17 @@ unsafe fn bytes_mut<'a>(data: *mut u8, length: usize) -> &'a mut [u8] {
     }
 }
 
+/// `X25519AuthenticationHandler`: both peers exchange public keys and derive two
+/// `BLAKE2b` keys from the shared secret, server public key, client public key and
+/// optional password, in that order. The first key encrypts client-to-server
+/// traffic; the second encrypts server-to-client traffic.
+///
+/// The server sends its nonce: admin-protocol clients have many implementations,
+/// so the server cannot rely on them to generate a sufficiently good nonce.
+/// It generates new keys for each session. The client encrypts eight random bytes
+/// with XChaCha20-Poly1305, using its public key as additional authenticated data,
+/// and returns its public key, MAC and encrypted message. The server derives the
+/// same keys, verifies the MAC and message, then performs the method-specific check.
 struct Session {
     secret: X25519SecretKey,
     public: X25519PublicKey,
@@ -82,6 +94,7 @@ impl Drop for Session {
     fn drop(&mut self) {
         // Ensure the nonce does not get leaked when we are done with it.
         self.encryption_nonce.zeroize();
+        // Ensure the key and derived keys do not get leaked when we are done.
         self.peer.zeroize();
         self.keys.zeroize();
         // Ensure the nonce does not get leaked when we are done with it.
@@ -220,6 +233,7 @@ unsafe fn session_new(secret: &X25519SecretKey, services: *const Services) -> Se
 }
 
 /// Constructor inputs for one original authentication sub-handler.
+#[derive(Clone, Copy)]
 struct SingleArgs<'a> {
     method: NetworkAuthenticationMethod,
     server: bool,
@@ -498,7 +512,7 @@ pub(crate) unsafe fn client_new(
                 SingleArgs {
                     method: NetworkAuthenticationMethod(method),
                     server: false,
-                    secret: secret,
+                    secret,
                     client_password: password,
                     server_password: ptr::null(),
                     authorized: ptr::null(),
@@ -534,7 +548,9 @@ pub(crate) unsafe fn server_new(
 ) -> *mut Handler {
     let mut secret = Zeroizing::new([0; X25519_KEY_SIZE]);
     unsafe {
-        ((*services).random_bytes)(secret.as_mut_ptr(), X25519_KEY_SIZE);
+        create_random_secret_key(&mut secret, |key| {
+            ((*services).random_bytes)(key.as_mut_ptr(), X25519_KEY_SIZE);
+        });
     }
     let mut handlers = Vec::new();
     if !password.is_null() && mask.test(NetworkAuthenticationMethod::X25519_PAKE) {
@@ -566,7 +582,7 @@ pub(crate) unsafe fn server_new(
                     secret: &secret,
                     client_password: ptr::null_mut(),
                     server_password: ptr::null(),
-                    authorized: authorized,
+                    authorized,
                 },
             )
         };
@@ -614,10 +630,19 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
         )
     }
 }
+/// Release the original handler owner and its destruction-time wipes.
+/// # Safety
+/// `owner` is live, uniquely owned and was allocated by its constructor.
+pub(crate) unsafe fn destroy_handler(owner: *mut Handler) {
+    unsafe {
+        drop(Box::from_raw(owner));
+    }
+}
+
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_destroy(owner: *mut Handler) {
     unsafe {
-        drop(Box::from_raw(owner));
+        destroy_handler(owner);
     }
 }
 #[unsafe(no_mangle)]
@@ -714,10 +739,10 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_enable(
 /// Read the active session nonce for enabling encryption.
 /// # Safety
 /// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
-pub(crate) unsafe fn receive_enable(owner: *mut Handler, packet: *mut packet::State) -> u8 {
+pub(crate) unsafe fn receive_enable(owner: *mut Handler, packet: *mut packet::State) -> bool {
     unsafe {
         let session = &mut single_mut(Handler::active(owner)).session;
-        u8::from((*packet).recv_bytes(&mut session.encryption_nonce) == X25519_NONCE_SIZE)
+        (*packet).recv_bytes(&mut session.encryption_nonce) == X25519_NONCE_SIZE
     }
 }
 
@@ -726,7 +751,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_enable(
     owner: *mut Handler,
     packet: *mut packet::State,
 ) -> u8 {
-    unsafe { receive_enable(owner, packet) }
+    u8::from(unsafe { receive_enable(owner, packet) })
 }
 /// Create an encryption stream for the selected exchange direction.
 /// # Safety
@@ -754,10 +779,19 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
     unsafe { stream_new(owner, X25519KeyExchangeSide(side)) }
 }
 
+/// Release the original stream owner and its destruction-time wipes.
+/// # Safety
+/// `owner` is live, uniquely owned and was allocated by its constructor.
+pub(crate) unsafe fn destroy_stream(owner: *mut Stream) {
+    unsafe {
+        drop(Box::from_raw(owner));
+    }
+}
+
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_destroy(owner: *mut Stream) {
     unsafe {
-        drop(Box::from_raw(owner));
+        destroy_stream(owner);
     }
 }
 #[unsafe(no_mangle)]
@@ -795,8 +829,8 @@ crate::abi::layouts! {
 mod tests {
     use super::{
         Handler, NetworkAuthenticationAuthorizedKeyHandler, NetworkAuthenticationPasswordProvider,
-        RustAuthenticationClientHandler, Services, SingleArgs, new_single,
-        openttd_rust_auth_handler_send_request, receive_request, receive_response, send_response,
+        RustAuthenticationClientHandler, Services, SingleArgs, new_single, receive_request,
+        receive_response, send_request, send_response,
     };
     use crate::network_crypto::NetworkAuthenticationMethod;
     use crate::network_crypto_internal::X25519_KEY_SIZE;
@@ -875,7 +909,7 @@ mod tests {
         let mut request = packet::State::new(1460, ptr::null_mut());
         let mut response = packet::State::new(1460, ptr::null_mut());
         unsafe {
-            openttd_rust_auth_handler_send_request(&raw mut server, &raw mut request, check);
+            send_request(&raw mut server, &raw mut request, check);
             // RequestResult::AwaitUserInput.
             assert_eq!(receive_request(&raw mut client, &raw mut request).0, 0);
             assert!(send_response(&raw mut client, &raw mut response));
