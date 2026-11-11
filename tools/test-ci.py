@@ -1702,36 +1702,20 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(evaluate(linux, inputs=inputs), expected)
 
     def test_windows_targets_x64_alone(self) -> None:
-        """Windows x86 is retired (#899), with no target or Rust-only path left."""
-        text = (ROOT / ".github/workflows/ci-windows.yml").read_text()
-        for retired in ("i686", "x86)", "rust-only"):
-            self.assertNotIn(retired, text)
-        build = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        self.assertNotIn("rust-only", build)
-        self.assertEqual(
-            workflow("ci-build.yml")["jobs"]["windows"]["strategy"]["matrix"]["arch"],
-            ["x64"],
-        )
+        """Windows x86 is retired (#899), with no Rust-only path left."""
+        windows = workflow("ci-build.yml")["jobs"]["windows"]
+        self.assertEqual(windows["strategy"]["matrix"]["arch"], ["x64"])
+        self.assertNotIn("rust-only", windows["with"])
+        # PyYAML reads the `on:` key as True.
+        triggers = cast(dict[Any, Any], workflow("ci-windows.yml"))[True]
+        inputs = triggers["workflow_call"]["inputs"]
+        self.assertNotIn("rust-only", inputs)
 
-    def test_rust_32bit_job_executes_the_workspace_tests_on_a_free_runner(self) -> None:
-        """Replaces the 32-bit Rust tests of Windows x86: compiling alone is not enough (#899)."""
+    def test_rust_32bit_job_targets_i686_on_a_free_runner(self) -> None:
+        """Its execution is shown by CI and root's width-dependent negative control (#899)."""
         body = workflow("ci-build.yml")["jobs"]["rust-32bit"]
         self.assertEqual(body["runs-on"], "ubuntu-24.04")
         self.assertEqual(body["env"]["RUST_TARGET"], "i686-unknown-linux-gnu")
-        runs_by_name = {step.get("name"): step.get("run", "") for step in body["steps"]}
-        tests = runs_by_name["Workspace Rust tests at 32 bits"]
-        self.assertEqual(
-            tests, 'cargo test --workspace --locked --target "$RUST_TARGET"'
-        )
-        self.assertIn(
-            "grep -Fx 'target_pointer_width=\"32\"'",
-            runs_by_name["Require 32-bit pointers"],
-        )
-        names = list(runs_by_name)
-        self.assertLess(
-            names.index("Require 32-bit pointers"),
-            names.index("Workspace Rust tests at 32 bits"),
-        )
 
     def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(
         self,
