@@ -183,7 +183,7 @@ impl<'a> World<'a> {
         get_tunnel_bridge_length(self.map, start, end)
     }
     fn slope_z(&self, tile: u32) -> (u8, i32) {
-        crate::map_func::World::new(self.s).tile_slope_z(tile)
+        crate::map_func::World::new(self.s).tile_slope_z(TileIndex(tile))
     }
     fn editor(&self) -> bool {
         (self.town.environment.editor)()
@@ -1322,7 +1322,7 @@ impl<'a> World<'a> {
                     middle,
                     (height as u32).wrapping_sub(crate::tile_map::tile_height_in(
                         &crate::map_func::World::new(self.s),
-                        middle,
+                        TileIndex(middle),
                     )) as i32,
                 );
                 middle = middle.wrapping_add(delta);

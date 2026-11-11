@@ -68,8 +68,8 @@ fn depot(s: &Services, tile: TileIndex) -> bool {
     (s.is_depot)(tile.0)
         && crate::tile_map::is_tile_owner(
             s.common.base.shared,
-            tile.0,
-            (s.common.base.shared.current_company)(),
+            TileIndex(tile.0),
+            crate::company_type::CompanyID((s.common.base.shared.current_company)()),
         )
 }
 /// `Command<CMD_START_STOP_VEHICLE>::Do(flags, v->index, false)`.

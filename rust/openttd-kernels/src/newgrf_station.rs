@@ -658,7 +658,7 @@ pub(crate) unsafe fn station_base_variable(
     unhandled(variable, available)
 }
 fn land_info(native: &Services, file: *const c_void, tile: u32, axis: u8) -> u32 {
-    let slope = crate::map_func::World::new(native.shared()).tile_slope(tile);
+    let slope = crate::map_func::World::new(native.shared()).tile_slope(TileIndex(tile));
     let swap = axis == AXIS_Y && (slope & SLOPE_W != 0) != (slope & SLOPE_E != 0);
     (native.shared().nearby_tile_information)(tile, (native.shared().grf_file_version)(file) >= 8)
         ^ if swap { u32::from(SLOPE_EW) } else { 0 }
@@ -995,7 +995,7 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     let native = services();
     let map = native.map();
     let diff = tile.wrapping_sub(north);
-    let slope = u32::from(crate::map_func::World::new(native.shared()).tile_slope(tile));
+    let slope = u32::from(crate::map_func::World::new(native.shared()).tile_slope(TileIndex(tile)));
     let swap =
         axis == AXIS_Y && (slope & u32::from(SLOPE_W) != 0) != (slope & u32::from(SLOPE_E) != 0);
     let p1 = (slope << 4) | (slope ^ if swap { u32::from(SLOPE_EW) } else { 0 });

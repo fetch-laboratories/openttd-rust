@@ -284,7 +284,7 @@ fn crossing_admission(w: &World<'_>, tile: u32, owner: u8) -> RailCrossingAdmiss
         axis: Axis(crate::direction_type::AXIS_X),
     };
     if r.crossing {
-        r.owner = view.owner(tile);
+        r.owner = view.owner(TileIndex(tile));
         if r.owner == owner {
             r.axis = Axis(view.crossing_road_axis(tile));
         }

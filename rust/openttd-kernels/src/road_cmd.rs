@@ -604,7 +604,9 @@ impl<'a> Ctx<'a> {
         }
         match self.kind(tile) {
             0 => {
-                let slope = simple_slope(crate::map_func::World::new(self.shared).tile_slope(tile));
+                let slope = simple_slope(
+                    crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile)),
+                );
                 let mut present = self.bits(tile, rtt);
                 let other = self.bits(tile, rtt ^ 1);
                 let foundation = crate::movement::road_foundation(slope, present, |ok| {
@@ -874,7 +876,7 @@ impl<'a> Ctx<'a> {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
         let mut clear = false;
         match self.tile_type(tile) {
@@ -1140,7 +1142,8 @@ impl<'a> Ctx<'a> {
             if self.tile_type(tile) == MP_ROAD {
                 pieces &= existing ^ 15;
                 if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
-                    let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
+                    let slope =
+                        crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
                     let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
                         crate::movement::native_assert(self.shared, ok);
                     });
@@ -1502,7 +1505,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         cost.set(0);
-        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         if slope != 0 {
             if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope) {
                 cost.error(self.r.strings.flat_land);
@@ -1878,7 +1881,7 @@ impl<'a> Ctx<'a> {
                     self.slope(scratch, slope, &mut copy, 0, 0);
                     if scratch.ok() && bits == copy {
                         let mut old_slope =
-                            crate::map_func::World::new(self.shared).tile_slope(tile);
+                            crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
                         let mut old_z = (self.shared.tile_z)(tile);
                         let old = (self.shared.apply_foundation)(
                             Foundation(crate::movement::road_foundation(old_slope, bits, |ok| {

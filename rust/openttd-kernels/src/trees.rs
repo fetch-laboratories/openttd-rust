@@ -294,7 +294,7 @@ impl Trees<'_> {
             .and_then(|m| {
                 let mut p = PlantObservation {
                     tile_type: crate::tile_map::get_tile_type(m, TileIndex(tile))?.0,
-                    zone: crate::tile_map::get_tropic_zone(m, tile)?,
+                    zone: crate::tile_map::get_tropic_zone(m, TileIndex(tile))?,
                     ..PlantObservation::default()
                 };
                 if p.tile_type == MP_CLEAR {
@@ -307,7 +307,12 @@ impl Trees<'_> {
                     p.coast = crate::water_map::is_coast(m, tile)? && {
                         let width = self.s.map().size_x();
                         !crate::slope_func::is_slope_with_one_corner_raised_raw(
-                            crate::tile_map::get_tile_slope(m, tile, width, m.count() / width)?,
+                            crate::tile_map::get_tile_slope(
+                                m,
+                                TileIndex(tile),
+                                width,
+                                m.count() / width,
+                            )?,
                         )
                     };
                 }
@@ -344,7 +349,11 @@ impl Trees<'_> {
         self.field(tile, crate::tree_map::get_tree_growth_raw, |t| t.growth)
     }
     fn zone(&self, tile: u32) -> u8 {
-        self.field(tile, crate::tile_map::get_tropic_zone, |t| t.zone)
+        self.field(
+            tile,
+            |map, tile| crate::tile_map::get_tropic_zone(map, crate::tile_type::TileIndex(tile)),
+            |t| t.zone,
+        )
     }
     /// `TreesOnTileCanSpread`; the zone is read only in the tropic climate.
     fn can_spread(&self, tile: u32, s: &LoopSettings) -> bool {
@@ -657,7 +666,7 @@ impl Trees<'_> {
         let k = self
             .map
             .and_then(|map| {
-                crate::tile_map::get_tile_z(map, tile, s.size_x, map.count() / s.size_x)
+                crate::tile_map::get_tile_z(map, TileIndex(tile), s.size_x, map.count() / s.size_x)
             })
             .unwrap_or_else(|| (self.s.tile_z)(tile))
             .wrapping_sub(i32::from(crate::snow_line::get(self.s)))

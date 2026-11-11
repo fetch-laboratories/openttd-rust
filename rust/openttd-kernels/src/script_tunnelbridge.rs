@@ -142,7 +142,8 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
         return (s.command.shared.other_tunnel_end)(tile);
     }
     let (x, y) = w.size();
-    let (start_tileh, start_z) = w.asserted(|m| crate::tile_map::get_tile_slope_z(m, tile, x, y));
+    let (start_tileh, start_z) =
+        w.asserted(|m| crate::tile_map::get_tile_slope_z(m, TileIndex(tile), x, y));
     let direction = crate::slope_func::get_inclined_slope_direction_raw(start_tileh);
     if direction == crate::direction_type::INVALID_DIAGDIR {
         return crate::tile_type::INVALID_TILE;
@@ -156,7 +157,8 @@ pub extern "C" fn openttd_rust_script_tunnel_other_end(s: &Services, mut tile: u
         if !valid(&w, tile) {
             return crate::tile_type::INVALID_TILE;
         }
-        let (_, end_z) = w.asserted(|m| crate::tile_map::get_tile_slope_z(m, tile, x, y));
+        let (_, end_z) =
+            w.asserted(|m| crate::tile_map::get_tile_slope_z(m, TileIndex(tile), x, y));
         if start_z == end_z {
             return tile;
         }

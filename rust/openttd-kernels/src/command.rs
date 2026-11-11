@@ -278,7 +278,7 @@ fn tile_rejected(shared: &crate::services::Services, tile: u32, all_tiles: bool)
     let world = crate::map_func::World::new(shared);
     let size = world.types.count();
     tile >= size
-        || (!crate::tile_map::is_valid_tile(&world.types, tile, size).expect("live map")
+        || (!crate::tile_map::is_valid_tile(&world.types, TileIndex(tile), size).expect("live map")
             && !all_tiles)
 }
 

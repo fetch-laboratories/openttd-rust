@@ -161,7 +161,7 @@ impl Services {
     fn tile_valid(&self, tile: TileIndex) -> bool {
         // Command/lifecycle execution holds the mutex and cannot reset or yield the map.
         let map = crate::map_func::World::new(self.shared());
-        crate::tile_map::is_valid_tile(&map.types, tile.0, map.types.count()).unwrap()
+        crate::tile_map::is_valid_tile(&map.types, tile, map.types.count()).unwrap()
     }
     fn goal_dirty(&self, company: CompanyID) {
         if company == CompanyID::INVALID {

@@ -316,13 +316,13 @@ impl Context<'_> {
                         .owned_land)(tile)
                 })
         {
-            return self.world.tile_max_pixel_z(tile);
+            return self.world.tile_max_pixel_z(TileIndex(tile));
         }
         let (slope, z) = if kind == MP_VOID {
             self.world
                 .tile_pixel_slope_outside_map((x >> 4).cast_signed(), (y >> 4).cast_signed())
         } else {
-            self.world.tile_pixel_slope(tile)
+            self.world.tile_pixel_slope(TileIndex(tile))
         };
         let mut p = FoundationSlope {
             z,
@@ -458,7 +458,7 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
 ) -> FoundationSlope {
     let s = unsafe { &*s };
     let (slope, z, foundation) = s.with_context(|c| {
-        let (slope, z) = c.world.tile_slope_z(tile);
+        let (slope, z) = c.world.tile_slope_z(TileIndex(tile));
         (slope, z, c.foundation(tile, slope))
     });
     let a = (s.shared().apply_foundation)(Foundation(foundation), Slope(slope));
@@ -668,7 +668,7 @@ impl Context<'_> {
                 if mode == TRANSPORT_WATER
                     && self.world.is_plain_rail(tile)
                     && self.world.rail_ground(tile) == RAIL_GROUND_HALF_TILE_WATER
-                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(tile))
+                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(TileIndex(tile)))
                 {
                     w::hit(w::MOVE_HALF_WATER);
                     bits = match self.world.tracks(tile) {
@@ -908,7 +908,7 @@ impl Context<'_> {
                 }
                 bits = match self.world.water_tile_type(tile) {
                     0 => {
-                        if self.world.tile_flat(tile) {
+                        if self.world.tile_flat(TileIndex(tile)) {
                             TRACK_BIT_ALL
                         } else {
                             TRACK_BIT_NONE
@@ -933,7 +933,7 @@ impl Context<'_> {
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
-                        ][usize::from(self.world.tile_slope(tile) & 15)]
+                        ][usize::from(self.world.tile_slope(TileIndex(tile)) & 15)]
                     }
                     2 => {
                         w::hit(w::MOVE_LOCK);

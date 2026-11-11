@@ -9,8 +9,13 @@ pub(crate) fn make_void(
     t: TileIndex,
     freeform_edges: impl FnOnce() -> bool,
 ) {
-    crate::tile_map::set_tile_type(w, t.0, crate::tile_type::MP_VOID, freeform_edges);
-    crate::tile_map::set_tile_height(w, t.0, 0);
+    crate::tile_map::set_tile_type(
+        w,
+        TileIndex(t.0),
+        crate::tile_type::TileType::MP_VOID,
+        freeform_edges,
+    );
+    crate::tile_map::set_tile_height(w, t, 0);
     let m = &w.types;
     let _ = (
         m.set_m1(t, 0),

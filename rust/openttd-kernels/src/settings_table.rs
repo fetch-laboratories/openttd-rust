@@ -20,7 +20,6 @@ use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, CommandCost, EnvironmentServices};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_map::{set_tile_height, set_tile_type, tile_height_in};
-use crate::tile_type::MP_WATER;
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
 use crate::timer_game_calendar::{
@@ -414,13 +413,13 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
     let max_x = map.max_x();
     let max_y = Map::max_y(w.size_y());
     let water = |t: u32| w.kind(TileIndex(t)) == TileType::MP_WATER;
-    let edges_land = (0..max_x).any(|i| tile_height_in(&w, map.tile_xy(i, 1).0) != 0)
+    let edges_land = (0..max_x).any(|i| tile_height_in(&w, map.tile_xy(i, 1)) != 0)
         || (1..max_x).any(|i| {
-            !water(map.tile_xy(i, max_y - 1).0) || tile_height_in(&w, map.tile_xy(1, max_y).0) != 0
+            !water(map.tile_xy(i, max_y - 1).0) || tile_height_in(&w, map.tile_xy(1, max_y)) != 0
         })
-        || (0..max_y).any(|i| tile_height_in(&w, map.tile_xy(1, i).0) != 0)
+        || (0..max_y).any(|i| tile_height_in(&w, map.tile_xy(1, i)) != 0)
         || (1..max_y).any(|i| {
-            !water(map.tile_xy(max_x - 1, i).0) || tile_height_in(&w, map.tile_xy(max_x, i).0) != 0
+            !water(map.tile_xy(max_x - 1, i).0) || tile_height_in(&w, map.tile_xy(max_x, i)) != 0
         });
     if edges_land {
         hit(witness::SETTINGS_EDGES_NOT_WATER);
@@ -447,12 +446,22 @@ fn update_freeform_edges(s: &Services, new_value: i32) {
     } else {
         hit(witness::SETTINGS_EDGES_WATER);
         for i in 0..map.max_x() {
-            set_tile_height(&w, map.tile_xy(i, 0).0, 0);
-            set_tile_type(&w, map.tile_xy(i, 0).0, MP_WATER, freeform);
+            set_tile_height(&w, map.tile_xy(i, 0), 0);
+            set_tile_type(
+                &w,
+                TileIndex(map.tile_xy(i, 0).0),
+                crate::tile_type::TileType::MP_WATER,
+                freeform,
+            );
         }
         for i in 0..Map::max_y(w.size_y()) {
-            set_tile_height(&w, map.tile_xy(0, i).0, 0);
-            set_tile_type(&w, map.tile_xy(0, i).0, MP_WATER, freeform);
+            set_tile_height(&w, map.tile_xy(0, i), 0);
+            set_tile_type(
+                &w,
+                TileIndex(map.tile_xy(0, i).0),
+                crate::tile_type::TileType::MP_WATER,
+                freeform,
+            );
         }
     }
     (s.company.shared.screen_dirty)();
@@ -480,8 +489,7 @@ fn check_max_height_level(s: &Services, new_value: i32) -> bool {
     let w = World::new(s.shared);
     // `(int32_t)TileHeight(t)` of a byte height.
     #[allow(clippy::cast_possible_wrap)]
-    let too_high =
-        Map::iterate(w.types.count()).any(|t| tile_height_in(&w, t.0) as i32 > new_value);
+    let too_high = Map::iterate(w.types.count()).any(|t| tile_height_in(&w, t) as i32 > new_value);
     if too_high {
         hit(witness::SETTINGS_HEIGHT_REFUSED);
         return refuse(s, s.too_high_mountain);

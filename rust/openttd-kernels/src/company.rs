@@ -380,7 +380,7 @@ pub(crate) fn check_tile_ownership(
     out: crate::services::Cost<'_>,
     tile: crate::tile_type::TileIndex,
 ) {
-    let owner = crate::company_type::CompanyID(crate::map_func::World::new(s.shared).owner(tile.0));
+    let owner = crate::company_type::CompanyID(crate::map_func::World::new(s.shared).owner(tile));
     check_ownership(s, out, owner, tile);
 }
 
@@ -1353,7 +1353,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             let railway = world.kind(TileIndex(tile)) == TileType::MP_RAILWAY;
             let crossing = !railway && world.level_crossing_tile(tile);
             let owner = if railway || crossing {
-                world.owner(tile)
+                world.owner(TileIndex(tile))
             } else {
                 0
             };

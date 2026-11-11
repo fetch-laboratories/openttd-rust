@@ -26,7 +26,6 @@ use crate::raw_field::read_field;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::INVALID_TILE;
 use crate::tile_type::TileIndex;
-use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
     trackdir_bits_to_track_bits as tracks,
@@ -308,7 +307,11 @@ fn pbs(step: Search) -> Pbs {
 }
 fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
     let dir = g.dir(id, td);
-    if is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE) {
+    if is_tile_type(
+        g.shared(),
+        TileIndex(tile),
+        crate::tile_type::TileType::MP_TUNNELBRIDGE,
+    ) {
         if crate::map_func::World::new(g.shared()).tunnel_bridge_dir(tile) == dir ^ 2 {
             let end = (g.leaves.other_end)(g.context, id, tile) as u32;
             if g.tunnel_free(id, tile, end) {
@@ -351,7 +354,11 @@ fn free(g: &Game, id: Handle) {
     let mut tile = v_tile;
     let mut td = g.td(id);
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
-        || (is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE)));
+        || (is_tile_type(
+            g.shared(),
+            TileIndex(tile),
+            crate::tile_type::TileType::MP_TUNNELBRIDGE,
+        )));
     let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
         crate::map_func::World::new(g.shared())
             .get_station_index(crate::tile_type::TileIndex(tile))
@@ -389,7 +396,11 @@ fn free(g: &Game, id: Handle) {
         if td == 0xff {
             break;
         }
-        if is_tile_type(g.shared(), tile, MP_RAILWAY) {
+        if is_tile_type(
+            g.shared(),
+            TileIndex(tile),
+            crate::tile_type::TileType::MP_RAILWAY,
+        ) {
             if ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
                 && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
             {
@@ -449,8 +460,11 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
             }
         }
         let target = ft.is_station
-            || ((is_tile_type(g.shared(), ft.new_tile.0, MP_RAILWAY))
-                && ((g.leaves.is_plain)(g.context, id, ft.new_tile.0) == 0));
+            || ((is_tile_type(
+                g.shared(),
+                TileIndex(ft.new_tile.0),
+                crate::tile_type::TileType::MP_RAILWAY,
+            )) && ((g.leaves.is_plain)(g.context, id, ft.new_tile.0) == 0));
         if target || !single(ft.new_td_bits) {
             if g.has_reserved(
                 ft.new_tile.0,
@@ -963,8 +977,11 @@ fn check_next(g: &Game, id: Handle) {
         return;
     }
     let td = g.td(id);
-    if (is_tile_type(g.shared(), tile, MP_RAILWAY))
-        && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
+    if (is_tile_type(
+        g.shared(),
+        TileIndex(tile),
+        crate::tile_type::TileType::MP_RAILWAY,
+    )) && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
         && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
         && ((g.leaves.green)(g.context, id, tile, td) == 0)
     {

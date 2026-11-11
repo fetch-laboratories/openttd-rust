@@ -170,7 +170,7 @@ impl World<'_> {
         (self.a.water_type)(t).0
     }
     fn flat(&self, t: u32) -> bool {
-        crate::map_func::World::new(self.s).tile_slope(t) == 0
+        crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(t)) == 0
     }
     fn canal(&self, t: u32) -> bool {
         self.kind(t) == 0 && self.class(t) == 1
@@ -454,8 +454,9 @@ impl World<'_> {
         (self.c.amount)(out, crate::company::price(64));
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
-        let dir =
-            get_inclined_slope_direction_raw(crate::map_func::World::new(self.s).tile_slope(tile));
+        let dir = get_inclined_slope_direction_raw(
+            crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile)),
+        );
         if dir == INVALID_DIAGDIR {
             self.error(out, self.a.strings.sloped_wrong);
             return;
@@ -551,7 +552,8 @@ impl World<'_> {
             crate::tilearea::TileIterator::create(self.map, size, end, start, diagonal, check);
         while iter.tile() != INVALID_TILE {
             let tile = iter.tile();
-            let slope = crate::map_func::World::new(self.s).tile_slope(tile);
+            let slope =
+                crate::map_func::World::new(self.s).tile_slope(crate::tile_type::TileIndex(tile));
             if slope != 0 && (wc.0 != 2 || !is_inclined_slope_raw(slope)) {
                 self.error(out, self.a.strings.flat);
                 return;
@@ -586,7 +588,7 @@ impl World<'_> {
                         }
                         0 if crate::tile_map::tile_height_in(
                             &crate::map_func::World::new(self.s),
-                            tile,
+                            crate::tile_type::TileIndex(tile),
                         ) == 0 =>
                         {
                             (self.water.make_sea)(tile);
@@ -653,7 +655,8 @@ impl World<'_> {
                 self.expense(out, price);
             }
             1 => {
-                let slope = crate::map_func::World::new(self.s).tile_slope(tile);
+                let slope = crate::map_func::World::new(self.s)
+                    .tile_slope(crate::tile_type::TileIndex(tile));
                 self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;

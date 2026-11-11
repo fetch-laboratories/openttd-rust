@@ -845,7 +845,7 @@ pub(crate) unsafe fn terraform_tile_industry(
         //  - TileMaxZ must not be changed.
         //  - Allow autoslope by default.
         //  - Disallow autoslope if callback succeeds and returns non-zero.
-        let tileh_old = Slope(crate::map_func::World::new(shared).tile_slope(tile.0));
+        let tileh_old = Slope(crate::map_func::World::new(shared).tile_slope(tile));
         // TileMaxZ must not be changed. Slopes must not be steep.
         if !is_steep_slope(tileh_old)
             && !is_steep_slope(tileh_new)

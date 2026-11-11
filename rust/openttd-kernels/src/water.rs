@@ -100,7 +100,7 @@ pub(crate) unsafe fn restore(
     let map = crate::map_func::World::new(s);
     let mut class = map.water_class(tile);
     /* Autoslope might turn an originally canal or river tile into land */
-    let (slope, z) = map.tile_slope_z(tile);
+    let (slope, z) = map.tile_slope_z(TileIndex(tile));
     if slope != 0 {
         if class == 1 {
             /* If we clear the canal, we have to remove it from the infrastructure count as well. */
@@ -265,11 +265,17 @@ impl<'a> World<'a> {
                     .types
                     .asserted(self.s, |m| crate::water_map::is_coast(m, tile))
                 {
-                    return if is_slope_with_one_corner_raised_raw(
-                        self.types.asserted(self.s, |m| {
-                            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
-                        }),
-                    ) {
+                    return if is_slope_with_one_corner_raised_raw(self.types.asserted(
+                        self.s,
+                        |m| {
+                            crate::tile_map::get_tile_slope(
+                                m,
+                                TileIndex(tile),
+                                self.size_x,
+                                self.size_y,
+                            )
+                        },
+                    )) {
                         1
                     } else {
                         3
@@ -293,7 +299,12 @@ impl<'a> World<'a> {
                     == 13
                 {
                     if is_slope_with_one_corner_raised_raw(self.types.asserted(self.s, |m| {
-                        crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+                        crate::tile_map::get_tile_slope(
+                            m,
+                            TileIndex(tile),
+                            self.size_x,
+                            self.size_y,
+                        )
                     })) {
                         1
                     } else {
@@ -344,7 +355,7 @@ impl<'a> World<'a> {
             return false;
         }
         let slope = self.types.asserted(self.s, |m| {
-            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+            crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised_raw(slope) {
@@ -502,7 +513,7 @@ impl<'a> World<'a> {
         let company = (self.s.current_company)();
         (self.co().finance.set_current_company)(17);
         let slope = self.types.asserted(self.s, |m| {
-            crate::tile_map::get_tile_slope(m, tile, self.size_x, self.size_y)
+            crate::tile_map::get_tile_slope(m, TileIndex(tile), self.size_x, self.size_y)
         });
         let flooded = if slope != 0 {
             match self.tile_type(tile) {

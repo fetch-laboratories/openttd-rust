@@ -504,8 +504,10 @@ impl<'a> World<'a> {
                         &mut ts,
                         ret,
                         t,
-                        crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), t)
-                            as i32
+                        crate::tile_map::tile_height_in(
+                            &crate::map_func::World::new(self.s),
+                            TileIndex(t),
+                        ) as i32
                             + direction,
                     );
                     if ret.ok() {
@@ -728,7 +730,8 @@ impl<'a> World<'a> {
             out.error(INVALID_STRING_ID);
             return (0, INVALID_TILE);
         }
-        let old = crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), start);
+        let old =
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), TileIndex(start));
         let h = match mode {
             LM_LEVEL => old,
             LM_RAISE => old.wrapping_add(1),
@@ -763,7 +766,7 @@ impl<'a> World<'a> {
         let mut error = INVALID_TILE;
         let extra = self.area(tile, start, diagonal, |t| {
             let mut current =
-                crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), t);
+                crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), TileIndex(t));
             while current != h {
                 error = self.terraform_do(ret, t, SLOPE_N, current <= h, flags & !F::EXECUTE);
                 if !ret.ok() {
@@ -815,7 +818,8 @@ struct TerraformerState {
 impl TerraformerState {
     fn height(&self, w: &World<'_>, tile: u32) -> i32 {
         self.heights.get(&tile).copied().unwrap_or_else(|| {
-            crate::tile_map::tile_height_in(&crate::map_func::World::new(w.s), tile) as i32
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(w.s), TileIndex(tile))
+                as i32
         })
     }
 }

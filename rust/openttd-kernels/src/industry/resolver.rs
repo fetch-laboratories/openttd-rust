@@ -19,7 +19,7 @@ use crate::newgrf_callbacks::{
 };
 use crate::newgrf_industries::IndustryAvailabilityCallType;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
-use crate::tile_type::{TILE_HEIGHT, TileIndex, TileType};
+use crate::tile_type::{TILE_HEIGHT, TileIndex};
 use crate::timer_game_common::{DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR};
 use crate::town_type::TownID;
 use crate::witness;
@@ -98,7 +98,11 @@ impl ResolverServices {
     }
     /// `IsTileType(tile, MP_INDUSTRY)`.
     fn is_industry_tile(&self, tile: TileIndex) -> bool {
-        crate::tile_map::is_tile_type(self.shared(), tile.0, TileType::MP_INDUSTRY.0)
+        crate::tile_map::is_tile_type(
+            self.shared(),
+            TileIndex(tile.0),
+            crate::tile_type::TileType::MP_INDUSTRY,
+        )
     }
     /// `Industry::TileBelongsToIndustry`, for the industry with this index.
     fn tile_belongs_to_industry(&self, tile: TileIndex, index: IndustryID) -> bool {

@@ -491,7 +491,7 @@ impl<'a> Ctx<'a> {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         let trackbit = 1_u8 << track;
         let strings = &self.s.strings;
         let mut fall_through = false;
@@ -1004,7 +1004,8 @@ impl<'a> Ctx<'a> {
                     };
                     (self.command.infrastructure_dirty)(owner);
                     if present == 0 {
-                        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
+                        let tileh =
+                            crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
                         if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                             && is_slope_with_one_corner_raised_raw(tileh)
                         {
@@ -1177,7 +1178,7 @@ impl<'a> Ctx<'a> {
         if !crate::rail::val_param_rail_type(self.shared, railtype) || dir >= 4 {
             return cost.error(INVALID_STRING_ID);
         }
-        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         cost.set(0);
         if tileh != SLOPE_FLAT {
             const INCLINED: [u8; 4] = [12, 6, 3, 9];
@@ -2264,7 +2265,7 @@ impl<'a> Ctx<'a> {
         {
             RAIL_TILE_SIGNALS | RAIL_TILE_NORMAL => {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
-                let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
+                let tileh = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
                 let water_ground = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                     && is_slope_with_one_corner_raised_raw(tileh);
                 let mut tracks = self.tracks(tile);
@@ -2417,7 +2418,7 @@ impl<'a> Ctx<'a> {
 
     /// `TerraformTile_Track`.
     fn terraform(&self, cost: Cost<'_>, flags: u16, tile: u32, z_new: i32, tileh_new: u8) {
-        let tileh_old = crate::map_func::World::new(self.shared).tile_slope(tile);
+        let tileh_old = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
         let z_old = (self.shared.tile_z)(tile);
         if (self.shared.is_plain_rail)(tile) {
             let bits = self.tracks(tile);
