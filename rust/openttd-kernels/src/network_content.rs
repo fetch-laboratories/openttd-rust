@@ -176,14 +176,18 @@ fn socket(s: &Services) -> *mut packet::NetworkSocketHandler {
     (s.tcp.base_socket)(s.client)
 }
 
-fn get_content(cid: ContentID) -> *mut ContentInfo {
-    with(|c| {
-        c.infos
+impl Client {
+    fn get_content(&self, cid: ContentID) -> *mut ContentInfo {
+        self.infos
             .iter()
             .copied()
             .find(|&ci| info(ci).id() == cid)
             .unwrap_or(std::ptr::null_mut())
-    })
+    }
+}
+
+fn get_content(cid: ContentID) -> *mut ContentInfo {
+    with(|c| c.get_content(cid))
 }
 
 fn notify(each: impl Fn(*mut ContentCallback)) {
@@ -1040,10 +1044,13 @@ fn select_where(s: &Services, upgrade_only: bool) {
 
 fn reverse_lookup_dependency(parents: &mut Vec<*mut ContentInfo>, child: *const ContentInfo) {
     let id = info(child).id();
-    let ids = with(|c| c.reverse.get(&id).cloned().unwrap_or_default());
-    for parent in ids.into_iter().rev() {
-        parents.push(get_content(parent));
-    }
+    with(|c| {
+        if let Some(ids) = c.reverse.get(&id) {
+            for &parent in ids.iter().rev() {
+                parents.push(c.get_content(parent));
+            }
+        }
+    });
 }
 
 fn reverse_lookup_tree_dependency(child: *mut ContentInfo) -> Vec<*mut ContentInfo> {
