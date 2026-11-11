@@ -18,6 +18,8 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
@@ -477,7 +479,7 @@ impl<'a> Ctx<'a> {
                     shell: town,
                 },
                 crate::town::RatingChange {
-                    company: crate::company_type::CompanyID(company),
+                    company: CompanyID(company),
                     add: decrease,
                     maximum: RATING_ROAD_MINIMUM,
                     flags: crate::command_type::DoCommandFlags(flags),
@@ -691,6 +693,7 @@ impl<'a> Ctx<'a> {
                         )
                         .0,
                     );
+                    /* A full diagonal road tile has two road bits. */
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
                     let track = crate::ground::crossing_rail_track(
                         tile,
@@ -718,16 +721,23 @@ impl<'a> Ctx<'a> {
                         if reserved {
                             (self.rail.set_track_reservation)(tile, tracks);
                         }
+                        /* Update rail count for level crossings. The plain track should still be accounted
+                         * for, so only subtract the difference to the level crossing cost. */
                         let owner = (self.shared.tile_owner)(tile);
                         if (self.shared.company_valid)(owner) {
-                            (self.r.rail_infrastructure)(
-                                owner,
-                                crate::services::RailType(
-                                    crate::map_func::World::new(self.shared).rail_type(tile),
-                                )
-                                .0,
-                                (LEVELCROSSING_TRACKBIT_FACTOR - 1).wrapping_neg(),
-                            );
+                            unsafe {
+                                CompanyInfrastructure::add_rail(
+                                    CompanyInfrastructure::get(self.shared, CompanyID(owner)),
+                                    crate::rail_type::RailType(
+                                        crate::services::RailType(
+                                            crate::map_func::World::new(self.shared)
+                                                .rail_type(tile),
+                                        )
+                                        .0,
+                                    ),
+                                    (LEVELCROSSING_TRACKBIT_FACTOR - 1).wrapping_neg(),
+                                );
+                            };
                             (self.commands.infrastructure_dirty)(owner);
                         }
                     } else {
@@ -999,17 +1009,25 @@ impl<'a> Ctx<'a> {
                         if flags & DoCommandFlag::EXECUTE != 0 {
                             let track = axis ^ 1;
                             (self.r.layout_changed)(tile, track);
+                            /* Update company infrastructure counts. A level crossing has two road bits. */
                             self.infrastructure(rt, company, 2);
+                            /* Update rail count for level crossings. The plain track is already
+                             * counted, so only add the difference to the level crossing cost. */
                             let owner = (self.shared.tile_owner)(tile);
                             if (self.shared.company_valid)(owner) {
-                                (self.r.rail_infrastructure)(
-                                    owner,
-                                    crate::services::RailType(
-                                        crate::map_func::World::new(self.shared).rail_type(tile),
-                                    )
-                                    .0,
-                                    LEVELCROSSING_TRACKBIT_FACTOR - 1,
-                                );
+                                unsafe {
+                                    CompanyInfrastructure::add_rail(
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner)),
+                                        crate::rail_type::RailType(
+                                            crate::services::RailType(
+                                                crate::map_func::World::new(self.shared)
+                                                    .rail_type(tile),
+                                            )
+                                            .0,
+                                        ),
+                                        LEVELCROSSING_TRACKBIT_FACTOR - 1,
+                                    );
+                                };
                                 (self.commands.infrastructure_dirty)(owner);
                             }
                             let reserved = crate::pbs::Pbs::acquire(self.shared).reserved(tile)
@@ -1542,13 +1560,20 @@ impl<'a> Ctx<'a> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.shared.tile_owner)(tile);
             if (self.shared.company_valid)(owner) {
+                /* A road depot has two road bits. */
                 let mut rt = self.rt(tile, 0);
                 if rt == INVALID {
                     rt = self.rt(tile, 1);
                 }
                 // The original skips INVALID_ROADTYPE only for the public update helper;
                 // a depot is guaranteed to have one valid type here.
-                (self.r.road_infrastructure)(owner, rt, ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg());
+                unsafe {
+                    CompanyInfrastructure::add_road(
+                        CompanyInfrastructure::get(self.shared, CompanyID(owner)),
+                        crate::road_type::RoadType(rt),
+                        ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg(),
+                    );
+                };
                 (self.commands.infrastructure_dirty)(owner);
             }
             (self.r.delete_depot)(tile);
@@ -1631,22 +1656,47 @@ impl<'a> Ctx<'a> {
         }
     }
     fn change_owner(&self, ret: Cost<'_>, scratch: Cost<'_>, tile: u32, old: u8, new: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut new_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::ROAD_COMMANDS_OWNER);
         if (self.shared.is_road_depot)(tile) {
             if (self.shared.tile_owner)(tile) == old {
                 if new == INVALID_OWNER {
                     self.clear(ret, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT, tile);
                 } else {
+                    /* A road depot has two road bits. No need to dirty windows here, we'll redraw the whole screen anyway. */
                     let mut rt = self.rt(tile, 0);
                     if rt == INVALID {
                         rt = self.rt(tile, 1);
                     }
-                    (self.r.road_infrastructure)(
-                        old,
-                        rt,
-                        ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg(),
-                    );
-                    (self.r.road_infrastructure)(new, rt, ROAD_DEPOT_TRACKBIT_FACTOR);
+                    unsafe {
+                        CompanyInfrastructure::add_road(
+                            {
+                                if old_infrastructure_ptr.is_null() {
+                                    old_infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(old));
+                                }
+                                old_infrastructure_ptr
+                            },
+                            crate::road_type::RoadType(rt),
+                            ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg(),
+                        );
+                    };
+                    unsafe {
+                        CompanyInfrastructure::add_road(
+                            {
+                                if new_infrastructure_ptr.is_null() {
+                                    new_infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(new));
+                                }
+                                new_infrastructure_ptr
+                            },
+                            crate::road_type::RoadType(rt),
+                            ROAD_DEPOT_TRACKBIT_FACTOR,
+                        );
+                    };
                     (self.shared.set_tile_owner)(tile, new);
                     for rtt in [0, 1] {
                         if self.owner(tile, rtt) == old {
@@ -1661,15 +1711,40 @@ impl<'a> Ctx<'a> {
             if self.owner(tile, rtt) == old {
                 let rt = self.rt(tile, rtt);
                 if rt != INVALID {
+                    /* A level crossing has two road bits. No need to dirty windows here, we'll redraw the whole screen anyway. */
                     let num = if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
                     {
                         2
                     } else {
                         self.bits(tile, rtt).count_ones()
                     };
-                    (self.r.road_infrastructure)(old, rt, num.wrapping_neg());
+                    unsafe {
+                        CompanyInfrastructure::add_road(
+                            {
+                                if old_infrastructure_ptr.is_null() {
+                                    old_infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(old));
+                                }
+                                old_infrastructure_ptr
+                            },
+                            crate::road_type::RoadType(rt),
+                            num.wrapping_neg(),
+                        );
+                    };
                     if new != INVALID_OWNER {
-                        (self.r.road_infrastructure)(new, rt, num);
+                        unsafe {
+                            CompanyInfrastructure::add_road(
+                                {
+                                    if new_infrastructure_ptr.is_null() {
+                                        new_infrastructure_ptr =
+                                            CompanyInfrastructure::get(self.shared, CompanyID(new));
+                                    }
+                                    new_infrastructure_ptr
+                                },
+                                crate::road_type::RoadType(rt),
+                                num,
+                            );
+                        };
                     }
                 }
                 (self.shared.set_road_owner)(
@@ -1715,12 +1790,37 @@ impl<'a> Ctx<'a> {
                     },
                 );
             } else {
+                /* Update infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
                 let rt = crate::services::RailType(
                     crate::map_func::World::new(self.shared).rail_type(tile),
                 )
                 .0;
-                (self.r.rail_infrastructure)(old, rt, LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg());
-                (self.r.rail_infrastructure)(new, rt, LEVELCROSSING_TRACKBIT_FACTOR);
+                unsafe {
+                    CompanyInfrastructure::add_rail(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.shared, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        crate::rail_type::RailType(rt),
+                        LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
+                    );
+                };
+                unsafe {
+                    CompanyInfrastructure::add_rail(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.shared, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        crate::rail_type::RailType(rt),
+                        LEVELCROSSING_TRACKBIT_FACTOR,
+                    );
+                };
                 (self.shared.set_tile_owner)(tile, new);
             }
         }
@@ -1802,8 +1902,21 @@ impl<'a> Ctx<'a> {
             );
             self.infrastructure(to, company, num as i32);
         } else {
-            (self.r.road_infrastructure)(owner, from, num.wrapping_neg());
-            (self.r.road_infrastructure)(owner, to, num);
+            let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
+            unsafe {
+                CompanyInfrastructure::add_road(
+                    infrastructure,
+                    crate::road_type::RoadType(from),
+                    num.wrapping_neg(),
+                );
+            };
+            unsafe {
+                CompanyInfrastructure::add_road(
+                    infrastructure,
+                    crate::road_type::RoadType(to),
+                    num,
+                );
+            };
             (self.commands.infrastructure_dirty)(owner);
         }
     }
@@ -2337,7 +2450,13 @@ pub(crate) unsafe fn update_company_road_infrastructure(
     if rt == INVALID || !(shared.company_valid)(owner) {
         return;
     }
-    (rail.road_infrastructure)(owner, rt, count as u32);
+    unsafe {
+        CompanyInfrastructure::add_road(
+            CompanyInfrastructure::get(shared, CompanyID(owner)),
+            crate::road_type::RoadType(rt),
+            count as u32,
+        );
+    };
     let commands = unsafe { &*rail.command };
     (commands.infrastructure_dirty)(owner);
 }

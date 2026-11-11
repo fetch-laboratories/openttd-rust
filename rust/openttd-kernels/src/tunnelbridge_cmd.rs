@@ -20,6 +20,8 @@
 use crate::bridge::{MAX_BRIDGES, calc_bridge_len_cost_factor, get_bridge_foundation};
 use crate::command_type::DoCommandFlag;
 use crate::company::price;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::direction_func::{axis_to_diag_dir_raw, diag_dir_to_axis_raw, reverse_diag_dir_raw};
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR};
@@ -145,7 +147,6 @@ struct World<'a> {
     road: &'a crate::road_cmd::RoadCommandServices,
     town: &'a crate::town::Leaves,
     authority: &'a crate::town::AuthorityServices,
-    stations: &'a crate::station_cmd::CommandServicesTable,
     map: Map,
 }
 impl<'a> World<'a> {
@@ -167,7 +168,6 @@ impl<'a> World<'a> {
                 road,
                 town: &*road.town,
                 authority: &*road.authority,
-                stations: &*(s.station_commands)(),
                 map: s.map(),
             }
         }
@@ -232,7 +232,7 @@ impl<'a> World<'a> {
                     shell: town,
                 },
                 crate::town::RatingChange {
-                    company: crate::company_type::CompanyID((self.s.current_company)()),
+                    company: CompanyID((self.s.current_company)()),
                     add: delta,
                     maximum: minimum,
                     flags: crate::command_type::DoCommandFlags(flags),
@@ -626,11 +626,22 @@ impl<'a> World<'a> {
                 crate::movement::native_assert(self.s, ok);
             });
             let valid_company = (self.s.company_valid)(company);
+            let infrastructure = if valid_company {
+                CompanyInfrastructure::get(self.s, CompanyID(company))
+            } else {
+                std::ptr::null_mut()
+            };
             let pieces = length.wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
             match transport {
                 RAIL => {
                     if new_owner && valid_company {
-                        (self.r.rail_infrastructure)(company, railtype, pieces);
+                        unsafe {
+                            CompanyInfrastructure::add_rail(
+                                infrastructure,
+                                crate::rail_type::RailType(railtype),
+                                pieces,
+                            );
+                        };
                     }
                     (self.a.make_rail_bridge)(
                         start,
@@ -653,6 +664,7 @@ impl<'a> World<'a> {
                 }
                 ROAD => {
                     if new_owner {
+                        /* Also give unowned present roadtypes to new owner */
                         if hasroad
                             && crate::map_func::World::new(self.s).road_owner(start, false)
                                 == OWNER_NONE
@@ -667,11 +679,26 @@ impl<'a> World<'a> {
                         }
                     }
                     if valid_company {
+                        /* Add all new road types to the company infrastructure counter. */
                         if !hasroad && road != INVALID_ROADTYPE {
-                            (self.r.road_infrastructure)(company, road, pieces.wrapping_mul(2));
+                            /* A full diagonal road tile has two road bits. */
+                            unsafe {
+                                CompanyInfrastructure::add_road(
+                                    infrastructure,
+                                    crate::road_type::RoadType(road),
+                                    pieces.wrapping_mul(2),
+                                );
+                            };
                         }
                         if !hastram && tram != INVALID_ROADTYPE {
-                            (self.r.road_infrastructure)(company, tram, pieces.wrapping_mul(2));
+                            /* A full diagonal road tile has two road bits. */
+                            unsafe {
+                                CompanyInfrastructure::add_road(
+                                    infrastructure,
+                                    crate::road_type::RoadType(tram),
+                                    pieces.wrapping_mul(2),
+                                );
+                            };
                         }
                     }
                     let owner_road = if hasroad {
@@ -709,7 +736,9 @@ impl<'a> World<'a> {
                 }
                 WATER => {
                     if new_owner && valid_company {
-                        (self.stations.water_infrastructure)(company, pieces);
+                        unsafe {
+                            CompanyInfrastructure::add_water(infrastructure, pieces);
+                        };
                     }
                     (self.a.make_aqueduct)(start, owner, DiagDirection(dir));
                     (self.a.make_aqueduct)(
@@ -749,9 +778,7 @@ impl<'a> World<'a> {
         let companies = unsafe { &*self.a.company };
         if flags & DoCommandFlag::QUERY_COST == 0
             || (valid_company
-                && (companies.identity.is_ai)((companies.identity.company)(
-                    crate::company_type::CompanyID(company),
-                ))
+                && (companies.identity.is_ai)((companies.identity.company)(CompanyID(company)))
                 && company != (companies.local_company)())
         {
             if flags & DoCommandFlag::QUERY_COST != 0 {
@@ -927,10 +954,21 @@ impl<'a> World<'a> {
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             let valid = (self.s.company_valid)(company);
+            let infrastructure = if valid {
+                CompanyInfrastructure::get(self.s, CompanyID(company))
+            } else {
+                std::ptr::null_mut()
+            };
             let pieces = (tiles.wrapping_add(2) as u32).wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
             if transport == RAIL {
                 if valid {
-                    (self.r.rail_infrastructure)(company, railtype, pieces);
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(railtype),
+                            pieces,
+                        );
+                    };
                 }
                 (self.a.make_rail_tunnel)(
                     start,
@@ -955,7 +993,13 @@ impl<'a> World<'a> {
                 );
             } else {
                 if valid {
-                    (self.r.road_infrastructure)(company, roadtype, pieces.wrapping_mul(2));
+                    unsafe {
+                        CompanyInfrastructure::add_road(
+                            infrastructure,
+                            crate::road_type::RoadType(roadtype),
+                            pieces.wrapping_mul(2),
+                        );
+                    };
                 }
                 let road = if crate::road::road_type_is_road(roadtype) {
                     roadtype
@@ -1096,16 +1140,20 @@ impl<'a> World<'a> {
                 let owner = (self.s.tile_owner)(tile);
                 let train = self.release_reservation(tile, track);
                 if (self.s.company_valid)(owner) {
-                    (self.r.rail_infrastructure)(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.s).rail_type(tile),
-                        )
-                        .0,
-                        length
-                            .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
-                            .wrapping_neg(),
-                    );
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            CompanyInfrastructure::get(self.s, CompanyID(owner)),
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            length
+                                .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
+                                .wrapping_neg(),
+                        );
+                    };
                     (self.cmd.infrastructure_dirty)(owner);
                 }
                 crate::ground::clear_square(tile, self.s);
@@ -1197,16 +1245,20 @@ impl<'a> World<'a> {
             };
             if rail {
                 if (self.s.company_valid)(owner) {
-                    (self.r.rail_infrastructure)(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.s).rail_type(tile),
-                        )
-                        .0,
-                        length
-                            .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
-                            .wrapping_neg(),
-                    );
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            CompanyInfrastructure::get(self.s, CompanyID(owner)),
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.s).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            length
+                                .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
+                                .wrapping_neg(),
+                        );
+                    };
                 }
             } else if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == ROAD {
                 self.update_road_infrastructure(
@@ -1226,12 +1278,14 @@ impl<'a> World<'a> {
                         .wrapping_neg() as i32,
                 );
             } else if (self.s.company_valid)(owner) {
-                (self.stations.water_infrastructure)(
-                    owner,
-                    length
-                        .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
-                        .wrapping_neg(),
-                );
+                unsafe {
+                    CompanyInfrastructure::add_water(
+                        CompanyInfrastructure::get(self.s, CompanyID(owner)),
+                        length
+                            .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
+                            .wrapping_neg(),
+                    );
+                };
             }
             (self.cmd.infrastructure_dirty)(owner);
             crate::ground::clear_square(tile, self.s);
@@ -1298,8 +1352,14 @@ impl<'a> World<'a> {
         train
     }
     fn change_owner(&self, ret: Cost<'_>, tile: u32, old: u8, new: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut new_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::TB_OWNER);
         let end = (self.rail.other_tunnel_bridge_end)(tile);
+        /* Set number of pieces to zero if it's the southern tile as we
+         * don't want to update the infrastructure counts twice. */
         let pieces = if tile < end {
             self.length(tile, end)
                 .wrapping_add(2)
@@ -1310,6 +1370,7 @@ impl<'a> World<'a> {
         let transport = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile);
         if transport == ROAD {
             for rtt in [0, 1] {
+                /* Update all roadtypes, no matter if they are present */
                 let owner = if rtt == 0 {
                     crate::map_func::World::new(self.s).road_owner(tile, false)
                 } else {
@@ -1322,13 +1383,35 @@ impl<'a> World<'a> {
                         (self.s.tram_type)(tile).0
                     };
                     if kind != INVALID_ROADTYPE {
-                        (self.r.road_infrastructure)(
-                            old,
-                            kind,
-                            pieces.wrapping_mul(2).wrapping_neg(),
-                        );
+                        /* Update company infrastructure counts. A full diagonal road tile has two road bits.
+                         * No need to dirty windows here, we'll redraw the whole screen anyway. */
+                        unsafe {
+                            CompanyInfrastructure::add_road(
+                                {
+                                    if old_infrastructure_ptr.is_null() {
+                                        old_infrastructure_ptr =
+                                            CompanyInfrastructure::get(self.s, CompanyID(old));
+                                    }
+                                    old_infrastructure_ptr
+                                },
+                                crate::road_type::RoadType(kind),
+                                pieces.wrapping_mul(2).wrapping_neg(),
+                            );
+                        };
                         if new != INVALID_OWNER {
-                            (self.r.road_infrastructure)(new, kind, pieces.wrapping_mul(2));
+                            unsafe {
+                                CompanyInfrastructure::add_road(
+                                    {
+                                        if new_infrastructure_ptr.is_null() {
+                                            new_infrastructure_ptr =
+                                                CompanyInfrastructure::get(self.s, CompanyID(new));
+                                        }
+                                        new_infrastructure_ptr
+                                    },
+                                    crate::road_type::RoadType(kind),
+                                    pieces.wrapping_mul(2),
+                                );
+                            };
                         }
                     }
                     (self.s.set_road_owner)(
@@ -1346,24 +1429,64 @@ impl<'a> World<'a> {
         if (self.s.tile_owner)(tile) != old {
             return;
         }
+        /* Update company infrastructure counts for rail and water as well.
+         * No need to dirty windows here, we'll redraw the whole screen anyway. */
+        let old_infrastructure = {
+            if old_infrastructure_ptr.is_null() {
+                old_infrastructure_ptr = CompanyInfrastructure::get(self.s, CompanyID(old));
+            }
+            old_infrastructure_ptr
+        };
         if transport == RAIL {
-            (self.r.rail_infrastructure)(
-                old,
-                crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile)).0,
-                pieces.wrapping_neg(),
-            );
-            if new != INVALID_OWNER {
-                (self.r.rail_infrastructure)(
-                    new,
-                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
+            unsafe {
+                CompanyInfrastructure::add_rail(
+                    old_infrastructure,
+                    crate::rail_type::RailType(
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.s).rail_type(tile),
+                        )
                         .0,
-                    pieces,
+                    ),
+                    pieces.wrapping_neg(),
                 );
+            };
+            if new != INVALID_OWNER {
+                unsafe {
+                    CompanyInfrastructure::add_rail(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        crate::rail_type::RailType(
+                            crate::services::RailType(
+                                crate::map_func::World::new(self.s).rail_type(tile),
+                            )
+                            .0,
+                        ),
+                        pieces,
+                    );
+                };
             }
         } else if transport == WATER {
-            (self.stations.water_infrastructure)(old, pieces.wrapping_neg());
+            unsafe {
+                CompanyInfrastructure::add_water(old_infrastructure, pieces.wrapping_neg());
+            };
             if new != INVALID_OWNER {
-                (self.stations.water_infrastructure)(new, pieces);
+                unsafe {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        pieces,
+                    );
+                };
             }
         }
         if new != INVALID_OWNER {

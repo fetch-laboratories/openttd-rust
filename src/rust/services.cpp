@@ -222,7 +222,6 @@ const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
-		.infrastructure = RustAddWaterInfrastructure,
 		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
 	return services;
@@ -469,6 +468,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.generating_world = OpenTTDGeneratingWorld,
 	},
 	.company_human = OpenTTDCompanyIsValidHuman,
+	.company_infrastructure = RustCompanyInfrastructure,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,

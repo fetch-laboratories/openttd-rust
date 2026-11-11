@@ -1215,9 +1215,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.build_signal = RailBuildSignal,
 		.remove_signal = RailRemoveSignal,
 		.convert_rail = RailConvert,
-		.rail_infrastructure = RustAddRailInfrastructure,
-		.road_infrastructure = RustAddRoadInfrastructure,
-		.signal_infrastructure = RustAddSignalInfrastructure,
 
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },

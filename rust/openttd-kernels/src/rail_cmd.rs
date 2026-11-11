@@ -17,6 +17,8 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::rail_map::is_pbs_signal as is_pbs;
 use crate::track_func::{
     is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
@@ -185,12 +187,6 @@ pub struct RailCommandServices {
     pub remove_signal: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8),
     /// `CMD_CONVERT_RAIL`.
     pub convert_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u32, u8, bool),
-    /// `infrastructure.rail[rt] += delta` with uint32 wrap.
-    pub rail_infrastructure: extern "C" fn(u8, u8, u32),
-    /// `infrastructure.road[rt] += delta` with uint32 wrap.
-    pub road_infrastructure: extern "C" fn(u8, u8, u32),
-    /// `infrastructure.signal += delta` with uint32 wrap.
-    pub signal_infrastructure: extern "C" fn(u8, u32),
     /// `DirtyCompanyInfrastructureWindows`.
     /// `GetTrainForReservation`.
     /// Train fields read at the signal re-reservation branch.
@@ -421,9 +417,6 @@ impl<'a> Ctx<'a> {
     fn add_side(&self, tile: u32, side: u8, owner: u8) {
         self.signals().add_side(tile, side, owner);
     }
-    fn rail_infra(&self, owner: u8, railtype: u8, delta: u32) {
-        (self.s.rail_infrastructure)(owner, railtype, delta);
-    }
     /// `TileX`/`TileY` delta add, as `tile += ToTileIndexDiff(_trackdelta[td])`.
     fn step(&self, tile: u32, trackdir: u8) -> u32 {
         let (x, y) = TRACK_DELTA[usize::from(trackdir)];
@@ -483,6 +476,8 @@ impl<'a> Ctx<'a> {
         track: u8,
         auto_remove_signals: bool,
     ) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         cost.set(0);
         if !crate::rail::val_param_rail_type(self.shared, railtype) || track >= 6 {
             cost.error(INVALID_STRING_ID);
@@ -567,23 +562,45 @@ impl<'a> Ctx<'a> {
                     let bits = self.tracks(tile);
                     (self.rail.set_track_bits)(tile, bits | trackbit);
                     let owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        pieces(bits).wrapping_neg(),
-                    );
+                    /* Subtract old infrastructure count. */
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            {
+                                if infrastructure_ptr.is_null() {
+                                    infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                                }
+                                infrastructure_ptr
+                            },
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            pieces(bits).wrapping_neg(),
+                        );
+                    };
                     let owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        pieces(bits | trackbit),
-                    );
+                    /* Add new infrastructure count. */
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            {
+                                if infrastructure_ptr.is_null() {
+                                    infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                                }
+                                infrastructure_ptr
+                            },
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            pieces(bits | trackbit),
+                        );
+                    };
                     (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
                 }
             }
@@ -686,7 +703,13 @@ impl<'a> Ctx<'a> {
                     // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
                     unsafe { crate::station_cmd::check_possible_docking_raw(stations, tile) };
                 }
-                self.rail_infra(self.current(), railtype, 1);
+                unsafe {
+                    CompanyInfrastructure::add_rail(
+                        CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
+                        crate::rail_type::RailType(railtype),
+                        1,
+                    );
+                };
                 (self.command.infrastructure_dirty)(self.current());
             }
         }
@@ -764,14 +787,32 @@ impl<'a> Ctx<'a> {
                 )
                 .0,
             );
-            self.rail_infra(self.current(), railtype, LEVELCROSSING_TRACKBIT_FACTOR);
+            unsafe {
+                CompanyInfrastructure::add_rail(
+                    CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
+                    crate::rail_type::RailType(railtype),
+                    LEVELCROSSING_TRACKBIT_FACTOR,
+                );
+            };
             (self.command.infrastructure_dirty)(self.current());
             if new_road > 0 && (self.shared.company_valid)(road_owner) {
-                (self.s.road_infrastructure)(road_owner, road.road_type, new_road);
+                unsafe {
+                    CompanyInfrastructure::add_road(
+                        CompanyInfrastructure::get(self.shared, CompanyID(road_owner)),
+                        crate::road_type::RoadType(road.road_type),
+                        new_road,
+                    );
+                };
                 (self.command.infrastructure_dirty)(road_owner);
             }
             if new_tram > 0 && (self.shared.company_valid)(tram_owner) {
-                (self.s.road_infrastructure)(tram_owner, road.tram_type, new_tram);
+                unsafe {
+                    CompanyInfrastructure::add_road(
+                        CompanyInfrastructure::get(self.shared, CompanyID(tram_owner)),
+                        crate::road_type::RoadType(road.tram_type),
+                        new_tram,
+                    );
+                };
                 (self.command.infrastructure_dirty)(tram_owner);
             }
         }
@@ -780,6 +821,8 @@ impl<'a> Ctx<'a> {
 
     /// `CmdRemoveSingleRail`.
     fn remove_single_rail(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, track: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         cost.set(0);
         let mut crossing = false;
         if track >= 6 {
@@ -836,14 +879,24 @@ impl<'a> Ctx<'a> {
                         }
                     }
                     owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
-                    );
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            {
+                                if infrastructure_ptr.is_null() {
+                                    infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                                }
+                                infrastructure_ptr
+                            },
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
+                        );
+                    };
                     (self.command.infrastructure_dirty)(owner);
                     let road = CrossingRoad {
                         bits: (self.shared.crossing_road_bits)(tile).0,
@@ -902,23 +955,45 @@ impl<'a> Ctx<'a> {
                         }
                     }
                     owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        pieces(present).wrapping_neg(),
-                    );
+                    /* Subtract old infrastructure count. */
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            {
+                                if infrastructure_ptr.is_null() {
+                                    infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                                }
+                                infrastructure_ptr
+                            },
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            pieces(present).wrapping_neg(),
+                        );
+                    };
                     present ^= trackbit;
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        pieces(present),
-                    );
+                    /* Add new infrastructure count. */
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            {
+                                if infrastructure_ptr.is_null() {
+                                    infrastructure_ptr =
+                                        CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                                }
+                                infrastructure_ptr
+                            },
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            pieces(present),
+                        );
+                    };
                     (self.command.infrastructure_dirty)(owner);
                     if present == 0 {
                         let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
@@ -1158,7 +1233,13 @@ impl<'a> Ctx<'a> {
                 let depot = (self.s.new_depot)(tile);
                 (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
                 (self.s.depot_name)(depot);
-                self.rail_infra(self.current(), railtype, 1);
+                unsafe {
+                    CompanyInfrastructure::add_rail(
+                        CompanyInfrastructure::get(self.shared, CompanyID(self.current())),
+                        crate::rail_type::RailType(railtype),
+                        1,
+                    );
+                };
                 (self.command.infrastructure_dirty)(self.current());
             }
             (self.shared.mark_dirty)(tile);
@@ -1187,6 +1268,8 @@ impl<'a> Ctx<'a> {
         mut num_dir_cycle: u8,
         signals_copy: u8,
     ) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         if sigtype > SIGTYPE_LAST || sigvar > SIG_SEMAPHORE {
             return cost.error(INVALID_STRING_ID);
         }
@@ -1250,10 +1333,21 @@ impl<'a> Ctx<'a> {
             (self.rail.set_signal_variant)(tile, track, sigvar);
         }
         let present = self.present_signals(tile);
-        (self.s.signal_infrastructure)(
-            (self.shared.tile_owner)(tile),
-            present.count_ones().wrapping_neg(),
-        );
+        /* Subtract old signal infrastructure count. */
+        unsafe {
+            CompanyInfrastructure::add_signal(
+                {
+                    if infrastructure_ptr.is_null() {
+                        infrastructure_ptr = CompanyInfrastructure::get(
+                            self.shared,
+                            CompanyID((self.shared.tile_owner)(tile)),
+                        );
+                    }
+                    infrastructure_ptr
+                },
+                present.count_ones().wrapping_neg(),
+            );
+        };
         if signals_copy == 0 {
             if !self.has_signal(tile, track) {
                 w::hit(w::RAIL_CMD_SIGNAL_BUILD);
@@ -1309,7 +1403,21 @@ impl<'a> Ctx<'a> {
             (self.rail.set_signal_type)(tile, track, sigtype);
         }
         let present = self.present_signals(tile);
-        (self.s.signal_infrastructure)((self.shared.tile_owner)(tile), present.count_ones());
+        /* Add new signal infrastructure count. */
+        unsafe {
+            CompanyInfrastructure::add_signal(
+                {
+                    if infrastructure_ptr.is_null() {
+                        infrastructure_ptr = CompanyInfrastructure::get(
+                            self.shared,
+                            CompanyID((self.shared.tile_owner)(tile)),
+                        );
+                    }
+                    infrastructure_ptr
+                },
+                present.count_ones(),
+            );
+        };
         (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
         if is_pbs(sigtype) {
             w::hit(w::RAIL_CMD_SIGNAL_PBS_STATE);
@@ -1642,6 +1750,8 @@ impl<'a> Ctx<'a> {
 
     /// `CmdRemoveSingleSignal`.
     fn remove_signal(&self, cost: Cost<'_>, flags: u16, tile: u32, track: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
             return cost.error(self.s.strings.no_track);
         }
@@ -1689,14 +1799,37 @@ impl<'a> Ctx<'a> {
                 }
             }
             let present = self.present_signals(tile);
-            (self.s.signal_infrastructure)(
-                (self.shared.tile_owner)(tile),
-                present.count_ones().wrapping_neg(),
-            );
+            unsafe {
+                CompanyInfrastructure::add_signal(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(
+                                self.shared,
+                                CompanyID((self.shared.tile_owner)(tile)),
+                            );
+                        }
+                        infrastructure_ptr
+                    },
+                    present.count_ones().wrapping_neg(),
+                );
+            };
             let on_track = crate::signal_func::signal_on_track(track);
             (self.rail.set_present_signals)(tile, self.present_signals(tile) & !on_track);
             let present = self.present_signals(tile);
-            (self.s.signal_infrastructure)((self.shared.tile_owner)(tile), present.count_ones());
+            unsafe {
+                CompanyInfrastructure::add_signal(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(
+                                self.shared,
+                                CompanyID((self.shared.tile_owner)(tile)),
+                            );
+                        }
+                        infrastructure_ptr
+                    },
+                    present.count_ones(),
+                );
+            };
             (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
             if self.present_signals(tile) == 0 {
                 (self.rail.set_signal_states)(tile, 0);
@@ -1855,7 +1988,9 @@ impl<'a> Ctx<'a> {
                 if !crate::map_func::World::new(self.shared).rail_station(tile)
                     || !crate::map_func::World::new(self.shared).station_blocked(tile)
                 {
+                    /* Update the company infrastructure counters. */
                     let owner = (self.shared.tile_owner)(tile);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
                     let mut num =
                         if crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
                             LEVELCROSSING_TRACKBIT_FACTOR
@@ -1865,8 +2000,20 @@ impl<'a> Ctx<'a> {
                     if (self.shared.is_plain_rail)(tile) {
                         num = pieces(self.tracks(tile));
                     }
-                    self.rail_infra(owner, kind, num.wrapping_neg());
-                    self.rail_infra(owner, totype, num);
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(kind),
+                            num.wrapping_neg(),
+                        );
+                    };
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(totype),
+                            num,
+                        );
+                    };
                     (self.command.infrastructure_dirty)(owner);
                 }
                 (self.rail.set_rail_type)(tile, totype);
@@ -1944,20 +2091,32 @@ impl<'a> Ctx<'a> {
                         affected[affected_len] = v;
                         affected_len += 1;
                     }
+                    /* Update the company infrastructure counters. */
                     let num = self
                         .tunnel_length(tile, endtile)
                         .wrapping_add(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
                     let owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(
-                        owner,
-                        crate::services::RailType(
-                            crate::map_func::World::new(self.shared).rail_type(tile),
-                        )
-                        .0,
-                        num.wrapping_neg(),
-                    );
-                    self.rail_infra(owner, totype, num);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
+                            ),
+                            num.wrapping_neg(),
+                        );
+                    };
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(totype),
+                            num,
+                        );
+                    };
                     (self.command.infrastructure_dirty)(owner);
                     (self.rail.set_rail_type)(tile, totype);
                     (self.rail.set_rail_type)(endtile, totype);
@@ -2049,12 +2208,18 @@ impl<'a> Ctx<'a> {
                     unsafe { (self.shared.free_train_reservation)(v) };
                 }
             }
-            self.rail_infra(
-                owner,
-                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile))
-                    .0,
-                1_u32.wrapping_neg(),
-            );
+            unsafe {
+                CompanyInfrastructure::add_rail(
+                    CompanyInfrastructure::get(self.shared, CompanyID(owner)),
+                    crate::rail_type::RailType(
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
+                    ),
+                    1_u32.wrapping_neg(),
+                );
+            };
             (self.command.infrastructure_dirty)(owner);
             (self.s.delete_depot)(tile);
             crate::ground::clear_square(tile, self.shared);
@@ -2135,6 +2300,7 @@ impl<'a> Ctx<'a> {
             );
         }
         w::hit(w::RAIL_CMD_OWNER_TRANSFER);
+        /* Update company infrastructure counts. No need to dirty windows here, we'll redraw the whole screen anyway. */
         let num = if (self.shared.is_plain_rail)(tile) {
             pieces(self.tracks(tile))
         } else {
@@ -2142,12 +2308,30 @@ impl<'a> Ctx<'a> {
         };
         let railtype =
             crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)).0;
-        self.rail_infra(old_owner, railtype, num.wrapping_neg());
-        self.rail_infra(new_owner, railtype, num);
+        let old_infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(old_owner));
+        unsafe {
+            CompanyInfrastructure::add_rail(
+                old_infrastructure,
+                crate::rail_type::RailType(railtype),
+                num.wrapping_neg(),
+            );
+        };
+        let new_infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(new_owner));
+        unsafe {
+            CompanyInfrastructure::add_rail(
+                new_infrastructure,
+                crate::rail_type::RailType(railtype),
+                num,
+            );
+        };
         if crate::map_func::World::new(self.shared).has_signals(tile) {
             let signals = self.present_signals(tile).count_ones();
-            (self.s.signal_infrastructure)(old_owner, signals.wrapping_neg());
-            (self.s.signal_infrastructure)(new_owner, signals);
+            unsafe {
+                CompanyInfrastructure::add_signal(old_infrastructure, signals.wrapping_neg());
+            };
+            unsafe {
+                CompanyInfrastructure::add_signal(new_infrastructure, signals);
+            };
         }
         (self.shared.set_tile_owner)(tile, new_owner);
     }
@@ -2585,9 +2769,6 @@ crate::abi::layouts! {
         build_signal,
         remove_signal,
         convert_rail,
-        rail_infrastructure,
-        road_infrastructure,
-        signal_infrastructure,
         parking,
         train_position,
         layout_changed,

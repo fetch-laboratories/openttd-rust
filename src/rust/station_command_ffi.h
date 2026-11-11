@@ -117,7 +117,6 @@ struct OpenTTDStationCommandServices {
 	size_t (*tile_flag_count)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_flag_count);
 	uint8_t (*tile_flags)(const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flags);
 	void (*set_tile_flags)(uint32_t, bool, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_flags);
-	void (*station_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_infrastructure);
 	void (*mark_tiles)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(mark_tiles);
 	void (*reset_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_facilities);
 	void (*orders_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(orders_dirty);
@@ -167,7 +166,6 @@ struct OpenTTDStationCommandServices {
 	OrthogonalTileArea *(*airport_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_area);
 	bool (*airport_animated)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_animated);
 
-	void (*airport_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_infrastructure);
 	void (*station_view_invalidate)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_view_invalidate);
 	void (*town_view_dirty)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_view_dirty);
 	OpenTTDAircraftVehicle (*aircraft_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_vehicle);
@@ -186,7 +184,6 @@ struct OpenTTDStationCommandServices {
 	OrthogonalTileArea *(*ship_station_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(ship_station_area);
 	void (*docking_clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(docking_clear);
 	OrthogonalTileArea *(*docking_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(docking_area);
-	void (*water_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_infrastructure);
 	void (*make_dock)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_dock);
 	BaseStation *(*neutral_for_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(neutral_for_tile);
 	void (*associate_industry)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);

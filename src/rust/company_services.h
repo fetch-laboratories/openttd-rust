@@ -63,13 +63,7 @@ inline uint64_t RustCompanyRoadTypes(uint8_t id) noexcept { return Company::Get(
 inline void RustSetCompanyRailTypes(uint8_t id, uint64_t types) noexcept { Company::Get(CompanyID{id})->avail_railtypes = RailTypes{types}; }
 inline void RustSetCompanyRoadTypes(uint8_t id, uint64_t types) noexcept { Company::Get(CompanyID{id})->avail_roadtypes = RoadTypes{types}; }
 inline bool RustIsInteractiveCompany(uint8_t id) noexcept { return IsInteractiveCompany(CompanyID{id}); }
-/* Infrastructure counters wrap as the uint32_t source fields do. */
-inline void RustAddRailInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.rail[rt] += delta; }
-inline void RustAddRoadInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.road[rt] += delta; }
-inline void RustAddSignalInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.signal += delta; }
-inline void RustAddWaterInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.water += delta; }
-inline void RustStationStationInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.station += delta; }
-inline void RustStationAirportInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.airport += delta; }
+inline CompanyInfrastructure *RustCompanyInfrastructure(uint8_t owner) noexcept { return &Company::Get(CompanyID{owner})->infrastructure; }
 inline uint32_t RustCompanyHQ(uint8_t id) noexcept { return Company::Get(CompanyID(id))->location_of_HQ.base(); }
 inline uint8_t RustCompanyRecolour(const Company *company, bool two) noexcept { return company->GetCompanyRecolourOffset(LS_DEFAULT, two); }
 inline uint8_t RustObjectRecolour(uint8_t owner, bool two) noexcept { return RustCompanyRecolour(Company::Get(CompanyID(owner)), two); }

@@ -15,6 +15,8 @@
     clippy::cast_possible_wrap,
     clippy::collapsible_match
 )]
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::services::TileTypeAccess;
 use crate::slope_func::{
     is_inclined_slope_raw, is_slope_with_one_corner_raised_raw,
@@ -81,7 +83,6 @@ impl WaterServices {
 /// Native packed-map/storage leaves for water class restoration.
 #[repr(C)]
 pub struct RestorationServices {
-    pub infrastructure: extern "C" fn(u8, u32),
     pub make_canal: extern "C" fn(u32, u8, u8),
     pub make_river: extern "C" fn(u32, u8),
 }
@@ -96,23 +97,32 @@ pub(crate) unsafe fn restore(
 ) {
     let map = crate::map_func::World::new(s);
     let mut class = map.water_class(tile);
+    /* Autoslope might turn an originally canal or river tile into land */
     let (slope, z) = map.tile_slope_z(tile);
     if slope != 0 {
         if class == 1 {
+            /* If we clear the canal, we have to remove it from the infrastructure count as well. */
             if (s.company_valid)(owner) {
-                (r.infrastructure)(owner, u32::MAX);
+                let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
+                unsafe {
+                    CompanyInfrastructure::add_water(infrastructure, u32::MAX);
+                };
                 // SAFETY: Shared command tables are immutable and live for this call.
                 unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
             }
+            /* Sloped canals are locks and no natural water remains whatever the slope direction */
             class = 3;
         }
+        /* Only river water should be restored on appropriate slopes. Other water would be invalid on slopes */
         if class != 2 || !is_inclined_slope_raw(slope) {
             class = 3;
         }
     }
     if class == 0 && z > 0 {
+        /* Update company infrastructure count. */
         if (s.company_valid)(owner) {
-            (r.infrastructure)(owner, 1);
+            let infrastructure = CompanyInfrastructure::get(s, CompanyID(owner));
+            unsafe { CompanyInfrastructure::add_water(infrastructure, 1) };
             // SAFETY: Shared command tables are immutable and live for this call.
             unsafe { ((*(*(s.station_commands)()).command).infrastructure_dirty)(owner) };
         }
@@ -802,7 +812,6 @@ crate::abi::layouts! {
         news,
     };
     "OpenTTDWaterRestorationServices" ["common"] => RestorationServices {
-        infrastructure,
         make_canal,
         make_river,
     };

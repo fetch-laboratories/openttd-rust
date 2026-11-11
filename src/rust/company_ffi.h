@@ -35,11 +35,6 @@ uint8_t openttd_rust_company_first_playable(const OpenTTDCompanyServices *);
  * int64_t. Layouts are checked by ABI 210-214 and 400-417. */
 struct OpenTTDCompanyRef { CompanyFinances *finances; uint32_t id; };
 struct OpenTTDCompanyVehicleCounts { uint16_t trains, road, ships, aircraft; };
-struct OpenTTDCompanyInfrastructure {
-	uint32_t rail[64], road[63];
-	uint32_t rail_total, road_total, tram_total, signal, water, station;
-	uint64_t road_is_road; ///< Bit rt set when RoadTypeIsRoad(rt).
-};
 struct OpenTTDCompanyVehicleGroupFlags { bool engine_countable, primary; };
 struct OpenTTDCompanyVehicleProfit { int64_t profit_last_year; int32_t economy_age; };
 struct OpenTTDCompanyStationTimes { uint8_t since_load, since_unload; };
@@ -109,7 +104,6 @@ struct OpenTTDCompanyServices {
 	const OpenTTDObjectServices *(OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
 	void (OPENTTD_RUST_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
 	void (OPENTTD_RUST_CALL *company_graphs_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_graphs_dirty);
-	void (OPENTTD_RUST_CALL *company_infrastructure)(uint8_t, OpenTTDCompanyInfrastructure *) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);
 	int64_t (OPENTTD_RUST_CALL *rail_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *signal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
@@ -176,7 +170,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
 	void (OPENTTD_RUST_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
 	void (OPENTTD_RUST_CALL *update_signals_in_buffer)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals_in_buffer);
-	void (OPENTTD_RUST_CALL *add_airport_infrastructure)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_airport_infrastructure);
 	uint32_t (OPENTTD_RUST_CALL *station_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_next_owned);
 	OpenTTDCompanyStationTimes (OPENTTD_RUST_CALL *station_times)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_times);
 	void (OPENTTD_RUST_CALL *set_station_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);

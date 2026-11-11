@@ -24,6 +24,8 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
@@ -699,6 +701,8 @@ impl<'a> World<'a> {
         }
     }
     fn build(&self, kind: u16, tile: u32, owner: u8, town: *const TownHandle, view: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         unsafe {
             let spec = (self.s.spec)(kind);
             let shape = (self.s.footprint)(spec);
@@ -757,12 +761,20 @@ impl<'a> World<'a> {
                 } else {
                     INVALID_WATER_CLASS
                 };
+                /* Update company infrastructure counts for objects build on canals owned by nobody. */
                 if wc.0 == 1
                     && owner != OWNER_NONE
                     && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)
                         || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
                 {
-                    ((*self.s.restoration).infrastructure)(owner, 1);
+                    let infrastructure = {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr =
+                                CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                        }
+                        infrastructure_ptr
+                    };
+                    CompanyInfrastructure::add_water(infrastructure, 1);
                     ((*self.s.command).infrastructure_dirty)(owner);
                 }
                 let remove = (self.shared.clear_square_services.docking)(t);
@@ -1396,8 +1408,10 @@ impl World<'_> {
             if (kind == OWNED || kind >= NEW_OBJECT_OFFSET) && new != INVALID_OWNER {
                 (self.shared.set_tile_owner)(tile, new);
                 if crate::map_func::World::new(self.shared).water_class(tile) == 1 {
-                    ((*self.s.restoration).infrastructure)(old, u32::MAX);
-                    ((*self.s.restoration).infrastructure)(new, 1);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(old));
+                    CompanyInfrastructure::add_water(infrastructure, u32::MAX);
+                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(new));
+                    CompanyInfrastructure::add_water(infrastructure, 1);
                 }
             } else if kind == STATUE {
                 let town = (self.s.statue_town)((self.query().by_tile)(tile));

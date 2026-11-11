@@ -95,6 +95,7 @@ struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
 struct GRFFile;
 struct OpenTTDCommandPostServices;
+struct CompanyInfrastructure;
 struct OpenTTDSharedServices {
 	uint64_t (*all_compatible_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible_railtypes);
 	const OpenTTDCommandPostServices &(*command_post)() noexcept OPENTTD_SERVICE_DEFAULT(command_post);
@@ -107,6 +108,7 @@ struct OpenTTDSharedServices {
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	OpenTTDClearSquareServices clear_square_services;
 	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
+	CompanyInfrastructure *(*company_infrastructure)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
 	void (*cost_animation)(int32_t, int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);

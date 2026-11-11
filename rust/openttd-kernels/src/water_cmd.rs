@@ -17,6 +17,8 @@
     clippy::if_not_else
 )]
 use crate::command_type::DoCommandFlag;
+use crate::company_base::CompanyInfrastructure;
+use crate::company_type::CompanyID;
 use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{
@@ -174,7 +176,8 @@ impl World<'_> {
         !(1..self.size_x - 2).contains(&x) || !(1..self.size_y - 2).contains(&y)
     }
     fn infra(&self, owner: u8, delta: u32, dirty: bool) {
-        (self.a.restoration.infrastructure)(owner, delta);
+        let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
+        unsafe { CompanyInfrastructure::add_water(infrastructure, delta) };
         if dirty {
             (self.cmd.infrastructure_dirty)(owner);
         }
@@ -305,11 +308,16 @@ impl World<'_> {
             (self.rail().delete_depot)(tile);
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
-                let mut amount = 0u32.wrapping_sub(2 * FACTOR);
+                let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
+                unsafe {
+                    CompanyInfrastructure::add_water(infrastructure, 0u32.wrapping_sub(2 * FACTOR));
+                };
                 if force && self.class(tile) == 1 {
-                    amount = amount.wrapping_sub(1);
+                    unsafe {
+                        CompanyInfrastructure::add_water(infrastructure, u32::MAX);
+                    };
                 }
-                self.infra(owner, amount, true);
+                (self.cmd.infrastructure_dirty)(owner);
             }
             if !force {
                 self.restore(tile, (self.s.tile_owner)(tile));
@@ -384,15 +392,23 @@ impl World<'_> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
+            /* Update company infrastructure counts. */
             let owner = (self.s.current_company)();
             if (self.s.company_valid)(owner) {
-                if !(self.s.is_water_tile)(lower) {
-                    self.infra(owner, 1, false);
-                }
-                if !(self.s.is_water_tile)(upper) {
-                    self.infra(owner, 1, false);
-                }
-                self.infra(owner, 3 * FACTOR, true);
+                let infrastructure = CompanyInfrastructure::get(self.s, CompanyID(owner));
+                // SAFETY: Serialized field-sized writes; no native-state borrow crosses the tile reads.
+                unsafe {
+                    /* Counts for the water. */
+                    if !(self.s.is_water_tile)(lower) {
+                        CompanyInfrastructure::add_water(infrastructure, 1);
+                    }
+                    if !(self.s.is_water_tile)(upper) {
+                        CompanyInfrastructure::add_water(infrastructure, 1);
+                    }
+                    // Count for the lock itself. Lock is three tiles.
+                    CompanyInfrastructure::add_water(infrastructure, 3 * FACTOR);
+                };
+                (self.cmd.infrastructure_dirty)(owner);
             }
             for (part, t) in [tile, lower, upper].into_iter().enumerate() {
                 let o = if part != 0 && (self.s.is_water_tile)(t) {
@@ -671,38 +687,116 @@ impl World<'_> {
         }
     }
     fn owner(&self, ret: *mut CommandCost, tile: u32, old: u8, new: u8) {
-        if (self.s.tile_owner)(tile) != old {
-            return;
-        }
-        let middle = (self.s.water_middle_lock)(tile);
-        if middle {
-            self.infra(old, 0u32.wrapping_sub(3 * FACTOR), false);
-        }
-        if new != INVALID_OWNER {
+        // SAFETY: Field-sized native accesses are serialized; raw pointers retain no owner borrow across callbacks.
+        unsafe {
+            // Resolve at the first original access; the raw pointer retains no Rust borrow.
+            let mut new_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+            // Resolve at the first original access; the raw pointer retains no Rust borrow.
+            let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+            if (self.s.tile_owner)(tile) != old {
+                return;
+            }
+            let middle = (self.s.water_middle_lock)(tile);
+            /* No need to dirty company windows here, we'll redraw the whole screen anyway. */
             if middle {
-                self.infra(new, 3 * FACTOR, false);
+                // Lock has three parts.
+                CompanyInfrastructure::add_water(
+                    {
+                        if old_infrastructure_ptr.is_null() {
+                            old_infrastructure_ptr =
+                                CompanyInfrastructure::get(self.s, CompanyID(old));
+                        }
+                        old_infrastructure_ptr
+                    },
+                    0u32.wrapping_sub(3 * FACTOR),
+                );
             }
-            if self.class(tile) == 1 && !middle {
-                self.infra(old, u32::MAX, false);
-                self.infra(new, 1, false);
+            if new != INVALID_OWNER {
+                if middle {
+                    // Lock has three parts.
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        3 * FACTOR,
+                    );
+                }
+                /* Only subtract from the old owner here if the new owner is valid,
+                 * otherwise we clear ship depots and canal water below. */
+                if self.class(tile) == 1 && !middle {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        u32::MAX,
+                    );
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        1,
+                    );
+                }
+                if self.kind(tile) == 3 {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        0u32.wrapping_sub(FACTOR),
+                    );
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        FACTOR,
+                    );
+                }
+                (self.s.set_tile_owner)(tile, new);
+                return;
             }
+            /* Remove depot */
             if self.kind(tile) == 3 {
-                self.infra(old, 0u32.wrapping_sub(FACTOR), false);
-                self.infra(new, FACTOR, false);
+                self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
             }
-            (self.s.set_tile_owner)(tile, new);
-            return;
-        }
-        if self.kind(tile) == 3 {
-            self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
-        }
-        if (self.s.tile_owner)(tile) == old {
-            if self.class(tile) == 1 && !middle {
-                self.infra(old, u32::MAX, false);
+            /* Set owner of canals and locks ... and also canal under dock there was before.
+             * Check if the new owner after removing depot isn't OWNER_WATER. */
+            if (self.s.tile_owner)(tile) == old {
+                if self.class(tile) == 1 && !middle {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        u32::MAX,
+                    );
+                }
+                (self.s.set_tile_owner)(tile, OWNER_NONE);
             }
-            (self.s.set_tile_owner)(tile, OWNER_NONE);
+            w::hit(w::WATER_CMD_OWNER);
         }
-        w::hit(w::WATER_CMD_OWNER);
     }
 }
 
