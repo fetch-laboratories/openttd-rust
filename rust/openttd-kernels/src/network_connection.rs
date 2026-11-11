@@ -688,12 +688,12 @@ pub(crate) fn send_newgrf_check(
         }
         if !is_static(c) {
             let md5sum = unsafe { (s.grf.config_md5)(c) };
-            crate::network_game_info::serialize_grf_identifier(
-                &mut p,
-                unsafe { (s.grf.config_id)(c) },
-                unsafe { crate::utf8::borrow(md5sum.data, md5sum.size) },
-                packet_check(f),
-            );
+            // SAFETY: The native `GRFConfig::ident.md5sum` is a live `MD5Hash`.
+            let ident = crate::newgrf_config::GRFIdentifier {
+                grfid: unsafe { (s.grf.config_id)(c) },
+                md5sum: unsafe { md5sum.data.cast::<crate::md5::MD5Hash>().read_unaligned() },
+            };
+            crate::network_game_info::serialize_grf_identifier(&mut p, &ident, packet_check(f));
         }
         cursor += 1;
     }
