@@ -7,7 +7,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketGameType(pub u8);
 
-#[allow(dead_code)] // Complete original enumerator vocabulary.
 impl PacketGameType {
     /*
      * These first ten packets must remain in this order for backward and forward compatibility

@@ -49,6 +49,9 @@ pub(crate) fn outgoing(socket: *mut GameSocket) -> *mut CommandQueue {
 pub(crate) fn status(socket: *mut GameSocket) -> u8 {
     read_field!(socket, status)
 }
+pub(crate) fn set_status(socket: *mut GameSocket, value: u8) {
+    write_field!(socket, status, value);
+}
 pub(crate) fn pending(socket: *mut GameSocket) -> bool {
     read_field!(socket, pending)
 }

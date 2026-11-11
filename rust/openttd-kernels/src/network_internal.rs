@@ -6,7 +6,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NetworkJoinStatus(pub u8);
 
-#[allow(dead_code)] // Complete original enumerator vocabulary.
 impl NetworkJoinStatus {
     /// Native `NETWORK_JOIN_STATUS_CONNECTING`.
     pub const NETWORK_JOIN_STATUS_CONNECTING: Self = Self(0);

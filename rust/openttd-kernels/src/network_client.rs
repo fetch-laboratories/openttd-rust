@@ -111,10 +111,7 @@ crate::abi::layouts! {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ServerStatus(pub u8);
 
-#[allow(dead_code)] // Complete original enumerator vocabulary.
 impl ServerStatus {
-    /// The client is not connected nor active.
-    pub const STATUS_INACTIVE: Self = Self(0);
     /// We are trying to join a server.
     pub const STATUS_JOIN: Self = Self(1);
     /// Last action was requesting game (server) password.
@@ -122,8 +119,6 @@ impl ServerStatus {
     /// The game authentication has completed and from here on the connection to the server is
     /// encrypted.
     pub const STATUS_ENCRYPTED: Self = Self(3);
-    /// Last action was checking `NewGRFs`.
-    pub const STATUS_NEWGRFS_CHECK: Self = Self(4);
     /// The client is authorized at the server.
     pub const STATUS_AUTHORIZED: Self = Self(5);
     /// The client is waiting as someone else is downloading the map.
@@ -132,8 +127,6 @@ impl ServerStatus {
     pub const STATUS_MAP: Self = Self(7);
     /// The client is active within in the game.
     pub const STATUS_ACTIVE: Self = Self(8);
-    /// Must ALWAYS be on the end of this list!! (period)
-    pub const STATUS_END: Self = Self(9);
 }
 
 pub(crate) mod status {

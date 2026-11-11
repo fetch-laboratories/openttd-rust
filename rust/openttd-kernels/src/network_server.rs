@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `ServerNetworkGameSocketHandler::ClientStatus` from `network_server.h`, read and written in
 //! place on the server-side game socket shell.
-#![allow(unsafe_code)]
 
 use crate::network_socket::{self as socket, GameSocket};
 
@@ -42,5 +41,5 @@ pub(crate) fn status(cs: *mut GameSocket) -> ClientStatus {
 
 /// Stores `ServerNetworkGameSocketHandler::status` of a live server-side socket.
 pub(crate) fn set_status(cs: *mut GameSocket, status: ClientStatus) {
-    crate::raw_field::write_field!(cs, status, status.0);
+    socket::set_status(cs, status.0);
 }

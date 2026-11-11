@@ -1224,7 +1224,7 @@ mod network_crypto_internal;
 mod network_dispatch;
 mod network_frame;
 mod network_game_info;
-mod network_internal;
+pub mod network_internal;
 mod network_lifecycle;
 mod network_server;
 mod network_socket;
@@ -1233,7 +1233,7 @@ pub mod network_type;
 mod tcp_content_type;
 /// Native content slot and protocol value domains.
 pub use tcp_content_type::{ContentID, ContentType, PacketContentType};
-mod tcp_game;
+pub mod tcp_game;
 
 /// Native industry domain definitions; native owners and record access remain internal.
 pub use industry::{
