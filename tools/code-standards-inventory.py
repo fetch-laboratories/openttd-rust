@@ -634,27 +634,25 @@ def residue(path: str, source: str) -> list[Site]:
         elif node.type == "generic_type" and re.match(
             r"GameState\s*<\s*Vec\s*<", text(node, data)
         ):
-            if in_test(node, data, path):
-                continue
-            item = node.parent
-            while item and item.type not in (
-                "static_item",
-                "const_item",
-                "field_declaration",
-                "let_declaration",
-            ):
-                item = item.parent
-            name = (
-                text(
-                    item.child_by_field_name("name")
-                    or item.child_by_field_name("pattern"),
-                    data,
-                )
-                if item
-                else text(node, data)
-            )
-            found.append(Site(path, line, "scratch pool", name))
+            if not in_test(node, data, path):
+                found.append(Site(path, line, "scratch pool", pool_name(node, data)))
     return sorted(found, key=lambda s: (s.line, s.kind))
+
+
+def pool_name(node: Node, data: bytes) -> str:
+    """The static, field or binding a `GameState<Vec<...>>` type declares."""
+    item = node.parent
+    while item and item.type not in (
+        "static_item",
+        "const_item",
+        "field_declaration",
+        "let_declaration",
+    ):
+        item = item.parent
+    if item is None:
+        return text(node, data)
+    named = item.child_by_field_name("name") or item.child_by_field_name("pattern")
+    return text(named, data)
 
 
 def finished_files(revision: str) -> list[str]:
@@ -719,6 +717,9 @@ def gate(base_ref: str, head: str) -> int:
     ).strip()
     files = finished_files(head)
     renames = renamed_from(base, head)
+    missing = [path for path in files if show(head, path) is None]
+    for path in missing:
+        print(f"{FINISHED}: listed file is missing at {head}: {path}")
     failures = [
         site
         for path in files
@@ -733,7 +734,15 @@ def gate(base_ref: str, head: str) -> int:
         f"Finished-file residue gate: {len(files)} finished files, "
         f"{len(failures)} new residue sites"
     )
-    return int(bool(failures))
+    return int(bool(failures or missing))
+
+
+def print_residue(rust: dict[str, str], paths: set[str]) -> None:
+    """The residue classes of paths, except long commands, which print above."""
+    for path in sorted(paths):
+        for site in residue(path, rust[path]):
+            if site.kind != "long command":
+                print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
 
 
 def main() -> int:
@@ -794,10 +803,7 @@ def main() -> int:
                 print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
         for site in long:
             print(f"{site.path}:{site.line}: long {site.kind}: {site.detail}")
-        for path in sorted(selected - tests):
-            for site in residue(path, rust[path]):
-                if site.kind != "long command":
-                    print(f"{site.path}:{site.line}: {site.kind}: {site.detail}")
+        print_residue(rust, selected - tests)
     counts = {
         kind: sum(s.kind == kind for s in sites)
         for kind in ("bare integer", "wrapper", "constant", "literal")

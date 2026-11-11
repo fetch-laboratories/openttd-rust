@@ -224,9 +224,7 @@ mod tests {
     def gate(self, finished: bool, base: str, head: str) -> int:
         def show(revision: str, path: str) -> str | None:
             if path == INVENTORY.FINISHED:
-                return (
-                    RUST + "\n" if finished else "rust/openttd-kernels/src/other.rs\n"
-                )
+                return RUST + "\n" if finished else "# Nothing finished.\n"
             if path != RUST:
                 return None
             return base if revision == "base" else head
@@ -238,6 +236,18 @@ mod tests {
             patch("builtins.print"),
         ):
             return INVENTORY.gate("origin/rust-migration", "head")
+
+    def test_a_listed_file_missing_at_head_fails(self) -> None:
+        def show(revision: str, path: str) -> str | None:
+            return RUST + "\n" if path == INVENTORY.FINISHED else None
+
+        with (
+            patch.object(INVENTORY, "show", side_effect=show),
+            patch.object(INVENTORY, "renamed_from", return_value={}),
+            patch.object(INVENTORY.subprocess, "check_output", return_value="base\n"),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(INVENTORY.gate("origin/rust-migration", "head"), 1)
 
     def test_seeded_violation_fails_only_in_a_finished_file(self) -> None:
         for kind, line in SEEDS.items():

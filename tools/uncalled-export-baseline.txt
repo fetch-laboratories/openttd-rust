@@ -5,12 +5,12 @@ openttd_rust_airport_town | #634 station pools: airport-resolver-console.hpp cal
 openttd_rust_auth_handler_method | #736 authentication probe: auth-comparison.cpp calls GetAuthenticationMethod
 openttd_rust_auth_handler_receive_enable | #730 network: tests/network_connection.cpp, and #736's auth-comparison.cpp, call ReceiveEnableEncryption
 openttd_rust_auth_handler_receive_request | #730 network: tests/network_connection.cpp, and #736's auth-comparison.cpp, call ReceiveRequest
-openttd_rust_backup_clear_user | #716 order pools: orders-console.cpp calls OrderBackup::ResetOfUser
-openttd_rust_delete_implicit | #716 order pools: orders-console.cpp calls Vehicle::DeleteUnreachedImplicitOrders
+openttd_rust_backup_clear_user | #906 order pools: orders-console.cpp calls OrderBackup::ResetOfUser
+openttd_rust_delete_implicit | #906 order pools: orders-console.cpp calls Vehicle::DeleteUnreachedImplicitOrders
 openttd_rust_goods_convert_state | #634 station pools: tests/station_service.cpp and station-resolver-console.hpp call GoodsEntry::ConvertState
 openttd_rust_industry_resolver_town | #635 industry pools and #638 storage: industries-console.cpp and storage-console.inc call IndustriesResolverObject::GetTown
-openttd_rust_list_insert | #716 order pools: tests/orders.cpp and orders-console.cpp call OrderList::InsertOrderAt
-openttd_rust_order_implicit | #716 order pools: orders-console.cpp calls Order::MakeImplicit
+openttd_rust_list_insert | #906 order pools: tests/orders.cpp and orders-console.cpp call OrderList::InsertOrderAt
+openttd_rust_order_implicit | #906 order pools: orders-console.cpp calls Order::MakeImplicit
 openttd_rust_order_loading | #656 vehicle pool and #634 station pools: tests/vehicle_scheduler.cpp, fleet-console.cpp and station-lifecycle-console.hpp call Order::MakeLoading
 openttd_rust_override_reset | #635 industry pools: tests/industry.cpp calls OverrideManagerBase::ResetOverride
 openttd_rust_override_substitute | #635 town and industry pools: tests/industry.cpp and towns-console.cpp call OverrideManagerBase::GetSubstituteID
