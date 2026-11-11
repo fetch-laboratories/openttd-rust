@@ -220,9 +220,18 @@ fn send_packet(s: &Services, mut p: PacketState) {
 
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
     unsafe {
-        packet::recv_string_into(p, s.tcp.packet, check, length, settings, |bytes| {
-            append(text, bytes);
-        });
+        packet::recv_string_into(
+            packet::ReceiveContext {
+                state: p,
+                services: s.tcp.packet,
+            },
+            check,
+            length,
+            crate::string_type::StringValidationSettings(settings),
+            |bytes| {
+                append(text, bytes);
+            },
+        );
     }
 }
 

@@ -174,11 +174,15 @@ pub(crate) fn packet_recv_string(
     (s.text_reset)(text);
     unsafe {
         packet::recv_string_into(
-            p,
-            s.packet,
+            packet::ReceiveContext {
+                state: p,
+                services: s.packet,
+            },
             packet_check(s),
             length,
-            crate::string_type::REPLACE_WITH_QUESTION_MARK,
+            crate::string_type::StringValidationSettings::from_element(
+                crate::string_type::StringValidationSetting::ReplaceWithQuestionMark,
+            ),
             |bytes| {
                 (s.text_append)(text, bytes.as_ptr(), bytes.len());
             },

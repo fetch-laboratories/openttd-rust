@@ -679,6 +679,9 @@ mod tests {
     use super::*;
     #[test]
     fn each_newgrf_checksum_starts_empty() {
+        extern "C" fn assert_condition(condition: bool) {
+            assert!(condition);
+        }
         extern "C" fn check(id: u32, hash: *const u8) -> bool {
             let hash = unsafe { std::slice::from_raw_parts(hash, crate::md5::MD5_HASH_BYTES) };
             match id {
@@ -692,6 +695,12 @@ mod tests {
                 }
                 _ => panic!("unexpected NewGRF"),
             }
+        }
+        if crate::services_assert::isolate_test_check(
+            "network_client::tests::each_newgrf_checksum_starts_empty",
+            assert_condition,
+        ) {
+            return;
         }
         let mut p = PacketState::new(100, std::ptr::null_mut());
         p.send_bytes(&7_u32.to_le_bytes());

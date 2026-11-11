@@ -86,8 +86,19 @@ pub fn step(bytes: &[u8], settings: StringValidationSettings) -> Step {
 }
 
 /// `StrMakeValid(str, settings)`: the scan decisions of `step`, appended to a new string.
-pub fn make_valid(mut bytes: &[u8], settings: StringValidationSettings) -> Vec<u8> {
+pub fn make_valid(bytes: &[u8], settings: StringValidationSettings) -> Vec<u8> {
     let mut result = Vec::new();
+    make_valid_into(bytes, settings, |bytes| result.extend_from_slice(bytes));
+    result
+}
+
+/// `StrMakeValid`'s shared scan with output appended to the caller's existing string.
+/// Empty output decisions do not invoke `append`.
+pub fn make_valid_into(
+    mut bytes: &[u8],
+    settings: StringValidationSettings,
+    mut append: impl FnMut(&[u8]),
+) {
     /* Assume the ABSOLUTE WORST to be in str as it comes from the outside. */
     while !bytes.is_empty() {
         let step = step(bytes, settings);
@@ -95,10 +106,11 @@ pub fn make_valid(mut bytes: &[u8], settings: StringValidationSettings) -> Vec<u
         if step.stopped != 0 {
             break;
         }
-        result.extend_from_slice(&step.output.bytes[..step.output.length]);
+        if step.output.length != 0 {
+            append(&step.output.bytes[..step.output.length]);
+        }
     }
     /* String termination, if needed, is left to the caller of this function. */
-    result
 }
 
 /// `StrValid`: printable characters and NUL termination in a fixed-length buffer.
