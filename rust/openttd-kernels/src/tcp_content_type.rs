@@ -4,39 +4,28 @@
 //! `ContentInfo`, whose text and list fields stay native; both languages access them in place.
 #![allow(unsafe_code)]
 
-pub const CONTENT_TYPE_BEGIN: u8 = ContentType::CONTENT_TYPE_BEGIN.0;
-pub const CONTENT_TYPE_BASE_GRAPHICS: u8 = ContentType::CONTENT_TYPE_BASE_GRAPHICS.0;
-pub const CONTENT_TYPE_NEWGRF: u8 = ContentType::CONTENT_TYPE_NEWGRF.0;
-pub const CONTENT_TYPE_AI: u8 = ContentType::CONTENT_TYPE_AI.0;
-pub const CONTENT_TYPE_AI_LIBRARY: u8 = ContentType::CONTENT_TYPE_AI_LIBRARY.0;
-pub const CONTENT_TYPE_SCENARIO: u8 = ContentType::CONTENT_TYPE_SCENARIO.0;
-pub const CONTENT_TYPE_HEIGHTMAP: u8 = ContentType::CONTENT_TYPE_HEIGHTMAP.0;
-pub const CONTENT_TYPE_BASE_SOUNDS: u8 = ContentType::CONTENT_TYPE_BASE_SOUNDS.0;
-pub const CONTENT_TYPE_BASE_MUSIC: u8 = ContentType::CONTENT_TYPE_BASE_MUSIC.0;
-pub const CONTENT_TYPE_GAME: u8 = ContentType::CONTENT_TYPE_GAME.0;
-pub const CONTENT_TYPE_GAME_LIBRARY: u8 = ContentType::CONTENT_TYPE_GAME_LIBRARY.0;
-pub const CONTENT_TYPE_END: u8 = ContentType::CONTENT_TYPE_END.0;
+/// `ContentInfo::State`, retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ContentInfoState(pub u8);
 
-pub const PACKET_CONTENT_CLIENT_INFO_LIST: u8 =
-    PacketContentType::PACKET_CONTENT_CLIENT_INFO_LIST.0;
-pub const PACKET_CONTENT_CLIENT_INFO_ID: u8 = PacketContentType::PACKET_CONTENT_CLIENT_INFO_ID.0;
-pub const PACKET_CONTENT_CLIENT_INFO_EXTID: u8 =
-    PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID.0;
-pub const PACKET_CONTENT_CLIENT_INFO_EXTID_MD5: u8 =
-    PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5.0;
-pub const PACKET_CONTENT_SERVER_INFO: u8 = PacketContentType::PACKET_CONTENT_SERVER_INFO.0;
-pub const PACKET_CONTENT_CLIENT_CONTENT: u8 = PacketContentType::PACKET_CONTENT_CLIENT_CONTENT.0;
-pub const PACKET_CONTENT_SERVER_CONTENT: u8 = PacketContentType::PACKET_CONTENT_SERVER_CONTENT.0;
-pub const PACKET_CONTENT_END: u8 = PacketContentType::PACKET_CONTENT_END.0;
-
-/// `ContentInfo::State`.
-pub mod state {
-    pub const UNSELECTED: u8 = 0;
-    pub const SELECTED: u8 = 1;
-    pub const AUTOSELECTED: u8 = 2;
-    pub const ALREADY_HERE: u8 = 3;
-    pub const DOES_NOT_EXIST: u8 = 4;
-    pub const INVALID: u8 = 5;
+#[allow(
+    non_upper_case_globals,
+    reason = "original ContentInfo::State enumerator vocabulary"
+)]
+impl ContentInfoState {
+    /// The content has not been selected.
+    pub const Unselected: Self = Self(0);
+    /// The content has been manually selected.
+    pub const Selected: Self = Self(1);
+    /// The content has been selected as a dependency.
+    pub const Autoselected: Self = Self(2);
+    /// The content is already at the client side.
+    pub const AlreadyHere: Self = Self(3);
+    /// The content does not exist in the content system.
+    pub const DoesNotExist: Self = Self(4);
+    /// The content is invalid.
+    pub const Invalid: Self = Self(5);
 }
 
 crate::abi::shared_records! {
@@ -54,18 +43,37 @@ crate::abi::shared_records! {
 }
 
 impl ContentInfo {
+    /// Typed view of the shared native content type.
+    pub fn content_type(&self) -> ContentType {
+        ContentType(self.r#type)
+    }
+    /// Typed view of the shared native content identifier.
+    pub fn id(&self) -> ContentID {
+        ContentID(self.id)
+    }
+    /// Typed view of the shared native selection state.
+    pub fn state(&self) -> ContentInfoState {
+        ContentInfoState(self.state)
+    }
+    /// Store the selection state in its shared native field.
+    pub fn set_state(&mut self, state: ContentInfoState) {
+        self.state = state.0;
+    }
+
     /// `ContentInfo::IsSelected`.
     pub fn is_selected(&self) -> bool {
         matches!(
-            self.state,
-            state::SELECTED | state::AUTOSELECTED | state::ALREADY_HERE
+            self.state(),
+            ContentInfoState::Selected
+                | ContentInfoState::Autoselected
+                | ContentInfoState::AlreadyHere
         )
     }
     /// `ContentInfo::IsValid`.
     pub fn is_valid(&self) -> bool {
-        self.state < state::INVALID
-            && self.r#type >= CONTENT_TYPE_BEGIN
-            && self.r#type < CONTENT_TYPE_END
+        self.state() < ContentInfoState::Invalid
+            && self.content_type() >= ContentType::CONTENT_TYPE_BEGIN
+            && self.content_type() < ContentType::CONTENT_TYPE_END
     }
 }
 
@@ -92,7 +100,7 @@ mod tests {
     #[test]
     fn selection_and_validity_follow_the_original_state_order() {
         let mut info = ContentInfo {
-            r#type: CONTENT_TYPE_AI,
+            r#type: ContentType::CONTENT_TYPE_AI.0,
             id: 1,
             filesize: 0,
             unique_id: 0,
@@ -106,7 +114,7 @@ mod tests {
             assert_eq!(info.is_selected(), expected);
             assert_eq!(info.is_valid(), value < 5);
         }
-        info.state = state::UNSELECTED;
+        info.state = ContentInfoState::Unselected.0;
         for (kind, expected) in [(0, false), (1, true), (10, true), (11, false), (255, false)] {
             info.r#type = kind;
             assert_eq!(info.is_valid(), expected);
