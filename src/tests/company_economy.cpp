@@ -94,8 +94,7 @@ TEST_CASE("Company control - native owned-by error encodings")
  * type's interval is read from the native VehicleDefaultSettings record they return; the
  * per-type field selection and the ignored percent flag are company::control_tests (#736 F).
  * With no human company, GetFirstPlayableCompanyID's Company::CanAllocateItem grants the
- * allocation credit that the unindexed construction of the company it returns consumes
- * (#156: the selector, not this test, calls the real binding). Retires with the native settings-table services
+ * allocation credit that the unindexed construction of the company it returns consumes. Retires with the native settings-table services
  * and the native company pool. */
 TEST_CASE("Company control - company or client service-interval defaults")
 {
@@ -304,7 +303,7 @@ TEST_CASE("Commands - local cash error encoding")
 
 /* The production session loop reaches OnTick_Companies' port, whose competitor loop rereads
  * max_no_competitors before each CCA_NEW_AI post and returns to the session caller for each
- * Post (#156: company::competitor_tests drives on_tick with its own loop). Expected counts follow
+ * Post. Expected counts follow
  * the original OnTick_Companies with competitors_interval 0 and no companies. Retires with the
  * native session services. */
 TEST_CASE("Company economy - session loop posts each competitor through its caller")
