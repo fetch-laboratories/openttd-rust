@@ -9,6 +9,8 @@
 //! the `ContentInfo` base records the native owner allocates and deletes through leaves.
 #![allow(unsafe_code)]
 
+use crate::consumer::{self, SeparatorUsage};
+use crate::container_func::include;
 use crate::debug::{Bytes, debug};
 use crate::game_state::GameState;
 use crate::network_config::{
@@ -21,9 +23,13 @@ use crate::packet::{self, State as PacketState};
 use crate::services::ByteSpan;
 use crate::services_assert::check;
 use crate::string_services::append;
-use crate::tcp_content_type::{self as ct, ContentInfo, state};
+use crate::string_type::{StringValidationSetting, StringValidationSettings};
+use crate::tcp_content_type::{
+    ContentID, ContentInfo, ContentInfoState, ContentType, PacketContentType,
+};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
+use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct ContentCallback {
@@ -117,17 +123,20 @@ const IDLE_TIMEOUT: i64 = 60_000_000_000;
 const CONTENT_QUEUE_TIMEOUT: i64 = 100_000_000;
 /// `MAX_PACKETS_TO_RECEIVE`.
 const MAX_PACKETS_TO_RECEIVE: i32 = 42;
-/// IDs per `CLIENT_INFO_ID` or `CLIENT_CONTENT` packet after size, type and count.
-const MAX_CONTENT_IDS_PER_PACKET: usize = (TCP_MTU - 2 - 1 - 2) / 4;
+/// We can only send a limited number of IDs in one packet. Its size and type
+/// come first, then a uint16 count; the remaining bytes hold the IDs.
+const MAX_CONTENT_IDS_PER_PACKET: usize =
+    (TCP_MTU - size_of::<packet::PacketSize>() - size_of::<u8>() - size_of::<u16>())
+        / size_of::<u32>();
 
 struct Client {
     callbacks: Vec<*mut ContentCallback>,
-    requested: Vec<u32>,
-    queued: Vec<u32>,
+    requested: Vec<ContentID>,
+    queued: Vec<ContentID>,
     infos: Vec<*mut ContentInfo>,
     /// `reverse_dependency_map`: libstdc++'s `unordered_multimap::emplace` places a new
     /// element before its equal keys, so `equal_range` visits each key's parents newest first.
-    reverse: BTreeMap<u32, Vec<u32>>,
+    reverse: BTreeMap<ContentID, Vec<ContentID>>,
     http_response: Vec<u8>,
     http_response_index: i32,
     cur_info: *mut ContentInfo,
@@ -169,14 +178,18 @@ fn socket(s: &Services) -> *mut packet::NetworkSocketHandler {
     (s.tcp.base_socket)(s.client)
 }
 
-fn get_content(cid: u32) -> *mut ContentInfo {
-    with(|c| {
-        c.infos
+impl Client {
+    fn get_content(&self, cid: ContentID) -> *mut ContentInfo {
+        self.infos
             .iter()
             .copied()
-            .find(|&ci| info(ci).id == cid)
+            .find(|&ci| info(ci).id() == cid)
             .unwrap_or(std::ptr::null_mut())
-    })
+    }
+}
+
+fn get_content(cid: ContentID) -> *mut ContentInfo {
+    with(|c| c.get_content(cid))
 }
 
 fn notify(each: impl Fn(*mut ContentCallback)) {
@@ -202,23 +215,29 @@ fn on_receive_content_info(s: &Services, ci: *const ContentInfo) {
 fn on_download_progress(s: &Services, ci: *const ContentInfo, bytes: i32) {
     notify(|cb| (s.callback_progress)(cb, ci, bytes));
 }
-fn on_download_complete(s: &Services, cid: u32) {
+fn on_download_complete(s: &Services, cid: ContentID) {
     let ci = get_content(cid);
     if !ci.is_null() {
-        info_mut(ci).state = state::ALREADY_HERE;
+        info_mut(ci).set_state(ContentInfoState::AlreadyHere);
     }
-    notify(|cb| (s.callback_complete)(cb, cid));
+    notify(|cb| (s.callback_complete)(cb, cid.0));
 }
 
-fn new_packet(s: &Services, kind: u8, limit: usize) -> PacketState {
-    unsafe { packet::new_outgoing(socket(s), s.tcp.packet, check, kind, limit) }
+fn new_packet(s: &Services, kind: PacketContentType, limit: usize) -> PacketState {
+    unsafe { packet::new_outgoing(socket(s), s.tcp.packet, check, kind.0, limit) }
 }
 fn send_packet(s: &Services, mut p: PacketState) {
     unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, check) };
     (s.tcp.packet_enqueue)(s.client, &raw mut p);
 }
 
-fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
+fn recv_string(
+    s: &Services,
+    p: *mut PacketState,
+    text: *mut c_void,
+    length: usize,
+    settings: StringValidationSettings,
+) {
     unsafe {
         packet::recv_string_into(
             packet::ReceiveContext {
@@ -227,7 +246,7 @@ fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usi
             },
             check,
             length,
-            crate::string_type::StringValidationSettings(settings),
+            settings,
             |bytes| {
                 append(text, bytes);
             },
@@ -254,19 +273,23 @@ fn close_connection(s: &Services) {
 }
 
 fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
-    let kind = unsafe { packet::recv_uint8(p, s.tcp.packet) };
+    let kind = PacketContentType(unsafe { packet::recv_uint8(p, s.tcp.packet) });
     let quit = unsafe { (s.tcp.packet.has_quit)(socket(s)) };
-    match if quit { ct::PACKET_CONTENT_END } else { kind } {
-        ct::PACKET_CONTENT_SERVER_INFO => receive_server_info(s, p),
-        ct::PACKET_CONTENT_SERVER_CONTENT => receive_server_content(s, p),
-        ct::PACKET_CONTENT_CLIENT_INFO_LIST
-        | ct::PACKET_CONTENT_CLIENT_INFO_ID
-        | ct::PACKET_CONTENT_CLIENT_INFO_EXTID
-        | ct::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5
-        | ct::PACKET_CONTENT_CLIENT_CONTENT => {
+    match if quit {
+        PacketContentType::PACKET_CONTENT_END
+    } else {
+        kind
+    } {
+        PacketContentType::PACKET_CONTENT_SERVER_INFO => receive_server_info(s, p),
+        PacketContentType::PACKET_CONTENT_SERVER_CONTENT => receive_server_content(s, p),
+        PacketContentType::PACKET_CONTENT_CLIENT_INFO_LIST
+        | PacketContentType::PACKET_CONTENT_CLIENT_INFO_ID
+        | PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID
+        | PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5
+        | PacketContentType::PACKET_CONTENT_CLIENT_CONTENT => {
             debug!(
                 net,
-                0, "[tcp/content] Received illegal packet type {}", kind
+                0, "[tcp/content] Received illegal packet type {}", kind.0
             );
             false
         }
@@ -274,7 +297,7 @@ fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
             if quit {
                 debug!(
                     net,
-                    0, "[tcp/content] Received invalid packet type {}", kind
+                    0, "[tcp/content] Received invalid packet type {}", kind.0
                 );
             } else {
                 debug!(net, 0, "[tcp/content] Received illegal packet");
@@ -286,7 +309,15 @@ fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
 
 /// `NetworkTCPSocketHandler::ReceivePacket` using the integrated TCP and packet owners.
 fn receive_packet(s: &Services) -> *mut Packet {
-    match unsafe { tcp::openttd_rust_tcp_receive(s.tcp, s.client, check) } {
+    match unsafe {
+        tcp::receive_packet(
+            tcp::Context {
+                services: s.tcp,
+                socket: s.client,
+            },
+            check,
+        )
+    } {
         tcp::Receive::None => std::ptr::null_mut(),
         tcp::Receive::Close => {
             close_connection(s);
@@ -309,6 +340,12 @@ fn receive_packet(s: &Services) -> *mut Packet {
 
 /// `NetworkContentSocketHandler::ReceivePackets`: a bounded batch per call.
 fn receive_packets(s: &Services) -> bool {
+    // Resolving parent/child relations and toggle state can make reception expensive.
+    // Show progress to the user rather than processing everything before an update.
+    // Unknown dependencies also trigger extra requests after the main lists, so all
+    // content cannot reliably arrive in one batch. Handle an arbitrary number now
+    // and the remainder in subsequent, almost immediate cycles: similar speed,
+    // with a more responsive interface. Choosing that arbitrary count is the question.
     let mut i = MAX_PACKETS_TO_RECEIVE;
     loop {
         i -= 1;
@@ -336,11 +373,13 @@ fn receive_server_info(s: &Services, p: *mut PacketState) -> bool {
         info_mut(ci).id = packet::recv_uint32(p, packets);
         info_mut(ci).filesize = packet::recv_uint32(p, packets);
     }
-    let plain = crate::string_type::REPLACE_WITH_QUESTION_MARK;
+    let plain =
+        StringValidationSettings::from_element(StringValidationSetting::ReplaceWithQuestionMark);
     recv_string(s, p, (s.name)(ci), NETWORK_CONTENT_NAME_LENGTH, plain);
     recv_string(s, p, (s.version)(ci), NETWORK_CONTENT_VERSION_LENGTH, plain);
     recv_string(s, p, (s.url)(ci), NETWORK_CONTENT_URL_LENGTH, plain);
-    let multiline = plain | crate::string_type::ALLOW_NEWLINE;
+    let multiline =
+        plain | StringValidationSettings::from_element(StringValidationSetting::AllowNewline);
     recv_string(
         s,
         p,
@@ -354,9 +393,9 @@ fn receive_server_info(s: &Services, p: *mut PacketState) -> bool {
     }
     let dependency_count = unsafe { packet::recv_uint8(p, packets) };
     for _ in 0..dependency_count {
-        let dependency = unsafe { packet::recv_uint32(p, packets) };
-        (s.dependency_push)(ci, dependency);
-        let parent = info(ci).id;
+        let dependency = ContentID(unsafe { packet::recv_uint32(p, packets) });
+        (s.dependency_push)(ci, dependency.0);
+        let parent = info(ci).id();
         with(|c| c.reverse.entry(dependency).or_default().push(parent));
     }
     let tag_count = unsafe { packet::recv_uint8(p, packets) };
@@ -371,35 +410,40 @@ fn receive_server_info(s: &Services, p: *mut PacketState) -> bool {
     }
 
     match (s.has_content)(ci, true) {
-        HasContent::Present => info_mut(ci).state = state::ALREADY_HERE,
+        HasContent::Present => info_mut(ci).set_state(ContentInfoState::AlreadyHere),
         HasContent::Missing => {
-            info_mut(ci).state = state::UNSELECTED;
+            info_mut(ci).set_state(ContentInfoState::Unselected);
             if (s.has_content)(ci, false) == HasContent::Present {
                 info_mut(ci).upgrade = true;
             }
         }
-        HasContent::NoProc => info_mut(ci).state = state::UNSELECTED,
+        HasContent::NoProc => info_mut(ci).set_state(ContentInfoState::Unselected),
     }
 
     // Something we do not have with file size 0 does not exist in the system.
-    if info(ci).state == state::UNSELECTED && info(ci).filesize == 0 {
-        info_mut(ci).state = state::DOES_NOT_EXIST;
+    if info(ci).state() == ContentInfoState::Unselected && info(ci).filesize == 0 {
+        info_mut(ci).set_state(ContentInfoState::DoesNotExist);
     }
 
+    // Do we already have a stub for this?
     let stub = with(|c| {
         c.infos.iter().copied().find(|&ici| {
             let (old, new) = (info(ici), info(ci));
-            old.r#type == new.r#type && old.unique_id == new.unique_id && new.md5sum == old.md5sum
+            old.content_type() == new.content_type()
+                && old.unique_id == new.unique_id
+                && new.md5sum == old.md5sum
         })
     });
     if let Some(ici) = stub {
+        // Preserve the name if possible.
         if (s.string_empty)((s.name)(ci)) {
             (s.string_assign)((s.name)(ci), (s.name)(ici));
         }
         if info(ici).is_selected() {
-            info_mut(ci).state = info(ici).state;
+            info_mut(ci).set_state(info(ici).state());
         }
-        // A content window may hold the stub, so it keeps its address and takes the new values.
+        // The content window may have selected the stub, so we cannot delete it.
+        // Keep its address and take the new values, except those just preserved.
         (s.info_assign)(ici, ci);
         on_receive_content_info(s, ici);
         (s.info_delete)(ci);
@@ -423,19 +467,19 @@ fn receive_server_info(s: &Services, p: *mut PacketState) -> bool {
     true
 }
 
-fn request_content_list_type(s: &Services, kind: u8) {
-    if kind == ct::CONTENT_TYPE_END {
+fn request_content_list_type(s: &Services, kind: ContentType) {
+    if kind == ContentType::CONTENT_TYPE_END {
         for kind in [
-            ct::CONTENT_TYPE_BASE_GRAPHICS,
-            ct::CONTENT_TYPE_BASE_MUSIC,
-            ct::CONTENT_TYPE_BASE_SOUNDS,
-            ct::CONTENT_TYPE_SCENARIO,
-            ct::CONTENT_TYPE_HEIGHTMAP,
-            ct::CONTENT_TYPE_AI,
-            ct::CONTENT_TYPE_AI_LIBRARY,
-            ct::CONTENT_TYPE_GAME,
-            ct::CONTENT_TYPE_GAME_LIBRARY,
-            ct::CONTENT_TYPE_NEWGRF,
+            ContentType::CONTENT_TYPE_BASE_GRAPHICS,
+            ContentType::CONTENT_TYPE_BASE_MUSIC,
+            ContentType::CONTENT_TYPE_BASE_SOUNDS,
+            ContentType::CONTENT_TYPE_SCENARIO,
+            ContentType::CONTENT_TYPE_HEIGHTMAP,
+            ContentType::CONTENT_TYPE_AI,
+            ContentType::CONTENT_TYPE_AI_LIBRARY,
+            ContentType::CONTENT_TYPE_GAME,
+            ContentType::CONTENT_TYPE_GAME_LIBRARY,
+            ContentType::CONTENT_TYPE_NEWGRF,
         ] {
             request_content_list_type(s, kind);
         }
@@ -446,18 +490,22 @@ fn request_content_list_type(s: &Services, kind: u8) {
 
     let mut p = new_packet(
         s,
-        ct::PACKET_CONTENT_CLIENT_INFO_LIST,
+        PacketContentType::PACKET_CONTENT_CLIENT_INFO_LIST,
         crate::network_config::COMPAT_MTU,
     );
-    p.send_uint8(kind, check);
+    p.send_uint8(kind.0, check);
     p.send_uint32(0xffff_ffff, check);
     p.send_uint8(1, check);
     p.send_string(b"vanilla", check);
     p.send_string(unsafe { (s.content_version)().bytes() }, check);
+    // Patchpacks can extend this list with a branch name and version. The BaNaNaS
+    // metadata compatibility list filters that branch; web-interface listing is
+    // requested through an issue at https://github.com/OpenTTD/bananas-api.
+    // For example: Send_string("patchpack"), Send_string(patchpack_content_version).
     send_packet(s, p);
 }
 
-fn request_content_list_ids(s: &Services, content_ids: &[u32]) {
+fn request_content_list_ids(s: &Services, content_ids: &[ContentID]) {
     if content_ids.is_empty() {
         return;
     }
@@ -465,11 +513,11 @@ fn request_content_list_ids(s: &Services, content_ids: &[u32]) {
     connect(s);
 
     for chunk in content_ids.chunks(MAX_CONTENT_IDS_PER_PACKET) {
-        let mut p = new_packet(s, ct::PACKET_CONTENT_CLIENT_INFO_ID, TCP_MTU);
+        let mut p = new_packet(s, PacketContentType::PACKET_CONTENT_CLIENT_INFO_ID, TCP_MTU);
         #[allow(clippy::cast_possible_truncation)]
         p.send_uint16(chunk.len() as u16, check);
         for &id in chunk {
-            p.send_uint32(id, check);
+            p.send_uint32(id.0, check);
         }
         send_packet(s, p);
     }
@@ -484,12 +532,22 @@ fn request_content_list_vector(s: &Services, cv: *mut ContentVector, send_md5sum
 
     let count = (s.list_size)(cv);
     check(count < 255);
-    check(count < (TCP_MTU - 2 - 1 - 1) / (1 + 4 + if send_md5sum { 16 } else { 0 }));
+    check(
+        count
+            < (TCP_MTU - size_of::<packet::PacketSize>() - size_of::<u8>() - size_of::<u8>())
+                / (size_of::<u8>()
+                    + size_of::<u32>()
+                    + if send_md5sum {
+                        crate::md5::MD5_HASH_BYTES
+                    } else {
+                        0
+                    }),
+    );
 
     let kind = if send_md5sum {
-        ct::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5
+        PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5
     } else {
-        ct::PACKET_CONTENT_CLIENT_INFO_EXTID
+        PacketContentType::PACKET_CONTENT_CLIENT_INFO_EXTID
     };
     let mut p = new_packet(s, kind, TCP_MTU);
     #[allow(clippy::cast_possible_truncation)]
@@ -509,7 +567,7 @@ fn request_content_list_vector(s: &Services, cv: *mut ContentVector, send_md5sum
         let found = with(|c| {
             c.infos.iter().any(|&ci2| {
                 let ci2 = info(ci2);
-                ci.r#type == ci2.r#type
+                ci.content_type() == ci2.content_type()
                     && ci.unique_id == ci2.unique_id
                     && (!send_md5sum || ci.md5sum == ci2.md5sum)
             })
@@ -528,10 +586,10 @@ fn download_selected_content(s: &Services, files: &mut u32, bytes: &mut u32, fal
     with(|c| {
         for &ci in &c.infos {
             let ci = info(ci);
-            if !ci.is_selected() || ci.state == state::ALREADY_HERE {
+            if !ci.is_selected() || ci.state() == ContentInfoState::AlreadyHere {
                 continue;
             }
-            content.push(ci.id);
+            content.push(ci.id());
             *bytes = bytes.wrapping_add(ci.filesize);
         }
     });
@@ -555,11 +613,10 @@ fn download_selected_content(s: &Services, files: &mut u32, bytes: &mut u32, fal
     }
 }
 
-fn download_selected_content_http(s: &Services, content: &[u32]) {
-    let mut content_request = Vec::new();
+fn download_selected_content_http(s: &Services, content: &[ContentID]) {
+    let mut content_request = String::new();
     for id in content {
-        content_request.extend_from_slice(id.to_string().as_bytes());
-        content_request.push(b'\n');
+        let _ = writeln!(content_request, "{}", id.0);
     }
 
     with(|c| c.http_response_index = -1);
@@ -570,15 +627,15 @@ fn download_selected_content_http(s: &Services, content: &[u32]) {
     });
 }
 
-fn download_selected_content_fallback(s: &Services, content: &[u32]) {
+fn download_selected_content_fallback(s: &Services, content: &[ContentID]) {
     connect(s);
 
     for chunk in content.chunks(MAX_CONTENT_IDS_PER_PACKET) {
-        let mut p = new_packet(s, ct::PACKET_CONTENT_CLIENT_CONTENT, TCP_MTU);
+        let mut p = new_packet(s, PacketContentType::PACKET_CONTENT_CLIENT_CONTENT, TCP_MTU);
         #[allow(clippy::cast_possible_truncation)]
         p.send_uint16(chunk.len() as u16, check);
         for &id in chunk {
-            p.send_uint32(id, check);
+            p.send_uint32(id.0, check);
         }
         send_packet(s, p);
     }
@@ -606,7 +663,9 @@ fn receive_server_content(s: &Services, p: *mut PacketState) -> bool {
             info_mut(ci).id = packet::recv_uint32(p, packets);
             info_mut(ci).filesize = packet::recv_uint32(p, packets);
         }
-        let plain = crate::string_type::REPLACE_WITH_QUESTION_MARK;
+        let plain = StringValidationSettings::from_element(
+            StringValidationSetting::ReplaceWithQuestionMark,
+        );
         recv_string(
             s,
             p,
@@ -686,7 +745,7 @@ fn after_download(s: &Services) {
 
     let ci = with(|c| c.cur_info);
     if (s.extract)(ci) {
-        on_download_complete(s, info(ci).id);
+        on_download_complete(s, info(ci).id());
     } else {
         (s.error_extract)();
     }
@@ -713,6 +772,7 @@ fn on_failure(s: &Services) {
 }
 
 fn on_receive_data(s: &Services, data: &[u8], has_data: bool) {
+    check(!has_data || !data.is_empty());
     // Latent data arrives from a connection that was closed.
     let index = with(|c| c.http_response_index);
     if index == -2 {
@@ -725,7 +785,7 @@ fn on_receive_data(s: &Services, data: &[u8], has_data: bool) {
             with(|c| c.http_response.extend_from_slice(data));
             return;
         }
-        // Terminate the response and prepare for the file data.
+        // Make sure the response is properly terminated, then prepare for the file data.
         with(|c| {
             c.http_response.push(0);
             c.http_response_index = 0;
@@ -737,11 +797,13 @@ fn on_receive_data(s: &Services, data: &[u8], has_data: bool) {
         if (s.file_write)(data.as_ptr(), data.len()) == data.len() {
             let ci = with(|c| c.cur_info);
             #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            // Just received the data.
             on_download_progress(s, ci, data.len() as i32);
         } else {
             // A failed write retries through the fallback protocol.
             on_failure(s);
         }
+        // Nothing more to do now.
         return;
     }
 
@@ -757,6 +819,7 @@ fn on_receive_data(s: &Services, data: &[u8], has_data: bool) {
         return;
     }
 
+    // Without an open file this is the first packet with metadata.
     let ci = replace_cur_info(s);
     if parse_response_line(s, ci).is_none() {
         on_failure(s);
@@ -779,7 +842,7 @@ impl<'a> Line<'a> {
         if result.error_kind != 0 {
             let part = &src[result.error_offset..];
             let head = &part[..result.error_length.min(part.len())];
-            if result.error_kind == 3 {
+            if result.error_kind == crate::integer::INTEGER_NEGATIVE_HEX_OUT_OF_RANGE {
                 debug!(misc, 0, "Integer out of range: '{}'", Bytes(head));
             } else {
                 let tail = &part[head.len()..];
@@ -787,7 +850,7 @@ impl<'a> Line<'a> {
                     misc,
                     0,
                     "{}: '{}'+'{}'",
-                    if result.error_kind == 2 {
+                    if result.error_kind == crate::integer::INTEGER_OUT_OF_RANGE {
                         "Integer out of range"
                     } else {
                         "Cannot parse integer"
@@ -806,26 +869,21 @@ impl<'a> Line<'a> {
         }
     }
     fn read_if(&mut self, prefix: &[u8]) -> bool {
-        let found = self.left().starts_with(prefix);
-        if found {
-            self.position += prefix.len();
-        }
-        found
+        let result = consumer::prefix(self.left(), prefix);
+        self.position += result.length;
+        result.matched != 0
     }
     /// `SkipUntilChar(c, KEEP_SEPARATOR)`.
     fn skip_until(&mut self, c: u8) {
-        self.position += self
-            .left()
-            .iter()
-            .position(|&b| b == c)
-            .unwrap_or(self.left().len());
+        self.position +=
+            consumer::until(self.left(), &[c], SeparatorUsage::KEEP_SEPARATOR).consumed_length;
     }
     /// `ReadUntilChar(c, KEEP_SEPARATOR)`.
     fn read_until(&mut self, c: u8) -> &'a [u8] {
         let left = self.left();
-        let length = left.iter().position(|&b| b == c).unwrap_or(left.len());
-        self.position += length;
-        &left[..length]
+        let result = consumer::until(left, &[c], SeparatorUsage::KEEP_SEPARATOR);
+        self.position += result.consumed_length;
+        &left[..result.result_length]
     }
 }
 
@@ -851,10 +909,12 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
             position: 0,
         };
 
+        // Read the ID.
         info_mut(ci).id = line.read_integer(32);
         if !line.read_if(b",") {
             return None;
         }
+        // Read the type.
         #[allow(clippy::cast_possible_truncation)]
         {
             info_mut(ci).r#type = line.read_integer(32) as u8;
@@ -862,15 +922,18 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
         if !line.read_if(b",") {
             return None;
         }
+        // Read the file size.
         info_mut(ci).filesize = line.read_integer(32);
         if !line.read_if(b",") {
             return None;
         }
 
+        // Read the URL.
         let url = line.left();
 
         // A fallback URL continues with the next line.
         if line.read_if(b"ottd") {
+            // Have we gone through all lines?
             #[allow(clippy::cast_sign_loss)]
             if with(|c| c.http_response_index as usize) >= size {
                 return None;
@@ -897,6 +960,7 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
             filename = &filename[..pos];
         }
 
+        // Copy the string, without extensions, to the filename.
         unsafe { append((s.filename)(ci), filename) };
 
         // Request the next file.
@@ -912,7 +976,7 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
     }
 }
 
-fn download_content_info(s: &Services, cid: u32) {
+fn download_content_info(s: &Services, cid: ContentID) {
     // Content already tried is not requested again.
     if with(|c| {
         if c.requested.contains(&cid) {
@@ -938,31 +1002,32 @@ fn request_queued_content_info(s: &Services) {
         return;
     }
 
-    // Take the queue so more IDs can be queued, then drop IDs received since.
+    // Move the queue locally so more IDs can be queued for later.
     let queue = with(|c| {
         let mut queue = std::mem::take(&mut c.queued);
-        queue.retain(|&id| !c.infos.iter().any(|&ci| info(ci).id == id));
+        // Remove IDs received since the request was queued.
+        queue.retain(|&id| !c.infos.iter().any(|&ci| info(ci).id() == id));
         queue
     });
 
     request_content_list_ids(s, &queue);
 }
 
-fn select(s: &Services, cid: u32) {
+fn select(s: &Services, cid: ContentID) {
     let ci = get_content(cid);
-    if ci.is_null() || info(ci).state != state::UNSELECTED {
+    if ci.is_null() || info(ci).state() != ContentInfoState::Unselected {
         return;
     }
-    info_mut(ci).state = state::SELECTED;
+    info_mut(ci).set_state(ContentInfoState::Selected);
     check_dependency_state(s, ci);
 }
 
-fn unselect(s: &Services, cid: u32) {
+fn unselect(s: &Services, cid: ContentID) {
     let ci = get_content(cid);
     if ci.is_null() || !info(ci).is_selected() {
         return;
     }
-    info_mut(ci).state = state::UNSELECTED;
+    info_mut(ci).set_state(ContentInfoState::Unselected);
     check_dependency_state(s, ci);
 }
 
@@ -971,73 +1036,77 @@ fn select_where(s: &Services, upgrade_only: bool) {
     let mut i = 0;
     while let Some(ci) = with(|c| c.infos.get(i).copied()) {
         i += 1;
-        if info(ci).state == state::UNSELECTED && (!upgrade_only || info(ci).upgrade) {
-            info_mut(ci).state = state::SELECTED;
+        if info(ci).state() == ContentInfoState::Unselected && (!upgrade_only || info(ci).upgrade) {
+            info_mut(ci).set_state(ContentInfoState::Selected);
             check_dependency_state(s, ci);
         }
     }
 }
 
 fn reverse_lookup_dependency(parents: &mut Vec<*mut ContentInfo>, child: *const ContentInfo) {
-    let id = info(child).id;
-    let ids = with(|c| c.reverse.get(&id).cloned().unwrap_or_default());
-    for parent in ids.into_iter().rev() {
-        parents.push(get_content(parent));
-    }
+    let id = info(child).id();
+    with(|c| {
+        if let Some(ids) = c.reverse.get(&id) {
+            for &parent in ids.iter().rev() {
+                parents.push(c.get_content(parent));
+            }
+        }
+    });
 }
 
 fn reverse_lookup_tree_dependency(child: *mut ContentInfo) -> Vec<*mut ContentInfo> {
     let mut tree = vec![child];
-    // Indices, since the tree grows while it is walked.
+    // First find the direct parents. Adding items can reallocate and move the
+    // vector storage, invalidating a normal iterator, so walk by indices.
     let mut i = 0;
     while i < tree.len() {
         let mut parents = Vec::new();
         reverse_lookup_dependency(&mut parents, tree[i]);
         for ci in parents {
-            if !tree.contains(&ci) {
-                tree.push(ci);
-            }
+            include(&mut tree, &ci);
         }
         i += 1;
     }
     tree
 }
 
-fn dependency_at(s: &Services, ci: *const ContentInfo, index: usize) -> Option<u32> {
+fn dependency_at(s: &Services, ci: *const ContentInfo, index: usize) -> Option<ContentID> {
     let span = (s.dependencies)(ci);
     // SAFETY: The native vector is live and unmodified for this read.
-    (index < span.size).then(|| unsafe { *span.data.add(index) })
+    (index < span.size).then(|| ContentID(unsafe { *span.data.add(index) }))
 }
 
 fn check_dependency_state(s: &Services, ci: *mut ContentInfo) {
-    if info(ci).is_selected() || info(ci).state == state::ALREADY_HERE {
-        // Mark unselected children autoselected, so removing a dependency can unselect them.
+    if info(ci).is_selected() || info(ci).state() == ContentInfoState::AlreadyHere {
+        // Selection is easy: walk all children and mark them autoselected. This records
+        // automatic selection so removing a dependency can unselect them.
         let mut k = 0;
         while let Some(dependency) = dependency_at(s, ci, k) {
             k += 1;
             let c = get_content(dependency);
             if c.is_null() {
                 download_content_info(s, dependency);
-            } else if info(c).state == state::UNSELECTED {
-                info_mut(c).state = state::AUTOSELECTED;
+            } else if info(c).state() == ContentInfoState::Unselected {
+                info_mut(c).set_state(ContentInfoState::Autoselected);
                 check_dependency_state(s, c);
             }
         }
         return;
     }
 
-    if info(ci).state != state::UNSELECTED {
+    if info(ci).state() != ContentInfoState::Unselected {
         return;
     }
 
-    // Unselect the parents, then the autoselected children only this content needs.
+    // For unselection, find and unselect our parents. Then unselect the children
+    // that are not otherwise needed as dependencies, but only when autoselected.
     let mut parents = Vec::new();
     reverse_lookup_dependency(&mut parents, ci);
     for &c in &parents {
         if !info(c).is_selected() {
             continue;
         }
-        unselect(s, info(c).id);
+        unselect(s, info(c).id());
     }
 
     let mut k = 0;
@@ -1048,7 +1117,7 @@ fn check_dependency_state(s: &Services, ci: *mut ContentInfo) {
             download_content_info(s, dependency);
             continue;
         }
-        if info(c).state != state::AUTOSELECTED {
+        if info(c).state() != ContentInfoState::Autoselected {
             continue;
         }
 
@@ -1056,19 +1125,20 @@ fn check_dependency_state(s: &Services, ci: *mut ContentInfo) {
         parents.clear();
         reverse_lookup_dependency(&mut parents, c);
 
+        // First check whether anything depends on us.
         let mut sel_count = 0;
         let mut force_selection = false;
         for &parent_ci in &parents {
             if info(parent_ci).is_selected() {
                 sel_count += 1;
             }
-            if info(parent_ci).state == state::SELECTED {
+            if info(parent_ci).state() == ContentInfoState::Selected {
                 force_selection = true;
             }
         }
         if sel_count == 0 {
             // Nothing depends on it.
-            unselect(s, info(c).id);
+            unselect(s, info(c).id());
             continue;
         }
         // Something manually selected depends directly on it.
@@ -1082,28 +1152,33 @@ fn check_dependency_state(s: &Services, ci: *mut ContentInfo) {
         // Anything manually selected keeps the graph.
         if parents
             .iter()
-            .any(|&parent_ci| info(parent_ci).state == state::SELECTED)
+            .any(|&parent_ci| info(parent_ci).state() == ContentInfoState::Selected)
         {
             continue;
         }
 
-        // Unselect the whole graph first, then check the children of each member.
+        // Nothing depends on us: unselect the whole graph first, then check each
+        // member's children. Doing that immediately would repeat this same search.
         for &parent in &parents {
-            if info(parent).state == state::AUTOSELECTED {
-                unselect(s, info(parent).id);
+            if info(parent).state() == ContentInfoState::Autoselected {
+                unselect(s, info(parent).id());
             }
         }
         for &parent in &parents {
-            check_dependency_state(s, get_content(info(parent).id));
+            check_dependency_state(s, get_content(info(parent).id()));
         }
     }
 }
 
 /// Construction of `_network_content_client`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_init(s: &Services) {
+fn init(s: &Services) {
     let now = (s.tcp.now)();
     with(|c| c.last_activity = now);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_content_init(s: &Services) {
+    init(s);
 }
 
 #[unsafe(no_mangle)]
@@ -1112,8 +1187,7 @@ pub extern "C" fn openttd_rust_content_connect(s: &Services) {
 }
 
 /// `NetworkContentConnecter`; on success the native socket is already open.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_connected(s: &Services, success: bool) {
+fn connected(s: &Services, success: bool) {
     if success {
         let now = (s.tcp.now)();
         with(|c| c.last_activity = now);
@@ -1123,18 +1197,26 @@ pub extern "C" fn openttd_rust_content_connected(s: &Services, success: bool) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_content_connected(s: &Services, success: bool) {
+    connected(s, success);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_close(s: &Services) {
     close_connection(s);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_cancel(s: &Services) {
+fn cancel(s: &Services) {
     CANCELLED.store(true, Ordering::Relaxed);
     close_connection(s);
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
+pub extern "C" fn openttd_rust_content_cancel(s: &Services) {
+    cancel(s);
+}
+
+fn send_receive(s: &Services) {
     if !(s.tcp.valid)(s.client) || with(|c| c.is_connecting) {
         return;
     }
@@ -1151,14 +1233,29 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
         with(|c| c.last_activity = now);
     }
 
-    if unsafe { tcp::openttd_rust_tcp_send(s.tcp, s.client, false, check) } == tcp::Send::Close {
+    if unsafe {
+        tcp::send_packets(
+            tcp::Context {
+                services: s.tcp,
+                socket: s.client,
+            },
+            false,
+            check,
+        )
+    } == tcp::Send::Close
+    {
         close_connection(s);
     }
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
+    send_receive(s);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_request_type(s: &Services, kind: u8) {
-    request_content_list_type(s, kind);
+    request_content_list_type(s, ContentType(kind));
 }
 
 /// # Safety
@@ -1172,7 +1269,7 @@ pub unsafe extern "C" fn openttd_rust_content_request_ids(
     let ids = if count == 0 {
         &[]
     } else {
-        unsafe { std::slice::from_raw_parts(ids, count) }
+        unsafe { std::slice::from_raw_parts(ids.cast::<ContentID>(), count) }
     };
     request_content_list_ids(s, ids);
 }
@@ -1203,12 +1300,12 @@ pub extern "C" fn openttd_rust_content_request_queued(s: &Services) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_select(s: &Services, cid: u32) {
-    select(s, cid);
+    select(s, ContentID(cid));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_unselect(s: &Services, cid: u32) {
-    unselect(s, cid);
+    unselect(s, ContentID(cid));
 }
 
 #[unsafe(no_mangle)]
@@ -1216,41 +1313,52 @@ pub extern "C" fn openttd_rust_content_select_all(s: &Services, upgrade_only: bo
     select_where(s, upgrade_only);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_unselect_all() {
+fn unselect_all() {
     with(|c| {
         for &ci in &c.infos {
             let ci = info_mut(ci);
-            if ci.is_selected() && ci.state != state::ALREADY_HERE {
-                ci.state = state::UNSELECTED;
+            if ci.is_selected() && ci.state() != ContentInfoState::AlreadyHere {
+                ci.set_state(ContentInfoState::Unselected);
             }
         }
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_toggle(s: &Services, ci: *const ContentInfo) {
-    match info(ci).state {
-        state::SELECTED | state::AUTOSELECTED => unselect(s, info(ci).id),
-        state::UNSELECTED => select(s, info(ci).id),
+pub extern "C" fn openttd_rust_content_unselect_all() {
+    unselect_all();
+}
+
+fn toggle_selected_state(s: &Services, ci: *const ContentInfo) {
+    match info(ci).state() {
+        ContentInfoState::Selected | ContentInfoState::Autoselected => unselect(s, info(ci).id()),
+        ContentInfoState::Unselected => select(s, info(ci).id()),
         _ => {}
     }
 }
 
-/// `ReverseLookupTreeDependency` into a native vector; its only caller passes it empty.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_tree(
-    s: &Services,
-    tree: *mut ConstContentVector,
-    child: *const ContentInfo,
-) {
+pub extern "C" fn openttd_rust_content_toggle(s: &Services, ci: *const ContentInfo) {
+    toggle_selected_state(s, ci);
+}
+
+/// `ReverseLookupTreeDependency` into a native vector; its only caller passes it empty.
+fn tree_dependency(s: &Services, tree: *mut ConstContentVector, child: *const ContentInfo) {
     for ci in reverse_lookup_tree_dependency(child.cast_mut()) {
         (s.tree_push)(tree, ci);
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_clear(s: &Services) {
+pub extern "C" fn openttd_rust_content_tree(
+    s: &Services,
+    tree: *mut ConstContentVector,
+    child: *const ContentInfo,
+) {
+    tree_dependency(s, tree, child);
+}
+
+fn clear(s: &Services) {
     let infos = with(|c| {
         c.requested.clear();
         c.queued.clear();
@@ -1262,9 +1370,13 @@ pub extern "C" fn openttd_rust_content_clear(s: &Services) {
     }
 }
 
-/// The received records in order, for native iteration until the next mutation.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_infos(count: &mut usize) -> *const *mut ContentInfo {
+pub extern "C" fn openttd_rust_content_clear(s: &Services) {
+    clear(s);
+}
+
+/// The received records in order, for native iteration until the next mutation.
+fn infos(count: &mut usize) -> *const *mut ContentInfo {
     with(|c| {
         *count = c.infos.len();
         c.infos.as_ptr()
@@ -1272,17 +1384,23 @@ pub extern "C" fn openttd_rust_content_infos(count: &mut usize) -> *const *mut C
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_add_callback(cb: *mut ContentCallback) {
+pub extern "C" fn openttd_rust_content_infos(count: &mut usize) -> *const *mut ContentInfo {
+    infos(count)
+}
+
+fn add_callback(cb: *mut ContentCallback) {
     with(|c| {
-        if !c.callbacks.contains(&cb) {
-            c.callbacks.push(cb);
-        }
+        include(&mut c.callbacks, &cb);
     });
 }
 
-/// `callbacks.erase(find(cb))`; libstdc++ erasing `end()` drops the last element.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_remove_callback(cb: *mut ContentCallback) {
+pub extern "C" fn openttd_rust_content_add_callback(cb: *mut ContentCallback) {
+    add_callback(cb);
+}
+
+/// `callbacks.erase(find(cb))`; libstdc++ erasing `end()` drops the last element.
+fn remove_callback(cb: *mut ContentCallback) {
     with(|c| match c.callbacks.iter().position(|&x| x == cb) {
         Some(index) => {
             c.callbacks.remove(index);
@@ -1291,6 +1409,11 @@ pub extern "C" fn openttd_rust_content_remove_callback(cb: *mut ContentCallback)
             c.callbacks.pop();
         }
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_content_remove_callback(cb: *mut ContentCallback) {
+    remove_callback(cb);
 }
 
 #[unsafe(no_mangle)]
@@ -1306,7 +1429,6 @@ pub unsafe extern "C" fn openttd_rust_content_http_data(
     data: *const u8,
     length: usize,
 ) {
-    check(data.is_null() || length != 0);
     let bytes = if data.is_null() {
         &[]
     } else {
@@ -1315,9 +1437,13 @@ pub unsafe extern "C" fn openttd_rust_content_http_data(
     on_receive_data(s, bytes, !data.is_null());
 }
 
+fn is_cancelled() -> bool {
+    CANCELLED.load(Ordering::Relaxed)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_http_cancelled() -> u8 {
-    u8::from(CANCELLED.load(Ordering::Relaxed))
+    u8::from(is_cancelled())
 }
 
 crate::abi::layouts! {

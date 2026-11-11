@@ -2,7 +2,7 @@
 
 ## Policy
 
-Deep checks (#503) run only on user request (user, 2026-10-31). Root runs the requested members, all by default, on the integrated tip in the background at idle CPU and I/O priority, surviving session end; read the report before the next integration after completion. Never restart an interrupted run without a request.
+Deep checks (#503) have standing user requests for all members at cleanup exit and phase-3 exit (#893; user, 2026-11-11). Other deep runs remain on user request. Root runs the requested members, all by default, on the integrated tip in the background at idle CPU and I/O priority, surviving session end; read the report before the next integration after completion. Never restart an interrupted run without a request.
 
 A failure alone does not block integration. Bisect integrations since the last clean deep check: a newly introduced divergence is a code regression under the [rollback rule](root-workflow.md#automatic-rollback-and-wind-down); an older one becomes a #156 fidelity item or a new issue.
 

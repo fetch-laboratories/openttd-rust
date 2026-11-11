@@ -1,12 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared string-validation flags from `string_type.h`.
-/// `StringValidationSettings{StringValidationSetting::ReplaceWithQuestionMark}`.
-pub(crate) const REPLACE_WITH_QUESTION_MARK: u8 =
-    StringValidationSettings::from_element(StringValidationSetting::ReplaceWithQuestionMark).0;
-/// `StringValidationSetting::AllowNewline`.
-pub(crate) const ALLOW_NEWLINE: u8 =
-    StringValidationSettings::from_element(StringValidationSetting::AllowNewline).0;
-
 /// Native `StringValidationSetting`, retaining every underlying `u8` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
