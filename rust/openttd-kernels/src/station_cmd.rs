@@ -2445,7 +2445,7 @@ impl Ctx<'_> {
             shared: self.s.shared,
             rail: self.rail().rail,
             native: self.rail().signal,
-            log_x: u32::from(self.map().log_x),
+            log_x: self.map().log_x,
         }
     }
     /// A nested `Command<...>::Do(flags, tile, ...)` running `body` with the

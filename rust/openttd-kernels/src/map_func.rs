@@ -15,7 +15,7 @@ use crate::tile_type::{TileIndex, TileType};
 #[derive(Clone, Copy)]
 pub struct Map {
     /// `Map::LogX()` captured for this synchronous entry.
-    pub log_x: u8,
+    pub log_x: u32,
 }
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
@@ -24,12 +24,11 @@ impl Map {
         (0..count).map(TileIndex)
     }
 
-    /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
+    /// Capture `Map::LogX()`, whose original dimension is a `uint`.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     #[inline]
     pub fn from_log_x(log_x: u32) -> Self {
-        Self { log_x: log_x as u8 }
+        Self { log_x }
     }
     /// `Map::SizeX()`, from the dimension captured at entry.
     #[must_use]
@@ -41,7 +40,7 @@ impl Map {
     #[must_use]
     #[inline]
     pub fn tile_xy(self, x: u32, y: u32) -> TileIndex {
-        TileIndex(y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x))
+        TileIndex(y.wrapping_shl(self.log_x).wrapping_add(x))
     }
     /// `TileVirtXY`, including the unsigned coordinate shifts and addition.
     #[must_use]
@@ -54,7 +53,7 @@ impl Map {
     #[inline]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
         // Subtract 12 to avoid overflow for large n; the minimum map is 64 by 64.
-        let scaled = n.wrapping_shl(u32::from(self.log_x) + size_y.ilog2() - 12);
+        let scaled = n.wrapping_shl(self.log_x + size_y.ilog2() - 12);
         crate::math::ceil_div(scaled, 1 << 4)
     }
     /// `AddTileIndexDiffCWrap`: add a coordinate offset, returning invalid if it

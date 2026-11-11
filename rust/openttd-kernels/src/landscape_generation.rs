@@ -443,7 +443,7 @@ impl World<'_> {
         // entry. Generation itself neither reads nor retains that descriptor.
         unsafe {
             crate::tile_loop::run(
-                u32::from(self.map.log_x),
+                self.map.log_x,
                 self.size_y.ilog2(),
                 input.settings,
                 input.services,

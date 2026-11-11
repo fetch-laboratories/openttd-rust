@@ -119,8 +119,7 @@ impl<'a> World<'a> {
         }
     }
     fn indirectly_cleared(&self, t: u32) -> bool {
-        crate::objects::openttd_rust_object_indirectly_cleared_abi(t, u32::from(self.map.log_x))
-            != 0
+        crate::objects::openttd_rust_object_indirectly_cleared_abi(t, self.map.log_x) != 0
     }
     fn area<T>(
         &self,

@@ -228,7 +228,7 @@ fn flush_signals(s: &CommandServices) {
             s.shared,
             s.rail_map,
             s.signals,
-            u32::from(s.shared.map().log_x),
+            s.shared.map().log_x,
         );
     }
 }

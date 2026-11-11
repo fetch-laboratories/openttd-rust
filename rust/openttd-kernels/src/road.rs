@@ -564,7 +564,9 @@ impl Game<'_> {
                 acceleration_model,
                 road_side,
                 queue,
-                map: Map { log_x },
+                map: Map {
+                    log_x: u32::from(log_x),
+                },
             }
         }
     }
@@ -2000,7 +2002,7 @@ impl Game<'_> {
         self.acceleration_model = entry.acceleration_model;
         self.road_side = entry.road_side;
         self.queue = entry.queue;
-        self.map.log_x = entry.map_log_x;
+        self.map.log_x = u32::from(entry.map_log_x);
         let running = if v.v.status() & VS_STOPPED == 0 {
             v.v.running().wrapping_add(1)
         } else {

@@ -199,7 +199,7 @@ impl<'a> World<'a> {
             shared: self.r.shared,
             rail: self.r.rail,
             native: self.r.signal,
-            log_x: u32::from(self.map.log_x),
+            log_x: self.map.log_x,
         }
         .add_side(tile, direction, owner);
     }
@@ -937,8 +937,7 @@ impl<'a> World<'a> {
             w::hit(w::TB_TUNNEL_TERRAFORM);
             // The canonical scratch owner returns a stable index, then restores
             // the first tile after recursive terraform may append/reallocate.
-            let hidden =
-                crate::objects::openttd_rust_object_tunnel_hide(end, u32::from(self.map.log_x));
+            let hidden = crate::objects::openttd_rust_object_tunnel_hide(end, self.map.log_x);
             (self.a.terraform)(ret.0, flags, end, end_slope & start_slope);
             crate::objects::openttd_rust_object_restore_first(hidden);
             if !ret.ok() {
