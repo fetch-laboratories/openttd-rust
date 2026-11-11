@@ -58,7 +58,7 @@ cargo test --workspace --locked
 - Logs, test reports and source revision go to `.local/verification/<timestamp>/`. A pass establishes covered behavior, not whole-game equivalence.
 - The candidate is `build-rust/openttd-rust`; Cargo artifacts are in `build-rust/cargo`. The reference is `.local/build-reference/openttd` in the main checkout.
 - Bootstrapped dependencies give candidate binaries an RPATH, so `./build-rust/openttd-rust -X`, `./build-rust/openttd_test` and `ctest` in `build-rust` run from a plain shell. `-X` avoids global game folders; use separate development configuration and saves.
-- Every fork build requires Rust. Native GNU/Linux x86-64 and ARM, macOS arm64, Emscripten and the scoped Windows MSVC mode below are supported. Other platforms, cross compilation and macOS universal or Intel are unsupported.
+- Every fork build requires Rust. CI exercises native GNU/Linux x86-64, macOS arm64, Emscripten and the scoped Windows MSVC mode below. Native GNU/Linux `aarch64-unknown-linux-gnu` is also accepted by the build system, but no Linux aarch64 job exercises it in CI. Other platforms, cross compilation and macOS universal or Intel are unsupported.
 
 ### Quick cleanup checks
 
