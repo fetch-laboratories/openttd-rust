@@ -15,8 +15,9 @@ use crate::tile_type::TropicZone;
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
+/// `IsTileType`: whether `GetTileType` of the tile is `kind`.
 pub(crate) fn is_tile_type(s: &crate::services::Services, tile: TileIndex, kind: TileType) -> bool {
-    TileType((s.tile_type)(tile.0)) == kind
+    crate::map_func::World::new(s).kind(tile) == kind
 }
 
 #[allow(clippy::inline_always)]
@@ -145,7 +146,7 @@ pub fn is_tile_owner(
     tile: TileIndex,
     owner: crate::company_type::Owner,
 ) -> bool {
-    (s.tile_owner)(tile.0) == owner.0
+    crate::map_func::World::new(s).owner(tile) == owner
 }
 
 /// `TileHash`, preserving the source unsigned subtraction.
@@ -159,7 +160,7 @@ pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
-    tile_hash(x, y) & 3
+    crate::bitmath_func::gb(tile_hash(x, y), 0, 2)
 }
 
 /// `GetTilePixelSlope`, preserving unsigned `TILE_HEIGHT` multiplication.
@@ -287,9 +288,9 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn owner(&self, t: TileIndex) -> crate::company_type::Owner {
-        self.check(t < TileIndex(self.types.count()) && self.kind(t) != TileType::MP_VOID);
-        self.check(self.kind(t) != TileType::MP_HOUSE);
-        self.check(self.kind(t) != TileType::MP_INDUSTRY);
+        self.assert_with(|| self.is_valid_tile(t));
+        self.assert_with(|| self.kind(t) != TileType::MP_HOUSE);
+        self.assert_with(|| self.kind(t) != TileType::MP_INDUSTRY);
         crate::company_type::CompanyID(crate::bitmath_func::gb(
             u32::from(Self::byte(self.types.m1(t))),
             0,
@@ -397,7 +398,7 @@ pub(crate) fn is_inner_tile(
     t: TileIndex,
     freeform_edges: bool,
 ) -> bool {
-    w.check(w.types.available(t).is_some());
+    w.check(t.0 < w.types.count());
     let map = w.dimensions;
     let x = map.tile_x(t);
     let y = map.tile_y(t);
@@ -408,7 +409,7 @@ pub(crate) fn is_inner_tile(
 /// `SetTileHeight`.
 #[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
 pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: TileIndex, height: u32) {
-    w.check(w.types.available(t).is_some());
+    w.check(t.0 < w.types.count());
     w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
     let _ = w.types.set_height(t, height as u8);
 }
@@ -420,7 +421,7 @@ pub(crate) fn set_tile_type(
     kind: TileType,
     freeform_edges: impl FnOnce() -> bool,
 ) {
-    w.check(w.types.available(t).is_some());
+    w.check(t.0 < w.types.count());
     /* VOID tiles (and no others) are exactly allowed at the lower left and right
      * edges of the map. If _settings_game.construction.freeform_edges is true,
      * the upper edges of the map are also VOID tiles. */
@@ -652,6 +653,50 @@ mod tests {
                 }
             }
         }
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 0,
+                assertions: true,
+            },
+            6,
+        );
+    }
+
+    /// `IsInnerTile`, `SetTileHeight` and `SetTileType` assert `tile < Map::Size()`
+    /// themselves: tile 4096 of the 64 by 64 map fails that range assertion once each,
+    /// although these backing arrays extend past it, and a returning handler resumes.
+    #[test]
+    #[allow(unsafe_code)] // The raw reader over this test's arrays only.
+    fn setters_assert_the_map_size_range() {
+        let (base, extended) = tiles();
+        let shared = crate::services::Services {
+            movement: MOVEMENT.with(std::ptr::from_ref),
+            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+        };
+        let allocation = TileTypeAllocation {
+            base: base.as_ptr(),
+            extended: extended.as_ptr(),
+            count: 4096,
+            assertions: true,
+        };
+        crate::map_func::fixture::set(allocation, 6);
+        let world = World::new(&shared);
+        let outside = crate::tile_type::TileIndex(4096);
+        ASSERTS.set(0);
+        let _ = super::is_inner_tile(&world, outside, false);
+        assert_eq!(ASSERTS.get(), 1, "IsInnerTile");
+        ASSERTS.set(0);
+        super::set_tile_height(&world, outside, 2);
+        assert_eq!(ASSERTS.get(), 1, "SetTileHeight");
+        ASSERTS.set(0);
+        // The range assertion, then the inner-tile assertion's own range assertion; a void
+        // type is not inner, so the type assertion holds.
+        super::set_tile_type(&world, outside, crate::tile_type::TileType::MP_VOID, || {
+            false
+        });
+        assert_eq!(ASSERTS.get(), 2, "SetTileType");
         crate::map_func::fixture::set(
             TileTypeAllocation {
                 base: std::ptr::null(),
