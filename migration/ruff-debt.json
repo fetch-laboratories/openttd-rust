@@ -21,9 +21,6 @@
     "tools/check-rust-platform.py | check_windows_link | PLR0913": [
       6
     ],
-    "tools/ci.py | main | C901": [
-      11
-    ],
     "tools/deep.py | run_deep | C901": [
       14
     ],

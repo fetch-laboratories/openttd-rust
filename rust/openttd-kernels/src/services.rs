@@ -641,7 +641,6 @@ crate::abi::layouts! {
         log_x,
         log_y,
         assertions,
-        debug,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
         kind => type,

@@ -1664,14 +1664,11 @@ impl World<'_> {
                     crate::witness::hit(crate::witness::OBJECT_LIGHTHOUSE);
                     return true;
                 }
-                tile = self
-                    .map
-                    .tile_add_by_diag_dir(
-                        TileIndex(tile),
-                        DiagDirection(dir),
-                        crate::map_func::native_check,
-                    )
-                    .0;
+                tile = (TileIndex(tile)
+                    + self
+                        .map
+                        .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+                .0;
                 if !(self.shared.tile_valid)(tile) {
                     return false;
                 }

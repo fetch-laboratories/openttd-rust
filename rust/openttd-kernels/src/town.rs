@@ -1543,9 +1543,8 @@ impl Engine<'_> {
                 cur = cur.wrapping_add(tid_lt[2]);
             }
             /* Test for roadbit parallel to dir and facing towards the middle axis */
-            let test = TileIndex(tile.0.wrapping_add_signed(cur));
-            if self.is_valid_tile(test)
-                && self.get_town_road_bits(test)
+            if self.is_valid_tile(tile + cur)
+                && self.get_town_road_bits(self.map().tile_add(tile, cur, self.check()))
                     & diag_dir_to_road_bits(
                         if pos & 2 != 0 {
                             dir
@@ -1844,6 +1843,8 @@ impl Engine<'_> {
         let mut bridge_length = 0_u32; // This value stores the length of the possible bridge
         let mut bridge_tile = tile; // Used to store the other waterside
 
+        let delta = self.map().tile_offs_by_diag_dir(bridge_dir, self.check());
+
         /* To prevent really small towns from building disproportionately
          * long bridges, make the max a function of its population. */
         let base_bridge_length = 5;
@@ -1864,9 +1865,7 @@ impl Engine<'_> {
                     /* Allow to cross rivers, not big lakes, nor large amounts of rails or one-way roads. */
                     return false;
                 }
-                bridge_tile =
-                    self.map()
-                        .tile_add_by_diag_dir(bridge_tile, bridge_dir, self.check());
+                bridge_tile += delta;
                 if !(self.is_valid_tile(bridge_tile)
                     && (((self.services.is_water_tile)(bridge_tile.0)
                         && !world().is_sea(bridge_tile.0))
@@ -1884,9 +1883,7 @@ impl Engine<'_> {
                     /* Ensure the bridge is not longer than the max allowed length. */
                     return false;
                 }
-                bridge_tile =
-                    self.map()
-                        .tile_add_by_diag_dir(bridge_tile, bridge_dir, self.check());
+                bridge_tile += delta;
                 if !(self.is_valid_tile(bridge_tile)
                     && ((self.services.is_water_tile)(bridge_tile.0)
                         || (self.services.is_plain_rail)(bridge_tile.0)
@@ -1963,6 +1960,8 @@ impl Engine<'_> {
         {
             return false;
         }
+        let delta = self.map().tile_offs_by_diag_dir(tunnel_dir, self.check());
+
         /* There are two conditions for building tunnels: Under a mountain and under an obstruction. */
         let max_tunnel_length = if self.can_road_continue_into_next_tile(t, tile, tunnel_dir) {
             /* Only tunnel under a mountain if the slope is continuous for at least 4 tiles. We want tunneling to be a last resort for large hills. */
@@ -1978,9 +1977,7 @@ impl Engine<'_> {
                 {
                     return false;
                 }
-                slope_tile = self
-                    .map()
-                    .tile_add_by_diag_dir(slope_tile, tunnel_dir, self.check());
+                slope_tile += delta;
             }
             /* More population means longer tunnels, but make sure we can at least cover the smallest mountain which necessitates tunneling. */
             self.population() / 1000 + 7
@@ -1998,9 +1995,7 @@ impl Engine<'_> {
             if u32::from(length) >= max_tunnel_length {
                 return false;
             }
-            tunnel_tile = self
-                .map()
-                .tile_add_by_diag_dir(tunnel_tile, tunnel_dir, self.check());
+            tunnel_tile += delta;
             /* The tunnel ends when start and end tiles are the same height. */
             if !self.is_valid_tile(tunnel_tile)
                 || self.get_tile_z(tile) == self.get_tile_z(tunnel_tile)
@@ -2039,7 +2034,7 @@ impl Engine<'_> {
         ];
         let mut allow = false;
         for (x, y) in TILES {
-            let cur_tile = self.map().tile_add_xy(t, x, y);
+            let cur_tile = t + self.map().diff(x, y);
             if !self.is_valid_tile(cur_tile) {
                 continue;
             }
@@ -2073,7 +2068,7 @@ impl Engine<'_> {
     /// `CanFollowRoad`: whether a road can be followed or is a dead end that can
     /// not be extended to the next tile. This only checks trivial but often cases.
     fn can_follow_road(&self, tile: TileIndex, dir: DiagDirection, modes: TownExpandModes) -> bool {
-        let target_tile = self.map().tile_add_by_diag_dir(tile, dir, self.check());
+        let target_tile = tile + self.map().tile_offs_by_diag_dir(dir, self.check());
         if !self.is_valid_tile(target_tile) || self.has_tile_water_ground(target_tile) {
             return false;
         }
@@ -2611,9 +2606,9 @@ impl Engine<'_> {
             return false;
         }
         for d in DiagDirection::DIAGDIR_SE.0..DiagDirection::DIAGDIR_END.0 {
-            tile = self
+            tile += self
                 .map()
-                .tile_add_by_diag_dir(tile, DiagDirection(d), self.check());
+                .tile_offs_by_diag_dir(DiagDirection(d), self.check());
             if !self.check_build_house_same_z(tile, z, noslope) {
                 return false;
             }
@@ -2632,17 +2627,16 @@ impl Engine<'_> {
         modes: TownExpandModes,
     ) -> bool {
         /* 'tile' is already checked in BuildTownHouse() - CanBuildHouseHere() and slope test */
-        let mut tile2 = self.map().tile_add_by_diag_dir(*tile, second, self.check());
+        let mut tile2 = *tile + self.map().tile_offs_by_diag_dir(second, self.check());
         if self.town_layout_allows_house_here(tile2, modes)
             && self.check_build_house_same_z(tile2, maxz, noslope)
         {
             return true;
         }
-        tile2 = self.map().tile_add_by_diag_dir(
-            *tile,
-            reverse_diag_dir(second, self.check()),
-            self.check(),
-        );
+        tile2 = *tile
+            + self
+                .map()
+                .tile_offs_by_diag_dir(reverse_diag_dir(second, self.check()), self.check());
         if self.town_layout_allows_house_here(tile2, modes)
             && self.check_build_house_same_z(tile2, maxz, noslope)
         {
@@ -2673,8 +2667,7 @@ impl Engine<'_> {
             if d == DiagDirection::DIAGDIR_END.0 {
                 break;
             }
-            tile2 = self.map().tile_add_by_diag_dir(
-                tile2,
+            tile2 += self.map().tile_offs_by_diag_dir(
                 reverse_diag_dir(DiagDirection(d), self.check()),
                 self.check(),
             ); // go clockwise
@@ -2724,15 +2717,15 @@ impl Engine<'_> {
         self.clear_make_house_tile(tile, t, house, c);
         if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
             house += 1;
-            self.clear_make_house_tile(self.map().tile_add_xy(tile, 0, 1), t, house, c);
+            self.clear_make_house_tile(tile + self.map().diff(0, 1), t, house, c);
         }
         if size.any(BuildingFlags::BUILDING_2_TILES_X) {
             house += 1;
-            self.clear_make_house_tile(self.map().tile_add_xy(tile, 1, 0), t, house, c);
+            self.clear_make_house_tile(tile + self.map().diff(1, 0), t, house, c);
         }
         if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
             house += 1;
-            self.clear_make_house_tile(self.map().tile_add_xy(tile, 1, 1), t, house, c);
+            self.clear_make_house_tile(tile + self.map().diff(1, 1), t, house, c);
         }
         let area = crate::tilearea::TileArea {
             tile: tile.0,
@@ -2835,13 +2828,13 @@ impl Engine<'_> {
         };
         stage_changed(tile);
         if size.any(BuildingFlags::BUILDING_2_TILES_Y) {
-            stage_changed(self.map().tile_add_xy(tile, 0, 1));
+            stage_changed(tile + self.map().diff(0, 1));
         }
         if size.any(BuildingFlags::BUILDING_2_TILES_X) {
-            stage_changed(self.map().tile_add_xy(tile, 1, 0));
+            stage_changed(tile + self.map().diff(1, 0));
         }
         if size.any(BuildingFlags::BUILDING_HAS_4_TILES) {
-            stage_changed(self.map().tile_add_xy(tile, 1, 1));
+            stage_changed(tile + self.map().diff(1, 1));
         }
     }
 }

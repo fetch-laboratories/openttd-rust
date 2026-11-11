@@ -404,7 +404,10 @@ impl Services {
         let world = crate::map_func::World::new(self.shared());
         world.assert_with(|| slot.is_some()); // indicates loop didn't end as intended
 
-        let slot = slot.expect("SubsidyIndustryCargoRoute cargo slot");
+        // Past a returning assertion the original reads past the end; stop natively.
+        let Some(slot) = slot else {
+            crate::services_assert::not_reached()
+        };
         let (cargo_type, trans, total) = unsafe { industry::subsidy_produced(state, slot) };
         // Quit if no production in this industry
         // or if the pct transported is already large enough

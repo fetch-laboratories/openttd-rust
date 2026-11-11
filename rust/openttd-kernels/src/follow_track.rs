@@ -354,15 +354,14 @@ impl State {
         if self.mode == RAIL && self.is_station {
             let length = platform_length(w, self.new_tile.0, trackdir_to_exitdir(self.old_td));
             self.tiles_skipped = length.wrapping_sub(1) as i32;
-            self.new_tile.0 = self.new_tile.0.wrapping_add(
+            /* move to the platform end */
+            let mut diff = w
+                .dimensions
+                .tile_offs_by_diag_dir(DiagDirection(self.exitdir), crate::map_func::native_check);
+            diff = diff.wrapping_mul(self.tiles_skipped);
+            self.new_tile =
                 w.dimensions
-                    .tile_offs_by_diag_dir(
-                        DiagDirection(self.exitdir),
-                        crate::map_func::native_check,
-                    )
-                    .cast_unsigned()
-                    .wrapping_mul(self.tiles_skipped as u32),
-            );
+                    .tile_add(self.new_tile, diff, crate::map_func::native_check);
         }
         true
     }
@@ -462,14 +461,10 @@ pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> 
     w.check(dir < crate::direction_type::DIAGDIR_END);
     loop {
         length = length.wrapping_add(1);
-        tile = w
-            .dimensions
-            .tile_add_by_diag_dir(
-                TileIndex(tile),
-                DiagDirection(dir),
-                crate::map_func::native_check,
-            )
-            .0;
+        tile = (TileIndex(tile)
+            + w.dimensions
+                .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+        .0;
         if !w.compatible_station(tile, start) {
             return length;
         }

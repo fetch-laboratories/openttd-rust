@@ -772,13 +772,12 @@ impl World<'_> {
                 }
                 for dir in 0..4 {
                     if self.water(
-                        self.map
-                            .tile_add_by_diag_dir(
-                                TileIndex(tile),
+                        (TileIndex(tile)
+                            + self.map.tile_offs_by_diag_dir(
                                 DiagDirection(dir),
                                 crate::map_func::native_check,
-                            )
-                            .0,
+                            ))
+                        .0,
                     ) {
                         self.river_tile(tile);
                         break;
@@ -890,14 +889,11 @@ impl World<'_> {
             return false;
         }
         for dir in 0..4 {
-            let other = self
-                .map
-                .tile_add_by_diag_dir(
-                    TileIndex(tile),
-                    DiagDirection(dir),
-                    crate::map_func::native_check,
-                )
-                .0;
+            let other = (TileIndex(tile)
+                + self
+                    .map
+                    .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+            .0;
             if self.valid(other)
                 && !(self.a.sea_contains)(frame, other)
                 && self.connected_sea(frame, other, limit)
@@ -971,14 +967,11 @@ impl World<'_> {
                 }
             }
             for dir in 0..4 {
-                let other = self
-                    .map
-                    .tile_add_by_diag_dir(
-                        TileIndex(end),
-                        DiagDirection(dir),
-                        crate::map_func::native_check,
-                    )
-                    .0;
+                let other = (TileIndex(end)
+                    + self
+                        .map
+                        .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+                .0;
                 if self.valid(other) && !marks.contains(&other) && self.flows_down(end, other) {
                     marks.insert(other);
                     queue.push(other);
@@ -1521,15 +1514,12 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
     }
     fn follow_node(&mut self, old: usize) {
         for dir in 0..4 {
-            let tile = self
-                .world
-                .map
-                .tile_add_by_diag_dir(
-                    TileIndex(self.nodes[old].get_tile()),
-                    DiagDirection(dir),
-                    crate::map_func::native_check,
-                )
-                .0;
+            let tile = (TileIndex(self.nodes[old].get_tile())
+                + self
+                    .world
+                    .map
+                    .tile_offs_by_diag_dir(DiagDirection(dir), crate::map_func::native_check))
+            .0;
             if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile(), tile) {
                 self.add_new_node(RiverNode::set(Some(old), tile));
             }
