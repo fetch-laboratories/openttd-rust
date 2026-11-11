@@ -22,6 +22,8 @@ CONTEXT = "Full validation"
 QUEUED = "Full runs in the merge queue"
 # Under the agent shell's 10-minute command cap, so a foreground wait returns.
 WAIT_TIMEOUT = 540
+# A queue-wait runs as a background job; the queue's Full takes about an hour.
+QUEUE_TIMEOUT = 5400
 
 
 def gh(*args: str) -> str:
@@ -30,6 +32,13 @@ def gh(*args: str) -> str:
 
 def api(repository: str, path: str) -> dict:
     return json.loads(gh("api", f"repos/{repository}/{path}"))
+
+
+def repository_of(repo: str | None) -> str:
+    return (
+        repo
+        or json.loads(gh("repo", "view", "--json", "nameWithOwner"))["nameWithOwner"]
+    )
 
 
 def current_head(pull: dict, head: str | None = None) -> str:
@@ -139,10 +148,7 @@ def write_request(path: Path, record: dict) -> None:
 
 
 def request(args: argparse.Namespace) -> Path | None:
-    repository = (
-        args.repo
-        or json.loads(gh("repo", "view", "--json", "nameWithOwner"))["nameWithOwner"]
-    )
+    repository = repository_of(args.repo)
     pull = api(repository, f"pulls/{args.pr}")
     head = current_head(pull)
     # A new request would reset a passing status, including one carried across a
@@ -240,29 +246,33 @@ def status(path: Path) -> tuple[dict, dict | None]:
             record["run_url"] = run["html_url"]
             write_request(path, record)
     if run and run["status"] != "completed":
-        pages = json.loads(
-            gh(
-                "api",
-                "--paginate",
-                "--slurp",
-                f"repos/{repository}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100",
-            )
-        )
-        run["failed_jobs"] = [
-            job
-            for page in pages
-            for job in page["jobs"]
-            if job["conclusion"]
-            in (
-                "failure",
-                "timed_out",
-                "cancelled",
-                "action_required",
-                "startup_failure",
-                "stale",
-            )
-        ]
+        run["failed_jobs"] = failed_jobs(repository, run["id"])
     return record, run
+
+
+def failed_jobs(repository: str, run_id: int) -> list[dict]:
+    pages = json.loads(
+        gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/actions/runs/{run_id}/jobs?filter=latest&per_page=100",
+        )
+    )
+    return [
+        job
+        for page in pages
+        for job in page["jobs"]
+        if job["conclusion"]
+        in (
+            "failure",
+            "timed_out",
+            "cancelled",
+            "action_required",
+            "startup_failure",
+            "stale",
+        )
+    ]
 
 
 def verify_children(run: dict) -> None:
@@ -323,6 +333,95 @@ def wait(path: Path, timeout: int, interval: int) -> None:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
+QUEUE_STATE = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      state
+      mergeCommit { oid }
+      mergeQueueEntry { state position }
+      autoMergeRequest { enabledAt }
+    }
+  }
+}
+"""
+
+
+class QueueRemoved(Exception):
+    """The PR left the merge queue without merging."""
+
+
+def queue_state(repository: str, pr: int) -> dict:
+    owner, name = repository.split("/", 1)
+    answer = json.loads(
+        gh(
+            "api",
+            "graphql",
+            "-f",
+            f"query={QUEUE_STATE}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={pr}",
+        )
+    )
+    return answer["data"]["repository"]["pullRequest"]
+
+
+def queue_run(repository: str, pr: int) -> dict | None:
+    """The PR's latest merge-group run of the CI request workflow."""
+    runs = api(
+        repository, f"actions/workflows/{WORKFLOW}/runs?event=merge_group&per_page=100"
+    )["workflow_runs"]
+    prefix = f"gh-readonly-queue/{PROTECTED_REF}/pr-{pr}-"
+    ours = [run for run in runs if run.get("head_branch", "").startswith(prefix)]
+    return max(ours, key=lambda run: run["created_at"]) if ours else None
+
+
+def removal(repository: str, pr: int, state: str) -> str:
+    run = queue_run(repository, pr)
+    if run is None:
+        return f"PR #{pr} left the merge queue ({state}); no merge-group run found"
+    lines = [
+        f"PR #{pr} left the merge queue ({state}); merge-group run "
+        f"{run['status']}/{run.get('conclusion')}: {run['html_url']}"
+    ]
+    lines += [
+        f"failed job: {job['name']} ({job['html_url']})"
+        for job in failed_jobs(repository, run["id"])
+    ]
+    return "\n".join(lines)
+
+
+def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
+    """Block until the PR merges (return its merge commit) or leaves the queue."""
+    deadline = time.monotonic() + timeout
+    previous = None
+    while True:
+        pull = queue_state(repository, pr)
+        if pull["state"] == "MERGED":
+            return pull["mergeCommit"]["oid"]
+        entry = pull.get("mergeQueueEntry")
+        if pull["state"] != "OPEN" or not entry and not pull.get("autoMergeRequest"):
+            raise QueueRemoved(removal(repository, pr, pull["state"].lower()))
+        state = (
+            f"queued {entry['state'].lower()} at position {entry['position']}"
+            if entry
+            else "awaiting entry to the merge queue"
+        )
+        if state != previous:
+            print(state, flush=True)
+            previous = state
+        if time.monotonic() >= deadline:
+            raise WaitTimeout(
+                f"PR #{pr} still queued after {timeout} seconds; "
+                f"resume with: python3 tools/ci.py queue-wait {pr}"
+            )
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -347,8 +446,23 @@ def main() -> int:
         check.add_argument("request_file", type=Path)
         check.add_argument("--timeout", type=int, default=WAIT_TIMEOUT)
         check.add_argument("--interval", type=int, default=15)
+    queued = commands.add_parser(
+        "queue-wait",
+        help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
+    )
+    queued.add_argument("pr", type=int)
+    queued.add_argument("--repo")
+    queued.add_argument("--timeout", type=int, default=QUEUE_TIMEOUT)
+    queued.add_argument("--interval", type=int, default=15)
     args = parser.parse_args()
     try:
+        if args.command == "queue-wait":
+            if args.timeout <= 0 or args.interval <= 0:
+                raise ValueError("Timeout and interval must be positive")
+            repository = repository_of(args.repo)
+            merge = queue_wait(repository, args.pr, args.timeout, args.interval)
+            print(f"PR #{args.pr} merged: {merge}")
+            return 0
         if args.command == "request":
             path = request(args)
             if path and args.wait:
@@ -368,6 +482,9 @@ def main() -> int:
     except WaitTimeout as timeout:
         print(timeout)
         return 2
+    except QueueRemoved as removed:
+        print(removed)
+        return 3
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"CI request failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError) and error.stderr:

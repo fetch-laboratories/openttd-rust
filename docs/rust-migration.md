@@ -164,6 +164,7 @@ Full validation requires native comparisons and simulation, Windows x64, the Rus
 | `python3 tools/ci.py request 123 --profile platform` | Diagnose a suspected platform failure across the platform matrix. |
 | `python3 tools/ci.py request 123 --profile full` | Optional pre-check of a PR head; the merge queue's Full is the merge gate. |
 | `python3 tools/ci.py wait .local/ci-requests/REQUEST.json` | Wait for a request. |
+| `python3 tools/ci.py queue-wait 123` | Wait, as a background job, until a queued PR leaves the merge queue. It exits 0 and prints the merge commit when the PR merges, 3 with its latest merge-group run and failed jobs when the queue removes it, and 2 with its resume command after `--timeout` (default 5,400 seconds). |
 | `python3 tools/preflight.py --base origin/rust-migration` | Run the pinned commit checker and every `run:` step of Quick's `quick` job, read from `ci-quick.yml`, except the setup steps it lists. It runs every step after a failure and exits non-zero if any failed. `--list` lists the steps, `--step TEXT` runs those whose name contains it, and `--hooks PATH` uses a clean pinned checkout offline. A full run took about 5 minutes on this host with a warm Rust build, so run it in the background; a single `--step` is usually short. |
 
 - Keep warm-cache Full within about 15 minutes (#233). Add parallel jobs or shards, not steps on one job's critical path. Keep caches under the repository limit.

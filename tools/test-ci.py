@@ -2394,5 +2394,145 @@ class RequestTests(unittest.TestCase):
                     ci.verify_completion(record, run)
 
 
+class QueueWaitTests(unittest.TestCase):
+    """Recorded gh responses for each way a PR leaves, or stays in, the queue."""
+
+    QUEUED = {
+        "state": "OPEN",
+        "mergeCommit": None,
+        "mergeQueueEntry": {"state": "AWAITING_CHECKS", "position": 1},
+        "autoMergeRequest": None,
+    }
+    MERGED = {
+        "state": "MERGED",
+        "mergeCommit": {"oid": MERGE},
+        "mergeQueueEntry": None,
+        "autoMergeRequest": None,
+    }
+    REMOVED = {
+        "state": "OPEN",
+        "mergeCommit": None,
+        "mergeQueueEntry": None,
+        "autoMergeRequest": None,
+    }
+    RUNS = {
+        "workflow_runs": [
+            {
+                "id": 7,
+                "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+                "created_at": "2026-11-11T01:00:00Z",
+                "status": "completed",
+                "conclusion": "failure",
+                "html_url": "https://github.com/example/fork/actions/runs/7",
+            },
+            {
+                "id": 6,
+                "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{PREVIOUS}",
+                "created_at": "2026-11-11T00:00:00Z",
+                "status": "completed",
+                "conclusion": "success",
+                "html_url": "https://github.com/example/fork/actions/runs/6",
+            },
+            {
+                "id": 5,
+                "head_branch": f"gh-readonly-queue/rust-migration/pr-1700-{BASE}",
+                "created_at": "2026-11-11T02:00:00Z",
+                "status": "completed",
+                "conclusion": "failure",
+                "html_url": "https://github.com/example/fork/actions/runs/5",
+            },
+        ]
+    }
+    JOBS = [
+        {
+            "jobs": [
+                {"name": "quick / Quick validation", "conclusion": "success"},
+                {
+                    "name": "native / simulation (1)",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/example/fork/actions/runs/7/job/9",
+                },
+            ]
+        }
+    ]
+
+    def run_main(
+        self, states: list[dict[str, Any]], *extra: str
+    ) -> tuple[int, str, list[tuple[str, ...]]]:
+        answers = iter(states)
+        calls: list[tuple[str, ...]] = []
+
+        def answer(*args: str) -> str:
+            calls.append(args)
+            if args[:2] == ("api", "graphql"):
+                return json.dumps(
+                    {"data": {"repository": {"pullRequest": next(answers)}}}
+                )
+            if "runs?event=merge_group" in args[1]:
+                return json.dumps(self.RUNS)
+            if "/runs/7/jobs" in args[-1]:
+                return json.dumps(self.JOBS)
+            raise AssertionError(args)
+
+        clock = itertools.count(0, 15)
+        argv = ["ci.py", "queue-wait", "170", "--repo", "example/fork", *extra]
+        with (
+            patch.object(ci, "gh", side_effect=answer),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep") as sleep,
+            patch("sys.argv", argv),
+            patch("builtins.print") as printed,
+        ):
+            code = ci.main()
+        output = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+        self.assertTrue(all(call.args[0] <= 15 for call in sleep.call_args_list))
+        return code, output, calls
+
+    def test_merged_prints_merge_commit(self) -> None:
+        code, output, calls = self.run_main([self.QUEUED, self.QUEUED, self.MERGED])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            output,
+            f"queued awaiting_checks at position 1\nPR #170 merged: {MERGE}",
+        )
+        query = calls[0]
+        self.assertIn("number=170", query)
+        self.assertIn("owner=example", query)
+        self.assertIn("name=fork", query)
+
+    def test_removed_prints_failed_run_and_jobs(self) -> None:
+        code, output, _ = self.run_main([self.QUEUED, self.REMOVED])
+        self.assertEqual(code, 3)
+        self.assertEqual(
+            output.splitlines()[1:],
+            [
+                "PR #170 left the merge queue (open); merge-group run "
+                "completed/failure: https://github.com/example/fork/actions/runs/7",
+                "failed job: native / simulation (1) "
+                "(https://github.com/example/fork/actions/runs/7/job/9)",
+            ],
+        )
+        closed = dict(self.REMOVED, state="CLOSED")
+        code, output, _ = self.run_main([closed])
+        self.assertEqual(code, 3)
+        self.assertIn("left the merge queue (closed)", output)
+
+    def test_pending_auto_merge_keeps_waiting(self) -> None:
+        pending = dict(self.REMOVED, autoMergeRequest={"enabledAt": "date"})
+        code, output, _ = self.run_main([pending, self.MERGED])
+        self.assertEqual(code, 0)
+        self.assertTrue(output.startswith("awaiting entry to the merge queue\n"))
+
+    def test_still_queued_times_out_with_resume_command(self) -> None:
+        code, output, _ = self.run_main([self.QUEUED] * 5, "--timeout", "30")
+        self.assertEqual(code, 2)
+        self.assertTrue(
+            output.endswith(
+                "PR #170 still queued after 30 seconds; "
+                "resume with: python3 tools/ci.py queue-wait 170"
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
