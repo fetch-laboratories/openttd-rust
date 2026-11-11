@@ -436,9 +436,14 @@ fn lifecycle_case(
             w.spec_triggers[tile as usize] = (tile * 13 + variant) as u8;
         }
     });
-    // SAFETY: The caller's live owner.
-    let metadata = unsafe { &mut *openttd_rust_industry_metadata(owner) };
-    metadata.random = seed as u16;
+    // Production writes the random word through `owner`, so no reference to the owner's
+    // metadata lives across the call.
+    // SAFETY: The caller's live owner; a field-sized write with no live reference.
+    let random = unsafe {
+        let metadata = openttd_rust_industry_metadata(owner);
+        ptr::addr_of_mut!((*metadata).random).write(seed as u16);
+        metadata
+    };
     let mut result = true;
     // SAFETY: The live owner and the fixture's tables; serialized by the lock.
     unsafe {
@@ -489,7 +494,9 @@ fn lifecycle_case(
         }
     }
     // Tiles the call changed, as index:triggers:bits.
-    let mut out = format!("{} {} {}", u8::from(result), draws(), metadata.random);
+    // SAFETY: The caller's live owner; a field-sized read after the call returned.
+    let random = unsafe { ptr::addr_of!((*random).random).read() };
+    let mut out = format!("{} {} {random}", u8::from(result), draws());
     with(|w| {
         for tile in 0..7_u32 {
             let now = w.tiles[tile as usize];
