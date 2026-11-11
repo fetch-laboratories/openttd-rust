@@ -128,7 +128,6 @@ pub struct Services {
     loading: extern "C" fn(*const c_void, usize) -> *const c_void,
     loaded: extern "C" fn(*const c_void, usize) -> *const c_void,
     axis: extern "C" fn(u32) -> crate::services::Axis,
-    tile_add: extern "C" fn(u32, i32) -> u32,
     tile_random: extern "C" fn(u32) -> u8,
     station_random: extern "C" fn(*mut BaseStation) -> u16,
     waiting: extern "C" fn(*mut BaseStation) -> u8,
@@ -291,7 +290,10 @@ fn find_end(
         AXIS_X
     };
     loop {
-        let next = (native.tile_add)(tile, delta);
+        let next = native
+            .map()
+            .tile_add(TileIndex(tile), delta, crate::map_func::native_check)
+            .0;
         if (native.shared().tile_type)(next) != crate::tile_type::MP_STATION
             || (native.shared().station_index)(next) != sid
         {
@@ -1043,7 +1045,7 @@ crate::abi::layouts! {
  "OpenTTDStationSlopeResult" ["station_service"] => SlopeResult { callback, registers };
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
- loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
+ loading, loaded, axis, tile_random, station_random, waiting, set_waiting, set_random,
  cached_cargo, spec_cargo, resolve_random, resolve_callback, company, nearby_station, build_date, airport_ttd_type, identity, town_scope, default_scope, slope_error
  };
 }
