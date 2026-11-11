@@ -56,7 +56,6 @@ struct OpenTTDCommandAdmission {
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 /* Predicates return 0 or 1 as uint8_t; see command.rs. */
 extern "C" {
-uint8_t openttd_rust_command_allowed_while_paused(const OpenTTDCommandServices *, uint8_t);
 uint8_t openttd_rust_command_enter();
 void openttd_rust_command_leave();
 uint8_t openttd_rust_command_tile_rejected(const OpenTTDCommandServices *, uint32_t, bool);

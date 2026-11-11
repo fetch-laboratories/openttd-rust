@@ -14,10 +14,11 @@ pub const NETWORK_ERROR_TIMEOUT_COMPUTER: u8 = NetworkErrorCode::NETWORK_ERROR_T
 pub const NETWORK_ERROR_TIMEOUT_MAP: u8 = NetworkErrorCode::NETWORK_ERROR_TIMEOUT_MAP.0;
 /// Native `NETWORK_ERROR_TIMEOUT_JOIN`.
 pub const NETWORK_ERROR_TIMEOUT_JOIN: u8 = NetworkErrorCode::NETWORK_ERROR_TIMEOUT_JOIN.0;
-/// `NetworkRecvStatus` values returned by the frame protocol.
-pub const NETWORK_RECV_STATUS_OKAY: u8 = 0;
+/// Native `NETWORK_RECV_STATUS_OKAY`.
+pub const NETWORK_RECV_STATUS_OKAY: u8 = NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY.0;
 /// Native `NETWORK_RECV_STATUS_MALFORMED_PACKET`.
-pub const NETWORK_RECV_STATUS_MALFORMED_PACKET: u8 = 5;
+pub const NETWORK_RECV_STATUS_MALFORMED_PACKET: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET.0;
 
 /// Native `NETWORK_ERROR_NOT_EXPECTED`.
 pub const NETWORK_ERROR_NOT_EXPECTED: u8 = NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED.0;
@@ -38,9 +39,11 @@ pub const NETWORK_ERROR_KICKED: u8 = NetworkErrorCode::NETWORK_ERROR_KICKED.0;
 /// Native `NETWORK_ERROR_ILLEGAL_PACKET`.
 pub const NETWORK_ERROR_ILLEGAL_PACKET: u8 = NetworkErrorCode::NETWORK_ERROR_ILLEGAL_PACKET.0;
 /// Native `NETWORK_RECV_STATUS_CLIENT_QUIT`.
-pub const NETWORK_RECV_STATUS_CLIENT_QUIT: u8 = 4;
+pub const NETWORK_RECV_STATUS_CLIENT_QUIT: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT.0;
 /// Native `NETWORK_RECV_STATUS_SERVER_ERROR`.
-pub const NETWORK_RECV_STATUS_SERVER_ERROR: u8 = 6;
+pub const NETWORK_RECV_STATUS_SERVER_ERROR: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_ERROR.0;
 
 /// First non-server client identity.
 pub const CLIENT_ID_FIRST: u32 = ClientID::CLIENT_ID_FIRST.0;
@@ -55,19 +58,24 @@ pub const NETWORK_ERROR_CONNECTION_LOST: u8 = NetworkErrorCode::NETWORK_ERROR_CO
 /// Native `NETWORK_ERROR_NEWGRF_MISMATCH`.
 pub const NETWORK_ERROR_NEWGRF_MISMATCH: u8 = NetworkErrorCode::NETWORK_ERROR_NEWGRF_MISMATCH.0;
 /// Native `NETWORK_RECV_STATUS_DESYNC`.
-pub const NETWORK_RECV_STATUS_DESYNC: u8 = 1;
+pub const NETWORK_RECV_STATUS_DESYNC: u8 = NetworkRecvStatus::NETWORK_RECV_STATUS_DESYNC.0;
 /// Native `NETWORK_RECV_STATUS_NEWGRF_MISMATCH`.
-pub const NETWORK_RECV_STATUS_NEWGRF_MISMATCH: u8 = 2;
+pub const NETWORK_RECV_STATUS_NEWGRF_MISMATCH: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_NEWGRF_MISMATCH.0;
 /// Native `NETWORK_RECV_STATUS_SAVEGAME`.
-pub const NETWORK_RECV_STATUS_SAVEGAME: u8 = 3;
+pub const NETWORK_RECV_STATUS_SAVEGAME: u8 = NetworkRecvStatus::NETWORK_RECV_STATUS_SAVEGAME.0;
 /// Native `NETWORK_RECV_STATUS_SERVER_FULL`.
-pub const NETWORK_RECV_STATUS_SERVER_FULL: u8 = 7;
+pub const NETWORK_RECV_STATUS_SERVER_FULL: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_FULL.0;
 /// Native `NETWORK_RECV_STATUS_SERVER_BANNED`.
-pub const NETWORK_RECV_STATUS_SERVER_BANNED: u8 = 8;
+pub const NETWORK_RECV_STATUS_SERVER_BANNED: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_SERVER_BANNED.0;
 /// Native `NETWORK_RECV_STATUS_CLOSE_QUERY`.
-pub const NETWORK_RECV_STATUS_CLOSE_QUERY: u8 = 9;
-/// `core/core.h`: unexpected transport loss.
-pub const NETWORK_RECV_STATUS_CONNECTION_LOST: u8 = 10;
+pub const NETWORK_RECV_STATUS_CLOSE_QUERY: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_CLOSE_QUERY.0;
+/// Native `NETWORK_RECV_STATUS_CONNECTION_LOST`.
+pub const NETWORK_RECV_STATUS_CONNECTION_LOST: u8 =
+    NetworkRecvStatus::NETWORK_RECV_STATUS_CONNECTION_LOST.0;
 
 /// Server identity.
 pub const CLIENT_ID_SERVER: u32 = ClientID::CLIENT_ID_SERVER.0;
@@ -87,6 +95,37 @@ pub const INVALID_CLIENT_ID: u32 = ClientID::INVALID_CLIENT_ID.0;
 pub const NETWORK_ERROR_CHEATER: u8 = NetworkErrorCode::NETWORK_ERROR_CHEATER.0;
 /// `NETWORK_ERROR_TOO_MANY_COMMANDS`.
 pub const NETWORK_ERROR_TOO_MANY_COMMANDS: u8 = NetworkErrorCode::NETWORK_ERROR_TOO_MANY_COMMANDS.0;
+
+/// `NetworkRecvStatus` from `network/core/core.h`: status of a network client; reasons why a
+/// client has quit. Every underlying byte is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NetworkRecvStatus(pub u8);
+
+impl NetworkRecvStatus {
+    /// Everything is okay.
+    pub const NETWORK_RECV_STATUS_OKAY: Self = Self(0);
+    /// A desync did occur.
+    pub const NETWORK_RECV_STATUS_DESYNC: Self = Self(1);
+    /// We did not have the required `NewGRFs`.
+    pub const NETWORK_RECV_STATUS_NEWGRF_MISMATCH: Self = Self(2);
+    /// Something went wrong (down)loading the savegame.
+    pub const NETWORK_RECV_STATUS_SAVEGAME: Self = Self(3);
+    /// The connection is lost gracefully. Other clients are already informed of this leaving client.
+    pub const NETWORK_RECV_STATUS_CLIENT_QUIT: Self = Self(4);
+    /// We apparently send a malformed packet.
+    pub const NETWORK_RECV_STATUS_MALFORMED_PACKET: Self = Self(5);
+    /// The server told us we made an error.
+    pub const NETWORK_RECV_STATUS_SERVER_ERROR: Self = Self(6);
+    /// The server is full.
+    pub const NETWORK_RECV_STATUS_SERVER_FULL: Self = Self(7);
+    /// The server has banned us.
+    pub const NETWORK_RECV_STATUS_SERVER_BANNED: Self = Self(8);
+    /// Done querying the server.
+    pub const NETWORK_RECV_STATUS_CLOSE_QUERY: Self = Self(9);
+    /// The connection is lost unexpectedly.
+    pub const NETWORK_RECV_STATUS_CONNECTION_LOST: Self = Self(10);
+}
 
 /// Native `ClientPoolID`, retaining every underlying `u16` value.
 #[repr(transparent)]

@@ -14,3 +14,11 @@ pub const RESERVED: u8 = 6;
 pub const INVALID: u8 = 7;
 /// `GRFPalette::GRFP_USE_MASK`.
 pub const GRFP_USE_MASK: u8 = 0x1;
+
+/// `GRFIdentifier`: basic data to distinguish a GRF. Used in the server list window
+pub(crate) struct GRFIdentifier {
+    /// GRF ID (defined by Action 0x08)
+    pub grfid: u32,
+    /// MD5 checksum of file to distinguish files with the same GRF ID (eg. newer version of GRF)
+    pub md5sum: crate::md5::MD5Hash,
+}

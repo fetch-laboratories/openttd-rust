@@ -180,7 +180,7 @@ static constexpr auto _cmd_dispatch = MakeDispatchTable(std::make_integer_sequen
 #	pragma GCC diagnostic pop
 #endif
 
-static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_command.rs STATUS_MAP
+static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_server.rs ClientStatus::STATUS_MAP
 
 static std::string_view CommandDecodeMessage(OpenTTDNetworkCommandDecodeError error) noexcept
 {

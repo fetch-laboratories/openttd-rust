@@ -10,7 +10,7 @@ use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
 use crate::network_socket as socket;
 use crate::network_type::{
-    CLIENT_ID_SERVER, NETWORK_RECV_STATUS_CLIENT_QUIT, SERVER_GAME_TYPE_LOCAL,
+    CLIENT_ID_SERVER, NETWORK_RECV_STATUS_CLIENT_QUIT, NetworkRecvStatus, SERVER_GAME_TYPE_LOCAL,
 };
 use crate::openttd::{GameMode, SwitchMode};
 use crate::services::ByteSpan;
@@ -138,11 +138,11 @@ pub(crate) fn close_clients(
     work: Actions,
 ) {
     while let Some(client) = next_client(f.command, &mut cursor) {
-        crate::network_connection::openttd_rust_network_server_close(
+        crate::network_connection::server_close(
             f.connection,
             f,
             client.socket,
-            NETWORK_RECV_STATUS_CLIENT_QUIT,
+            NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT,
             work,
         );
         if work.pending() {
@@ -200,7 +200,7 @@ pub(crate) fn disconnect_send(
     work: Actions,
 ) {
     while let Some(client) = next_client(f.command, &mut cursor) {
-        crate::network_connection::send_shutdown(f.connection, f, client.socket);
+        crate::network_connection::send_shutdown(f, client.socket);
         socket::send(f, client.socket, work);
         if work.pending() {
             work.push(Resume::DisconnectSend(cursor, close_admins));
@@ -243,7 +243,7 @@ pub(crate) fn reboot_send(
     work: Actions,
 ) {
     while let Some(client) = next_client(f.command, &mut cursor) {
-        crate::network_connection::send_newgame(f.connection, f, client.socket);
+        crate::network_connection::send_new_game(f, client.socket);
         socket::send(f, client.socket, work);
         if work.pending() {
             work.push(Resume::RebootSend(cursor));
@@ -270,7 +270,7 @@ pub(crate) fn join_end(s: &Services, f: &FrameServices) {
     unsafe {
         f.client
             .join_status
-            .write(crate::network_internal::NETWORK_JOIN_STATUS_CONNECTING);
+            .write(crate::network_internal::NetworkJoinStatus::NETWORK_JOIN_STATUS_CONNECTING.0);
     };
     (f.client.show_join_window)();
     (s.create_client_connecter)();
@@ -508,20 +508,20 @@ pub(crate) fn new_company(
     let allow = (s.pack_company_allow)(info);
     crate::network_command::send_command(
         f.command,
-        crate::command_type::CMD_COMPANY_ALLOW_LIST_CTRL,
-        0,
+        crate::command_type::Commands::CMD_COMPANY_ALLOW_LIST_CTRL,
+        crate::strings_type::StringID::STR_NULL,
         std::ptr::null(),
-        id,
+        crate::company_type::CompanyID(id),
         allow.span(),
     );
     drop(allow);
     let president = (s.pack_president)(info);
     crate::network_command::send_command(
         f.command,
-        crate::command_type::CMD_RENAME_PRESIDENT,
-        0,
+        crate::command_type::Commands::CMD_RENAME_PRESIDENT,
+        crate::strings_type::StringID::STR_NULL,
         std::ptr::null(),
-        id,
+        crate::company_type::CompanyID(id),
         president.span(),
     );
     drop(president);

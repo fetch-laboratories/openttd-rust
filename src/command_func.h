@@ -36,7 +36,6 @@ bool IsValidCommand(Commands cmd);
 CommandFlags GetCommandFlags(Commands cmd);
 uint8_t GetCommandType(Commands cmd) noexcept;
 std::string_view GetCommandName(Commands cmd);
-bool IsCommandAllowedWhilePaused(Commands cmd);
 
 template <Commands Tcmd>
 constexpr CommandFlags GetCommandFlags()
