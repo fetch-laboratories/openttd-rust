@@ -252,6 +252,32 @@ TEST_CASE("Vehicle maintenance - native scalar reads and stores")
 	CHECK(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
 	CHECK(v->breakdown_delay == 0);
 	CHECK(v->Record().breakdown_ctr == 0);
+	/* The kind and tick reads (#156): Vehicle::HandleBreakdown decrements a train's delay only
+	 * when tick_counter & 3 is zero and another type's when tick_counter & 1 is zero, and an
+	 * aircraft's breakdown sets AircraftBroken and ends no delay here. */
+	v->Record().breakdown_ctr = 1;
+	v->breakdown_delay = 5;
+	for (uint8_t tick : {1, 2, 3}) {
+		v->Record().tick_counter = tick;
+		CHECK(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+		CHECK(v->breakdown_delay == 5);
+	}
+	v->SetType(VEH_ROAD);
+	for (auto [tick, delay] : {std::pair<uint8_t, uint8_t>{2, 4}, {3, 4}}) {
+		v->Record().tick_counter = tick;
+		CHECK(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+		CHECK(v->breakdown_delay == delay);
+	}
+	v->SetType(VEH_AIRCRAFT);
+	v->Record().tick_counter = 0;
+	CHECK_FALSE(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+	CHECK(v->breakdown_delay == 4);
+	CHECK(v->Record().breakdown_ctr == 1);
+	v->Record().breakdown_ctr = 2;
+	CHECK_FALSE(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
+	CHECK(v->Record().breakdown_ctr == 1);
+	CHECK(v->GetVehStatus().Test(VehState::AircraftBroken));
+	CHECK(v->breakdown_delay == 4);
 	_vehicle_pool.CleanPool();
 	CHECK(Vehicle::GetNumItems() == 0);
 }
