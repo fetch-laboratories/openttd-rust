@@ -34,6 +34,7 @@ use crate::sprites::{
     SPR_SUB_SMALL_SW, SPR_UFO_HARVESTER, SPR_UFO_SMALL_SCOUT, SPR_UFO_SMALL_SCOUT_DARKER,
     SPR_XCOM_SKYRANGER,
 };
+use crate::tile_type::TileIndex;
 use crate::tile_type::{
     INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_RAILWAY, MP_TREES, TILE_SIZE,
 };
@@ -215,7 +216,9 @@ impl<'a> World<'a> {
         self.shared.random()
     }
     fn random_tile(&self) -> u32 {
-        self.map().wrap_to_map(self.random(), self.size_y())
+        self.map()
+            .wrap_to_map(TileIndex(self.random()), self.size_y())
+            .0
     }
     fn chance(&self, denominator: u32) -> bool {
         chance16_i(1, denominator, self.random())
@@ -319,7 +322,7 @@ impl<'a> World<'a> {
     }
     fn update_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
         (v.vehicle()).write_coordinates(x, y, z);
-        (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
+        (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32).0);
         self.update_image(v);
         self.viewport(v);
         if let Some(u) = self.next_part(v.vehicle()) {
@@ -480,8 +483,8 @@ impl<'a> World<'a> {
         if v.state() == 0 {
             let map = self.map();
             let dest = Self::dest(v);
-            let x = (map.tile_x(dest) * TILE_SIZE) as i32;
-            let y = (map.tile_y(dest) * TILE_SIZE) as i32;
+            let x = (map.tile_x(TileIndex(dest)) * TILE_SIZE) as i32;
+            let y = (map.tile_y(TileIndex(dest)) * TILE_SIZE) as i32;
             let p = (v.vehicle().x(), v.vehicle().y());
             if distance(x, y, p.0, p.1) >= TILE_SIZE as i32 {
                 (v.vehicle()).write_direction((self.s.toward)(v.vehicle(), x, y));
@@ -602,8 +605,8 @@ impl<'a> World<'a> {
                 let i = (self.s.industry)(Self::dest(v));
                 let tile = (self.s.industry_tile)(i.industry);
                 let map = self.map();
-                let x = map.tile_x(tile) * TILE_SIZE;
-                let y = map.tile_y(tile) * TILE_SIZE;
+                let x = map.tile_x(TileIndex(tile)) * TILE_SIZE;
+                let y = map.tile_y(TileIndex(tile)) * TILE_SIZE;
                 let r = self.random();
                 crate::effect::openttd_rust_effect_create_above(
                     ((r & 63) + x) as i32,
@@ -638,7 +641,7 @@ impl<'a> World<'a> {
             if x as u32 > self.map().max_x() * TILE_SIZE - 1 {
                 return true;
             }
-            let tile = self.map().tile_virt_xy(x as u32, p.1 as u32);
+            let tile = self.map().tile_virt_xy(x as u32, p.1 as u32).0;
             if (self.shared.tile_type)(tile) != MP_INDUSTRY {
                 return true;
             }
@@ -688,8 +691,8 @@ impl<'a> World<'a> {
         if v.state() == 1 {
             let dest = Self::dest(v);
             let map = self.map();
-            let x = (map.tile_x(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
-            let y = (map.tile_y(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
+            let x = (map.tile_x(TileIndex(dest)) * TILE_SIZE + TILE_SIZE / 2) as i32;
+            let y = (map.tile_y(TileIndex(dest)) * TILE_SIZE + TILE_SIZE / 2) as i32;
             let p = (v.vehicle().x(), v.vehicle().y());
             if distance(p.0, p.1, x, y) >= 8 {
                 (v.vehicle()).write_direction((self.s.toward)(v.vehicle(), x, y));
@@ -752,8 +755,8 @@ impl<'a> World<'a> {
             let map = self.map();
             let dest = Self::dest(v);
             let p = (v.vehicle().x(), v.vehicle().y());
-            let x = (map.tile_x(dest) * TILE_SIZE) as i32;
-            let y = (map.tile_y(dest) * TILE_SIZE) as i32;
+            let x = (map.tile_x(TileIndex(dest)) * TILE_SIZE) as i32;
+            let y = (map.tile_y(TileIndex(dest)) * TILE_SIZE) as i32;
             if distance(x, y, p.0, p.1) >= TILE_SIZE as i32 {
                 (v.vehicle()).write_direction((self.s.toward)(v.vehicle(), x, y));
                 self.move_flight(v);
@@ -834,13 +837,16 @@ impl<'a> World<'a> {
             }
             for dy in -3..3 {
                 for dx in -3..3 {
-                    let tile = self.map().tile_add_wrap(
-                        Self::tile(v),
-                        dx,
-                        dy,
-                        self.size_y(),
-                        (unsafe { &*self.s.environment }.freeform_edges)(),
-                    );
+                    let tile = self
+                        .map()
+                        .tile_add_wrap(
+                            TileIndex(Self::tile(v)),
+                            dx,
+                            dy,
+                            self.size_y(),
+                            (unsafe { &*self.s.environment }.freeform_edges)(),
+                        )
+                        .0;
                     if tile != INVALID_TILE {
                         self.clear(tile);
                     }
@@ -921,7 +927,7 @@ impl<'a> World<'a> {
         match kind {
             0 | 1 | 4 => {
                 let tile = self.random_tile();
-                let mut x = (self.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+                let mut x = (self.map().tile_x(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2) as i32;
                 if kind == 0 {
                     let mut from = 0;
                     loop {
@@ -933,7 +939,7 @@ impl<'a> World<'a> {
                             && (st.airport_type == crate::airport::AT_SMALL
                                 || st.airport_type == crate::airport::AT_LARGE)
                         {
-                            x = ((self.map().tile_x(st.tile) + 2) * TILE_SIZE) as i32;
+                            x = ((self.map().tile_x(TileIndex(st.tile)) + 2) * TILE_SIZE) as i32;
                             break;
                         }
                         from = st.next;
@@ -953,7 +959,8 @@ impl<'a> World<'a> {
                     Self::set_dest(
                         v,
                         self.map()
-                            .tile_xy(self.map().size_x() / 2, self.size_y() / 2),
+                            .tile_xy(self.map().size_x() / 2, self.size_y() / 2)
+                            .0,
                     );
                 }
                 let shadow = (self.s.create)(x, y, dir, subtype + 1, INVALID_VEHICLE);
@@ -991,7 +998,8 @@ impl<'a> World<'a> {
                 } else {
                     -16 * TILE_SIZE as i32
                 };
-                let y = (self.map().tile_y((self.s.industry_tile)(found)) * TILE_SIZE + 37) as i32;
+                let y = (self.map().tile_y(TileIndex((self.s.industry_tile)(found))) * TILE_SIZE
+                    + 37) as i32;
                 let dir = if kind == 2 { DIR_NE } else { DIR_SW };
                 let subtype = if kind == 2 {
                     ST_AIRPLANE
@@ -1014,8 +1022,8 @@ impl<'a> World<'a> {
             }
             5 | 6 => {
                 let r = self.random();
-                let tile = self.map().wrap_to_map(r, self.size_y());
-                let x = (self.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
+                let tile = self.map().wrap_to_map(TileIndex(r), self.size_y()).0;
+                let x = (self.map().tile_x(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2) as i32;
                 let (y, dir) = if r & 0x8000_0000 != 0 {
                     (
                         ((self.shared.map_max_y)() * TILE_SIZE - TILE_SIZE / 2 - 1) as i32,
@@ -1032,7 +1040,7 @@ impl<'a> World<'a> {
                         DIR_SE,
                     )
                 };
-                if !(self.shared.is_water_tile)(self.map().tile_virt_xy(x as u32, y as u32)) {
+                if !(self.shared.is_water_tile)(self.map().tile_virt_xy(x as u32, y as u32).0) {
                     return;
                 }
                 (self.s.create)(x, y, dir, kind + 8, INVALID_VEHICLE);
@@ -1051,7 +1059,9 @@ impl<'a> World<'a> {
                             if index < 0 {
                                 let location = (self.s.industry_location)(i.industry);
                                 (self.s.coal_news)(
-                                    location.tile.wrapping_add(self.map().diff(1, 1)),
+                                    location
+                                        .tile
+                                        .wrapping_add(self.map().diff(1, 1).cast_unsigned()),
                                     location.town,
                                 );
                                 let mut tile = location.tile;
@@ -1133,7 +1143,7 @@ impl<'a> World<'a> {
             }
         }
         (v.vehicle()).write_direction(dir);
-        (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
+        (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32).0);
         crate::raw_field::write_field!(v.handle, subtype, subtype);
         (unsafe { &*self.s.vehicles }.update_delta)(v.vehicle());
         crate::raw_field::write_field!(

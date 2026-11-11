@@ -22,6 +22,7 @@
 )]
 use crate::cargopacket::{CargoPacket, MoveToAction};
 use crate::services_assert::check;
+use crate::tile_type::TileIndex;
 use crate::vehicle::VehicleRef;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
@@ -195,8 +196,8 @@ unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
         // SAFETY: the synchronous service table keeps the shared map view live;
         // these coordinate reads neither call back nor yield.
         let world = crate::map_func::World::new(&*s.shared);
-        let x = world.dimensions.tile_x(at) as i16;
-        let y = world.dimensions.tile_y(at) as i16;
+        let x = world.dimensions.tile_x(TileIndex(at)) as i16;
+        let y = world.dimensions.tile_y(TileIndex(at)) as i16;
         if loading {
             // Add the known loading tile now; subtract the unloading tile later
             // to obtain the vector of travel inside a vehicle.
@@ -640,8 +641,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
     // SAFETY: the synchronous service table keeps the shared map view live;
     // these coordinate reads neither call back nor yield.
     let world = crate::map_func::World::new(unsafe { &*s.shared });
-    let x = world.dimensions.tile_x(at);
-    let y = world.dimensions.tile_y(at);
+    let x = world.dimensions.tile_x(TileIndex(at));
+    let y = world.dimensions.tile_y(TileIndex(at));
     // Distance is requested while the cargo is still inside the vehicle.
     // Finish the travel vector locally without changing the packet.
     let dx = p.travelled_x.wrapping_sub(x as i16);
@@ -650,7 +651,9 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
     // Free movement within a station must not increase payment. Cap vehicle
     // travel at the direct source-to-destination distance to avoid overpayment
     // on routes with large transfer stations or long detours.
-    let direct = world.dimensions.distance_manhattan(p.source_xy, at);
+    let direct = world
+        .dimensions
+        .distance_manhattan(TileIndex(p.source_xy), TileIndex(at));
     travelled.min(direct)
 }
 #[unsafe(no_mangle)]

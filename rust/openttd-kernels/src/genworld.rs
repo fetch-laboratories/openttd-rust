@@ -326,7 +326,7 @@ pub(crate) unsafe fn setup(
     let shared = unsafe { &*a.shared };
     let map = shared.map();
     let size_y = (shared.map_max_y)() + 1;
-    (s.scroll)(TileIndex(map.tile_xy(map.size_x() / 2, size_y / 2)));
+    (s.scroll)(map.tile_xy(map.size_x() / 2, size_y / 2));
     true
 }
 #[derive(Clone, Copy)]
@@ -390,7 +390,7 @@ impl World<'_> {
         self.set_progress(GWP_ROUGH_ROCKY, rocky.wrapping_add(count))?;
         loop {
             self.increase(GWP_ROUGH_ROCKY)?;
-            let tile = map.random_tile_seed(size_y, shared.random());
+            let tile = map.random_tile_seed(size_y, shared.random()).0;
             if (shared.tile_type)(tile) == MP_CLEAR && (shared.clear_ground)(tile).0 != CLEAR_DESERT
             {
                 (clear.set_ground)(tile, ClearGroundType(CLEAR_ROUGH), 3);
@@ -403,7 +403,7 @@ impl World<'_> {
         count = rocky;
         loop {
             let r = shared.random();
-            let mut tile = map.random_tile_seed(size_y, r);
+            let mut tile = map.random_tile_seed(size_y, r).0;
             self.increase(GWP_ROUGH_ROCKY)?;
             if (shared.tile_type)(tile) == MP_CLEAR && (shared.clear_ground)(tile).0 != CLEAR_DESERT
             {
@@ -542,10 +542,10 @@ impl World<'_> {
                 let view = crate::map_func::World::new(shared);
                 let freeform = || unsafe { shared.settings().freeform_edges.read() };
                 for x in 0..map.size_x() {
-                    crate::void_map::make_void_raw(&view, map.tile_xy(x, 0), freeform);
+                    crate::void_map::make_void_raw(&view, map.tile_xy(x, 0).0, freeform);
                 }
                 for y in 0..=(shared.map_max_y)() {
-                    crate::void_map::make_void_raw(&view, map.tile_xy(0, y), freeform);
+                    crate::void_map::make_void_raw(&view, map.tile_xy(0, y).0, freeform);
                 }
             }
             if crate::session::mode() != GameMode::MENU {

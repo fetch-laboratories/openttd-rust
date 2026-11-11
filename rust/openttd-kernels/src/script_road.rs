@@ -23,6 +23,7 @@ use crate::script_tile::{
 use crate::slope_func::{
     SLOPE_EW, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, SLOPE_W, SLOPE_WSE,
 };
+use crate::tile_type::TileIndex;
 
 /// `ScriptRoad::ROADVEHTYPE_BUS` and `ROADVEHTYPE_TRUCK`.
 const ROADVEHTYPE_BUS: u32 = 0;
@@ -196,16 +197,20 @@ fn tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     }
     let m = w.dimensions;
     /* Tiles not neighbouring */
-    if m.distance_manhattan(t1, t2) != 1 {
+    if m.distance_manhattan(TileIndex(t1), TileIndex(t2)) != 1 {
         return false;
     }
     let tram = crate::road::availability::get_road_tram_type(script_host::active_road_type()).0;
     let r1 = any_road_bits(s, t1, tram);
     let r2 = any_road_bits(s, t2, tram);
     #[allow(clippy::comparison_chain)]
-    let dir_1: u8 = if m.tile_x(t1) == m.tile_x(t2) {
-        if m.tile_y(t1) < m.tile_y(t2) { 2 } else { 0 }
-    } else if m.tile_x(t1) < m.tile_x(t2) {
+    let dir_1: u8 = if m.tile_x(TileIndex(t1)) == m.tile_x(TileIndex(t2)) {
+        if m.tile_y(TileIndex(t1)) < m.tile_y(TileIndex(t2)) {
+            2
+        } else {
+            0
+        }
+    } else if m.tile_x(TileIndex(t1)) < m.tile_x(TileIndex(t2)) {
         1
     } else {
         3
@@ -461,7 +466,9 @@ pub extern "C" fn openttd_rust_script_road_can_build_parts_here(
         return -1;
     }
     let m = w.dimensions;
-    if m.distance_manhattan(tile, start) != 1 || m.distance_manhattan(tile, end) != 1 {
+    if m.distance_manhattan(TileIndex(tile), TileIndex(start)) != 1
+        || m.distance_manhattan(TileIndex(tile), TileIndex(end)) != 1
+    {
         return -1;
     }
     let index = |x, y| crate::script_tile::openttd_rust_script_map_tile_index(s, x, y);
@@ -526,7 +533,7 @@ pub extern "C" fn openttd_rust_script_road_neighbour_count(s: &Services, tile: u
     let rt = current_road_type() as u8;
     let m = w.dimensions;
     let mut neighbour = 0;
-    if m.tile_x(tile) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NE) {
+    if m.tile_x(TileIndex(tile)) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NE) {
         neighbour += 1;
     }
     if neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_SE) {
@@ -535,7 +542,7 @@ pub extern "C" fn openttd_rust_script_road_neighbour_count(s: &Services, tile: u
     if neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_SW) {
         neighbour += 1;
     }
-    if m.tile_y(tile) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NW) {
+    if m.tile_y(TileIndex(tile)) > 0 && neighbour_has_reachable_road(&w, rt, tile, DIAGDIR_NW) {
         neighbour += 1;
     }
     neighbour
@@ -611,7 +618,8 @@ fn straight_pair(s: &Services, start: u32, end: u32) -> bool {
         && enforce(valid(&w, start), ERR_PRECONDITION_FAILED)
         && enforce(valid(&w, end), ERR_PRECONDITION_FAILED)
         && enforce(
-            m.tile_x(start) == m.tile_x(end) || m.tile_y(start) == m.tile_y(end),
+            m.tile_x(TileIndex(start)) == m.tile_x(TileIndex(end))
+                || m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)),
             ERR_PRECONDITION_FAILED,
         )
 }
@@ -639,7 +647,7 @@ pub extern "C" fn openttd_rust_script_road_build(
         return REFUSED;
     }
     let m = world(s).dimensions;
-    if m.tile_y(start) == m.tile_y(end) {
+    if m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)) {
         crate::direction_type::AXIS_X
     } else {
         crate::direction_type::AXIS_Y
@@ -661,13 +669,13 @@ fn entrance_dir(w: &World<'_>, tile: u32, front: u32) -> u8 {
     use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
     let m = w.dimensions;
     #[allow(clippy::if_same_then_else, clippy::comparison_chain)]
-    if m.tile_x(tile) == m.tile_x(front) {
-        if m.tile_y(tile) < m.tile_y(front) {
+    if m.tile_x(TileIndex(tile)) == m.tile_x(TileIndex(front)) {
+        if m.tile_y(TileIndex(tile)) < m.tile_y(TileIndex(front)) {
             DIAGDIR_SE
         } else {
             DIAGDIR_NW
         }
-    } else if m.tile_x(tile) < m.tile_x(front) {
+    } else if m.tile_x(TileIndex(tile)) < m.tile_x(TileIndex(front)) {
         DIAGDIR_SW
     } else {
         DIAGDIR_NE
@@ -709,10 +717,7 @@ pub extern "C" fn openttd_rust_script_road_station(
     }
     let w = world(s);
     w.dimensions
-        .diagdir_between_tiles(
-            crate::tile_type::TileIndex(tile),
-            crate::tile_type::TileIndex(front),
-        )
+        .diagdir_between_tiles(TileIndex(tile), TileIndex(front))
         .0
 }
 

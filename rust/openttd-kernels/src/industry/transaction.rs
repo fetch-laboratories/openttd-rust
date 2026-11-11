@@ -157,16 +157,16 @@ impl Engine<'_> {
     }
     fn tile_add_wrap(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
         let map = self.map();
-        TileIndex(map.coordinates().tile_add_wrap(
-            tile.0,
+        map.coordinates().tile_add_wrap(
+            tile,
             x,
             y,
             map.size_y,
             (self.g.environment.freeform_edges)(),
-        ))
+        )
     }
     fn distance_max(&self, a: TileIndex, b: TileIndex) -> u32 {
-        self.map().coordinates().distance_max(a.0, b.0)
+        self.map().coordinates().distance_max(a, b)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
         self.map().coordinates().tile_add_xy(tile, x, y)
@@ -512,14 +512,14 @@ impl Engine<'_> {
     ) -> bool {
         let coordinates = self.map().coordinates();
         // Check if we don't leave the map.
-        if coordinates.tile_x(tile.0) == 0
-            || coordinates.tile_y(tile.0) == 0
+        if coordinates.tile_x(tile) == 0
+            || coordinates.tile_y(tile) == 0
             || self.tile_type(tile) == TileType::MP_VOID
         {
             return false;
         }
         let ta = TileArea {
-            tile: tile.0.wrapping_sub(coordinates.diff(1, 1)),
+            tile: tile.0.wrapping_sub(coordinates.diff(1, 1).cast_unsigned()),
             w: 2,
             h: 2,
         };
@@ -540,8 +540,8 @@ impl Engine<'_> {
             //  else you get a chain-reaction of terraforming.
             if internal == 0
                 && curh != height
-                && (coordinates.tile_x(tile_walk.0) == 0
-                    || coordinates.tile_y(tile_walk.0) == 0
+                && (coordinates.tile_x(tile_walk) == 0
+                    || coordinates.tile_y(tile_walk) == 0
                     || !self.check_can_terraform_surrounding_tiles(
                         self.tile_add_xy(tile_walk, -1, -1),
                         height,
@@ -582,8 +582,8 @@ impl Engine<'_> {
         let h = self.tile_height(tile);
         let coordinates = self.map().coordinates();
         let industry_platform = u32::from(self.s.industry_platform());
-        if coordinates.tile_x(tile.0) <= industry_platform.wrapping_add(1)
-            || coordinates.tile_y(tile.0) <= industry_platform.wrapping_add(1)
+        if coordinates.tile_x(tile) <= industry_platform.wrapping_add(1)
+            || coordinates.tile_y(tile) <= industry_platform.wrapping_add(1)
         {
             return false;
         }
@@ -605,8 +605,13 @@ impl Engine<'_> {
                 .wrapping_add(2)
                 .wrapping_add((2 * industry_platform) as i32)) as u16,
         };
-        if coordinates.tile_x(ta.tile).wrapping_add(u32::from(ta.w)) >= coordinates.max_x()
-            || coordinates.tile_y(ta.tile).wrapping_add(u32::from(ta.h))
+        if coordinates
+            .tile_x(TileIndex(ta.tile))
+            .wrapping_add(u32::from(ta.w))
+            >= coordinates.max_x()
+            || coordinates
+                .tile_y(TileIndex(ta.tile))
+                .wrapping_add(u32::from(ta.h))
                 >= crate::map_func::Map::max_y(self.map().size_y)
         {
             return false;
@@ -1054,11 +1059,9 @@ pub(crate) unsafe fn cmd_build_industry(
                     // We should not have more than one Random() in a function call because
                     // parameter evaluation order is not guaranteed in the c++ standard.
                     let world = crate::map_func::World::new(e.s.shared());
-                    let tile = TileIndex(
-                        world
-                            .dimensions
-                            .random_tile_seed(world.size_y(), e.s.shared().random()),
-                    );
+                    let tile = world
+                        .dimensions
+                        .random_tile_seed(world.size_y(), e.s.shared().random());
                     // Start with a random layout.
                     let mut layout = e.s.shared().random_range(num_layouts as u32) as usize;
                     // Check now each layout, starting with the random one.

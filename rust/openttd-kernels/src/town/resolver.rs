@@ -463,14 +463,14 @@ unsafe fn get_distance_from_nearby_house(
         .wrapping_add_signed(house::get_house_north_part(leaves, &mut start_house, map));
     let size_y = crate::map_func::World::new(unsafe { &*s.shared }).size_y();
     let mut spiral = crate::spiral::square(
-        map.tile_x(start_tile.0),
-        map.tile_y(start_tile.0),
+        map.tile_x(start_tile),
+        map.tile_y(start_tile),
         2 * searchradius + 1,
         map.size_x(),
         size_y,
     );
     while !spiral.is_end() {
-        let tile = TileIndex(map.tile_xy(spiral.x, spiral.y));
+        let tile = map.tile_xy(spiral.x, spiral.y);
         if TileType((unsafe { &*s.shared }.tile_type)(tile.0)) == TileType::MP_HOUSE {
             let mut house = (unsafe { &*leaves.houses }.house_type)(tile.0);
             let hs = (s.search_spec)(house);
@@ -495,7 +495,7 @@ unsafe fn get_distance_from_nearby_house(
                     _ => return 0,
                 };
                 if matched {
-                    return map.distance_manhattan(tile.0, start_tile.0);
+                    return map.distance_manhattan(tile, start_tile);
                 }
             }
         }
@@ -558,7 +558,11 @@ pub(crate) unsafe fn house_get_variable(
             } else {
                 0
             };
-            stage | crate::tile_map::tile_hash_2bit(map().tile_x(tile), map().tile_y(tile)) << 2
+            stage
+                | crate::tile_map::tile_hash_2bit(
+                    map().tile_x(TileIndex(tile)),
+                    map().tile_y(TileIndex(tile)),
+                ) << 2
         }
         // Building age.
         0x41 => {
@@ -595,7 +599,7 @@ pub(crate) unsafe fn house_get_variable(
             }
         }
         // Position of the house.
-        0x47 => map().tile_y(tile) << 16 | map().tile_x(tile),
+        0x47 => map().tile_y(TileIndex(tile)) << 16 | map().tile_x(TileIndex(tile)),
         // Building counts for old houses with id = parameter.
         0x60 => {
             if parameter < u32::from(NEW_HOUSE_OFFSET) {
@@ -733,12 +737,16 @@ unsafe fn acceptance_history(
     let register = unsafe { newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
     let x_offs = gb(register, 0, 8) as i8;
     let y_offs = gb(register, 8, 8) as i8;
-    let offset = map.diff(i32::from(x_offs), i32::from(y_offs));
+    let offset = map
+        .diff(i32::from(x_offs), i32::from(y_offs))
+        .cast_unsigned();
     let shared = unsafe { &*s.shared };
-    let tile = map.wrap_to_map(
-        scope.tile.wrapping_add(offset),
-        crate::map_func::World::new(shared).size_y(),
-    );
+    let tile = map
+        .wrap_to_map(
+            TileIndex(scope.tile.wrapping_add(offset)),
+            crate::map_func::World::new(shared).size_y(),
+        )
+        .0;
     let c = crate::station::Ctx::from_shared(shared);
     let mut stations =
         crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });

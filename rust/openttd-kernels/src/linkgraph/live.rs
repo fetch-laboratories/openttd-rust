@@ -11,6 +11,7 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use crate::debug::debug;
+use crate::tile_type::TileIndex;
 use crate::{
     linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE, LinkGraphID},
     station_type::INVALID_STATION,
@@ -530,8 +531,8 @@ pub(crate) unsafe fn run(
             supply: n.supply,
             demand: n.demand,
             station: u32::from(n.station),
-            x: map.tile_x(n.xy),
-            y: map.tile_y(n.xy),
+            x: map.tile_x(TileIndex(n.xy)),
+            y: map.tile_y(TileIndex(n.xy)),
             edge_begin: edges.len() as u32,
             edge_count: n.edges.len() as u32,
         });

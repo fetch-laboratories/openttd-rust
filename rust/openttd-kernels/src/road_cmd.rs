@@ -35,6 +35,7 @@ use crate::slope_func::{
     get_slope_max_z_raw, is_slope_with_one_corner_raised_raw, is_steep_slope_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 use crate::witness as w;
 /// Opaque caller-owned native affected-road-vehicle list.
@@ -263,11 +264,7 @@ impl<'a> Ctx<'a> {
         let company = unsafe { &*(self.commands.company)() };
         error.make_error(company.owned_by);
         if (company.local_company)() == (company.finance.current_company)() {
-            (error.1.encode_owned_by)(
-                error.0,
-                crate::company_type::Owner::TOWN,
-                crate::tile_type::TileIndex(tile),
-            );
+            (error.1.encode_owned_by)(error.0, crate::company_type::Owner::TOWN, TileIndex(tile));
         }
     }
 
@@ -801,8 +798,8 @@ impl<'a> Ctx<'a> {
         cost.error(INVALID_STRING_ID);
     }
     fn length(&self, tile: u32, end: u32) -> u32 {
-        let a = (self.map.tile_x(tile) + self.map.tile_y(tile)) as i32;
-        let b = (self.map.tile_x(end) + self.map.tile_y(end)) as i32;
+        let a = (self.map.tile_x(TileIndex(tile)) + self.map.tile_y(TileIndex(tile))) as i32;
+        let b = (self.map.tile_x(TileIndex(end)) + self.map.tile_y(TileIndex(end))) as i32;
         a.abs_diff(b).wrapping_sub(1)
     }
     fn dirty_wormhole(&self, tile: u32, end: u32) {
@@ -1271,9 +1268,9 @@ impl<'a> Ctx<'a> {
             && crate::road::val_param_road_type(self.shared, rt)
             && axis < 2
             && (if axis == 0 {
-                self.map.tile_y(start) == self.map.tile_y(end)
+                self.map.tile_y(TileIndex(start)) == self.map.tile_y(TileIndex(end))
             } else {
-                self.map.tile_x(start) == self.map.tile_x(end)
+                self.map.tile_x(TileIndex(start)) == self.map.tile_x(TileIndex(end))
             })
     }
     fn build_long(

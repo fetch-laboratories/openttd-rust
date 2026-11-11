@@ -66,6 +66,7 @@ use crate::roadveh::{
     RVSB_WORMHOLE,
 };
 use crate::services::{Map, RoadStopType, Services};
+use crate::tile_type::TileIndex;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
@@ -605,8 +606,8 @@ impl Game<'_> {
     }
     fn tile_xy(&self, tile: u32, pos: (u8, u8)) -> (i32, i32) {
         (
-            (self.map.tile_x(tile) * 16 + u32::from(pos.0)) as i32,
-            (self.map.tile_y(tile) * 16 + u32::from(pos.1)) as i32,
+            (self.map.tile_x(TileIndex(tile)) * 16 + u32::from(pos.0)) as i32,
+            (self.map.tile_y(TileIndex(tile)) * 16 + u32::from(pos.1)) as i32,
         )
     }
     fn set_speed(v: Part, s: &mut Step, speed: u16) {

@@ -128,7 +128,7 @@ fn count_map_square_around(
     let mut num = 0;
     for dx in -3..=3 {
         for dy in -3..=3 {
-            let t = TileIndex(map.tile_add_wrap(tile.0, dx, dy, size_y, freeform));
+            let t = map.tile_add_wrap(tile, dx, dy, size_y, freeform);
             if t != TileIndex::INVALID && cmp(t) {
                 num += 1;
             }
@@ -235,15 +235,10 @@ pub(crate) fn generate_station_name(
     let n = &s.names;
     let town = (s.commands().station_town)(st);
     let mut sni = station_name_information(st, town, s);
-    let mut spiral = crate::spiral::square(
-        map.tile_x(tile.0),
-        map.tile_y(tile.0),
-        7,
-        map.size_x(),
-        size_y,
-    );
+    let mut spiral =
+        crate::spiral::square(map.tile_x(tile), map.tile_y(tile), 7, map.size_x(), size_y);
     while !spiral.is_end() {
-        let indtile = TileIndex(map.tile_xy(spiral.x, spiral.y));
+        let indtile = map.tile_xy(spiral.x, spiral.y);
         spiral = spiral.advance(map.size_x(), size_y);
         if TileType(m.read(indtile.0)) != TileType::MP_INDUSTRY {
             continue;
@@ -296,7 +291,7 @@ pub(crate) fn generate_station_name(
     }
     /* check close enough to town to get central as name? */
     let town_xy = unsafe { crate::town::position((s.shared.town_owner)(town)) };
-    if map.distance_max(tile.0, town_xy.0) < 8 {
+    if map.distance_max(tile, town_xy) < 8 {
         if sni.is_available(StringID(n.base), s) {
             return StringID(n.base);
         }
@@ -336,14 +331,14 @@ pub(crate) fn generate_station_name(
         return StringID(n.heights);
     }
     /* check direction compared to town */
-    for name in if map.tile_x(tile.0) < map.tile_x(town_xy.0) {
+    for name in if map.tile_x(tile) < map.tile_x(town_xy) {
         [n.south, n.west]
     } else {
         [n.north, n.east]
     } {
         sni.set_used(StringID(name), s);
     }
-    for name in if map.tile_y(tile.0) < map.tile_y(town_xy.0) {
+    for name in if map.tile_y(tile) < map.tile_y(town_xy) {
         [n.south, n.east]
     } else {
         [n.north, n.west]

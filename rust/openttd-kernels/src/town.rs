@@ -426,7 +426,7 @@ pub(crate) unsafe fn road_context(
 ) -> (u8, HouseZone, u32) {
     // SAFETY: Immediate reads only, caller establishes owner lifetime.
     let state = unsafe { &*state };
-    let distance = map.distance_manhattan(tile.0, state.simulation.xy);
+    let distance = map.distance_manhattan(tile, TileIndex(state.simulation.xy));
     let zone = unsafe { get_town_radius_group(state, tile, map) };
     (state.growth.road, zone, distance)
 }
@@ -1906,8 +1906,8 @@ impl Engine<'_> {
         if slope != Slope::SLOPE_FLAT {
             let map = self.map();
             let mut search = crate::spiral::hole(
-                map.tile_x(tile.0),
-                map.tile_y(tile.0),
+                map.tile_x(tile),
+                map.tile_y(tile),
                 bridge_length,
                 0,
                 0,
@@ -1915,7 +1915,7 @@ impl Engine<'_> {
                 self.size_y(),
             );
             while !search.is_end() {
-                let at = TileIndex(map.tile_xy(search.x, search.y));
+                let at = map.tile_xy(search.x, search.y);
                 /* Only consider bridge head tiles. */
                 /* Only consider road bridges. */
                 /* If the bridge is facing the same direction as the proposed bridge, we've found a redundant bridge. */

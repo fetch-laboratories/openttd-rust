@@ -8,6 +8,7 @@
 //! Helpers of `tile_map.h` for the audited map view.
 //! `None` denotes an unavailable raw backend or a failed native precondition.
 use crate::map_func::TileTypeAccess;
+use crate::tile_type::TileIndex;
 
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -50,15 +51,15 @@ fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     m.available(t)?;
     let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
-    let x1 = map.tile_x(t);
-    let y1 = map.tile_y(t);
+    let x1 = map.tile_x(TileIndex(t));
+    let y1 = map.tile_y(TileIndex(t));
     let x2 = (x1 + 1).min(map.max_x());
     let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
     Some([
         tile_height(m, t)?,
-        tile_height(m, map.tile_xy(x2, y1))?,
-        tile_height(m, map.tile_xy(x1, y2))?,
-        tile_height(m, map.tile_xy(x2, y2))?,
+        tile_height(m, map.tile_xy(x2, y1).0)?,
+        tile_height(m, map.tile_xy(x1, y2).0)?,
+        tile_height(m, map.tile_xy(x2, y2).0)?,
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
@@ -176,7 +177,8 @@ pub(crate) fn tile_height_outside_map(
             x.clamp(0, map.max_x().cast_signed()).cast_unsigned(),
             y.clamp(0, crate::map_func::Map::max_y(height).cast_signed())
                 .cast_unsigned(),
-        ),
+        )
+        .0,
     )
 }
 /// `GetTilePixelSlopeOutsideMap`.
@@ -269,7 +271,7 @@ impl crate::map_func::World<'_> {
         if t < self.types.count() {
             // Clamped corners of an in-range tile are in range: no `TileHeight` assertion fails.
             let map = self.dimensions;
-            let (x1, y1) = (map.tile_x(t), map.tile_y(t));
+            let (x1, y1) = (map.tile_x(TileIndex(t)), map.tile_y(TileIndex(t)));
             let x2 = (x1 + 1).min(map.max_x());
             let y2 = (y1 + 1).min(crate::map_func::Map::max_y(size_y));
             let height = |c: u32| {
@@ -279,9 +281,9 @@ impl crate::map_func::World<'_> {
             };
             return get_tile_slope_given_height([
                 height(t),
-                height(map.tile_xy(x2, y1)),
-                height(map.tile_xy(x1, y2)),
-                height(map.tile_xy(x2, y2)),
+                height(map.tile_xy(x2, y1).0),
+                height(map.tile_xy(x1, y2).0),
+                height(map.tile_xy(x2, y2).0),
             ]);
         }
         self.tile_slope_z_outside(t)
@@ -334,8 +336,8 @@ pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
 pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
     w.check(w.types.available(t).is_some());
     let map = w.dimensions;
-    let x = map.tile_x(t);
-    let y = map.tile_y(t);
+    let x = map.tile_x(TileIndex(t));
+    let y = map.tile_y(TileIndex(t));
     x < map.max_x()
         && y < crate::map_func::Map::max_y(w.size_y())
         && ((x > 0 && y > 0) || !freeform_edges)

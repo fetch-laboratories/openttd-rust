@@ -16,6 +16,7 @@ use crate::script_host::{self, ERR_PRECONDITION_INVALID_COMPANY, Services};
 use crate::script_tile::{
     ERR_PRECONDITION_FAILED, deity_or_company_mode_valid, enforce, has_transport_type, valid, world,
 };
+use crate::tile_type::TileIndex;
 use crate::track_type::{
     INVALID_TRACK, INVALID_TRACKDIR, TRACK_BIT_ALL, TRACK_LEFT, TRACK_LOWER, TRACK_RIGHT,
     TRACK_UPPER, TRACK_X, TRACK_Y, TRACKDIR_LEFT_N, TRACKDIR_LEFT_S, TRACKDIR_LOWER_E,
@@ -299,8 +300,8 @@ fn tiles_connected(s: &Services, from: u32, tile: u32, to: u32) -> bool {
 #[allow(clippy::cast_possible_wrap)]
 fn diag_offset(w: &World<'_>, to: u32, tile: u32) -> i32 {
     let m = w.dimensions;
-    let dx = (m.tile_x(to) as i32).wrapping_sub(m.tile_x(tile) as i32);
-    let dy = (m.tile_y(to) as i32).wrapping_sub(m.tile_y(tile) as i32);
+    let dx = (m.tile_x(TileIndex(to)) as i32).wrapping_sub(m.tile_x(TileIndex(tile)) as i32);
+    let dy = (m.tile_y(TileIndex(to)) as i32).wrapping_sub(m.tile_y(TileIndex(tile)) as i32);
     dx.wrapping_abs()
         .wrapping_sub(dy.wrapping_abs())
         .wrapping_abs()
@@ -316,8 +317,8 @@ fn simulate_drag(s: &Services, from: u32, tile: u32, mut to: u32) -> (u8, u32) {
     let map = world(s);
     let dims = map.dimensions;
     let size_x = crate::script_tile::openttd_rust_script_map_size_x(s);
-    let x = |t: u32| dims.tile_x(t) as i32;
-    let y = |t: u32| dims.tile_y(t) as i32;
+    let x = |t: u32| dims.tile_x(TileIndex(t)) as i32;
+    let y = |t: u32| dims.tile_y(TileIndex(t)) as i32;
     let offset = diag_offset(&map, to, tile);
     let step_x = |to: u32| to.wrapping_sub(x(to).wrapping_sub(x(tile)).clamp(-1, 1) as u32);
     let step_y = |to: u32| {
@@ -392,10 +393,13 @@ pub extern "C" fn openttd_rust_script_rail_drag(
         || !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(valid(&w, to), ERR_PRECONDITION_FAILED)
         || !enforce(
-            m.distance_manhattan(from, tile) == 1,
+            m.distance_manhattan(TileIndex(from), TileIndex(tile)) == 1,
             ERR_PRECONDITION_FAILED,
         )
-        || !enforce(m.distance_manhattan(tile, to) >= 1, ERR_PRECONDITION_FAILED)
+        || !enforce(
+            m.distance_manhattan(TileIndex(tile), TileIndex(to)) >= 1,
+            ERR_PRECONDITION_FAILED,
+        )
         || (build != 0
             && !enforce(
                 rail_type_available(s, current_rail_type()),
@@ -404,8 +408,10 @@ pub extern "C" fn openttd_rust_script_rail_drag(
     {
         return refused;
     }
-    let straight = (m.tile_x(from) == m.tile_x(tile) && m.tile_x(tile) == m.tile_x(to))
-        || (m.tile_y(from) == m.tile_y(tile) && m.tile_y(tile) == m.tile_y(to));
+    let straight = (m.tile_x(TileIndex(from)) == m.tile_x(TileIndex(tile))
+        && m.tile_x(TileIndex(tile)) == m.tile_x(TileIndex(to)))
+        || (m.tile_y(TileIndex(from)) == m.tile_y(TileIndex(tile))
+            && m.tile_y(TileIndex(tile)) == m.tile_y(TileIndex(to)));
     if !enforce(
         diag_offset(&w, to, tile) <= 1 || straight,
         ERR_PRECONDITION_FAILED,
@@ -435,7 +441,8 @@ pub extern "C" fn openttd_rust_script_rail_depot(s: &Services, tile: u32, front:
         || !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(valid(&w, front), ERR_PRECONDITION_FAILED)
         || !enforce(
-            m.tile_x(tile) == m.tile_x(front) || m.tile_y(tile) == m.tile_y(front),
+            m.tile_x(TileIndex(tile)) == m.tile_x(TileIndex(front))
+                || m.tile_y(TileIndex(tile)) == m.tile_y(TileIndex(front)),
             ERR_PRECONDITION_FAILED,
         )
         || !enforce(
@@ -446,13 +453,13 @@ pub extern "C" fn openttd_rust_script_rail_depot(s: &Services, tile: u32, front:
         return REFUSED;
     }
     #[allow(clippy::if_same_then_else, clippy::comparison_chain)]
-    if m.tile_x(tile) == m.tile_x(front) {
-        if m.tile_y(tile) < m.tile_y(front) {
+    if m.tile_x(TileIndex(tile)) == m.tile_x(TileIndex(front)) {
+        if m.tile_y(TileIndex(tile)) < m.tile_y(TileIndex(front)) {
             DIAGDIR_SE
         } else {
             DIAGDIR_NW
         }
-    } else if m.tile_x(tile) < m.tile_x(front) {
+    } else if m.tile_x(TileIndex(tile)) < m.tile_x(TileIndex(front)) {
         DIAGDIR_SW
     } else {
         DIAGDIR_NE
@@ -590,8 +597,12 @@ const POSSIBLE_TRACKDIRS: [[(u8, u8, u8); 3]; 5] = [
 #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
 fn data_index(w: &World<'_>, tile: u32, front: u32) -> usize {
     let m = w.dimensions;
-    let dx = m.tile_x(front).wrapping_sub(m.tile_x(tile));
-    let dy = m.tile_y(front).wrapping_sub(m.tile_y(tile));
+    let dx = m
+        .tile_x(TileIndex(front))
+        .wrapping_sub(m.tile_x(TileIndex(tile)));
+    let dy = m
+        .tile_y(TileIndex(front))
+        .wrapping_sub(m.tile_y(TileIndex(tile)));
     2_u32.wrapping_add(dx).wrapping_add(dy.wrapping_mul(2)) as i32 as usize
 }
 

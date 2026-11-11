@@ -16,6 +16,7 @@
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, company_mode_valid, enforce, valid, world};
 use crate::script_vehicle::{VT_RAIL, VT_ROAD, VT_WATER};
+use crate::tile_type::TileIndex;
 use crate::tunnelbridge_cmd::TunnelBridgeServices;
 
 /// `ScriptBridge::IsValidBridge`: `bridge_type < MAX_BRIDGES` and the type is
@@ -187,7 +188,8 @@ fn build_bridge(s: &Services, vehicle_type: u32, start: u32, end: u32) -> bool {
     enforce(start != end, ERR_PRECONDITION_FAILED)
         && enforce(valid(&w, start) && valid(&w, end), ERR_PRECONDITION_FAILED)
         && enforce(
-            m.tile_x(start) == m.tile_x(end) || m.tile_y(start) == m.tile_y(end),
+            m.tile_x(TileIndex(start)) == m.tile_x(TileIndex(end))
+                || m.tile_y(TileIndex(start)) == m.tile_y(TileIndex(end)),
             ERR_PRECONDITION_FAILED,
         )
         && vehicle_preconditions(s, vehicle_type, true)
@@ -224,10 +226,7 @@ pub extern "C" fn openttd_rust_script_tunnelbridge_road_piece(
     let check = |ok| w.check(ok);
     let dir_1 = w
         .dimensions
-        .diagdir_between_tiles(
-            crate::tile_type::TileIndex(end),
-            crate::tile_type::TileIndex(start),
-        )
+        .diagdir_between_tiles(TileIndex(end), TileIndex(start))
         .0;
     let dir_2 = crate::direction_func::reverse_diag_dir_raw(dir_1, check);
     let (tile, dir, bits_dir) = if first != 0 {

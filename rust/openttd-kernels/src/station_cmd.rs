@@ -661,7 +661,7 @@ impl<'a> Ctx<'a> {
     #[allow(clippy::cast_possible_wrap)]
     fn rect_contains(&self, st: *mut BaseStation, tile: TileIndex) -> bool {
         let map = self.map();
-        let (x, y) = (map.tile_x(tile.0) as i32, map.tile_y(tile.0) as i32);
+        let (x, y) = (map.tile_x(tile) as i32, map.tile_y(tile) as i32);
         // SAFETY: Live owner; the test reads its fields in place without a callback.
         unsafe { &*self.rect(st) }.pt_in_extended_rect(x, y, 0)
     }
@@ -927,12 +927,12 @@ impl Ctx<'_> {
         let xy = (self.s.location)(st);
         // SAFETY: Field-sized reads of the live rectangle at the clamp; no callback
         // runs between them.
-        let new_xy = TileIndex(self.map().tile_xy(
-            (self.map().tile_x(xy) as i32).clamp(unsafe { (*r).left }, unsafe { (*r).right })
-                as u32,
-            (self.map().tile_y(xy) as i32).clamp(unsafe { (*r).top }, unsafe { (*r).bottom })
-                as u32,
-        ));
+        let new_xy = self.map().tile_xy(
+            (self.map().tile_x(TileIndex(xy)) as i32)
+                .clamp(unsafe { (*r).left }, unsafe { (*r).right }) as u32,
+            (self.map().tile_y(TileIndex(xy)) as i32)
+                .clamp(unsafe { (*r).top }, unsafe { (*r).bottom }) as u32,
+        );
         crate::station::spatial::station_move_sign(self.shared, st, new_xy);
         if !(self.world().is_station)(st) {
             return;
@@ -1095,7 +1095,9 @@ impl Ctx<'_> {
             {
                 return;
             }
-            let cur_dist = self.map().distance_manhattan(tile.0, (self.s.location)(st));
+            let cur_dist = self
+                .map()
+                .distance_manhattan(tile, TileIndex((self.s.location)(st)));
             if cur_dist < threshold {
                 threshold = cur_dist;
                 best_station = st;
@@ -1370,9 +1372,11 @@ impl Ctx<'_> {
                 let mut found = false;
                 for i in 0..size {
                     let tile = if vertical {
-                        ta.tile.wrapping_add(self.map().diff(x, i32::from(i)))
+                        ta.tile
+                            .wrapping_add(self.map().diff(x, i32::from(i)).cast_unsigned())
                     } else {
-                        ta.tile.wrapping_add(self.map().diff(i32::from(i), x))
+                        ta.tile
+                            .wrapping_add(self.map().diff(i32::from(i), x).cast_unsigned())
                     };
                     if func(TileIndex(tile)) {
                         found = true;
@@ -1383,12 +1387,12 @@ impl Ctx<'_> {
                 if !found {
                     if vertical {
                         if x == 0 {
-                            ta.tile = ta.tile.wrapping_add(self.map().diff(1, 0));
+                            ta.tile = ta.tile.wrapping_add(self.map().diff(1, 0).cast_unsigned());
                         }
                         ta.w -= 1;
                     } else {
                         if x == 0 {
-                            ta.tile = ta.tile.wrapping_add(self.map().diff(0, 1));
+                            ta.tile = ta.tile.wrapping_add(self.map().diff(0, 1).cast_unsigned());
                         }
                         ta.h -= 1;
                     }
@@ -1543,13 +1547,17 @@ impl Ctx<'_> {
     /// negated: whether the first tile and the last tile are valid.
     fn first_and_last_tile_valid(&self, tile: TileIndex, w: u16, h: u16) -> bool {
         (self.shared.tile_valid)(tile.0)
-            && self.map().tile_add_wrap(
-                tile.0,
-                i32::from(w) - 1,
-                i32::from(h) - 1,
-                crate::map_func::World::new(self.shared).size_y(),
-                (self.world().environment.freeform_edges)(),
-            ) != TileIndex::INVALID.0
+            && self
+                .map()
+                .tile_add_wrap(
+                    tile,
+                    i32::from(w) - 1,
+                    i32::from(h) - 1,
+                    crate::map_func::World::new(self.shared).size_y(),
+                    (self.world().environment.freeform_edges)(),
+                )
+                .0
+                != TileIndex::INVALID.0
     }
     /// `FreeTrainReservation`: clear platform reservation during station
     /// building/removing.
@@ -4247,14 +4255,14 @@ impl Ctx<'_> {
         } else {
             (size.w, size.h)
         };
-        let perimeter_min_x = map.tile_x(tile.0);
-        let perimeter_min_y = map.tile_y(tile.0);
+        let perimeter_min_x = map.tile_x(tile);
+        let perimeter_min_y = map.tile_y(tile);
         let perimeter_max_x = perimeter_min_x + u32::from(width) - 1;
         let perimeter_max_y = perimeter_min_y + u32::from(height) - 1;
         let mut mindist = u32::MAX - 1; // prevent overflow
         let authority = unsafe { &*self.s.authority };
         for cur_tile in it {
-            let (x, y) = (map.tile_x(cur_tile.0), map.tile_y(cur_tile.0));
+            let (x, y) = (map.tile_x(cur_tile), map.tile_y(cur_tile));
             if x != perimeter_min_x
                 && x != perimeter_max_x
                 && y != perimeter_min_y
@@ -4271,7 +4279,7 @@ impl Ctx<'_> {
                 continue;
             }
             let xy = unsafe { crate::town::position((self.shared.town_owner)(t)) }.0;
-            let dist = map.distance_manhattan(xy, cur_tile.0);
+            let dist = map.distance_manhattan(TileIndex(xy), cur_tile);
             if dist == mindist && (authority.town_index)(t) < (authority.town_index)(nearest) {
                 nearest = t;
             }
@@ -4871,15 +4879,15 @@ impl Ctx<'_> {
             return;
         }
         let map = self.map();
-        let x = map.tile_x(area.tile);
-        let y = map.tile_y(area.tile);
+        let x = map.tile_x(TileIndex(area.tile));
+        let y = map.tile_y(TileIndex(area.tile));
         /* Expand the area by a tile on each side while
          * making sure that we remain inside the map. */
         let x2 = (x + u32::from(area.w) + 1).min(map.size_x());
         let x1 = x.saturating_sub(1);
         let y2 = (y + u32::from(area.h) + 1).min(crate::map_func::World::new(self.shared).size_y());
         let y1 = y.saturating_sub(1);
-        let ta = TileArea::between(map, map.tile_xy(x1, y1), map.tile_xy(x2 - 1, y2 - 1));
+        let ta = TileArea::between(map, map.tile_xy(x1, y1).0, map.tile_xy(x2 - 1, y2 - 1).0);
         for tile in ta.tiles(map) {
             let tile = TileIndex(tile);
             if (self.shared.tile_valid)(tile.0) && self.is_possible_docking_tile(tile) {
@@ -5093,7 +5101,7 @@ impl Ctx<'_> {
         }
         let (dx, dy) = DOCK_TILEOFFS_CHKAROUND[usize::from(direction.0)];
         let dock_area = TileArea {
-            tile: tile.0.wrapping_add(self.map().diff(dx, dy)),
+            tile: tile.0.wrapping_add(self.map().diff(dx, dy).cast_unsigned()),
             w: DOCK_W_CHK[usize::from(direction.0)],
             h: DOCK_H_CHK[usize::from(direction.0)],
         };
@@ -6034,19 +6042,29 @@ impl Ctx<'_> {
         let cur_ta = self.s.rail_area(st);
         let map = self.map();
         /* determine new size of train station region.. */
-        let x = map.tile_x(cur_ta.tile).min(map.tile_x(new_ta.tile));
-        let y = map.tile_y(cur_ta.tile).min(map.tile_y(new_ta.tile));
+        let x = map
+            .tile_x(TileIndex(cur_ta.tile))
+            .min(map.tile_x(TileIndex(new_ta.tile)));
+        let y = map
+            .tile_y(TileIndex(cur_ta.tile))
+            .min(map.tile_y(TileIndex(new_ta.tile)));
         let new_ta = TileArea {
-            tile: map.tile_xy(x, y),
+            tile: map.tile_xy(x, y).0,
             w: (map
-                .tile_x(cur_ta.tile)
+                .tile_x(TileIndex(cur_ta.tile))
                 .wrapping_add(u32::from(cur_ta.w))
-                .max(map.tile_x(new_ta.tile).wrapping_add(u32::from(new_ta.w)))
+                .max(
+                    map.tile_x(TileIndex(new_ta.tile))
+                        .wrapping_add(u32::from(new_ta.w)),
+                )
                 .wrapping_sub(x)) as u16,
             h: (map
-                .tile_y(cur_ta.tile)
+                .tile_y(TileIndex(cur_ta.tile))
                 .wrapping_add(u32::from(cur_ta.h))
-                .max(map.tile_y(new_ta.tile).wrapping_add(u32::from(new_ta.h)))
+                .max(
+                    map.tile_y(TileIndex(new_ta.tile))
+                        .wrapping_add(u32::from(new_ta.h)),
+                )
                 .wrapping_sub(y)) as u16,
         };
         /* make sure the final size is not too big. */

@@ -41,30 +41,37 @@ impl Map {
     /// `TileXY`, over the captured map width.
     #[must_use]
     #[inline]
-    pub fn tile_xy(self, x: u32, y: u32) -> u32 {
-        y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
+    pub fn tile_xy(self, x: u32, y: u32) -> TileIndex {
+        TileIndex(y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x))
     }
     /// `TileVirtXY`, including the unsigned coordinate shifts and addition.
     #[must_use]
     #[inline]
-    pub fn tile_virt_xy(self, x: u32, y: u32) -> u32 {
+    pub fn tile_virt_xy(self, x: u32, y: u32) -> TileIndex {
         self.tile_xy(x >> 4, y >> 4)
     }
     /// `Map::ScaleBySize`, preserving its pre-division unsigned shift.
     #[must_use]
     #[inline]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
+        // Subtract 12 to avoid overflow for large n; the minimum map is 64 by 64.
         let scaled = n.wrapping_shl(u32::from(self.log_x) + size_y.ilog2() - 12);
-        scaled.wrapping_add(15) / 16
+        crate::math::ceil_div(scaled, 1 << 4)
     }
-    /// `AddTileIndexDiffCWrap` for an arbitrary original coordinate offset.
+    /// `AddTileIndexDiffCWrap`: add a coordinate offset, returning invalid if it
+    /// would leave the map. A negative coordinate becomes large when cast unsigned.
     #[must_use]
     #[inline]
-    pub fn add_offset_c_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32) -> u32 {
-        let x = self.tile_x(tile).wrapping_add_signed(dx);
-        let y = self.tile_y(tile).wrapping_add_signed(dy);
+    pub fn add_tile_index_diff_c_wrap(
+        self,
+        tile: TileIndex,
+        diff: TileIndexDiffC,
+        size_y: u32,
+    ) -> TileIndex {
+        let x = self.tile_x(tile).wrapping_add_signed(i32::from(diff.x));
+        let y = self.tile_y(tile).wrapping_add_signed(i32::from(diff.y));
         if x >= self.size_x() || y >= size_y {
-            crate::tile_type::INVALID_TILE
+            TileIndex::INVALID
         } else {
             self.tile_xy(x, y)
         }
@@ -72,22 +79,29 @@ impl Map {
     /// `Map::WrapToMap`, preserving the canonical power-of-two tile mask.
     #[must_use]
     #[inline]
-    pub fn wrap_to_map(self, tile: u32, size_y: u32) -> u32 {
-        tile & (self.size_x() * size_y - 1)
+    pub fn wrap_to_map(self, tile: TileIndex, size_y: u32) -> TileIndex {
+        TileIndex(tile.0 & (self.size_x() * size_y - 1))
     }
     /// `RandomTileSeed`, using the original `Map::WrapToMap` helper.
     #[must_use]
     #[inline]
-    pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
-        self.wrap_to_map(random, size_y)
+    pub fn random_tile_seed(self, size_y: u32, random: u32) -> TileIndex {
+        self.wrap_to_map(TileIndex(random), size_y)
     }
     /// `TileAddWrap`, including freeform-edge exclusion.
     #[must_use]
-    pub fn tile_add_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32, freeform: bool) -> u32 {
+    pub fn tile_add_wrap(
+        self,
+        tile: TileIndex,
+        dx: i32,
+        dy: i32,
+        size_y: u32,
+        freeform: bool,
+    ) -> TileIndex {
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
         if ((x == 0 || y == 0) && freeform) || x >= self.max_x() || y >= Self::max_y(size_y) {
-            crate::tile_type::INVALID_TILE
+            TileIndex::INVALID
         } else {
             self.tile_xy(x, y)
         }
@@ -107,28 +121,28 @@ impl Map {
     /// `TileX`.
     #[must_use]
     #[inline]
-    pub fn tile_x(self, tile: u32) -> u32 {
-        tile & (self.size_x() - 1)
+    pub fn tile_x(self, tile: TileIndex) -> u32 {
+        tile.0 & (self.size_x() - 1)
     }
     /// `TileY`.
     #[must_use]
     #[inline]
-    pub fn tile_y(self, tile: u32) -> u32 {
-        tile >> self.log_x
+    pub fn tile_y(self, tile: TileIndex) -> u32 {
+        tile.0 >> self.log_x
     }
     /// Original `DistanceManhattan`.
     #[must_use]
     #[inline]
-    pub fn distance_manhattan(self, a: u32, b: u32) -> u32 {
-        self.tile_x(a).abs_diff(self.tile_x(b)) + self.tile_y(a).abs_diff(self.tile_y(b))
+    pub fn distance_manhattan(self, a: TileIndex, b: TileIndex) -> u32 {
+        crate::math::delta(self.tile_x(a), self.tile_x(b))
+            .wrapping_add(crate::math::delta(self.tile_y(a), self.tile_y(b)))
     }
     /// Original `DistanceMax`, the L-infinity norm.
     #[must_use]
     #[inline]
-    pub fn distance_max(self, a: u32, b: u32) -> u32 {
-        self.tile_x(a)
-            .abs_diff(self.tile_x(b))
-            .max(self.tile_y(a).abs_diff(self.tile_y(b)))
+    pub fn distance_max(self, a: TileIndex, b: TileIndex) -> u32 {
+        crate::math::delta(self.tile_x(a), self.tile_x(b))
+            .max(crate::math::delta(self.tile_y(a), self.tile_y(b)))
     }
     /// `TileIndexToTileIndexDiffC`: the unsigned coordinate differences
     /// `TileX(a) - TileX(b)` and `TileY(a) - TileY(b)`, narrowed to `int16_t`.
@@ -144,17 +158,20 @@ impl Map {
         tile_b: crate::tile_type::TileIndex,
     ) -> crate::map_type::TileIndexDiffC {
         crate::map_type::TileIndexDiffC {
-            x: self.tile_x(tile_a.0).wrapping_sub(self.tile_x(tile_b.0)) as i16,
-            y: self.tile_y(tile_a.0).wrapping_sub(self.tile_y(tile_b.0)) as i16,
+            x: self.tile_x(tile_a).wrapping_sub(self.tile_x(tile_b)) as i16,
+            y: self.tile_y(tile_a).wrapping_sub(self.tile_y(tile_b)) as i16,
         }
     }
-    /// `TileDiffXY`: `y * Map::SizeX() + x` in unsigned arithmetic.
+    /// `TileDiffXY`: coordinate offsets can be negative. Multiplication optimizes
+    /// better on MSVC than shifting: zero shifted by a variable is not optimized
+    /// properly. Constant x/y often eliminate the multiplication entirely.
     #[must_use]
     #[inline]
-    pub fn diff(self, x: i32, y: i32) -> u32 {
+    pub fn diff(self, x: i32, y: i32) -> TileIndexDiff {
         y.cast_unsigned()
             .wrapping_mul(self.size_x())
             .wrapping_add(x.cast_unsigned())
+            .cast_signed()
     }
     /// `TileOffsByAxis`: convert an `Axis` to the tile offset in southern
     /// direction (SW or SE).
@@ -171,8 +188,8 @@ impl Map {
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
     pub fn diagdir_between_tiles(self, from: TileIndex, to: TileIndex) -> DiagDirection {
-        let dx = (self.tile_x(to.0) as i32).wrapping_sub(self.tile_x(from.0) as i32);
-        let dy = (self.tile_y(to.0) as i32).wrapping_sub(self.tile_y(from.0) as i32);
+        let dx = (self.tile_x(to) as i32).wrapping_sub(self.tile_x(from) as i32);
+        let dy = (self.tile_y(to) as i32).wrapping_sub(self.tile_y(from) as i32);
         if dx == 0 {
             if dy == 0 {
                 return DiagDirection::INVALID_DIAGDIR;
@@ -196,8 +213,8 @@ impl Map {
     /// the distance to the nearest edge of the map, in any direction.
     #[must_use]
     pub fn distance_from_edge(self, tile: TileIndex, size_y: u32) -> u32 {
-        let xl = self.tile_x(tile.0);
-        let yl = self.tile_y(tile.0);
+        let xl = self.tile_x(tile);
+        let yl = self.tile_y(tile);
         let xh = self.max_x().wrapping_sub(xl);
         let yh = Self::max_y(size_y).wrapping_sub(yl);
         xl.min(yl).min(xh.min(yh))
@@ -208,15 +225,15 @@ impl Map {
     #[must_use]
     #[inline]
     pub fn distance_square(self, t0: TileIndex, t1: TileIndex) -> u32 {
-        let dx = self.tile_x(t0.0).cast_signed() - self.tile_x(t1.0).cast_signed();
-        let dy = self.tile_y(t0.0).cast_signed() - self.tile_y(t1.0).cast_signed();
+        let dx = self.tile_x(t0).wrapping_sub(self.tile_x(t1)).cast_signed();
+        let dy = self.tile_y(t0).wrapping_sub(self.tile_y(t1)).cast_signed();
         (dx * dx + dy * dy).cast_unsigned()
     }
     /// `TileAddXY`: adds a given offset of x and y to a tile.
     #[must_use]
     #[inline]
     pub fn tile_add_xy(self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(tile.0.wrapping_add(self.diff(x, y)))
+        TileIndex(tile.0.wrapping_add(self.diff(x, y).cast_unsigned()))
     }
     /// `ToTileIndexDiff`: return the offset between two tiles from a
     /// `TileIndexDiffC` struct.
@@ -224,7 +241,6 @@ impl Map {
     #[inline]
     pub fn to_tile_index_diff(self, tidc: TileIndexDiffC) -> TileIndexDiff {
         self.diff(i32::from(tidc.x), i32::from(tidc.y))
-            .cast_signed()
     }
     /// `TileOffsByDiagDir`: convert a `DiagDirection` to a `TileIndexDiff`.
     #[must_use]
@@ -306,9 +322,9 @@ impl Map {
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
     #[must_use]
     #[inline]
-    pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
-        let diff = tile_index_diff_c_by_diag_dir(DiagDirection(dir), native_check);
-        self.add_offset_c_wrap(tile, i32::from(diff.x), i32::from(diff.y), size_y)
+    pub fn add_diff_c_wrap(self, tile: TileIndex, dir: DiagDirection, size_y: u32) -> TileIndex {
+        let diff = tile_index_diff_c_by_diag_dir(dir, native_check);
+        self.add_tile_index_diff_c_wrap(tile, diff, size_y)
     }
 }
 

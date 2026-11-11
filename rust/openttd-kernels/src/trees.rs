@@ -25,6 +25,7 @@ use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLE
 use crate::openttd::GameMode;
 use crate::random_func::chance16_i;
 use crate::services::Services;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 use crate::tree_map::TREE_GROUND_SHORE as GROUND_SHORE;
 
@@ -230,9 +231,10 @@ fn scale_by_size(size: u32, n: u32) -> u32 {
 /// `TileAddWrap` on the canonical map; `freeform_edges` is read at the call, as in `map.cpp`.
 fn tile_add_wrap(s: &Services, tile: u32, x: i32, y: i32) -> u32 {
     s.map()
-        .tile_add_wrap(tile, x, y, 1 << s.map_log_y(), unsafe {
+        .tile_add_wrap(TileIndex(tile), x, y, 1 << s.map_log_y(), unsafe {
             s.settings().freeform_edges.read()
         })
+        .0
 }
 
 /// `GetRandomTreeType`; the zone is used only in the tropic climate.
@@ -1138,7 +1140,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         };
         let x = coordinate();
         let y = coordinate();
-        let target = map.tile_add_wrap(tile, x, y, size_y, freeform);
+        let target = map.tile_add_wrap(TileIndex(tile), x, y, size_y, freeform).0;
         if target == INVALID_TILE {
             continue;
         }

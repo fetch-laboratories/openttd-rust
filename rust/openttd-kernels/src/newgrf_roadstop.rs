@@ -17,6 +17,7 @@ use crate::station_type::{
     ROAD_WAYPOINT, SRT_CARGO_TAKEN, SRT_NEW_CARGO, STATION_BUS, STATION_TRUCK,
 };
 use crate::tile_type::INVALID_TILE;
+use crate::tile_type::TileIndex;
 use crate::{
     services::{Services as Shared, TownHandle},
     station::BaseStation,
@@ -251,7 +252,9 @@ unsafe fn variable(
             let xy = unsafe { (s.town_tile)(t) };
             return if variable == 0x45 {
                 (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), t, c.tile) }) << 16)
-                    | s.map().distance_manhattan(c.tile, xy).min(65535)
+                    | s.map()
+                        .distance_manhattan(TileIndex(c.tile), TileIndex(xy))
+                        .min(65535)
             } else {
                 s.map().distance_square_raw(c.tile, xy)
             };

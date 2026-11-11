@@ -347,7 +347,7 @@ impl Ctx<'_> {
                 continue;
             }
             let xy = TileIndex((self.s.location)(wp));
-            let cur_dist = self.map().distance_manhattan(tile.0, xy.0);
+            let cur_dist = self.map().distance_manhattan(tile, xy);
             if cur_dist == thres && !best.is_null() {
                 w::hit(w::WAYPOINT_TIE);
             }

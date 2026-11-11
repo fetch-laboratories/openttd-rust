@@ -25,6 +25,7 @@ use crate::newgrf_storage::{
 };
 use crate::openttd::{GameMode, PauseMode};
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
+use crate::tile_type::TileIndex;
 
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::TILE_SIZE;
@@ -527,8 +528,8 @@ pub struct Admission {
 fn pixel(s: &CommandServices, tile: u32) -> (i32, i32) {
     let map = s.shared.map();
     (
-        map.tile_x(tile).wrapping_mul(TILE_SIZE) as i32,
-        map.tile_y(tile).wrapping_mul(TILE_SIZE) as i32,
+        map.tile_x(TileIndex(tile)).wrapping_mul(TILE_SIZE) as i32,
+        map.tile_y(TileIndex(tile)).wrapping_mul(TILE_SIZE) as i32,
     )
 }
 

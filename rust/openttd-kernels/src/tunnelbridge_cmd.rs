@@ -38,6 +38,7 @@ use crate::slope_func::{
     get_inclined_slope_direction_raw,
 };
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{
     MP_CLEAR, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER,
 };
@@ -400,7 +401,7 @@ impl<'a> World<'a> {
             if !(self.s.tile_valid)(tile) {
                 return cost.error(self.a.strings.bridge_border);
             }
-            if self.map.tile_x(tile) == 0 || self.map.tile_y(tile) == 0 {
+            if self.map.tile_x(TileIndex(tile)) == 0 || self.map.tile_y(TileIndex(tile)) == 0 {
                 return cost.error(if transport == WATER {
                     self.a.strings.bridge_border
                 } else {
@@ -433,9 +434,9 @@ impl<'a> World<'a> {
         if start == end {
             return cost.error(self.a.strings.same_end);
         }
-        let axis = if self.map.tile_x(start) == self.map.tile_x(end) {
+        let axis = if self.map.tile_x(TileIndex(start)) == self.map.tile_x(TileIndex(end)) {
             1
-        } else if self.map.tile_y(start) == self.map.tile_y(end) {
+        } else if self.map.tile_y(TileIndex(start)) == self.map.tile_y(TileIndex(end)) {
             0
         } else {
             return cost.error(self.a.strings.straight);
@@ -538,9 +539,9 @@ impl<'a> World<'a> {
                 owner = company;
             }
             let delta = if axis == 0 {
-                self.map.diff(1, 0)
+                self.map.diff(1, 0).cast_unsigned()
             } else {
-                self.map.diff(0, 1)
+                self.map.diff(0, 1).cast_unsigned()
             };
             let mut tile = start.wrapping_add(delta);
             while tile != end {
@@ -877,12 +878,12 @@ impl<'a> World<'a> {
             crate::movement::native_assert(self.s, ok);
         }) == 1
         {
-            if self.map.tile_x(start) < (self.map.size_x() - 1) / 2 {
+            if self.map.tile_x(TileIndex(start)) < (self.map.size_x() - 1) / 2 {
                 DIAGDIR_SW
             } else {
                 DIAGDIR_NE
             }
-        } else if self.map.tile_y(start) < (self.map.size_x() - 1) / 2 {
+        } else if self.map.tile_y(TileIndex(start)) < (self.map.size_x() - 1) / 2 {
             DIAGDIR_SE
         } else {
             DIAGDIR_NW

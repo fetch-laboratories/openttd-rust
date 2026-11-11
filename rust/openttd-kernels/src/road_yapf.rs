@@ -23,6 +23,7 @@ use crate::node_hash::NodeMap;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
+use crate::tile_type::TileIndex;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::vehicle::OpenTTDVehicle;
 use std::cell::OnceCell;
@@ -436,10 +437,10 @@ impl Search<'_> {
             let map = crate::services::Map::from_log_x(self.input.map_x.trailing_zeros());
             let center_z = |tile| {
                 movement.pixel_z_at(
-                    (map.tile_x(tile) * crate::tile_type::TILE_SIZE
+                    (map.tile_x(TileIndex(tile)) * crate::tile_type::TILE_SIZE
                         + crate::tile_type::TILE_SIZE / 2)
                         .cast_signed(),
-                    (map.tile_y(tile) * crate::tile_type::TILE_SIZE
+                    (map.tile_y(TileIndex(tile)) * crate::tile_type::TILE_SIZE
                         + crate::tile_type::TILE_SIZE / 2)
                         .cast_signed(),
                     true,

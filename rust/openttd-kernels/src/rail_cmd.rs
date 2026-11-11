@@ -20,6 +20,7 @@
 use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::rail_map::is_pbs_signal as is_pbs;
+use crate::tile_type::TileIndex;
 use crate::track_func::{
     is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
     tracks_overlap,
@@ -420,11 +421,17 @@ impl<'a> Ctx<'a> {
     /// `TileX`/`TileY` delta add, as `tile += ToTileIndexDiff(_trackdelta[td])`.
     fn step(&self, tile: u32, trackdir: u8) -> u32 {
         let (x, y) = TRACK_DELTA[usize::from(trackdir)];
-        tile.wrapping_add(self.map.diff(x, y))
+        tile.wrapping_add(self.map.diff(x, y).cast_unsigned())
     }
     fn tunnel_length(&self, begin: u32, end: u32) -> u32 {
-        let (x1, y1) = (self.map.tile_x(begin) as i32, self.map.tile_y(begin) as i32);
-        let (x2, y2) = (self.map.tile_x(end) as i32, self.map.tile_y(end) as i32);
+        let (x1, y1) = (
+            self.map.tile_x(TileIndex(begin)) as i32,
+            self.map.tile_y(TileIndex(begin)) as i32,
+        );
+        let (x2, y2) = (
+            self.map.tile_x(TileIndex(end)) as i32,
+            self.map.tile_y(TileIndex(end)) as i32,
+        );
         ((x2 + y2 - x1 - y1).abs() - 1) as u32
     }
 
@@ -1035,10 +1042,10 @@ impl<'a> Ctx<'a> {
 
     /// `ValidateAutoDrag`; false is `CMD_ERROR`.
     fn validate_auto_drag(&self, trackdir: &mut u8, start: u32, end: u32) -> bool {
-        let x = self.map.tile_x(start) as i32;
-        let y = self.map.tile_y(start) as i32;
-        let ex = self.map.tile_x(end) as i32;
-        let ey = self.map.tile_y(end) as i32;
+        let x = self.map.tile_x(TileIndex(start)) as i32;
+        let y = self.map.tile_y(TileIndex(start)) as i32;
+        let ex = self.map.tile_x(TileIndex(end)) as i32;
+        let ey = self.map.tile_y(TileIndex(end)) as i32;
         if *trackdir & 7 >= 6 {
             return false;
         }
@@ -1474,8 +1481,8 @@ impl<'a> Ctx<'a> {
             *tile = (self.rail.other_tunnel_bridge_end)(*tile);
         }
         let (dx, dy) = TRACK_DELTA[usize::from(*trackdir)];
-        let x = self.map.tile_x(*tile) as i32 + dx;
-        let y = self.map.tile_y(*tile) as i32 + dy;
+        let x = self.map.tile_x(TileIndex(*tile)) as i32 + dx;
+        let y = self.map.tile_y(TileIndex(*tile)) as i32 + dy;
         if x as u32 >= self.map.size_x() || y as u32 > (self.shared.map_max_y)() {
             *tile = INVALID_TILE;
             return false;

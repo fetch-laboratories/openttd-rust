@@ -299,19 +299,19 @@ pub(super) fn get_house_north_part(
         let previous_flags = building_flags(leaves, *house - 1);
         if previous_flags.test(BuildingFlag::Size2x1) {
             *house -= 1;
-            return map.diff(-1, 0).cast_signed();
+            return map.diff(-1, 0);
         } else if previous_flags.any(BuildingFlags::BUILDING_2_TILES_Y) {
             *house -= 1;
-            return map.diff(0, -1).cast_signed();
+            return map.diff(0, -1);
         } else if building_flags(leaves, *house - 2).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 2;
-            return map.diff(-1, 0).cast_signed();
+            return map.diff(-1, 0);
         } else if building_flags(leaves, *house - 3).any(BuildingFlags::BUILDING_HAS_4_TILES) {
             *house -= 3;
-            return map.diff(-1, -1).cast_signed();
+            return map.diff(-1, -1);
         }
     }
-    map.diff(0, 0).cast_signed()
+    map.diff(0, 0)
 }
 impl<'a> House<'a> {
     fn map(&self) -> Map {
@@ -351,7 +351,7 @@ impl<'a> House<'a> {
     }
     /// `tile + TileDiffXY(x, y)`.
     fn tile_diff_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(tile.0.wrapping_add(self.map().diff(x, y)))
+        TileIndex(tile.0.wrapping_add(self.map().diff(x, y).cast_unsigned()))
     }
     /// `TileAddXY`.
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
@@ -1513,7 +1513,7 @@ impl<'a> House<'a> {
             }
             // Increase the number of houses for every house, but only once.
             let mut house_id = house_id;
-            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0).cast_signed() {
+            if self.get_house_north_part(&mut house_id) == self.map().diff(0, 0) {
                 // SAFETY: As above.
                 unsafe {
                     let fields = &raw mut (*town).simulation;

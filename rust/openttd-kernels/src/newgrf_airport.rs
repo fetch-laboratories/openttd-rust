@@ -201,8 +201,8 @@ pub(crate) fn in_bounds(spec: *const AirportSpec, layout: u8, tile: u32, s: &Ser
     if rotation == crate::direction_type::DIR_E || rotation == crate::direction_type::DIR_W {
         std::mem::swap(&mut w, &mut h);
     }
-    s.map().tile_x(tile) + u32::from(w) < (s.shared().map_max_x)() + 1
-        && s.map().tile_y(tile) + u32::from(h) < (s.shared().map_max_y)() + 1
+    s.map().tile_x(TileIndex(tile)) + u32::from(w) < (s.shared().map_max_x)() + 1
+        && s.map().tile_y(TileIndex(tile)) + u32::from(h) < (s.shared().map_max_y)() + 1
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_spec(
@@ -449,14 +449,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             let owner = (s.shared().town_owner)(town);
             u32::from(
-                unsafe {
-                    crate::town::get_town_radius_group(
-                        owner,
-                        crate::tile_type::TileIndex(c.tile),
-                        s.map(),
-                    )
-                }
-                .0,
+                unsafe { crate::town::get_town_radius_group(owner, TileIndex(c.tile), s.map()) }.0,
             )
         }
         0x43 => crate::industry::resolver::get_relative_position(

@@ -38,6 +38,7 @@ use crate::slope_func::{
     special_rail_foundation_raw,
 };
 use crate::tile_cmd::{CANNOT_ENTER, ENTERED_STATION, ENTERED_WORMHOLE};
+use crate::tile_type::TileIndex;
 use crate::tile_type::{
     INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
     MP_TUNNELBRIDGE, MP_VOID, MP_WATER,
@@ -244,12 +245,7 @@ impl Context<'_> {
                 };
                 if p.callback {
                     let result = if house {
-                        unsafe {
-                            crate::town::resolver::foundation(
-                                crate::tile_type::TileIndex(tile),
-                                p.kind,
-                            )
-                        }
+                        unsafe { crate::town::resolver::foundation(TileIndex(tile), p.kind) }
                     } else {
                         (self.industry_callback)(tile, p.kind)
                     };
@@ -293,7 +289,8 @@ impl Context<'_> {
         let tile = self
             .world
             .dimensions
-            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned());
+            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned())
+            .0;
         let kind = self.world.kind(tile);
         // One named body for constant Rust callers and the dynamic native entry.
         // Observe the live tile type before selecting the ground specialization.
@@ -646,11 +643,11 @@ use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
 impl Context<'_> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
         let map = self.world.dimensions;
-        if map.tile_x(tile) == 0 {
+        if map.tile_x(TileIndex(tile)) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
         }
-        if map.tile_y(tile) == 0 {
+        if map.tile_y(TileIndex(tile)) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_Y | TRACK_BIT_LEFT | TRACK_BIT_UPPER);
         }

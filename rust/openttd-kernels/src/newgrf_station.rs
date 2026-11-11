@@ -19,6 +19,7 @@ use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
+use crate::tile_type::TileIndex;
 use crate::{
     map_func::Map,
     services::{CommandCost, Services as Shared},
@@ -65,13 +66,13 @@ pub(crate) fn rail_tile_area(
                 tile: start,
                 w: world
                     .dimensions
-                    .tile_x(end)
-                    .wrapping_sub(world.dimensions.tile_x(start))
+                    .tile_x(TileIndex(end))
+                    .wrapping_sub(world.dimensions.tile_x(TileIndex(start)))
                     .wrapping_add(1) as u16,
                 h: world
                     .dimensions
-                    .tile_y(end)
-                    .wrapping_sub(world.dimensions.tile_y(start))
+                    .tile_y(TileIndex(end))
+                    .wrapping_sub(world.dimensions.tile_y(TileIndex(start)))
                     .wrapping_add(1) as u16,
             }
         }
@@ -316,45 +317,45 @@ fn platform(
     centred: bool,
 ) -> u32 {
     let map = native.map();
-    let sx = map.tile_x(find_end(
+    let sx = map.tile_x(TileIndex(find_end(
         native,
         tile,
-        map.diff(-1, 0) as i32,
+        map.diff(-1, 0),
         check_type,
         check_axis,
-    ));
-    let sy = map.tile_y(find_end(
+    )));
+    let sy = map.tile_y(TileIndex(find_end(
         native,
         tile,
-        map.diff(0, -1) as i32,
+        map.diff(0, -1),
         check_type,
         check_axis,
-    ));
+    )));
     let ex = map
-        .tile_x(find_end(
+        .tile_x(TileIndex(find_end(
             native,
             tile,
-            map.diff(1, 0) as i32,
+            map.diff(1, 0),
             check_type,
             check_axis,
-        ))
+        )))
         .wrapping_add(1);
     let ey = map
-        .tile_y(find_end(
+        .tile_y(TileIndex(find_end(
             native,
             tile,
-            map.diff(0, 1) as i32,
+            map.diff(0, 1),
             check_type,
             check_axis,
-        ))
+        )))
         .wrapping_add(1);
     openttd_rust_platform_info(
         (native.axis)(tile).0,
         (native.shared().station_gfx)(tile),
         ex.wrapping_sub(sx) as i32,
         ey.wrapping_sub(sy) as i32,
-        map.tile_x(tile).wrapping_sub(sx) as i32,
-        map.tile_y(tile).wrapping_sub(sy) as i32,
+        map.tile_x(TileIndex(tile)).wrapping_sub(sx) as i32,
+        map.tile_y(TileIndex(tile)).wrapping_sub(sy) as i32,
         centred,
     )
 }
@@ -924,7 +925,9 @@ pub extern "C" fn openttd_rust_station_randomisation(
     let mut used = 0;
     for y in 0..area.h {
         for x in 0..area.w {
-            let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
+            let t = area
+                .tile
+                .wrapping_add(map.diff(i32::from(x), i32::from(y)).cast_unsigned());
             if !(a.rail_belongs)(st, t) {
                 continue;
             }
@@ -992,9 +995,9 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     let p2 = u32::from(tracks) << 24
         | u32::from(length) << 16
         | if axis == AXIS_Y {
-            map.tile_x(diff) << 8 | map.tile_y(diff)
+            map.tile_x(TileIndex(diff)) << 8 | map.tile_y(TileIndex(diff))
         } else {
-            map.tile_y(diff) << 8 | map.tile_x(diff)
+            map.tile_y(TileIndex(diff)) << 8 | map.tile_x(TileIndex(diff))
         };
     let mut r = SlopeResult {
         callback: 0,

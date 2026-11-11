@@ -36,6 +36,7 @@ use crate::game_state::GameState;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z_raw, is_steep_slope_raw};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
 use crate::tilearea::TileArea;
 
@@ -522,8 +523,8 @@ impl<'a> World<'a> {
             match variable {
                 0x40 => {
                     let offset = tile.wrapping_sub((q.north)(obj));
-                    let x = self.map.tile_x(offset);
-                    let y = self.map.tile_y(offset);
+                    let x = self.map.tile_x(TileIndex(offset));
+                    let y = self.map.tile_y(TileIndex(offset));
                     y << 20 | x << 16 | y << 8 | x
                 }
                 0x41 => {
@@ -1042,11 +1043,11 @@ impl<'a> World<'a> {
                             }
                             if !((*self.s.town).environment.freeform_edges)()
                                 && (!crate::math::is_inside_mm(
-                                    self.map.tile_x(t) as usize,
+                                    self.map.tile_x(TileIndex(t)) as usize,
                                     1,
                                     ((self.shared.map_max_x)() - 1) as usize,
                                 ) || !crate::math::is_inside_mm(
-                                    self.map.tile_y(t) as usize,
+                                    self.map.tile_y(TileIndex(t)) as usize,
                                     1,
                                     ((self.shared.map_max_y)() - 1) as usize,
                                 ))
@@ -1092,7 +1093,8 @@ impl<'a> World<'a> {
                         result.callback = self.callback(
                             crate::newgrf_callbacks::CBID_OBJECT_LAND_SLOPE_CHECK.0,
                             u32::from(crate::map_func::World::new(self.shared).tile_slope(t)),
-                            self.map.tile_y(diff) << 4 | self.map.tile_x(diff),
+                            self.map.tile_y(TileIndex(diff)) << 4
+                                | self.map.tile_x(TileIndex(diff)),
                             spec,
                             ptr::null_mut(),
                             t,
@@ -1584,8 +1586,8 @@ impl World<'_> {
         let size_x = self.map.size_x();
         let size_y = (self.shared.map_max_y)() + 1;
         let mut it = crate::spiral::square(
-            self.map.tile_x(tile),
-            self.map.tile_y(tile),
+            self.map.tile_x(TileIndex(tile)),
+            self.map.tile_y(TileIndex(tile)),
             9,
             size_x,
             size_y,
@@ -1769,8 +1771,8 @@ struct Drag {
 }
 impl Drag {
     fn new(map: crate::services::Map, size_y: u32, tile: u32, end: u32, diagonal: bool) -> Self {
-        let (x, y) = (map.tile_x(tile), map.tile_y(tile));
-        let (ex, ey) = (map.tile_x(end), map.tile_y(end));
+        let (x, y) = (map.tile_x(TileIndex(tile)), map.tile_y(TileIndex(tile)));
+        let (ex, ey) = (map.tile_x(TileIndex(end)), map.tile_y(TileIndex(end)));
         let mut a = ey as i32 + ex as i32 - y as i32 - x as i32;
         let mut b = ey as i32 - ex as i32 - y as i32 + x as i32;
         a += if a > 0 { 1 } else { -1 };

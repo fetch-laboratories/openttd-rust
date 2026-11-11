@@ -172,7 +172,7 @@ impl Services {
     /// The `DistanceManhattan(tile_src, tile_dst) <= SUBSIDY_MAX_DISTANCE` test.
     fn within_subsidy_distance(&self, tile_src: TileIndex, tile_dst: TileIndex) -> bool {
         let map = self.shared().map();
-        map.distance_manhattan(tile_src.0, tile_dst.0) <= SUBSIDY_MAX_DISTANCE
+        map.distance_manhattan(tile_src, tile_dst) <= SUBSIDY_MAX_DISTANCE
     }
     /// Checks if the source and destination of a subsidy are inside the distance limit.
     fn check_subsidy_distance(&self, src: Source, dst: Source) -> bool {

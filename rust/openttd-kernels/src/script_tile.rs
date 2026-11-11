@@ -23,6 +23,7 @@ use crate::slope_func::{
     SLOPE_ELEVATED, SLOPE_HALFTILE_MASK, SLOPE_STEEP, complement_slope_raw, is_halftile_slope_raw,
     is_steep_slope_raw,
 };
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_ROAD, MP_STATION, MP_TREES, MP_WATER};
 
 /// `ScriptError::ERR_PRECONDITION_FAILED`.
@@ -103,7 +104,7 @@ pub extern "C" fn openttd_rust_script_map_tile_x(s: &Services, tile: u32) -> i64
     if !valid(&w, tile) {
         return -1;
     }
-    i64::from(w.dimensions.tile_x(tile))
+    i64::from(w.dimensions.tile_x(TileIndex(tile)))
 }
 
 /// `ScriptMap::GetTileY`.
@@ -113,14 +114,14 @@ pub extern "C" fn openttd_rust_script_map_tile_y(s: &Services, tile: u32) -> i64
     if !valid(&w, tile) {
         return -1;
     }
-    i64::from(w.dimensions.tile_y(tile))
+    i64::from(w.dimensions.tile_y(TileIndex(tile)))
 }
 
 /// `ScriptMap::GetTileIndex`: `TileXY` of the `uint` truncations.
 #[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub extern "C" fn openttd_rust_script_map_tile_index(s: &Services, x: i64, y: i64) -> u32 {
-    world(s).dimensions.tile_xy(x as u32, y as u32)
+    world(s).dimensions.tile_xy(x as u32, y as u32).0
 }
 
 /// Shared validation of the two-tile `ScriptMap` distances.
@@ -135,13 +136,15 @@ fn distance(s: &Services, a: u32, b: u32, metric: impl Fn(crate::map_func::Map) 
 /// `ScriptMap::DistanceManhattan`, also `ScriptTile::GetDistanceManhattanToTile`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_map_distance_manhattan(s: &Services, a: u32, b: u32) -> i64 {
-    distance(s, a, b, |m| m.distance_manhattan(a, b))
+    distance(s, a, b, |m| {
+        m.distance_manhattan(TileIndex(a), TileIndex(b))
+    })
 }
 
 /// `ScriptMap::DistanceMax`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_map_distance_max(s: &Services, a: u32, b: u32) -> i64 {
-    distance(s, a, b, |m| m.distance_max(a, b))
+    distance(s, a, b, |m| m.distance_max(TileIndex(a), TileIndex(b)))
 }
 
 /// `ScriptMap::DistanceSquare`, also `ScriptTile::GetDistanceSquareToTile`.
@@ -528,13 +531,16 @@ pub extern "C" fn openttd_rust_script_tile_plant_tree_rectangle(
     let w = world(s);
     // SAFETY: the canonical setting outlives the entry; read where `TileAddWrap` reads it.
     let freeform = unsafe { w.shared.settings().freeform_edges.read() };
-    let end = w.dimensions.tile_add_wrap(
-        tile,
-        (width - 1) as i32,
-        (height - 1) as i32,
-        w.size_y(),
-        freeform,
-    );
+    let end = w
+        .dimensions
+        .tile_add_wrap(
+            TileIndex(tile),
+            (width - 1) as i32,
+            (height - 1) as i32,
+            w.size_y(),
+            freeform,
+        )
+        .0;
     if enforce(valid(&w, end), ERR_PRECONDITION_FAILED) {
         end
     } else {

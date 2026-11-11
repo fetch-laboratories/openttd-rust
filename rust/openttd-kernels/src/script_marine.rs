@@ -13,6 +13,7 @@
 use crate::map_func::World;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, enforce, valid, world};
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_STATION, MP_WATER};
 use crate::water_map::{WATER_TILE_DEPOT, WATER_TILE_LOCK};
 
@@ -68,7 +69,10 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
         return false;
     }
     /* Tiles not neighbouring */
-    if w.dimensions.distance_manhattan(t1, t2) != 1 {
+    if w.dimensions
+        .distance_manhattan(TileIndex(t1), TileIndex(t2))
+        != 1
+    {
         return false;
     }
     let check = |ok| w.check(ok);
@@ -80,10 +84,7 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
     };
     let to_other_tile = w
         .dimensions
-        .diagdir_between_tiles(
-            crate::tile_type::TileIndex(t2),
-            crate::tile_type::TileIndex(t1),
-        )
+        .diagdir_between_tiles(TileIndex(t2), TileIndex(t1))
         .0;
     /* Determine the reachable tracks from the shared edge */
     if reachable(t1, to_other_tile) == crate::track_type::TRACK_BIT_NONE {
@@ -128,13 +129,14 @@ pub extern "C" fn openttd_rust_script_marine_water_depot(
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(valid(&w, front), ERR_PRECONDITION_FAILED)
         || !enforce(
-            (m.tile_x(front) == m.tile_x(tile)) != (m.tile_y(front) == m.tile_y(tile)),
+            (m.tile_x(TileIndex(front)) == m.tile_x(TileIndex(tile)))
+                != (m.tile_y(TileIndex(front)) == m.tile_y(TileIndex(tile))),
             ERR_PRECONDITION_FAILED,
         )
     {
         return REFUSED;
     }
-    if m.tile_x(front) == m.tile_x(tile) {
+    if m.tile_x(TileIndex(front)) == m.tile_x(TileIndex(tile)) {
         crate::direction_type::AXIS_Y
     } else {
         crate::direction_type::AXIS_X

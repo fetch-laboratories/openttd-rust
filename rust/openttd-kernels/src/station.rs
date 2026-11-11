@@ -78,8 +78,8 @@ impl StationRect {
     /// `BeforeAddTile`; `false` is `STR_ERROR_STATION_TOO_SPREAD_OUT`.
     #[allow(clippy::cast_possible_wrap, clippy::many_single_char_names)]
     pub fn before_add_tile(&mut self, tile: TileIndex, mode: StationRectMode, c: &Ctx<'_>) -> bool {
-        let x = c.map.tile_x(tile.0) as i32;
-        let y = c.map.tile_y(tile.0) as i32;
+        let x = c.map.tile_x(tile) as i32;
+        let y = c.map.tile_y(tile) as i32;
         if self.is_empty() {
             // we are adding the first station tile
             if mode != RectMode::ADD_TEST {
@@ -140,8 +140,8 @@ impl StationRect {
     /// `AfterRemoveTile`: shrink edges while no station tile remains on them.
     #[allow(clippy::cast_possible_wrap)]
     pub fn after_remove_tile(&mut self, id: StationID, tile: TileIndex, c: &Ctx<'_>) -> bool {
-        let mut x = c.map.tile_x(tile.0) as i32;
-        let mut y = c.map.tile_y(tile.0) as i32;
+        let mut x = c.map.tile_x(tile) as i32;
+        let mut y = c.map.tile_y(tile) as i32;
         // look if removed tile was on the bounding rect edge
         // and try to reduce the rect by this edge
         // do it until we have empty rect or nothing to do
@@ -194,8 +194,8 @@ impl StationRect {
     /// `AfterRemoveRect`: the second corner is skipped once the first empties.
     #[allow(clippy::cast_possible_wrap)]
     pub fn after_remove_rect(&mut self, id: StationID, ta: TileArea, c: &Ctx<'_>) -> bool {
-        let x = c.map.tile_x(ta.tile);
-        let y = c.map.tile_y(ta.tile);
+        let x = c.map.tile_x(TileIndex(ta.tile));
+        let y = c.map.tile_y(TileIndex(ta.tile));
         c.check(self.pt_in_extended_rect(x as i32, y as i32, 0));
         c.check(self.pt_in_extended_rect(
             (x + u32::from(ta.w)).wrapping_sub(1) as i32,
@@ -229,8 +229,8 @@ fn scan_for_station_tiles(
 ) -> bool {
     let ta = TileArea::between(
         c.map,
-        c.map.tile_xy(left as u32, top as u32),
-        c.map.tile_xy(right as u32, bottom as u32),
+        c.map.tile_xy(left as u32, top as u32).0,
+        c.map.tile_xy(right as u32, bottom as u32).0,
     );
     ta.tiles(c.map).map(TileIndex).any(|tile| {
         TileType((c.s.tile_type)(tile.0)) == TileType::MP_STATION && c.station_index(tile) == id
@@ -595,7 +595,7 @@ pub(crate) fn add_industry_to_deliver(
     c: &Ctx<'_>,
 ) {
     /* Using DistanceMax to get about the same order as with previously used SpiralTileSequence. */
-    let distance = c.map.distance_max((c.c.location)(st), tile.0);
+    let distance = c.map.distance_max(TileIndex((c.c.location)(st)), tile);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
@@ -769,8 +769,8 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     #[allow(clippy::cast_sign_loss)]
     let ta = TileArea::between(
         c.map,
-        c.map.tile_xy(bounds.left as u32, bounds.top as u32),
-        c.map.tile_xy(bounds.right as u32, bounds.bottom as u32),
+        c.map.tile_xy(bounds.left as u32, bounds.top as u32).0,
+        c.map.tile_xy(bounds.right as u32, bounds.bottom as u32).0,
     );
     let id = (c.c.id)(st);
     for tile in ta.tiles(c.map).map(TileIndex) {

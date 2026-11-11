@@ -264,8 +264,8 @@ impl<'a> Commands<'a> {
         }
         let center = unsafe { super::position(t.state) };
         let mut spiral = crate::spiral::square(
-            self.map().tile_x(center.0),
-            self.map().tile_y(center.0),
+            self.map().tile_x(center),
+            self.map().tile_y(center),
             9,
             self.map().size_x(),
             self.size_y(),
@@ -275,7 +275,7 @@ impl<'a> Commands<'a> {
         // Number of tiles tried.
         let mut tile_count = 0;
         while !spiral.is_end() {
-            let tile = TileIndex(self.map().tile_xy(spiral.x, spiral.y));
+            let tile = self.map().tile_xy(spiral.x, spiral.y);
             spiral = spiral.advance(self.map().size_x(), self.size_y());
             tile_count += 1;
             // Statues can be build on slopes, just like houses. Only the steep slopes is a no go.

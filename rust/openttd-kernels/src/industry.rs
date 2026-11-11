@@ -1841,7 +1841,7 @@ fn setup_farm_field_fence(
         })
         .cast_unsigned();
     loop {
-        tile = TileIndex(map.coordinates().wrap_to_map(tile.0, map.size_y));
+        tile = map.coordinates().wrap_to_map(tile, map.size_y);
         // The tile is a field whose neighbour in `side` is not a field with a fence in the
         // same position.
         if unsafe { (s.fence_wanted)(tile.0, side.0) } {
@@ -1887,12 +1887,14 @@ fn plant_farm_field(
     let size_x = gb(r, 0, 8);
     let size_y = gb(r, 8, 8);
     let tiles = map.coordinates();
-    let (tile_x, tile_y) = (tiles.tile_x(tile.0), tiles.tile_y(tile.0));
+    let (tile_x, tile_y) = (tiles.tile_x(tile), tiles.tile_y(tile));
     let mut ta = TileArea::new(
-        tiles.tile_xy(
-            tile_x - tile_x.min(size_x / 2),
-            tile_y - tile_y.min(size_y / 2),
-        ),
+        tiles
+            .tile_xy(
+                tile_x - tile_x.min(size_x / 2),
+                tile_y - tile_y.min(size_y / 2),
+            )
+            .0,
         size_x as u16,
         size_y as u16,
     );
@@ -1970,13 +1972,13 @@ fn plant_random_farm_field(
     let y = (u32::from(location.h) / 2)
         .wrapping_add(random(s) % 31)
         .wrapping_sub(16) as i32;
-    let tile = TileIndex(map.coordinates().tile_add_wrap(
-        location.tile,
+    let tile = map.coordinates().tile_add_wrap(
+        TileIndex(location.tile),
         x,
         y,
         map.size_y,
         (unsafe { &*s.environment }.freeform_edges)(),
-    ));
+    );
     if tile != TileIndex::INVALID {
         plant_farm_field(tile, id, map, s, landscape);
     }
@@ -2037,14 +2039,14 @@ fn chop_lumber_mill_trees(
     let width = map.size_x;
     // 40x40 tiles to search.
     let mut spiral = crate::spiral::square(
-        tiles.tile_x(location.tile),
-        tiles.tile_y(location.tile),
+        tiles.tile_x(TileIndex(location.tile)),
+        tiles.tile_y(TileIndex(location.tile)),
         40,
         width,
         map.size_y,
     );
     while !spiral.is_end() {
-        let tile = tiles.tile_xy(spiral.x, spiral.y);
+        let tile = tiles.tile_xy(spiral.x, spiral.y).0;
         let info = unsafe { (s.farm_tile)(tile) };
         if TileType(info.kind) == TileType::MP_TREES && info.grown != 0 {
             // found a tree

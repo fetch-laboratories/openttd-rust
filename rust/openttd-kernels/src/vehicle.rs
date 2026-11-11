@@ -421,6 +421,7 @@ impl VehicleServices {
 mod tests {
     use super::*;
     use crate::services::Map;
+    use crate::tile_type::TileIndex;
     #[test]
     fn map_offsets_follow_the_original_tables() {
         let map = Map { log_x: 8 };
@@ -429,7 +430,10 @@ mod tests {
         assert_eq!(map.tile_add_by_dir_raw(0x1010, 0), 0x0f0f);
         assert_eq!(map.tile_add_by_dir_raw(0x1010, 5), 0x1011);
         assert_eq!(map.tile_add_by_dir_raw(0, 0), 0_u32.wrapping_sub(257));
-        assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
+        assert_eq!(
+            (map.tile_x(TileIndex(0x1234)), map.tile_y(TileIndex(0x1234))),
+            (0x34, 0x12)
+        );
         assert_eq!(advance_distance(3), 192);
     }
 }

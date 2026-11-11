@@ -21,6 +21,7 @@ use crate::services::{
     RailGroundType, RoadBits, RoadType, Roadside, Services, Slope, Track, TrackBits, WaterClass,
 };
 use crate::slope_func::{is_slope_with_three_corners_raised_raw, is_steep_slope_raw};
+use crate::tile_type::TileIndex;
 
 /// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
 pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
@@ -724,8 +725,8 @@ pub(crate) unsafe fn road_tile_loop(
                         }
                         let map = crate::map_func::Map::from_log_x(size_x.ilog2());
                         crate::effect::openttd_rust_effect_create_above(
-                            (map.tile_x(tile) * 16 + 7).cast_signed(),
-                            (map.tile_y(tile) * 16 + 7).cast_signed(),
+                            (map.tile_x(TileIndex(tile)) * 16 + 7).cast_signed(),
+                            (map.tile_y(TileIndex(tile)) * 16 + 7).cast_signed(),
                             0,
                             crate::effectvehicle_func::EV_BULLDOZER,
                         );
