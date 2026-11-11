@@ -6362,7 +6362,7 @@ mod docking_tests {
     }
 
     /// A buoy on a 64x64 map with freeform edges off may sit at x = 0 or y = 0.
-    /// Pinned water_cmd.cpp:197 adds `TileOffsByDiagDir` by hand, so at the native
+    /// Pinned `water_cmd.cpp:197` adds `TileOffsByDiagDir` by hand, so at the native
     /// `_DEBUG` projection the north-east neighbour of (0, 5) is the void tile
     /// (63, 4) and that of (0, 0) wraps past the map, both without assertions;
     /// `TileAdd` would assert on the same steps.

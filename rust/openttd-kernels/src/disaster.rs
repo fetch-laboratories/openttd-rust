@@ -1328,7 +1328,7 @@ mod tests {
     }
 
     /// A submarine on row 0 of a 64x64 map heading north-west. Pinned
-    /// disaster_vehicle.cpp:685 adds `TileOffsByDiagDir` by hand, so at the native
+    /// `disaster_vehicle.cpp:685` adds `TileOffsByDiagDir` by hand, so at the native
     /// `_DEBUG` projection the step leaves the map without an assertion and the
     /// submarine turns; `TileAdd` would fail its y and wrap assertions instead.
     #[test]
