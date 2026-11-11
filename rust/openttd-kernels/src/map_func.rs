@@ -22,7 +22,7 @@ pub struct Map {
     #[cfg(any(feature = "native-debug", test))]
     log_y: *const u32,
 }
-// Release callers copy the width alone, as before the `_DEBUG` projection.
+// Release map contexts contain only the width.
 #[cfg(not(any(feature = "native-debug", test)))]
 const _: () = assert!(std::mem::size_of::<Map>() == std::mem::size_of::<u32>());
 /// Native `_DEBUG`, a build-time choice: CMake enables `native-debug` exactly
