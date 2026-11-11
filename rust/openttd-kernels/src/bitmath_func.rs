@@ -86,6 +86,26 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
     value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
 }
 
+/// `GB<uint64_t>`: fetch `count` bits at `start` in the original 64-bit domain.
+/// Source-valid shifts retain the same mask and result as [`gb`].
+pub const fn gb_u64(value: u64, start: u8, count: u8) -> u32 {
+    let bits = (value.wrapping_shr(start as u32)
+        & (1_u64.wrapping_shl(count as u32).wrapping_sub(1)))
+    .to_le_bytes();
+    // GB returns uint even when its input and mask use uint64_t.
+    u32::from_le_bytes([bits[0], bits[1], bits[2], bits[3]])
+}
+
+/// `GB<size_t>`: fetch `count` bits at `start` in the native unsigned domain.
+/// Source-valid shifts retain the same mask and result as [`gb`].
+pub const fn gb_usize(value: usize, start: u8, count: u8) -> u32 {
+    let bits = (value.wrapping_shr(start as u32)
+        & (1_usize.wrapping_shl(count as u32).wrapping_sub(1)))
+    .to_le_bytes();
+    // GB returns uint on both 32-bit and 64-bit hosts.
+    u32::from_le_bytes([bits[0], bits[1], bits[2], bits[3]])
+}
+
 /// `KillFirstBit`: clear the first bit in an integer. This function returns a value where
 /// the first bit (from LSB) is cleared. So, 110100 returns 110000, 000001 returns 000000,
 /// etc. For the byte-sized track bitsets.
