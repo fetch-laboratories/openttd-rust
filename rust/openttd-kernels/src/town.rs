@@ -4529,6 +4529,7 @@ mod tunnel_tests {
         leaves.resolve_owner = resolve_owner;
         leaves.build_tunnel = build_tunnel;
         let mut services = SHARED;
+        services.map = crate::map_func::fixture::statics();
         services.settings = Box::leak(Box::new(crate::settings_type::SettingAddresses {
             allow_town_level_crossings: Box::leak(Box::new(with(|w| w.allow_crossings))),
             ..crate::settings_type::SettingAddresses::NULL
