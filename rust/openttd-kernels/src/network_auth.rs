@@ -17,24 +17,28 @@ use crate::packet::State;
 use crate::tcp_game::PacketGameType;
 
 /// `ServerNetworkGameSocketHandler::SendAuthRequest`: request the game password.
-pub(crate) fn send_request(f: &Services, cs: *mut GameSocket, work: Actions) -> NetworkRecvStatus {
+pub(crate) fn send_request(
+    f: &Services,
+    socket: *mut GameSocket,
+    work: Actions,
+) -> NetworkRecvStatus {
     let s = f.connection;
-    let native = socket::server(cs);
+    let native = socket::server(socket);
     debug!(
         net,
         9,
         "client[{}] SendAuthRequest()",
-        (f.dispatch.client_id)(cs)
+        (f.dispatch.client_id)(socket)
     );
 
     /* Invalid packet when status is anything but STATUS_INACTIVE or STATUS_AUTH_GAME. */
     if !matches!(
-        server::status(cs),
+        server::status(socket),
         ClientStatus::STATUS_INACTIVE | ClientStatus::STATUS_AUTH_GAME
     ) {
         return NetworkRecvStatus(socket::specialized_close(
             f,
-            cs,
+            socket,
             NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET.0,
             work,
         ));
@@ -44,24 +48,24 @@ pub(crate) fn send_request(f: &Services, cs: *mut GameSocket, work: Actions) -> 
         net,
         9,
         "client[{}] status = AUTH_GAME",
-        (f.dispatch.client_id)(cs)
+        (f.dispatch.client_id)(socket)
     );
-    server::set_status(cs, ClientStatus::STATUS_AUTH_GAME);
+    server::set_status(socket, ClientStatus::STATUS_AUTH_GAME);
 
     /* Reset 'lag' counters */
-    crate::network_connection::reset_lag(cs);
+    crate::network_connection::reset_lag(socket);
 
     if (s.auth)(native).is_null() {
         (s.auth_create)(native);
     }
 
     let owner = (f.auth_owner)((s.auth)(native));
-    let mut p = packet_new(f, cs, PacketGameType::PACKET_SERVER_AUTH_REQUEST);
+    let mut p = packet_new(f, socket, PacketGameType::PACKET_SERVER_AUTH_REQUEST);
     unsafe {
         auth::send_request(owner, &raw mut p, packet_check(f));
     }
 
-    packet_send(f, cs, &mut p);
+    packet_send(f, socket, &mut p);
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
@@ -162,7 +166,7 @@ fn get_error_for_authentication_method(method: NetworkAuthenticationMethod) -> N
 /// enabled.
 fn send_enable_encryption(
     f: &Services,
-    cs: *mut GameSocket,
+    socket: *mut GameSocket,
     owner: *mut auth::Handler,
     work: Actions,
 ) -> NetworkRecvStatus {
@@ -170,52 +174,52 @@ fn send_enable_encryption(
         net,
         9,
         "client[{}] SendEnableEncryption()",
-        (f.dispatch.client_id)(cs)
+        (f.dispatch.client_id)(socket)
     );
 
     /* Invalid packet when status is anything but STATUS_AUTH_GAME. */
-    if server::status(cs) != ClientStatus::STATUS_AUTH_GAME {
+    if server::status(socket) != ClientStatus::STATUS_AUTH_GAME {
         return NetworkRecvStatus(socket::specialized_close(
             f,
-            cs,
+            socket,
             NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET.0,
             work,
         ));
     }
 
-    let mut p = packet_new(f, cs, PacketGameType::PACKET_SERVER_ENABLE_ENCRYPTION);
+    let mut p = packet_new(f, socket, PacketGameType::PACKET_SERVER_ENABLE_ENCRYPTION);
     unsafe {
         auth::send_enable(owner, &raw mut p);
     }
-    packet_send(f, cs, &mut p);
+    packet_send(f, socket, &mut p);
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// `ServerNetworkGameSocketHandler::Receive_CLIENT_AUTH_RESPONSE`.
 pub(crate) fn receive_response(
     f: &Services,
-    cs: *mut GameSocket,
+    socket: *mut GameSocket,
     p: *mut State,
     work: Actions,
 ) -> NetworkRecvStatus {
     let s = f.connection;
-    if server::status(cs) != ClientStatus::STATUS_AUTH_GAME {
+    if server::status(socket) != ClientStatus::STATUS_AUTH_GAME {
         return crate::network_connection::send_error(
             s,
             f,
-            cs,
+            socket,
             NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED,
             crate::network_connection::EMPTY_TEXT,
             work,
         );
     }
 
-    let native = socket::server(cs);
+    let native = socket::server(socket);
     debug!(
         net,
         9,
         "client[{}] Receive_CLIENT_AUTH_RESPONSE()",
-        (f.dispatch.client_id)(cs)
+        (f.dispatch.client_id)(socket)
     );
 
     let owner = (f.auth_owner)((s.auth)(native));
@@ -223,13 +227,13 @@ pub(crate) fn receive_response(
     match unsafe { auth::receive_response(owner, p) } {
         ResponseResult::Authenticated => (),
 
-        ResponseResult::RetryNextMethod => return send_request(f, cs, work),
+        ResponseResult::RetryNextMethod => return send_request(f, socket, work),
 
         _ => {
             return crate::network_connection::send_error(
                 s,
                 f,
-                cs,
+                socket,
                 get_error_for_authentication_method(authentication_method),
                 crate::network_connection::EMPTY_TEXT,
                 work,
@@ -237,7 +241,7 @@ pub(crate) fn receive_response(
         }
     }
 
-    let status = send_enable_encryption(f, cs, owner, work);
+    let status = send_enable_encryption(f, socket, owner, work);
     if status != NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY {
         return status;
     }
@@ -251,12 +255,12 @@ pub(crate) fn receive_response(
         net,
         9,
         "client[{}] status = IDENTIFY",
-        (f.dispatch.client_id)(cs)
+        (f.dispatch.client_id)(socket)
     );
-    server::set_status(cs, ClientStatus::STATUS_IDENTIFY);
+    server::set_status(socket, ClientStatus::STATUS_IDENTIFY);
 
     /* Reset 'lag' counters */
-    crate::network_connection::reset_lag(cs);
+    crate::network_connection::reset_lag(socket);
 
     NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
