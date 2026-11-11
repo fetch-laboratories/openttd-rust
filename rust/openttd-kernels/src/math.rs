@@ -14,6 +14,12 @@ pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
+/// `Delta<uint>`: the absolute difference between two unsigned scalars.
+#[inline]
+pub(crate) const fn delta(a: u32, b: u32) -> u32 {
+    a.abs_diff(b)
+}
+
 /// `RoundDivSU`: computes round(a / b) for signed a and unsigned b; the quotient, rounded to
 /// nearest.
 pub(crate) const fn round_div_su(a: i32, b: u32) -> i32 {

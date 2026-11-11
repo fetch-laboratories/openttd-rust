@@ -33,7 +33,7 @@ use crate::slope_type::Slope;
 use crate::strings_type::StringID;
 use crate::tile_type::{TileIndex, TileType, TropicZone};
 use crate::tilearea::TileArea;
-use std::{ffi::c_void, ptr};
+use std::{cell::OnceCell, ffi::c_void, ptr};
 
 #[repr(C)]
 pub struct ConflictKinds {
@@ -122,6 +122,7 @@ struct IndustryCandidate {
 }
 struct Engine<'a> {
     context: &'a TransactionContext,
+    coordinates: OnceCell<crate::map_func::Map>,
     s: &'a Services,
     g: &'a GenerationServices,
     c: &'a ConstructionServices,
@@ -157,19 +158,25 @@ impl Engine<'_> {
     }
     fn tile_add_wrap(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
         let map = self.map();
-        TileIndex(map.coordinates().tile_add_wrap(
-            tile.0,
+        map.coordinates().tile_add_wrap(
+            tile,
             x,
             y,
             map.size_y,
             (self.g.environment.freeform_edges)(),
-        ))
+        )
     }
     fn distance_max(&self, a: TileIndex, b: TileIndex) -> u32 {
-        self.map().coordinates().distance_max(a.0, b.0)
+        self.map().coordinates().distance_max(a, b)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        self.map().coordinates().tile_add_xy(tile, x, y)
+        self.coordinates
+            .get_or_init(|| {
+                let mut map = self.s.shared().map();
+                map.log_x = self.context.map.size_x.trailing_zeros();
+                map
+            })
+            .tile_add_xy(tile, x, y)
     }
     fn tile_type(&self, tile: TileIndex) -> TileType {
         TileType((self.s.shared().tile_type)(tile.0))
@@ -512,14 +519,14 @@ impl Engine<'_> {
     ) -> bool {
         let coordinates = self.map().coordinates();
         // Check if we don't leave the map.
-        if coordinates.tile_x(tile.0) == 0
-            || coordinates.tile_y(tile.0) == 0
+        if coordinates.tile_x(tile) == 0
+            || coordinates.tile_y(tile) == 0
             || self.tile_type(tile) == TileType::MP_VOID
         {
             return false;
         }
         let ta = TileArea {
-            tile: tile.0.wrapping_sub(coordinates.diff(1, 1)),
+            tile: tile.0.wrapping_sub(coordinates.diff(1, 1).cast_unsigned()),
             w: 2,
             h: 2,
         };
@@ -540,8 +547,8 @@ impl Engine<'_> {
             //  else you get a chain-reaction of terraforming.
             if internal == 0
                 && curh != height
-                && (coordinates.tile_x(tile_walk.0) == 0
-                    || coordinates.tile_y(tile_walk.0) == 0
+                && (coordinates.tile_x(tile_walk) == 0
+                    || coordinates.tile_y(tile_walk) == 0
                     || !self.check_can_terraform_surrounding_tiles(
                         self.tile_add_xy(tile_walk, -1, -1),
                         height,
@@ -582,8 +589,8 @@ impl Engine<'_> {
         let h = self.tile_height(tile);
         let coordinates = self.map().coordinates();
         let industry_platform = u32::from(self.s.industry_platform());
-        if coordinates.tile_x(tile.0) <= industry_platform.wrapping_add(1)
-            || coordinates.tile_y(tile.0) <= industry_platform.wrapping_add(1)
+        if coordinates.tile_x(tile) <= industry_platform.wrapping_add(1)
+            || coordinates.tile_y(tile) <= industry_platform.wrapping_add(1)
         {
             return false;
         }
@@ -605,8 +612,13 @@ impl Engine<'_> {
                 .wrapping_add(2)
                 .wrapping_add((2 * industry_platform) as i32)) as u16,
         };
-        if coordinates.tile_x(ta.tile).wrapping_add(u32::from(ta.w)) >= coordinates.max_x()
-            || coordinates.tile_y(ta.tile).wrapping_add(u32::from(ta.h))
+        if coordinates
+            .tile_x(TileIndex(ta.tile))
+            .wrapping_add(u32::from(ta.w))
+            >= coordinates.max_x()
+            || coordinates
+                .tile_y(TileIndex(ta.tile))
+                .wrapping_add(u32::from(ta.h))
                 >= crate::map_func::Map::max_y(self.map().size_y)
         {
             return false;
@@ -929,6 +941,7 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
     unsafe {
         Engine {
             context,
+            coordinates: OnceCell::new(),
             s: &*context.production,
             g: &*context.generation,
             c: &*context.construction,
@@ -975,7 +988,6 @@ pub(crate) unsafe fn cmd_build_industry(
     args: CmdBuildIndustry,
     context: &TransactionContext,
 ) {
-    let e = unsafe { engine(context, out) };
     let CmdBuildIndustry {
         tile,
         it,
@@ -984,9 +996,10 @@ pub(crate) unsafe fn cmd_build_industry(
         seed,
     } = args;
     if it >= IndustryType::NUM_INDUSTRYTYPES {
-        e.fail(StringID::INVALID_STRING_ID);
+        unsafe { ((*context.costs).error)(out, StringID::INVALID_STRING_ID.0) };
         return;
     }
+    let e = unsafe { engine(context, out) };
     let indspec = get_industry_spec(it);
     // Check if the to-be built/founded industry is available for this climate.
     if !unsafe { (*indspec).enabled } || unsafe { (*indspec).layouts.is_empty() } {
@@ -1054,11 +1067,9 @@ pub(crate) unsafe fn cmd_build_industry(
                     // We should not have more than one Random() in a function call because
                     // parameter evaluation order is not guaranteed in the c++ standard.
                     let world = crate::map_func::World::new(e.s.shared());
-                    let tile = TileIndex(
-                        world
-                            .dimensions
-                            .random_tile_seed(world.size_y(), e.s.shared().random()),
-                    );
+                    let tile = world
+                        .dimensions
+                        .random_tile_seed(world.size_y(), e.s.shared().random());
                     // Start with a random layout.
                     let mut layout = e.s.shared().random_range(num_layouts as u32) as usize;
                     // Check now each layout, starting with the random one.
@@ -1294,4 +1305,57 @@ pub unsafe extern "C" fn openttd_rust_industry_shape_check(
         spec,
         IndustryGfx(gfx),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_industry_type_returns_error_without_map_metadata() {
+        unsafe extern "C" fn error(out: *mut IndustryCost, message: u32) {
+            unsafe { out.cast::<u32>().write(message) };
+        }
+        let costs = IndustryCostServices {
+            zero: crate::test_tables::unreachable1,
+            error,
+            expense_money: crate::test_tables::unreachable3,
+            success: crate::test_tables::unreachable1,
+        };
+        let context = TransactionContext {
+            map: super::super::Map {
+                size_x: 64,
+                size_y: 64,
+                landscape: 0,
+            },
+            builder: ptr::null_mut(),
+            production: ptr::null(),
+            generation: ptr::null(),
+            construction: ptr::null(),
+            lifecycle: ptr::null(),
+            tiles: ptr::null(),
+            commands: ptr::null(),
+            command_checks: ptr::null(),
+            costs: &raw const costs,
+            transaction: ptr::null(),
+            errors: ptr::null(),
+        };
+        let mut message = 0;
+        // Original CmdBuildIndustry rejects the type before any world observation.
+        unsafe {
+            cmd_build_industry(
+                ptr::from_mut(&mut message).cast(),
+                DoCommandFlags(0),
+                CmdBuildIndustry {
+                    tile: TileIndex(0),
+                    it: IndustryType::NUM_INDUSTRYTYPES,
+                    first_layout: 0,
+                    fund: false,
+                    seed: 0,
+                },
+                &context,
+            );
+        }
+        assert_eq!(message, StringID::INVALID_STRING_ID.0);
+    }
 }

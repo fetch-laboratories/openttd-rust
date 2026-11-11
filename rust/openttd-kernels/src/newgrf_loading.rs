@@ -134,7 +134,7 @@ pub struct Services {
     pub(crate) config_id: unsafe extern "C" fn(*const c_void) -> u32,
     pub(crate) config_status: unsafe extern "C" fn(*const c_void) -> u8,
     pub(crate) config_flags: unsafe extern "C" fn(*const c_void) -> u8,
-    set_status: unsafe extern "C" fn(*mut c_void, u8),
+    pub(crate) set_status: unsafe extern "C" fn(*mut c_void, u8),
     set_flag: unsafe extern "C" fn(*mut c_void, u8, bool),
     set_config_id: unsafe extern "C" fn(*mut c_void, u32),
     set_file_info: unsafe extern "C" fn(*mut c_void, u32, u8),
@@ -147,7 +147,7 @@ pub struct Services {
     set_parameter: unsafe extern "C" fn(*mut c_void, u8, u32),
     pub(crate) find_config: unsafe extern "C" fn(u32, u32) -> *mut c_void,
     file_for_config: unsafe extern "C" fn(*const c_void) -> *mut c_void,
-    error: unsafe extern "C" fn(*mut c_void, u32, u32, bool) -> *mut c_void,
+    pub(crate) error: unsafe extern "C" fn(*mut c_void, u32, u32, bool) -> *mut c_void,
     error_name: unsafe extern "C" fn(*mut c_void, *const c_void),
     error_property: unsafe extern "C" fn(*mut c_void, u32),
     pub(crate) error_after_translated_file: unsafe extern "C" fn(*mut c_void),
@@ -200,7 +200,7 @@ pub struct Services {
     grm_failed: u32,
     static_desync: u32,
     list_property_too_long: u32,
-    invalid_id: u32,
+    pub(crate) invalid_id: u32,
     force_disabled: u32,
     colourmap_sprite: u32,
     slopes_sprite: u32,
@@ -814,7 +814,7 @@ unsafe fn patch_variable(s: &Services, pn: u8) -> u32 {
             },
             0x11 => s.colourmap_sprite,
             0x13 => {
-                let x = u32::from(s.shared().map().log_x).wrapping_sub(6) as u8;
+                let x = s.shared().map().log_x.wrapping_sub(6) as u8;
                 let y = s.shared().map_log_y().wrapping_sub(6) as u8;
                 let bits = if x == y {
                     1

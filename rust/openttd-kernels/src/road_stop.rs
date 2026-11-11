@@ -517,7 +517,9 @@ fn rebuild_entry(s: &Services, xy: TileIndex, state: *mut State, east: bool, thi
     let mut vehicles: Vec<VehicleRef> = Vec::new();
     // SAFETY: `this` is the caller's live entry; no service runs during the write.
     unsafe { (*this).length = 0 };
-    let offset = map(s).offs_by_axis(axis.0);
+    let offset = map(s)
+        .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
+        .cast_unsigned();
     let mut tile = xy;
     while is_drive_through_road_stop_continuation(s, xy, tile) {
         // SAFETY: As above; the read and write end before the vehicle traversal.
@@ -568,7 +570,9 @@ pub(crate) fn make_drive_through(s: &Services, xy: TileIndex, state: *mut State)
     World::new(s).assert_with(|| entries(state).is_null());
     let rst = crate::map_func::World::new(s).get_road_stop_type(xy);
     let axis = crate::map_func::World::new(s).get_drive_through_stop_axis(xy);
-    let offset = map(s).offs_by_axis(axis.0);
+    let offset = map(s)
+        .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
+        .cast_unsigned();
 
     // Information about the tile north of us
     let north_tile = TileIndex(xy.0.wrapping_sub(offset));
@@ -648,7 +652,9 @@ pub(crate) fn clear_drive_through(s: &Services, xy: TileIndex, state: *mut State
     World::new(s).assert_with(|| !entries(state).is_null());
     let rst = crate::map_func::World::new(s).get_road_stop_type(xy);
     let axis = crate::map_func::World::new(s).get_drive_through_stop_axis(xy);
-    let offset = map(s).offs_by_axis(axis.0);
+    let offset = map(s)
+        .offs_by_axis(axis, |ok| crate::services_assert::check(ok))
+        .cast_unsigned();
 
     // Information about the tile north of us
     let mut north_tile = TileIndex(xy.0.wrapping_sub(offset));
@@ -749,7 +755,13 @@ fn check_integrity(s: &Services, xy: TileIndex, state: *mut State, dir: DiagDire
             s,
             xy,
             TileIndex(
-                xy.0.wrapping_sub(map(s).offs_by_axis(world.get_drive_through_stop_axis(xy).0)),
+                xy.0.wrapping_sub(
+                    map(s)
+                        .offs_by_axis(world.get_drive_through_stop_axis(xy), |ok| {
+                            crate::services_assert::check(ok);
+                        })
+                        .cast_unsigned(),
+                ),
             ),
         )
     });

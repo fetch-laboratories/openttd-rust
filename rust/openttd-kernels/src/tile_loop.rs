@@ -97,7 +97,7 @@ unsafe fn dispatch<const AMBIENT: bool>(
 ) {
     // SAFETY: Reached tables are immutable and live for the synchronous batch. Owner
     // entries end their accesses before callbacks; only scalar cursor is local.
-    let tile_type = TileType(types.read(tile.0));
+    let tile_type = types.read(tile);
     let g = &s.ground;
     match tile_type {
         TileType::MP_CLEAR => unsafe {
@@ -555,9 +555,9 @@ mod comparison_tests {
             (empty, 0, 3),
         ] {
             // SAFETY: The test's live allocation; out-of-range tiles reach only the callback.
-            let read =
-                unsafe { crate::map_func::TileTypeAccess::raw(allocation, fallback) }.read(tile);
-            assert_eq!((read, CALLS.get()), (231, (calls, tile)), "tile={tile}");
+            let read = unsafe { crate::map_func::TileTypeAccess::raw(allocation, fallback) }
+                .read(TileIndex(tile));
+            assert_eq!((read.0, CALLS.get()), (231, (calls, tile)), "tile={tile}");
         }
     }
 

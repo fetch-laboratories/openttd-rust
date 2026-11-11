@@ -19,6 +19,7 @@ use crate::map_type::{LM_LEVEL, LM_LOWER, LM_RAISE};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{
     INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
     MP_TREES, MP_VOID, MP_WATER,
@@ -118,8 +119,7 @@ impl<'a> World<'a> {
         }
     }
     fn indirectly_cleared(&self, t: u32) -> bool {
-        crate::objects::openttd_rust_object_indirectly_cleared_abi(t, u32::from(self.map.log_x))
-            != 0
+        crate::objects::openttd_rust_object_indirectly_cleared_abi(t, self.map.log_x) != 0
     }
     fn area<T>(
         &self,
@@ -449,8 +449,8 @@ impl<'a> World<'a> {
                 };
                 if (t == tile || t == start) && !(self.a.paused)() {
                     crate::effect::openttd_rust_effect_create_above(
-                        (self.map.tile_x(t) * 16 + 8) as i32,
-                        (self.map.tile_y(t) * 16 + 8) as i32,
+                        (self.map.tile_x(TileIndex(t)) * 16 + 8) as i32,
+                        (self.map.tile_y(TileIndex(t)) * 16 + 8) as i32,
                         2,
                         if tile == start {
                             crate::effectvehicle_func::EV_EXPLOSION_SMALL
@@ -493,7 +493,7 @@ impl<'a> World<'a> {
             (SLOPE_E, 0, 1),
             (SLOPE_N, 0, 0),
         ] {
-            let t = tile.wrapping_add(self.map.diff(x, y));
+            let t = tile.wrapping_add(self.map.diff(x, y).cast_unsigned());
             if slope & corner == 0 || (corner != SLOPE_N && t >= self.size) {
                 continue;
             }
@@ -531,9 +531,9 @@ impl<'a> World<'a> {
                 }
                 let heights = [
                     ts.height(self, t),
-                    ts.height(self, t.wrapping_add(self.map.diff(1, 0))),
-                    ts.height(self, t.wrapping_add(self.map.diff(1, 1))),
-                    ts.height(self, t.wrapping_add(self.map.diff(0, 1))),
+                    ts.height(self, t.wrapping_add(self.map.diff(1, 0).cast_unsigned())),
+                    ts.height(self, t.wrapping_add(self.map.diff(1, 1).cast_unsigned())),
+                    ts.height(self, t.wrapping_add(self.map.diff(0, 1).cast_unsigned())),
                 ];
                 let low = *heights.iter().min().unwrap();
                 let high = *heights.iter().max().unwrap();
@@ -647,8 +647,8 @@ impl<'a> World<'a> {
             out.error(INVALID_STRING_ID);
             return INVALID_TILE;
         }
-        let mut x = self.map.tile_x(tile);
-        let mut y = self.map.tile_y(tile);
+        let mut x = self.map.tile_x(TileIndex(tile));
+        let mut y = self.map.tile_y(TileIndex(tile));
         if !(self.a.freeform_edges)()
             && (x <= 1 || y <= 1 || x >= (self.s.map_max_x)() - 1 || y >= (self.s.map_max_y)() - 1)
         {
@@ -661,14 +661,17 @@ impl<'a> World<'a> {
             out.error(self.a.strings.edge);
             return y * self.map.size_x() + x;
         }
-        if self.map.tile_y(tile) >= 1 {
-            ts.dirty.insert(tile.wrapping_add(self.map.diff(0, -1)));
-            if self.map.tile_x(tile) >= 1 {
-                ts.dirty.insert(tile.wrapping_add(self.map.diff(-1, -1)));
+        if self.map.tile_y(TileIndex(tile)) >= 1 {
+            ts.dirty
+                .insert(tile.wrapping_add(self.map.diff(0, -1).cast_unsigned()));
+            if self.map.tile_x(TileIndex(tile)) >= 1 {
+                ts.dirty
+                    .insert(tile.wrapping_add(self.map.diff(-1, -1).cast_unsigned()));
             }
         }
-        if self.map.tile_x(tile) >= 1 {
-            ts.dirty.insert(tile.wrapping_add(self.map.diff(-1, 0)));
+        if self.map.tile_x(TileIndex(tile)) >= 1 {
+            ts.dirty
+                .insert(tile.wrapping_add(self.map.diff(-1, 0).cast_unsigned()));
         }
         ts.dirty.insert(tile);
         ts.heights.insert(tile, height);
@@ -676,7 +679,12 @@ impl<'a> World<'a> {
         for dir in 0..4 {
             let neighbour = self
                 .map
-                .add_diff_c_wrap(tile, dir, (self.s.map_max_y)() + 1);
+                .add_diff_c_wrap(
+                    crate::tile_type::TileIndex(tile),
+                    crate::direction_type::DiagDirection(dir),
+                    (self.s.map_max_y)() + 1,
+                )
+                .0;
             if neighbour == INVALID_TILE {
                 continue;
             }

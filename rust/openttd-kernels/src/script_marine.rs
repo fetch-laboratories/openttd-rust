@@ -13,6 +13,8 @@
 use crate::map_func::World;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, enforce, valid, world};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::tile_type::{MP_STATION, MP_WATER};
 use crate::water_map::{WATER_TILE_DEPOT, WATER_TILE_LOCK};
 
@@ -22,7 +24,7 @@ const REFUSED: u8 = 0xFF;
 /// `IsTileType(tile, kind)` and `read` on a valid tile.
 fn on_type(s: &Services, tile: u32, kind: u8, read: impl Fn(&World<'_>) -> bool) -> bool {
     let w = world(s);
-    valid(&w, tile) && w.kind(tile) == kind && read(&w)
+    valid(&w, tile) && w.kind(TileIndex(tile)) == TileType(kind) && read(&w)
 }
 
 fn water_tile_type(w: &World<'_>, tile: u32) -> u8 {
@@ -68,7 +70,10 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
         return false;
     }
     /* Tiles not neighbouring */
-    if w.dimensions.distance_manhattan(t1, t2) != 1 {
+    if w.dimensions
+        .distance_manhattan(TileIndex(t1), TileIndex(t2))
+        != 1
+    {
         return false;
     }
     let check = |ok| w.check(ok);
@@ -78,7 +83,10 @@ fn water_tiles_connected(s: &Services, t1: u32, t2: u32) -> bool {
         let status = crate::movement::track_status(s.command.shared, tile, water, 0, side);
         track_status_to_track_bits(status) & diagdir_reaches_tracks(to_other)
     };
-    let to_other_tile = w.dimensions.diagdir_between_tiles(t2, t1);
+    let to_other_tile = w
+        .dimensions
+        .diagdir_between_tiles(TileIndex(t2), TileIndex(t1))
+        .0;
     /* Determine the reachable tracks from the shared edge */
     if reachable(t1, to_other_tile) == crate::track_type::TRACK_BIT_NONE {
         return false;
@@ -122,13 +130,14 @@ pub extern "C" fn openttd_rust_script_marine_water_depot(
     if !enforce(valid(&w, tile), ERR_PRECONDITION_FAILED)
         || !enforce(valid(&w, front), ERR_PRECONDITION_FAILED)
         || !enforce(
-            (m.tile_x(front) == m.tile_x(tile)) != (m.tile_y(front) == m.tile_y(tile)),
+            (m.tile_x(TileIndex(front)) == m.tile_x(TileIndex(tile)))
+                != (m.tile_y(TileIndex(front)) == m.tile_y(TileIndex(tile))),
             ERR_PRECONDITION_FAILED,
         )
     {
         return REFUSED;
     }
-    if m.tile_x(front) == m.tile_x(tile) {
+    if m.tile_x(TileIndex(front)) == m.tile_x(TileIndex(tile)) {
         crate::direction_type::AXIS_Y
     } else {
         crate::direction_type::AXIS_X

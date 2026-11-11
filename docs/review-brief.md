@@ -1,13 +1,10 @@
 # Review brief
 
-A reviewer reads this brief, then the spawn message. The spawn gives:
-- the reviewer's name;
-- the PR;
-- the function group to review, and who covers the other groups;
-- the points the PR body flags for review;
-- the implementer's thread ID.
+Everything a reviewer needs is here and in the PR ([delegation](team.md#review-loop)). The PR's implementer starts each reviewer with this fixed message and nothing more; it never says what to look for:
 
-Everything else is here ([delegation](team.md#review-loop)).
+> Review PR <URL> under `docs/review-brief.md`. You are <name>. Review <group N of the PR body's review groups | the whole PR>. The implementer's thread is <thread ID>.
+
+A re-check's message adds one sentence: `Re-check the fixing commits <SHAs> for the findings in <report URLs>.` Read the PR body, its review groups, its flagged points and its earlier reports yourself.
 
 ## Before reviewing
 
@@ -21,7 +18,7 @@ Everything else is here ([delegation](team.md#review-loop)).
 
 ## Report only
 
-Do not commit, push, request Full or merge. The PR's implementer fixes each finding in its own commits ending `Found-by: review`. When the implementer asks, verify the fixing commits for your own findings and post the verification, also report only.
+Do not commit, push, request Full or merge. The PR's implementer fixes each finding in its own commits ending `Found-by: review`. A re-check reviewer verifies the fixing commits its brief names and posts the PR's final disposition, also report only ([review loop](team.md#review-loop)).
 
 ## What to examine in your group
 
@@ -40,7 +37,9 @@ Do not commit, push, request Full or merge. The PR's implementer fixes each find
   - a non-command helper above seven parameters (the Clippy ratchet already rejects a new or longer one);
   - a command or helper body written inside an FFI export, or a Rust-internal `Cmd*` body without one argument struct;
   - a Rust call to a `_raw` adapter or an `openttd_rust_*` export where a typed Rust form exists;
-  - a [boundary design fault](review-checklist.md#code-standards): a Rust-to-C++-to-Rust bounce, a moved field behind a service, per-call allocation the original lacks, or an owner resolved once per field instead of once per entry.
+  - a [boundary design fault](review-checklist.md#code-standards): a Rust-to-C++-to-Rust bounce, a moved field behind a service, per-call allocation the original lacks, a process-wide scratch pool where the original uses a local container, opcode dispatch (a `mode` parameter choosing among operations), or an owner resolved once per field instead of once per entry;
+  - a projected flag (`execute: bool`) in an internal signature where the original takes `DoCommandFlags`;
+  - a native assertion the original has and the Rust omits, or a check the original lacks: `tile + offset` is not `TileAdd`.
 
   Literals the original itself writes as literals stay. Operators and control flow follow the original's: a `switch` with `NOT_REACHED` stays a match with the native unreachable path, not an ordering comparison.
 - **Adapters and boundary.** Each raw adapter delegates to one typed definition and serves only callers in files no pass has finished. A pass converts callers in finished files to the typed form. Each touched orphan export is a finding; tests and the orphan baseline do not keep an export alive.
@@ -48,7 +47,7 @@ Do not commit, push, request Full or merge. The PR's implementer fixes each find
 
 ## Policy questions
 
-Rule on a policy question yourself, using the decisions recorded on the stream issues and in the docs. State your ruling and its source in the report. Only a question that no recorded decision answers waits for root: put it in the report and message your own `parentThreadId`.
+Rule on a policy question yourself, using the decisions recorded on the stream issues and in the docs. State your ruling and its source in the report. Only a question that no recorded decision answers goes to root: put it in the report and tell the implementer, who asks root.
 
 ## Checks
 
@@ -67,7 +66,7 @@ Post one report on the PR, with the PR template's review skeleton, starting `Rev
   - the check or reading that found it;
   - the suggested remedy.
 - End with the disposition: accepted, or findings to remediate.
-- Findings do not wait for CI: post the report when the source review is done. Only an acceptance needs the passing `native` result at the reviewed head ([checks](workflow.md#checks)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
+- Findings and acceptances do not wait for CI: post the report when the source review is done. An acceptance covers the source at the reviewed head; the implementer records the passing `native` run ([review loop](team.md#review-loop)). On 2026-11-10, eight reviewers each held a finished report with findings until a `native` run ended, five of them for a run that timed out.
 
 After posting a report or a verification, tell the implementer in one line with `t3_thread_send` to its thread ID, with `mode: "queue"` ([spawning](team.md#spawning)): your own thread ID, the report's URL and the disposition. Root relays nothing ([review loop](team.md#review-loop)).
 

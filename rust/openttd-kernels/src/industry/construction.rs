@@ -457,7 +457,7 @@ pub(crate) unsafe fn do_create_new_industry(
         let it = layout_tile(req.layout, slot);
         let cur_tile = TileIndex(
             tile.0
-                .wrapping_add(map.diff(i32::from(it.x), i32::from(it.y))),
+                .wrapping_add(map.diff(i32::from(it.x), i32::from(it.y)).cast_unsigned()),
         );
         if IndustryGfx(it.gfx) != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
             let mut location = super::location(owner);

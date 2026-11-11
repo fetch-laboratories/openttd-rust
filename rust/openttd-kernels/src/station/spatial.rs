@@ -15,9 +15,9 @@ fn table(s: &Services) -> &CatchmentServices {
 fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
     let tile = (c.location)((c.station_if_valid)(id));
     if dim == 0 {
-        map.tile_x(tile) as u16
+        map.tile_x(TileIndex(tile)) as u16
     } else {
-        map.tile_y(tile) as u16
+        map.tile_y(TileIndex(tile)) as u16
     }
 }
 /// `RebuildStationKdtree`: rebuild the station index from every station in
@@ -82,8 +82,8 @@ pub(crate) fn for_all_stations_radius(
                 .min(size.cast_signed())) as u16,
         ]
     };
-    let x = bounds(map.tile_x(center.0), map.size_x());
-    let y = bounds(map.tile_y(center.0), (s.map_max_y)().wrapping_add(1));
+    let x = bounds(map.tile_x(center), map.size_x());
+    let y = bounds(map.tile_y(center), (s.map_max_y)().wrapping_add(1));
     unsafe {
         (*TREE.get()).contained(
             [x[0], y[0]],
@@ -126,7 +126,7 @@ pub(crate) fn modify_station_rating_around(
     let map = s.map();
     for_all_stations_radius(s, tile, radius, |st| {
         if CompanyID((station.station_owner)(st)) == owner
-            && map.distance_manhattan(tile.0, (c.location)(st)) <= radius
+            && map.distance_manhattan(tile, TileIndex((c.location)(st))) <= radius
         {
             unsafe {
                 crate::station_service::modify_rating((c.owner)(st), amount);

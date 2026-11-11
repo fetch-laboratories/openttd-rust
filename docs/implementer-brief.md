@@ -13,7 +13,7 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 - Write with the original's vocabulary. Each enum, flag set, ID and named constant has one Rust definition in the module named after its original header (`track_type.rs` for `track_type.h`). Use that name wherever the original does; when it is missing, add it there.
 - Carry the original's explanatory comments with every ported body, at the matching branch or operation.
-- Pass a command's arguments as its argument struct, and a helper's shared state as a context struct.
+- Pass a command's arguments as its argument struct, its flags as `DoCommandFlags` rather than a projected `execute: bool`, and a helper's shared state as a context struct.
 - Port each original helper once, in the module named after its original file, and call it everywhere. Rust code calls the typed Rust function, never a `_raw` adapter or an `openttd_rust_*` export that has one ([code standards](porting.md#code-standards)).
 - Cross the C++ boundary through typed `noexcept` services with synchronous calls, allocating only where the original allocates. End Rust borrows before a callback that can reenter Rust.
 - A C++ global or static becomes a process-wide Rust static.
@@ -23,6 +23,16 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 - Use the existing harness (`python3 tools/migration.py simulate`) and Rust tests. New evidence lives in Rust or in harness scenarios; C++ under `tools/` and `src/tests` shrinks or holds.
 - Add a scenario or test only for behaviour existing checks cannot distinguish, and name that behaviour in the PR.
+
+## Finishing a file pass
+
+A pass is ready for review when a reviewer would have nothing left on the [every-line list](review-brief.md#what-to-examine-in-your-group). #883 reached review with ten standards findings; the same classes recurred across most passes on 11-10/11. Before marking the PR ready, for each file:
+
+- Read `python3 tools/code-standards-inventory.py FILE...` and settle each line it reports.
+- Search the file for `_raw(`, `openttd_rust_` calls and scratch pools, and check each original callee name against existing Rust definitions.
+- Compare each body with its original, comments and assertions included.
+
+List anything you leave in the PR body with its reason. Residue not listed there is a finding.
 
 ## Checks and commits
 
@@ -34,9 +44,11 @@ Readers: implementation agents. Read this brief, your work order (issue and spaw
 
 ## Review
 
+When the PR is ready (finishing step done, local checks passing, `native` requested), start its reviewers yourself with `delegate_task`; this brief authorizes those subagents. Use the role table's review model ([roles](team.md#roles-and-models)). Start one reviewer for the whole PR. Above about 1,000 changed lines, list review groups in the PR body and start one reviewer per group. Use the [review brief](review-brief.md)'s fixed spawn message and nothing more: never tell a reviewer what to look for. Name each `/root/review-<PR>-<group>`.
+
 Each reviewer tells you in one line when its report is posted, and gives its thread ID. Root relays nothing ([review loop](team.md#review-loop)). A tool call cancelled with a notice to stop as such a message arrives is the host delivering it, not a refusal: read the message, rerun the call and carry on ([spawning](team.md#spawning)).
 
 - Read the reports on the PR. Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
-- Ask each finding's reviewer to verify, in one line naming the fixing commits, with `t3_thread_send` to its thread ID and `mode: "queue"`.
-- When every reviewer accepts, queue the PR under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
-- Ask root only for a fresh reviewer after a substantive rewrite or a base update that needs one, or when you and a reviewer disagree.
+- If a fix changed behaviour, evidence or a body's operations, start one re-check the same way, naming the fixing commits ([review loop](team.md#review-loop)). For fixes limited to names, comments, types or argument structs with unchanged operations, say so in the status comment instead.
+- Record the passing `native` run at the reviewed head in the status comment, then queue the PR and wait on the queue yourself under [integration](root-workflow.md#integration), which also covers a conflict with base and a failure in the queue.
+- After a substantive rewrite, or a base update that needs review, start a fresh reviewer the same way. Ask root only when you and a reviewer disagree, or a reviewer raises a policy question no recorded decision answers.

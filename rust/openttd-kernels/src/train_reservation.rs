@@ -17,6 +17,7 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
+use crate::direction_type::DiagDirection;
 use crate::order_type::{
     OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
     OT_LOADING, OT_NOTHING,
@@ -24,6 +25,7 @@ use crate::order_type::{
 use crate::raw_field::read_field;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::INVALID_TILE;
+use crate::tile_type::TileIndex;
 use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
@@ -323,7 +325,15 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
             }
         }
     } else if (g.leaves.is_station)(g.context, id, tile) != 0 {
-        let next = g.shared().map().tile_add_by_diag_dir_raw(tile, dir);
+        let next = g
+            .shared()
+            .map()
+            .tile_add_by_diag_dir(
+                TileIndex(tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if (g.leaves.compat_station)(g.context, id, next, tile) == 0 {
             g.set_platform(tile, dir ^ 2, false);
         }
@@ -778,7 +788,15 @@ fn choose(
     // SAFETY: The entry keeps the native train live through reservation traversal.
     while !g.safe(id, dest.tile, dest.td) {
         let exit = g.dir(id, dest.td);
-        let next = g.shared().map().tile_add_by_diag_dir_raw(dest.tile, exit);
+        let next = g
+            .shared()
+            .map()
+            .tile_add_by_diag_dir(
+                TileIndex(dest.tile),
+                DiagDirection(exit),
+                crate::map_func::native_check,
+            )
+            .0;
         let mut reachable =
             tracks(g.track_status(next)) & (g.leaves.reach_tracks)(g.context, id, exit) as u8;
         if (g.leaves.rail90)(g.context, id, dest.tile, next) != 0 {
@@ -843,7 +861,15 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
             return false;
         }
         let dir = (g.leaves.depot_dir)(g.context, id, v_tile) as u8;
-        let next = g.shared().map().tile_add_by_diag_dir_raw(v_tile, dir);
+        let next = g
+            .shared()
+            .map()
+            .tile_add_by_diag_dir(
+                TileIndex(v_tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
             return false;
         }
@@ -869,7 +895,15 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         }
     }
     let exit = g.dir(id, origin.td);
-    let new_tile = g.shared().map().tile_add_by_diag_dir_raw(origin.tile, exit);
+    let new_tile = g
+        .shared()
+        .map()
+        .tile_add_by_diag_dir(
+            TileIndex(origin.tile),
+            DiagDirection(exit),
+            crate::map_func::native_check,
+        )
+        .0;
     let mut reachable =
         tracks(g.track_status(new_tile) & (g.leaves.diag_reach_dirs)(g.context, id, exit) as u16);
     if (g.leaves.rail90)(g.context, id, origin.tile, new_tile) != 0 {

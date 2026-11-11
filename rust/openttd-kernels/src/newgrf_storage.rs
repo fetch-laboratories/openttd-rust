@@ -413,6 +413,9 @@ crate::abi::layouts! {
     "OpenTTDIndustryStorage" ["storage"] => IndustryStorage { owner, valid };
 }
 
+#[cfg(test)]
+mod evidence_tests;
+
 /// Native `PersistentStorageID`, retaining every underlying `u32` value.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

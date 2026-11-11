@@ -8,7 +8,8 @@
 //! Read helpers of `tree_map.h` for the audited map reader.
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
-use crate::tile_type::{MP_TREES, TileIndex};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 
 /// Native `TreeType`, retaining every underlying `u8` value.
 ///
@@ -84,13 +85,13 @@ pub(crate) const TREE_GROUND_SHORE: u8 = TreeGround::TREE_GROUND_SHORE.0;
 /// problem known about it.
 #[inline]
 pub(crate) fn get_tree_type(m: &TileTypeAccess, t: TileIndex) -> Option<TreeType> {
-    m.require_type(t.0, MP_TREES)?;
-    m.m3(t.0).map(TreeType)
+    m.require_type(t, TileType::MP_TREES)?;
+    m.m3(t).map(TreeType)
 }
 /// `GetTreeGround`: returns the groundtype for tree tiles.
 #[inline]
 pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGround> {
-    let fields = m.require_type(t.0, MP_TREES)?;
+    let fields = m.require_type(t, TileType::MP_TREES)?;
     Some(TreeGround(((fields.m2() >> 6) & 7) as u8))
 }
 /// `GetTreeDensity`: returns the 'density' of a tile with trees.
@@ -103,19 +104,19 @@ pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGr
 /// density of a tile" but "get the density of a tile which got trees".
 #[inline]
 pub(crate) fn get_tree_density(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
-    let fields = m.require_type(t.0, MP_TREES)?;
+    let fields = m.require_type(t, TileType::MP_TREES)?;
     Some(((fields.m2() >> 4) & 3) as u8)
 }
 /// `GetTreeCount`.
 #[inline]
 pub(crate) fn get_tree_count(m: &TileTypeAccess, t: TileIndex) -> Option<u8> {
-    let fields = m.require_type(t.0, MP_TREES)?;
+    let fields = m.require_type(t, TileType::MP_TREES)?;
     Some((fields.m5() >> 6) + 1)
 }
 /// `GetTreeGrowth`.
 #[inline]
 pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: TileIndex) -> Option<TreeGrowthStage> {
-    let fields = m.require_type(t.0, MP_TREES)?;
+    let fields = m.require_type(t, TileType::MP_TREES)?;
     Some(TreeGrowthStage(fields.m5() & 7))
 }
 

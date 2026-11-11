@@ -7,13 +7,18 @@
 
 //! Shared `tunnelbridge.h` helpers.
 use crate::map_func::Map;
+use crate::tile_type::TileIndex;
 /// Number of infrastructure pieces per tunnel/bridge tile.
 pub const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
 /// `GetTunnelBridgeLength`, excluding the endpoints.
 #[must_use]
 pub fn get_tunnel_bridge_length(map: Map, begin: u32, end: u32) -> u32 {
-    let first = map.tile_x(begin).wrapping_add(map.tile_y(begin));
-    let last = map.tile_x(end).wrapping_add(map.tile_y(end));
+    let first = map
+        .tile_x(TileIndex(begin))
+        .wrapping_add(map.tile_y(TileIndex(begin)));
+    let last = map
+        .tile_x(TileIndex(end))
+        .wrapping_add(map.tile_y(TileIndex(end)));
     last.abs_diff(first).wrapping_sub(1)
 }
 

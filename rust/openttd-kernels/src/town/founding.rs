@@ -153,8 +153,8 @@ impl<'a> Founding<'a> {
     }
     fn spiral(&self, tile: TileIndex, diameter: u32) -> crate::spiral::SpiralState {
         crate::spiral::square(
-            self.map().tile_x(tile.0),
-            self.map().tile_y(tile.0),
+            self.map().tile_x(tile),
+            self.map().tile_y(tile),
             diameter,
             self.map().size_x(),
             self.size_y(),
@@ -163,8 +163,8 @@ impl<'a> Founding<'a> {
     /// Towns must all share a grid so their road networks mesh when they interpenetrate.
     /// Tell whether the tile is properly aligned (`town_cmd.cpp::IsTileAlignedToGrid`).
     fn is_tile_aligned_to_grid(&self, tile: TileIndex, layout: TownLayout) -> bool {
-        let x = self.map().tile_x(tile.0);
-        let y = self.map().tile_y(tile.0);
+        let x = self.map().tile_x(tile);
+        let y = self.map().tile_y(tile);
         match layout {
             TownLayout::TL_2X2_GRID => x.is_multiple_of(3) && y.is_multiple_of(3),
             TownLayout::TL_3X3_GRID => x.is_multiple_of(4) && y.is_multiple_of(4),
@@ -174,11 +174,11 @@ impl<'a> Founding<'a> {
     /// Towns must all share a grid so their road networks mesh when they interpenetrate.
     /// Return the tile aligned to the layout's grid (`town_cmd.cpp::AlignTileToGrid`).
     fn align_tile_to_grid(&self, tile: TileIndex, layout: TownLayout) -> TileIndex {
-        let x = self.map().tile_x(tile.0);
-        let y = self.map().tile_y(tile.0);
+        let x = self.map().tile_x(tile);
+        let y = self.map().tile_y(tile);
         match layout {
-            TownLayout::TL_2X2_GRID => TileIndex(self.map().tile_xy(x - x % 3, y - y % 3)),
-            TownLayout::TL_3X3_GRID => TileIndex(self.map().tile_xy(x & !3, y & !3)),
+            TownLayout::TL_2X2_GRID => self.map().tile_xy(x - x % 3, y - y % 3),
+            TownLayout::TL_3X3_GRID => self.map().tile_xy(x & !3, y & !3),
             _ => tile,
         }
     }
@@ -218,7 +218,7 @@ impl<'a> Founding<'a> {
                 if counter == VALID_TILE_GOAL {
                     break;
                 }
-                let at = TileIndex(self.map().tile_xy(spiral.x, spiral.y));
+                let at = self.map().tile_xy(spiral.x, spiral.y);
                 let valid = match TileType(observed!((self.shared.tile_type)(at.0))) {
                     // Don't allow rough tiles, as they are likely wetlands.
                     TileType::MP_CLEAR => {
@@ -257,14 +257,14 @@ impl<'a> Founding<'a> {
         w::hit(w::TOWN_COAST);
         let mut coast = self.spiral(tile, 40);
         while !coast.is_end() {
-            let at = TileIndex(self.map().tile_xy(coast.x, coast.y));
+            let at = self.map().tile_xy(coast.x, coast.y);
             // Find nearest land tile.
             if TileType(observed!((self.shared.tile_type)(at.0))) == TileType::MP_CLEAR {
                 let mut furthest = TileIndex::INVALID;
                 let mut max_dist = 0;
                 let mut test = self.spiral(at, 10);
                 while !test.is_end() {
-                    let tile = TileIndex(self.map().tile_xy(test.x, test.y));
+                    let tile = self.map().tile_xy(test.x, test.y);
                     if TileType(observed!((self.shared.tile_type)(tile.0))) == TileType::MP_CLEAR
                         && observed!((self.s.flat)(tile))
                         && self.is_tile_aligned_to_grid(tile, layout)
@@ -420,10 +420,8 @@ impl<'a> Founding<'a> {
         loop {
             // Generate a tile index not too close from the edge
             let random = self.random();
-            let mut tile = self.align_tile_to_grid(
-                TileIndex(self.map().random_tile_seed(self.size_y(), random)),
-                layout,
-            );
+            let mut tile =
+                self.align_tile_to_grid(self.map().random_tile_seed(self.size_y(), random), layout);
             // If we tried to place the town on water, find a suitable land tile nearby.
             // Otherwise, evaluate the land tile.
             let valid =
@@ -509,7 +507,7 @@ impl<'a> Founding<'a> {
 unsafe fn initialize_layout(state: *mut State, layout: TownLayout, map: crate::services::Map) {
     let result = if layout == TownLayout::TL_RANDOM {
         let xy = unsafe { super::position(state) };
-        let hash = crate::tile_map::tile_hash(map.tile_x(xy.0), map.tile_y(xy.0));
+        let hash = crate::tile_map::tile_hash(map.tile_x(xy), map.tile_y(xy));
         TownLayout((hash % u32::from(TownLayout::NUM_TLS.0 - 1)) as u8)
     } else {
         layout

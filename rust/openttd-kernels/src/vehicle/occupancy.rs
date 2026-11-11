@@ -63,7 +63,7 @@ fn get_tile_hash(x: u32, y: u32) -> *mut Shell {
 }
 #[inline]
 fn get_tile_hash_for_tile(map: Map, tile: TileIndex) -> *mut Shell {
-    get_tile_hash(map.tile_x(tile.0), map.tile_y(tile.0))
+    get_tile_hash(map.tile_x(tile), map.tile_y(tile))
 }
 unsafe fn handle(shell: Shell) -> VehicleRef {
     VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(shell) })

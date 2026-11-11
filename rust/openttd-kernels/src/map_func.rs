@@ -5,32 +5,42 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Inline helpers of `map_func.h` over map dimensions read once per entry.
+//! Inline helpers of `map_func.h` over map metadata captured per entry.
 #![allow(unsafe_code)]
-use crate::direction_type::{DiagDirection, Direction};
+use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_type::{TileIndexDiff, TileIndexDiffC};
-use crate::tile_type::TileIndex;
+use crate::tile_type::{TileIndex, TileType};
 
-/// Map dimensions read once per entry.
+/// Map width and native build policy captured per entry.
 #[derive(Clone, Copy)]
 pub struct Map {
     /// `Map::LogX()` captured for this synchronous entry.
-    pub log_x: u8,
+    pub log_x: u32,
+    // Native build choices are distinct: WITH_ASSERT does not enable _DEBUG.
+    native_debug: bool,
+    native_assertions: bool,
+    // Address of Map::log_y, live across each entry and cached road context.
+    // Geometry remains available when a fixture uses the callback backend.
+    log_y: *const u32,
 }
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
-    #[must_use]
     #[inline]
-    pub fn iterate(count: u32) -> std::ops::Range<u32> {
-        0..count
+    pub fn iterate(count: u32) -> impl DoubleEndedIterator<Item = TileIndex> + ExactSizeIterator {
+        (0..count).map(TileIndex)
     }
 
-    /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
+    /// Width-only context for coordinate, distance and offset calculations.
+    /// Original `TileAdd` callers use the native context from `MapStatics` instead.
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
     #[inline]
-    pub fn from_log_x(log_x: u32) -> Self {
-        Self { log_x: log_x as u8 }
+    pub const fn from_log_x(log_x: u32) -> Self {
+        Self {
+            log_x,
+            native_debug: false,
+            native_assertions: false,
+            log_y: std::ptr::null(),
+        }
     }
     /// `Map::SizeX()`, from the dimension captured at entry.
     #[must_use]
@@ -41,30 +51,39 @@ impl Map {
     /// `TileXY`, over the captured map width.
     #[must_use]
     #[inline]
-    pub fn tile_xy(self, x: u32, y: u32) -> u32 {
-        y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
+    pub fn tile_xy(self, x: u32, y: u32) -> TileIndex {
+        TileIndex(y.wrapping_shl(self.log_x).wrapping_add(x))
     }
     /// `TileVirtXY`, including the unsigned coordinate shifts and addition.
     #[must_use]
     #[inline]
-    pub fn tile_virt_xy(self, x: u32, y: u32) -> u32 {
+    pub fn tile_virt_xy(self, x: u32, y: u32) -> TileIndex {
         self.tile_xy(x >> 4, y >> 4)
     }
     /// `Map::ScaleBySize`, preserving its pre-division unsigned shift.
     #[must_use]
     #[inline]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
-        let scaled = n.wrapping_shl(u32::from(self.log_x) + size_y.ilog2() - 12);
-        scaled.wrapping_add(15) / 16
+        // Subtract 12 from the shift to prevent integer overflow
+        // for large n; this is safe since the minimum map size is 64x64.
+        let scaled = n.wrapping_shl(self.log_x + size_y.ilog2() - 12);
+        crate::math::ceil_div(scaled, 1 << 4)
     }
-    /// `AddTileIndexDiffCWrap` for an arbitrary original coordinate offset.
+    /// `AddTileIndexDiffCWrap`: add a coordinate offset, returning invalid if it
+    /// would leave the map.
     #[must_use]
     #[inline]
-    pub fn add_offset_c_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32) -> u32 {
-        let x = self.tile_x(tile).wrapping_add_signed(dx);
-        let y = self.tile_y(tile).wrapping_add_signed(dy);
+    pub fn add_tile_index_diff_c_wrap(
+        self,
+        tile: TileIndex,
+        diff: TileIndexDiffC,
+        size_y: u32,
+    ) -> TileIndex {
+        let x = self.tile_x(tile).wrapping_add_signed(i32::from(diff.x));
+        let y = self.tile_y(tile).wrapping_add_signed(i32::from(diff.y));
+        // A negative value becomes a large positive value after the unsigned cast.
         if x >= self.size_x() || y >= size_y {
-            crate::tile_type::INVALID_TILE
+            TileIndex::INVALID
         } else {
             self.tile_xy(x, y)
         }
@@ -72,25 +91,36 @@ impl Map {
     /// `Map::WrapToMap`, preserving the canonical power-of-two tile mask.
     #[must_use]
     #[inline]
-    pub fn wrap_to_map(self, tile: u32, size_y: u32) -> u32 {
-        tile & (self.size_x() * size_y - 1)
+    pub fn wrap_to_map(self, tile: TileIndex, size_y: u32) -> TileIndex {
+        TileIndex(tile.0 & (self.size_x() * size_y - 1))
     }
     /// `RandomTileSeed`, using the original `Map::WrapToMap` helper.
     #[must_use]
     #[inline]
-    pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
-        self.wrap_to_map(random, size_y)
+    pub fn random_tile_seed(self, size_y: u32, random: u32) -> TileIndex {
+        self.wrap_to_map(TileIndex(random), size_y)
     }
     /// `TileAddWrap`, including freeform-edge exclusion.
     #[must_use]
-    pub fn tile_add_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32, freeform: bool) -> u32 {
+    pub fn tile_add_wrap(
+        self,
+        tile: TileIndex,
+        dx: i32,
+        dy: i32,
+        size_y: u32,
+        freeform: bool,
+    ) -> TileIndex {
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
-        if ((x == 0 || y == 0) && freeform) || x >= self.max_x() || y >= Self::max_y(size_y) {
-            crate::tile_type::INVALID_TILE
-        } else {
-            self.tile_xy(x, y)
+        // Disallow void tiles at the north border.
+        if (x == 0 || y == 0) && freeform {
+            return TileIndex::INVALID;
         }
+        // Are we about to wrap?
+        if x >= self.max_x() || y >= Self::max_y(size_y) {
+            return TileIndex::INVALID;
+        }
+        self.tile_xy(x, y)
     }
     /// `Map::MaxX`.
     #[must_use]
@@ -107,28 +137,29 @@ impl Map {
     /// `TileX`.
     #[must_use]
     #[inline]
-    pub fn tile_x(self, tile: u32) -> u32 {
-        tile & (self.size_x() - 1)
+    pub fn tile_x(self, tile: TileIndex) -> u32 {
+        tile.0 & (self.size_x() - 1)
     }
     /// `TileY`.
     #[must_use]
     #[inline]
-    pub fn tile_y(self, tile: u32) -> u32 {
-        tile >> self.log_x
+    pub fn tile_y(self, tile: TileIndex) -> u32 {
+        tile.0 >> self.log_x
     }
-    /// Original `DistanceManhattan`.
+    /// `DistanceManhattan`: sum of the delta of the X and Y components.
+    /// Also known as the L1 norm: the shortest distance over diagonal tracks or roads.
     #[must_use]
     #[inline]
-    pub fn distance_manhattan(self, a: u32, b: u32) -> u32 {
-        self.tile_x(a).abs_diff(self.tile_x(b)) + self.tile_y(a).abs_diff(self.tile_y(b))
+    pub fn distance_manhattan(self, a: TileIndex, b: TileIndex) -> u32 {
+        crate::math::delta(self.tile_x(a), self.tile_x(b))
+            .wrapping_add(crate::math::delta(self.tile_y(a), self.tile_y(b)))
     }
     /// Original `DistanceMax`, the L-infinity norm.
     #[must_use]
     #[inline]
-    pub fn distance_max(self, a: u32, b: u32) -> u32 {
-        self.tile_x(a)
-            .abs_diff(self.tile_x(b))
-            .max(self.tile_y(a).abs_diff(self.tile_y(b)))
+    pub fn distance_max(self, a: TileIndex, b: TileIndex) -> u32 {
+        crate::math::delta(self.tile_x(a), self.tile_x(b))
+            .max(crate::math::delta(self.tile_y(a), self.tile_y(b)))
     }
     /// `TileIndexToTileIndexDiffC`: the unsigned coordinate differences
     /// `TileX(a) - TileX(b)` and `TileY(a) - TileY(b)`, narrowed to `int16_t`.
@@ -144,52 +175,65 @@ impl Map {
         tile_b: crate::tile_type::TileIndex,
     ) -> crate::map_type::TileIndexDiffC {
         crate::map_type::TileIndexDiffC {
-            x: self.tile_x(tile_a.0).wrapping_sub(self.tile_x(tile_b.0)) as i16,
-            y: self.tile_y(tile_a.0).wrapping_sub(self.tile_y(tile_b.0)) as i16,
+            x: self.tile_x(tile_a).wrapping_sub(self.tile_x(tile_b)) as i16,
+            y: self.tile_y(tile_a).wrapping_sub(self.tile_y(tile_b)) as i16,
         }
     }
-    /// `TileDiffXY`: `y * Map::SizeX() + x` in unsigned arithmetic.
+    /// `TileDiffXY`: calculate a tile offset; the coordinates can be negative.
     #[must_use]
     #[inline]
-    pub fn diff(self, x: i32, y: i32) -> u32 {
+    pub fn diff(self, x: i32, y: i32) -> TileIndexDiff {
+        // Multiplication gives much better optimization on MSVC than shifting.
+        // 0 << shift is not optimized to 0 properly.
+        // Typically x and y are constants, so this does not result
+        // in any actual multiplication in the assembly code.
         y.cast_unsigned()
             .wrapping_mul(self.size_x())
             .wrapping_add(x.cast_unsigned())
+            .cast_signed()
     }
-    /// `TileOffsByAxis`, as the unsigned pattern of its `TileIndexDiff`.
+    /// `TileOffsByAxis`: convert an `Axis` to the tile offset in southern
+    /// direction (SW or SE).
     #[must_use]
     #[inline]
-    pub fn offs_by_axis(self, axis: u8) -> u32 {
-        const OFFSETS: [(i32, i32); 2] = [(1, 0), (0, 1)];
-        let (x, y) = OFFSETS[usize::from(axis)];
-        self.diff(x, y)
+    pub fn offs_by_axis(self, axis: Axis, check: impl Fn(bool)) -> TileIndexDiff {
+        if !crate::direction_func::is_valid_axis(axis) {
+            check(false);
+        }
+        self.to_tile_index_diff(TILEOFFS_BY_AXIS[usize::from(axis.0)])
     }
-    /// `DiagdirBetweenTiles`.
+    /// `DiagdirBetweenTiles`: direction from `from` towards `to`, or invalid
+    /// when the tiles do not lie on an axis.
     #[must_use]
     #[allow(clippy::cast_possible_wrap)]
-    pub fn diagdir_between_tiles(self, from: u32, to: u32) -> u8 {
-        use crate::direction_type::{
-            DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR,
-        };
+    pub fn diagdir_between_tiles(self, from: TileIndex, to: TileIndex) -> DiagDirection {
         let dx = (self.tile_x(to) as i32).wrapping_sub(self.tile_x(from) as i32);
         let dy = (self.tile_y(to) as i32).wrapping_sub(self.tile_y(from) as i32);
         if dx == 0 {
             if dy == 0 {
-                return INVALID_DIAGDIR;
+                return DiagDirection::INVALID_DIAGDIR;
             }
-            return if dy < 0 { DIAGDIR_NW } else { DIAGDIR_SE };
+            return if dy < 0 {
+                DiagDirection::DIAGDIR_NW
+            } else {
+                DiagDirection::DIAGDIR_SE
+            };
         }
         if dy != 0 {
-            return INVALID_DIAGDIR;
+            return DiagDirection::INVALID_DIAGDIR;
         }
-        if dx < 0 { DIAGDIR_NE } else { DIAGDIR_SW }
+        if dx < 0 {
+            DiagDirection::DIAGDIR_NE
+        } else {
+            DiagDirection::DIAGDIR_SW
+        }
     }
     /// `DistanceFromEdge`: gets the distance to the edge of the map. Returns
     /// the distance to the nearest edge of the map, in any direction.
     #[must_use]
     pub fn distance_from_edge(self, tile: TileIndex, size_y: u32) -> u32 {
-        let xl = self.tile_x(tile.0);
-        let yl = self.tile_y(tile.0);
+        let xl = self.tile_x(tile);
+        let yl = self.tile_y(tile);
         let xh = self.max_x().wrapping_sub(xl);
         let yh = Self::max_y(size_y).wrapping_sub(yl);
         xl.min(yl).min(xh.min(yh))
@@ -200,15 +244,61 @@ impl Map {
     #[must_use]
     #[inline]
     pub fn distance_square(self, t0: TileIndex, t1: TileIndex) -> u32 {
-        let dx = self.tile_x(t0.0).cast_signed() - self.tile_x(t1.0).cast_signed();
-        let dy = self.tile_y(t0.0).cast_signed() - self.tile_y(t1.0).cast_signed();
+        let dx = self.tile_x(t0).wrapping_sub(self.tile_x(t1)).cast_signed();
+        let dy = self.tile_y(t0).wrapping_sub(self.tile_y(t1)).cast_signed();
         (dx * dx + dy * dy).cast_unsigned()
+    }
+    /// `TileAdd`: native `_DEBUG` reconstructs coordinates before its three
+    /// assertions; every other native configuration adds the unsigned offset.
+    #[must_use]
+    #[inline]
+    pub fn tile_add(
+        self,
+        tile: TileIndex,
+        offset: TileIndexDiff,
+        check: impl Fn(bool),
+    ) -> TileIndex {
+        if !self.native_debug {
+            return TileIndex(tile.0.wrapping_add(offset.cast_unsigned()));
+        }
+        let size_x = self.size_x();
+        let mut dx = (offset.cast_unsigned() & self.max_x()).cast_signed();
+        if dx >= size_x.cast_signed() / 2 {
+            dx = dx.wrapping_sub(size_x.cast_signed());
+        }
+        let dy = offset.wrapping_sub(dx) / size_x.cast_signed();
+        let x = self.tile_x(tile).wrapping_add_signed(dx);
+        let y = self.tile_y(tile).wrapping_add_signed(dy);
+
+        if self.native_assertions {
+            if x >= size_x {
+                check(false);
+            }
+            // SAFETY: Native contexts retain the canonical Map::log_y address;
+            // no reset/load/mutex yield occurs in this entry. Map dimensions are
+            // powers of two, even when the reader uses a callback-only backend.
+            let size_y = 1_u32 << unsafe { self.log_y.read() };
+            if y >= size_y {
+                check(false);
+            }
+            // The original WrapToMap observes the map mask at this assertion.
+            let size_y = 1_u32 << unsafe { self.log_y.read() };
+            if self.tile_xy(x, y)
+                != self.wrap_to_map(
+                    TileIndex(tile.0.wrapping_add(offset.cast_unsigned())),
+                    size_y,
+                )
+            {
+                check(false);
+            }
+        }
+        self.tile_xy(x, y)
     }
     /// `TileAddXY`: adds a given offset of x and y to a tile.
     #[must_use]
     #[inline]
     pub fn tile_add_xy(self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        TileIndex(tile.0.wrapping_add(self.diff(x, y)))
+        self.tile_add(tile, self.diff(x, y), native_check)
     }
     /// `ToTileIndexDiff`: return the offset between two tiles from a
     /// `TileIndexDiffC` struct.
@@ -216,7 +306,6 @@ impl Map {
     #[inline]
     pub fn to_tile_index_diff(self, tidc: TileIndexDiffC) -> TileIndexDiff {
         self.diff(i32::from(tidc.x), i32::from(tidc.y))
-            .cast_signed()
     }
     /// `TileOffsByDiagDir`: convert a `DiagDirection` to a `TileIndexDiff`.
     #[must_use]
@@ -239,10 +328,8 @@ impl Map {
         dir: Direction,
         check: impl Fn(bool),
     ) -> TileIndex {
-        TileIndex(
-            tile.0
-                .wrapping_add(self.tile_offs_by_dir(dir, check).cast_unsigned()),
-        )
+        let offset = self.tile_offs_by_dir(dir, &check);
+        self.tile_add(tile, offset, check)
     }
     /// `TileAddByDiagDir`: adds a `DiagDirection` to a tile.
     #[must_use]
@@ -253,70 +340,37 @@ impl Map {
         dir: DiagDirection,
         check: impl Fn(bool),
     ) -> TileIndex {
-        TileIndex(
-            tile.0
-                .wrapping_add(self.tile_offs_by_diag_dir(dir, check).cast_unsigned()),
-        )
-    }
-    /// Raw adapter: `DistanceFromEdge` over a base tile, for files no pass has
-    /// finished yet.
-    #[must_use]
-    pub fn distance_from_edge_raw(self, tile: u32, size_y: u32) -> u32 {
-        self.distance_from_edge(TileIndex(tile), size_y)
-    }
-    /// Raw adapter: `DistanceSquare` over base tiles.
-    #[must_use]
-    #[inline]
-    pub fn distance_square_raw(self, a: u32, b: u32) -> u32 {
-        self.distance_square(TileIndex(a), TileIndex(b))
-    }
-    /// Raw adapter: `TileOffsByDiagDir` as the unsigned pattern of its
-    /// `TileIndexDiff`; the precondition fails through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_offs_by_diag_dir_raw(self, dir: u8) -> u32 {
-        self.tile_offs_by_diag_dir(DiagDirection(dir), native_check)
-            .cast_unsigned()
-    }
-    /// Raw adapter: `TileAddByDiagDir` over base values; the precondition fails
-    /// through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_add_by_diag_dir_raw(self, tile: u32, dir: u8) -> u32 {
-        self.tile_add_by_diag_dir(TileIndex(tile), DiagDirection(dir), native_check)
-            .0
-    }
-    /// Raw adapter: `TileAddByDir` over base values; the precondition fails
-    /// through the canonical native assertion.
-    #[must_use]
-    #[inline]
-    pub fn tile_add_by_dir_raw(self, tile: u32, dir: u8) -> u32 {
-        self.tile_add_by_dir(TileIndex(tile), Direction(dir), native_check)
-            .0
+        let offset = self.tile_offs_by_diag_dir(dir, &check);
+        self.tile_add(tile, offset, check)
     }
     /// `AddTileIndexDiffCWrap(tile, TileIndexDiffCByDiagDir(dir))`.
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
     #[must_use]
     #[inline]
-    pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
-        let diff = tile_index_diff_c_by_diag_dir(DiagDirection(dir), native_check);
-        self.add_offset_c_wrap(tile, i32::from(diff.x), i32::from(diff.y), size_y)
+    pub fn add_diff_c_wrap(self, tile: TileIndex, dir: DiagDirection, size_y: u32) -> TileIndex {
+        let diff = tile_index_diff_c_by_diag_dir(dir, native_check);
+        self.add_tile_index_diff_c_wrap(tile, diff, size_y)
     }
 }
 
-/// The canonical native assertion, for the raw adapters' header preconditions.
-fn native_check(ok: bool) {
+/// The canonical native assertion for header preconditions.
+pub(crate) fn native_check(ok: bool) {
     crate::services_assert::check(ok);
 }
+/// `_tileoffs_by_axis`: southern (SW/SE) coordinate offset for each axis.
+const TILEOFFS_BY_AXIS: [TileIndexDiffC; Axis::AXIS_END.0 as usize] = [
+    TileIndexDiffC { x: 1, y: 0 }, // AXIS_X
+    TileIndexDiffC { x: 0, y: 1 }, // AXIS_Y
+];
 /// `_tileoffs_by_diagdir`: `TileIndexDiffC` for each `DiagDirection`.
-const TILEOFFS_BY_DIAGDIR: [TileIndexDiffC; 4] = [
+const TILEOFFS_BY_DIAGDIR: [TileIndexDiffC; DiagDirection::DIAGDIR_END.0 as usize] = [
     TileIndexDiffC { x: -1, y: 0 }, // DIAGDIR_NE
     TileIndexDiffC { x: 0, y: 1 },  // DIAGDIR_SE
     TileIndexDiffC { x: 1, y: 0 },  // DIAGDIR_SW
     TileIndexDiffC { x: 0, y: -1 }, // DIAGDIR_NW
 ];
 /// `_tileoffs_by_dir`: `TileIndexDiffC` for each `Direction`.
-const TILEOFFS_BY_DIR: [TileIndexDiffC; 8] = [
+const TILEOFFS_BY_DIR: [TileIndexDiffC; Direction::DIR_END.0 as usize] = [
     TileIndexDiffC { x: -1, y: -1 }, // DIR_N
     TileIndexDiffC { x: -1, y: 0 },  // DIR_NE
     TileIndexDiffC { x: -1, y: 1 },  // DIR_E
@@ -333,7 +387,6 @@ const TILEOFFS_BY_DIR: [TileIndexDiffC; 8] = [
 pub fn tile_index_diff_c_by_diag_dir(dir: DiagDirection, check: impl Fn(bool)) -> TileIndexDiffC {
     if !crate::direction_func::is_valid_diag_direction(dir) {
         check(false);
-        std::process::abort();
     }
     TILEOFFS_BY_DIAGDIR[usize::from(dir.0)]
 }
@@ -343,7 +396,6 @@ pub fn tile_index_diff_c_by_diag_dir(dir: DiagDirection, check: impl Fn(bool)) -
 pub fn tile_index_diff_c_by_dir(dir: Direction, check: impl Fn(bool)) -> TileIndexDiffC {
     if !crate::direction_func::is_valid_direction(dir) {
         check(false);
-        std::process::abort();
     }
     TILEOFFS_BY_DIR[usize::from(dir.0)]
 }
@@ -365,8 +417,24 @@ pub struct MapStatics {
     pub log_y: *const u32,
     /// Native assert policy of the C++ build.
     pub assertions: bool,
+    /// Native `_DEBUG`, independently of native assertion enablement.
+    pub debug: bool,
 }
 impl MapStatics {
+    /// Capture the map width and native `TileAdd` policy from the canonical metadata.
+    /// # Safety
+    /// `log_x` is readable now; `log_y` stays readable throughout this context.
+    /// Native map accesses are serialized and each use excludes reset/load/mutex yield.
+    #[inline]
+    pub(crate) unsafe fn dimensions(&self) -> Map {
+        Map {
+            log_x: unsafe { self.log_x.read() },
+            native_debug: self.debug,
+            native_assertions: self.assertions,
+            log_y: self.log_y,
+        }
+    }
+
     /// Load the allocation and dimensions current at this observation point.
     /// # Safety
     /// Every address is live; the loads are serialized with `Map::Allocate`.
@@ -381,7 +449,7 @@ impl MapStatics {
                     count: self.size.read(),
                     assertions: self.assertions,
                 },
-                Map::from_log_x(self.log_x.read()),
+                self.dimensions(),
             )
         }
     }
@@ -402,26 +470,41 @@ pub struct TileTypeAllocation {
     pub assertions: bool,
 }
 
-/// Layout-only shell for the actual native base tile. Never create a reference,
-/// read or copy a value of this type; it supplies stride/ABI metadata only.
+/// Data stored per tile, together with `ExtendedTileLayout`.
+/// See the original `docs/landscape.html` for the exact meaning of the members.
+/// This layout-only shell supplies native stride/ABI metadata. Never create a
+/// reference, or read or copy a value of this type.
 #[repr(C)]
 #[allow(missing_docs)]
 pub struct BaseTileLayout {
+    /// The type (bits 4..7), bridges (2..3), rainforest/desert (0..1).
     pub kind: u8,
+    /// The height of the northern corner.
     pub height: u8,
+    /// Primarily used for indices to towns, industries and stations.
     pub m2: u16,
+    /// Primarily used for ownership information.
     pub m1: u8,
+    /// General purpose.
     pub m3: u8,
+    /// General purpose.
     pub m4: u8,
+    /// General purpose.
     pub m5: u8,
 }
 
-/// Layout-only native extended tile. Never read a whole value or form a reference.
+/// Data stored per tile, together with `BaseTileLayout`.
+/// See the original `docs/landscape.html` for the exact meaning of the members.
+/// This native layout supplies stride/ABI metadata only; never read a whole
+/// value or form a reference.
 #[repr(C)]
 #[allow(missing_docs)]
 pub struct ExtendedTileLayout {
+    /// General purpose.
     pub m6: u8,
+    /// Primarily used for `NewGRF` support.
     pub m7: u8,
+    /// General purpose.
     pub m8: u16,
 }
 
@@ -439,14 +522,17 @@ macro_rules! map_fields {
     ($array:ident: $layout:ty => $($field:ident: $scalar:ty),*) => {$ (
         #[allow(clippy::inline_always)]
     #[inline(always)]
-        pub(crate) fn $field(&self, tile: u32) -> Option<$scalar> {
+        pub(crate) fn $field(&self, tile: TileIndex) -> Option<$scalar> {
             Some(self.fields(tile)?.$field())
         }
     )*};
 }
-/// Field addresses for one tile after its header getter checks the backend and
-/// source preconditions. The borrow keeps allocation metadata live; scalars are
-/// loaded afresh, never copied or referenced as a tile record.
+/// `Tile`: wrapper for access to the map data of a single tile, expected to be
+/// optimized away except when optimizations are disabled.
+/// Field addresses follow the header getter's backend and source checks. The
+/// borrow keeps allocation metadata live; scalars are loaded afresh, never
+/// copied or referenced as a tile record. Field meanings are in the original
+/// `docs/landscape.html`.
 pub(crate) struct TileFields<'a> {
     base: *const BaseTileLayout,
     extended: *const ExtendedTileLayout,
@@ -472,10 +558,10 @@ impl TileFields<'_> {
 macro_rules! map_stores {
     ($array:ident: $layout:ty => $($setter:ident . $field:ident: $scalar:ty),*) => {$ (
         #[inline]
-        pub(crate) fn $setter(&self, tile: u32, value: $scalar) -> Option<()> {
+        pub(crate) fn $setter(&self, tile: TileIndex, value: $scalar) -> Option<()> {
             self.available(tile)?;
             // SAFETY: Live allocation under the entry contract, one scalar only.
-            unsafe { std::ptr::addr_of_mut!((*self.allocation.$array.cast_mut().add(tile as usize)).$field).write(value) };
+            unsafe { std::ptr::addr_of_mut!((*self.allocation.$array.cast_mut().add(tile.0 as usize)).$field).write(value) };
             Some(())
         }
     )*};
@@ -504,23 +590,23 @@ impl TileTypeAccess {
     /// go through the native accessor; asserts-off reads add no range rejection.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn read(&self, tile: u32) -> u8 {
-        crate::tile_map::get_tile_type(self, tile).unwrap_or_else(|| (self.callback)(tile))
+    pub(crate) fn read(&self, tile: TileIndex) -> TileType {
+        crate::tile_map::get_tile_type(self, tile)
+            .unwrap_or_else(|| TileType((self.callback)(tile.0)))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn field_addresses(&self, tile: u32) -> TileFields<'_> {
+    fn field_addresses(&self, tile: TileIndex) -> TileFields<'_> {
         TileFields {
-            base: self.allocation.base.wrapping_add(tile as usize),
-            extended: self.allocation.extended.wrapping_add(tile as usize),
+            base: self.allocation.base.wrapping_add(tile.0 as usize),
+            extended: self.allocation.extended.wrapping_add(tile.0 as usize),
             _metadata: std::marker::PhantomData,
         }
     }
     /// Raw Tile fields have no source assertions; callback-only readers use None.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn fields(&self, tile: u32) -> Option<TileFields<'_>> {
+    pub(crate) fn fields(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         self.available(tile)?;
         Some(self.field_addresses(tile))
     }
@@ -528,8 +614,8 @@ impl TileTypeAccess {
     /// Raw backend availability; assertion-disabled builds add no range rejection.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        if tile < self.allocation.count {
+    pub(crate) fn available(&self, tile: TileIndex) -> Option<()> {
+        if tile.0 < self.allocation.count {
             return Some(());
         }
         if self.allocation.count == 0 {
@@ -593,16 +679,16 @@ impl TileTypeAccess {
     /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
+    pub(crate) fn require_range(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         // A successful source bounds check also proves a nonempty backend.
-        if tile < self.count() {
+        if tile.0 < self.count() {
             return Some(self.field_addresses(tile));
         }
         self.outside_range(tile)
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
+    pub(crate) fn require_type(&self, tile: TileIndex, kind: TileType) -> Option<TileFields<'_>> {
         let fields = self.require_range(tile)?;
         if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
             self.failed_check()?;
@@ -614,7 +700,7 @@ impl TileTypeAccess {
     // are disabled or the native handler returns.
     #[cold]
     #[inline(never)]
-    fn outside_range(&self, tile: u32) -> Option<TileFields<'_>> {
+    fn outside_range(&self, tile: TileIndex) -> Option<TileFields<'_>> {
         if self.count() == 0 {
             return None;
         }
@@ -624,19 +710,19 @@ impl TileTypeAccess {
         Some(self.field_addresses(tile))
     }
     /// Field-sized stores under the same serialized allocation contract as reads.
-    pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
+    pub(crate) fn set_m3(&self, tile: TileIndex, value: u8) -> Option<()> {
         self.available(tile)?;
         unsafe {
-            std::ptr::addr_of!((*self.allocation.base.add(tile as usize)).m3)
+            std::ptr::addr_of!((*self.allocation.base.add(tile.0 as usize)).m3)
                 .cast_mut()
                 .write(value);
         }
         Some(())
     }
-    pub(crate) fn set_m8(&self, tile: u32, value: u16) -> Option<()> {
+    pub(crate) fn set_m8(&self, tile: TileIndex, value: u16) -> Option<()> {
         self.available(tile)?;
         unsafe {
-            std::ptr::addr_of!((*self.allocation.extended.add(tile as usize)).m8)
+            std::ptr::addr_of!((*self.allocation.extended.add(tile.0 as usize)).m8)
                 .cast_mut()
                 .write(value);
         }
@@ -689,7 +775,7 @@ impl<'a> World<'a> {
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn kind(&self, t: u32) -> u8 {
+    pub(crate) fn kind(&self, t: TileIndex) -> TileType {
         self.types.read(t)
     }
     /// `Map::SizeY()`, derived from the descriptor's tile count.
@@ -726,6 +812,7 @@ pub(crate) mod fixture {
             log_x: LOG_X.with(Cell::as_ptr),
             log_y: LOG_Y.with(Cell::as_ptr),
             assertions: true,
+            debug: false,
         });
     }
     /// This thread's statics, valid for the thread's lifetime.
@@ -747,5 +834,152 @@ pub(crate) mod fixture {
             // SAFETY: Thread-local cell; no reference to it is live.
             unsafe { (*s.as_ptr()).assertions = allocation.assertions };
         });
+    }
+}
+
+#[cfg(test)]
+mod assertion_tests {
+    use super::{Map, tile_index_diff_c_by_diag_dir, tile_index_diff_c_by_dir};
+    use crate::direction_type::{Axis, DiagDirection, Direction};
+    use std::cell::Cell;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    thread_local! {
+        static TILE_ADD_ASSERTS: Cell<u32> = const { Cell::new(0) };
+    }
+    extern "C" fn record_tile_add_assertion(condition: bool) {
+        if !condition {
+            TILE_ADD_ASSERTS.set(TILE_ADD_ASSERTS.get() + 1);
+        }
+    }
+
+    fn native_map(size: &u32, log_y: &u32, debug: bool, assertions: bool) -> Map {
+        const LOG_X: u32 = 6;
+        let statics = super::MapStatics {
+            base: std::ptr::null(),
+            extended: std::ptr::null(),
+            size: std::ptr::from_ref(size),
+            log_x: &LOG_X,
+            log_y: std::ptr::from_ref(log_y),
+            assertions,
+            debug,
+        };
+        // SAFETY: The width is live for capture; the caller retains log_y while
+        // using the context. dimensions neither loads nor accesses tile arrays.
+        unsafe { statics.dimensions() }
+    }
+
+    /// Cases derived from pinned map.cpp:90-104 on a 64x64 map. Returning
+    /// assertion handlers preserve the original result and failure count.
+    #[test]
+    fn native_debug_tile_add_is_independent_of_assertion_enablement() {
+        use crate::tile_type::TileIndex;
+        use std::cell::RefCell;
+        let size = 4096;
+        let cases = [
+            (650, 65, 715, 0),         // (10,10) + (1,1): inside the map.
+            (640, -1, 639, 1),         // (0,10) + (-1,0): only the x assertion fails.
+            (10, -64, 0xffff_ffca, 2), // (10,0) + (0,-1): y, then wrap assertion.
+            (0, -65, 0xffff_ffbf, 3),  // (0,0) + (-1,-1): all three assertions.
+        ];
+        for debug in [false, true] {
+            for assertions in [false, true] {
+                let map = native_map(&size, &6, debug, assertions);
+                assert_eq!(
+                    (map.native_debug, map.native_assertions),
+                    (debug, assertions)
+                );
+                for (tile, offset, expected, failures) in cases {
+                    let calls = RefCell::new(Vec::new());
+                    let result = map.tile_add(TileIndex(tile), offset, |condition| {
+                        calls.borrow_mut().push(condition);
+                    });
+                    assert_eq!(result, TileIndex(expected));
+                    assert_eq!(
+                        *calls.borrow(),
+                        vec![false; if debug && assertions { failures } else { 0 }],
+                        "debug={debug} assertions={assertions} tile={tile} offset={offset}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// A callback-only backend has no tile allocation, but keeps the original
+    /// map geometry. On 64x128, (10,63) + (0,1) is (10,64), tile 4106.
+    #[test]
+    fn zero_backend_native_debug_uses_map_geometry() {
+        use crate::tile_type::TileIndex;
+        for debug in [false, true] {
+            for assertions in [false, true] {
+                let map = native_map(&0, &7, debug, assertions);
+                let calls = Cell::new(0);
+                let result = map.tile_add(TileIndex(4042), 64, |_| calls.set(calls.get() + 1));
+                assert_eq!(result, TileIndex(4106));
+                assert_eq!(calls.get(), 0);
+            }
+        }
+    }
+
+    /// All three composed helpers reach `TileAdd`'s native-debug assertions;
+    /// release-with-asserts still performs only the original direct addition.
+    #[test]
+    fn tile_add_wrappers_use_native_policy_and_preserve_results() {
+        use crate::tile_type::TileIndex;
+        if crate::services_assert::isolate_test_check(
+            "map_func::assertion_tests::tile_add_wrappers_use_native_policy_and_preserve_results",
+            record_tile_add_assertion,
+        ) {
+            return;
+        }
+        let size = 4096;
+        for debug in [false, true] {
+            let map = native_map(&size, &6, debug, true);
+            TILE_ADD_ASSERTS.set(0);
+            let results = [
+                map.tile_add_xy(TileIndex(0), -1, 0),
+                map.tile_add_by_dir(TileIndex(0), Direction::DIR_NE, super::native_check),
+                map.tile_add_by_diag_dir(
+                    TileIndex(0),
+                    DiagDirection::DIAGDIR_NE,
+                    super::native_check,
+                ),
+            ];
+            assert_eq!(results, [TileIndex(u32::MAX); 3]);
+            assert_eq!(TILE_ADD_ASSERTS.get(), if debug { 6 } else { 0 });
+        }
+    }
+
+    type InvalidDirection = fn(&dyn Fn(bool));
+
+    /// The native assertion stops before an invalid table index is used. The
+    /// recording mock stops in test code; production helpers contain no test trap.
+    #[test]
+    fn direction_preconditions_dispatch_the_original_assertion() {
+        let operations: [InvalidDirection; 3] = [
+            |check| {
+                let _ = Map::from_log_x(6).offs_by_axis(Axis::AXIS_END, check);
+            },
+            |check| {
+                let _ = tile_index_diff_c_by_diag_dir(DiagDirection::DIAGDIR_END, check);
+            },
+            |check| {
+                let _ = tile_index_diff_c_by_dir(Direction::DIR_END, check);
+            },
+        ];
+        for operation in operations {
+            let calls = Cell::new(0);
+            let observed = Cell::new(None);
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                operation(&|condition| {
+                    calls.set(calls.get() + 1);
+                    observed.set(Some(condition));
+                    panic!("recorded native assertion");
+                });
+            }));
+            assert!(result.is_err());
+            assert_eq!(calls.get(), 1);
+            assert_eq!(observed.get(), Some(false));
+        }
     }
 }

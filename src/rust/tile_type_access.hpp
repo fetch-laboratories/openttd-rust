@@ -38,6 +38,11 @@ struct OpenTTDNativeTileTypeAccess {
 #else
 			.assertions = false,
 #endif
+#ifdef _DEBUG
+			.debug = true,
+#else
+			.debug = false,
+#endif
 		};
 	}
 };

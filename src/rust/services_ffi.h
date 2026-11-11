@@ -52,6 +52,7 @@ struct OpenTTDMapStatics {
 	const uint32_t *log_x;
 	const uint32_t *log_y;
 	bool assertions;
+	bool debug;
 };
 extern const OpenTTDMapStatics _rust_map_statics;
 

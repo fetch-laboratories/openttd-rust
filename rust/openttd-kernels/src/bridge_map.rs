@@ -9,6 +9,8 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
 use crate::direction_func::diag_dir_to_axis_raw;
 use crate::services::{Foundation, Services};
+use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
 #[inline]
 pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
@@ -39,8 +41,8 @@ pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u3
 impl crate::map_func::World<'_> {
     #[inline]
     pub(crate) fn bridge(&self, t: u32) -> bool {
-        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
-        crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 7)
+        self.check(self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE);
+        crate::bitmath_func::has_bit(Self::byte(self.types.m5(TileIndex(t))), 7)
     }
 }
 
@@ -48,8 +50,8 @@ impl crate::map_func::World<'_> {
     /// `GetBridgeType`, preserving `IsBridgeTile`'s assertion.
     #[inline]
     pub(crate) fn bridge_type(&self, t: u32) -> u32 {
-        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)
+        self.check(self.kind(TileIndex(t)) == TileType::MP_TUNNELBRIDGE && self.bridge(t));
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(TileIndex(t)))), 2, 4)
     }
 }
 
@@ -63,5 +65,5 @@ impl crate::map_func::World<'_> {
 
 /// `IsBridgeAbove`, over the canonical tile's bridge-axis bits.
 pub(crate) fn is_bridge_above(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
-    Some(m.kind(tile)? & 0x0c != 0)
+    Some(m.kind(TileIndex(tile))? & 0x0c != 0)
 }

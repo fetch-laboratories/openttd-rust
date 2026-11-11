@@ -672,7 +672,7 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
                 let max = i32::from(g.settings.max_height() >> 4);
                 i32::from(g.get(x, y) >> 4).clamp(0, max)
             };
-            let tile = world.map.tile_xy(x as u32, y as u32);
+            let tile = world.map.tile_xy(x as u32, y as u32).0;
             tgen_set_tile_height(world, &view, tile, height);
         }
     }

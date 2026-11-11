@@ -388,7 +388,7 @@ pub(crate) fn show_visual_effect(front: VehicleRef, max_speed: u32) {
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
                 let map = s.shared.map();
-                map.tile_virt_xy(v.x() as u32, v.y() as u32) == p.tile
+                map.tile_virt_xy(v.x() as u32, v.y() as u32).0 == p.tile
                     && crate::map_func::World::new(s.shared).bridge_above(p.tile)
             } else {
                 crate::map_func::World::new(s.shared).bridge_above(p.tile)

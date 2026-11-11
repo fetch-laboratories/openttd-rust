@@ -15,10 +15,12 @@
 )]
 use crate::company_type::Owner;
 use crate::direction_func::reverse_diag_dir_raw;
+use crate::direction_type::DiagDirection;
 use crate::map_func::World;
 use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
+use crate::tile_type::TileType;
 use crate::track_func::{
     diagdir_reaches_trackdirs, reverse_trackdir, track_bits_to_trackdir_bits,
     track_status_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
@@ -244,7 +246,7 @@ impl State {
         self.is_bridge = false;
         self.is_tunnel = false;
         self.tiles_skipped = 0;
-        if w.kind(self.old_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+        if w.kind(self.old_tile) == TileType::MP_TUNNELBRIDGE {
             let dir = w.tunnel_bridge_dir(self.old_tile.0);
             if dir == self.exitdir {
                 if w.tunnel(self.old_tile.0) {
@@ -267,7 +269,12 @@ impl State {
         }
         self.new_tile.0 = w
             .dimensions
-            .tile_add_by_diag_dir_raw(self.old_tile.0, self.exitdir);
+            .tile_add_by_diag_dir(
+                self.old_tile,
+                DiagDirection(self.exitdir),
+                crate::map_func::native_check,
+            )
+            .0;
         self.is_station = (self.mode == RAIL && w.station_rail_raw(self.new_tile.0))
             || (self.mode == ROAD && w.station_road_stop(self.new_tile.0));
     }
@@ -331,7 +338,7 @@ impl State {
                 return false;
             }
         }
-        if w.kind(self.new_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+        if w.kind(self.new_tile) == TileType::MP_TUNNELBRIDGE {
             if w.tunnel(self.new_tile.0) {
                 if !self.is_tunnel && w.tunnel_bridge_dir(self.new_tile.0) != self.exitdir {
                     self.err = EC_NO_WAY;
@@ -347,7 +354,11 @@ impl State {
             self.tiles_skipped = length.wrapping_sub(1) as i32;
             self.new_tile.0 = self.new_tile.0.wrapping_add(
                 w.dimensions
-                    .tile_offs_by_diag_dir_raw(self.exitdir)
+                    .tile_offs_by_diag_dir(
+                        DiagDirection(self.exitdir),
+                        crate::map_func::native_check,
+                    )
+                    .cast_unsigned()
                     .wrapping_mul(self.tiles_skipped as u32),
             );
         }
@@ -449,7 +460,14 @@ pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> 
     w.check(dir < crate::direction_type::DIAGDIR_END);
     loop {
         length = length.wrapping_add(1);
-        tile = w.dimensions.tile_add_by_diag_dir_raw(tile, dir);
+        tile = w
+            .dimensions
+            .tile_add_by_diag_dir(
+                TileIndex(tile),
+                DiagDirection(dir),
+                crate::map_func::native_check,
+            )
+            .0;
         if !w.compatible_station(tile, start) {
             return length;
         }
@@ -468,7 +486,7 @@ pub(crate) fn speed_limit_with_road(
     let w = World::new(s);
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
-    if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
+    if mode != WATER && w.kind(TileIndex(tile)) == TileType::MP_TUNNELBRIDGE && w.bridge(tile) {
         speed = i32::from((m.tunnel_bridge().speed)(w.bridge_type(tile)));
         if mode == ROAD {
             speed *= 2;
@@ -495,7 +513,10 @@ pub(crate) fn speed_limit_with_road(
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut State) -> bool {
     if ft.is_station {
-        let diff = pbs.map().tile_offs_by_diag_dir_raw(ft.exitdir);
+        let diff = pbs
+            .map()
+            .tile_offs_by_diag_dir(DiagDirection(ft.exitdir), crate::map_func::native_check)
+            .cast_unsigned();
         let mut tile = ft
             .new_tile
             .0
@@ -540,7 +561,12 @@ pub(crate) fn platform_length_full(
         let stations = unsafe { &*(w.shared.station_catchment)() };
         w.check(w.rail_station(tile) && w.station_index(tile) == (stations.id)(station));
     }
-    let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
+    let delta = w
+        .dimensions
+        .offs_by_axis(crate::direction_type::Axis(w.station_axis(tile)), |ok| {
+            crate::services_assert::check(ok);
+        })
+        .cast_unsigned();
     let mut t = tile;
     let mut len: u32 = 0;
     loop {

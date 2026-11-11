@@ -21,7 +21,7 @@ Read the course and resume the work order.
 1. Read [AGENTS.md](../../../AGENTS.md), the [roadmap](../../roadmap.md), [team](../../team.md), [workflow](../../workflow.md) and [planning](../../planning.md). Use the routing table for other guidance.
 2. Apply the roadmap's "Phases" and latest steering review actions first.
 3. Run `python3 docs/skills/steer/issues.py`. Place every unplaced issue, including the user's.
-4. Run `python3 tools/housekeeping.py`, read its dry run, then use `--apply` for eligible stale worktrees and output.
+4. Start the [routine agent](../../team.md#routine-agent) for housekeeping.
 5. Resume from the open PRs (`gh pr list`) and their status comments, then from the roadmap's work order and checkpoint. The checkpoint is written at wind-down; where GitHub is newer, GitHub is right.
 
 Done when the current course is applied and work can resume.
@@ -35,7 +35,7 @@ Handle finished work first, then start ready work.
 - Follow [selection](../../planning.md#selection), [integration](../../workflow.md#integration) and [team](../../team.md#spawning).
 - Use [team's host orchestration rules](../../team.md#spawning) for native or T3 agents and isolated checkouts.
 - Run long jobs in the background and end the turn ([AGENTS.md](../../../AGENTS.md#every-agent)).
-- At each independent wake, handle completed child results and recover missed resumes of children already known to be idle on named jobs ([team](../../team.md#spawning)). If other agents are held for a quiet measurement, resolve that job and release the hold before waiting for its report. A peripheral host-action failure does not end the assignment.
+- At each independent wake, handle completed child results and act on messages addressed to you. Dispatch ready entries as the planner wrote them. Missed resumes go to the routine agent ([team](../../team.md#spawning)). If other agents are held for a quiet measurement, resolve that job and release the hold before waiting for its report. A peripheral host-action failure does not end the assignment.
 
 Done when finished work is handled and free slots have ready work.
 
@@ -43,7 +43,7 @@ Done when finished work is handled and free slots have ready work.
 
 Follow the [change workflow](../../workflow.md) from issue through cleanup.
 
-- Run `python3 tools/housekeeping.py`, read its dry run, then use `--apply`.
+- Housekeeping and the platform cadence run through the [routine agent](../../team.md#routine-agent) after every fifth merge; you decide on its results.
 - Commit roadmap updates at stocktakes, course changes and wind-down. Record a selection on its issue or PR; alone it is not a work-order change. Push no docs only to record a merge ([checks](../../workflow.md#checks)).
 - Apply the [automatic rollback rule](../../workflow.md#automatic-rollback-and-wind-down) before further merges after a regression.
 

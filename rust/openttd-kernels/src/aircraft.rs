@@ -52,6 +52,7 @@ use crate::services::{Map, Services};
 use crate::station::Station;
 use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
+use crate::tile_type::TileIndex;
 use crate::vehicle::maintenance;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices, YEAR_TICKS};
 use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
@@ -721,13 +722,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.block_owner(station).read(self)
     }
     fn tile_x(&self, t: u32) -> i64 {
-        i64::from(self.map().tile_x(t))
+        i64::from(self.map().tile_x(TileIndex(t)))
     }
     fn tile_y(&self, t: u32) -> i64 {
-        i64::from(self.map().tile_y(t))
+        i64::from(self.map().tile_y(TileIndex(t)))
     }
     fn tile_virt(&self, x: i64, y: i64) -> u32 {
-        self.map().tile_virt_xy(x as i32 as u32, y as i32 as u32)
+        self.map().tile_virt_xy(x as i32 as u32, y as i32 as u32).0
     }
 
     fn height(&self, id: Vehicle) -> i64 {

@@ -81,7 +81,7 @@ pub(crate) fn map_read_probe(
         {
             return false;
         }
-        if world.kind(tile) != kind {
+        if world.kind(crate::tile_type::TileIndex(tile)) != crate::tile_type::TileType(kind) {
             return false;
         }
         if crate::road_map::may_have_road(&world.types, TileIndex(tile))
