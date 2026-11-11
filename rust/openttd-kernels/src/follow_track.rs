@@ -302,7 +302,7 @@ impl State {
                 self.err = EC_NO_WAY;
                 return false;
             }
-            if w.owner(self.new_tile.0) != self.veh_owner.0 {
+            if w.owner(self.new_tile) != crate::company_type::CompanyID(self.veh_owner.0) {
                 self.err = EC_OWNER;
                 return false;
             }
@@ -315,7 +315,9 @@ impl State {
             self.err = EC_NO_WAY;
             return false;
         }
-        if self.mode == RAIL && w.owner(self.new_tile.0) != self.veh_owner.0 {
+        if self.mode == RAIL
+            && w.owner(self.new_tile) != crate::company_type::CompanyID(self.veh_owner.0)
+        {
             self.err = EC_NO_WAY;
             return false;
         }

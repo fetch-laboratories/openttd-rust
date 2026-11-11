@@ -349,7 +349,11 @@ impl<'a> House<'a> {
     }
     /// `IsTileType(tile, MP_HOUSE)`.
     fn is_house_tile(&self, tile: TileIndex) -> bool {
-        is_tile_type(self.s, tile.0, TileType::MP_HOUSE.0)
+        is_tile_type(
+            self.s,
+            TileIndex(tile.0),
+            crate::tile_type::TileType::MP_HOUSE,
+        )
     }
     /// `tile + TileDiffXY(x, y)`.
     fn tile_diff_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
@@ -1181,7 +1185,7 @@ impl<'a> House<'a> {
         let commands = unsafe { &*self.h.commands };
         for subtile in ta.tiles(map).map(TileIndex) {
             // Houses cannot be built on steep slopes.
-            let slope = Slope(crate::map_func::World::new(self.s).tile_slope(subtile.0));
+            let slope = crate::map_func::World::new(self.s).tile_slope(subtile);
             if is_steep_slope(slope) {
                 (c.error)(call.result, self.h.errors.sloped);
                 return;

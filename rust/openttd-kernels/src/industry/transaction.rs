@@ -185,7 +185,11 @@ impl Engine<'_> {
         unsafe { (self.x.tile_height)(tile.0) }
     }
     fn tile_slope(&self, tile: TileIndex) -> Slope {
-        Slope(crate::map_func::World::new(self.s.shared()).tile_slope(tile.0))
+        Slope(
+            crate::map_func::World::new(self.s.shared())
+                .tile_slope(tile)
+                .0,
+        )
     }
     fn tropic_zone(&self, tile: TileIndex) -> TropicZone {
         TropicZone((self.s.shared().tropic_zone)(tile.0))
@@ -391,11 +395,11 @@ impl Engine<'_> {
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(tile, i32::from(it.x), i32::from(it.y));
             let world = crate::map_func::World::new(shared);
-            if !world.is_valid_tile(cur_tile.0) {
+            if !world.is_valid_tile(cur_tile) {
                 return self.fail(StringID(self.e.site));
             }
             if gfx == IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
-                if !(shared.is_water_tile)(cur_tile.0) || !world.tile_flat(cur_tile.0) {
+                if !(shared.is_water_tile)(cur_tile.0) || !world.tile_flat(cur_tile) {
                     return self.fail(StringID(self.e.site));
                 }
             } else {
@@ -476,7 +480,7 @@ impl Engine<'_> {
             let gfx = IndustryGfx(unsafe { (self.c.translated_gfx)(it.gfx) });
             let cur_tile = self.tile_add_wrap(candidate.tile, i32::from(it.x), i32::from(it.y));
             let world = crate::map_func::World::new(self.s.shared());
-            world.assert_with(|| world.is_valid_tile(cur_tile.0)); // checked before in CheckIfIndustryTilesAreFree
+            world.assert_with(|| world.is_valid_tile(cur_tile)); // checked before in CheckIfIndustryTilesAreFree
 
             if gfx != IndustryGfx::GFX_WATERTILE_SPECIALCHECK {
                 let its = get_industry_tile_spec(gfx);

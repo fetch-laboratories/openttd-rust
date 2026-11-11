@@ -710,7 +710,7 @@ impl<'a> Ctx<'a> {
         if !out.ok() {
             return;
         }
-        let tileh = Slope(crate::map_func::World::new(self.shared).tile_slope(tile.0));
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
         let z = (self.shared.tile_z)(tile.0);
         /* Prohibit building if
          *   1) The tile is "steep" (i.e. stretches two height levels).
@@ -5034,7 +5034,7 @@ impl Ctx<'_> {
         {
             return cost.error(StringID::INVALID_STRING_ID.0);
         }
-        let direction = get_inclined_slope_direction(Slope(world.tile_slope(tile.0)));
+        let direction = get_inclined_slope_direction(world.tile_slope(tile));
         if direction == DiagDirection::INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -5066,7 +5066,7 @@ impl Ctx<'_> {
             + self.map().tile_offs_by_diag_dir(direction, |ok| {
                 crate::movement::native_assert(self.shared, ok);
             });
-        if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur.0) {
+        if !(self.shared.has_water_ground)(tile_cur.0) || !world.tile_flat(tile_cur) {
             return cost.error(self.s.strings.unsuitable);
         }
         self.default_bridge_above_ok(
@@ -5099,7 +5099,7 @@ impl Ctx<'_> {
                 crate::movement::native_assert(self.shared, ok);
             });
         if TileType((self.shared.tile_type)(tile_cur.0)) != TileType::MP_WATER
-            || !world.tile_flat(tile_cur.0)
+            || !world.tile_flat(tile_cur)
         {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -5882,7 +5882,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        if !crate::tile_map::is_tile_owner(self.shared, tile.0, old_owner.0) {
+        if !crate::tile_map::is_tile_owner(self.shared, TileIndex(tile.0), old_owner) {
             return;
         }
         if new_owner != CompanyID::INVALID {
@@ -5973,7 +5973,7 @@ impl Ctx<'_> {
              * Do not update when owned by OWNER_WATER (sea and rivers). */
             if (TileType((self.shared.tile_type)(tile.0)) == TileType::MP_WATER
                 || world.is_buoy_tile(tile))
-                && crate::tile_map::is_tile_owner(self.shared, tile.0, old_owner.0)
+                && crate::tile_map::is_tile_owner(self.shared, TileIndex(tile.0), old_owner)
             {
                 (self.shared.set_tile_owner)(tile.0, CompanyID::NONE.0);
             }

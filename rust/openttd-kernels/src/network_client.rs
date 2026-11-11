@@ -7,10 +7,7 @@ use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
 };
-use crate::network_internal::{
-    NETWORK_JOIN_STATUS_AUTHORIZING, NETWORK_JOIN_STATUS_DOWNLOADING,
-    NETWORK_JOIN_STATUS_PROCESSING, NETWORK_JOIN_STATUS_REGISTERING, NETWORK_JOIN_STATUS_WAITING,
-};
+use crate::network_internal::NetworkJoinStatus;
 use crate::network_socket as socket;
 use crate::network_type::{
     NETWORK_ERROR_DESYNC, NETWORK_ERROR_GENERAL, NETWORK_ERROR_KICKED,
@@ -22,10 +19,7 @@ use crate::network_type::{
 };
 use crate::openttd::{GameMode, SwitchMode};
 use crate::packet::{self, State as PacketState};
-use crate::tcp_game::{
-    PACKET_CLIENT_ERROR, PACKET_CLIENT_GETMAP, PACKET_CLIENT_IDENTIFY, PACKET_CLIENT_JOIN,
-    PACKET_CLIENT_MAP_OK, PACKET_CLIENT_NEWGRFS_CHECKED, PACKET_CLIENT_QUIT,
-};
+use crate::tcp_game::PacketGameType;
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Services {
@@ -111,14 +105,38 @@ crate::abi::layouts! {
 }
 
 /// `ClientNetworkGameSocketHandler::ServerStatus`.
+/// `ClientNetworkGameSocketHandler::ServerStatus`: status of the connection with the server,
+/// retaining every underlying byte.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ServerStatus(pub u8);
+
+impl ServerStatus {
+    /// We are trying to join a server.
+    pub const STATUS_JOIN: Self = Self(1);
+    /// Last action was requesting game (server) password.
+    pub const STATUS_AUTH_GAME: Self = Self(2);
+    /// The game authentication has completed and from here on the connection to the server is
+    /// encrypted.
+    pub const STATUS_ENCRYPTED: Self = Self(3);
+    /// The client is authorized at the server.
+    pub const STATUS_AUTHORIZED: Self = Self(5);
+    /// The client is waiting as someone else is downloading the map.
+    pub const STATUS_MAP_WAIT: Self = Self(6);
+    /// The client is downloading the map.
+    pub const STATUS_MAP: Self = Self(7);
+    /// The client is active within in the game.
+    pub const STATUS_ACTIVE: Self = Self(8);
+}
+
 pub(crate) mod status {
-    pub const JOIN: u8 = 1;
-    pub const AUTH_GAME: u8 = 2;
-    pub const ENCRYPTED: u8 = 3;
-    pub const AUTHORIZED: u8 = 5;
-    pub const MAP_WAIT: u8 = 6;
-    pub const MAP: u8 = 7;
-    pub const ACTIVE: u8 = 8;
+    use super::ServerStatus;
+    pub const JOIN: u8 = ServerStatus::STATUS_JOIN.0;
+    pub const ENCRYPTED: u8 = ServerStatus::STATUS_ENCRYPTED.0;
+    pub const AUTHORIZED: u8 = ServerStatus::STATUS_AUTHORIZED.0;
+    pub const MAP_WAIT: u8 = ServerStatus::STATUS_MAP_WAIT.0;
+    pub const MAP: u8 = ServerStatus::STATUS_MAP.0;
+    pub const ACTIVE: u8 = ServerStatus::STATUS_ACTIVE.0;
 }
 
 fn status(_s: &Services, game: *mut socket::GameSocket) -> u8 {
@@ -130,10 +148,10 @@ fn set_status(_s: &Services, game: *mut socket::GameSocket, value: u8) {
 fn join_company(s: &Services) -> u8 {
     unsafe { s.join_company.read() }
 }
-fn set_join_status(s: &Services, value: u8) {
-    unsafe { s.join_status.write(value) };
+fn set_join_status(s: &Services, value: NetworkJoinStatus) {
+    unsafe { s.join_status.write(value.0) };
 }
-fn empty_packet(f: &FrameServices, game: *mut socket::GameSocket, kind: u8) -> u8 {
+fn empty_packet(f: &FrameServices, game: *mut socket::GameSocket, kind: PacketGameType) -> u8 {
     let mut p = packet_new(f, game, kind);
     packet_send(f, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
@@ -145,9 +163,9 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
     let game = (f.client_game)();
     set_status(s, game, status::JOIN);
     debug!(net, 9, "Client::join_status = AUTHORIZING");
-    set_join_status(s, NETWORK_JOIN_STATUS_AUTHORIZING);
+    set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_AUTHORIZING);
     (s.dirty_join)();
-    let mut p = packet_new(f, game, PACKET_CLIENT_JOIN);
+    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_JOIN);
     packet_send_string(f, &mut p, (s.revision)());
     p.send_uint32((f.connection.newgrf_version)(), packet_check(f));
     packet_send(f, game, &mut p);
@@ -157,7 +175,7 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
 pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
     debug!(net, 9, "Client::SendIdentify()");
     let game = (f.client_game)();
-    let mut p = packet_new(f, game, PACKET_CLIENT_IDENTIFY);
+    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_IDENTIFY);
     packet_send_string(f, &mut p, (s.client_name)());
     p.send_uint8(join_company(s), packet_check(f));
     packet_send(f, game, &mut p);
@@ -166,27 +184,31 @@ pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
 
 pub(crate) fn send_grfs_ok(f: &FrameServices) -> u8 {
     debug!(net, 9, "Client::SendNewGRFsOk()");
-    empty_packet(f, (f.client_game)(), PACKET_CLIENT_NEWGRFS_CHECKED)
+    empty_packet(
+        f,
+        (f.client_game)(),
+        PacketGameType::PACKET_CLIENT_NEWGRFS_CHECKED,
+    )
 }
 
 pub(crate) fn send_getmap(s: &Services, f: &FrameServices) -> u8 {
     debug!(net, 9, "Client::SendGetMap()");
     debug!(net, 9, "Client::status = MAP_WAIT");
     set_status(s, (f.client_game)(), status::MAP_WAIT);
-    empty_packet(f, (f.client_game)(), PACKET_CLIENT_GETMAP)
+    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_GETMAP)
 }
 
 pub(crate) fn send_map_ok(s: &Services, f: &FrameServices) -> u8 {
     debug!(net, 9, "Client::SendMapOk()");
     debug!(net, 9, "Client::status = ACTIVE");
     set_status(s, (f.client_game)(), status::ACTIVE);
-    empty_packet(f, (f.client_game)(), PACKET_CLIENT_MAP_OK)
+    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_MAP_OK)
 }
 
 pub(crate) fn send_error(f: &FrameServices, error: u8) -> u8 {
     debug!(net, 9, "Client::SendError(): errorno={}", error);
     let game = (f.client_game)();
-    let mut p = packet_new(f, game, PACKET_CLIENT_ERROR);
+    let mut p = packet_new(f, game, PacketGameType::PACKET_CLIENT_ERROR);
     p.send_uint8(error, packet_check(f));
     packet_send(f, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
@@ -194,7 +216,7 @@ pub(crate) fn send_error(f: &FrameServices, error: u8) -> u8 {
 
 pub(crate) fn send_quit(f: &FrameServices) -> u8 {
     debug!(net, 9, "Client::SendQuit()");
-    empty_packet(f, (f.client_game)(), PACKET_CLIENT_QUIT)
+    empty_packet(f, (f.client_game)(), PacketGameType::PACKET_CLIENT_QUIT)
 }
 
 pub(crate) fn receive_full(s: &Services, _f: &FrameServices, _game: *mut socket::GameSocket) -> u8 {
@@ -288,7 +310,7 @@ pub(crate) fn receive_wait(
     }
     debug!(net, 9, "Client::Receive_SERVER_WAIT()");
     debug!(net, 9, "Client::join_status = WAITING");
-    set_join_status(s, NETWORK_JOIN_STATUS_WAITING);
+    set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_WAITING);
     unsafe { s.join_waiting.write(packet::recv_uint8(p, f.packet)) };
     (s.dirty_join)();
     NETWORK_RECV_STATUS_OKAY
@@ -321,7 +343,7 @@ pub(crate) fn receive_map_begin(
         s.join_bytes_total.write(0);
     }
     debug!(net, 9, "Client::join_status = DOWNLOADING");
-    set_join_status(s, NETWORK_JOIN_STATUS_DOWNLOADING);
+    set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_DOWNLOADING);
     (s.dirty_join)();
     NETWORK_RECV_STATUS_OKAY
 }
@@ -383,7 +405,7 @@ pub(crate) fn receive_map_done(
     }
     debug!(net, 9, "Client::Receive_SERVER_MAP_DONE()");
     debug!(net, 9, "Client::join_status = PROCESSING");
-    set_join_status(s, NETWORK_JOIN_STATUS_PROCESSING);
+    set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_PROCESSING);
     (s.dirty_join)();
     (s.map_load_prepare)(socket::shell(game), load);
     let Ok(success) =
@@ -427,7 +449,7 @@ pub(crate) fn map_loaded(
         );
         if join_company(s) != crate::company_type::COMPANY_SPECTATOR {
             debug!(net, 9, "Client::join_status = REGISTERING");
-            set_join_status(s, NETWORK_JOIN_STATUS_REGISTERING);
+            set_join_status(s, NetworkJoinStatus::NETWORK_JOIN_STATUS_REGISTERING);
             (s.show_join_window)();
             crate::command_post::new_company(f.command.company.shared, unsafe {
                 s.own_client_id.read()

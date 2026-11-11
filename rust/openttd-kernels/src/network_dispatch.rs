@@ -12,20 +12,7 @@ use crate::network_type::{NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STA
 use crate::packet;
 use crate::raw_field::{read_field, write_field};
 use crate::session::{Frame, Services as Session};
-use crate::tcp_game::{
-    PACKET_CLIENT_ACK, PACKET_CLIENT_AUTH_RESPONSE, PACKET_CLIENT_CHAT, PACKET_CLIENT_COMMAND,
-    PACKET_CLIENT_ERROR, PACKET_CLIENT_GAME_INFO, PACKET_CLIENT_GETMAP, PACKET_CLIENT_IDENTIFY,
-    PACKET_CLIENT_JOIN, PACKET_CLIENT_MAP_OK, PACKET_CLIENT_MOVE, PACKET_CLIENT_NEWGRFS_CHECKED,
-    PACKET_CLIENT_QUIT, PACKET_CLIENT_RCON, PACKET_CLIENT_SET_NAME, PACKET_SERVER_AUTH_REQUEST,
-    PACKET_SERVER_BANNED, PACKET_SERVER_CHAT, PACKET_SERVER_CHECK_NEWGRFS,
-    PACKET_SERVER_CLIENT_INFO, PACKET_SERVER_COMMAND, PACKET_SERVER_CONFIG_UPDATE,
-    PACKET_SERVER_ENABLE_ENCRYPTION, PACKET_SERVER_ERROR, PACKET_SERVER_ERROR_QUIT,
-    PACKET_SERVER_EXTERNAL_CHAT, PACKET_SERVER_FRAME, PACKET_SERVER_FULL, PACKET_SERVER_GAME_INFO,
-    PACKET_SERVER_JOIN, PACKET_SERVER_MAP_BEGIN, PACKET_SERVER_MAP_DATA, PACKET_SERVER_MAP_DONE,
-    PACKET_SERVER_MAP_SIZE, PACKET_SERVER_MOVE, PACKET_SERVER_NEWGAME, PACKET_SERVER_QUIT,
-    PACKET_SERVER_RCON, PACKET_SERVER_SHUTDOWN, PACKET_SERVER_SYNC, PACKET_SERVER_WAIT,
-    PACKET_SERVER_WELCOME,
-};
+use crate::tcp_game::PacketGameType;
 #[repr(C)]
 pub struct Services {
     pub client_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
@@ -82,115 +69,121 @@ fn handle(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     socket::set_last_packet(game, (s.tcp.now)());
-    match kind {
-        PACKET_CLIENT_ACK => match read_field!(game, role) {
-            1 => unsafe { crate::network_frame::receive_ack(s, game, p, frame, work) },
+    match PacketGameType(kind) {
+        PacketGameType::PACKET_CLIENT_ACK => match read_field!(game, role) {
+            1 => unsafe { crate::network_frame::receive_ack(s, game, p, frame, work) }.0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_AUTH_RESPONSE => match read_field!(game, role) {
-            1 => crate::network_auth::receive_response(s, game, p, work),
+        PacketGameType::PACKET_CLIENT_AUTH_RESPONSE => match read_field!(game, role) {
+            1 => crate::network_auth::receive_response(s, game, p, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_CHAT => match read_field!(game, role) {
+        PacketGameType::PACKET_CLIENT_CHAT => match read_field!(game, role) {
             1 => (s.dispatch.client_chat)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_COMMAND => match read_field!(game, role) {
-            1 => crate::network_command::receive_client(s, game, p, frame, work),
+        PacketGameType::PACKET_CLIENT_COMMAND => match read_field!(game, role) {
+            1 => crate::network_command::receive_client(s, game, p, frame, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_ERROR => match read_field!(game, role) {
-            1 => crate::network_connection::receive_error(s.connection, s, game, p, work),
+        PacketGameType::PACKET_CLIENT_ERROR => match read_field!(game, role) {
+            1 => crate::network_connection::receive_error(s.connection, s, game, p, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_GAME_INFO => match read_field!(game, role) {
-            1 => crate::network_connection::receive_game_info(s.connection, s, game),
+        PacketGameType::PACKET_CLIENT_GAME_INFO => match read_field!(game, role) {
+            1 => crate::network_connection::receive_game_info(s.connection, s, game).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_GETMAP => match read_field!(game, role) {
-            1 => crate::network_connection::receive_getmap(s.connection, s, game, work),
+        PacketGameType::PACKET_CLIENT_GETMAP => match read_field!(game, role) {
+            1 => crate::network_connection::receive_getmap(s.connection, s, game, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_IDENTIFY => match read_field!(game, role) {
-            1 => crate::network_connection::receive_identify(
-                s.connection,
-                s,
-                game,
-                p,
-                (s.dispatch.text_begin)(frame),
-                work,
-            ),
+        PacketGameType::PACKET_CLIENT_IDENTIFY => match read_field!(game, role) {
+            1 => {
+                crate::network_connection::receive_identify(
+                    s.connection,
+                    s,
+                    game,
+                    p,
+                    (s.dispatch.text_begin)(frame),
+                    work,
+                )
+                .0
+            }
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_JOIN => match read_field!(game, role) {
-            1 => crate::network_connection::receive_join(
-                s.connection,
-                s,
-                game,
-                p,
-                (s.dispatch.text_begin)(frame),
-                work,
-            ),
+        PacketGameType::PACKET_CLIENT_JOIN => match read_field!(game, role) {
+            1 => {
+                crate::network_connection::receive_join(
+                    s.connection,
+                    s,
+                    game,
+                    p,
+                    (s.dispatch.text_begin)(frame),
+                    work,
+                )
+                .0
+            }
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_MAP_OK => match read_field!(game, role) {
-            1 => crate::network_connection::receive_map_ok(s.connection, s, game, work),
+        PacketGameType::PACKET_CLIENT_MAP_OK => match read_field!(game, role) {
+            1 => crate::network_connection::receive_map_ok(s.connection, s, game, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_MOVE => match read_field!(game, role) {
+        PacketGameType::PACKET_CLIENT_MOVE => match read_field!(game, role) {
             1 => (s.dispatch.client_move)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_NEWGRFS_CHECKED => match read_field!(game, role) {
-            1 => crate::network_connection::receive_newgrfs_checked(s.connection, s, game, work),
+        PacketGameType::PACKET_CLIENT_NEWGRFS_CHECKED => match read_field!(game, role) {
+            1 => crate::network_connection::receive_newgrfs_checked(s.connection, s, game, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_QUIT => match read_field!(game, role) {
-            1 => crate::network_connection::receive_quit(s.connection, s, game, work),
+        PacketGameType::PACKET_CLIENT_QUIT => match read_field!(game, role) {
+            1 => crate::network_connection::receive_quit(s.connection, s, game, work).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_RCON => match read_field!(game, role) {
+        PacketGameType::PACKET_CLIENT_RCON => match read_field!(game, role) {
             1 => (s.dispatch.client_rcon)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_CLIENT_SET_NAME => match read_field!(game, role) {
+        PacketGameType::PACKET_CLIENT_SET_NAME => match read_field!(game, role) {
             1 => (s.dispatch.client_set_name)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_AUTH_REQUEST => match read_field!(game, role) {
-            0 => crate::network_auth::receive_request(s, game, p),
+        PacketGameType::PACKET_SERVER_AUTH_REQUEST => match read_field!(game, role) {
+            0 => crate::network_auth::receive_request(s, game, p).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_BANNED => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_BANNED => match read_field!(game, role) {
             0 => crate::network_client::receive_banned(s.client, s, game),
             2 => (s.dispatch.server_banned)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_CHAT => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_CHAT => match read_field!(game, role) {
             0 => (s.dispatch.server_chat)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_CHECK_NEWGRFS => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_CHECK_NEWGRFS => match read_field!(game, role) {
             0 => crate::network_client::receive_grfs(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_CLIENT_INFO => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_CLIENT_INFO => match read_field!(game, role) {
             0 => (s.dispatch.server_client_info)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_COMMAND => match read_field!(game, role) {
-            0 => crate::network_command::receive_server(s, game, p),
+        PacketGameType::PACKET_SERVER_COMMAND => match read_field!(game, role) {
+            0 => crate::network_command::receive_server(s, game, p).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_CONFIG_UPDATE => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_CONFIG_UPDATE => match read_field!(game, role) {
             0 => (s.dispatch.server_config_update)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_ENABLE_ENCRYPTION => match read_field!(game, role) {
-            0 => crate::network_auth::receive_enable(s, game, p),
+        PacketGameType::PACKET_SERVER_ENABLE_ENCRYPTION => match read_field!(game, role) {
+            0 => crate::network_auth::receive_enable(s, game, p).0,
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_ERROR => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_ERROR => match read_field!(game, role) {
             0 => crate::network_client::receive_error(
                 s.client,
                 s,
@@ -201,42 +194,50 @@ fn handle(
             2 => (s.dispatch.server_error)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_ERROR_QUIT => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_ERROR_QUIT => match read_field!(game, role) {
             0 => crate::network_client::receive_error_quit(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_EXTERNAL_CHAT => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_EXTERNAL_CHAT => match read_field!(game, role) {
             0 => (s.dispatch.server_external_chat)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_FRAME => match read_field!(game, role) {
-            0 => unsafe {
-                crate::network_frame::receive_frame(s, socket::status(game), socket::sync(game), p)
-            },
+        PacketGameType::PACKET_SERVER_FRAME => match read_field!(game, role) {
+            0 => {
+                unsafe {
+                    crate::network_frame::receive_frame(
+                        s,
+                        crate::network_client::ServerStatus(socket::status(game)),
+                        socket::sync(game),
+                        p,
+                    )
+                }
+                .0
+            }
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_FULL => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_FULL => match read_field!(game, role) {
             0 => crate::network_client::receive_full(s.client, s, game),
             2 => (s.dispatch.server_full)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_GAME_INFO => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_GAME_INFO => match read_field!(game, role) {
             2 => (s.dispatch.server_game_info)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_JOIN => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_JOIN => match read_field!(game, role) {
             0 => crate::network_client::receive_join(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_MAP_BEGIN => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_MAP_BEGIN => match read_field!(game, role) {
             0 => crate::network_client::receive_map_begin(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_MAP_DATA => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_MAP_DATA => match read_field!(game, role) {
             0 => crate::network_client::receive_map_data(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_MAP_DONE => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_MAP_DONE => match read_field!(game, role) {
             0 => crate::network_client::receive_map_done(
                 s.client,
                 s,
@@ -247,39 +248,46 @@ fn handle(
             ),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_MAP_SIZE => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_MAP_SIZE => match read_field!(game, role) {
             0 => crate::network_client::receive_map_size(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_MOVE => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_MOVE => match read_field!(game, role) {
             0 => (s.dispatch.server_move)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_NEWGAME => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_NEWGAME => match read_field!(game, role) {
             0 => crate::network_client::receive_newgame(s.client, s, game),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_QUIT => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_QUIT => match read_field!(game, role) {
             0 => crate::network_client::receive_quit(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_RCON => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_RCON => match read_field!(game, role) {
             0 => (s.dispatch.server_rcon)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_SHUTDOWN => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_SHUTDOWN => match read_field!(game, role) {
             0 => crate::network_client::receive_shutdown(s.client, s, game),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_SYNC => match read_field!(game, role) {
-            0 => crate::network_frame::receive_sync(s, socket::status(game), p),
+        PacketGameType::PACKET_SERVER_SYNC => match read_field!(game, role) {
+            0 => {
+                crate::network_frame::receive_sync(
+                    s,
+                    crate::network_client::ServerStatus(socket::status(game)),
+                    p,
+                )
+                .0
+            }
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_WAIT => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_WAIT => match read_field!(game, role) {
             0 => crate::network_client::receive_wait(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
-        PACKET_SERVER_WELCOME => match read_field!(game, role) {
+        PacketGameType::PACKET_SERVER_WELCOME => match read_field!(game, role) {
             0 => crate::network_client::receive_welcome(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },

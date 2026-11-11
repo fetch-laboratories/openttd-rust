@@ -322,8 +322,8 @@ pub(crate) fn generate_station_name(
         });
     }
     /* check elevation compared to town */
-    let z = crate::tile_map::get_tile_z(&m, tile.0, map.size_x(), size_y).unwrap();
-    let z2 = crate::tile_map::get_tile_z(&m, town_xy.0, map.size_x(), size_y).unwrap();
+    let z = crate::tile_map::get_tile_z(&m, tile, map.size_x(), size_y).unwrap();
+    let z2 = crate::tile_map::get_tile_z(&m, town_xy, map.size_x(), size_y).unwrap();
     if z < z2 && sni.is_available(StringID(n.valley), s) {
         return StringID(n.valley);
     }
@@ -433,7 +433,7 @@ pub(crate) unsafe fn tile_loop_station(
             // StationType::Dock: only handle the water part; then fall through.
             if crate::station_map::get_station_type(m, tile)
                 .is_some_and(|kind| kind == StationType::Dock)
-                && !crate::tile_map::is_tile_flat(m, tile.0, size_x, size_y).unwrap()
+                && !crate::tile_map::is_tile_flat(m, tile, size_x, size_y).unwrap()
             {
                 return;
             }
@@ -462,12 +462,12 @@ pub(crate) unsafe fn tile_loop_station(
             let change = match s.landscape() {
                 LandscapeType::Arctic => {
                     on_snow_or_desert()
-                        != (crate::tile_map::get_tile_z(m, tile.0, size_x, size_y).unwrap()
+                        != (crate::tile_map::get_tile_z(m, tile, size_x, size_y).unwrap()
                             > i32::from(crate::snow_line::get(s.shared)))
                 }
                 LandscapeType::Tropic => {
-                    crate::tile_map::get_tropic_zone(m, tile.0).unwrap()
-                        == crate::tile_type::TROPICZONE_DESERT
+                    crate::tile_map::get_tropic_zone(m, tile).unwrap()
+                        == crate::tile_type::TropicZone::TROPICZONE_DESERT
                         && !on_snow_or_desert()
                 }
                 _ => false,

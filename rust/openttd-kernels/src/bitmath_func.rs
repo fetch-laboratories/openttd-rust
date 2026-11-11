@@ -86,6 +86,12 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
     value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
 }
 
+/// `GB<uint8_t>`: fetch `count` bits at `start` of a byte field, in its own width.
+/// Preconditions: `1 <= count <= 8` and `start + count <= 8`.
+pub const fn gb_u8(value: u8, start: u8, count: u8) -> u8 {
+    value.wrapping_shr(start as u32) & (u8::MAX >> (8 - count))
+}
+
 /// `GB<uint64_t>`: fetch `count` bits at `start` in the original 64-bit domain.
 /// Source-valid shifts retain the same mask and result as [`gb`].
 pub const fn gb_u64(value: u64, start: u8, count: u8) -> u32 {

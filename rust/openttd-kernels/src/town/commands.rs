@@ -4,7 +4,7 @@
 use super::founding::FoundingServices;
 use super::{Engine, State, TownAction, TownActions, TownId, TownRef, engine};
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
-use crate::company_type::{CompanyID, OWNER_NONE, OWNER_TOWN};
+use crate::company_type::{CompanyID, OWNER_NONE};
 use crate::economy_type::PR_TOWN_ACTION;
 use crate::movement::native_assert;
 use crate::objects::{Object, ObjectServices, QueryServices};
@@ -280,7 +280,7 @@ impl<'a> Commands<'a> {
             tile_count += 1;
             // Statues can be build on slopes, just like houses. Only the steep slopes is a no go.
             if is_steep_slope(crate::slope_type::Slope(
-                crate::map_func::World::new(self.shared).tile_slope(tile.0),
+                crate::map_func::World::new(self.shared).tile_slope(tile).0,
             )) {
                 continue;
             }
@@ -437,7 +437,11 @@ impl<'a> Commands<'a> {
     /// ends. If either adjacent tile belongs to the town then it will be assumed that the
     /// town built the bridge.
     fn test_town_owns_bridge(&self, tile: TileIndex, t: TownRef) -> bool {
-        if !crate::tile_map::is_tile_owner(self.shared, tile.0, OWNER_TOWN) {
+        if !crate::tile_map::is_tile_owner(
+            self.shared,
+            TileIndex(tile.0),
+            crate::company_type::Owner::TOWN,
+        ) {
             return false;
         }
         let adjacent = tile
@@ -452,7 +456,11 @@ impl<'a> Commands<'a> {
             );
         let owns = |at: TileIndex| {
             self.tile_type(at) == TileType::MP_ROAD
-                && crate::tile_map::is_tile_owner(self.shared, at.0, OWNER_TOWN)
+                && crate::tile_map::is_tile_owner(
+                    self.shared,
+                    TileIndex(at.0),
+                    crate::company_type::Owner::TOWN,
+                )
                 && TownId((self.shared.town_index)(at.0)) == t.id
         };
         if owns(adjacent) {

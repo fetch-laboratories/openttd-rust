@@ -246,15 +246,6 @@ pub(crate) fn allowed_while_paused(s: &CommandServices, command_type: u8) -> boo
         || COMMAND_TYPE_PAUSE_LEVEL[usize::from(command_type)] <= (s.pause_level)()
 }
 
-/// `IsCommandAllowedWhilePaused` facade for native network queue admission.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_allowed_while_paused(
-    s: &CommandServices,
-    command_type: u8,
-) -> u8 {
-    u8::from(allowed_while_paused(s, command_type))
-}
-
 /// `RecursiveCommandCounter` construction from a native command template.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_command_enter() -> u8 {
@@ -278,7 +269,7 @@ fn tile_rejected(shared: &crate::services::Services, tile: u32, all_tiles: bool)
     let world = crate::map_func::World::new(shared);
     let size = world.types.count();
     tile >= size
-        || (!crate::tile_map::is_valid_tile(&world.types, tile, size).expect("live map")
+        || (!crate::tile_map::is_valid_tile(&world.types, TileIndex(tile), size).expect("live map")
             && !all_tiles)
 }
 
@@ -680,7 +671,7 @@ pub(crate) fn post(
                     Tested::Exit => restore(s),
                     Tested::Send => {
                         let data = pack();
-                        crate::network_command::send_command(
+                        crate::network_command::send_command_raw(
                             (p.network)(),
                             cmd,
                             0,

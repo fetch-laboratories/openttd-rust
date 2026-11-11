@@ -44,7 +44,8 @@ pub(crate) fn scan_water_edges(
 pub(crate) fn surrounded_by_water(s: &crate::services::Services) -> bool {
     let w = crate::map_func::World::new(s);
     scan_water_edges(w.dimensions.size_x(), w.size_y(), |x, y| {
-        w.tile_pixel_slope_outside_map(x.cast_signed(), y.cast_signed())
+        let (slope, z) = w.tile_pixel_slope_outside_map(x.cast_signed(), y.cast_signed());
+        (slope.0, z)
     })
 }
 

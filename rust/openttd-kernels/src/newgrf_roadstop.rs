@@ -208,7 +208,11 @@ unsafe fn variable(
             return if c.tile == INVALID_TILE {
                 0
             } else {
-                (u32::from(crate::map_func::World::new(shared).tile_slope(c.tile)) << 8)
+                (u32::from(
+                    crate::map_func::World::new(shared)
+                        .tile_slope(TileIndex(c.tile))
+                        .0,
+                ) << 8)
                     | (shared.terrain_type)(c.tile)
             };
         }

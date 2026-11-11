@@ -39,7 +39,7 @@ use crate::slope_func::{
     SLOPE_ELEVATED, complement_slope_raw, get_inclined_slope_direction_raw, is_inclined_slope_raw,
     is_slope_with_three_corners_raised_raw, is_steep_slope_raw,
 };
-use crate::slope_func::{SLOPE_FLAT, SLOPE_STEEP, is_slope_with_one_corner_raised_raw};
+use crate::slope_func::{SLOPE_STEEP, is_slope_with_one_corner_raised_raw};
 use crate::tile_map::{is_inner_tile, set_tile_height, tile_height_in};
 use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_WATER};
@@ -161,7 +161,7 @@ impl<'a> World<'a> {
             for x in u32::from(freeform)..self.map.max_x() {
                 let tile = self.map.tile_xy(x, y).0;
                 (self.clear.make_clear)(tile, ClearGroundType(CLEAR_GRASS), 3);
-                set_tile_height(&view, tile, 0);
+                set_tile_height(&view, TileIndex(tile), 0);
                 (self.s.set_tropic_zone)(tile, TROPICZONE_NORMAL);
                 (self.a.clear_bridge_middle)(tile);
             }
@@ -186,25 +186,25 @@ impl<'a> World<'a> {
                     if (!reverse && x != 0) || (reverse && x != self.map.max_x()) {
                         current = tile_height_in(
                             &view,
-                            self.map.tile_xy(if reverse { x + 1 } else { x - 1 }, y).0,
+                            self.map.tile_xy(if reverse { x + 1 } else { x - 1 }, y),
                         );
                     }
                     if (!reverse && y != 0) || (reverse && y != self.size_y - 1) {
                         let h = tile_height_in(
                             &view,
-                            self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }).0,
+                            self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }),
                         );
                         if h < current {
                             current = tile_height_in(
                                 &view,
-                                self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }).0,
+                                self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }),
                             );
                         }
                     }
                     let tile = self.map.tile_xy(x, y).0;
-                    if tile_height_in(&view, tile) >= current + 2 {
-                        set_tile_height(&view, tile, current + 1);
-                        if is_inner_tile(&view, tile, self.freeform_edges())
+                    if tile_height_in(&view, TileIndex(tile)) >= current + 2 {
+                        set_tile_height(&view, TileIndex(tile), current + 1);
+                        if is_inner_tile(&view, TileIndex(tile), || self.freeform_edges())
                             && self.s.random_range(u32::from(max_height)) <= current
                         {
                             (self.clear.make_clear)(tile, ClearGroundType(CLEAR_ROCKS), 3);
@@ -230,16 +230,17 @@ impl World<'_> {
         let water = unsafe { &*self.a.water };
         let view = self.view();
         for tile in 0..self.map.size_x() * self.size_y {
-            let (slope, z) = view.tile_slope_z(tile);
+            let (slope, z) = view.tile_slope_z(TileIndex(tile));
             if (self.s.tile_type)(tile) != MP_CLEAR || z != 0 {
                 continue;
             }
-            if slope == SLOPE_FLAT {
+            if slope == crate::slope_type::Slope::SLOPE_FLAT {
                 (water.make_sea)(tile);
-            } else if is_slope_with_one_corner_raised_raw(slope) {
+            } else if is_slope_with_one_corner_raised_raw(slope.0) {
                 (self.s.make_shore)(tile);
             } else {
-                let mask = crate::water::FLOOD_FROM[usize::from(slope & !SLOPE_STEEP)];
+                let mask = crate::water::FLOOD_FROM
+                    [usize::from((slope & crate::slope_type::Slope(!SLOPE_STEEP)).0)];
                 for dir in 0..8 {
                     if mask & (1 << dir) == 0 {
                         continue;
@@ -252,9 +253,10 @@ impl World<'_> {
                             crate::map_func::native_check,
                         )
                         .0;
-                    let other = crate::map_func::World::new(self.s).tile_slope(dest) & !SLOPE_STEEP;
-                    if other == SLOPE_FLAT
-                        || is_slope_with_one_corner_raised_raw(other)
+                    let other = crate::map_func::World::new(self.s).tile_slope(TileIndex(dest))
+                        & crate::slope_type::Slope(!SLOPE_STEEP);
+                    if other == crate::slope_type::Slope::SLOPE_FLAT
+                        || is_slope_with_one_corner_raised_raw(other.0)
                         || (self.s.tile_type)(dest) == MP_VOID
                     {
                         (self.s.make_shore)(tile);
@@ -270,7 +272,7 @@ impl World<'_> {
         let view = self.view();
         for y in edge..self.size_y - edge {
             for x in edge..self.map.size_x() - edge {
-                set_tile_height(&view, self.map.tile_xy(x, y).0, u32::from(height));
+                set_tile_height(&view, self.map.tile_xy(x, y), u32::from(height));
             }
         }
         self.fix_slopes(max_height);
@@ -311,7 +313,7 @@ impl World<'_> {
                     || col < col_pad
                     || col >= width - col_pad - u32::from(!freeform)
                 {
-                    set_tile_height(&view, tile, 0);
+                    set_tile_height(&view, TileIndex(tile), 0);
                 } else {
                     let img_row = (row - row_pad) * DIV / scale;
                     let img_col = if rotation == HM_COUNTER_CLOCKWISE {
@@ -326,9 +328,9 @@ impl World<'_> {
                     if level > 0 {
                         level = 1 + (level - 1) * u32::from(heightmap_height) / 255;
                     }
-                    set_tile_height(&view, tile, level);
+                    set_tile_height(&view, TileIndex(tile), level);
                 }
-                if is_inner_tile(&view, tile, self.freeform_edges()) {
+                if is_inner_tile(&view, TileIndex(tile), || self.freeform_edges()) {
                     (self.clear.make_clear)(tile, ClearGroundType(CLEAR_GRASS), 3);
                 }
             }
@@ -556,8 +558,8 @@ impl World<'_> {
             let mut current = tile;
             for _ in 0..inner {
                 let level = u32::from(unsafe { *template.data.add(position) } & 15);
-                if level >= tile_height_in(&view, current) {
-                    set_tile_height(&view, current, level);
+                if level >= tile_height_in(&view, TileIndex(current)) {
+                    set_tile_height(&view, TileIndex(current), level);
                 }
                 position += 1;
                 current = current.wrapping_add(step);
@@ -585,8 +587,10 @@ impl World<'_> {
         let mut histogram = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         let mut edges = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         for tile in 0..self.size() {
-            let height =
-                crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), tile);
+            let height = crate::tile_map::tile_height_in(
+                &crate::map_func::World::new(self.s),
+                TileIndex(tile),
+            );
             histogram[height as usize] += 1;
             if edge_multiplier != 0 {
                 for dir in 0..4 {
@@ -601,7 +605,7 @@ impl World<'_> {
                     if self.valid(neighbour)
                         && crate::tile_map::tile_height_in(
                             &crate::map_func::World::new(self.s),
-                            neighbour,
+                            TileIndex(neighbour),
                         ) < height
                     {
                         edges[height as usize] += 1;
@@ -653,7 +657,7 @@ impl World<'_> {
                 other == INVALID_TILE
                     || (crate::tile_map::tile_height_in(
                         &crate::map_func::World::new(self.s),
-                        other,
+                        TileIndex(other),
                     ) < line
                         && (self.s.tile_type)(other) != MP_WATER)
             }) {
@@ -737,7 +741,10 @@ impl World<'_> {
     }
     fn valid_terminus_tile(&self, tile: u32, height: u32, g: &Settings) -> bool {
         self.valid(tile)
-            && crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), tile) == height
+            && crate::tile_map::tile_height_in(
+                &crate::map_func::World::new(self.s),
+                TileIndex(tile),
+            ) == height
             && self.flat(tile)
             && !self.zone_desert(tile, g)
     }
@@ -823,7 +830,8 @@ impl World<'_> {
             return false;
         }
         let begin_height =
-            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), begin) as i32;
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), TileIndex(begin))
+                as i32;
         if flat.height != begin_height {
             return false;
         }
@@ -848,18 +856,21 @@ impl World<'_> {
                 == 1,
         );
         let view = self.view();
-        let (last_slope, last_z) = view.tile_slope_z(end);
-        if last_slope != SLOPE_FLAT && !is_inclined_slope_raw(last_slope) {
+        let (last_slope, last_z) = view.tile_slope_z(TileIndex(end));
+        if last_slope != crate::slope_type::Slope::SLOPE_FLAT
+            && !is_inclined_slope_raw(last_slope.0)
+        {
             return false;
         }
-        let (first_slope, first_z) = view.tile_slope_z(begin);
+        let (first_slope, first_z) = view.tile_slope_z(TileIndex(begin));
         if last_z > first_z {
             return false;
         }
         if last_slope == first_slope && last_z < first_z {
             return true;
         }
-        last_slope == SLOPE_FLAT || first_slope == SLOPE_FLAT
+        last_slope == crate::slope_type::Slope::SLOPE_FLAT
+            || first_slope == crate::slope_type::Slope::SLOPE_FLAT
     }
     fn connected_sea(&self, frame: *mut Frame, tile: u32, limit: usize) -> bool {
         if !self.water(tile)
@@ -909,7 +920,8 @@ impl World<'_> {
             );
         }
         let begin_height =
-            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), begin) as i32;
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), TileIndex(begin))
+                as i32;
         let mut marks = NodeSet::default();
         marks.insert(begin);
         let mut queue = vec![begin];
@@ -936,7 +948,9 @@ impl World<'_> {
                         while tile != INVALID_TILE {
                             self.terraform(tile, SLOPE_ELEVATED, false, F::EXECUTE);
                             let slope = complement_slope_raw(
-                                crate::map_func::World::new(self.s).tile_slope(tile),
+                                crate::map_func::World::new(self.s)
+                                    .tile_slope(TileIndex(tile))
+                                    .0,
                                 |ok| crate::movement::native_assert(self.a.shared(), ok),
                             );
                             self.terraform(tile, slope, true, F::EXECUTE);
@@ -1179,13 +1193,13 @@ impl World<'_> {
         if !self.valid(tile) || self.water(tile) || (self.s.tile_max_z)(tile) == 0 {
             return;
         }
-        let mut current = crate::map_func::World::new(self.s).tile_slope(tile);
-        let mut desired = crate::map_func::World::new(self.s).tile_slope(origin);
+        let mut current = crate::map_func::World::new(self.s).tile_slope(TileIndex(tile));
+        let mut desired = crate::map_func::World::new(self.s).tile_slope(TileIndex(origin));
         if (self.s.tile_max_z)(tile) > (self.s.tile_max_z)(origin) {
             return;
         }
-        if !self.flat(tile) && !is_inclined_slope_raw(current) {
-            if is_steep_slope_raw(current) {
+        if !self.flat(tile) && !is_inclined_slope_raw(current.0) {
+            if is_steep_slope_raw(current.0) {
                 return;
             }
             let mut flat_river = false;
@@ -1199,15 +1213,15 @@ impl World<'_> {
                         crate::map_func::native_check,
                     )
                     .0;
-                let slope = crate::map_func::World::new(self.s).tile_slope(other);
+                let slope = crate::map_func::World::new(self.s).tile_slope(TileIndex(other));
                 if self.water(other) && (self.a.river)(other) {
-                    if is_inclined_slope_raw(slope)
+                    if is_inclined_slope_raw(slope.0)
                         && (self.s.tile_max_z)(tile) == (self.s.tile_max_z)(other)
-                        && (get_inclined_slope_direction_raw(slope)
+                        && (get_inclined_slope_direction_raw(slope.0)
                             == change_diag_dir_raw(dir, DIAGDIRDIFF_90RIGHT, |ok| {
                                 crate::movement::native_assert(self.a.shared(), ok);
                             })
-                            || get_inclined_slope_direction_raw(slope)
+                            || get_inclined_slope_direction_raw(slope.0)
                                 == change_diag_dir_raw(dir, DIAGDIRDIFF_90LEFT, |ok| {
                                     crate::movement::native_assert(self.a.shared(), ok);
                                 }))
@@ -1225,9 +1239,11 @@ impl World<'_> {
                 return;
             }
             if !sloped_river && flat_river {
-                desired = SLOPE_FLAT;
+                desired = crate::slope_type::Slope::SLOPE_FLAT;
             }
-            if desired == SLOPE_FLAT && is_slope_with_three_corners_raised_raw(current) {
+            if desired == crate::slope_type::Slope::SLOPE_FLAT
+                && is_slope_with_three_corners_raised_raw(current.0)
+            {
                 for dir in 0..4 {
                     let other = self
                         .map
@@ -1237,8 +1253,11 @@ impl World<'_> {
                             crate::map_func::native_check,
                         )
                         .0;
-                    if is_inclined_slope_raw(crate::map_func::World::new(self.s).tile_slope(other))
-                        && self.water(other)
+                    if is_inclined_slope_raw(
+                        crate::map_func::World::new(self.s)
+                            .tile_slope(TileIndex(other))
+                            .0,
+                    ) && self.water(other)
                     {
                         return;
                     }
@@ -1246,15 +1265,15 @@ impl World<'_> {
                 w::hit(w::GENERATION_WIDEN_TERRAFORM);
                 self.terraform(
                     tile,
-                    complement_slope_raw(current, |ok| {
+                    complement_slope_raw(current.0, |ok| {
                         crate::movement::native_assert(self.a.shared(), ok);
                     }),
                     true,
                     F::EXECUTE | F::AUTO,
                 );
-            } else if is_inclined_slope_raw(desired) {
+            } else if is_inclined_slope_raw(desired.0) {
                 let direction =
-                    reverse_diag_dir_raw(get_inclined_slope_direction_raw(desired), |ok| {
+                    reverse_diag_dir_raw(get_inclined_slope_direction_raw(desired.0), |ok| {
                         crate::movement::native_assert(self.a.shared(), ok);
                     });
                 for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
@@ -1276,23 +1295,23 @@ impl World<'_> {
                     }
                 }
                 let mut change = current ^ desired;
-                if !is_slope_with_one_corner_raised_raw(current) {
-                    change &= complement_slope_raw(desired, |ok| {
+                if !is_slope_with_one_corner_raised_raw(current.0) {
+                    change &= crate::slope_type::Slope(complement_slope_raw(desired.0, |ok| {
                         crate::movement::native_assert(self.a.shared(), ok);
-                    });
-                    self.terraform(tile, change, false, F::EXECUTE | F::AUTO);
+                    }));
+                    self.terraform(tile, change.0, false, F::EXECUTE | F::AUTO);
                 }
-                current = crate::map_func::World::new(self.s).tile_slope(tile);
-                if current != desired && is_slope_with_one_corner_raised_raw(current) {
+                current = crate::map_func::World::new(self.s).tile_slope(TileIndex(tile));
+                if current != desired && is_slope_with_one_corner_raised_raw(current.0) {
                     change = current ^ desired;
-                    self.terraform(tile, change, true, F::EXECUTE | F::AUTO);
+                    self.terraform(tile, change.0, true, F::EXECUTE | F::AUTO);
                 }
             }
-            current = crate::map_func::World::new(self.s).tile_slope(tile);
+            current = crate::map_func::World::new(self.s).tile_slope(TileIndex(tile));
         }
-        if is_inclined_slope_raw(current) {
+        if is_inclined_slope_raw(current.0) {
             w::hit(w::GENERATION_WIDEN_SLOPE);
-            let direction = get_inclined_slope_direction_raw(current);
+            let direction = get_inclined_slope_direction_raw(current.0);
             let upstream = self
                 .map
                 .tile_add_by_diag_dir(
@@ -1315,18 +1334,25 @@ impl World<'_> {
                 return;
             }
             let ocean = (self.s.tile_z)(downstream) == 0
-                && (crate::map_func::World::new(self.s).tile_slope(downstream) == SLOPE_FLAT
+                && (crate::map_func::World::new(self.s).tile_slope(TileIndex(downstream))
+                    == crate::slope_type::Slope::SLOPE_FLAT
                     || is_slope_with_one_corner_raised_raw(
-                        crate::map_func::World::new(self.s).tile_slope(downstream),
+                        crate::map_func::World::new(self.s)
+                            .tile_slope(TileIndex(downstream))
+                            .0,
                     ));
             if !self.water(downstream) && !ocean {
-                if crate::map_func::World::new(self.s).tile_slope(downstream) != SLOPE_FLAT {
+                if crate::map_func::World::new(self.s).tile_slope(TileIndex(downstream))
+                    != crate::slope_type::Slope::SLOPE_FLAT
+                {
                     return;
                 }
                 self.river_tile(downstream);
             }
             if !self.water(upstream) {
-                if crate::map_func::World::new(self.s).tile_slope(upstream) != SLOPE_FLAT {
+                if crate::map_func::World::new(self.s).tile_slope(TileIndex(upstream))
+                    != crate::slope_type::Slope::SLOPE_FLAT
+                {
                     return;
                 }
                 self.river_tile(upstream);
