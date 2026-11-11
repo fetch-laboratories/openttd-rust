@@ -30,7 +30,7 @@ struct Adjust {
     subroutine: usize,
 }
 struct Deterministic {
-    adjusts: Vec<Box<Adjust>>,
+    adjusts: Vec<Adjust>,
     ranges: Vec<Range>,
 }
 struct LayoutNode {
@@ -118,7 +118,7 @@ extern "C" fn deterministic_new(_: u32, _: u8, _: u8) -> Handle {
 }
 extern "C" fn adjust_begin(group: Handle) -> AdjustStorage {
     let adjusts = &mut deterministic_of(group).adjusts;
-    adjusts.push(Box::default());
+    adjusts.push(Adjust::default());
     let a = adjusts.last_mut().unwrap();
     AdjustStorage {
         operation: &raw mut a.operation,
@@ -165,9 +165,6 @@ extern "C" fn pal_sprite_storage(image: *mut PalSprite) -> PalSpriteStorage {
         sprite: image,
         pal: unsafe { image.add(1) },
     }
-}
-extern "C" fn has_registers(_: *const Layout) -> bool {
-    false
 }
 extern "C" fn production_new(_: u32) -> Handle {
     push(Node::Production(Box::default()))
@@ -232,7 +229,7 @@ const SERVICES: Services = Services {
     layout_sequence: unreachable2,
     sequence_storage: unreachable1,
     is_parent: unreachable1,
-    has_registers,
+    has_registers: unreachable1,
     allocate_registers: unreachable1,
     registers: unreachable2,
     assert_offsets: unreachable3,
@@ -243,7 +240,7 @@ struct Fixture {
     shared: crate::services::Services,
     global: crate::newgrf::Services,
     loading: LoadingServices,
-    _file: Box<u8>,
+    file: Box<u8>,
 }
 impl Fixture {
     fn new() -> Box<Self> {
@@ -253,7 +250,7 @@ impl Fixture {
             shared,
             global: crate::newgrf::TEST_TABLE,
             loading: LOADING_TEST_TABLE,
-            _file: Box::new(0),
+            file: Box::new(0),
         });
         f.global.shared = &raw const f.shared;
         f.loading.global = &raw const f.global;
@@ -265,7 +262,7 @@ impl Fixture {
         VERSION.store(8, Ordering::SeqCst);
         unsafe {
             let state = openttd_rust_grf_execution();
-            (*state).grffile = (&raw mut *f._file).cast();
+            (*state).grffile = (&raw mut *f.file).cast();
             (*state).nfo_line = 485;
             (*state).skip_sprites = 0;
             (*state).spritegroups.fill(ptr::null());
@@ -305,7 +302,10 @@ fn partial_reads_publication_and_interner() {
     let f = Fixture::new();
 
     // First publication of a deterministic group with one callback range.
-    assert!(f.parse(&[1, 200, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127]).0);
+    assert!(
+        f.parse(&[1, 200, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127])
+            .0
+    );
     let published = slot(200);
     let first_group = deterministic_of(published);
     assert_eq!(first_group.ranges.len(), 1);
@@ -327,14 +327,23 @@ fn partial_reads_publication_and_interner() {
 
     // A repeated callback result is interned, within one load.
     let before = count();
-    assert!(f.parse(&[1, 201, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127]).0);
-    assert_eq!(deterministic_of(slot(201)).ranges[0].result.group, first_callback);
+    assert!(
+        f.parse(&[1, 201, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127])
+            .0
+    );
+    assert_eq!(
+        deterministic_of(slot(201)).ranges[0].result.group,
+        first_callback
+    );
     assert_eq!(count(), before + 1);
 
     // The final reset forgets the interned results.
     unsafe { openttd_rust_action2_reset(true) };
     let before = count();
-    assert!(f.parse(&[1, 202, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127]).0);
+    assert!(
+        f.parse(&[1, 202, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127])
+            .0
+    );
     assert_eq!(count(), before + 2);
 
     // An unsupported production version publishes null over the old slot.
@@ -343,11 +352,23 @@ fn partial_reads_publication_and_interner() {
 
     // Before GRF version 8 the callback high byte FF is masked off; afterwards only bit 15.
     VERSION.store(7, Ordering::SeqCst);
-    assert!(f.parse(&[1, 203, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127]).0);
-    assert_eq!(callback_of(deterministic_of(slot(203)).ranges[0].result.group), 3);
+    assert!(
+        f.parse(&[1, 203, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127])
+            .0
+    );
+    assert_eq!(
+        callback_of(deterministic_of(slot(203)).ranges[0].result.group),
+        3
+    );
     VERSION.store(8, Ordering::SeqCst);
-    assert!(f.parse(&[1, 204, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127]).0);
-    assert_eq!(callback_of(deterministic_of(slot(204)).ranges[0].result.group), 0x7F03);
+    assert!(
+        f.parse(&[1, 204, 0x81, 0x0C, 0, 255, 1, 3, 255, 0, 255, 255, 127])
+            .0
+    );
+    assert_eq!(
+        callback_of(deterministic_of(slot(204)).ranges[0].result.group),
+        0x7F03
+    );
 
     // A layout truncated inside its ground sprite stays allocated and unpublished.
     let before = count();
@@ -362,7 +383,10 @@ fn partial_reads_publication_and_interner() {
 
     // Too many production inputs disables the file with the original's error data.
     assert!(f.parse(&[10, 206, 2, 17]).0);
-    assert_eq!(world().error_data.last().unwrap(), b"too many inputs (max 16)");
+    assert_eq!(
+        world().error_data.last().unwrap(),
+        b"too many inputs (max 16)"
+    );
     assert_eq!(world().errors.last(), Some(&INVALID_PRODUCTION));
     assert!(slot(206).is_null());
     assert_eq!(unsafe { (*openttd_rust_grf_execution()).skip_sprites }, -1);
@@ -383,7 +407,8 @@ fn callback_interner_crosses_serialized_threads() {
         std::thread::spawn(move || {
             // SAFETY: `f` outlives the join below, and this thread is the only one using it.
             let f = unsafe { &*std::ptr::with_exposed_provenance::<Fixture>(address) };
-            f.parse(&[1, id, 0x81, 0x0C, 0, 255, 1, 55, 128, 0, 255, 255, 127]).0
+            f.parse(&[1, id, 0x81, 0x0C, 0, 255, 1, 55, 128, 0, 255, 255, 127])
+                .0
         })
         .join()
         .unwrap()

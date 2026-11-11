@@ -247,21 +247,10 @@ class SimulationDeterminismTests(unittest.TestCase):
             with self.subTest(replaced=old, new=new), self.assertRaises(RuntimeError):
                 engines.runtime_markers([line.replace(old, new) for line in lines])
 
-    def test_townname_observations_require_every_style_and_seed(self) -> None:
-        lines = ["LOADING townname first styles 0", "LOADING townname first style 0 0"]
-        for k in range(40):
-            seed = (
-                (0, 1, 0x80000000, 0xFFFFFFFF)[k]
-                if k < 4
-                else (k * 0x9E3779B9) & 0xFFFFFFFF
-            )
-            lines.append(f"LOADING townname first name 0 {seed:08X} text")
-        self.assertEqual(newgrf_loading.townname_observations(lines, ("first",)), lines)
-        for index in range(len(lines)):
-            with self.subTest(missing=index), self.assertRaises(RuntimeError):
-                newgrf_loading.townname_observations(
-                    lines[:index] + lines[index + 1 :], ("first",)
-                )
+    def test_townname_observations_keep_only_founded_towns(self) -> None:
+        town = "LOADING townname town 0 7 35414E54 0 237C8F47 592048696C6C"
+        log = ["LOADING text first byte80 21", town, "LOADING complete true"]
+        self.assertEqual(newgrf_loading.townname_observations(log), [town])
 
     def test_unnamed_fixture_runs_and_named_river_diagnostics(self) -> None:
         # Disaster and aircraft preparation call run_game directly with unnamed

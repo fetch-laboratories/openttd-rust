@@ -103,13 +103,22 @@ fn register(value: i32) {
     unsafe { openttd_rust_storage_temp_store(0x100, value) };
 }
 
-#[test]
-fn store_rollback_and_ownership_policy() {
-    let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
-    let mut shared = SHARED;
-    shared.grf_file_id = grf_id;
-    let table = Services {
-        shared: &raw const shared,
+impl World {
+    fn new() -> Self {
+        Self {
+            industry_valid: true,
+            industry: null_mut(),
+            airport: null_mut(),
+            town: Vec::new(),
+            pending_town: None,
+            industries_created: 0,
+            airport_grfids: Vec::new(),
+        }
+    }
+}
+fn table(shared: *const crate::services::Services) -> Services {
+    Services {
+        shared,
         check,
         industry,
         create_industry,
@@ -119,17 +128,17 @@ fn store_rollback_and_ownership_policy() {
         town_storage,
         create_town,
         append_town,
-    };
+    }
+}
+
+#[test]
+fn store_rollback_and_ownership_policy() {
+    let _guard = crate::town::tests::GLOBAL_LOCK.lock().unwrap();
+    let mut shared = SHARED;
+    shared.grf_file_id = grf_id;
+    let table = table(&raw const shared);
     let s = &table;
-    let mut w = World {
-        industry_valid: true,
-        industry: null_mut(),
-        airport: null_mut(),
-        town: Vec::new(),
-        pending_town: None,
-        industries_created: 0,
-        airport_grfids: Vec::new(),
-    };
+    let mut w = World::new();
     let scope: *mut c_void = addr_of_mut!(w).cast();
     let (own, other) = (0x3931_2345_u32, 0x3935_4321_u32);
     let (grf, other_grf) = (
@@ -166,7 +175,7 @@ fn store_rollback_and_ownership_policy() {
     ind(0, 7);
     unsafe { (*w_ptr).industry_valid = true };
     unsafe {
-        assert!((&*w_ptr).town.is_empty());
+        assert_eq!((&*w_ptr).town.len(), 0);
         assert!((*w_ptr).industry.is_null() && (*w_ptr).airport.is_null());
     }
 
@@ -208,10 +217,10 @@ fn store_rollback_and_ownership_policy() {
     // Another file gets a distinct array; explicit GRFID reads may cross files.
     town(other_grf, false, 0, 99);
     unsafe { assert_eq!((&*w_ptr).town.len(), 2) };
-    register(other as i32);
+    register(other.cast_signed());
     town(grf, false, 0, 77);
     assert_eq!(town_get(grf, 0), 99);
-    register(own as i32);
+    register(own.cast_signed());
     assert_eq!(town_get(null(), 0), 0x8000_0000);
     register(-1);
     assert_eq!(town_get(null(), 0), 0);

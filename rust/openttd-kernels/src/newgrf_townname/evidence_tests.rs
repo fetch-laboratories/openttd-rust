@@ -18,7 +18,9 @@ use std::sync::Mutex;
 const INVALID_ID: u32 = 1234;
 static STATUSES: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 static ERRORS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
-static TEXTS_SEEN: Mutex<Vec<(u32, u8, u32, Vec<u8>)>> = Mutex::new(Vec::new());
+/// GRFID, language, returned string ID and bytes of one text table row.
+type TextRow = (u32, u8, u32, Vec<u8>);
+static TEXT_ROWS: Mutex<Vec<TextRow>> = Mutex::new(Vec::new());
 
 extern "C" fn set_status(_: *mut c_void, status: u8) {
     STATUSES.lock().unwrap().push(status);
@@ -43,7 +45,10 @@ unsafe extern "C" fn visit_text(
     text: ByteSpan,
 ) {
     let bytes = unsafe { std::slice::from_raw_parts(text.data, text.size) }.to_vec();
-    TEXTS_SEEN.lock().unwrap().push((grfid, language, returned, bytes));
+    TEXT_ROWS
+        .lock()
+        .unwrap()
+        .push((grfid, language, returned, bytes));
 }
 extern "C" fn random(_: *mut c_void) -> u32 {
     unreachable!()
@@ -55,15 +60,21 @@ extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
 fn text(prob: u8, value: &[u8]) -> Vec<u8> {
     [&[prob], value, &[0]].concat()
 }
-fn grfid(id: &[u8; 4]) -> u32 {
-    u32::from_le_bytes(*id)
+fn grfid(id: [u8; 4]) -> u32 {
+    u32::from_le_bytes(id)
 }
 fn actions_a() -> Vec<Vec<u8>> {
     vec![
         [&[0x01, 1, 2, 0, 8][..], &text(1, b"Al"), &text(127, b"Be")].concat(),
         // A repeated definition appends a second part list.
         [&[0x01, 1, 1, 8, 4][..], &text(5, b"ton")].concat(),
-        [&[0x02, 1, 3, 12, 0][..], &text(0, b"X"), &text(3, b"Y"), &text(0, b"Z")].concat(),
+        [
+            &[0x02, 1, 3, 12, 0][..],
+            &text(0, b"X"),
+            &text(3, b"Y"),
+            &text(0, b"Z"),
+        ]
+        .concat(),
         // Two localized names; bit 7 of the second language is cleared. A 32-bit count
         // follows the x86 shift masking of the original GB.
         [
@@ -73,7 +84,13 @@ fn actions_a() -> Vec<Vec<u8>> {
             &text(1, b" Hill"),
         ]
         .concat(),
-        [&[0x84, 0x7F][..], b"Beta\0\0", &[1, 2, 0, 16, 0xFF, 0x03], &text(1, b"Q")].concat(),
+        [
+            &[0x84, 0x7F][..],
+            b"Beta\0\0",
+            &[1, 2, 0, 16, 0xFF, 0x03],
+            &text(1, b"Q"),
+        ]
+        .concat(),
     ]
 }
 fn actions_bad() -> Vec<Vec<u8>> {
@@ -90,7 +107,15 @@ fn actions_bad() -> Vec<Vec<u8>> {
     ]
 }
 fn actions_b() -> Vec<Vec<u8>> {
-    vec![[&[0x85, 0x7F][..], b"Gamma\0\0", &[1, 1, 0, 1], &text(1, b"Gam\x9e")].concat()]
+    vec![
+        [
+            &[0x85, 0x7F][..],
+            b"Gamma\0\0",
+            &[1, 1, 0, 1],
+            &text(1, b"Gam\x9e"),
+        ]
+        .concat(),
+    ]
 }
 fn actions_short() -> Vec<Vec<u8>> {
     // The reference byte of the last part is missing.
@@ -120,7 +145,6 @@ struct Fixture {
     text: crate::newgrf_text::Services,
     engine: Box<MaybeUninit<crate::engine_loading::Services>>,
     loading: LoadingServices,
-    ids: Vec<Box<u32>>,
 }
 impl Fixture {
     fn new() -> Box<Self> {
@@ -132,7 +156,6 @@ impl Fixture {
             text: crate::newgrf_text::test_services(),
             engine: Box::new(MaybeUninit::zeroed()),
             loading: TEST_TABLE,
-            ids: Vec::new(),
         });
         // Only `shared` of this zeroed table is ever read, through raw pointers.
         unsafe {
@@ -146,14 +169,14 @@ impl Fixture {
         f
     }
     /// One file's actions in order; a read failure ends the file, as the loader's error frame.
-    fn load(&mut self, id: &[u8; 4], actions: &[Vec<u8>]) -> bool {
-        let mut grf = Box::new(grfid(id));
+    fn load(&self, id: &[u8; 4], actions: &[Vec<u8>]) -> bool {
+        // The file record lives for the whole test process, as the loader's GRFFile does.
+        let grf = Box::leak(Box::new(grfid(*id)));
         let state = newgrf_loading::openttd_rust_grf_execution();
         unsafe {
-            (*state).grffile = (&raw mut *grf).cast();
+            (*state).grffile = std::ptr::from_mut(grf).cast();
             (*state).skip_sprites = 0;
         }
-        self.ids.push(grf);
         for action in actions {
             let mut reader = ByteReader::new(action.as_ptr(), action.len());
             if unsafe { feature_town_name(&self.loading, &mut reader) }.is_err() {
@@ -179,7 +202,15 @@ impl Fixture {
     }
     fn name(&self, id: u32, gen_: u16, seed: u32) -> Vec<u8> {
         let mut out = Vec::new();
-        unsafe { generate(&self.shared, &mut |part| out.extend_from_slice(part), id, gen_, seed) };
+        unsafe {
+            generate(
+                &self.shared,
+                &mut |part| out.extend_from_slice(part),
+                id,
+                gen_,
+                seed,
+            )
+        };
         out
     }
 }
@@ -212,7 +243,7 @@ fn action_0f_parsing_and_generation_match_the_original() {
 
     // Style order, then the fallback past the last style.
     assert_eq!(first.len(), 4);
-    let ids = [b"TNA5", b"TNA5", b"TNB5", b"TNS5"].map(grfid);
+    let ids = [*b"TNA5", *b"TNA5", *b"TNB5", *b"TNS5"].map(grfid);
     for (gen_, id) in ids.into_iter().enumerate() {
         assert_eq!(unsafe { get_id(gen_ as u16) }, id);
     }
@@ -220,21 +251,26 @@ fn action_0f_parsing_and_generation_match_the_original() {
     assert_eq!(unsafe { get_id(4) }, 0);
     assert_eq!(unsafe { get_type(4) }, SPECSTR_TOWNNAME_START as u16);
 
-    let (a, b, s, x) = (grfid(b"TNA5"), grfid(b"TNB5"), grfid(b"TNS5"), grfid(b"TNX5"));
+    let (tna, tnb, tns, tnx) = (
+        grfid(*b"TNA5"),
+        grfid(*b"TNB5"),
+        grfid(*b"TNS5"),
+        grfid(*b"TNX5"),
+    );
     // A repeated definition, the recursive final definition and the second file.
-    assert_eq!(f.name(a, 0, 0), b"Y Hill");
-    assert_eq!(f.name(a, 0, u32::MAX), b"Alton Hill");
-    assert_eq!(f.name(a, 0, 0x0003_0000), b"Beton Hill");
-    assert_eq!(f.name(a, 1, 0), b"Q");
-    assert_eq!(f.name(a, 1, 0xFFFF), b"Y Hill");
-    assert_eq!(f.name(b, 0, 0), "Gam\u{20ac}".as_bytes());
+    assert_eq!(f.name(tna, 0, 0), b"Y Hill");
+    assert_eq!(f.name(tna, 0, u32::MAX), b"Alton Hill");
+    assert_eq!(f.name(tna, 0, 0x0003_0000), b"Beton Hill");
+    assert_eq!(f.name(tna, 1, 0), b"Q");
+    assert_eq!(f.name(tna, 1, 0xFFFF), b"Y Hill");
+    assert_eq!(f.name(tnb, 0, 0), "Gam\u{20ac}".as_bytes());
     // The invalid reference deleted its entry and disabled its file.
-    assert!(!unsafe { exists(x) });
-    assert!(f.name(x, 0, 0).is_empty());
+    assert!(!unsafe { exists(tnx) });
+    assert_eq!(f.name(tnx, 0, 0), b"");
     assert_eq!(*STATUSES.lock().unwrap(), [GCS_DISABLED]);
     assert_eq!(*ERRORS.lock().unwrap(), [INVALID_ID]);
     // The read failure of the truncated file keeps the parts read before it.
-    assert_eq!(f.name(s, 0, 0), b"Shortort");
+    assert_eq!(f.name(tns, 0, 0), b"Shortort");
 
     check_oracle(&f, &first);
 
@@ -248,22 +284,28 @@ fn check_oracle(f: &Fixture, list: &[u32]) {
     let builtin = crate::services::fixture(null_mut(), random, industry);
     let mut styles = 0;
     let mut samples = 0;
-    TEXTS_SEEN.lock().unwrap().clear();
+    TEXT_ROWS.lock().unwrap().clear();
     unsafe { crate::newgrf_text::visit(std::ptr::null(), visit_text) };
-    let seen = std::mem::take(&mut *TEXTS_SEEN.lock().unwrap());
-    for row in include_str!("name-oracle.txt").lines().filter(|l| !l.starts_with('#')) {
+    let rows = std::mem::take(&mut *TEXT_ROWS.lock().unwrap());
+    for row in include_str!("name-oracle.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+    {
         let field: Vec<&str> = row.split(' ').collect();
         let gen_: u16 = field[1].parse().unwrap();
         if field[0] == "style" {
             styles += 1;
             let id = u32::from_str_radix(field[2], 16).unwrap();
             assert_eq!(unsafe { get_id(gen_) }, id, "{row}");
-            assert_eq!(u32::from(unsafe { get_type(gen_) }), field[3].parse::<u32>().unwrap());
+            assert_eq!(
+                u32::from(unsafe { get_type(gen_) }),
+                field[3].parse::<u32>().unwrap()
+            );
             if field[4] == "true" {
                 // The console's default language selects the US name of the first style.
                 let name = list[usize::from(gen_)];
                 let language = if gen_ == 0 { 1 } else { 0x7F };
-                let matched: Vec<_> = seen
+                let matched: Vec<_> = rows
                     .iter()
                     .filter(|(g, l, r, _)| *g == id && *l == language && *r == name)
                     .collect();
@@ -280,7 +322,9 @@ fn check_oracle(f: &Fixture, list: &[u32]) {
                 hex(&f.name(id, kind, seed))
             } else {
                 // The built-in English generator, which the fallback selects.
-                let owner = unsafe { crate::townname::openttd_rust_townname_generate(&raw const builtin, 0, seed) };
+                let owner = unsafe {
+                    crate::townname::openttd_rust_townname_generate(&raw const builtin, 0, seed)
+                };
                 let text = hex(unsafe { &*owner }.as_bytes());
                 unsafe { crate::townname::openttd_rust_townname_destroy(owner) };
                 text

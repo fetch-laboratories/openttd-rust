@@ -21,9 +21,9 @@ use crate::game_state::GameState;
 use crate::services::ByteSpan;
 use crate::strings_type::{TAB_SIZE_NEWGRF, grf_string_id};
 use std::ffi::c_void;
-pub(crate) use translation::translate;
 #[cfg(test)]
 pub(crate) use translation::tests::services as test_services;
+pub(crate) use translation::translate;
 
 #[repr(C)]
 pub struct Services {
