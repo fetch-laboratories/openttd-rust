@@ -248,6 +248,16 @@ static bool StorageScenario(std::span<std::string_view> args)
 	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
 	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
 	Require(ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
+	/* IndustriesScopeResolver::GetVariable(0x7C) out of range, and an invalid-ID construction
+	 * scope that reads the existing array through the real binding but cannot write it (#156). */
+	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);
+	{
+		Backup<IndustryID> invalid(industry->index, IndustryID::Invalid());
+		IndustriesScopeResolver temporary(ro, industry->location.tile, industry, industry->type);
+		temporary.StorePSA(15, 7);
+		Require(temporary.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
+		invalid.Restore();
+	}
 	/* A second file's array, which the reload check counts. */
 	GRFFile other; other.grfid = 0x39354321;
 	TownResolverObject second(&other, town, false); second.SetRegister(0x100, -1); second.town_scope.StorePSA(0, 99);
