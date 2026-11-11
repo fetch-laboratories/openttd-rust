@@ -1,0 +1,16 @@
+[
+  {
+    "retires": [
+      "scenario:objectives"
+    ],
+    "oracle": "PARTIAL TRANSFER of tools/simulation/objectives-console.cpp. The old default scenario identity objectives is replaced by objectives-native-boundaries plus the registered Rust question matrix. Before reduction, Native42952287341 succeeded at d823ceb4a02e40a100b10444e7e8406527c483bf (tested merge 6e3d47edd4a6268e958071fc319897b274784db1), with unchanged original pin 14ec60f248547d4d062a1160f0fc26d742319888. Its migration-simulation-2-1 report independently captured the complete reference-role objectives_original_trace after all required markers, pairwise trace and semantic-save comparisons passed. question-oracle.txt records that provenance and full-trace digest and projects only original success values for the existing 25 kind/button test-mode inputs in unchanged order; no candidate trace supplies expectations. The Rust test calls the production goal-question entry with the original id42, global target, non-client, nonempty-text observation and test flags. Only current-company and text-empty reads are provided; all publication, client, window and event callbacks abort. Native CommandCost encoding is outside that byte-returning entry and remains covered by the real command wrapper in the reduced scenario, including both missing-client test refusal and direct replay execution. The original destination matrix, all record allocation/removal/text and sort wrap/reset/reload, native aliases, native ordered Game::NewEvent payloads, question client/server behavior, page capacity, league links/score extremes, save chunks and RNG remain executable in the native scenario. Their retirement owners are the native command-cost facade, objective pools/EncodedString/event/window leaves, native loader and story-sort aliases. No source is retired and the reduced console still builds.",
+    "observations": {
+      "Goal-question kind0..4 and buttons0,1,7,15,UINT32_MAX in test mode, preserving original success and prohibiting all side effects": [
+        "rust:lib:objectives::evidence_tests::goal_question_matrix_matches_original_without_side_effects"
+      ],
+      "Retained native command wrappers, destinations, records, sort aliases/wrap/reset, ordered event payloads, replay/client handling, capacity, league extremes, state/RNG and reload": [
+        "scenario:objectives-native-boundaries"
+      ]
+    }
+  }
+]

@@ -158,3 +158,6 @@ pub unsafe extern "C" fn openttd_rust_company_can_edit_sign_abi(
 ) -> u8 {
     u8::from(can_edit(s, si))
 }
+
+#[cfg(test)]
+mod evidence_tests;

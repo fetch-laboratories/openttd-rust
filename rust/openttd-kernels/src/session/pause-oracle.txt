@@ -1,0 +1,26 @@
+# Pinned original 14ec60f248547d4d062a1160f0fc26d742319888, src/misc_cmd.cpp CmdPause.
+# Original-only capture before reducing src/tests/session.cpp at d823ceb4a02e40a100b10444e7e8406527c483bf.
+# tools/oracle-recipes/session_pause.patch scaffolds only opaque cost/query/window/network leaves;
+# tools/oracle-capture.py extracts unchanged CmdPause and DoCommandFlags, and uses original PauseModes.
+# No candidate header, archive, body or output is compiled or read. -O0 and -O2 -DNDEBUG streams agree.
+# Reproduce: python3 tools/oracle-capture.py session_pause (GNU/Linux x86_64, g++).
+# pause: network false,true; value 0..255; execute false,true; pause=true from CommandDuringPause.
+# Valid executed cases then unpause the same mode, as the retiring native fixture did.
+# query: Error pause bits, execute Normal unpause. Each observation: success, pause bits, ordered leaves.
+# change:<previous>:<selected>, then status and toolbar dirty; query retains the Error bits.
+@@ pause
+1 128 -
+1 129 change:128:0,status,toolbar, | 1 0 change:129:0,status,toolbar,
+1 130 change:128:1,status,toolbar, | 1 0 change:130:1,status,toolbar,
+0 128 -
+1 136 change:128:3,status,toolbar, | 1 0 change:136:3,status,toolbar,
+1 160 change:128:5,status,toolbar, | 1 0 change:160:5,status,toolbar,
+1 192 change:128:6,status,toolbar, | 1 0 change:192:6,status,toolbar,
+1 132 change:128:2,status,toolbar, | 1 0 change:132:2,status,toolbar,
+1 144 change:128:4,status,toolbar, | 1 0 change:144:4,status,toolbar,
+%%
+0 1 0 2 3*2 0 4 3*2 0 5 0 6 3*498 0 1 0 2 0 7 0 4 0 8 0 5 0 6 3*498
+@@ query
+1 8 query,status,toolbar,
+%%
+0

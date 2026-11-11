@@ -1,0 +1,16 @@
+[
+  {
+    "retires": [
+      "scenario:signs"
+    ],
+    "oracle": "PARTIAL TRANSFER of tools/simulation/signs-console.cpp. The old default scenario signs becomes signs-native-boundaries plus the registered Rust test-mode observations. Before reduction, Native42952287341 succeeded at d823ceb4a02e40a100b10444e7e8406527c483bf (tested merge 6e3d47edd4a6268e958071fc319897b274784db1), with unchanged original pin 14ec60f248547d4d062a1160f0fc26d742319888. Its migration-simulation-0-1 report independently retained the complete reference-role signs_original_trace after unchanged required markers, full trace and semantic-save comparisons passed. test-mode-oracle.txt records provenance and full-trace digest and keeps the original success/error/returned-ID rows for place-test, rename-other-test, move-other-test, delete-test and place-full-test. Original Alpha/Beta/empty/Full bytes, IDs0/2, tile3860 and moved1022 and test flags are unchanged. Rust tests call the existing production place/rename/relocate helpers with only the corresponding original read observations; every mutation, map/height and unexpected actor or mode callback aborts. Exhaustion refuses before a length read, and the original too-many-signs payload4258 is copied into the test service field. Native CommandCost encoding, live sign records/owner aliases, multibyte UTF-8 31/32 limits, editor/deity/foreign ownership, actual allocation/exhaustion/reuse, presentation/kdtree changes, save/reload and both RNG streams remain in the reduced native scenario with every depot command. Every depot query also observes actual native pool/name/UTF-8/ownership bindings, and reset observes native default numbering; none is replaced by a synthetic Rust depot pool. A depot_cmd.rs test hook is therefore unnecessary in this transfer. Retained observations retire with native sign/depot pools, string/UTF-8 and command-cost leaves, viewport operations and native MakeDefaultName. No native source is retired.",
+    "observations": {
+      "Original sign test-mode place/rename/move/delete and exhausted placement outputs, unchanged bytes/IDs/tiles, no mutations or coordinate/height reads and exhaustion before length": [
+        "rust:lib:signs_cmd::evidence_tests::sign_test_mode_matches_original_without_mutations"
+      ],
+      "Retained actual sign and depot records, native costs, UTF-8 limits, owner/editor policy, allocation/exhaustion/reuse, presentation, native depot uniqueness/default numbering, both RNG streams and save/reload": [
+        "scenario:signs-native-boundaries"
+      ]
+    }
+  }
+]
