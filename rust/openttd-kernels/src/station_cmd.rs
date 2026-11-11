@@ -4384,13 +4384,15 @@ impl Ctx<'_> {
         &self,
         tile: TileIndex,
         nearest: *const crate::services::TownHandle,
-        noise_reached: *mut u16,
         newnoise_level: u32,
     ) -> (StringID, *const crate::services::TownHandle) {
         let mut authority_refuse_message = StringID::STR_NULL;
         let mut authority_refuse_town = std::ptr::null();
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
             /* do not allow to build a new airport if this raise the town noise over the maximum allowed by town */
+            // `nearest` is read only with the setting on: with no towns the original
+            // returns the estimate without dereferencing it.
+            let noise_reached = self.noise_reached(nearest);
             if u32::from(unsafe { noise_reached.read() }) + newnoise_level
                 > u32::from((self.s.town_max_noise)(nearest))
             {
@@ -4547,11 +4549,10 @@ impl Ctx<'_> {
                 .map(|t| TileIndex(t.tile)),
         );
         let newnoise_level = u32::from(self.get_airport_noise_level_for_distance(spec, dist));
-        let noise_reached = self.noise_reached(nearest);
         let authority = unsafe { &*self.s.authority };
         /* Check if local auth would allow a new airport */
         let (authority_refuse_message, authority_refuse_town) =
-            self.check_local_authority_allows_airport(tile, nearest, noise_reached, newnoise_level);
+            self.check_local_authority_allows_airport(tile, nearest, newnoise_level);
         if authority_refuse_message != StringID::STR_NULL {
             (self.cost.error_param)(
                 cost.0,
@@ -4601,6 +4602,7 @@ impl Ctx<'_> {
             return;
         }
         /* Always add the noise, so there will be no need to recalculate when option toggles */
+        let noise_reached = self.noise_reached(nearest);
         unsafe {
             noise_reached.write(noise_reached.read().wrapping_add(newnoise_level as u16));
         }
