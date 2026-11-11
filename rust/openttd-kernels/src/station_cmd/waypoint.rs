@@ -13,6 +13,7 @@ use super::{
 };
 use crate::base_station_base::StationRectMode;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::direction_type::Axis;
 use crate::economy_type::{
@@ -460,6 +461,8 @@ impl Ctx<'_> {
         layout: *mut WaypointLayout,
         args: CmdBuildRailWaypoint,
     ) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::WAYPOINT_BUILD_RAIL);
         let (cost, ret, flags) = (call.cost, call.ret, call.flags);
         let (start_tile, axis, width, height) =
@@ -625,7 +628,17 @@ impl Ctx<'_> {
                 0
             };
             if !world().has_station_tile_rail(tile) {
-                (self.s.station_infrastructure)(owner.0, 1);
+                unsafe {
+                    CompanyInfrastructure::add_station(
+                        {
+                            if infrastructure_ptr.is_null() {
+                                infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                            }
+                            infrastructure_ptr
+                        },
+                        1,
+                    );
+                };
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis.0), |ok| {
                 crate::movement::native_assert(self.shared, ok);
@@ -659,6 +672,8 @@ impl Ctx<'_> {
     }
     /// `CmdBuildRoadWaypoint`: build a road waypoint on an existing road.
     fn cmd_build_road_waypoint(&self, call: WaypointCall<'_>, args: CmdBuildRoadWaypoint) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         w::hit(w::WAYPOINT_BUILD_ROAD);
         let (cost, ret, flags) = (call.cost, call.ret, call.flags);
         let (start_tile, axis, width, height) =
@@ -889,7 +904,17 @@ impl Ctx<'_> {
                     ((*self.s.roadstop_resolver).set_tile_random)(wp, cur_tile, 0);
                 }
             }
-            (self.s.station_infrastructure)(owner.0, 1);
+            unsafe {
+                CompanyInfrastructure::add_station(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                        }
+                        infrastructure_ptr
+                    },
+                    1,
+                );
+            };
             (self.shared.mark_dirty)(cur_tile);
         }
         (self.command.infrastructure_dirty)(owner.0);

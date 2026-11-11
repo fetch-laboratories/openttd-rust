@@ -685,38 +685,108 @@ impl World<'_> {
         }
     }
     fn owner(&self, ret: *mut CommandCost, tile: u32, old: u8, new: u8) {
-        if (self.s.tile_owner)(tile) != old {
-            return;
-        }
-        let middle = (self.s.water_middle_lock)(tile);
-        if middle {
-            self.infra(old, 0u32.wrapping_sub(3 * FACTOR), false);
-        }
-        if new != INVALID_OWNER {
-            if middle {
-                self.infra(new, 3 * FACTOR, false);
+        // SAFETY: Field-sized native accesses are serialized; raw pointers retain no owner borrow across callbacks.
+        unsafe {
+            // Resolve at the first original access; the raw pointer retains no Rust borrow.
+            let mut new_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+            // Resolve at the first original access; the raw pointer retains no Rust borrow.
+            let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+            if (self.s.tile_owner)(tile) != old {
+                return;
             }
-            if self.class(tile) == 1 && !middle {
-                self.infra(old, u32::MAX, false);
-                self.infra(new, 1, false);
+            let middle = (self.s.water_middle_lock)(tile);
+            if middle {
+                CompanyInfrastructure::add_water(
+                    {
+                        if old_infrastructure_ptr.is_null() {
+                            old_infrastructure_ptr =
+                                CompanyInfrastructure::get(self.s, CompanyID(old));
+                        }
+                        old_infrastructure_ptr
+                    },
+                    0u32.wrapping_sub(3 * FACTOR),
+                );
+            }
+            if new != INVALID_OWNER {
+                if middle {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        3 * FACTOR,
+                    );
+                }
+                if self.class(tile) == 1 && !middle {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        u32::MAX,
+                    );
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        1,
+                    );
+                }
+                if self.kind(tile) == 3 {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        0u32.wrapping_sub(FACTOR),
+                    );
+                    CompanyInfrastructure::add_water(
+                        {
+                            if new_infrastructure_ptr.is_null() {
+                                new_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(new));
+                            }
+                            new_infrastructure_ptr
+                        },
+                        FACTOR,
+                    );
+                }
+                (self.s.set_tile_owner)(tile, new);
+                return;
             }
             if self.kind(tile) == 3 {
-                self.infra(old, 0u32.wrapping_sub(FACTOR), false);
-                self.infra(new, FACTOR, false);
+                self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
             }
-            (self.s.set_tile_owner)(tile, new);
-            return;
-        }
-        if self.kind(tile) == 3 {
-            self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
-        }
-        if (self.s.tile_owner)(tile) == old {
-            if self.class(tile) == 1 && !middle {
-                self.infra(old, u32::MAX, false);
+            if (self.s.tile_owner)(tile) == old {
+                if self.class(tile) == 1 && !middle {
+                    CompanyInfrastructure::add_water(
+                        {
+                            if old_infrastructure_ptr.is_null() {
+                                old_infrastructure_ptr =
+                                    CompanyInfrastructure::get(self.s, CompanyID(old));
+                            }
+                            old_infrastructure_ptr
+                        },
+                        u32::MAX,
+                    );
+                }
+                (self.s.set_tile_owner)(tile, OWNER_NONE);
             }
-            (self.s.set_tile_owner)(tile, OWNER_NONE);
+            w::hit(w::WATER_CMD_OWNER);
         }
-        w::hit(w::WATER_CMD_OWNER);
     }
 }
 

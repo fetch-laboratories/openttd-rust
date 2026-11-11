@@ -701,6 +701,8 @@ impl<'a> World<'a> {
         }
     }
     fn build(&self, kind: u16, tile: u32, owner: u8, town: *const TownHandle, view: u8) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         unsafe {
             let spec = (self.s.spec)(kind);
             let shape = (self.s.footprint)(spec);
@@ -764,7 +766,13 @@ impl<'a> World<'a> {
                     && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)
                         || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
                 {
-                    let infrastructure = CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                    let infrastructure = {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr =
+                                CompanyInfrastructure::get(self.shared, CompanyID(owner));
+                        }
+                        infrastructure_ptr
+                    };
                     CompanyInfrastructure::add_water(infrastructure, 1);
                     ((*self.s.command).infrastructure_dirty)(owner);
                 }

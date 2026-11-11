@@ -22,6 +22,7 @@ use crate::bitmath_func::find_first_bit;
 use crate::bitmath_func::{gb, has_bit};
 use crate::cargo_type::NUM_CARGO;
 use crate::command_type::{DoCommandFlag, DoCommandFlags};
+use crate::company_base::CompanyInfrastructure;
 use crate::company_type::CompanyID;
 use crate::debug::debug;
 use crate::depot_func::can_build_depot_by_tileh;
@@ -269,7 +270,6 @@ pub struct CommandServicesTable {
     pub tile_flag_count: extern "C" fn(*const RailSpec) -> usize,
     pub tile_flags: extern "C" fn(*const RailSpec, u8) -> u8,
     pub set_tile_flags: extern "C" fn(u32, bool, bool, bool),
-    pub station_infrastructure: extern "C" fn(u8, u32),
     pub mark_tiles: extern "C" fn(*mut BaseStation, bool),
     pub reset_facilities: extern "C" fn(*mut BaseStation, u8),
     pub orders_dirty: extern "C" fn(),
@@ -322,7 +322,6 @@ pub struct CommandServicesTable {
     pub airport_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
     pub airport_animated: extern "C" fn(*const crate::animated_tile::AirportSpec) -> bool,
 
-    pub airport_infrastructure: extern "C" fn(u8, u32),
     pub station_view_invalidate: extern "C" fn(*mut BaseStation, i32),
     pub town_view_dirty: extern "C" fn(*const crate::services::TownHandle),
     pub aircraft_vehicle: extern "C" fn(crate::vehicle::VehicleRef) -> crate::aircraft::Vehicle,
@@ -343,7 +342,6 @@ pub struct CommandServicesTable {
     pub docking_clear: extern "C" fn(*mut BaseStation),
     /// `docking_station`, in place.
     pub docking_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
-    pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
     pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
     pub associate_industry: extern "C" fn(*mut BaseStation, u32),
@@ -2236,6 +2234,7 @@ impl Ctx<'_> {
             crate::movement::native_assert(self.shared, ok);
         });
         let owner = CompanyID((self.world().station_owner)(st));
+        let infrastructure = CompanyInfrastructure::get(self.shared, owner);
         let index = (self.links().graphs.station_id)(st);
         let mut tile_track = tile_org;
         for i in 0..numtracks {
@@ -2263,13 +2262,19 @@ impl Ctx<'_> {
                 /* Railtype can change when overbuilding. */
                 if self.is_rail_station_tile(tile) {
                     if !self.is_station_tile_blocked(tile) {
-                        (self.rail().rail_infrastructure)(
-                            owner.0,
-                            crate::map_func::World::new(self.shared).rail_type(tile.0),
-                            u32::MAX,
-                        );
+                        unsafe {
+                            CompanyInfrastructure::add_rail(
+                                infrastructure,
+                                crate::rail_type::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile.0),
+                                ),
+                                u32::MAX,
+                            );
+                        };
                     }
-                    (self.s.station_infrastructure)(owner.0, u32::MAX);
+                    unsafe {
+                        CompanyInfrastructure::add_station(infrastructure, u32::MAX);
+                    };
                 }
                 /* Remove animation if overbuilding */
                 crate::animated_tile::openttd_rust_animation_delete(tile.0, false);
@@ -2333,9 +2338,17 @@ impl Ctx<'_> {
                 }
                 self.set_rail_station_tile_flags(tile, statspec);
                 if !self.is_station_tile_blocked(tile) {
-                    (self.rail().rail_infrastructure)(owner.0, rt.0, 1);
+                    unsafe {
+                        CompanyInfrastructure::add_rail(
+                            infrastructure,
+                            crate::rail_type::RailType(rt.0),
+                            1,
+                        );
+                    };
                 }
-                (self.s.station_infrastructure)(owner.0, 1);
+                unsafe {
+                    CompanyInfrastructure::add_station(infrastructure, 1);
+                };
                 tile = TileIndex(tile.0.wrapping_add(tile_delta));
             }
             self.signals()
@@ -2453,6 +2466,8 @@ impl Ctx<'_> {
         tile: TileIndex,
         keep_rail: bool,
     ) -> *mut crate::services::Train {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         /* read variables before the station tile is removed */
         let specindex = (self.s.custom_rail_index)(tile.0);
         let track = crate::map_func::World::new(self.shared).get_rail_station_track(tile);
@@ -2470,7 +2485,18 @@ impl Ctx<'_> {
         }
         let build_rail = keep_rail && !self.is_station_tile_blocked(tile);
         if !build_rail && !self.is_station_tile_blocked(tile) {
-            (self.rail().rail_infrastructure)(owner.0, rt.0, u32::MAX);
+            unsafe {
+                CompanyInfrastructure::add_rail(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                        }
+                        infrastructure_ptr
+                    },
+                    crate::rail_type::RailType(rt.0),
+                    u32::MAX,
+                );
+            };
         }
         crate::ground::clear_square(tile.0, self.shared);
         (self.s.close_station_inspect)(tile.0);
@@ -2484,7 +2510,17 @@ impl Ctx<'_> {
                 rt.0,
             );
         }
-        (self.s.station_infrastructure)(owner.0, u32::MAX);
+        unsafe {
+            CompanyInfrastructure::add_station(
+                {
+                    if infrastructure_ptr.is_null() {
+                        infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                    }
+                    infrastructure_ptr
+                },
+                u32::MAX,
+            );
+        };
         (self.command.infrastructure_dirty)(owner.0);
         self.after_remove_tile(st, tile);
         self.signals().add_track(tile.0, track.0, owner.0);
@@ -3287,6 +3323,8 @@ impl Ctx<'_> {
         flags: DoCommandFlags,
         args: CmdBuildRoadStop,
     ) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         let CmdBuildRoadStop {
             tile,
             width,
@@ -3568,7 +3606,17 @@ impl Ctx<'_> {
                 tram_owner,
                 ROAD_STOP_TRACKBIT_FACTOR as i32,
             );
-            (self.s.station_infrastructure)(owner.0, 1);
+            unsafe {
+                CompanyInfrastructure::add_station(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                        }
+                        infrastructure_ptr
+                    },
+                    1,
+                );
+            };
             (self.s.set_custom_road_index)(cur_tile.0, specindex.value);
             if !roadstopspec.is_null() {
                 unsafe {
@@ -3689,7 +3737,12 @@ impl Ctx<'_> {
                 );
             }
             let owner = CompanyID((self.world().station_owner)(st));
-            (self.s.station_infrastructure)(owner.0, u32::MAX);
+            unsafe {
+                CompanyInfrastructure::add_station(
+                    CompanyInfrastructure::get(self.shared, owner),
+                    u32::MAX,
+                );
+            };
             (self.command.infrastructure_dirty)(owner.0);
             let specindex = (self.s.custom_road_index)(tile.0);
             (self.s.close_stop_inspect)(tile.0);
@@ -3806,7 +3859,12 @@ impl Ctx<'_> {
                 );
             }
             let owner = CompanyID((self.world().station_owner)(wp));
-            (self.s.station_infrastructure)(owner.0, u32::MAX);
+            unsafe {
+                CompanyInfrastructure::add_station(
+                    CompanyInfrastructure::get(self.shared, owner),
+                    u32::MAX,
+                );
+            };
             (self.command.infrastructure_dirty)(owner.0);
             let specindex = (self.s.custom_road_index)(tile.0);
             (self.s.close_stop_inspect)(tile.0);
@@ -4544,7 +4602,9 @@ impl Ctx<'_> {
         unsafe {
             crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, index.0);
         }
-        (self.s.airport_infrastructure)(owner.0, 1);
+        unsafe {
+            CompanyInfrastructure::add_airport(CompanyInfrastructure::get(self.shared, owner), 1);
+        };
         self.after_station_tile_set_change(st, true, StationType::Airport);
         (self.s.station_view_invalidate)(st, -1);
         if unsafe { (*self.s.shared).settings().station_noise.read() } {
@@ -4642,7 +4702,15 @@ impl Ctx<'_> {
             );
             (self.s.orders_dirty)();
             (self.s.station_view_invalidate)(st, -1);
-            (self.s.airport_infrastructure)((self.world().station_owner)(st), u32::MAX);
+            unsafe {
+                CompanyInfrastructure::add_airport(
+                    CompanyInfrastructure::get(
+                        self.shared,
+                        CompanyID((self.world().station_owner)(st)),
+                    ),
+                    u32::MAX,
+                );
+            };
             self.after_station_tile_set_change(st, false, StationType::Airport);
             (self.s.close_airport_inspect)(st);
         }
@@ -4870,6 +4938,8 @@ impl Ctx<'_> {
         wc: WaterClass,
         dock_area: TileArea,
     ) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         let world = crate::map_func::World::new(self.shared);
         self.area_add((self.s.ship_station_area)(st), tile);
         let flat_tile = self.map().tile_add_by_diag_dir(tile, direction, |ok| {
@@ -4890,9 +4960,29 @@ impl Ctx<'_> {
                 && WaterClass(world.water_class(flat_tile.0)) == WaterClass::Canal
                 && (self.shared.tile_owner)(flat_tile.0) == (self.shared.current_company)())
         {
-            (self.s.water_infrastructure)(owner.0, 1);
+            unsafe {
+                CompanyInfrastructure::add_water(
+                    {
+                        if infrastructure_ptr.is_null() {
+                            infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                        }
+                        infrastructure_ptr
+                    },
+                    1,
+                );
+            };
         }
-        (self.s.station_infrastructure)(owner.0, 2);
+        unsafe {
+            CompanyInfrastructure::add_station(
+                {
+                    if infrastructure_ptr.is_null() {
+                        infrastructure_ptr = CompanyInfrastructure::get(self.shared, owner);
+                    }
+                    infrastructure_ptr
+                },
+                2,
+            );
+        };
         (self.s.make_dock)(
             tile.0,
             owner.0,
@@ -5195,7 +5285,12 @@ impl Ctx<'_> {
                 );
                 (self.s.orders_dirty)();
             }
-            (self.s.station_infrastructure)(owner.0, 2_u32.wrapping_neg());
+            unsafe {
+                CompanyInfrastructure::add_station(
+                    CompanyInfrastructure::get(self.shared, owner),
+                    2_u32.wrapping_neg(),
+                );
+            };
             self.after_station_tile_set_change(st, false, StationType::Dock);
             self.clear_docking_tiles_checking_neighbours(tile1);
             self.clear_docking_tiles_checking_neighbours(tile2);
@@ -5700,6 +5795,10 @@ impl Ctx<'_> {
     }
     /// `ChangeTileOwner_Station`.
     fn change_tile_owner_station(&self, context: StationOwnerChange<'_>) {
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut new_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
+        // Resolve at the first original access; the raw pointer retains no Rust borrow.
+        let mut old_infrastructure_ptr: *mut CompanyInfrastructure = std::ptr::null_mut();
         let StationOwnerChange {
             ownership,
             cost,
@@ -5718,9 +5817,33 @@ impl Ctx<'_> {
                     let rt = self.get_road_type(tile, rtt);
                     if rt != RoadType::INVALID_ROADTYPE {
                         /* A drive-through road-stop has always two road bits. No need to dirty windows here, we'll redraw the whole screen anyway. */
-                        (self.rail().road_infrastructure)(old_owner.0, rt.0, 2_u32.wrapping_neg());
+                        unsafe {
+                            CompanyInfrastructure::add_road(
+                                {
+                                    if old_infrastructure_ptr.is_null() {
+                                        old_infrastructure_ptr =
+                                            CompanyInfrastructure::get(self.shared, old_owner);
+                                    }
+                                    old_infrastructure_ptr
+                                },
+                                crate::road_type::RoadType(rt.0),
+                                2_u32.wrapping_neg(),
+                            );
+                        };
                         if new_owner != CompanyID::INVALID {
-                            (self.rail().road_infrastructure)(new_owner.0, rt.0, 2);
+                            unsafe {
+                                CompanyInfrastructure::add_road(
+                                    {
+                                        if new_infrastructure_ptr.is_null() {
+                                            new_infrastructure_ptr =
+                                                CompanyInfrastructure::get(self.shared, new_owner);
+                                        }
+                                        new_infrastructure_ptr
+                                    },
+                                    crate::road_type::RoadType(rt.0),
+                                    2,
+                                );
+                            };
                         }
                     }
                     (self.shared.set_road_owner)(
@@ -5743,29 +5866,61 @@ impl Ctx<'_> {
              * if the new owner is valid as otherwise the clear
              * command will do it for us. No need to dirty windows
              * here, we'll redraw the whole screen anyway.*/
+            let old_infrastructure = {
+                if old_infrastructure_ptr.is_null() {
+                    old_infrastructure_ptr = CompanyInfrastructure::get(self.shared, old_owner);
+                }
+                old_infrastructure_ptr
+            };
+            let new_infrastructure = {
+                if new_infrastructure_ptr.is_null() {
+                    new_infrastructure_ptr = CompanyInfrastructure::get(self.shared, new_owner);
+                }
+                new_infrastructure_ptr
+            };
             let station_type = StationType((self.shared.station_type)(tile.0).0);
             /* Update counts for underlying infrastructure. */
             match station_type {
                 StationType::Rail | StationType::RailWaypoint => {
                     if !self.is_station_tile_blocked(tile) {
                         let rt = world.rail_type(tile.0);
-                        (self.rail().rail_infrastructure)(old_owner.0, rt, u32::MAX);
-                        (self.rail().rail_infrastructure)(new_owner.0, rt, 1);
+                        unsafe {
+                            CompanyInfrastructure::add_rail(
+                                old_infrastructure,
+                                crate::rail_type::RailType(rt),
+                                u32::MAX,
+                            );
+                        };
+                        unsafe {
+                            CompanyInfrastructure::add_rail(
+                                new_infrastructure,
+                                crate::rail_type::RailType(rt),
+                                1,
+                            );
+                        };
                     }
                 }
                 /* Road stops were already handled above. */
                 StationType::Buoy | StationType::Dock
                     if world.water_class(tile.0) == crate::water_map::WaterClass::Canal.0 =>
                 {
-                    (self.s.water_infrastructure)(old_owner.0, u32::MAX);
-                    (self.s.water_infrastructure)(new_owner.0, 1);
+                    unsafe {
+                        CompanyInfrastructure::add_water(old_infrastructure, u32::MAX);
+                    };
+                    unsafe {
+                        CompanyInfrastructure::add_water(new_infrastructure, 1);
+                    };
                 }
                 _ => (),
             }
             /* Update station tile count. */
             if !world.is_buoy(tile) && !world.is_airport(tile) {
-                (self.s.station_infrastructure)(old_owner.0, u32::MAX);
-                (self.s.station_infrastructure)(new_owner.0, 1);
+                unsafe {
+                    CompanyInfrastructure::add_station(old_infrastructure, u32::MAX);
+                };
+                unsafe {
+                    CompanyInfrastructure::add_station(new_infrastructure, 1);
+                };
             }
             /* for buoys, owner of tile is owner of water, st->owner == OWNER_NONE */
             (self.shared.set_tile_owner)(tile.0, new_owner.0);
@@ -5954,7 +6109,6 @@ crate::abi::layouts! {
         tile_flag_count,
         tile_flags,
         set_tile_flags,
-        station_infrastructure,
         mark_tiles,
         reset_facilities,
         orders_dirty,
@@ -6004,7 +6158,6 @@ crate::abi::layouts! {
         airport_area,
         airport_animated,
 
-        airport_infrastructure,
         station_view_invalidate,
         town_view_dirty,
         aircraft_vehicle,
@@ -6023,7 +6176,6 @@ crate::abi::layouts! {
         ship_station_area,
         docking_clear,
         docking_area,
-        water_infrastructure,
         make_dock,
         neutral_for_tile,
         associate_industry,

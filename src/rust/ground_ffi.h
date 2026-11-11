@@ -101,7 +101,6 @@ const OpenTTDClearServices &GetRustClearServices() noexcept;
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept;
 const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept;
 struct OpenTTDWaterRestorationServices {
-	void (*infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure);
 	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_canal);
 	void (*make_river)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_river);
 };

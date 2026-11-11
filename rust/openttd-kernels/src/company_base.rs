@@ -32,12 +32,71 @@ pub struct CompanyInfrastructure {
 
 #[allow(
     unsafe_code,
-    reason = "Read the live native CompanyInfrastructure with field-sized raw loads, ending each access before callbacks."
+    reason = "Access the live native CompanyInfrastructure with field-sized raw loads and stores, ending each access before callbacks."
 )]
 impl CompanyInfrastructure {
     /// Resolve `Company::Get(id)->infrastructure` once at the original entry point.
     pub(crate) fn get(shared: &crate::services::Services, id: CompanyID) -> *mut Self {
         (shared.company_infrastructure)(id.0)
+    }
+    /// Add a wrapping count to the original rail field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure and `kind` meets the original array subscript precondition.
+    pub(crate) unsafe fn add_rail(this: *mut Self, kind: crate::rail_type::RailType, delta: u32) {
+        // SAFETY: The caller preserves native lifetime, serialization and indexing contracts.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).rail)
+                .cast::<u32>()
+                .add(usize::from(kind.0));
+            field.write(field.read().wrapping_add(delta));
+        }
+    }
+    /// Add a wrapping count to the original road field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure and `kind` meets the original array subscript precondition.
+    pub(crate) unsafe fn add_road(this: *mut Self, kind: crate::road_type::RoadType, delta: u32) {
+        // SAFETY: The caller preserves native lifetime, serialization and indexing contracts.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).road)
+                .cast::<u32>()
+                .add(usize::from(kind.0));
+            field.write(field.read().wrapping_add(delta));
+        }
+    }
+    /// Add a wrapping count to the original signal field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure.
+    pub(crate) unsafe fn add_signal(this: *mut Self, delta: u32) {
+        // SAFETY: The caller preserves native lifetime, serialization and indexing contracts.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).signal);
+            field.write(field.read().wrapping_add(delta));
+        }
+    }
+    /// Add a wrapping count to the original station field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure.
+    pub(crate) unsafe fn add_station(this: *mut Self, delta: u32) {
+        // SAFETY: The caller preserves native lifetime, serialization and indexing contracts.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).station);
+            field.write(field.read().wrapping_add(delta));
+        }
+    }
+    /// Add a wrapping count to the original airport field.
+    ///
+    /// # Safety
+    /// `this` points to live, writable, serialized native infrastructure.
+    pub(crate) unsafe fn add_airport(this: *mut Self, delta: u32) {
+        // SAFETY: The caller preserves native lifetime, serialization and indexing contracts.
+        unsafe {
+            let field = std::ptr::addr_of_mut!((*this).airport);
+            field.write(field.read().wrapping_add(delta));
+        }
     }
     /// Add a wrapping count to the original water field.
     ///

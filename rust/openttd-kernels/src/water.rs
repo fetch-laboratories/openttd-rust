@@ -83,7 +83,6 @@ impl WaterServices {
 /// Native packed-map/storage leaves for water class restoration.
 #[repr(C)]
 pub struct RestorationServices {
-    pub infrastructure: extern "C" fn(u8, u32),
     pub make_canal: extern "C" fn(u32, u8, u8),
     pub make_river: extern "C" fn(u32, u8),
 }
@@ -808,7 +807,6 @@ crate::abi::layouts! {
         news,
     };
     "OpenTTDWaterRestorationServices" ["common"] => RestorationServices {
-        infrastructure,
         make_canal,
         make_river,
     };

@@ -222,7 +222,6 @@ const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
-		.infrastructure = RustAddWaterInfrastructure,
 		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
 	return services;
