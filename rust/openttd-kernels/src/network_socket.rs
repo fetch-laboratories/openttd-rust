@@ -94,13 +94,16 @@ pub(crate) fn specialized_close(
 ) -> u8 {
     match read_field!(socket, role) {
         0 => crate::network_client::openttd_rust_network_client_close(s.client, s, socket, result),
-        1 => crate::network_connection::openttd_rust_network_server_close(
-            s.connection,
-            s,
-            socket,
-            result,
-            work,
-        ),
+        1 => {
+            crate::network_connection::server_close(
+                s.connection,
+                s,
+                socket,
+                crate::network_type::NetworkRecvStatus(result),
+                work,
+            )
+            .0
+        }
         _ => (s.query_close)(shell(socket), result),
     }
 }
@@ -214,7 +217,8 @@ pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
             return;
         }
         if sent != crate::network_tcp::Send::Closed
-            && status(client.socket) == crate::network_frame::server_status::MAP
+            && crate::network_server::status(client.socket)
+                == crate::network_server::ClientStatus::STATUS_MAP
         {
             crate::network_connection::send_map(s.connection, s, client.socket, work);
             if work.pending() {
@@ -256,7 +260,7 @@ pub(crate) fn receive_all(
                 Poll::Exception => return Err(()),
                 Poll::Error => break,
                 Poll::Ready => {
-                    let id = crate::network_connection::openttd_rust_network_next_client_id();
+                    let id = crate::network_connection::next_client_id().0;
                     if !(s.server_accept)(frame, id) {
                         return Err(());
                     }

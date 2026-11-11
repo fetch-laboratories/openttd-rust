@@ -680,7 +680,7 @@ pub(crate) fn post(
                     Tested::Exit => restore(s),
                     Tested::Send => {
                         let data = pack();
-                        crate::network_command::send_command(
+                        crate::network_command::send_command_raw(
                             (p.network)(),
                             cmd,
                             0,

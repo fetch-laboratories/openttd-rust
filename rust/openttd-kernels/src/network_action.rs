@@ -173,7 +173,7 @@ impl Actions {
                         network.connection,
                         network,
                         socket,
-                        result,
+                        crate::network_type::NetworkRecvStatus(result),
                     );
                 }
                 Resume::CloseClients(cursor, admins) => {

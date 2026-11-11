@@ -12,40 +12,19 @@ use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::gfx_type::MILLISECONDS_PER_TICK;
 use crate::network_action::{Actions, Resume};
+use crate::network_client::ServerStatus;
 use crate::network_command::next_client;
+use crate::network_server::{self as server, ClientStatus};
 use crate::network_socket as socket;
-use crate::network_type::{
-    NETWORK_ERROR_NOT_AUTHORIZED, NETWORK_ERROR_TIMEOUT_COMPUTER, NETWORK_ERROR_TIMEOUT_JOIN,
-    NETWORK_ERROR_TIMEOUT_MAP, NETWORK_ERROR_TIMEOUT_PASSWORD,
-    NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
-};
+use crate::network_type::{NetworkErrorCode, NetworkRecvStatus};
 use crate::packet::{self, State as PacketState};
 use crate::raw_field::{read_field, write_field};
 use crate::session::Frame;
+use crate::tcp_game::PacketGameType;
 use crate::timer_game_tick::DAY_TICKS;
-use server_status::{
-    ACTIVE, AUTH_GAME, AUTHORIZED, DONE_MAP, IDENTIFY, INACTIVE, MAP, MAP_WAIT, NEWGRFS_CHECK,
-    PRE_ACTIVE,
-};
 use std::ffi::c_void;
 
 const NANOSECONDS_PER_MILLISECOND: i64 = 1_000_000;
-
-use crate::tcp_game::{PACKET_CLIENT_ACK, PACKET_SERVER_FRAME, PACKET_SERVER_SYNC};
-/// `ServerNetworkGameSocketHandler::ClientStatus`.
-pub mod server_status {
-    pub const INACTIVE: u8 = 0;
-    pub const AUTH_GAME: u8 = 1;
-    pub const IDENTIFY: u8 = 2;
-    pub const NEWGRFS_CHECK: u8 = 3;
-    pub const AUTHORIZED: u8 = 4;
-    pub const MAP_WAIT: u8 = 5;
-    pub const MAP: u8 = 6;
-    pub const DONE_MAP: u8 = 7;
-    pub const PRE_ACTIVE: u8 = 8;
-    pub const ACTIVE: u8 = 9;
-}
-use crate::network_client::status::ACTIVE as CLIENT_STATUS_ACTIVE;
 
 crate::abi::shared_records! {
     fn abi_record;
@@ -140,13 +119,17 @@ pub(crate) fn socket_has_quit(s: &Services, game: *mut socket::GameSocket) -> bo
 pub(crate) fn packet_check(s: &Services) -> extern "C" fn(bool) {
     crate::movement::table(s.command.company.shared).native_assert
 }
-pub(crate) fn packet_new(s: &Services, game: *mut socket::GameSocket, kind: u8) -> PacketState {
+pub(crate) fn packet_new(
+    s: &Services,
+    game: *mut socket::GameSocket,
+    kind: PacketGameType,
+) -> PacketState {
     unsafe {
         packet::new_outgoing(
             socket::base(game),
             s.packet,
             packet_check(s),
-            kind,
+            kind.0,
             crate::network_config::COMPAT_MTU,
         )
     }
@@ -236,7 +219,9 @@ pub unsafe fn calculate_lag(s: &Services, sync: *const SocketSync) -> u32 {
     let last_frame_server = read_field!(sync, last_frame_server);
     // The original stores the unsigned difference in an int, then returns it as uint.
     let mut lag = last_frame_server.wrapping_sub(read_field!(sync, last_frame));
-    // A client that missed its daily ACK lags one more frame for every frame that passes.
+    /* This client has missed their ACK packet after 1 DAY_TICKS..
+     *  so we increase their lag for every frame that passes!
+     * The packet can be out by a max of _net_frame_freq */
     let limit = last_frame_server
         .wrapping_add(DAY_TICKS as u32)
         .wrapping_add(u32::from((s.frame_freq)()));
@@ -254,7 +239,8 @@ pub unsafe extern "C" fn openttd_rust_network_calculate_lag(
     unsafe { calculate_lag(s, sync) }
 }
 
-/// `ServerNetworkGameSocketHandler::SendFrame`.
+/// `ServerNetworkGameSocketHandler::SendFrame`: tell the client that they may run to a
+/// particular frame.
 ///
 /// # Safety
 /// `game` is a live server-side socket and `sync` its record.
@@ -262,11 +248,12 @@ pub(crate) unsafe fn send_frame(
     s: &Services,
     game: *mut socket::GameSocket,
     sync: *mut SocketSync,
-) -> u8 {
-    let mut p = packet_new(s, game, PACKET_SERVER_FRAME);
+) -> NetworkRecvStatus {
+    let mut p = packet_new(s, game, PacketGameType::PACKET_SERVER_FRAME);
     p.send_uint32(frame_counter(), packet_check(s));
     p.send_uint32(frame_counter_max(), packet_check(s));
-    // A zero token asks for a new one.
+
+    /* If token equals 0, we need to make a new token and send that. */
     if read_field!(sync, last_token) == 0 {
         // The uint8_t store truncates, as the original's.
         #[allow(clippy::cast_possible_truncation)]
@@ -274,12 +261,13 @@ pub(crate) unsafe fn send_frame(
         write_field!(sync, last_token, token);
         p.send_uint8(read_field!(sync, last_token), packet_check(s));
     }
+
     packet_send(s, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-/// `ServerNetworkGameSocketHandler::SendSync`.
-pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
+/// `ServerNetworkGameSocketHandler::SendSync`: request the client to sync.
+pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> NetworkRecvStatus {
     debug!(
         net,
         9,
@@ -288,11 +276,11 @@ pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
         frame_counter(),
         state!(sync_seed_1)
     );
-    let mut p = packet_new(s, game, PACKET_SERVER_SYNC);
+    let mut p = packet_new(s, game, PacketGameType::PACKET_SERVER_SYNC);
     p.send_uint32(frame_counter(), packet_check(s));
     p.send_uint32(state!(sync_seed_1), packet_check(s));
     packet_send(s, game, &mut p);
-    NETWORK_RECV_STATUS_OKAY
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// `ServerNetworkGameSocketHandler::Receive_CLIENT_ACK`.
@@ -305,12 +293,19 @@ pub(crate) unsafe fn receive_ack(
     p: *mut PacketState,
     session_frame: *mut Frame,
     work: Actions,
-) -> u8 {
+) -> NetworkRecvStatus {
     work.network(s);
     let sync = socket::sync(socket);
-    if socket::status(socket) < AUTHORIZED {
-        return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED, work);
+    if server::status(socket) < ClientStatus::STATUS_AUTHORIZED {
+        /* Illegal call, return error and ignore the packet */
+        return send_error(
+            s,
+            socket,
+            NetworkErrorCode::NETWORK_ERROR_NOT_AUTHORIZED,
+            work,
+        );
     }
+
     let frame = unsafe { packet::recv_uint32(p, s.packet) };
     debug!(
         net,
@@ -319,43 +314,64 @@ pub(crate) unsafe fn receive_ack(
         (s.dispatch.client_id)(socket),
         frame
     );
-    // The client is catching up with the server.
-    if socket::status(socket) == PRE_ACTIVE {
+
+    /* The client is trying to catch up with the server */
+    if server::status(socket) == ClientStatus::STATUS_PRE_ACTIVE {
+        /* The client is not yet caught up? */
         if frame.wrapping_add(DAY_TICKS as u32) < frame_counter() {
-            return NETWORK_RECV_STATUS_OKAY;
+            return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
+
+        /* Now it is! Unpause the game */
         debug!(
             net,
             9,
             "client[{}] status = ACTIVE",
             (s.dispatch.client_id)(socket)
         );
-        write_field!(socket, status, ACTIVE);
+        server::set_status(socket, ClientStatus::STATUS_ACTIVE);
         write_field!(sync, last_token_frame, frame_counter());
+
+        /* Execute script for, e.g. MOTD */
         if !(s.on_server_connect)(session_frame) {
-            return NETWORK_RECV_STATUS_OKAY;
+            return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
+
+    /* Get, and validate the token. */
     let token = unsafe { packet::recv_uint8(p, s.packet) };
     if token == read_field!(sync, last_token) {
-        // The lag test measures the client, not the token round trip, which follows each ACK.
+        /* We differentiate between last_token_frame and last_frame so the lag
+         * test uses the actual lag of the client instead of the lag for getting
+         * the token back and forth; after all, the token is only sent every
+         * time we receive a PACKET_CLIENT_ACK, after which we will send a new
+         * token to the client. If the lag would be one day, then we would not
+         * be sending the new token soon enough for the new daily scheduled
+         * PACKET_CLIENT_ACK. This would then register the lag of the client as
+         * two days, even when it's only a single day. */
         write_field!(sync, last_token_frame, frame_counter());
+        /* Request a new token. */
         write_field!(sync, last_token, 0);
     }
+
+    /* The client received the frame, make note of it */
     write_field!(sync, last_frame, frame);
+    /* With those 2 values we can calculate the lag realtime */
     write_field!(sync, last_frame_server, frame_counter());
-    NETWORK_RECV_STATUS_OKAY
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-/// `ClientNetworkGameSocketHandler::SendAck`.
-fn send_ack(s: &Services) {
+/// `ClientNetworkGameSocketHandler::SendAck`: send an acknowledgement from the server's ticks.
+fn send_ack(s: &Services) -> NetworkRecvStatus {
     debug!(net, 9, "Client::SendAck()");
     let game = (s.client_game)();
-    let mut p = packet_new(s, game, PACKET_CLIENT_ACK);
+    let mut p = packet_new(s, game, PacketGameType::PACKET_CLIENT_ACK);
+
     p.send_uint32(frame_counter(), packet_check(s));
     let sync = socket::sync((s.client_game)());
     p.send_uint8(read_field!(sync, token), packet_check(s));
     packet_send(s, game, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_FRAME`.
@@ -364,34 +380,45 @@ fn send_ack(s: &Services) {
 /// `sync` is the live client socket's record and `p` the packet being handled.
 pub(crate) unsafe fn receive_frame(
     s: &Services,
-    status: u8,
+    status: ServerStatus,
     sync: *mut SocketSync,
     p: *mut PacketState,
-) -> u8 {
-    if status != CLIENT_STATUS_ACTIVE {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    if status != ServerStatus::STATUS_ACTIVE {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     state!(frame_counter_server = unsafe { packet::recv_uint32(p, s.packet) });
     state!(frame_counter_max = unsafe { packet::recv_uint32(p, s.packet) });
+    /* Receive the token. */
     if unsafe { packet::can_read(p, s.packet, 1, false) } {
         write_field!(sync, token, unsafe { packet::recv_uint8(p, s.packet) });
     }
-    // Acknowledge once per day to save bandwidth.
+
+    /* Let the server know that we received this frame correctly
+     *  We do this only once per day, to save some bandwidth ;) */
     if !state!(network_first_time) && state!(last_ack_frame) < frame_counter() {
         state!(last_ack_frame = frame_counter().wrapping_add(DAY_TICKS as u32));
         debug!(net, 7, "Sent ACK at {}", frame_counter());
         send_ack(s);
     }
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_SYNC`.
-pub(crate) fn receive_sync(s: &Services, status: u8, p: *mut PacketState) -> u8 {
-    if status != CLIENT_STATUS_ACTIVE {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+pub(crate) fn receive_sync(
+    s: &Services,
+    status: ServerStatus,
+    p: *mut PacketState,
+) -> NetworkRecvStatus {
+    if status != ServerStatus::STATUS_ACTIVE {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     state!(sync_frame = unsafe { packet::recv_uint32(p, s.packet) });
     state!(sync_seed_1 = unsafe { packet::recv_uint32(p, s.packet) });
+
     debug!(
         net,
         9,
@@ -399,7 +426,8 @@ pub(crate) fn receive_sync(s: &Services, status: u8, p: *mut PacketState) -> u8 
         state!(sync_frame),
         state!(sync_seed_1)
     );
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// `NetworkClient_Connected`'s reset of the client frame state.
@@ -444,9 +472,12 @@ fn client_game_loop(
     frame: *mut Frame,
 ) -> Result<bool, ()> {
     state!(frame_counter = frame_counter().wrapping_add(1));
-    (session.assert_local_company)();
-    crate::network_command::execute_local_command_queue(s.command);
+
+    crate::network_command::execute_local_command_queue(session, s.command);
+
     state_loop(session, frame)?;
+
+    /* Check if we are in sync! */
     let sync_frame = state!(sync_frame);
     if sync_frame != 0 {
         if sync_frame == frame_counter() {
@@ -460,11 +491,15 @@ fn client_game_loop(
                 );
                 return Ok(false);
             }
-            // The first sync tells the server this client is ready at its frame.
+
+            /* If this is the first time we have a sync-frame, we
+             *   need to let the server know that we are ready and at the same
+             *   frame as it is.. so we can start playing! */
             if state!(network_first_time) {
                 state!(network_first_time = false);
                 send_ack(s);
             }
+
             state!(sync_frame = 0);
         } else if sync_frame < frame_counter() {
             debug!(
@@ -477,10 +512,17 @@ fn client_game_loop(
             state!(sync_frame = 0);
         }
     }
+
     Ok(true)
 }
 
-fn send_error(s: &Services, socket: *mut socket::GameSocket, error: u8, work: Actions) -> u8 {
+/// `ServerNetworkGameSocketHandler::SendError` with an empty reason.
+fn send_error(
+    s: &Services,
+    socket: *mut socket::GameSocket,
+    error: NetworkErrorCode,
+    work: Actions,
+) -> NetworkRecvStatus {
     crate::network_connection::send_error(
         s.connection,
         s,
@@ -491,16 +533,19 @@ fn send_error(s: &Services, socket: *mut socket::GameSocket, error: u8, work: Ac
     )
 }
 
-/// `NetworkServer_Tick`.
+/// `NetworkServer_Tick`: this is called every tick if this is a `_network_server`.
 fn server_tick(s: &Services, send_frame: bool, work: Actions) {
     let mut send_sync = false;
+
     if frame_counter() >= state!(last_sync_frame).wrapping_add(u32::from((s.sync_freq)())) {
         state!(last_sync_frame = frame_counter());
         send_sync = true;
     }
+
     server_tick_clients(s, send_frame, send_sync, 0, work);
 }
 
+/// `NetworkServer_Tick`'s client loop from `cursor`, resumed after a deferred close.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn server_tick_clients(
     s: &Services,
@@ -509,45 +554,67 @@ pub(crate) fn server_tick_clients(
     mut cursor: usize,
     work: Actions,
 ) {
+    /* Now we are done with the frame, inform the clients that they can
+     *  do their frame! */
     while let Some(client) = next_client(s.command, &mut cursor) {
         let socket = client.socket;
         let game = socket;
         let sync = socket::sync(socket);
         let last_packet = socket::last_packet(socket);
-        let status = socket::status(socket);
-        // Bytes per frame accrue up to the burst amount.
+        let status = server::status(socket);
+        /* We allow a number of bytes per frame, but only to the burst amount
+         * to be available for packet receiving at any particular time. */
         let limit = read_field!(sync, receive_limit)
             .wrapping_add(usize::from((s.bytes_per_frame)()))
             .min(usize::from((s.bytes_per_frame_burst)()));
         write_field!(sync, receive_limit, limit);
 
+        /* Check if the speed of the client is what we can expect from a client */
         let lag = unsafe { calculate_lag(s, sync) };
         let within = |milliseconds: u32| {
             last_packet + i64::from(milliseconds) * NANOSECONDS_PER_MILLISECOND > (s.tcp.now)()
         };
         match status {
-            ACTIVE => {
+            ClientStatus::STATUS_ACTIVE => {
                 if lag > u32::from((s.max_lag_time)()) {
-                    // A packet within the lag means a lagging client, else a lost connection.
+                    /* Client did still not report in within the specified limit. */
+
                     let recent = within(lag.wrapping_mul(MILLISECONDS_PER_TICK));
                     (s.console_lagging)(socket::server(socket), lag, recent);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    send_error(
+                        s,
+                        socket,
+                        NetworkErrorCode::NETWORK_ERROR_TIMEOUT_COMPUTER,
+                        work,
+                    );
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
                     }
                     continue;
                 }
-                // Warn once, and only while packets still arrive.
+
+                /* Report once per time we detect the lag, and only when we
+                 * received a packet in the last 2 seconds. If we
+                 * did not receive a packet, then the client is not just
+                 * slow, but the connection is likely severed. Mentioning
+                 * frame_freq is not useful in this case. */
                 if lag > DAY_TICKS as u32 && read_field!(sync, lag_test) == 0 && within(2000) {
                     (s.console_slow)(socket::server(socket), frame_counter());
                     write_field!(sync, lag_test, 1);
                 }
+
                 let token_age = read_field!(sync, last_frame_server)
                     .wrapping_sub(read_field!(sync, last_token_frame));
                 if token_age >= u32::from((s.max_lag_time)()) {
+                    /* This is a bad client! It didn't send the right token back within time. */
                     (s.console_bad_acks)(socket::server(socket));
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    send_error(
+                        s,
+                        socket,
+                        NetworkErrorCode::NETWORK_ERROR_TIMEOUT_COMPUTER,
+                        work,
+                    );
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
@@ -555,10 +622,21 @@ pub(crate) fn server_tick_clients(
                     continue;
                 }
             }
-            INACTIVE | IDENTIFY | NEWGRFS_CHECK | AUTHORIZED => {
+
+            ClientStatus::STATUS_INACTIVE
+            | ClientStatus::STATUS_IDENTIFY
+            | ClientStatus::STATUS_NEWGRFS_CHECK
+            | ClientStatus::STATUS_AUTHORIZED => {
+                /* NewGRF check and authorized states should be handled almost instantly.
+                 * So give them some lee-way, likewise for the query with inactive. */
                 if lag > u32::from((s.max_init_time)()) {
                     (s.console_init_timeout)(socket::server(socket));
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    send_error(
+                        s,
+                        socket,
+                        NetworkErrorCode::NETWORK_ERROR_TIMEOUT_COMPUTER,
+                        work,
+                    );
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
@@ -566,17 +644,27 @@ pub(crate) fn server_tick_clients(
                     continue;
                 }
             }
-            MAP_WAIT => {
-                // Keep a waiting client informed every two seconds.
+
+            ClientStatus::STATUS_MAP_WAIT => {
+                /* Send every two seconds a packet to the client, to make sure
+                 * it knows the server is still there; just someone else is
+                 * still receiving the map. */
                 if (s.tcp.now)() > last_packet + 2000 * NANOSECONDS_PER_MILLISECOND {
                     crate::network_connection::send_wait(s.connection, s, socket);
+                    /* We need to reset the timer, as otherwise we will be
+                     * spamming the client. Strictly speaking this variable
+                     * tracks when we last received a packet from the client,
+                     * but as it is waiting, it will not send us any till we
+                     * start sending them data. */
                     socket::set_last_packet(socket, (s.tcp.now)());
                 }
             }
-            MAP => {
+
+            ClientStatus::STATUS_MAP => {
+                /* Downloading the map... this is the amount of time since starting the saving. */
                 if lag > u32::from((s.max_download_time)()) {
                     (s.console_download_timeout)(socket::server(socket));
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_MAP, work);
+                    send_error(s, socket, NetworkErrorCode::NETWORK_ERROR_TIMEOUT_MAP, work);
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
@@ -584,10 +672,17 @@ pub(crate) fn server_tick_clients(
                     continue;
                 }
             }
-            DONE_MAP | PRE_ACTIVE => {
+
+            ClientStatus::STATUS_DONE_MAP | ClientStatus::STATUS_PRE_ACTIVE => {
+                /* The map has been sent, so this is for loading the map and syncing up. */
                 if lag > u32::from((s.max_join_time)()) {
                     (s.console_join_timeout)(socket::server(socket));
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_JOIN, work);
+                    send_error(
+                        s,
+                        socket,
+                        NetworkErrorCode::NETWORK_ERROR_TIMEOUT_JOIN,
+                        work,
+                    );
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
@@ -595,10 +690,17 @@ pub(crate) fn server_tick_clients(
                     continue;
                 }
             }
-            AUTH_GAME => {
+
+            ClientStatus::STATUS_AUTH_GAME => {
+                /* These don't block? */
                 if lag > u32::from((s.max_password_time)()) {
                     (s.console_password_timeout)(socket::server(socket));
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_PASSWORD, work);
+                    send_error(
+                        s,
+                        socket,
+                        NetworkErrorCode::NETWORK_ERROR_TIMEOUT_PASSWORD,
+                        work,
+                    );
                     if work.pending() {
                         work.push(Resume::ServerTick(cursor, send_frame, send_sync));
                         return;
@@ -606,10 +708,18 @@ pub(crate) fn server_tick_clients(
                     continue;
                 }
             }
-            // `STATUS_END`: the original's NOT_REACHED.
-            _ => unreachable!(),
+
+            ClientStatus::STATUS_END => {
+                /* Bad server/code. */
+                crate::services_assert::not_reached();
+            }
+
+            // A value outside the enumeration matches no case of the original switch.
+            _ => {}
         }
-        if status >= PRE_ACTIVE {
+
+        if status >= ClientStatus::STATUS_PRE_ACTIVE {
+            /* Check if we can send command, and if we have anything in the queue */
             unsafe {
                 crate::network_command::handle_command_queue(
                     s.command,
@@ -617,9 +727,13 @@ pub(crate) fn server_tick_clients(
                     socket::outgoing(client.socket),
                 );
             }
+
+            /* Send an updated _frame_counter_max to the client */
             if send_frame {
                 unsafe { self::send_frame(s, game, sync) };
             }
+
+            /* Send a sync-check packet */
             if send_sync {
                 self::send_sync(s, game);
             }
@@ -645,6 +759,7 @@ pub(crate) fn game_loop(
     game_loop_received(session, s, frame, result?, work)
 }
 
+/// `NetworkGameLoop` after `NetworkReceive`, resumed after a deferred close.
 pub(crate) fn game_loop_received(
     session: &crate::session::Services,
     s: &Services,
@@ -655,43 +770,69 @@ pub(crate) fn game_loop_received(
     if !received {
         return Ok(());
     }
+
     if (s.command.company.network_server)() {
+        /* Log the sync state to check for in-syncedness of replays. */
         (s.sync_log)();
         (s.replay_commands)();
+
         if frame_counter() >= frame_counter_max() {
-            // Only just before sending commands, so frame_freq > 1 sends one (un)pause.
+            /* Only check for active clients just before we're going to send out
+             * the commands so we don't send multiple pause/unpause commands when
+             * the frame_freq is more than 1 tick. Same with distributing commands. */
             crate::network_connection::check_pause_on_join(session, s);
             crate::network_connection::check_min_active_clients(session, s);
             crate::network_command::distribute_commands(s.command);
         }
+
         let mut send_frame = false;
+
+        /* We first increase the _frame_counter */
         state!(frame_counter = frame_counter().wrapping_add(1));
+        /* Update max-frame-counter */
         if frame_counter() > frame_counter_max() {
             state!(frame_counter_max = frame_counter().wrapping_add(u32::from((s.frame_freq)())));
             send_frame = true;
         }
-        (session.assert_local_company)();
-        crate::network_command::execute_local_command_queue(s.command);
+
+        crate::network_command::execute_local_command_queue(session, s.command);
+
+        /* Then we make the frame */
         state_loop(session, frame)?;
+
         state!(sync_seed_1 = random_state(s, 0));
+
         server_tick(s, send_frame, work);
         if work.pending() {
             work.push(Resume::FrameSend);
             return Err(());
         }
-    } else if state!(frame_counter_server) > frame_counter() {
-        // Catch up with the server; stop when things go bad.
-        while state!(frame_counter_server) > frame_counter() {
-            if !client_game_loop(session, s, frame)? {
-                return Ok(());
+    } else {
+        /* Client */
+
+        /* Make sure we are at the frame were the server is (quick-frames) */
+        if state!(frame_counter_server) > frame_counter() {
+            /* Run a number of frames; when things go bad, get out. */
+            while state!(frame_counter_server) > frame_counter() {
+                if !client_game_loop(session, s, frame)? {
+                    return Ok(());
+                }
+            }
+        } else {
+            /* Else, keep on going till _frame_counter_max */
+            if frame_counter_max() > frame_counter() {
+                /* Run one frame; if things went bad, get out. */
+                if !client_game_loop(session, s, frame)? {
+                    return Ok(());
+                }
             }
         }
-    } else if frame_counter_max() > frame_counter() && !client_game_loop(session, s, frame)? {
-        return Ok(());
     }
+
     send(s, frame, work)
 }
 
+/// `NetworkSend`.
 pub(crate) fn send(s: &Services, frame: *mut Frame, work: Actions) -> Result<(), ()> {
     socket::send_all(s, frame, work)
 }

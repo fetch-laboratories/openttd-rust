@@ -6,16 +6,20 @@
 //! No queue borrow survives a native leaf; entries address queued packets by raw pointer.
 #![allow(unsafe_code, missing_docs)]
 
+use crate::command_type::{CommandFlag, CommandFlags, Commands};
+use crate::company_type::CompanyID;
 use crate::debug::debug;
 use crate::game_state::GameState;
+use crate::network_server::{self as server, ClientStatus};
 use crate::network_socket as socket;
+use crate::network_type::{NetworkErrorCode, NetworkRecvStatus};
+use crate::openttd::PauseModes;
 use crate::services::ByteSpan;
+use crate::strings_type::StringID;
+use crate::tcp_game::PacketGameType;
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;
 use std::ptr::null_mut;
-
-/// `NetworkClientSocket::STATUS_MAP`; `network_command.cpp` asserts the value.
-pub const STATUS_MAP: u8 = 6;
 
 crate::abi::shared_records! {
     fn abi_record;
@@ -28,13 +32,20 @@ crate::abi::shared_records! {
     /// `CommandPacket`.
     #[derive(Clone)]
     "OpenTTDCommandPacket" ["probe"] => pub struct CommandPacket {
+        /// command parameters.
         pub data: CommandData,
+        /// any callback function executed upon successful completion of the command; a
         /// `CommandCallback *`, compared and called only by native leaves.
         pub callback: *const c_void,
+        /// the frame in which this packet is executed
         pub frame: u32,
+        /// string ID of error message to use.
         pub err_msg: u32,
+        /// company that is executing the command
         pub company: u8,
+        /// command being executed.
         pub cmd: u8,
+        /// did the command originate from "me"
         pub my_cmd: bool,
     }
     /// `CommandQueue` as the raw parts of a Rust `Vec<CommandPacket>`; null when never allocated.
@@ -43,9 +54,8 @@ crate::abi::shared_records! {
         pub size: usize,
         pub capacity: usize,
     }
-    /// One `NetworkClientSocket` resolved once per visit; queues and the sync record live in the
-    /// socket shell. `game` is the same socket as a `NetworkGameSocketHandler *`, and `last_packet`
-    /// its steady-clock time in nanoseconds when visited.
+    /// One `NetworkClientSocket` resolved once per visit, with its pool index; queues and the
+    /// sync record live in the socket shell.
     "OpenTTDNetworkCommandClient" ["probe"] => pub struct Client {
         pub socket: *mut socket::GameSocket,
         pub index: usize,
@@ -90,6 +100,12 @@ impl CommandData {
             unsafe { std::slice::from_raw_parts(self.data, self.size) }
         }
     }
+    /// Grows the bytes by at least one, as `std::vector::push_back`.
+    fn grow(&mut self) {
+        let mut bytes = self.take();
+        bytes.reserve(1);
+        *self = Self::from_vec(bytes);
+    }
 }
 
 impl Drop for CommandData {
@@ -128,6 +144,16 @@ impl CommandQueue {
             (*queue).size = packets.len();
             (*queue).capacity = packets.capacity();
             result
+        }
+    }
+    /// Frees the queue and leaves it empty.
+    ///
+    /// # Safety
+    /// `queue` is live and holds parts from `edit` or `EMPTY`.
+    unsafe fn free(queue: *mut Self) {
+        unsafe {
+            drop(Self::edit(queue, std::mem::take));
+            *queue = Self::EMPTY;
         }
     }
 }
@@ -196,7 +222,7 @@ pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
     })
 }
 
-/// `NetworkSendCommand`.
+/// `NetworkSendCommand` for the native command facade.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_send_command(
     s: &Services,
@@ -206,10 +232,18 @@ pub extern "C" fn openttd_rust_network_send_command(
     company: u8,
     data: ByteSpan,
 ) {
-    send_command(s, cmd, err_msg, callback, company, data);
+    send_command(
+        s,
+        Commands(cmd),
+        StringID(err_msg),
+        callback,
+        CompanyID(company),
+        data,
+    );
 }
 
-pub(crate) fn send_command(
+/// `NetworkSendCommand` with raw command, string and company integers, for held callers.
+pub(crate) fn send_command_raw(
     s: &Services,
     cmd: u8,
     err_msg: u32,
@@ -217,34 +251,70 @@ pub(crate) fn send_command(
     company: u8,
     data: ByteSpan,
 ) {
-    let bytes = if data.size == 0 {
+    send_command(
+        s,
+        Commands(cmd),
+        StringID(err_msg),
+        callback,
+        CompanyID(company),
+        data,
+    );
+}
+
+/// `NetworkSendCommand`: prepare a `DoCommand` to be send over the network.
+/// `cmd` is the command to execute (a CMD_* value), `err_message` the message prefix to show on
+/// error, `callback` a callback function to call after the command is finished, `company` the
+/// company that wants to send the command and `cmd_data` the command proc arguments.
+pub(crate) fn send_command(
+    s: &Services,
+    cmd: Commands,
+    err_message: StringID,
+    callback: *const c_void,
+    company: CompanyID,
+    cmd_data: ByteSpan,
+) {
+    let bytes = if cmd_data.size == 0 {
         Vec::new()
     } else {
         // SAFETY: The caller's buffer is live for this entry.
-        unsafe { std::slice::from_raw_parts(data.data, data.size) }.to_vec()
+        unsafe { std::slice::from_raw_parts(cmd_data.data, cmd_data.size) }.to_vec()
     };
     let mut c = CommandPacket {
         data: CommandData::from_vec(bytes),
         callback,
         frame: 0,
-        err_msg,
-        company,
-        cmd,
+        err_msg: err_message.0,
+        company: company.0,
+        cmd: cmd.0,
         my_cmd: false,
     };
+
     if (s.company.network_server)() {
-        // Delay the server's own commands one tick, as clients' commands are.
+        /* If we are the server, we queue the command in our 'special' queue.
+         *   In theory, we could execute the command right away, but then the
+         *   client on the server can do everything 1 tick faster than others.
+         *   So to keep the game fair, we delay the command with 1 tick
+         *   which gives about the same speed as most clients.
+         */
         c.frame = crate::network_frame::frame_counter_max().wrapping_add(1);
         c.my_cmd = true;
+
         unsafe { CommandQueue::edit(WAIT.get(), |queue| queue.push(c)) };
         return;
     }
-    // The client cannot tell which frame; it sends and forgets the packet.
-    c.frame = 0;
-    send_packet((s.network)(), ((s.network)().client_game)(), &c, false);
+
+    c.frame = 0; // The client can't tell which frame, so just make it 0
+
+    /* Clients send their command to the server and forget all about the packet */
+    client_send_command((s.network)(), &c);
 }
 
-/// `NetworkSyncCommandQueue`: a joining client's save omits commands queued for execution.
+/// `NetworkSyncCommandQueue`: sync our local command queue to the command queue of the given
+/// socket. This is needed for the case where we receive a command
+/// before saving the game for a joining client, but without the
+/// execution of those commands. Not syncing those commands means
+/// that the client will never get them and as such will be in a
+/// desynced state from the time it started with joining.
 ///
 /// # Safety
 /// `outgoing` is the live queue of a client socket.
@@ -259,37 +329,48 @@ pub(crate) unsafe fn sync_command_queue(outgoing: *mut CommandQueue) {
     }
 }
 
-/// `NetworkExecuteLocalCommandQueue`; the caller asserts `IsLocalCompany()` first.
-pub(crate) fn execute_local_command_queue(s: &Services) {
+/// `NetworkExecuteLocalCommandQueue`: execute all commands on the local command queue that ought
+/// to be executed this frame.
+pub(crate) fn execute_local_command_queue(session: &crate::session::Services, s: &Services) {
+    (session.assert_local_company)();
+
     let company = s.company;
     let queue = if (company.network_server)() {
         EXECUTION.get()
     } else {
         socket::incoming(((s.network)().client_game)())
     };
+
     let mut executed = 0;
     // SAFETY: Execution never adds to or frees the queue it executes.
     unsafe {
         while executed < (*queue).size {
             let cp = (*queue).data.add(executed);
-            // The queue is in frame order.
+            /* The queue is always in order, which means
+             * that the first element will be executed first. */
             if crate::network_frame::frame_counter() < (*cp).frame {
                 break;
             }
+
             if crate::network_frame::frame_counter() > (*cp).frame {
+                /* If we reach here, it means for whatever reason, we've already executed
+                 * past the command we need to execute. */
                 (s.execute_past)();
             }
+
+            /* We can execute this command */
             (company.finance.set_current_company)((*cp).company);
-            (s.execute)(cp, callback_index(s, (*cp).callback));
+            (s.execute)(cp, find_callback_index(s, (*cp).callback));
             executed += 1;
         }
         CommandQueue::edit(queue, |queue| drop(queue.drain(..executed)));
     }
-    // The local company may have changed; do not restore the previous current company.
+
+    /* Local company may have changed, so we should not restore the old value */
     (company.finance.set_current_company)((company.local_company)());
 }
 
-/// `NetworkFreeLocalCommandQueue`.
+/// `NetworkFreeLocalCommandQueue`: free the local command queues.
 pub(crate) fn free_local_command_queue() {
     unsafe {
         CommandQueue::edit(WAIT.get(), Vec::clear);
@@ -297,8 +378,9 @@ pub(crate) fn free_local_command_queue() {
     }
 }
 
-/// `DistributeCommandPacket`: callbacks go back only to the owning client.
-unsafe fn distribute_packet(
+/// `DistributeCommandPacket`: "Send" a particular `CommandPacket` to all clients.
+/// `cp` is the command that has to be distributed and `owner` the client that owns the command.
+unsafe fn distribute_command_packet(
     s: &Services,
     cp: *mut CommandPacket,
     owner: *const socket::GameSocket,
@@ -306,9 +388,12 @@ unsafe fn distribute_packet(
     unsafe {
         let callback = (*cp).callback;
         (*cp).frame = crate::network_frame::frame_counter_max().wrapping_add(1);
+
         let mut cursor = 0;
         while let Some(client) = next_client(s, &mut cursor) {
-            if socket::status(client.socket) >= STATUS_MAP {
+            if server::status(client.socket) >= ClientStatus::STATUS_MAP {
+                /* Callbacks are only send back to the client who sent them in the
+                 *  first place. This filters that out. */
                 let own = client.socket.cast_const() == owner;
                 (*cp).callback = if own { callback } else { std::ptr::null() };
                 (*cp).my_cmd = own;
@@ -316,6 +401,7 @@ unsafe fn distribute_packet(
                 CommandQueue::edit(socket::outgoing(client.socket), |queue| queue.push(c));
             }
         }
+
         (*cp).callback = if owner.is_null() {
             callback
         } else {
@@ -327,7 +413,9 @@ unsafe fn distribute_packet(
     }
 }
 
-/// `DistributeQueue`.
+/// `DistributeQueue`: "Send" a particular `CommandQueue` to all clients.
+/// `queue` is the queue of commands that has to be distributed and `owner` the client that owns
+/// the commands.
 unsafe fn distribute_queue(
     s: &Services,
     queue: *mut CommandQueue,
@@ -335,27 +423,34 @@ unsafe fn distribute_queue(
 ) {
     let mut to_go = i32::from((s.commands_per_frame)());
     if owner.is_null() {
-        // The server uses `commands_per_frame_server` if higher.
+        /* This is the server, use the commands_per_frame_server setting if higher */
         to_go = to_go.max(i32::from((s.commands_per_frame_server)()));
     }
+
+    /* Not technically the most performant way, but consider clients rarely click more than once per tick. */
     let mut index = 0;
     unsafe {
         while index < (*queue).size {
             let cp = (*queue).data.add(index);
-            if crate::session::pause() != 0
-                && crate::command::openttd_rust_command_allowed_while_paused(
-                    commands(s),
-                    (commands(s).command_type)((*cp).cmd),
-                ) == 0
+            /* Do not distribute commands when paused and the command is not allowed while paused. */
+            let commands = commands(s);
+            if PauseModes(crate::session::pause()) != PauseModes::EMPTY
+                && !crate::command::allowed_while_paused(
+                    commands,
+                    (commands.command_type)((*cp).cmd),
+                )
             {
                 index += 1;
                 continue;
             }
+
+            /* Limit the number of commands per client per tick. */
             to_go -= 1;
             if to_go < 0 {
                 break;
             }
-            distribute_packet(s, cp, owner);
+
+            distribute_command_packet(s, cp, owner);
             (s.admin_log)(
                 if owner.is_null() {
                     std::ptr::null()
@@ -369,98 +464,134 @@ unsafe fn distribute_queue(
     }
 }
 
-/// `NetworkDistributeCommands`: the server's commands first, then each client's.
+/// `NetworkDistributeCommands`: distribute the commands of ourself and the clients.
 pub(crate) fn distribute_commands(s: &Services) {
+    /* First send the server's commands. */
     unsafe { distribute_queue(s, WAIT.get(), std::ptr::null()) };
+
+    /* Then send the queues of the others. */
     let mut cursor = 0;
     while let Some(client) = next_client(s, &mut cursor) {
         unsafe { distribute_queue(s, socket::incoming(client.socket), client.socket) };
     }
 }
 
-/// `NetworkHandleCommandQueue`.
+/// `NetworkHandleCommandQueue`: handle the command-queue of a socket.
 ///
 /// # Safety
-/// `outgoing` is the live queue of `socket`.
+/// `outgoing` is the live queue of `cs`.
 pub(crate) unsafe fn handle_command_queue(
     s: &Services,
-    socket: *mut socket::GameSocket,
+    cs: *mut socket::GameSocket,
     outgoing: *mut CommandQueue,
 ) {
     unsafe {
         for index in 0..(*outgoing).size {
-            send_packet((s.network)(), socket, &*(*outgoing).data.add(index), true);
+            server_send_command((s.network)(), cs, &*(*outgoing).data.add(index));
         }
         CommandQueue::edit(outgoing, Vec::clear);
     }
 }
 
-fn callback_index(s: &Services, callback: *const c_void) -> usize {
+/// `FindCallbackIndex`: the callback index of a callback pointer, or `usize::MAX` if the
+/// function wasn't found in the callback list.
+fn find_callback_index(s: &Services, callback: *const c_void) -> usize {
     (0..s.callback_count)
         .find(|&i| (s.callback)(i) == callback)
         .unwrap_or(usize::MAX)
 }
+
+/// `IsNetworkRegisteredCallback`: ensure that callbacks used when Posting commands are actually
+/// registered for the network calls.
+fn is_network_registered_callback(s: &Services, callback: *const c_void) -> bool {
+    find_callback_index(s, callback) != usize::MAX
+}
+
 /// `IsNetworkRegisteredCallback` for the native command facade.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_registered_callback(
     s: &Services,
     callback: *const c_void,
 ) -> u8 {
-    u8::from(callback_index(s, callback) != usize::MAX)
+    u8::from(is_network_registered_callback(s, callback))
 }
 
 fn commands(s: &Services) -> &crate::services::CommandServices {
     ((s.company.shared.command_post)().command)()
 }
 
-/// `NetworkGameSocketHandler::SendCommand` and the per-role command packet envelope.
+/// `NetworkGameSocketHandler::SendCommand`: sends a command over the network.
+/// `p` is the packet to send it in and `cp` the packet to actually send.
 #[allow(clippy::cast_possible_truncation)] // Original u16 string ID and u8 callback encoding.
-fn send_packet(
+fn send_command_packet(
     f: &crate::network_frame::Services,
-    game: *mut socket::GameSocket,
+    p: &mut crate::packet::State,
     cp: &CommandPacket,
-    server: bool,
 ) {
-    use crate::network_frame::{packet_check, packet_new, packet_send};
     let s = f.command;
-    let kind = if server {
-        debug!(
-            net,
-            9,
-            "client[{}] SendCommand(): cmd={}",
-            (f.dispatch.client_id)(game),
-            cp.cmd
-        );
-        crate::tcp_game::PACKET_SERVER_COMMAND
-    } else {
-        debug!(net, 9, "Client::SendCommand(): cmd={}", cp.cmd);
-        crate::tcp_game::PACKET_CLIENT_COMMAND
-    };
-    let mut p = packet_new(f, game, kind);
-    let check = packet_check(f);
+    let check = crate::network_frame::packet_check(f);
     p.send_uint8(cp.company, check);
     p.send_uint16(u16::from(cp.cmd), check);
     p.send_uint16(cp.err_msg as u16, check);
     p.send_buffer(cp.data.as_slice(), check);
-    let mut callback = callback_index(s, cp.callback);
+
+    let mut callback = find_callback_index(s, cp.callback);
     if callback > usize::from(u8::MAX) || !(s.has_unpack)(cp.cmd, callback) {
         debug!(
             net,
             0, "Unknown callback for command; no callback sent (command: {})", cp.cmd
         );
-        callback = 0;
+        callback = 0; // _callback_table[0] == nullptr
     }
     p.send_uint8(callback as u8, check);
-    if server {
-        p.send_uint32(cp.frame, check);
-        p.send_bool(cp.my_cmd, check);
-    }
-    packet_send(f, game, &mut p);
 }
 
-/// `ReceiveCommand`: the wire's u16 command narrows to the native enum's u8 first.
+/// `ServerNetworkGameSocketHandler::SendCommand`: send a command to the client to execute.
+fn server_send_command(
+    f: &crate::network_frame::Services,
+    cs: *mut socket::GameSocket,
+    cp: &CommandPacket,
+) -> NetworkRecvStatus {
+    use crate::network_frame::{packet_check, packet_new, packet_send};
+    debug!(
+        net,
+        9,
+        "client[{}] SendCommand(): cmd={}",
+        (f.dispatch.client_id)(cs),
+        cp.cmd
+    );
+
+    let mut p = packet_new(f, cs, PacketGameType::PACKET_SERVER_COMMAND);
+
+    send_command_packet(f, &mut p, cp);
+    p.send_uint32(cp.frame, packet_check(f));
+    p.send_bool(cp.my_cmd, packet_check(f));
+
+    packet_send(f, cs, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
+}
+
+/// `ClientNetworkGameSocketHandler::SendCommand`: send a command to the server.
+fn client_send_command(
+    f: &crate::network_frame::Services,
+    cp: &CommandPacket,
+) -> NetworkRecvStatus {
+    use crate::network_frame::{packet_new, packet_send};
+    debug!(net, 9, "Client::SendCommand(): cmd={}", cp.cmd);
+
+    let my_client = (f.client_game)();
+    let mut p = packet_new(f, my_client, PacketGameType::PACKET_CLIENT_COMMAND);
+    send_command_packet(f, &mut p, cp);
+
+    packet_send(f, my_client, &mut p);
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
+}
+
+/// `NetworkGameSocketHandler::ReceiveCommand`: receives a command from the network.
+/// `p` is the packet to read from and `cp` the struct to write the data to; the wire's u16
+/// command narrows to the native enum's u8 first.
 #[allow(clippy::cast_possible_truncation)] // Native Commands narrows the wire u16 to u8.
-fn receive_packet(
+fn receive_command(
     f: &crate::network_frame::Services,
     p: *mut crate::packet::State,
     cp: &mut CommandPacket,
@@ -474,7 +605,7 @@ fn receive_packet(
         if !(commands.command_valid)(cp.cmd) {
             return DecodeError::InvalidCommand;
         }
-        if (commands.command_flags)(cp.cmd) & crate::command_type::CommandFlag::OFFLINE != 0 {
+        if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Offline) {
             return DecodeError::Offline;
         }
         cp.err_msg = u32::from(packet::recv_uint16(p, f.packet));
@@ -489,21 +620,25 @@ fn receive_packet(
             },
         );
         drop(bytes);
+
         let callback = usize::from(packet::recv_uint8(p, f.packet));
         if callback >= s.callback_count || !(s.has_unpack)(cp.cmd, callback) {
             return DecodeError::InvalidCallback;
         }
+
         cp.callback = (s.callback)(callback);
     }
     DecodeError::None
 }
+
+/// A default-constructed `CommandPacket`.
 fn empty_packet() -> CommandPacket {
     CommandPacket {
         data: CommandData::EMPTY,
         callback: std::ptr::null(),
         frame: 0,
         err_msg: 0,
-        company: crate::company_type::INVALID_OWNER,
+        company: CompanyID::INVALID.0,
         cmd: 0,
         my_cmd: false,
     }
@@ -514,30 +649,36 @@ pub(crate) fn receive_server(
     f: &crate::network_frame::Services,
     game: *mut socket::GameSocket,
     p: *mut crate::packet::State,
-) -> u8 {
-    use crate::network_type::{NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY};
-    if socket::status(game) != crate::network_client::status::ACTIVE {
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+) -> NetworkRecvStatus {
+    use crate::network_client::ServerStatus;
+    if ServerStatus(socket::status(game)) != ServerStatus::STATUS_ACTIVE {
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     let mut cp = empty_packet();
-    let err = receive_packet(f, p, &mut cp);
+    let err = receive_command(f, p, &mut cp);
     cp.frame = unsafe { crate::packet::recv_uint32(p, f.packet) };
     cp.my_cmd = unsafe { crate::packet::recv_bool(p, f.packet) };
+
     debug!(
         net,
         9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cp.cmd, cp.frame
     );
+
     if err != DecodeError::None {
         (f.command.console_bad_server)(err);
-        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
+
     unsafe {
         CommandQueue::edit(socket::incoming(game), |q| q.push(cp));
     }
-    NETWORK_RECV_STATUS_OKAY
+
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
-/// `ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND` admission and quota.
+/// `ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND`: the client has done a command and
+/// wants us to handle it.
 #[allow(clippy::too_many_lines)] // The original ordered command admission/error precedence.
 pub(crate) fn receive_client(
     f: &crate::network_frame::Services,
@@ -545,36 +686,32 @@ pub(crate) fn receive_client(
     p: *mut crate::packet::State,
     frame: *mut crate::session::Frame,
     work: crate::network_action::Actions,
-) -> u8 {
-    use crate::command_type::{CMD_COMPANY_ALLOW_LIST_CTRL, CMD_COMPANY_CTRL, CommandFlag};
-    use crate::company_type::{COMPANY_NEW_COMPANY, COMPANY_SPECTATOR};
-    use crate::network_type::{
-        CLIENT_ID_SERVER, NETWORK_ERROR_CHEATER, NETWORK_ERROR_COMPANY_MISMATCH,
-        NETWORK_ERROR_KICKED, NETWORK_ERROR_NOT_EXPECTED, NETWORK_ERROR_TOO_MANY_COMMANDS,
-        NETWORK_RECV_STATUS_CLIENT_QUIT, NETWORK_RECV_STATUS_OKAY,
-    };
-    let fail = |error| {
+) -> NetworkRecvStatus {
+    use crate::company_type::{CCA_NEW, COMPANY_NEW_COMPANY, COMPANY_SPECTATOR};
+    use crate::network_type::CLIENT_ID_SERVER;
+    let send_error = |error| {
         crate::network_connection::send_error(
             f.connection,
             f,
             game,
             error,
-            ByteSpan {
-                data: std::ptr::null(),
-                size: 0,
-            },
+            crate::network_connection::EMPTY_TEXT,
             work,
         )
     };
-    if socket::status(game) < crate::network_frame::server_status::DONE_MAP
+    /* The client was never joined.. so this is impossible, right?
+     *  Ignore the packet, give the client a warning, and close the connection */
+    if server::status(game) < ClientStatus::STATUS_DONE_MAP
         || crate::network_frame::socket_has_quit(f, game)
     {
-        return fail(NETWORK_ERROR_NOT_EXPECTED);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED);
     }
+
     let s = f.command;
     if unsafe { (*socket::incoming(game)).size } >= usize::from((s.max_commands_in_queue)()) {
-        return fail(NETWORK_ERROR_TOO_MANY_COMMANDS);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_TOO_MANY_COMMANDS);
     }
+
     let shell = socket::server(game);
     debug!(
         net,
@@ -582,82 +719,103 @@ pub(crate) fn receive_client(
         "client[{}] Receive_CLIENT_COMMAND()",
         (f.dispatch.client_id)(game)
     );
+
     let mut cp = empty_packet();
-    let err = receive_packet(f, p, &mut cp);
+    let err = receive_command(f, p, &mut cp);
+
     if crate::network_frame::socket_has_quit(f, game) {
-        return NETWORK_RECV_STATUS_CLIENT_QUIT;
+        return NetworkRecvStatus::NETWORK_RECV_STATUS_CLIENT_QUIT;
     }
+
     if err != DecodeError::None {
         (s.console_bad_client)(shell, err);
-        return fail(NETWORK_ERROR_NOT_EXPECTED);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_NOT_EXPECTED);
     }
+
     let commands = commands(s);
-    if (commands.command_flags)(cp.cmd) & CommandFlag::SERVER != 0
+    if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Server)
         && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
     {
         (s.console_server_only)(shell, cp.cmd);
-        return fail(NETWORK_ERROR_KICKED);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
     }
-    if (commands.command_flags)(cp.cmd) & CommandFlag::SPECTATOR == 0
+
+    if !CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::Spectator)
         && !(s.company.shared.company_valid)(cp.company)
         && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
     {
         (s.console_spectator)(shell, cp.cmd);
-        return fail(NETWORK_ERROR_KICKED);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_KICKED);
     }
-    let action = if cp.cmd == CMD_COMPANY_CTRL {
+
+    /*
+     * Only CMD_COMPANY_CTRL is always allowed, for the rest, playas needs
+     * to match the company in the packet. If it doesn't, the client has done
+     * something pretty naughty (or a bug), and will be kicked
+     */
+    let cca = if Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL {
         (s.control_action)(cp.data.span())
     } else {
-        crate::company_type::CCA_NEW
+        CCA_NEW
     };
-    if !(cp.cmd == CMD_COMPANY_CTRL
-        && action == crate::company_type::CCA_NEW
+    if !(Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL
+        && cca == CCA_NEW
         && (f.connection.client_company)(shell) == COMPANY_NEW_COMPANY)
         && (f.connection.client_company)(shell) != cp.company
     {
         (s.console_company_mismatch)(shell, cp.company);
-        return fail(NETWORK_ERROR_COMPANY_MISMATCH);
+        return send_error(NetworkErrorCode::NETWORK_ERROR_COMPANY_MISMATCH);
     }
-    if cp.cmd == CMD_COMPANY_CTRL {
-        if action != crate::company_type::CCA_NEW || cp.company != COMPANY_SPECTATOR {
-            return fail(NETWORK_ERROR_CHEATER);
+
+    if Commands(cp.cmd) == Commands::CMD_COMPANY_CTRL {
+        if cca != CCA_NEW || cp.company != COMPANY_SPECTATOR {
+            return send_error(NetworkErrorCode::NETWORK_ERROR_CHEATER);
         }
+
+        /* Check if we are full - else it's possible for spectators to send a CMD_COMPANY_CTRL and the company is created regardless of max_companies! */
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
             (s.server_full)((f.dispatch.client_id)(game));
-            return NETWORK_RECV_STATUS_OKAY;
+            return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
-    if cp.cmd == CMD_COMPANY_ALLOW_LIST_CTRL {
+
+    if Commands(cp.cmd) == Commands::CMD_COMPANY_ALLOW_LIST_CTRL {
+        /* Maybe the client just got moved before allowing? */
         if (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
             && (f.connection.client_company)(shell) != cp.company
         {
-            return NETWORK_RECV_STATUS_OKAY;
+            return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
-        let text = (f.dispatch.text_begin)(frame);
-        (s.allow_list_key)(cp.data.span(), text);
+
+        /* Only allow clients to add/remove currently joined clients. The server owner does not go via this method, so is allowed to do more. */
+        let public_key = (f.dispatch.text_begin)(frame);
+        (s.allow_list_key)(cp.data.span(), public_key);
         let mut cursor = 0;
         let found = loop {
             let info = (s.next_info)(&raw mut cursor);
             if info.is_null() {
                 break false;
             }
-            if (s.info_key_equals)(info, text) {
+            if (s.info_key_equals)(info, public_key) {
                 break true;
             }
         };
         // The original key temporary ends before client-ID replacement and queue insertion.
         (f.dispatch.packet_end)(frame);
+
+        /* Maybe the client just left? */
         if !found {
-            return NETWORK_RECV_STATUS_OKAY;
+            return NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY;
         }
     }
-    if (commands.command_flags)(cp.cmd) & CommandFlag::CLIENT_ID != 0 {
+
+    if CommandFlags((commands.command_flags)(cp.cmd)).test(CommandFlag::ClientID) {
         cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), (f.dispatch.client_id)(game));
     }
     unsafe {
         CommandQueue::edit(socket::incoming(game), |q| q.push(cp));
     }
-    NETWORK_RECV_STATUS_OKAY
+    NetworkRecvStatus::NETWORK_RECV_STATUS_OKAY
 }
 
 /// Grows `data` by at least one byte, as `std::vector::push_back`.
@@ -666,11 +824,7 @@ pub(crate) fn receive_client(
 /// `data` is live and holds parts from this module or zeroes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_command_data_grow(data: *mut CommandData) {
-    unsafe {
-        let mut bytes = (*data).take();
-        bytes.reserve(1);
-        std::ptr::write(data, CommandData::from_vec(bytes));
-    }
+    unsafe { (*data).grow() };
 }
 
 /// # Safety
@@ -684,10 +838,7 @@ pub unsafe extern "C" fn openttd_rust_command_data_free(data: *mut CommandData) 
 /// `queue` is live and holds parts from this module or zeroes; it is left empty.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_command_queue_free(queue: *mut CommandQueue) {
-    unsafe {
-        drop(CommandQueue::edit(queue, std::mem::take));
-        *queue = CommandQueue::EMPTY;
-    }
+    unsafe { CommandQueue::free(queue) };
 }
 
 crate::abi::layouts! {
@@ -748,7 +899,7 @@ mod tests {
             assert_eq!((*queue.data.add(1)).frame, 8);
             CommandQueue::edit(&raw mut queue, |q| drop(q.remove(0)));
             assert_eq!((*queue.data).frame, 8);
-            openttd_rust_command_queue_free(&raw mut queue);
+            CommandQueue::free(&raw mut queue);
         }
         assert!(queue.data.is_null() && queue.size == 0 && queue.capacity == 0);
     }
@@ -759,7 +910,7 @@ mod tests {
         for byte in 0..40u8 {
             unsafe {
                 if data.size == data.capacity {
-                    openttd_rust_command_data_grow(&raw mut data);
+                    data.grow();
                 }
                 *data.data.add(data.size) = byte;
             }
