@@ -422,6 +422,22 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
+def report_status(path: Path) -> None:
+    record, run = status(path)
+    print(json.dumps({"request": record, "run": run}, indent=2))
+    if run:
+        verify_children(run)
+    if run and run["status"] == "completed":
+        verify_completion(record, run)
+
+
+def positive(text: str) -> int:
+    value = int(text)
+    if value <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -444,40 +460,31 @@ def main() -> int:
     for command in ("status", "wait"):
         check = commands.add_parser(command)
         check.add_argument("request_file", type=Path)
-        check.add_argument("--timeout", type=int, default=WAIT_TIMEOUT)
-        check.add_argument("--interval", type=int, default=15)
+        check.add_argument("--timeout", type=positive, default=WAIT_TIMEOUT)
+        check.add_argument("--interval", type=positive, default=15)
     queued = commands.add_parser(
         "queue-wait",
         help="wait until a queued PR merges (exit 0) or leaves the queue (exit 3)",
     )
     queued.add_argument("pr", type=int)
     queued.add_argument("--repo")
-    queued.add_argument("--timeout", type=int, default=QUEUE_TIMEOUT)
-    queued.add_argument("--interval", type=int, default=15)
+    queued.add_argument("--timeout", type=positive, default=QUEUE_TIMEOUT)
+    queued.add_argument("--interval", type=positive, default=15)
     args = parser.parse_args()
     try:
         if args.command == "queue-wait":
-            if args.timeout <= 0 or args.interval <= 0:
-                raise ValueError("Timeout and interval must be positive")
-            repository = repository_of(args.repo)
-            merge = queue_wait(repository, args.pr, args.timeout, args.interval)
+            merge = queue_wait(
+                repository_of(args.repo), args.pr, args.timeout, args.interval
+            )
             print(f"PR #{args.pr} merged: {merge}")
-            return 0
-        if args.command == "request":
+        elif args.command == "request":
             path = request(args)
             if path and args.wait:
                 wait(path, WAIT_TIMEOUT, 15)
         elif args.command == "wait":
-            if args.timeout <= 0 or args.interval <= 0:
-                raise ValueError("Timeout and interval must be positive")
             wait(args.request_file, args.timeout, args.interval)
         else:
-            record, run = status(args.request_file)
-            print(json.dumps({"request": record, "run": run}, indent=2))
-            if run:
-                verify_children(run)
-            if run and run["status"] == "completed":
-                verify_completion(record, run)
+            report_status(args.request_file)
         return 0
     except WaitTimeout as timeout:
         print(timeout)
