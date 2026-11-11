@@ -2085,3 +2085,81 @@ pub(crate) const DISASTER: crate::disaster::Services = crate::disaster::Services
     disasters_enabled: unreachable0,
     town_index: unreachable1,
 };
+
+/// `crate::industry::Services` with every entry unreachable.
+pub(crate) const INDUSTRIES: crate::industry::Services = crate::industry::Services {
+    shared: ptr::null(),
+    next_tick: unreachable1,
+    industry_sound: unreachable2,
+    play_sound: unreachable2,
+    special_effect: unreachable3,
+    tick_trigger: unreachable1,
+    production_callback: unreachable2,
+    scale_cargo: unreachable1,
+    environment: ptr::null(),
+    farm_tile: unreachable1,
+    make_field: unreachable4,
+    fence_wanted: unreachable2,
+    tile_completed: unreachable2,
+    harvest: unreachable1,
+    change_callback: unreachable3,
+    text: ptr::null(),
+    news: unreachable4,
+    production_news: unreachable4,
+    callback_error: unreachable2,
+    set_dirty: unreachable1,
+    destroy: unreachable1,
+    opening_news: unreachable1,
+    opening_events: unreachable1,
+    create: unreachable2,
+    num_items: unreachable0,
+    get: unreachable1,
+    resolver: ptr::null(),
+    company_none: unreachable0,
+    restore_company: unreachable1,
+    directory_dirty: unreachable1,
+};
+
+/// `crate::industry::LifecycleServices` with every entry unreachable.
+pub(crate) const INDUSTRY_LIFECYCLE: crate::industry::LifecycleServices =
+    crate::industry::LifecycleServices {
+        neutral_station: unreachable1,
+        cleanup_tile: unreachable1,
+        delete_tile_inspect: unreachable1,
+        restoration: ptr::null(),
+        delete_oilrig: unreachable1,
+        clear_docking: unreachable1,
+        industry_field: unreachable2,
+        disassociate_field: unreachable1,
+        release_disasters: unreachable1,
+        delete_storage: unreachable1,
+        delete_news: unreachable1,
+        close_view: unreachable1,
+        close_production: unreachable1,
+        delete_inspect: unreachable1,
+        subsidies: unreachable0,
+        invalidate_cargo: unreachable1,
+        belongs: unreachable2,
+        randomisation_spec: unreachable1,
+        random_triggers: unreachable1,
+        set_random_triggers: unreachable2,
+        resolve_reseed: unreachable4,
+        random_bits: unreachable1,
+        set_random_bits: unreachable2,
+        animation_spec: unreachable1,
+    };
+
+/// `crate::industry::ConstructionServices` with every entry unreachable.
+pub(crate) const INDUSTRY_CONSTRUCTION: crate::industry::ConstructionServices =
+    crate::industry::ConstructionServices {
+        set_town: unreachable2,
+        callback: unreachable4,
+        callback_error: unreachable3,
+        water_class: unreachable1,
+        clear_tile: unreachable2,
+        make_industry: unreachable5,
+        set_construction_counter: unreachable2,
+        set_construction_stage: unreachable2,
+        translated_gfx: unreachable1,
+        build_window_dirty: unreachable0,
+    };
