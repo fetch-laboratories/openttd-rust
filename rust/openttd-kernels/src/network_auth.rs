@@ -47,7 +47,7 @@ pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -
     let owner = (f.auth_owner)((s.auth)(native));
     let mut p = packet_new(f, game, PACKET_SERVER_AUTH_REQUEST);
     unsafe {
-        auth::openttd_rust_auth_handler_send_request(owner, &raw mut p, packet_check(f));
+        auth::send_request(owner, &raw mut p, packet_check(f));
     }
     packet_send(f, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
@@ -98,11 +98,21 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
     }
     let owner = (f.auth_owner)(handler);
     debug!(net, 9, "Client::Receive_SERVER_ENABLE_ENCRYPTION()");
-    if unsafe { auth::openttd_rust_auth_handler_receive_enable(owner, p) } == 0 {
+    if unsafe { auth::receive_enable(owner, p) } == 0 {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
-    let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
+    let receive = unsafe {
+        auth::stream_new(
+            owner,
+            crate::network_crypto_internal::X25519KeyExchangeSide::SERVER,
+        )
+    };
+    let send = unsafe {
+        auth::stream_new(
+            owner,
+            crate::network_crypto_internal::X25519KeyExchangeSide::CLIENT,
+        )
+    };
     (s.enable_encryption)(native, receive, send);
     debug!(net, 9, "Client::status = ENCRYPTED");
     write_field!(game, status, client::ENCRYPTED);
@@ -165,12 +175,22 @@ pub(crate) fn receive_response(
     }
     let mut p = packet_new(f, game, PACKET_SERVER_ENABLE_ENCRYPTION);
     unsafe {
-        auth::openttd_rust_auth_handler_send_enable(owner, &raw mut p);
+        auth::send_enable(owner, &raw mut p);
     }
     packet_send(f, game, &mut p);
     let peer = unsafe { auth::openttd_rust_auth_handler_peer(owner) };
-    let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
-    let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
+    let receive = unsafe {
+        auth::stream_new(
+            owner,
+            crate::network_crypto_internal::X25519KeyExchangeSide::CLIENT,
+        )
+    };
+    let send = unsafe {
+        auth::stream_new(
+            owner,
+            crate::network_crypto_internal::X25519KeyExchangeSide::SERVER,
+        )
+    };
     (s.enable_encryption)(native, peer, receive, send);
     debug!(
         net,

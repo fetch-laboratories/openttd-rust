@@ -11,7 +11,7 @@ pub(crate) const X25519_MAC_SIZE: usize = 16;
 pub(crate) const X25519_KEY_EXCHANGE_MESSAGE_SIZE: usize = 8;
 
 /// Nonce storage projected into the existing session owner. The owner preserves
-/// X25519Nonce's destruction-time crypto wipe, just as it does for the key projections.
+/// `X25519Nonce`'s destruction-time crypto wipe, just as it does for the key projections.
 pub(crate) type X25519Nonce = [u8; X25519_NONCE_SIZE];
 /// Container for an X25519 message authentication code.
 pub(crate) type X25519Mac = [u8; X25519_MAC_SIZE];

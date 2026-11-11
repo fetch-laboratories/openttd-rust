@@ -15,8 +15,8 @@ use crate::debug::debug;
 use crate::network_crypto::{NetworkAuthenticationMethod, NetworkAuthenticationMethodMask};
 use crate::network_crypto_internal::{
     X25519_KEY_EXCHANGE_MESSAGE_SIZE, X25519_KEY_SIZE, X25519_MAC_SIZE, X25519_NONCE_SIZE,
-    X25519DerivedKeys, X25519KeyExchangeMessage, X25519Mac, X25519Nonce, X25519PublicKey,
-    X25519SecretKey, create_random_nonce,
+    X25519DerivedKeys, X25519KeyExchangeMessage, X25519KeyExchangeSide, X25519Mac, X25519Nonce,
+    X25519PublicKey, X25519SecretKey, create_random_nonce,
 };
 use crate::{
     crypto::{self, Aead},
@@ -321,12 +321,12 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
     };
     let valid = unsafe {
         let single = single_mut(owner);
-        crypto::derive(
+        crypto::exchange(
             &mut single.session.keys,
             &single.session.secret,
             &single.session.public,
             &single.session.peer,
-            false,
+            X25519KeyExchangeSide::CLIENT,
             bytes(password, size),
         )
     };
@@ -395,12 +395,12 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
         (*packet).recv_bytes(&mut single.session.peer);
         (*packet).recv_bytes(&mut mac);
         (*packet).recv_bytes(message.as_mut());
-        crypto::derive(
+        crypto::exchange(
             &mut single.session.keys,
             &single.session.secret,
             &single.session.public,
             &single.session.peer,
-            true,
+            X25519KeyExchangeSide::SERVER,
             bytes(password, size),
         )
     };
@@ -443,10 +443,12 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
 }
 
 // Entries share the module contract. Native success values are 0-or-1 u8 (#644).
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
+/// Create the client authentication handlers in method order.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn client_new(
     services: *const Services,
-    secret: *const u8,
+    secret: &X25519SecretKey,
     password: *mut RustAuthenticationClientHandler,
 ) -> *mut Handler {
     let mut handlers = Vec::new();
@@ -456,7 +458,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
                 services,
                 NetworkAuthenticationMethod(method),
                 false,
-                &*secret.cast::<X25519SecretKey>(),
+                secret,
                 password,
                 ptr::null(),
                 ptr::null(),
@@ -471,14 +473,24 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
         },
     }))
 }
+
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
+pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
+    services: *const Services,
+    secret: *const u8,
+    password: *mut RustAuthenticationClientHandler,
+) -> *mut Handler {
+    unsafe { client_new(services, &*secret.cast::<X25519SecretKey>(), password) }
+}
+/// Create the available server handlers, preserving provider and fallback order.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn server_new(
     services: *const Services,
     password: *const NetworkAuthenticationPasswordProvider,
     authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
-    mask: u16,
+    mask: NetworkAuthenticationMethodMask,
 ) -> *mut Handler {
-    let mask = NetworkAuthenticationMethodMask(mask);
     let mut secret = Zeroizing::new([0; X25519_KEY_SIZE]);
     unsafe {
         ((*services).random_bytes)(secret.as_mut_ptr(), X25519_KEY_SIZE);
@@ -534,6 +546,23 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
         kind: Kind::Server { handlers },
     }))
 }
+
+#[unsafe(no_mangle)]
+pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
+    services: *const Services,
+    password: *const NetworkAuthenticationPasswordProvider,
+    authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
+    mask: u16,
+) -> *mut Handler {
+    unsafe {
+        server_new(
+            services,
+            password,
+            authorized,
+            NetworkAuthenticationMethodMask(mask),
+        )
+    }
+}
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_destroy(owner: *mut Handler) {
     unsafe {
@@ -584,8 +613,10 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_response(
 ) -> u8 {
     unsafe { receive_response(owner, packet) }
 }
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_request(
+/// Send the active server request, with its method prefix for combined handlers.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn send_request(
     owner: *mut Handler,
     packet: *mut packet::State,
     check: extern "C" fn(bool),
@@ -603,43 +634,73 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_request(
         (*packet).send_bytes(&session.exchange_nonce);
     }
 }
+
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_enable(
+pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_request(
     owner: *mut Handler,
     packet: *mut packet::State,
+    check: extern "C" fn(bool),
 ) {
+    unsafe { send_request(owner, packet, check) }
+}
+/// Send the active session nonce to enable encryption.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn send_enable(owner: *mut Handler, packet: *mut packet::State) {
     unsafe {
         let session = &single_mut(Handler::active(owner)).session;
         (*packet).send_bytes(&session.encryption_nonce);
     }
 }
+
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_enable(
+pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_enable(
     owner: *mut Handler,
     packet: *mut packet::State,
-) -> u8 {
+) {
+    unsafe { send_enable(owner, packet) }
+}
+/// Read the active session nonce for enabling encryption.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn receive_enable(owner: *mut Handler, packet: *mut packet::State) -> u8 {
     unsafe {
         let session = &mut single_mut(Handler::active(owner)).session;
         u8::from((*packet).recv_bytes(&mut session.encryption_nonce) == X25519_NONCE_SIZE)
     }
 }
+
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
-    owner: *const Handler,
-    side: u8,
-) -> *mut Stream {
+pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_receive_enable(
+    owner: *mut Handler,
+    packet: *mut packet::State,
+) -> u8 {
+    unsafe { receive_enable(owner, packet) }
+}
+/// Create an encryption stream for the selected exchange direction.
+/// # Safety
+/// Owners, providers, packets and synchronous leaves obey this module's lifetime contract.
+pub(crate) unsafe fn stream_new(owner: *const Handler, side: X25519KeyExchangeSide) -> *mut Stream {
     unsafe {
         let session = &(*owner).single().session;
         Box::into_raw(Box::new(Stream {
             context: Aead::new(
-                session.keys[usize::from(side) * X25519_KEY_SIZE
-                    ..usize::from(side) * X25519_KEY_SIZE + X25519_KEY_SIZE]
+                session.keys[usize::from(side.0) * X25519_KEY_SIZE
+                    ..usize::from(side.0) * X25519_KEY_SIZE + X25519_KEY_SIZE]
                     .try_into()
                     .unwrap(),
                 &session.encryption_nonce,
             ),
         }))
     }
+}
+
+#[unsafe(no_mangle)]
+pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
+    owner: *const Handler,
+    side: u8,
+) -> *mut Stream {
+    unsafe { stream_new(owner, X25519KeyExchangeSide(side)) }
 }
 
 #[unsafe(no_mangle)]
