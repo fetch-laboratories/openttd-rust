@@ -33,7 +33,7 @@ use crate::slope_type::Slope;
 use crate::strings_type::StringID;
 use crate::tile_type::{TileIndex, TileType, TropicZone};
 use crate::tilearea::TileArea;
-use std::{ffi::c_void, ptr};
+use std::{cell::OnceCell, ffi::c_void, ptr};
 
 #[repr(C)]
 pub struct ConflictKinds {
@@ -122,7 +122,7 @@ struct IndustryCandidate {
 }
 struct Engine<'a> {
     context: &'a TransactionContext,
-    coordinates: crate::map_func::Map,
+    coordinates: OnceCell<crate::map_func::Map>,
     s: &'a Services,
     g: &'a GenerationServices,
     c: &'a ConstructionServices,
@@ -170,7 +170,13 @@ impl Engine<'_> {
         self.map().coordinates().distance_max(a, b)
     }
     fn tile_add_xy(&self, tile: TileIndex, x: i32, y: i32) -> TileIndex {
-        self.coordinates.tile_add_xy(tile, x, y)
+        self.coordinates
+            .get_or_init(|| {
+                let mut map = self.s.shared().map();
+                map.log_x = self.context.map.size_x.trailing_zeros();
+                map
+            })
+            .tile_add_xy(tile, x, y)
     }
     fn tile_type(&self, tile: TileIndex) -> TileType {
         TileType((self.s.shared().tile_type)(tile.0))
@@ -935,11 +941,7 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
     unsafe {
         Engine {
             context,
-            coordinates: {
-                let mut map = (&*context.production).shared().map();
-                map.log_x = context.map.size_x.trailing_zeros();
-                map
-            },
+            coordinates: OnceCell::new(),
             s: &*context.production,
             g: &*context.generation,
             c: &*context.construction,
@@ -986,7 +988,6 @@ pub(crate) unsafe fn cmd_build_industry(
     args: CmdBuildIndustry,
     context: &TransactionContext,
 ) {
-    let e = unsafe { engine(context, out) };
     let CmdBuildIndustry {
         tile,
         it,
@@ -995,9 +996,10 @@ pub(crate) unsafe fn cmd_build_industry(
         seed,
     } = args;
     if it >= IndustryType::NUM_INDUSTRYTYPES {
-        e.fail(StringID::INVALID_STRING_ID);
+        unsafe { ((*context.costs).error)(out, StringID::INVALID_STRING_ID.0) };
         return;
     }
+    let e = unsafe { engine(context, out) };
     let indspec = get_industry_spec(it);
     // Check if the to-be built/founded industry is available for this climate.
     if !unsafe { (*indspec).enabled } || unsafe { (*indspec).layouts.is_empty() } {
@@ -1303,4 +1305,57 @@ pub unsafe extern "C" fn openttd_rust_industry_shape_check(
         spec,
         IndustryGfx(gfx),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_industry_type_returns_error_without_map_metadata() {
+        unsafe extern "C" fn error(out: *mut IndustryCost, message: u32) {
+            unsafe { out.cast::<u32>().write(message) };
+        }
+        let costs = IndustryCostServices {
+            zero: crate::test_tables::unreachable1,
+            error,
+            expense_money: crate::test_tables::unreachable3,
+            success: crate::test_tables::unreachable1,
+        };
+        let context = TransactionContext {
+            map: super::super::Map {
+                size_x: 64,
+                size_y: 64,
+                landscape: 0,
+            },
+            builder: ptr::null_mut(),
+            production: ptr::null(),
+            generation: ptr::null(),
+            construction: ptr::null(),
+            lifecycle: ptr::null(),
+            tiles: ptr::null(),
+            commands: ptr::null(),
+            command_checks: ptr::null(),
+            costs: &raw const costs,
+            transaction: ptr::null(),
+            errors: ptr::null(),
+        };
+        let mut message = 0;
+        // Original CmdBuildIndustry rejects the type before any world observation.
+        unsafe {
+            cmd_build_industry(
+                ptr::from_mut(&mut message).cast(),
+                DoCommandFlags(0),
+                CmdBuildIndustry {
+                    tile: TileIndex(0),
+                    it: IndustryType::NUM_INDUSTRYTYPES,
+                    first_layout: 0,
+                    fund: false,
+                    seed: 0,
+                },
+                &context,
+            );
+        }
+        assert_eq!(message, StringID::INVALID_STRING_ID.0);
+    }
 }

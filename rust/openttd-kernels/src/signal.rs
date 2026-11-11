@@ -28,7 +28,7 @@ use crate::signal_func::SigSegState;
 use crate::signal_type::{SignalState, SignalType};
 use crate::track_func::track_status_to_track_bits;
 use crate::track_type::TrackBits;
-use std::ffi::c_uint;
+use std::{cell::OnceCell, ffi::c_uint};
 
 // Maximums used for updating signal blocks.
 const SIG_TBU_SIZE: usize = 64; // Number of signals entering the block.
@@ -186,7 +186,8 @@ struct World<'a> {
     shared: &'a Services,
     rail: &'a RailMapServices,
     native: &'a SignalServices,
-    map: Map,
+    map: OnceCell<Map>,
+    log_x: u32,
 }
 macro_rules! read {
     ($w:expr, $group:ident, $field:ident $(, $arg:expr)*) => {
@@ -220,6 +221,13 @@ struct RailCrossingAdmission {
     axis: Axis,
 }
 impl World<'_> {
+    fn map(&self) -> Map {
+        *self.map.get_or_init(|| {
+            let mut map = self.shared.map();
+            map.log_x = self.log_x;
+            map
+        })
+    }
     /// The canonical map view, loaded at each observation.
     fn view(&self) -> crate::map_func::World<'_> {
         crate::map_func::World::new(self.shared)
@@ -394,7 +402,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         train_on_tile(w, tile, &mut flags);
                         exitdir = w.view().rail_depot_dir(tile);
                         tile = w
-                            .map
+                            .map()
                             .tile_add_by_diag_dir(
                                 TileIndex(tile),
                                 DiagDirection(exitdir),
@@ -500,7 +508,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                         {
                             let next = Item {
                                 tile: w
-                                    .map
+                                    .map()
                                     .tile_add_by_diag_dir(
                                         TileIndex(tile),
                                         DiagDirection(exit),
@@ -530,7 +538,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                 crate::witness::hit(crate::witness::SIGNAL_STATION);
                 train_on_tile(w, tile, &mut flags);
                 tile = w
-                    .map
+                    .map()
                     .tile_add_by_diag_dir(
                         TileIndex(tile),
                         DiagDirection(exitdir),
@@ -547,7 +555,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                 crate::witness::hit(crate::witness::SIGNAL_CROSSING);
                 train_on_tile(w, tile, &mut flags);
                 tile = w
-                    .map
+                    .map()
                     .tile_add_by_diag_dir(
                         TileIndex(tile),
                         DiagDirection(exitdir),
@@ -570,7 +578,7 @@ fn explore_segment(w: &World<'_>, owner: u8) -> SigFlags {
                     dir = direction;
                     exitdir = reverse_diag_dir_raw(direction, |ok| native_assert(w.shared, ok));
                     tile = w
-                        .map
+                        .map()
                         .tile_add_by_diag_dir(
                             TileIndex(tile),
                             DiagDirection(exitdir),
@@ -723,7 +731,7 @@ fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
             add_tbd(Item { tile, dir });
             add_tbd(Item {
                 tile: w
-                    .map
+                    .map()
                     .tile_add_by_diag_dir(
                         TileIndex(tile),
                         DiagDirection(dir),
@@ -734,7 +742,7 @@ fn update_signals_in_buffer(w: &World<'_>, owner: u8) -> SigSegState {
             });
         } else {
             tile = w
-                .map
+                .map()
                 .tile_add_by_diag_dir(
                     TileIndex(tile),
                     DiagDirection(dir),
@@ -847,11 +855,8 @@ unsafe fn world<'a>(
             shared: &*shared,
             rail: &*rail,
             native: &*native,
-            map: {
-                let mut map = (&*shared).map();
-                map.log_x = log_x;
-                map
-            },
+            map: OnceCell::new(),
+            log_x,
         }
     }
 }
@@ -1204,8 +1209,68 @@ pub unsafe extern "C" fn openttd_rust_signal_workset_probe(output: *mut SetTrace
 #[cfg(test)]
 mod tests {
     use super::*;
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn empty_flush_and_queue_only_entries_leave_map_metadata_unused() {
+        extern "C" fn check(condition: bool) {
+            assert!(condition);
+        }
+        let _lock = LOCK.lock().unwrap();
+        let mut shared = crate::test_tables::SHARED;
+        shared.map = std::ptr::null();
+        let mut native = crate::test_tables::SIGNALS;
+        native.assertions = true;
+        native.assert_condition = check;
+        let context = Context {
+            shared: &raw const shared,
+            rail: &crate::test_tables::RAIL_MAP,
+            native: &raw const native,
+            log_x: 6,
+        };
+        access(|s| {
+            s.global.reset();
+            s.last_owner = INVALID_OWNER;
+        });
+        context.flush();
+        access(|s| {
+            assert_eq!(s.global.count, 0);
+            assert_eq!(s.last_owner, INVALID_OWNER);
+        });
+        context.add_track(1234, crate::track_type::TRACK_X, 7);
+        context.add_side(4321, DIAGDIR_NE, 7);
+        access(|s| {
+            assert_eq!(s.global.count, 3);
+            assert_eq!(s.last_owner, 7);
+            assert_eq!(
+                s.global.get(),
+                Some(Item {
+                    tile: 4321,
+                    dir: DIAGDIR_NE
+                })
+            );
+            assert_eq!(
+                s.global.get(),
+                Some(Item {
+                    tile: 1234,
+                    dir: DIAGDIR_SW
+                })
+            );
+            assert_eq!(
+                s.global.get(),
+                Some(Item {
+                    tile: 1234,
+                    dir: DIAGDIR_NE
+                })
+            );
+            assert_eq!(s.global.count, 0);
+            s.last_owner = INVALID_OWNER;
+        });
+    }
+
     #[test]
     fn process_owner_is_shared_across_serialized_game_threads() {
+        let _lock = LOCK.lock().unwrap();
         access(|s| {
             s.global.reset();
             s.last_owner = 7;
