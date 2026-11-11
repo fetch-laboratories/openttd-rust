@@ -433,13 +433,10 @@ unsafe fn distribute_queue(
         while index < (*queue).size {
             let cp = (*queue).data.add(index);
             /* Do not distribute commands when paused and the command is not allowed while paused. */
-            let commands = commands(s);
-            if PauseModes(crate::session::pause()) != PauseModes::EMPTY
-                && !crate::command::allowed_while_paused(
-                    commands,
-                    (commands.command_type)((*cp).cmd),
-                )
-            {
+            if PauseModes(crate::session::pause()) != PauseModes::EMPTY && {
+                let commands = commands(s);
+                !crate::command::allowed_while_paused(commands, (commands.command_type)((*cp).cmd))
+            } {
                 index += 1;
                 continue;
             }
