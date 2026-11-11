@@ -190,7 +190,6 @@ static bool ObjectivesScenario(std::span<std::string_view> args)
 		player.Restore();
 	}
 	Observe<CMD_GOAL_QUESTION_ANSWER>("answer-deity", run, 45, 1);
-	/* The side-effect-free question matrix moved to objectives::evidence_tests. */
 	{
 		Backup<bool> server(_network_server, true);
 		Observe<CMD_GOAL_QUESTION>("question-missing-client-test", {}, 46, UINT32_MAX, true, 1, GQT_QUESTION, text);

@@ -23,7 +23,6 @@ TEST_CASE("Session pause - native aliases and serialized commands")
 		CHECK(_game_mode == GM_EDITOR); CHECK(_switch_mode == SM_RELOADGAME); CHECK(_pause_mode == PauseMode::Normal);
 	}); second.join();
 	auto services = GetRustSessionServices();
-	/* The exhaustive input matrix moved to session::evidence_tests; retain actual C++ aliases and callbacks. */
 	session_queries = 0;
 	services.pause_query = []() noexcept { session_queries++; };
 	services.pause_change = [](uint8_t, PauseMode) noexcept {};
