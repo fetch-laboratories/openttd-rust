@@ -174,22 +174,22 @@ impl Handle {
         write_field!(self.owner, wait_counter, value as u16);
     }
     pub(crate) fn get_compatible_railtypes(self) -> u64 {
-        read_field!(self.owner, compatible_railtypes)
+        read_field!(self.owner, compatible_railtypes).0
     }
     pub(crate) fn set_compatible_railtypes(self, value: u64) {
-        write_field!(self.owner, compatible_railtypes, value);
+        write_field!(self.owner, compatible_railtypes, crate::rail_type::RailTypes(value));
     }
     pub(crate) fn get_railtypes(self) -> u64 {
-        read_field!(self.owner, railtypes)
+        read_field!(self.owner, railtypes).0
     }
     pub(crate) fn set_railtypes(self, value: u64) {
-        write_field!(self.owner, railtypes, value);
+        write_field!(self.owner, railtypes, crate::rail_type::RailTypes(value));
     }
     pub(crate) fn get_track(self) -> u64 {
-        u64::from(read_field!(self.owner, track))
+        u64::from(read_field!(self.owner, track).0)
     }
     pub(crate) fn set_track(self, value: u64) {
-        write_field!(self.owner, track, value as u8);
+        write_field!(self.owner, track, crate::track_type::TrackBits(value as u8));
     }
     pub(crate) fn get_force_proceed(self) -> u64 {
         u64::from(read_field!(self.owner, force_proceed))

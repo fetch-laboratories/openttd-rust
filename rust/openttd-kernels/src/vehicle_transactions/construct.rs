@@ -271,7 +271,7 @@ pub(crate) unsafe fn cmd_build_aircraft(
     );
     (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hv.handle));
     (r.common.vehicles.update_delta)(crate::vehicle::VehicleRef::of(hu.handle));
-    let pos = crate::airport::get_vehicle_pos_on_build(tile, crate::newgrf_airport::runtime());
+    let pos = crate::airport::get_vehicle_pos_on_build(TileIndex(tile), crate::newgrf_airport::runtime());
     let target = (b.shared.station_index)(tile);
     // SAFETY: The new aircraft's sole private owner; no callback runs meanwhile.
     unsafe {

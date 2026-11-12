@@ -54,7 +54,7 @@ impl RailType {
 
 /// Native `RailTypes`, retaining every underlying `u64` value.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RailTypes(pub u64);
 
 impl RailTypes {
