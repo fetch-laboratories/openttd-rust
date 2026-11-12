@@ -14,8 +14,8 @@ python3 tools/migration.py deep [SELECTOR...]
 
 | Member | Scope |
 | --- | --- |
-| `simulate --soak` | 520 scenarios versus 445 by default |
-| `simulate --sanitize` | ASan and UBSan games (#505) |
+| `simulate --soak` | 568 scenarios versus 485 by default |
+| `simulate --sanitize` | ASan and UBSan games and sanitized Cargo tests (#505, #891) |
 | Threaded and C++ TSan | Threaded comparisons (#506) |
 | `simulate --multiplayer` | Dedicated server and SDL client (#510) |
 
@@ -29,9 +29,9 @@ python3 tools/migration.py deep [SELECTOR...]
 | Command | Purpose and limits |
 | --- | --- |
 | `python3 tools/migration.py simulate --threaded` | #506: unchanged road Opus and Padhattan 2000 inputs, SDL offscreen and native graph workers. Tests game and main-thread occupied-road queries, saturated landscaping credits, distinct threads and calendar phase. |
-| `python3 tools/migration.py build --tsan` or `python3 tools/migration.py simulate --tsan --threaded` | #506: separate `build-reference-tsan` and `build-rust-tsan`, C++ `-fsanitize=thread -fno-omit-frame-pointer`. No Rust instrumentation; incompatible with `--sanitize`. |
+| `python3 tools/migration.py build --tsan` or `python3 tools/migration.py simulate --tsan --threaded` | #506: separate `build-reference-tsan` and `build-rust-tsan`, C++ `-fsanitize=thread -fno-omit-frame-pointer`. No Rust instrumentation; incompatible with `--sanitize`. A Rust trial (#891) built the candidate archive with `-Zsanitizer=thread -Cunsafe-allow-abi-mismatch=sanitizer`, linked it against GCC 13's TSan runtime and passed both inputs with no candidate-only report, so it was not adopted: the precompiled standard library stays uninstrumented and could add false reports around its locks. On this host the build and games need `setarch -R`, and Mesa's uninstrumented `libgallium` driver threads report a race in both roles that the classifier cannot parse (#925). |
 | `python3 tools/migration.py simulate --multiplayer` | #510: host deep tier only; original dedicated server and SDL offscreen fork client run the Opus save, then swap roles. |
-| `python3 tools/migration.py build --sanitize` or `python3 tools/migration.py simulate --sanitize` | #505: separate `build-reference-sanitized` and `build-rust-sanitized`; C++ ASan/UBSan and Rust ASan via pinned toolchain and `RUSTC_BOOTSTRAP=1`. Rust has no UBSan and its precompiled standard library is uninstrumented. |
+| `python3 tools/migration.py build --sanitize` or `python3 tools/migration.py simulate --sanitize` | #505: separate `build-reference-sanitized` and `build-rust-sanitized`; C++ ASan/UBSan, and Rust ASan with `-Zub-checks=yes` via pinned toolchain and `RUSTC_BOOTSTRAP=1`. The UB checks are the standard library's unsafe preconditions (raw slices, pointer alignment and null, overlapping copies, unchecked indexing and arithmetic); `-Cdebug-assertions` stays off so the candidate keeps the production body. The precompiled standard library is uninstrumented. After the candidate game, `cargo test --workspace` runs every Cargo test under the same flags in `build-rust-sanitized/cargo-tests`, leaving `build-rust/cargo` untouched (#891). Linux only. |
 
 - Threaded games compare snapshots, RNG and complete combined output with existing masks and GLOG normalization; each input also has same-build pairs in plain and desync modes. Missing saves or markers fail. The next-month callback saves during calendar advancement, not at end of tick; `scrollto instant` and `32bpp-anim` avoid camera and startup blitter timing differences.
 - TSan classifies reference-only, candidate-only and both-role findings separately; unknown reports fail. TSan games run under `setarch -R`: GCC 13's TSan cannot map its shadow under Linux 6.8's mmap randomization, and an aborted start (`FATAL: ThreadSanitizer`) exits 0 without a report, so it fails the game (#678). Reference-only findings can reflect accesses moved to uninstrumented Rust. The fixed inputs do not establish arbitrary SDL determinism, interactive RNG equality or Rust race freedom. Full reports remain with saves.
