@@ -167,11 +167,17 @@ def environment() -> dict[str, str]:
     return env
 
 
-def shell_exports() -> str:
-    """Shell exports for each variable environment() sets or changes, plus the
-    driver's Cargo target directory so hand-run Cargo reuses its output."""
+def driver_environment() -> dict[str, str]:
+    """environment() plus the driver's Cargo target directory, so hand-run Cargo
+    reuses its output. `env` exports it and `exec` runs under it."""
     env = environment()
     env["CARGO_TARGET_DIR"] = str(CARGO_TARGET_DIR)
+    return env
+
+
+def shell_exports() -> str:
+    """Shell exports for each variable driver_environment() sets or changes."""
+    env = driver_environment()
     return "".join(
         f"export {name}={shlex.quote(value)}\n"
         for name, value in sorted(env.items())
@@ -750,6 +756,78 @@ def command_env() -> None:
     print(shell_exports(), end="")
 
 
+EXEC_USAGE = "python3 tools/migration.py exec -- CMD [ARG ...]"
+
+
+def other_checkout(cwd: Path) -> Path | None:
+    """The checkout holding cwd when it is not this one; None outside Git too."""
+    try:
+        top = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return None if Path(top).resolve() == ROOT else Path(top)
+
+
+def command_exec(argv: list[str]) -> int:
+    """Replace this process with one command in the driver environment."""
+    parser = argparse.ArgumentParser(
+        prog="migration.py exec",
+        usage=EXEC_USAGE,
+        description=(
+            "Run one command, such as cargo, rustc or a built binary, with the "
+            "variables `migration.py env` exports, in the current directory. "
+            "Arguments pass through unchanged, without a shell; the exit status "
+            "is the command's."
+        ),
+    )
+    if argv[:1] in (["-h"], ["--help"]):
+        parser.print_help()
+        return 0
+    command = argv[1:] if argv[:1] == ["--"] else argv
+    if not command or command[0].startswith("-"):
+        parser.error(f"name the command after --: {EXEC_USAGE}")
+    cwd = Path.cwd()
+    if (top := other_checkout(cwd)) is not None:
+        sys.exit(
+            f"migration.py exec: {cwd} is in the checkout {top}, not in {ROOT}, "
+            f"whose Cargo target directory this would use. Run "
+            f"python3 {top}/tools/migration.py exec -- ..., or cd into {ROOT}."
+        )
+    try:
+        os.execvpe(command[0], command, driver_environment())
+    except OSError as error:
+        print(
+            f"migration.py exec: cannot run {command[0]}: {error.strerror}. The "
+            f"driver PATH adds {bootstrapped('cargo') / 'bin'} to yours; check "
+            "the command name.",
+            file=sys.stderr,
+        )
+        # The shell's statuses for a command not found or not executable.
+        return 127 if isinstance(error, FileNotFoundError) else 126
+    return 0  # os.execvpe does not return.
+
+
+# Commands that parse their own arguments and need no build lock or evidence.
+AGENT_COMMANDS: dict[str, Callable[[list[str]], int]] = {"exec": command_exec}
+AGENT_EPILOG = f"""\
+These take their own arguments, come first and take none of the options above:
+  {EXEC_USAGE}
+      run one command (cargo, rustc, a built binary) in the driver environment
+"""
+
+
+def run_agent_command(argv: Sequence[str]) -> int | None:
+    """Run `exec` when it is the first argument; None leaves argv to main()."""
+    if not argv or argv[0] not in AGENT_COMMANDS:
+        return None
+    return AGENT_COMMANDS[argv[0]](list(argv[1:]))
+
+
 def command_deep(
     args: argparse.Namespace, simulate_args: list[str], parser: argparse.ArgumentParser
 ) -> None:
@@ -770,7 +848,11 @@ def command_deep(
 
 
 def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=AGENT_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "action",
         choices=(
@@ -782,6 +864,7 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
             "rust-checks",
             "deep",
             "env",
+            *AGENT_COMMANDS,
         ),
         nargs="?",
         default="verify",
@@ -832,6 +915,11 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
     )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
+    if args.action in AGENT_COMMANDS:
+        parser.error(
+            f"put {args.action} first, without the options above; see "
+            f"python3 tools/migration.py {args.action} --help"
+        )
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
     if args.member and args.action != "deep":
@@ -1053,6 +1141,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     try:
+        if (code := run_agent_command(sys.argv[1:])) is not None:
+            sys.exit(code)
         main()
     except (RuntimeError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))

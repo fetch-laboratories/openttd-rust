@@ -29,7 +29,7 @@ Rule on a policy question yourself, from the decisions recorded on the stream is
 
 ## Checks
 
-To confirm a suspected difference, run the narrowest check, after `eval "$(python3 tools/migration.py env)"`: a focused test, `python3 tools/migration.py rust-checks`, or the affected scenarios by name.
+To confirm a suspected difference, run the narrowest check: a focused test through `python3 tools/migration.py exec -- cargo test ...`, `python3 tools/migration.py rust-checks`, or the affected scenarios by name.
 
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`.
 - Keep `TMPDIR` and build output under your worktree's `.local`. You may borrow another worktree's build read-only if its stamp matches; name the build's commit in the report.

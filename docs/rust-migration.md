@@ -39,7 +39,8 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/migration.py tools` | Build the native Rust generators. |
 | `python3 tools/migration.py simulate`, `coverage`, `deep` | See [simulation comparison](#simulation-comparison), [coverage](#original-simulation-coverage) and [deep checks](deep-checks.md). |
 | `python3 tools/run-comparisons.py` | Run every `tools/*-comparison.py`: the component comparisons, not the simulation scenarios. |
-| `eval "$(python3 tools/migration.py env)"` | Set the driver environment for Cargo and binaries run outside the driver. |
+| `python3 tools/migration.py exec -- CMD ...` | Run one command, such as `cargo test -p openttd-kernels`, in the driver environment. |
+| `eval "$(python3 tools/migration.py env)"` | Set the driver environment in a shell that runs many commands. |
 | `python3 tools/git_hooks.py install` | Install the pre-push and pre-commit hooks. |
 
 - Run the candidate with `./build-rust/openttd-rust -X`, which avoids the global game folders.
