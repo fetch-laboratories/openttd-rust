@@ -298,7 +298,7 @@ fn road_change(
                     }
                     match prop {
                         0x0f => {
-                            if crate::road::get_road_tram_type(resolved).0 == rtt.0 {
+                            if crate::road::get_road_tram_type_raw(resolved).0 == rtt.0 {
                                 (s.powered)(info, resolved);
                             } else {
                                 grf_msg!(
@@ -358,7 +358,7 @@ fn road_reserve(
                 let mut rt = registry::openttd_rust_road_by_label(label, false);
                 if rt == INVALID_ROADTYPE {
                     rt = registry::road_allocate(label, rtt);
-                } else if crate::road::get_road_tram_type(rt).0 != rtt.0 {
+                } else if crate::road::get_road_tram_type_raw(rt).0 != rtt.0 {
                     grf_msg!(
                         1,
                         "RoadTypeReserveInfo: Road type {} is invalid type (road/tram), ignoring",

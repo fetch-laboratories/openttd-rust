@@ -333,7 +333,7 @@ fn rolling_friction_for(o: Owner, roadtype: RoadType, speed: u16) -> u32 {
     if o.rail() {
         15 * (512 + u32::from(speed)) / 512
     } else {
-        let coeff = if crate::road::road_type_is_tram(roadtype.0) {
+        let coeff = if crate::road::road_type_is_tram(roadtype) {
             40
         } else {
             75

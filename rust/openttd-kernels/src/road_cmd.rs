@@ -873,13 +873,13 @@ impl<'a> Ctx<'a> {
         if pieces == 0
             || pieces & !15 != 0
             || toggle >= 4
-            || !crate::road::val_param_road_type(self.shared, rt)
+            || !crate::road::val_param_road_type_raw(self.shared, rt)
         {
             cost.error(INVALID_STRING_ID);
             return;
         }
         let slope = crate::map_func::World::new(self.shared).tile_slope(TileIndex(tile));
-        let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
+        let rtt = u8::from(crate::road::get_road_tram_type_raw(rt).0);
         let mut clear = false;
         match self.tile_type(tile) {
             MP_ROAD => match self.kind(tile) {
@@ -1276,7 +1276,7 @@ impl<'a> Ctx<'a> {
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
-        let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
+        let rtt = u8::from(crate::road::get_road_tram_type_raw(rt).0);
         let old = self.rt(tile, rtt);
         if old == INVALID
             || (!(self.shared.road_powered)(old, rt) && !(self.shared.road_powered)(rt, old))
@@ -1287,7 +1287,7 @@ impl<'a> Ctx<'a> {
     }
     fn valid_drag(&self, start: u32, end: u32, rt: u8, axis: u8) -> bool {
         start < self.size()
-            && crate::road::val_param_road_type(self.shared, rt)
+            && crate::road::val_param_road_type_raw(self.shared, rt)
             && axis < 2
             && (if axis == 0 {
                 self.map.tile_y(TileIndex(start)) == self.map.tile_y(TileIndex(end))
@@ -1447,7 +1447,7 @@ impl<'a> Ctx<'a> {
                 bits &= 4 | 2;
             }
             if bits != 0 {
-                let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
+                let rtt = u8::from(crate::road::get_road_tram_type_raw(rt).0);
                 self.remove(
                     ret,
                     scratch,
@@ -1496,7 +1496,7 @@ impl<'a> Ctx<'a> {
     }
     fn build_depot(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, rt: u8, dir: u8) {
         w::hit(w::ROAD_COMMANDS_DEPOT_BUILD);
-        if !crate::road::val_param_road_type(self.shared, rt) || dir >= 4 {
+        if !crate::road::val_param_road_type_raw(self.shared, rt) || dir >= 4 {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -1920,7 +1920,7 @@ impl<'a> Ctx<'a> {
         if owner == OWNER_NONE {
             (self.shared.set_road_owner)(
                 tile,
-                u8::from(crate::road::get_road_tram_type(to).0),
+                u8::from(crate::road::get_road_tram_type_raw(to).0),
                 company,
             );
             self.infrastructure(to, company, num as i32);
@@ -1956,11 +1956,11 @@ impl<'a> Ctx<'a> {
         diagonal: bool,
     ) {
         w::hit(w::ROAD_COMMANDS_CONVERT);
-        if !crate::road::val_param_road_type(self.shared, to) || start >= self.size() {
+        if !crate::road::val_param_road_type_raw(self.shared, to) || start >= self.size() {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let rtt = u8::from(crate::road::get_road_tram_type(to).0);
+        let rtt = u8::from(crate::road::get_road_tram_type_raw(to).0);
         cost.set(0);
         error.error(if rtt == 1 {
             self.s.strings.no_suitable_tram

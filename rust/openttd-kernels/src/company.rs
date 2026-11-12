@@ -947,7 +947,7 @@ fn maintenance(s: &Services, p: *mut Finances, id: u8) {
     let tram_total = unsafe { CompanyInfrastructure::get_tram_total(infra) };
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
         if read_field!(infra, road[usize::from(rt)]) != 0 {
-            let total = if crate::road::road_type_is_road(rt) {
+            let total = if crate::road::road_type_is_road_raw(rt) {
                 road_total
             } else {
                 tram_total

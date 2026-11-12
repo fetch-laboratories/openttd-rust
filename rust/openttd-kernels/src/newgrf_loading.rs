@@ -557,9 +557,9 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                         crate::type_registry::openttd_rust_road_by_label(value.swap_bytes(), true);
                     let valid = rt != crate::road_type::INVALID_ROADTYPE
                         && if cond < 17 {
-                            crate::road::road_type_is_road(rt)
+                            crate::road::road_type_is_road_raw(rt)
                         } else {
-                            crate::road::road_type_is_tram(rt)
+                            crate::road::road_type_is_tram_raw(rt)
                         };
                     if cond % 2 == 1 { !valid } else { valid }
                 }

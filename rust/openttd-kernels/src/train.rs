@@ -177,7 +177,11 @@ impl Handle {
         read_field!(self.owner, compatible_railtypes).0
     }
     pub(crate) fn set_compatible_railtypes(self, value: u64) {
-        write_field!(self.owner, compatible_railtypes, crate::rail_type::RailTypes(value));
+        write_field!(
+            self.owner,
+            compatible_railtypes,
+            crate::rail_type::RailTypes(value)
+        );
     }
     pub(crate) fn get_railtypes(self) -> u64 {
         read_field!(self.owner, railtypes).0
