@@ -89,7 +89,9 @@ impl crate::map_func::World<'_> {
     pub(crate) fn signal_state_by_trackdir(&self, t: u32, trackdir: u8) -> u8 {
         self.check(crate::track_func::is_valid_trackdir(trackdir));
         self.check(self.has_signal_on_track(t, crate::track_func::trackdir_to_track(trackdir)));
-        u8::from(self.signal_states(t) & crate::signal_func::signal_along_trackdir(trackdir) != 0)
+        u8::from(
+            self.signal_states(t) & crate::signal_func::signal_along_trackdir_raw(trackdir) != 0,
+        )
     }
     /// `IsPresignalEntry`.
     pub(crate) fn is_presignal_entry(&self, t: u32, track: u8) -> bool {
@@ -109,13 +111,14 @@ impl crate::map_func::World<'_> {
     pub(crate) fn has_signal_on_track(&self, t: u32, track: u8) -> bool {
         self.check(crate::track_func::is_valid_track(track));
         self.has_signals(t)
-            && self.present_signals(t) & crate::signal_func::signal_on_track(track) != 0
+            && self.present_signals(t) & crate::signal_func::signal_on_track_raw(track) != 0
     }
     /// `HasSignalOnTrackdir`.
     pub(crate) fn has_signal_on_trackdir(&self, t: u32, trackdir: u8) -> bool {
         self.check(crate::track_func::is_valid_trackdir(trackdir));
         self.has_signals(t)
-            && self.present_signals(t) & crate::signal_func::signal_along_trackdir(trackdir) != 0
+            && self.present_signals(t) & crate::signal_func::signal_along_trackdir_raw(trackdir)
+                != 0
     }
     /// `GetSignalType`.
     pub(crate) fn signal_type(&self, t: u32, track: u8) -> u8 {

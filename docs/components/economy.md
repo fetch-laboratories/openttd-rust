@@ -12,7 +12,7 @@
 ## Station cargo service
 
 - Rust owns: loading queue, station service counters, acceptance mask and cargo rating/pickup/speed/age/waiting/fraction metadata.
-- C++ keeps: packet, flow, link-graph, map and geometry storage.
+- C++ keeps: packet and link-graph pool shells, map and geometry storage.
 - Checks: `python3 tools/migration.py simulate stations economy`.
 - Limits: Gaps remain in legacy cases, NewGRFs and refits (#156).
 - PRs: #142, #217; boundary #214.
@@ -20,7 +20,7 @@
 ## Station construction, joining and removal (#267)
 
 - Rust owns: rail platform/waypoint, road stop, airport, dock and oil-rig commands; sign/name/owner, terrain, clearance, joining, deletion/reuse and docking-neighbour decisions, including `water_cmd.cpp` docking eligibility/registration.
-- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, spatial indices, rendering/description and vehicle-entry/track/slope services.
+- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, viewport sign indices and rendering/description.
 - Checks: `python3 tools/migration.py simulate stations-commands aircraft-controller-removal water-structures-mutate --jobs 2`; default #320 cases, builtin tram, airport noise and reload cases are required.
 - Limits: Gaps remain in external NewGRF programs, legacy cases and unusual occupied or reservation branches (#156).
 - PRs: #303, #323.
@@ -36,7 +36,7 @@
 ## Cargo storage and movement (#139)
 
 - Rust owns: packet fields, station/vehicle lists, count/age/feeder/action/reservation caches, flow shares/origin maps, packet operations, movement/staging/rerouting, flow reconciliation, capacity redistribution and autoreplace transfer.
-- C++ keeps: packet pool identity/allocation/hooks, payment/delivery (#117), loading (#125), link-graph computation (#74), world access, thread join and save adapters.
+- C++ keeps: packet pool identity/allocation/hooks, world access, thread join and save adapters.
 - Checks: default cargo-storage, economy, station, Padhattan and aircraft scenarios; `python3 tools/cargo-storage-comparison.py` for unreachable pool-limit Split failure.
 - Limits: Gaps remain in legacy conversions and complete refit/autoreplace transactions (#156).
 - PRs: #151, #268.
@@ -44,7 +44,7 @@
 ## Cargo payment and delivery
 
 - Rust owns: `CargoPayment` state/lifetime, final/transfer payment, settlement, industry acceptance, statistics/payment ordering, destination deduplication and production flush.
-- C++ keeps: pool shells, world/packet storage, loading/reservation, subsidy checks and UI. Production resolution keeps one native resolver in caller-owned stack storage across the Rust repeat loop.
+- C++ keeps: pool shells, world storage and UI. Production resolution keeps one native resolver in caller-owned stack storage across the Rust repeat loop.
 - Checks: default `economy` simulation; production cargo callback fixtures with #467 and narrow arithmetic fixture.
 - Limits: The checks do not exhaust NewGRF resolver execution, legacy CAPY files or industry layouts. Boundary conversions remain in #168, #199 and #500.
 - PRs: #123.
@@ -65,16 +65,16 @@
 
 ## Link graph job computation
 
-- Rust owns: demands, both MCF passes, cycle elimination, paths, flow mapping and job graph/settings.
-- C++ keeps: worker launch/join, abort flags, LGRP/LGRJ save/load and station flow join.
+- Rust owns: demands, both MCF passes, cycle elimination, paths, flow mapping, job graph/settings and abort flags.
+- C++ keeps: worker launch/join, LGRP/LGRJ save/load and station flow join.
 - Checks: unchanged regressions/comparisons and `python3 tools/migration.py simulate` with manual/cargodist road saves and reload from a reference snapshot with outstanding LGRJ records; prepared road inputs reset GLOG history.
 - Limits: The checks do not exhaust graphs, allocator failures or abort timing. Resource exhaustion timing differs with the allocation strategy.
 - PRs: #95.
 
 ## Link graph scheduler ownership (#373)
 
-- Rust owns: queued/running jobs, rotation, spawn/join/requeue, pool-wide date shifts and pause policy.
-- C++ keeps: pools, job snapshots, worker launch/join, abort/completion publication and LGRS save/load.
+- Rust owns: queued/running jobs, rotation, spawn/join/requeue, pool-wide date shifts, pause policy and abort/completion publication.
+- C++ keeps: pools, job shells, worker launch/join and LGRS save/load.
 - Checks: default symmetric/asymmetric cargodist reloads and module-compiled unchanged pinned scheduler bodies.
 - Limits: Gaps remain in actual concurrent workers, multiplayer and GUI timing, and historical LGRS versions (#156).
 - PRs: #380, integrated in #391.
@@ -98,8 +98,7 @@
 ## Station naming, tile loop and lifecycle (#562)
 
 - Rust owns: `station_lifecycle.rs` default naming and suffix/industry-name exclusion, station tile loops (called directly by the tile scheduler with its map descriptor), destructor ordering, facility addition and airport maintenance; it shares the station service owner and calls the Rust queue, aircraft, order, link-graph, flow, cargo and catchment owners directly. Station map fields use the shared map descriptor; industry-map lookups preserve the original helper assertions and pool operations.
-- C++ keeps: pool shells, unmoved record fields, the road-stop tile-data vector with `SetRoadStopTileData` and `RemoveRoadStopTileData`, native member destruction, spatial indices, news and windows. The native destructor is one Rust call followed by ordinary member destruction; each destructor owner access ends before a callback.
-- Limits: `GetPlatformLength` remains with #560.
+- C++ keeps: pool shells, unmoved record fields, the road-stop tile-data vector with `SetRoadStopTileData` and `RemoveRoadStopTileData`, native member destruction, viewport sign indices, news and windows. The native destructor is one Rust call followed by ordinary member destruction; each destructor owner access ends before a callback.
 - PRs: #568.
 
 ## Station spatial queries and road-stop selection (#602)

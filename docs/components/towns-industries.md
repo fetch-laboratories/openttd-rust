@@ -15,7 +15,7 @@
 - Rust owns: town tick traversal, road/build choices, terrain retries, house selection/placement/expansion, metadata, histories, ratings and building counts (#148); house tile loops and deletion belong to #256.
 - C++ keeps: native field aliases.
 - Checks: default `town-growth` simulation and native tests.
-- Limits: Gaps remain in natural tunnel construction, custom NewGRF callbacks or complete historical saves. #148 is not a complete lifecycle port.
+- Limits: Gaps remain in natural tunnel construction, custom NewGRF callbacks or complete historical saves.
 - PRs: #127, #216.
 
 ## Town founding, generation and names
@@ -23,7 +23,7 @@
 - Rust owns: custom-name bytes, founding, placement/coastal/grid search, initial growth, generation counts/retries, layout, rename and name uniqueness.
 - C++ keeps: map/pool shells, house specs, rendering/NewGRF resolvers, noise/news services, save decoding and presentation name cache.
 - Checks: `python3 tools/migration.py simulate town-founding- --jobs 2`; module-owned adapters compare cancellation, full-width count clamps/RNG and otherwise unreachable name bytes.
-- Limits: Gaps remain in real NewGRFs, historical saves, GUI threading or the final 10,000-attempt fallback (#156). House lifecycle is #256.
+- Limits: Gaps remain in real NewGRFs, historical saves, GUI threading or the final 10,000-attempt fallback (#156).
 - PRs: #258.
 
 ## Town commands, authority actions and deletion (#247)
@@ -37,7 +37,7 @@
 ## House lifecycle and tile simulation (#256)
 
 - Rust owns: `TileLoop_Town`, construction/rebuild, cargo, lift animation, north-part normalization, clearing/terraform/placement, caches, yearly aging, NewGRF house loop, deletion, animation triggers and rerandomisation.
-- C++ keeps: virtual facades and common Action2. House resolution (#409) shares the north-part helper; the tile loop uses `StationFinder` (#516).
+- C++ keeps: virtual facades. House resolution (#409) shares the north-part helper; the tile loop uses `StationFinder` (#516).
 - Checks: `python3 tools/migration.py simulate town-houses- --jobs 2`.
 - Limits: Gaps remain in station removal on house clearance (#156).
 - PRs: #269.
@@ -67,7 +67,7 @@
 ## Industry periodic production and builder ownership (#129)
 
 - Rust owns: produced/accepted slots, histories, production fields, sound countdown, builder records, production/transport ticks, farm/lumber updates, NewGRF production, monthly statistics/closure, daily changes and builder targets/retries.
-- C++ keeps: pool/map/spec storage, construction/landscape-clear transactions, presentation, bounded NewGRF resolution and load adapters; `CargoPayment` delivery is #117.
+- C++ keeps: pool/map/spec storage, presentation, bounded NewGRF resolution and load adapters.
 - Checks: default `industry-` scenarios and native ABI/lifetime tests.
 - Limits: The checks do not exhaust legacy saves, NewGRF resolver programs or industry layouts.
 - PRs: #144, #205; boundary #203.
@@ -99,7 +99,7 @@
 ## NewGRF town names and Action 0F (#585)
 
 - Rust owns: Action 0F parsing (`FeatureTownName`) in the INIT stage, per-GRF style and part lists, the generator-name list, recursive seeded generation, style/GRF lookups and cleanup. The loader calls the parser, cleanup and list rebuild directly. Both `TownNameParams` constructors are shared Rust logic; town founding reads its style setting directly and keeps the parameters locally. Name verification calls the Rust generator directly.
-- C++ keeps: a facade. `TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists; `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each selected part's bytes. `TranslateTTDPatchCodes`, `AddGRFString` and debug messages remain native, behind one loading service each; translated bytes are copied into the Rust part from a view backed by the native loader stack frame.
+- C++ keeps: a facade. `TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists; `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each selected part's bytes. The parser calls the Rust GRF text owner for translation and string insertion, so `TranslateTTDPatchCodes` and `AddGRFString` are facades; debug messages remain native, behind one loading service.
 - Limits: Generation preserves the native `gen < styles.size()` assertion. Self-referencing definitions recurse without a guard, as in the original.
 - PRs: pending.
 

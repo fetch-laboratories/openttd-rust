@@ -13,7 +13,6 @@ row names the owner issue that retires the fixture calling those members (#737).
 import argparse
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import baseline_ratchet
@@ -251,12 +250,26 @@ def check_uncalled(base_ref: str) -> int:
 
 
 def main() -> int:
-    if sys.argv[1:] == ["--report-uncalled"]:
+    # Parsed in full before any check runs, so --help and a mistyped option
+    # cost nothing. baseline_ratchet.main parses sys.argv again: it accepts the
+    # same --base-ref, the only option left once --report-uncalled has returned.
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--base-ref",
+        default="origin/rust-migration",
+        help="the revision whose baselines may only shrink (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--report-uncalled",
+        action="store_true",
+        help="only list exports held by uncalled members, without the check",
+    )
+    args = parser.parse_args()
+    if args.report_uncalled:
         return report_uncalled()
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--base-ref", default="origin/rust-migration")
-    base_ref = parser.parse_known_args()[0].base_ref
-    return check_uncalled(base_ref) | baseline_ratchet.main(
+    return check_uncalled(args.base_ref) | baseline_ratchet.main(
         __doc__,
         ROOT,
         BASELINE,

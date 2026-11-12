@@ -19,7 +19,7 @@
 ## Rail signal blocks and fixed work sets (#219)
 
 - Rust owns: Signal-block exploration, immediate update/propagation, first-segment classification and 64/256/128 work sets.
-- C++ keeps: Public signal constants, map/pools/spatial queries, commands and rendering.
+- C++ keeps: Public signal constants, map/pools and rendering.
 - Checks: Default `signals` simulation.
 - Limits: These remain #156 gaps: real tbd/global propagation overflow, threaded play and arbitrary mod layouts.
 - PRs: #245.
@@ -27,7 +27,7 @@
 ## Rail track, depot and signal commands (#265)
 
 - Rust owns: Rail track build/remove/drag, depot construction/removal, signal commands and autofill, rail conversion and tile clear, owner-change, autoslope/terraform and build-above policy.
-- C++ keeps: Map reads, crossing/depot writes, nested commands, PBS, conversion iterator, affected-train list, tile loops, track status and drawing.
+- C++ keeps: Map reads, crossing/depot writes, nested commands, conversion iterator, affected-train list and drawing.
 - Checks: `python3 tools/migration.py simulate signals-rail-commands --jobs 2`.
 - Limits: These remain #156 gaps: coast/half-tile water and PBS path-end removal.
 - PRs: #270.
@@ -35,15 +35,15 @@
 ## Road track, depot and conversion commands (#266)
 
 - Rust owns: Road removal permissions and slopes, single/long build/removal, depots, clear/owner/nearest-town updates, terraform, conversion, build-above, prices and tile clearing.
-- C++ keeps: Road-type allocation, drawing, track-status/vehicle-enter, tile loops and map services.
+- C++ keeps: Road-type allocation, drawing and map services.
 - Checks: Default `roads-commands` and `roads-commands-reload` scenarios.
 - Limits: The fixture declares builtin-like road-type inputs; external NewGRF programs and legacy save variants remain #156 gaps.
 - PRs: #290.
 
 ## Road stop bays and drive-through entries (#354)
 
-- Rust owns: RoadStop status and drive-through entries, bay admission/freeing, entrance status, `GetByTile`, continuation, `Enter`/`Leave`, joining/splitting, `Rebuild`, `CheckIntegrity`, destruction and `AfterLoadRoadStops`.
-- C++ keeps: Shell, pool, links, station stop lists, vehicle reads, tile hash and `GetNextRoadStop`.
+- Rust owns: RoadStop status and drive-through entries, bay admission/freeing, entrance status, `GetByTile`, continuation, `GetNextRoadStop`, `Enter`/`Leave`, joining/splitting, `Rebuild`, `CheckIntegrity`, destruction and `AfterLoadRoadStops`.
+- C++ keeps: Shell, pool, links, station stop lists and vehicle reads.
 - Checks: `stations-commands-road-stops` and `stations-commands-road-stops-reload`.
 - Limits: These remain #156 gaps: articulated bay refusal and unreachable `include` duplicate.
 - PRs: #362.
@@ -67,7 +67,7 @@
 ## Complete PBS reservation service (#367)
 
 - Rust owns: PBS reservation reads/writes, platform scans, traversal, loop termination, train selection and waiting policy.
-- C++ keeps: Map bits and spatial enumeration.
+- C++ keeps: Map bits.
 - Checks: Default rail-reservation, reload, controller and signal scenarios.
 - Limits: These remain #156 gaps: external NewGRF trigger reentry, custom railtype turn flags, legacy conversion and threaded GUI coverage.
 - PRs: #370.

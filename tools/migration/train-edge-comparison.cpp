@@ -59,11 +59,13 @@ struct Train {
 	void UpdateInclination(bool, bool) { std::abort(); }
 };
 static Train trains[16];
+/* The reference's asserted entry tiles, in order, and the next one the candidate must use. */
+static std::vector<uint32_t> entered; static size_t next_entry;
 const Train *Train::First() const { return trains; }
 static void VehicleEnterTile(Train *v, TileIndex tile, int x, int y)
 {
 	assert(tile == v->tile && x == v->x_pos && y == v->y_pos);
-	events.push_back(0x300 + v->id);
+	events.push_back(0x300 + v->id); entered.push_back(tile);
 }
 static TileIndex TileVirtXY(int x, int y) { return uint32_t((y >> 4) * 256 + (x >> 4)); }
 static bool IsTileType(TileIndex, int) { return false; }
@@ -76,7 +78,6 @@ static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
 static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
 static OpenTTDMovementServices movement;
 static OpenTTDVehicleServices vehicle;
-static uint32_t entered_tile;
 static const OpenTTDSettingAddresses _settings_catalog{.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model};
 static OpenTTDTrainServices Leaves()
 {
@@ -103,20 +104,24 @@ static void RustReverse(int left, int right)
 	movement.shared = &shared;
 	shared.movement = &movement;
 	shared.settings = &_settings_catalog;
-	// Plain rail on every tile of the 256 by 256 map: depot entry reads the map in place.
+	// The 256 by 256 map is plain rail only on the tile of the reference's next
+	// entry, which it asserted is that vehicle's own tile, and clear elsewhere.
+	// Depot entry reads the map in place and VehicleEnterTile reads the tile type
+	// there, so an entry on any other tile skips the vehicle callback and changes
+	// the compared events. The copied world has no depot/tunnel tiles. Observe the
+	// real owner's admission call through typed map/vehicle services, retaining
+	// event order.
 	static OpenTTDFixtureMap map{8, 256 * 256};
-	for (uint32_t t = 0; t < map.size; ++t) map.base[t].type = 1 << 4; // MP_RAILWAY
+	next_entry = 0; if (!entered.empty()) map.base[entered[0]].type = 1 << 4; // MP_RAILWAY
 	shared.map = &map.statics;
-	// The copied world has no depot/tunnel tiles. Observe the real owner's
-	// admission call through typed map/vehicle services, retaining event order.
-	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };
 	movement.resolve = [](OpenTTDVehicle *shell) noexcept {
 		auto *v = reinterpret_cast<Train *>(shell->shell);
-		assert(entered_tile == v->record.tile);
 		events.push_back(0x300 + v->id);
+		map.base[entered[next_entry]].type = 0; if (++next_entry < entered.size()) map.base[entered[next_entry]].type = 1 << 4;
 		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
 	};
 	openttd_rust_train_reverse_swap(Handle(trains), left, right, &leaves, &shared);
+	for (uint32_t tile : entered) map.base[tile].type = 0; // MP_CLEAR
 }
 static uint32_t random_state = 130;
 static uint32_t Draw() { random_state = random_state * 1664525U + 1013904223U; return random_state; }
@@ -166,7 +171,7 @@ int main()
 		if (trains[0].GetCurveSpeedLimit() != RustCurve()) { std::fprintf(stderr, "curve mismatch %u\n", trial); return 1; }
 		Train original[16]; std::copy(std::begin(trains), std::end(trains), std::begin(original));
 		int l = int(Draw() % count), r = int(Draw() % count);
-		events.clear(); ReverseTrainSwapVeh(trains, l, r); auto expected = State();
+		events.clear(); entered.clear(); ReverseTrainSwapVeh(trains, l, r); auto expected = State();
 		std::copy(std::begin(original), std::end(original), std::begin(trains)); Sync(); events.clear(); RustReverse(l, r);
 		for (Train &v : trains) {
 			v.track = uint8_t(v.state->track);

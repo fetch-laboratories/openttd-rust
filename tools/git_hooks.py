@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Pre-push and pre-commit hooks that enforce preflight locally (#920).
+"""Pre-push, pre-commit and commit-msg hooks that enforce preflight locally (#920).
 
     python3 tools/git_hooks.py install
 
-writes two small shims into the clone's shared hooks directory, beside
+writes three small shims into the clone's shared hooks directory, beside
 `post-checkout`, so they serve every worktree. Each shim runs this file from
 the worktree that runs the hook, and does nothing in a worktree whose branch
-predates it.
+predates that hook.
 
 pre-push: a push of a branch whose change against origin/rust-migration is not
 inert Markdown needs a preflight stamp for its tree. Every push first runs a
@@ -20,19 +20,25 @@ stamp with
 which is logged. It still runs the fast tier. A ready PR always needs the stamp.
 
 pre-commit: the pinned checker's diff rules on the staged change.
+
+commit-msg: the pinned checker's message rules, then what to do instead: the
+accepted prefixes, each non-ASCII character or tab by line and column, the
+exact command for a base-update merge, or why a fixup! title cannot stay.
 """
 
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
 import preflight
 import preflight_stamp
 import vcs
-import yaml
 
 import migration
 
@@ -42,39 +48,21 @@ MARKER = "Installed by tools/git_hooks.py"
 SHIM = """#!/bin/sh
 # {marker} (#920): runs this worktree's tracked hook.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
-[ -f "$top/tools/git_hooks.py" ] || exit 0
+# A branch whose git_hooks.py predates this hook does not list it in HOOKS.
+grep -q '^HOOKS = .*"{hook}"' "$top/tools/git_hooks.py" 2>/dev/null || exit 0
 exec python3 "$top/tools/git_hooks.py" {hook} "$@"
 """
-HOOKS = ("pre-push", "pre-commit")
+# Each shim reads this line, on one line, to tell whether the worktree's copy of
+# this file handles its hook.
+HOOKS = ("pre-push", "pre-commit", "commit-msg")
+BASE_BRANCH = "rust-migration"
+# Titles git writes for `commit --fixup` and `--squash`; the checker refuses them.
+FOLDED = ("fixup! ", "squash! ", "amend! ")
 PREFLIGHT = "python3 tools/preflight.py --base origin/rust-migration"
 
 
-def ruff_lines() -> list[str]:
-    """Quick's own Ruff commands, so the fast tier cannot drift from it."""
-    quick = yaml.safe_load(preflight.WORKFLOW.read_text())
-    lines = [
-        line.strip()
-        for step in quick["jobs"][preflight.JOB]["steps"]
-        for line in step.get("run", "").splitlines()
-        if line.strip().startswith("uvx --from ruff")
-    ]
-    if not lines:
-        raise ValueError("Quick runs no Ruff command")
-    return lines
-
-
 def fast_tier(base: str, head: str, inert: bool) -> list[preflight.Step]:
-    steps = [preflight.commit_step(base, head, preflight.hooks_checkout())]
-    if not inert:
-        steps.append(
-            preflight.Step(
-                "Rust formatting (cargo fmt --check)",
-                ["cargo", "fmt", "--all", "--", "--check"],
-            )
-        )
-        shell = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
-        steps += [preflight.Step(line, [*shell, line]) for line in ruff_lines()]
-    return steps
+    return preflight.fast_tier(base, head, inert, preflight.hooks_checkout())
 
 
 def ready_pr(branch: str) -> int | None:
@@ -130,7 +118,7 @@ def git_merge_base(base: str, sha: str) -> str:
 
 def pre_push(lines: list[str]) -> int:
     # Git exports these to hooks; every command here names its worktree by cwd.
-    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"):
+    for name in preflight.REPOSITORY_VARIABLES:
         os.environ.pop(name, None)
     updates = [
         line.split()
@@ -160,14 +148,166 @@ def pre_push(lines: list[str]) -> int:
 
 
 def pre_commit() -> int:
+    # An unavailable checker (no network for its first fetch, or an edited
+    # checkout) lets the commit through: pre-push runs the same rules again.
     try:
         hooks = preflight.hooks_checkout() / "hooks"
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        print(f"pre-commit: pinned checker unavailable, not checked: {error}")
+        print(
+            f"pre-commit: pinned checker unavailable, not checked: {error}",
+            file=sys.stderr,
+        )
         return 0
+    # The checker's diff runs in the committing repository, with git's variables.
     env = os.environ | {"HOOKS_DIR": str(hooks)}
     command = ["sh", str(hooks / "pre-commit")]
     return subprocess.run(command, cwd=migration.ROOT, env=env, check=False).returncode
+
+
+def run_checker(checker: Path, message: Path, quiet: bool = False) -> int:
+    """The pinned check-message.py on a message file, as its own commit-msg runs it."""
+    command = [sys.executable, str(checker), str(message), "client"]
+    output = subprocess.DEVNULL if quiet else None
+    return subprocess.run(command, stderr=output, check=False).returncode
+
+
+def title_refused(checker: Path, title: str) -> bool:
+    """Whether the checker refuses the title's prefix; characters are judged apart."""
+    plain = "".join(c if 32 <= ord(c) <= 127 else "x" for c in title).rstrip()
+    with tempfile.TemporaryDirectory() as directory:
+        message = Path(directory) / "title"
+        message.write_text(plain + "\n")
+        return run_checker(checker, message, quiet=True) != 0
+
+
+def git_text(*arguments: str) -> str | None:
+    """Git in the repository the hook runs for, or None when it fails."""
+    result = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, check=False
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def prefix_remedy(checker: Path) -> list[str]:
+    """The checker's own keyword list, so this hook keeps no second copy."""
+    found = re.search(r'^KEYWORDS = "\(([^)]*)\)"', checker.read_text(), re.M)
+    prefixes = ", ".join(found[1].split("|")) if found else "see the checker above"
+    return [
+        f"Accepted prefixes: {prefixes}.",
+        "Start the title with one and ': ', for example `Fix: What it fixes` or "
+        "`Fix #123: What it fixes`.",
+    ]
+
+
+def folded_remedy(title: str) -> list[str]:
+    word = title.split()[0]
+    return [
+        f"A `{word}` title is refused here, and the commit checker refuses it at "
+        "push. Give the commit a normal title: commit the change under its own "
+        "`Fix: ...` title, or, when the commit it belongs to is HEAD, fold it in "
+        "with `git commit --amend`."
+    ]
+
+
+def merge_heads() -> list[str]:
+    path = git_text("rev-parse", "--git-path", "MERGE_HEAD")
+    if path is None or not Path(path).is_file():
+        return []
+    return Path(path).read_text().split()
+
+
+def on_base(commit: str) -> bool:
+    base = f"origin/{BASE_BRANCH}"
+    check = ["git", "merge-base", "--is-ancestor", commit, base]
+    return subprocess.run(check, capture_output=True, check=False).returncode == 0
+
+
+def merge_remedy(heads: list[str], checker: Path) -> list[str]:
+    """The command for a base update, after checking that it is one."""
+    branch = git_text("symbolic-ref", "--quiet", "--short", "HEAD")
+    merged = ", ".join(head[:10] for head in heads)
+    if len(heads) != 1 or not on_base(heads[0]):
+        return [
+            f"This merge is not a base update: MERGE_HEAD {merged} is not a commit "
+            f"on origin/{BASE_BRANCH}. Give it a title that says what it merges.",
+            *prefix_remedy(checker),
+        ]
+    if branch in (None, BASE_BRANCH):
+        return [
+            f"This merge brings origin/{BASE_BRANCH} into {branch or 'a detached HEAD'}"
+            ", which is not a base update of a PR branch; check what you meant to merge."
+        ]
+    describe = ["log", "-1", "--format=%h %s"]
+    return [
+        f"This is a base update: MERGE_HEAD is on origin/{BASE_BRANCH}.",
+        f"  parent 1 (HEAD):       {git_text(*describe, 'HEAD')}",
+        f"  parent 2 (MERGE_HEAD): {git_text(*describe, heads[0])}",
+        "The merge is not committed, so a push now would leave it out. Commit it with:",
+        f'  git commit -m "Update: Merge {BASE_BRANCH} into {branch}"',
+    ]
+
+
+def character_remedy(lines: list[tuple[int, str]]) -> list[str]:
+    found = [
+        f"  line {number} column {column}: "
+        + ("a tab" if c == "\t" else f"U+{ord(c):04X} {unicodedata.name(c, 'control')}")
+        for number, line in lines
+        for column, c in enumerate(line, 1)
+        if not 32 <= ord(c) <= 127
+    ]
+    if not found:
+        return []
+    return ["Replace each with ASCII (a tab with spaces):", *found]
+
+
+def message_remedies(checker: Path, text: str) -> list[str]:
+    """This fork's advice after the checker refused the message in text."""
+    # The checker skips comment lines on the client side; so does this.
+    lines = [
+        (number, line)
+        for number, line in enumerate(text.splitlines(), 1)
+        if not line.startswith("#")
+    ]
+    title = lines[0][1] if lines else ""
+    remedies = []
+    if title.startswith(FOLDED):
+        remedies += folded_remedy(title)
+    elif title_refused(checker, title):
+        heads = merge_heads()
+        remedies += merge_remedy(heads, checker) if heads else prefix_remedy(checker)
+    return remedies + character_remedy(lines)
+
+
+def commit_msg(message: Path) -> int:
+    # As in pre_commit, an unavailable checker lets the commit through: pre-push
+    # runs the same message rules again.
+    try:
+        checker = preflight.hooks_checkout() / "hooks/check-message.py"
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(
+            f"commit-msg: pinned checker unavailable, not checked: {error}",
+            file=sys.stderr,
+        )
+        return 0
+    code = run_checker(checker, message.absolute())
+    if code:
+        text = message.read_text(encoding="utf-8", errors="replace")
+        for line in message_remedies(checker, text):
+            print(f"commit-msg: {line}", file=sys.stderr)
+    return code
+
+
+def foreign_hook(path: Path) -> str:
+    """Why install stops at a hook it did not write, and how to replace it."""
+    lines = path.read_text(errors="replace").splitlines()[1:]
+    opening = next((line.strip() for line in lines if line.strip()), "(empty)")
+    return (
+        f"{path} exists and was not written by this installer; after its first "
+        f"line it reads: {opening[:100]!r}. This installer's {path.name} hook "
+        "would replace it. To replace it deliberately, keep a copy if you want "
+        f"one (mv {path} {path}.local), then run python3 tools/git_hooks.py "
+        "install --force, which replaces each hook it did not write."
+    )
 
 
 def install(hooks: Path, force: bool) -> int:
@@ -178,9 +318,7 @@ def install(hooks: Path, force: bool) -> int:
             and MARKER not in path.read_text(errors="replace")
             and not force
         ):
-            print(
-                f"{path} exists and was not written by this installer; --force replaces it"
-            )
+            print(foreign_hook(path))
             return 1
         path.write_text(SHIM.format(marker=MARKER, hook=hook))
         path.chmod(0o755)
@@ -194,6 +332,8 @@ def main(argv: list[str]) -> int:
         return pre_push(sys.stdin.read().splitlines())
     if command == "pre-commit":
         return pre_commit()
+    if command == "commit-msg" and len(argv) == 3:
+        return commit_msg(Path(argv[2]))
     if command == "install":
         common = preflight_stamp.git(
             "rev-parse", "--path-format=absolute", "--git-common-dir"

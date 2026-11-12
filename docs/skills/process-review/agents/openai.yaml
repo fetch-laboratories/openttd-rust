@@ -1,0 +1,6 @@
+interface:
+  display_name: "Process review"
+  short_description: "Review agent transcripts for a process question"
+  default_prompt: "Use $process-review to answer a question about the agents' process from their transcripts."
+policy:
+  allow_implicit_invocation: false

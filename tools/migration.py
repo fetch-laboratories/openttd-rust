@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 import evidence_replacements
@@ -167,11 +167,17 @@ def environment() -> dict[str, str]:
     return env
 
 
-def shell_exports() -> str:
-    """Shell exports for each variable environment() sets or changes, plus the
-    driver's Cargo target directory so hand-run Cargo reuses its output."""
+def driver_environment() -> dict[str, str]:
+    """environment() plus the driver's Cargo target directory, so hand-run Cargo
+    reuses its output. `env` exports it and `exec` runs under it."""
     env = environment()
     env["CARGO_TARGET_DIR"] = str(CARGO_TARGET_DIR)
+    return env
+
+
+def shell_exports() -> str:
+    """Shell exports for each variable driver_environment() sets or changes."""
+    env = driver_environment()
     return "".join(
         f"export {name}={shlex.quote(value)}\n"
         for name, value in sorted(env.items())
@@ -750,6 +756,309 @@ def command_env() -> None:
     print(shell_exports(), end="")
 
 
+EXEC_USAGE = "python3 tools/migration.py exec -- CMD [ARG ...]"
+
+
+def other_checkout(cwd: Path) -> Path | None:
+    """The checkout holding cwd when it is not this one; None outside Git too."""
+    try:
+        top = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return None if Path(top).resolve() == ROOT else Path(top)
+
+
+def command_exec(argv: list[str]) -> int:
+    """Replace this process with one command in the driver environment."""
+    parser = argparse.ArgumentParser(
+        prog="migration.py exec",
+        usage=EXEC_USAGE,
+        description=(
+            "Run one command, such as cargo, rustc or a built binary, with the "
+            "variables `migration.py env` exports, in the current directory. "
+            "Arguments pass through unchanged, without a shell; the exit status "
+            "is the command's."
+        ),
+    )
+    if argv[:1] in (["-h"], ["--help"]):
+        parser.print_help()
+        return 0
+    command = argv[1:] if argv[:1] == ["--"] else argv
+    if not command or command[0].startswith("-"):
+        parser.error(f"name the command after --: {EXEC_USAGE}")
+    cwd = Path.cwd()
+    if (top := other_checkout(cwd)) is not None:
+        sys.exit(
+            f"migration.py exec: {cwd} is in the checkout {top}, not in {ROOT}, "
+            f"whose Cargo target directory this would use. Run "
+            f"python3 {top}/tools/migration.py exec -- ..., or cd into {ROOT}."
+        )
+    try:
+        os.execvpe(command[0], command, driver_environment())
+    except OSError as error:
+        print(
+            f"migration.py exec: cannot run {command[0]}: {error.strerror}. The "
+            f"driver PATH adds {bootstrapped('cargo') / 'bin'} to yours; check "
+            "the command name.",
+            file=sys.stderr,
+        )
+        # The shell's statuses for a command not found or not executable.
+        return 127 if isinstance(error, FileNotFoundError) else 126
+    return 0  # os.execvpe does not return.
+
+
+FMT_USAGE = "python3 tools/migration.py fmt [--check | --fix]"
+
+
+def ruff_command(lines: list[str], subcommand: str) -> list[str]:
+    """The argv of Quick's pinned `ruff SUBCOMMAND` line."""
+    for line in lines:
+        words = shlex.split(line)
+        if "ruff" in words and words[words.index("ruff") + 1 :][:1] == [subcommand]:
+            return words
+    raise RuntimeError(
+        f"Quick runs no `ruff {subcommand}` line; see the Ruff lines in "
+        ".github/workflows/ci-quick.yml"
+    )
+
+
+def format_steps(check: bool, fix: bool) -> list[tuple[list[str], dict[str, str]]]:
+    """cargo fmt, then Quick's pinned Ruff over Quick's scope: its lint line
+    with --fix when asked, and its format line, without --check unless asked."""
+    # Imported here: preflight imports this module, and quick_workflow needs
+    # PyYAML, which migration.py's other commands do not.
+    import preflight
+    import quick_workflow
+
+    lines = quick_workflow.ruff_lines()
+    formatting = ruff_command(lines, "format")
+    if not check:
+        formatting = [word for word in formatting if word != "--check"]
+    lint = [*ruff_command(lines, "check"), "--fix"] if fix else []
+    cargo = ["cargo", "fmt", "--all", *(["--", "--check"] if check else [])]
+    ruff_environment = preflight.environment()
+    steps = [(cargo, driver_environment()), (lint, ruff_environment)]
+    return [step for step in steps if step[0]] + [(formatting, ruff_environment)]
+
+
+def run_format_step(command: list[str], env: dict[str, str]) -> bool:
+    print(f"--> {shlex.join(command)}", flush=True)
+    try:
+        return subprocess.run(command, cwd=ROOT, env=env, check=False).returncode == 0
+    except OSError as error:
+        print(f"cannot run {command[0]}: {error.strerror}", file=sys.stderr)
+        return False
+
+
+def command_fmt(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="migration.py fmt",
+        usage=FMT_USAGE,
+        description=(
+            "Format the whole Rust workspace with cargo fmt in the driver "
+            "environment, and the whole Python scope Quick checks with Quick's "
+            "pinned Ruff formatter. Only files that were unformatted change, "
+            "including unrelated unformatted files in the working tree; nothing "
+            "is staged."
+        ),
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="report what would change without writing; exit 1 if anything would",
+    )
+    mode.add_argument(
+        "--fix",
+        action="store_true",
+        help="also apply Ruff's lint fixes (Quick's `ruff check` line with --fix)",
+    )
+    args = parser.parse_args(argv)
+    failed = [
+        shlex.join(command)
+        for command, env in format_steps(args.check, args.fix)
+        if not run_format_step(command, env)
+    ]
+    if failed:
+        remedy = "; run python3 tools/migration.py fmt" if args.check else ""
+        print(f"fmt: failed: {', '.join(failed)}{remedy}", file=sys.stderr)
+    return 1 if failed else 0
+
+
+ORIGINAL_USAGE = "python3 tools/migration.py original {path | show FILE[:A-B] | grep PATTERN [PATH ...]}"
+
+
+def reference_problem() -> str | None:
+    """What keeps the shared reference worktree from being the pinned original."""
+    commit = BASELINE["commit"]
+    if not REFERENCE.is_dir():
+        return (
+            f"{REFERENCE} does not exist; `python3 tools/migration.py build` creates "
+            "it. `original show` and `original grep` read the pinned commit without it."
+        )
+    try:
+        head = git("rev-parse", "HEAD", cwd=REFERENCE)
+        changes = git(
+            "--no-optional-locks",
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            cwd=REFERENCE,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return f"{REFERENCE} is not a Git worktree; move it aside and rerun the build."
+    if head != commit:
+        return (
+            f"{REFERENCE} is at {head}, not the pinned {commit} of "
+            "migration/baseline.json; check it out there before comparing."
+        )
+    if changes:
+        return (
+            f"{REFERENCE} has changes (`git -C {REFERENCE} status`); restore it to "
+            "the pinned commit. `original show` and `original grep` are unaffected."
+        )
+    return None
+
+
+def pinned_commit() -> str:
+    """The baseline commit, after checking this clone has its objects."""
+    commit = BASELINE["commit"]
+    present = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+        cwd=ROOT,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if present.returncode:
+        raise RuntimeError(
+            f"the pinned original {commit} is not in this clone; fetch it with "
+            f"git fetch --no-tags --depth=1 origin {commit}"
+        )
+    return commit
+
+
+def original_path(text: str) -> str:
+    """A path inside the original's repository, or a refusal."""
+    path = PurePosixPath(text)
+    if path.is_absolute() or ".." in path.parts:
+        raise RuntimeError(
+            f"{text}: give a path relative to the original's root, such as src/map.cpp"
+        )
+    return str(path)
+
+
+def show_original(spec: str) -> int:
+    """Print a file, or lines A-B numbered, from the pinned commit's object."""
+    lines_match = re.search(r":(\d+)(?:-(\d+))?$", spec)
+    path = original_path(spec[: lines_match.start()] if lines_match else spec)
+    commit = pinned_commit()
+    shown = subprocess.run(
+        ["git", "show", f"{commit}:{path}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    if shown.returncode:
+        raise RuntimeError(
+            f"{path} is not in the original at {commit}; find it with "
+            "python3 tools/migration.py original grep PATTERN"
+        )
+    if lines_match is None:
+        print(shown.stdout, end="")
+        return 0
+    lines = shown.stdout.splitlines()
+    start = int(lines_match[1])
+    end = int(lines_match[2] or start)
+    if not 1 <= start <= min(end, len(lines)):
+        raise RuntimeError(f"{path} has {len(lines)} lines; give 1 <= A <= B")
+    for number in range(start, min(end, len(lines)) + 1):
+        print(f"{number:>6}  {lines[number - 1]}")
+    return 0
+
+
+def grep_original(pattern: str, paths: list[str]) -> int:
+    """git grep -n over the pinned commit, printing path:line:text."""
+    commit = pinned_commit()
+    pathspecs = [original_path(path) for path in paths] or ["src/"]
+    command = ["git", "grep", "-n", "-E", "-e", pattern, commit, "--", *pathspecs]
+    with subprocess.Popen(
+        command, cwd=ROOT, stdout=subprocess.PIPE, text=True, errors="replace"
+    ) as process:
+        assert process.stdout is not None
+        for line in process.stdout:
+            sys.stdout.write(line.removeprefix(f"{commit}:"))
+    if process.returncode == 1:
+        print(f"no match in the original at {commit}", file=sys.stderr)
+    return process.returncode
+
+
+def command_original(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="migration.py original",
+        usage=ORIGINAL_USAGE,
+        description=(
+            "Read the pinned original (migration/baseline.json) from any worktree. "
+            "show and grep read the pinned commit's Git objects, running "
+            "`git show COMMIT:src/FILE` and `git grep -n -E PATTERN COMMIT -- src/`, "
+            "so the reference worktree's state cannot affect them."
+        ),
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(
+        "path", help="print the reference worktree's path after checking it"
+    )
+    show = commands.add_parser("show", help="print a file, or lines A-B numbered")
+    show.add_argument(
+        "spec", metavar="FILE[:A-B]", help="for example src/map.cpp:80-120"
+    )
+    grep = commands.add_parser(
+        "grep", help="search with an extended regular expression; prints path:line:text"
+    )
+    grep.add_argument("pattern")
+    grep.add_argument("paths", nargs="*", metavar="PATH", help="default: src/")
+    args = parser.parse_args(argv)
+    if args.command == "show":
+        return show_original(args.spec)
+    if args.command == "grep":
+        return grep_original(args.pattern, args.paths)
+    if problem := reference_problem():
+        print(f"original path: {problem}", file=sys.stderr)
+        return 1
+    print(REFERENCE)
+    return 0
+
+
+# Commands that parse their own arguments and need no build lock or evidence.
+AGENT_COMMANDS: dict[str, Callable[[list[str]], int]] = {
+    "exec": command_exec,
+    "fmt": command_fmt,
+    "original": command_original,
+}
+AGENT_EPILOG = f"""\
+These take their own arguments, come first and take none of the options above:
+  {EXEC_USAGE}
+      run one command (cargo, rustc, a built binary) in the driver environment
+  {FMT_USAGE}
+      format the Rust workspace and Quick's Python scope at the pinned versions
+  {ORIGINAL_USAGE}
+      read the pinned original from any worktree
+"""
+
+
+def run_agent_command(argv: Sequence[str]) -> int | None:
+    """Run `exec` when it is the first argument; None leaves argv to main()."""
+    if not argv or argv[0] not in AGENT_COMMANDS:
+        return None
+    return AGENT_COMMANDS[argv[0]](list(argv[1:]))
+
+
 def command_deep(
     args: argparse.Namespace, simulate_args: list[str], parser: argparse.ArgumentParser
 ) -> None:
@@ -770,7 +1079,11 @@ def command_deep(
 
 
 def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=AGENT_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "action",
         choices=(
@@ -782,6 +1095,7 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
             "rust-checks",
             "deep",
             "env",
+            *AGENT_COMMANDS,
         ),
         nargs="?",
         default="verify",
@@ -832,6 +1146,11 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
     )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
+    if args.action in AGENT_COMMANDS:
+        parser.error(
+            f"put {args.action} first, without the options above; see "
+            f"python3 tools/migration.py {args.action} --help"
+        )
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
     if args.member and args.action != "deep":
@@ -1053,6 +1372,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     try:
+        if (code := run_agent_command(sys.argv[1:])) is not None:
+            sys.exit(code)
         main()
     except (RuntimeError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))

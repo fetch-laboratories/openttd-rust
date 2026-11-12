@@ -13,7 +13,7 @@
 ## Landscape scheduler, ground and flooding
 
 - Rust owns: `RunTileLoop` (LFSR walk and saved cursor), seven Rust tile owners; clear, rail, road and tunnel ground evolution; flooding, half-tile rail removal, dry-up, neighbour wakeups and flood-victim traversal.
-- C++ keeps: Map arrays, allocation and writes; house, station and object tile handlers. Scheduler clear/water/tree reads use the shared map descriptor (#274); standalone water/tree, generation, planting, command and other owner reads use typed callbacks.
+- C++ keeps: Map arrays, allocation and writes. Scheduler clear/water/tree reads use the shared map descriptor (#274); standalone water/tree, generation, planting, command and other owner reads use typed callbacks.
 - Checks: the `tile_loop::comparison_tests` and `movement::evidence_tests` Rust tests over frozen original observations, and `python3 tools/migration.py simulate landscape roads-flooding`.
 - Limits: These remain #156 gaps: matrix, editor, NewGRF, threaded.
 - PRs: #255; descriptor #351.
@@ -36,8 +36,8 @@
 
 ## Spiral tile traversal
 
-- Rust owns: Square/hole initialization, spiral position and movement, shell jumps, outside-map skipping, end detection and equality.
-- C++ keeps: Typed iterator/sequence facade, `TileXY` dereference, wrappers, map storage, orthogonal and diagonal tile-area algorithms.
+- Rust owns: Square/hole initialization, spiral position and movement, shell jumps, outside-map skipping, end detection and equality; orthogonal and diagonal tile-area algorithms.
+- C++ keeps: Typed iterator/sequence facade, `TileXY` dereference, wrappers and map storage.
 - Limits: Positive diameter/radius and increment-before-end are preconditions; the huge inherited perimeter after a wrapped extent is not traversed. Native generators do not use spiral traversal.
 - PRs: #23.
 
@@ -52,7 +52,7 @@
 ## Water-region cache and graph service
 
 - Rust owns: Water-region cache, validity, tile labels, edge masks, patch counts, aqueduct flags, flood scratch, rebuild, invalidation and neighbour traversal.
-- C++ keeps: Map storage, shared water track/follower queries, formatting and `water_regions.h` facade.
+- C++ keeps: Map storage, formatting and `water_regions.h` facade.
 - Checks: `python3 tools/migration.py simulate water --jobs 2` and native ABI probes. See `tools/water-scenario-ai/README.md` for preparation, negative probes and optional crossing/timing measurements.
 - Limits: Map replacement during a visitor violates original reference lifetimes. Arbitrary maps/NewGRFs and exhaustive region/path limits remain open.
 - PRs: #114.
@@ -68,7 +68,7 @@
 ## Tunnel and bridge commands and ownership (#293)
 
 - Rust owns: Bridge/tunnel construction, removal permission and clearing, ownership, terraform, build-above, reservations, infrastructure updates and hidden tunnel end tile.
-- C++ keeps: Map/spec/pool storage, rendering, vehicle entry and command results.
+- C++ keeps: Map/spec/pool storage, rendering and command results.
 - Checks: Default `roads-commands` scenario and reload.
 - Limits: These remain #156 gaps: live train re-reservation, rectangular-map tunnel intersection choices, external NewGRFs, legacy layouts.
 - PRs: #352.
@@ -76,7 +76,7 @@
 ## Object construction, generation and HQ lifecycle (#295)
 
 - Rust owns: Object build/area commands, clearing, ownership, terraform/build-above, HQ lifecycle, colour updates, tile loops, generation, NewGRF variables, nearby/sister queries, animation triggers, type counts and cleared-area scratch; tile ownership uses the shared dispatcher (#333).
-- C++ keeps: Object pool/specs/map/save/render records, NewGRF interpreter, badge, override and animation-frame services.
+- C++ keeps: Object pool/specs/map/save/render records, badge, override and animation-frame services.
 - Checks: Default `objects` scenarios and unchanged-body probes.
 - Limits: These remain #156 gaps: external NewGRF/legacy, autoslope and generation branches.
 - PRs: #313.
@@ -91,8 +91,8 @@
 
 ## Shared tile ownership dispatch (#331)
 
-- Rust owns: The general `ChangeTileOwner` tile-kind dispatch. It calls the integrated rail, road, station, water and industry owners directly.
-- C++ keeps: Clear, house, tree, void, tunnel/bridge and object handlers, which the Rust dispatch calls as typed leaves.
+- Rust owns: The general `ChangeTileOwner` tile-kind dispatch. It calls the integrated rail, road, station, water, industry, tunnel/bridge and object owners directly.
+- C++ keeps: Clear, house, tree and void handlers, which the Rust dispatch calls as typed leaves.
 - Checks: Default `water-commands` and `ownership-dispatch` scenarios.
 - PRs: #333 and #335.
 

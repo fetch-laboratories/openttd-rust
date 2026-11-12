@@ -380,3 +380,29 @@ jobs:
             });
           }
           if (!passed) core.setFailed('Full validation did not pass for the current PR head');
+
+  # A request whose PR head moved, closed or left rust-migration tested nothing current:
+  # the plan or a gate refused it. Its run ends cancelled, not failed, so a count of
+  # failed runs leaves it out (#922). A merge group's refusal stays a failure.
+  superseded:
+    name: Cancel a superseded request
+    needs: [plan, quick, rust, native, platform, publish]
+    if: always() && github.event_name != 'merge_group' && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+    # No checkout: this job executes only the reviewed workflow definition.
+    - uses: actions/github-script@v7
+      env:
+        PR: ${{ inputs.pr || github.event.pull_request.number }}
+        HEAD: ${{ inputs.head || github.event.pull_request.head.sha }}
+      with:
+        script: |
+          const {data: pull} = await github.rest.pulls.get({...context.repo, pull_number: Number(process.env.PR)});
+          if (pull.state === 'open' && pull.base.ref === 'rust-migration' && pull.head.sha === process.env.HEAD) return;
+          core.notice(`PR #${process.env.PR} no longer has head ${process.env.HEAD}; cancelling this run`);
+          await github.rest.actions.cancelWorkflowRun({...context.repo, run_id: context.runId});
+          // Cancellation stops this job within seconds; the run then concludes cancelled.
+          await new Promise(resolve => setTimeout(resolve, 60000));

@@ -90,23 +90,4 @@ inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 template <typename Context>
 inline void RustCrossingSound(Context, uint32_t tile) noexcept { RustPlayTileSound(tile, SND_0E_LEVEL_CROSSING); }
 
-inline OpenTTDMovementObjectFoundation RustObjectFoundation(uint32_t tile) noexcept
-{
-	const auto *spec = ObjectSpec::Get(GetObjectType(TileIndex{tile}));
-	const bool enabled = spec->IsEnabled();
-	return {.enabled = enabled, .no_foundation = enabled && spec->flags.Test(ObjectFlag::HasNoFoundation)};
-}
-inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
-{
-	HouseID kind = GetHouseType(TileIndex{tile});
-	const auto *spec = kind >= NEW_HOUSE_OFFSET ? HouseSpec::Get(kind) : nullptr;
-	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(HouseCallbackMask::DrawFoundations)};
-}
-inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
-{
-	IndustryGfx kind = GetIndustryGfx(TileIndex{tile});
-	const auto *spec = kind >= NEW_INDUSTRYTILEOFFSET ? GetIndustryTileSpec(kind) : nullptr;
-	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(IndustryTileCallbackMask::DrawFoundations)};
-}
-inline uint16_t RustIndustryFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return OpenTTDIndustryTileCallback(tile, kind, CBID_INDTILE_DRAW_FOUNDATIONS, 0, 0); }
 #endif /* RUST_SERVICES_LANDSCAPE_H */

@@ -825,6 +825,42 @@ pub(crate) struct TerraformServices<'a> {
     pub policy: &'a TilePolicyServices,
     pub costs: &'a IndustryCostServices,
 }
+/// `GetFoundation_Industry`.
+pub(crate) fn get_foundation_industry(
+    shared: &crate::services::Services,
+    tile_procs: &TileServices,
+    tile: TileIndex,
+    tileh: Slope,
+) -> crate::slope_type::Foundation {
+    let gfx = tile_procs.get_industry_gfx(tile);
+
+    /* For NewGRF industry tiles we might not be drawing a foundation. We need to
+     * account for this, as other structures should
+     * draw the wall of the foundation in this case.
+     */
+    if gfx >= IndustryGfx::NEW_INDUSTRYTILEOFFSET {
+        let indts: *const IndustryTileSpec = get_industry_tile_spec(gfx);
+        // SAFETY: The Rust-owned tile spec storage holds every valid graphics ID.
+        if unsafe {
+            IndustryTileCallbackMasks((*indts).callback_mask)
+                .test(IndustryTileCallbackMask::DrawFoundations)
+        } {
+            let callback_res =
+                tile_procs.tile_callback(tile, gfx, CallbackID::CBID_INDTILE_DRAW_FOUNDATIONS);
+            if callback_res != CALLBACK_FAILED
+                && !(shared.grf_boolean_callback)(
+                    // SAFETY: As above.
+                    unsafe { (*indts).grf_prop.grffile },
+                    CallbackID::CBID_INDTILE_DRAW_FOUNDATIONS.0,
+                    callback_res,
+                )
+            {
+                return crate::slope_type::Foundation::FOUNDATION_NONE;
+            }
+        }
+    }
+    crate::slope_func::flattening_foundation(tileh)
+}
 /// `TerraformTile_Industry`.
 ///
 /// # Safety

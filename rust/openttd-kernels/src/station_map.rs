@@ -76,6 +76,13 @@ pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bo
     Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)? || is_road_waypoint(m, tile)?)
 }
 
+/// `IsStationRoadStop`: is the station at `t` a road station?
+#[inline]
+pub(crate) fn is_station_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    m.require_type(tile, TileType::MP_STATION)?;
+    Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)?)
+}
+
 /// `IsAirport`: is this station tile an airport? The station type leaf keeps
 /// its native assertion.
 #[allow(clippy::inline_always)]
@@ -465,14 +472,8 @@ impl crate::map_func::World<'_> {
     pub(crate) fn rail_station(&self, t: u32) -> bool {
         self.is_rail_station_tile(TileIndex(t))
     }
-    pub(crate) fn is_rail_station_raw(&self, t: u32) -> bool {
-        self.is_rail_station(TileIndex(t))
-    }
     pub(crate) fn station_has_rail(&self, t: u32) -> bool {
         self.has_station_rail(TileIndex(t))
-    }
-    pub(crate) fn buoy(&self, t: u32) -> bool {
-        self.is_buoy(TileIndex(t))
     }
     pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
         self.is_any_road_stop_tile(TileIndex(t))

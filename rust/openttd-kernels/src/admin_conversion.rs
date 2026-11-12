@@ -7,6 +7,10 @@
 
 //! Admin conversion traversal; typed VM/JSON effects execute between Rust calls.
 
+use crate::json;
+use crate::script_host::SQUIRREL_MAX_DEPTH;
+use crate::squirrel::SQObjectType;
+
 /// Scalar instruction whose C++ execution may invoke user code or throw.
 #[repr(C)]
 #[derive(Default)]
@@ -50,6 +54,17 @@ const SAVE_TOP: u8 = 25;
 const RESTORE_TOP: u8 = 26;
 const PUSH_NULL: u8 = 27;
 
+/// Scalar selector: null.
+const SCALAR_NULL: u8 = 0;
+/// Scalar selector: boolean.
+const SCALAR_BOOL: u8 = 1;
+/// Scalar selector: string.
+const SCALAR_STRING: u8 = 2;
+/// Scalar selector: integer.
+const SCALAR_INTEGER: u8 = 3;
+/// Release selector: destroy the child, then its parent's copied table key.
+const RELEASE_KEY: u8 = 1;
+
 #[derive(Clone, Copy)]
 enum Stage {
     Enter,
@@ -57,8 +72,8 @@ enum Stage {
     Scalar,
     Begun,
     Iterated,
+    /// The pair's key is copied; the parent keeps this stage while its child converts.
     Key,
-    Child,
     ChildFinished(bool),
     PairPopped(bool),
     Committed,
@@ -91,6 +106,8 @@ enum Control {
     Done(bool),
 }
 
+/// One conversion: `ScriptAdminMakeJSON` when outgoing, `ScriptEventAdminPort::GetObject` with
+/// `ScriptEventAdminPortReadValue` when incoming.
 pub struct Engine {
     incoming: bool,
     frames: Vec<Frame>,
@@ -98,10 +115,13 @@ pub struct Engine {
     top: i64,
 }
 
+/// The frame slot as the native `size_t` index it stands for.
+fn frame_slot(slot: usize) -> u64 {
+    slot as u64
+}
+
 impl Engine {
-    pub fn new(direction: u8, index: i64, depth: i32) -> Self {
-        assert!(direction <= 1);
-        let incoming = direction != 0;
+    pub fn new(incoming: bool, index: i64, depth: i32) -> Self {
         Self {
             incoming,
             frames: vec![Frame {
@@ -122,7 +142,7 @@ impl Engine {
     fn action(&self, kind: u8, argument: u8) -> Action {
         let slot = self.frames.len().saturating_sub(1);
         Action {
-            frame: u64::try_from(slot).expect("native frame slot"),
+            frame: frame_slot(slot),
             index: self.frames.last().map_or(0, |frame| frame.index),
             kind,
             argument,
@@ -141,7 +161,7 @@ impl Engine {
             self.control = Control::Finished(result);
         }
         Some(Action {
-            frame: u64::try_from(slot).expect("native frame slot"),
+            frame: frame_slot(slot),
             kind: RELEASE_FRAME,
             ..Action::default()
         })
@@ -154,8 +174,7 @@ impl Engine {
                 return Some(self.action(INSPECT_IN, 0));
             }
             Control::RootInspected => {
-                if response == 1 {
-                    // nlohmann object, statically pinned in C++.
+                if response == u64::from(json::value_t::OBJECT) {
                     self.control = Control::TopSaved;
                     return Some(self.action(SAVE_TOP, 0));
                 }
@@ -180,6 +199,7 @@ impl Engine {
             }
             Control::Finished(result) => {
                 if self.incoming && !result {
+                    /* Rewind the stack, removing anything that might be left on top. */
                     self.control = Control::Restore;
                     return Some(Action {
                         kind: RESTORE_TOP,
@@ -216,22 +236,41 @@ impl Engine {
         None
     }
 
+    fn enter(&mut self, slot: usize) -> Action {
+        if !self.incoming && self.frames[slot].depth.cast_unsigned() == SQUIRREL_MAX_DEPTH {
+            // SQUIRREL_MAX_DEPTH = 25
+            self.frames[slot].stage = Stage::Failed;
+            return self.action(ERROR_DEPTH, 0);
+        }
+        self.frames[slot].stage = Stage::Inspected;
+        self.action(
+            if self.incoming {
+                INSPECT_IN
+            } else {
+                INSPECT_OUT
+            },
+            0,
+        )
+    }
+
+    /// The type switch: the exact raw type values the original's cases name.
     fn inspect(&mut self, slot: usize, response: u64) -> Option<Action> {
-        // Exact raw type values, not a C++ acceptance predicate.
         let scalar = if self.incoming {
-            match response {
-                0 => Some(0),
-                4 => Some(1),
-                3 => Some(2),
-                5 | 6 => Some(3),
+            match u8::try_from(response) {
+                Ok(json::value_t::NULL) => Some(SCALAR_NULL),
+                Ok(json::value_t::BOOLEAN) => Some(SCALAR_BOOL),
+                Ok(json::value_t::STRING) => Some(SCALAR_STRING),
+                Ok(json::value_t::NUMBER_INTEGER | json::value_t::NUMBER_UNSIGNED) => {
+                    Some(SCALAR_INTEGER)
+                }
                 _ => None,
             }
         } else {
-            match response {
-                0x0100_0001 => Some(0),
-                0x0100_0008 => Some(1),
-                0x0800_0010 => Some(2),
-                0x0500_0002 => Some(3),
+            match u32::try_from(response).map(SQObjectType) {
+                Ok(SQObjectType::OT_NULL) => Some(SCALAR_NULL),
+                Ok(SQObjectType::OT_BOOL) => Some(SCALAR_BOOL),
+                Ok(SQObjectType::OT_STRING) => Some(SCALAR_STRING),
+                Ok(SQObjectType::OT_INTEGER) => Some(SCALAR_INTEGER),
                 _ => None,
             }
         };
@@ -247,15 +286,15 @@ impl Engine {
             ));
         }
         let container = if self.incoming {
-            match response {
-                1 => Some(true),
-                2 => Some(false),
+            match u8::try_from(response) {
+                Ok(json::value_t::OBJECT) => Some(true),
+                Ok(json::value_t::ARRAY) => Some(false),
                 _ => None,
             }
         } else {
-            match response {
-                0x0a00_0020 => Some(true),
-                0x0800_0040 => Some(false),
+            match u32::try_from(response).map(SQObjectType) {
+                Ok(SQObjectType::OT_TABLE) => Some(true),
+                Ok(SQObjectType::OT_ARRAY) => Some(false),
                 _ => None,
             }
         };
@@ -271,142 +310,101 @@ impl Engine {
         if !self.incoming {
             return Some(self.action(ERROR_OUT_TYPE, 0));
         }
+        /* These types are not supported by Squirrel. */
         None
     }
 
-    fn traverse(&mut self, slot: usize, response: u64) -> Option<Action> {
-        match self.frames[slot].stage {
-            Stage::Begun | Stage::Released => {
-                self.frames[slot].stage = Stage::Iterated;
-                if self.incoming {
-                    return Some(self.action(CHECK_IN_ITERATOR, 0));
-                }
-                let mut action = self.action(NEXT_OUT, 0);
-                action.index = action
-                    .index
-                    .checked_sub(1)
-                    .expect("original valid VM index");
-                return Some(action);
+    /// The loop condition: `sq_next(vm, index - 1)` outgoing, the next item incoming.
+    fn iterate(&mut self, slot: usize) -> Action {
+        self.frames[slot].stage = Stage::Iterated;
+        if self.incoming {
+            return self.action(CHECK_IN_ITERATOR, 0);
+        }
+        let mut action = self.action(NEXT_OUT, 0);
+        action.index = action.index.wrapping_sub(1);
+        action
+    }
+
+    fn iterated(&mut self, slot: usize, response: u64) -> Option<Action> {
+        if response == 0 {
+            if self.incoming {
+                return self.finish(true);
             }
-            Stage::Iterated => {
-                if response == 0 {
-                    if self.incoming {
-                        if let Some(action) = self.finish(true) {
-                            return Some(action);
-                        }
+            self.frames[slot].stage = Stage::IteratorPopped(true);
+            return Some(self.action(POP_ITERATOR, 0));
+        }
+        self.frames[slot].stage = Stage::Key;
+        if self.frames[slot].table {
+            return Some(self.action(
+                if self.incoming {
+                    PUSH_IN_KEY
+                } else {
+                    COPY_OUT_KEY
+                },
+                0,
+            ));
+        }
+        None
+    }
+
+    fn child(&mut self, slot: usize) -> Action {
+        let depth = if self.incoming {
+            0
+        } else {
+            self.frames[slot].depth.wrapping_add(1)
+        };
+        self.frames.push(Frame {
+            index: -1,
+            depth,
+            table: false,
+            stage: Stage::Enter,
+        });
+        self.action(if self.incoming { CHILD_IN } else { CHILD_OUT }, 0)
+    }
+
+    fn child_finished(&mut self, slot: usize, result: bool) -> Option<Action> {
+        if self.incoming {
+            if result {
+                self.frames[slot].stage = Stage::InCommitted;
+                return Some(self.action(
+                    if self.frames[slot].table {
+                        COMMIT_IN_TABLE
                     } else {
-                        self.frames[slot].stage = Stage::IteratorPopped(true);
-                        return Some(self.action(POP_ITERATOR, 0));
-                    }
-                } else if self.frames[slot].table {
-                    self.frames[slot].stage = Stage::Key;
-                    return Some(self.action(
-                        if self.incoming {
-                            PUSH_IN_KEY
-                        } else {
-                            COPY_OUT_KEY
-                        },
-                        0,
-                    ));
-                } else {
-                    self.frames[slot].stage = Stage::Key;
-                }
+                        COMMIT_IN_ARRAY
+                    },
+                    0,
+                ));
             }
-            Stage::Key => {
-                self.frames[slot].stage = Stage::Child;
-                let depth = if self.incoming {
-                    0
-                } else {
-                    self.frames[slot]
-                        .depth
-                        .checked_add(1)
-                        .expect("original defined depth increment")
-                };
-                self.frames.push(Frame {
-                    index: -1,
-                    depth,
-                    table: false,
-                    stage: Stage::Enter,
-                });
-                return Some(self.action(if self.incoming { CHILD_IN } else { CHILD_OUT }, 0));
-            }
-            Stage::Child => unreachable!("child must finish before its parent"),
-            _ => unreachable!("entry and completion stages dispatched separately"),
+            return self.finish(false);
         }
-        None
+        self.frames[slot].stage = Stage::PairPopped(result);
+        Some(self.action(POP_PAIR, 0))
     }
 
-    fn complete(&mut self, slot: usize) -> Option<Action> {
-        match self.frames[slot].stage {
-            Stage::ChildFinished(result) => {
-                if self.incoming {
-                    if result {
-                        self.frames[slot].stage = Stage::InCommitted;
-                        return Some(self.action(
-                            if self.frames[slot].table {
-                                COMMIT_IN_TABLE
-                            } else {
-                                COMMIT_IN_ARRAY
-                            },
-                            0,
-                        ));
-                    }
-                    if let Some(action) = self.finish(false) {
-                        return Some(action);
-                    }
+    fn pair_popped(&mut self, slot: usize, result: bool) -> Action {
+        if result {
+            self.frames[slot].stage = Stage::Committed;
+            return self.action(
+                if self.frames[slot].table {
+                    COMMIT_OUT_TABLE
                 } else {
-                    self.frames[slot].stage = Stage::PairPopped(result);
-                    return Some(self.action(POP_PAIR, 0));
-                }
-            }
-            Stage::PairPopped(result) => {
-                if result {
-                    self.frames[slot].stage = Stage::Committed;
-                    return Some(self.action(
-                        if self.frames[slot].table {
-                            COMMIT_OUT_TABLE
-                        } else {
-                            COMMIT_OUT_ARRAY
-                        },
-                        0,
-                    ));
-                }
-                self.frames[slot].stage = Stage::IteratorPopped(false);
-                return Some(self.action(POP_ITERATOR, 0));
-            }
-            Stage::Committed => {
-                self.frames[slot].stage = Stage::Released;
-                return Some(Action {
-                    frame: u64::try_from(slot + 1).expect("native frame slot"),
-                    kind: RELEASE_FRAME,
-                    argument: 1,
-                    ..Action::default()
-                });
-            }
-            Stage::IteratorPopped(result) => {
-                if !result {
-                    self.frames[slot].stage = Stage::Failed;
-                    return Some(Action {
-                        frame: u64::try_from(slot + 1).expect("native frame slot"),
-                        kind: RELEASE_FRAME,
-                        argument: 1,
-                        ..Action::default()
-                    });
-                }
-                if let Some(action) = self.finish(true) {
-                    return Some(action);
-                }
-            }
-            Stage::InCommitted => {
-                self.frames[slot].stage = Stage::InAdvanced;
-                return Some(self.action(ADVANCE_IN_ITERATOR, 0));
-            }
-            Stage::InAdvanced => {
-                self.frames[slot].stage = Stage::Begun;
-            }
-            _ => unreachable!("entry and completion stages dispatched separately"),
+                    COMMIT_OUT_ARRAY
+                },
+                0,
+            );
         }
-        None
+        self.frames[slot].stage = Stage::IteratorPopped(false);
+        self.action(POP_ITERATOR, 0)
+    }
+
+    fn release_child(&mut self, slot: usize, stage: Stage) -> Action {
+        self.frames[slot].stage = stage;
+        Action {
+            frame: frame_slot(slot + 1),
+            kind: RELEASE_FRAME,
+            argument: RELEASE_KEY,
+            ..Action::default()
+        }
     }
 
     pub fn advance(&mut self, response: u64) -> Action {
@@ -419,29 +417,25 @@ impl Engine {
             }
             let slot = self.frames.len() - 1;
             let action = match self.frames[slot].stage {
-                Stage::Enter => {
-                    if !self.incoming && self.frames[slot].depth == 25 {
-                        self.frames[slot].stage = Stage::Failed;
-                        Some(self.action(ERROR_DEPTH, 0))
-                    } else {
-                        self.frames[slot].stage = Stage::Inspected;
-                        Some(self.action(
-                            if self.incoming {
-                                INSPECT_IN
-                            } else {
-                                INSPECT_OUT
-                            },
-                            0,
-                        ))
-                    }
-                }
+                Stage::Enter => Some(self.enter(slot)),
                 Stage::Inspected => self.inspect(slot, response),
-                Stage::Scalar => self.finish(true),
+                Stage::Scalar | Stage::IteratorPopped(true) => self.finish(true),
                 Stage::Failed => self.finish(false),
-                Stage::Begun | Stage::Released | Stage::Iterated | Stage::Key | Stage::Child => {
-                    self.traverse(slot, response)
+                Stage::Begun | Stage::Released => Some(self.iterate(slot)),
+                Stage::Iterated => self.iterated(slot, response),
+                Stage::Key => Some(self.child(slot)),
+                Stage::ChildFinished(result) => self.child_finished(slot, result),
+                Stage::PairPopped(result) => Some(self.pair_popped(slot, result)),
+                Stage::Committed => Some(self.release_child(slot, Stage::Released)),
+                Stage::IteratorPopped(false) => Some(self.release_child(slot, Stage::Failed)),
+                Stage::InCommitted => {
+                    self.frames[slot].stage = Stage::InAdvanced;
+                    Some(self.action(ADVANCE_IN_ITERATOR, 0))
                 }
-                _ => self.complete(slot),
+                Stage::InAdvanced => {
+                    self.frames[slot].stage = Stage::Begun;
+                    None
+                }
             };
             if let Some(action) = action {
                 return action;

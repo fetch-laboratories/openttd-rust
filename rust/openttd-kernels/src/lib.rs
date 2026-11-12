@@ -71,6 +71,7 @@ pub mod house_type;
 pub mod industry_type;
 mod industrytype;
 mod integer;
+mod json;
 mod kdtree;
 mod landscape;
 mod landscape_generation;
@@ -120,6 +121,7 @@ pub use newgrf_station::{
 mod newgrf_storage;
 /// Canonical persistent-storage pool identity.
 pub use newgrf_storage::PersistentStorageID;
+pub mod newgrf_object;
 mod newgrf_text;
 mod newgrf_townname;
 mod node_hash;
@@ -169,6 +171,7 @@ pub mod slope_type;
 mod snow_line;
 mod sound_type;
 mod sprites;
+mod squirrel;
 mod station;
 mod station_base;
 mod station_cargo;
@@ -838,7 +841,9 @@ pub extern "C" fn openttd_rust_admin_conversion_create(
     depth: i32,
 ) -> *mut std::ffi::c_void {
     Box::into_raw(Box::new(admin_conversion::Engine::new(
-        direction, index, depth,
+        direction != 0,
+        index,
+        depth,
     )))
     .cast()
 }

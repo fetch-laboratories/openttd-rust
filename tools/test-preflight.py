@@ -2,9 +2,11 @@
 """Check preflight's reading of Quick and the pinned commit checker checkout."""
 
 import importlib.util
+import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -365,6 +367,58 @@ class PushTests(unittest.TestCase):
                 with self.subTest(text=text), patch("sys.stderr"):
                     self.assertEqual(bool(git_hooks.pre_commit()), bool(code))
 
+    def test_pre_commit_hook_under_gits_variables_in_main_and_linked(self) -> None:
+        # #933: git exports GIT_DIR (linked worktree) or an absolute
+        # GIT_INDEX_FILE (`commit -a`) to the hook; neither may reach the checker.
+        try:
+            preflight.hooks_checkout()
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"pinned commit checker unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            main, linked, runner = (Path(directory) / name for name in ("m", "l", "r"))
+            runner.write_text(
+                "import subprocess, sys\nfrom pathlib import Path\n"
+                f"sys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                "import git_hooks, migration\n"
+                "top = subprocess.check_output(['git', 'rev-parse', "
+                "'--show-toplevel'], text=True)\n"
+                "migration.ROOT = Path(top.strip())\n"
+                f"migration.COMMON_LOCAL = Path({str(preflight.migration.COMMON_LOCAL)!r})\n"
+                "sys.exit(git_hooks.pre_commit())\n"
+            )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in preflight.REPOSITORY_VARIABLES
+            } | {"GIT_AUTHOR_NAME": "Seed", "GIT_AUTHOR_EMAIL": "s@example.invalid"}
+            env |= {"GIT_COMMITTER_NAME": "Seed", "GIT_COMMITTER_EMAIL": "s@x.invalid"}
+
+            def git(cwd: Path, *arguments: str) -> CompletedProcess[str]:
+                return subprocess.run(
+                    ["git", *arguments],
+                    cwd=cwd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            git(Path(directory), "init", "-q", "-b", "work", str(main))
+            (main / "a.cpp").write_text("int a;\n")
+            git(main, "add", "a.cpp")
+            git(main, "commit", "-qm", "Add: Base")
+            git(main, "worktree", "add", "-q", "-b", "side", str(linked))
+            hook = main / ".git/hooks/pre-commit"
+            hook.write_text(f"#!/bin/sh\nexec {sys.executable} {runner}\n")
+            hook.chmod(0o755)
+            for checkout in (main, linked):
+                for text, refused in (("int a; \n", True), ("int b;\n", False)):
+                    (checkout / "a.cpp").write_text(text)
+                    result = git(checkout, "commit", "-qam", "Change: A")
+                    with self.subTest(checkout=checkout.name, text=text):
+                        self.assertNotIn("unavailable", result.stdout + result.stderr)
+                        self.assertEqual(result.returncode != 0, refused, result)
+
     def test_installer_writes_shims_and_keeps_foreign_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("builtins.print"):
             hooks = Path(directory)
@@ -482,6 +536,61 @@ class CompileCheckTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, code, result.stderr)
 
+    def test_a_missing_generated_input_is_a_named_skip_not_a_failure(self) -> None:
+        # #933: script-list-comparison read bindings its skipped cmake -P writes.
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            seeded = Path(directory) / "seeded-comparison.py"
+            seeded.write_text(f"open({str(Path(directory) / 'gen.hpp')!r})\n")
+            with patch("sys.stderr"), patch.object(sys, "addaudithook"):
+                self.assertEqual(check.child(str(seeded), None), check.MISSING)
+            done = [("seeded", check.MISSING, Path(directory) / "log")]
+            with (
+                patch.object(check, "BUILD", Path(directory)),
+                patch.object(check, "OUT", Path(directory) / "out"),
+                patch.object(check, "generated_abi_changed", return_value=["seeded.h"]),
+                patch.object(check, "changed", return_value=[]),
+                patch.object(check.shutil, "which", return_value=None),
+                patch.object(check, "jobs", return_value=[("seeded", [])]),
+                patch.object(check, "run", return_value=done[0]),
+                patch("builtins.print") as printed,
+            ):
+                for name in ("CMakeCache.txt", "compile_commands.json"):
+                    (Path(directory) / name).write_text("")
+                self.assertEqual(check.check("base"), 0)
+            lines = [call.args[0] for call in printed.call_args_list]
+            self.assertTrue(any(line.startswith("SKIP seeded") for line in lines))
+
+    def test_clang_fails_a_missing_initializer_only_behind_a_touched_file(self) -> None:
+        # #933: GCC does not report -Wmissing-field-initializers here (#885, #929).
+        if not shutil.which("clang++"):
+            self.skipTest("no clang++ on this host")
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory).resolve()
+            (out / "tools").mkdir()
+            (out / "services.h").write_text("struct S { int a; int b; };\n")
+            (out / "tools/probe.inc").write_text("S s{ .a = 1 };\n")
+            source = out / "tools/probe.cpp"
+            source.write_text('#include "../services.h"\n#include "probe.inc"\n')
+            command = f"/usr/bin/c++ -std=c++20 -O2 -flifetime-dse=1 -o x.o -c {source}"
+            entry = {"file": str(source), "directory": str(out), "command": command}
+            (out / "compile_commands.json").write_text(json.dumps([entry]))
+            (out / "clang").mkdir()
+            with (
+                patch.object(check, "BUILD", out),
+                patch.object(check, "OUT", out),
+                patch.object(check, "ROOT", out),
+            ):
+                (warning,), checked, listed = check.clang_pass(
+                    {out / "services.h"}, out
+                )
+                self.assertEqual((checked, listed), (1, 1))
+                self.assertIn("probe.inc:1", warning)
+                self.assertIn("-Wmissing-field-initializers", warning)
+                untouched = check.clang_pass({out / "other.h"}, out)
+                self.assertEqual(untouched, ([], 0, 1))
+
     def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
         check = tool("compile-check")
         for path in check.comparisons():
@@ -496,7 +605,8 @@ class CompileCheckTests(unittest.TestCase):
             patch.object(check, "BUILD", Path(directory)),
             patch.object(check, "OUT", Path(directory) / "out"),
             patch.object(check, "changed", return_value=["src/shared.h"]),
-            patch.object(check, "generated_abi_changed", return_value=False) as abi,
+            patch.object(check, "generated_abi_changed", return_value=[]) as abi,
+            patch.object(check.shutil, "which", return_value=None),
             patch.object(check, "jobs", return_value=[]),
             patch("builtins.print"),
         ):
@@ -505,6 +615,332 @@ class CompileCheckTests(unittest.TestCase):
             (Path(directory) / "out/generated-abi").mkdir(parents=True)
             self.assertEqual(check.check("base"), 0)
             abi.assert_called_once()
+
+    def test_a_fork_test_source_alone_runs_only_the_clang_pass(self) -> None:
+        # #933: c11ad644db's warning was in src/tests/station_service.cpp alone.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check, "changed", return_value=["src/tests/station.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value="clang++"),
+            patch.object(check, "jobs") as jobs,
+            patch.object(
+                check, "clang_pass", return_value=(["x:1:1: warning: w"], 1, 1)
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 1)
+            jobs.assert_not_called()
+
+
+class FastTests(unittest.TestCase):
+    """--fast: the pre-push fast tier and Quick's ty line, with no stamp."""
+
+    @contextmanager
+    def fakes(self, failing: str = "") -> Generator[Path]:
+        """Fake cargo, uvx and commit checker that log each call and fail when
+        their arguments contain `failing`."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            calls = root / "calls"
+            script = (
+                f'#!/bin/sh\necho "$(basename "$0") $*" >> {calls}\n'
+                f'case "$*" in *"{failing or "-never-"}"*) exit 1;; esac\n'
+            )
+            for name in ("bin/cargo", "bin/uvx", "hooks/hooks/check-commits.sh"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(script)
+                (root / name).chmod(0o755)
+            path = f"{root / 'bin'}{os.pathsep}{os.environ['PATH']}"
+            with (
+                patch.object(preflight, "revision", return_value="sha"),
+                patch.object(preflight, "hooks_checkout", return_value=root / "hooks"),
+                patch.object(preflight, "environment", return_value={"PATH": path}),
+                patch.object(preflight.migration, "LOCAL", root / "local"),
+                patch.object(preflight_stamp, "record") as record,
+            ):
+                yield calls
+            record.assert_not_called()
+
+    def fast(self, *argv: str) -> tuple[int, list[str]]:
+        with (
+            patch.object(sys, "argv", ["preflight.py", "--fast", *argv]),
+            patch("builtins.print") as printed,
+        ):
+            code = preflight.main()
+        return code, [" ".join(map(str, call.args)) for call in printed.call_args_list]
+
+    def test_runs_the_fast_tier_and_ty_once_each_without_a_stamp(self) -> None:
+        quick = [
+            *preflight.quick_workflow.ruff_lines(),
+            preflight.quick_workflow.ty_line(),
+        ]
+        with self.fakes() as calls:
+            code, lines = self.fast()
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                [
+                    "check-commits.sh sha..sha",
+                    "cargo fmt --all -- --check",
+                    *quick,
+                ],
+            )
+        self.assertIn("5/5 passed", lines[-1])
+        self.assertIn("no stamp", lines[-1])
+
+    def test_a_failed_step_prints_the_command_that_fixes_it(self) -> None:
+        with self.fakes(failing="format") as calls:
+            code, lines = self.fast()
+            self.assertEqual(len(calls.read_text().splitlines()), 5)
+        self.assertEqual(code, 1)
+        failed = [line for line in lines if line.startswith("failed: ")]
+        self.assertEqual(len(failed), 1)
+        self.assertIn("ruff format --check", failed[0])
+        self.assertTrue(failed[0].endswith("; fix: python3 tools/migration.py fmt"))
+        with self.fakes(failing="ty@") as calls:
+            code, lines = self.fast()
+        self.assertEqual(code, 1)
+        (failed_ty,) = [line for line in lines if line.startswith("failed: ")]
+        self.assertNotIn("fix:", failed_ty)
+
+    def test_list_names_the_steps_and_runs_nothing(self) -> None:
+        with (
+            self.fakes() as calls,
+            patch.object(preflight, "hooks_checkout") as hooks,
+        ):
+            code, lines = self.fast("--list")
+            self.assertFalse(calls.exists())
+            hooks.assert_not_called()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[0].splitlines()[0], preflight.COMMITS)
+        self.assertEqual(len(lines[0].splitlines()), 5)
+
+    def test_fast_cannot_be_combined_with_step(self) -> None:
+        with (
+            patch.object(sys, "argv", ["preflight.py", "--fast", "--step", "ruff"]),
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            preflight.main()
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIn("not allowed with argument --fast", stderr.getvalue())
+
+
+class CommitMsgTests(unittest.TestCase):
+    """The commit-msg hook: the pinned message check, then this fork's remedy."""
+
+    @contextmanager
+    def repo(self, missing_checker: bool = False) -> Generator[Path]:
+        """A repository on branch work whose commit-msg hook runs this git_hooks,
+        with origin/rust-migration one commit ahead of the shared base."""
+        if not missing_checker:
+            try:
+                preflight.hooks_checkout()
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                self.skipTest(f"pinned commit checker unavailable: {error}")
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            runner = Path(directory) / "runner.py"
+            gone = (
+                "def gone() -> None:\n    raise ValueError('no checkout')\n"
+                "preflight.hooks_checkout = gone\n"
+            )
+            runner.write_text(
+                f"import sys\nsys.path.insert(0, {str(REPO / 'tools')!r})\n"
+                "import git_hooks, preflight\n"
+                + (gone if missing_checker else "")
+                + "sys.exit(git_hooks.main(['git_hooks.py', 'commit-msg', *sys.argv[1:]]))\n"
+            )
+            self.git(Path(directory), "init", "-q", "-b", "work", str(repo))
+            self.write(repo, "a.txt", "a\n")
+            self.git(repo, "commit", "-qm", "Add: Base", "--no-verify")
+            self.git(repo, "switch", "-qc", "base")
+            self.write(repo, "b.txt", "b\n")
+            self.git(repo, "commit", "-qm", "Add: Base change", "--no-verify")
+            self.git(repo, "update-ref", "refs/remotes/origin/rust-migration", "HEAD")
+            self.git(repo, "switch", "-q", "work")
+            hook = repo / ".git/hooks/commit-msg"
+            hook.write_text(f'#!/bin/sh\nexec {sys.executable} {runner} "$@"\n')
+            hook.chmod(0o755)
+            yield repo
+
+    def git(self, cwd: Path, *arguments: str) -> CompletedProcess[str]:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in preflight.REPOSITORY_VARIABLES
+        }
+        env |= {"GIT_AUTHOR_NAME": "Seed", "GIT_AUTHOR_EMAIL": "s@example.invalid"}
+        env |= {"GIT_COMMITTER_NAME": "Seed", "GIT_COMMITTER_EMAIL": "s@x.invalid"}
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def write(self, repo: Path, name: str, text: str) -> None:
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+        self.git(repo, "add", "-A")
+
+    def commit(self, repo: Path, message: str) -> CompletedProcess[str]:
+        self.write(repo, "c.txt", message)
+        return self.git(repo, "commit", "-qm", message)
+
+    def test_each_refusal_names_its_fix(self) -> None:
+        with self.repo() as repo:
+            for message, expected in (
+                ("Tools: Add a thing", "Accepted prefixes: Add, Feature, Change"),
+                ("Fix: A dash \u2014 here", "line 1 column 13: U+2014 EM DASH"),
+                ("Fix: Body\n\nhas\ta tab", "line 3 column 4: a tab"),
+                ("fixup! Fix: Body", "A `fixup!` title is refused here"),
+                ("squash! Fix: Body", "Give the commit a normal title"),
+                ("amend! Fix: Body", "the commit checker refuses it at push"),
+            ):
+                with self.subTest(message=message):
+                    result = self.commit(repo, message)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("***", result.stderr)
+                    self.assertIn(expected, result.stderr)
+            accepted = self.commit(repo, "Fix #12: A plain title")
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertEqual(accepted.stderr, "")
+            refused = self.commit(repo, "Fix: Body\n\nhas\ta tab")
+            self.assertNotIn("Accepted prefixes", refused.stderr)
+
+    def test_a_base_update_prints_its_parents_and_the_exact_command(self) -> None:
+        with self.repo() as repo:
+            self.write(repo, "w.txt", "w\n")
+            self.git(repo, "commit", "-qm", "Add: Work", "--no-verify")
+            merge = self.git(repo, "merge", "--no-edit", "origin/rust-migration")
+            self.assertNotEqual(merge.returncode, 0)
+            self.assertIn("This is a base update", merge.stderr)
+            self.assertIn("parent 1 (HEAD):       ", merge.stderr)
+            self.assertIn("Add: Work\n", merge.stderr)
+            self.assertIn("parent 2 (MERGE_HEAD): ", merge.stderr)
+            self.assertIn("Add: Base change", merge.stderr)
+            command = 'git commit -m "Update: Merge rust-migration into work"'
+            self.assertIn(f"commit-msg:   {command}\n", merge.stderr)
+            done = self.git(
+                repo, "commit", "-m", "Update: Merge rust-migration into work"
+            )
+            self.assertEqual(done.returncode, 0, done.stderr)
+            parents = self.git(repo, "rev-list", "--parents", "-n1", "HEAD").stdout
+            self.assertEqual(len(parents.split()), 3)
+
+    def test_a_merge_of_another_branch_gets_no_command(self) -> None:
+        with self.repo() as repo:
+            self.git(repo, "switch", "-qc", "other", "work")
+            self.write(repo, "o.txt", "o\n")
+            self.git(repo, "commit", "-qm", "Add: Other", "--no-verify")
+            self.git(repo, "switch", "-q", "work")
+            self.write(repo, "w.txt", "w\n")
+            self.git(repo, "commit", "-qm", "Add: Work", "--no-verify")
+            merge = self.git(repo, "merge", "--no-edit", "other")
+            self.assertNotEqual(merge.returncode, 0)
+            self.assertIn("This merge is not a base update", merge.stderr)
+            self.assertIn("Accepted prefixes", merge.stderr)
+            self.assertNotIn("git commit -m", merge.stderr)
+
+    def test_a_missing_checker_lets_the_commit_through_with_a_notice(self) -> None:
+        with self.repo(missing_checker=True) as repo:
+            result = self.commit(repo, "Tools: Add a thing")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("pinned checker unavailable, not checked", result.stderr)
+
+    def test_install_names_a_foreign_commit_msg_hook_and_keeps_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            hooks = Path(directory)
+            foreign = '#!/usr/bin/env python3\n"""Catch message failures."""\n'
+            (hooks / "commit-msg").write_text(foreign)
+            with patch("builtins.print") as printed:
+                self.assertEqual(git_hooks.install(hooks, force=False), 1)
+            message = printed.call_args.args[0]
+            self.assertIn("Catch message failures", message)
+            self.assertIn("install --force", message)
+            self.assertEqual((hooks / "commit-msg").read_text(), foreign)
+            with patch("builtins.print"):
+                self.assertEqual(git_hooks.install(hooks, force=True), 0)
+            self.assertIn(git_hooks.MARKER, (hooks / "commit-msg").read_text())
+
+    def run_shim(self, repo: Path, hook: str, python: Path) -> CompletedProcess[str]:
+        """Run an installed shim in repo with a recording python3 first on PATH."""
+        env = os.environ | {"PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}"}
+        shim = repo / ".git/hooks" / hook
+        return subprocess.run(
+            [str(shim), "argument"], cwd=repo, env=env, text=True, capture_output=True
+        )
+
+    @contextmanager
+    def shimmed(self) -> Generator[tuple[Path, Path, Path]]:
+        """A repository with every shim installed, a python3 that records its
+        arguments instead of running anything, and the record it writes."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            self.git(Path(directory), "init", "-q", "-b", "work", str(repo))
+            with patch("builtins.print"):
+                self.assertEqual(git_hooks.install(repo / ".git/hooks", force=False), 0)
+            record = Path(directory) / "record"
+            python = Path(directory) / "bin/python3"
+            python.parent.mkdir()
+            python.write_text(f'#!/bin/sh\necho "$@" >> {record}\n')
+            python.chmod(0o755)
+            yield repo, python, record
+
+    def test_every_installed_shim_runs_this_file_for_its_hook(self) -> None:
+        # A shim that stopped recognising this file would do nothing, silently.
+        with self.shimmed() as (repo, python, record):
+            production = (REPO / "tools/git_hooks.py").read_text()
+            self.write(repo, "tools/git_hooks.py", production)
+            for hook in git_hooks.HOOKS:
+                with self.subTest(hook=hook):
+                    record.unlink(missing_ok=True)
+                    result = self.run_shim(repo, hook, python)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    ran = record.read_text().split()
+                    self.assertEqual(ran[1:], [hook, "argument"])
+                    # Git names the repository by its physical path.
+                    self.assertTrue(Path(ran[0]).samefile(repo / "tools/git_hooks.py"))
+
+    def test_every_hook_name_reaches_its_handler(self) -> None:
+        handlers = {
+            "pre-push": "pre_push",
+            "pre-commit": "pre_commit",
+            "commit-msg": "commit_msg",
+        }
+        self.assertEqual(set(handlers), set(git_hooks.HOOKS))
+        for hook, handler in handlers.items():
+            with (
+                self.subTest(hook=hook),
+                patch.object(git_hooks, handler, return_value=7) as called,
+                patch("sys.stdin", io.StringIO("")),
+            ):
+                self.assertEqual(git_hooks.main(["git_hooks.py", hook, "argument"]), 7)
+                called.assert_called_once()
+
+    def test_a_shim_does_nothing_where_the_file_does_not_list_its_hook(self) -> None:
+        with self.shimmed() as (repo, python, record):
+            older = 'HOOKS = ("pre-push", "pre-commit")\n'
+            self.write(repo, "tools/git_hooks.py", older)
+            result = self.run_shim(repo, "commit-msg", python)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(record.exists())
+            for hook in ("pre-push", "pre-commit"):
+                self.run_shim(repo, hook, python)
+            self.assertEqual(len(record.read_text().splitlines()), 2)
+            (repo / "tools/git_hooks.py").unlink()
+            record.unlink()
+            self.assertEqual(self.run_shim(repo, "pre-push", python).returncode, 0)
+            self.assertFalse(record.exists())
 
 
 if __name__ == "__main__":

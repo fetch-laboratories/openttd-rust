@@ -1290,7 +1290,7 @@ impl<'a> Ctx<'a> {
         if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
             return cost.error(self.s.strings.no_track);
         }
-        let on_track = crate::signal_func::signal_on_track(track);
+        let on_track = crate::signal_func::signal_on_track_raw(track);
         if signals_copy != 0 && signals_copy & on_track == 0 {
             return cost.error(INVALID_STRING_ID);
         }
@@ -1575,7 +1575,8 @@ impl<'a> Ctx<'a> {
             return total.error(INVALID_STRING_ID);
         }
         let signals = if self.has_signal(tile, track) {
-            let signals = self.present_signals(tile) & crate::signal_func::signal_on_track(track);
+            let signals =
+                self.present_signals(tile) & crate::signal_func::signal_on_track_raw(track);
             sigvar = (self.rail.signal_variant)(tile, track).0;
             sigtype = self.signal_type(tile, track);
             if sigtype == SIGTYPE_ENTRY || sigtype == SIGTYPE_EXIT {
@@ -1585,7 +1586,7 @@ impl<'a> Ctx<'a> {
         } else if is_pbs(sigtype) {
             SIGNAL_ALONG[usize::from(trackdir)]
         } else {
-            crate::signal_func::signal_on_track(track)
+            crate::signal_func::signal_on_track_raw(track)
         };
         let mut signal_dir = 0_u8;
         if signals & SIGNAL_ALONG[usize::from(trackdir)] != 0 {
@@ -1825,7 +1826,7 @@ impl<'a> Ctx<'a> {
                     present.count_ones().wrapping_neg(),
                 );
             };
-            let on_track = crate::signal_func::signal_on_track(track);
+            let on_track = crate::signal_func::signal_on_track_raw(track);
             (self.rail.set_present_signals)(tile, self.present_signals(tile) & !on_track);
             let present = self.present_signals(tile);
             unsafe {

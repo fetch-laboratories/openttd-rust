@@ -2,19 +2,25 @@
 """Exercise request identity and the actual privileged full-result publisher."""
 
 import argparse
+import io
 import itertools
 import json
 import os
 import re
 import subprocess
 import tempfile
+import threading
 import unittest
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from unittest.mock import patch
 
 import ci
+import ci_log
+import review_report
+import status_comment
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,7 +182,7 @@ def execute_script(
     return cast(
         dict[str, Any],
         node(f"""
-const statuses = [], failures = [], outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
+const statuses = [], failures = [], outputs = {{}}, delays = [], cancels = [], trees = {json.dumps(trees or {})};
 const commits = {json.dumps(commits or {})}, progress = {json.dumps(progress or {})};
 let now = 0;
 Date.now = () => (now += {tick});
@@ -184,7 +190,7 @@ const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
 const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root', eventName: {json.dumps(event_name)},
   serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
 const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
-  info: () => {{}}}};
+  info: () => {{}}, notice: () => {{}}}};
 const github = {{paginate: async (method, args) => {{
   if (method === github.rest.pulls.listFiles) {{
     const files = {json.dumps(files)};
@@ -196,7 +202,7 @@ const github = {{paginate: async (method, args) => {{
   return listed[args.ref];
 }}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}}), listFiles: () => {{}}}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
-  actions: {{listWorkflowRuns: {runs},
+  actions: {{listWorkflowRuns: {runs}, cancelWorkflowRun: async args => cancels.push(args.run_id),
     getWorkflowRun: async args => ({{data: progress[args.run_id].shift()}})}},
   repos: {{
   getCommit: async args => ({{data: commits[args.ref] ?? {json.dumps(tested)}}}),
@@ -208,7 +214,7 @@ const github = {{paginate: async (method, args) => {{
   createCommitStatus: async value => statuses.push(value)
 }}}}}};
 Object.assign(process.env, {json.dumps(env or {})});
-(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs, delays}})))
+(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs, delays, cancels}})))
   .catch(error => console.log(JSON.stringify({{error: error.message, statuses, delays}})));
 """),
     )
@@ -434,6 +440,20 @@ class GateTests(unittest.TestCase):
                     self.assertEqual(result["outputs"]["merge"], MERGE)
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
+
+    def test_superseded_request_ends_cancelled_not_failed(self) -> None:
+        superseded = job("ci-request.yml", "superseded")
+        self.assertIn("github.event_name != 'merge_group'", superseded["if"])
+        self.assertEqual(superseded["permissions"]["actions"], "write")
+        env = {"PR": "170", "HEAD": HEAD}
+        for label, pull, cancelled in (
+            ("current head", PULL, []),
+            ("moved head", dict(PULL, head={"sha": PREVIOUS}), [123]),
+            ("closed", dict(PULL, state="closed"), [123]),
+        ):
+            with self.subTest(label):
+                result = execute_script("ci-request.yml", "superseded", pull, env=env)
+                self.assertEqual(result["cancels"], cancelled)
 
     def test_requested_plan_bases_gates_on_the_merges_first_parent(self) -> None:
         # PULL's base SHA predates what merged into base since its last push; the
@@ -1321,6 +1341,12 @@ class MergeQueueTests(unittest.TestCase):
                 "CI rust PR 170 unique",
             ),
             (
+                # The head ends the request identifier, not the name (#922).
+                {"profile": "rust", "pr": "170", "request": "unique", "head": HEAD},
+                {"event_name": "workflow_dispatch", "run_id": 7, "event": {}},
+                "CI rust PR 170 unique",
+            ),
+            (
                 {},
                 {
                     "event_name": "pull_request",
@@ -2103,6 +2129,8 @@ class RequestTests(unittest.TestCase):
             profile="native",
             bootstrap=False,
             unstamped=None,
+            head=None,
+            wait=False,
         )
         with (
             patch.object(ci, "api", side_effect=pull_and_statuses([])),
@@ -2140,6 +2168,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=False,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2162,7 +2192,8 @@ class RequestTests(unittest.TestCase):
                 record = json.loads(cast(Path, request_path).read_text())
                 self.assertEqual(record["head"], HEAD)
                 self.assertEqual(record["base"], BASE)
-                self.assertEqual(len(record["request"]), 32)
+                request_id, head = record["request"].split("-")
+                self.assertEqual((len(request_id), head), (32, HEAD))
 
     def test_full_request_stops_on_a_head_that_already_passed(self) -> None:
         passed = {
@@ -2199,6 +2230,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2257,6 +2290,8 @@ class RequestTests(unittest.TestCase):
                     profile=profile,
                     bootstrap=bootstrap,
                     unstamped=None,
+                    head=None,
+                    wait=False,
                     request_file=Path(directory) / "request.json",
                 )
                 with (
@@ -2287,6 +2322,8 @@ class RequestTests(unittest.TestCase):
                 profile="full",
                 bootstrap=False,
                 unstamped=None,
+                head=None,
+                wait=False,
                 request_file=Path(directory) / "request.json",
             )
             with (
@@ -2336,7 +2373,7 @@ class RequestTests(unittest.TestCase):
                 mergeable=mergeable,
                 base={"sha": "e" * 40, "ref": "rust-migration"},
             )
-            with self.assertRaisesRegex(ValueError, "mergeability"):
+            with self.assertRaisesRegex(ValueError, "conflicts|mergeability"):
                 ci.validate_pull(pull)
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "request.json"
@@ -2415,9 +2452,9 @@ class RequestTests(unittest.TestCase):
                 patch("builtins.print"),
             ):
                 self.assertEqual(ci.main(), 1)
-            ci.verify_children({"failed_jobs": []})
+            ci.verify_children({"repository": "example/fork"}, {"failed_jobs": []})
 
-    def test_wait_returns_within_shell_cap_and_names_resume_command(self) -> None:
+    def test_wait_times_out_with_exit_2_and_names_resume_command(self) -> None:
         running = {"status": "in_progress", "html_url": RUN, "failed_jobs": []}
         record = {"profile": "full", "head": HEAD}
         clock = itertools.count(0, 100)
@@ -2434,9 +2471,12 @@ class RequestTests(unittest.TestCase):
                 ):
                     ci.wait(path, 540, 15)
             self.assertTrue(sleep.called)
-            for argv in (
-                ["ci.py", "wait", str(path)],
-                ["ci.py", "request", "170", "--wait"],
+            # Waits run as background jobs, so both default to queue-wait's limit.
+            for argv, timeout in (
+                (["ci.py", "wait", str(path)], 5400),
+                (["ci.py", "request", "170", "--wait"], 5400),
+                (["ci.py", "request", "170", "--wait", "--timeout", "60"], 60),
+                (["ci.py", "wait", str(path), "--timeout", "120"], 120),
             ):
                 with (
                     patch("sys.argv", argv),
@@ -2447,7 +2487,7 @@ class RequestTests(unittest.TestCase):
                     patch("builtins.print") as printed,
                 ):
                     self.assertEqual(ci.main(), 2)
-                self.assertLess(waited.call_args.args[1], 600)
+                self.assertEqual(waited.call_args.args[1:], (timeout, 15))
                 printed.assert_called_once()
 
     def test_successful_run_without_full_status_is_rejected(self) -> None:
@@ -2471,6 +2511,260 @@ class RequestTests(unittest.TestCase):
             with patch.object(ci, "api", side_effect=[PULL, {"statuses": statuses}]):
                 with self.assertRaises(ValueError):
                     ci.verify_completion(record, run)
+
+
+def requested(
+    profile: str, request: str, created: str, conclusion: str | None = None
+) -> ci_log.Run:
+    """A dispatched ci-request.yml run as GitHub lists it, still queued without a
+    conclusion; its ID is the hour it was created."""
+    return {
+        "id": int(created[11:13]),
+        "run_attempt": 1,
+        "status": "queued" if conclusion is None else "completed",
+        "conclusion": conclusion,
+        "display_title": f"CI {profile} PR 170 {request}-{HEAD}",
+        "event": "workflow_dispatch",
+        "head_branch": "rust-migration",
+        "created_at": created,
+        "html_url": f"https://github.com/example/fork/actions/runs/{created[11:13]}",
+    }
+
+
+class RequestPathTests(unittest.TestCase):
+    """request waits out pending mergeability; wait takes a PR number (P3)."""
+
+    PENDING = dict(PULL, mergeable=None, merge_commit_sha=None)
+
+    def setUp(self) -> None:
+        stamp = patch.object(ci, "require_stamp")
+        self.stamp = stamp.start()
+        self.addCleanup(stamp.stop)
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        requests = patch.object(ci, "REQUESTS", self.directory / "requests")
+        requests.start()
+        self.addCleanup(requests.stop)
+
+    def request(
+        self, *pulls: dict, **options: object
+    ) -> tuple[Path | None, list[tuple[str, ...]], str, int]:
+        """Run request against successive reads of the PR, on a fake clock."""
+        reads = iter(pulls)
+        calls: list[tuple[str, ...]] = []
+        args = argparse.Namespace(
+            **{
+                "repo": "example/fork",
+                "pr": 170,
+                "profile": "native",
+                "bootstrap": False,
+                "unstamped": None,
+                "head": None,
+                "wait": False,
+                "request_file": None,
+                **options,
+            }
+        )
+        clock = itertools.count(0, 3)
+        with (
+            patch.object(ci, "api", side_effect=lambda _r, _p: next(reads)),
+            patch.object(ci, "gh", side_effect=lambda *a: calls.append(a) or ""),
+            patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+            patch.object(ci.time, "sleep") as sleep,
+            patch("builtins.print") as printed,
+        ):
+            try:
+                path = ci.request(args)
+            finally:
+                self.output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return path, calls, self.output, sleep.call_count
+
+    def test_pending_then_mergeable_dispatches_the_pinned_head(self) -> None:
+        path, calls, output, sleeps = self.request(self.PENDING, self.PENDING, PULL)
+        self.assertEqual(sleeps, 2)
+        self.assertEqual(output.count("Waiting up to 60 seconds"), 1)
+        ((dispatch),) = calls
+        self.assertEqual(dispatch[:2], ("workflow", "run"))
+        self.assertIn(f"head={HEAD}", dispatch)
+        self.assertTrue(
+            output.endswith(
+                f"Wait for it as a background job: python3 tools/ci.py wait {path}"
+            )
+        )
+
+    def test_pending_then_conflict_or_closed_stops_at_once(self) -> None:
+        for label, after, message in (
+            ("conflict", dict(PULL, mergeable=False), "conflicts with rust-migration"),
+            ("closed", dict(self.PENDING, state="closed"), "must be open"),
+        ):
+            with self.subTest(label), self.assertRaisesRegex(ValueError, message):
+                self.request(self.PENDING, after)
+            self.assertNotIn("Requested", self.output)
+
+    def test_a_head_that_moves_while_pending_is_followed_once(self) -> None:
+        # Just after a push GitHub still answers with the previous head.
+        stale = dict(self.PENDING, head={"sha": PREVIOUS})
+        path, calls, output, _ = self.request(stale, PULL, PULL)
+        self.assertIsNotNone(path)
+        self.assertIn("requesting for the new head", output)
+        ((dispatch),) = calls
+        self.assertIn(f"head={HEAD}", dispatch)
+        self.assertEqual(
+            [c.args[1] for c in self.stamp.call_args_list], [PREVIOUS, HEAD]
+        )
+        # A head that moves again is refused, and so is any move from a named head.
+        moved = dict(PULL, head={"sha": PARENT})
+        with self.assertRaisesRegex(ci.HeadMoved, "head changed"):
+            self.request(stale, PULL, self.PENDING, moved)
+        self.assertNotIn("Requested", self.output)
+        named = dict(self.PENDING, head={"sha": PREVIOUS})
+        with self.assertRaisesRegex(ci.HeadMoved, "head changed"):
+            self.request(named, PULL, head=PREVIOUS)
+        self.assertNotIn("requesting for the new head", self.output)
+
+    def test_conflict_is_worded_apart_from_pending(self) -> None:
+        with self.assertRaisesRegex(ValueError, "merge origin/rust-migration"):
+            self.request(dict(PULL, mergeable=False))
+        self.assertNotIn("Waiting", self.output)
+        # Pending past the bound stops without dispatching, and says so.
+        with self.assertRaisesRegex(ci.MergeabilityPending, "still computing"):
+            self.request(*[self.PENDING] * 40)
+        self.assertNotIn("Requested", self.output)
+
+    def test_head_option_refuses_another_remote_head(self) -> None:
+        with self.assertRaisesRegex(ValueError, f"head on GitHub is {HEAD}, not"):
+            self.request(PULL, head=PREVIOUS)
+        self.stamp.assert_not_called()
+        path, calls, _, _ = self.request(PULL, head=HEAD[:12])
+        self.assertIsNotNone(path)
+        self.assertEqual(calls[0][:2], ("workflow", "run"))
+        with patch("sys.argv", ["ci.py", "request", "170", "--head", "main"]):
+            with patch("sys.stderr"), self.assertRaises(SystemExit):
+                ci.main()
+
+    def test_request_with_wait_prints_no_separate_wait_command(self) -> None:
+        _, _, output, _ = self.request(PULL, wait=True)
+        self.assertNotIn("Wait for it", output)
+
+    def record(self, name: str, **fields: object) -> Path:
+        record = {
+            "schema_version": 1,
+            "repository": "example/fork",
+            "pr": 170,
+            "head": HEAD,
+            "profile": "native",
+            "request": f"{name}-{HEAD}",
+            "bootstrap": False,
+            "created_at": "2026-11-12T01:00:00Z",
+            **fields,
+        }
+        path = ci.REQUESTS / f"{name}.json"
+        ci.write_request(path, record)
+        return path
+
+    def wait_pr(
+        self, *extra: str, runs: list[list[ci_log.Run]] | None = None
+    ) -> tuple[int, Path | None, str, list[tuple[str, ...]]]:
+        """Run `ci.py wait 170 ...`, recording the request file wait was given."""
+        calls: list[tuple[str, ...]] = []
+
+        def gh(*args: str) -> str:
+            calls.append(args)
+            return json.dumps([{"workflow_runs": page} for page in runs or []])
+
+        pull = dict(PULL, number=170, created_at="2026-11-11T00:00:00Z")
+        argv = ["ci.py", "wait", "170", "--repo", "example/fork", *extra]
+        with (
+            patch.object(ci, "api", return_value=pull),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "wait") as waited,
+            patch("sys.argv", argv),
+            patch("builtins.print") as printed,
+            patch("sys.stderr") as stderr,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        output += "".join(str(c.args[0]) for c in stderr.write.call_args_list)
+        path = waited.call_args.args[0] if waited.called else None
+        return code, path, output, calls
+
+    def test_wait_on_a_pr_takes_the_newest_local_record_at_head(self) -> None:
+        self.record("old", created_at="2026-11-12T00:00:00Z")
+        newest = self.record("new", run_url=RUN)
+        self.record("moved", head=PREVIOUS, created_at="2026-11-12T09:00:00Z")
+        self.record("label", bootstrap=True, created_at="2026-11-12T09:00:00Z")
+        code, path, output, calls = self.wait_pr()
+        self.assertEqual((code, path), (0, newest))
+        self.assertIn(f"newest native request for PR #170 at {HEAD}", output)
+        self.assertIn(f"(from local record): {RUN}", output)
+        self.assertEqual(len(calls), 1)
+
+    def test_wait_on_a_pr_finds_a_remote_request_through_every_page(self) -> None:
+        older = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
+        newer = requested("native", "e" * 32, "2026-11-12T03:00:00Z")
+        foreign = [newer.copy() for _ in range(3)]
+        foreign[0]["display_title"] = f"CI native PR 171 x-{HEAD}"
+        foreign[1]["display_title"] = f"CI native PR 170 x-{PREVIOUS}"
+        foreign[2]["head_branch"] = "untrusted"
+        code, path, output, calls = self.wait_pr(runs=[[older, *foreign], [newer]])
+        self.assertEqual(code, 0)
+        self.assertEqual(path, ci.REQUESTS / f"{'e' * 32}-{HEAD}.json")
+        record = json.loads(cast(Path, path).read_text())
+        self.assertEqual((record["run_id"], record["profile"]), (3, "native"))
+        self.assertIn("(from GitHub)", output)
+        ((query),) = calls
+        self.assertIn("--paginate", query)
+        self.assertIn("created=%3E%3D2026-11-11T00%3A00%3A00Z", query[-1])
+
+    def test_wait_on_a_pr_chooses_among_local_and_remote_requests(self) -> None:
+        local = self.record("c" * 32, created_at="2026-11-12T01:00:00Z")
+        remote = requested("native", "e" * 32, "2026-11-12T02:00:00Z")
+        # The local request is on GitHub too: one request, not two.
+        listed = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
+        code, path, output, calls = self.wait_pr(runs=[[listed, remote]])
+        self.assertEqual(code, 0)
+        self.assertEqual(path, ci.REQUESTS / f"{'e' * 32}-{HEAD}.json")
+        self.assertIn("(from GitHub)", output)
+        self.assertEqual(len(calls), 1)
+        # A newer local request GitHub does not list yet is still the newest.
+        newest = self.record("f" * 32, created_at="2026-11-12T03:00:00Z")
+        code, path, output, _ = self.wait_pr(runs=[[listed, remote]])
+        self.assertEqual((code, path), (0, newest))
+        self.assertIn("(from local record)", output)
+        # A remote request of another profile is a choice to name.
+        rust = requested("rust", "a" * 32, "2026-11-12T04:00:00Z")
+        code, path, output, _ = self.wait_pr(runs=[[listed, rust]])
+        self.assertEqual((code, path), (1, None))
+        self.assertIn("for native, rust; name one", output)
+        self.assertTrue(local.exists())
+
+    def test_wait_on_a_pr_with_several_profiles_needs_one_named(self) -> None:
+        self.record("native")
+        rust = self.record("rust", profile="rust", created_at="2026-11-12T05:00:00Z")
+        code, path, output, _ = self.wait_pr()
+        self.assertEqual((code, path), (1, None))
+        self.assertIn("for native, rust; name one", output)
+        self.assertIn("wait 170 --profile PROFILE", output)
+        code, path, _, _ = self.wait_pr("--profile", "rust")
+        self.assertEqual((code, path), (0, rust))
+
+    def test_wait_on_a_pr_without_a_request_names_the_request_command(self) -> None:
+        self.record("native")
+        code, _, output, calls = self.wait_pr("--profile", "full")
+        self.assertEqual(code, 1)
+        self.assertIn("request 170 --profile full --wait", output)
+        self.assertEqual(len(calls), 1)
+
+    def test_wait_on_a_file_rejects_pr_options(self) -> None:
+        path = self.record("native")
+        with (
+            patch("sys.argv", ["ci.py", "wait", str(path), "--profile", "rust"]),
+            patch.object(ci, "wait") as waited,
+            patch("sys.stderr"),
+        ):
+            self.assertEqual(ci.main(), 1)
+        waited.assert_not_called()
 
 
 class QueueWaitTests(unittest.TestCase):
@@ -2580,11 +2874,16 @@ class QueueWaitTests(unittest.TestCase):
         self.assertIn("name=fork", query)
 
     def test_removed_prints_failed_run_and_jobs(self) -> None:
-        code, output, _ = self.run_main([self.QUEUED, self.REMOVED])
+        code, output, _ = self.run_main([self.QUEUED, self.REMOVED, self.REMOVED])
         self.assertEqual(code, 3)
+        # The recorded answers hold no run or log: the summary says so in one
+        # line and the removal's exit status stands (P2).
+        self.assertIn("Could not read the failed jobs' logs", output.splitlines()[-1])
+        self.assertIn("python3 tools/ci.py log 7 --repo example/fork", output)
         self.assertEqual(
-            output.splitlines()[1:],
+            output.splitlines()[1:-1],
             [
+                "leaving the merge queue",
                 "PR #170 left the merge queue (open); merge-group run "
                 "completed/failure: https://github.com/example/fork/actions/runs/7",
                 "failed job: native / simulation (1) "
@@ -2592,9 +2891,31 @@ class QueueWaitTests(unittest.TestCase):
             ],
         )
         closed = dict(self.REMOVED, state="CLOSED")
-        code, output, _ = self.run_main([closed])
+        code, output, _ = self.run_main([closed, closed])
         self.assertEqual(code, 3)
         self.assertIn("left the merge queue (closed)", output)
+
+    def test_open_read_between_leaving_the_queue_and_merged_keeps_waiting(
+        self,
+    ) -> None:
+        # #938: GitHub reads a merging PR as open with no entry for a moment.
+        code, output, _ = self.run_main([self.QUEUED, self.REMOVED, self.MERGED])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            output.splitlines(),
+            [
+                "queued awaiting_checks at position 1",
+                "leaving the merge queue",
+                f"PR #170 merged: {MERGE}",
+            ],
+        )
+
+    def test_queued_entry_names_its_state_once(self) -> None:
+        # #938: an entry in state QUEUED printed "queued queued".
+        entry = {"state": "QUEUED", "position": 2}
+        queued = dict(self.QUEUED, mergeQueueEntry=entry)
+        _, output, _ = self.run_main([queued, self.MERGED])
+        self.assertEqual(output.splitlines()[0], "queued at position 2")
 
     def test_pending_auto_merge_keeps_waiting(self) -> None:
         pending = dict(self.REMOVED, autoMergeRequest={"enabledAt": "date"})
@@ -2619,6 +2940,1339 @@ class QueueWaitTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("owner=example", calls[0])
         self.assertIn("name=fork", calls[0])
+
+
+class EnqueueTests(unittest.TestCase):
+    """Recorded gh answers for ci.py enqueue's gates (#922)."""
+
+    QUICK = {
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-12T01:00:00Z",
+        "html_url": "https://github.com/example/fork/runs/1",
+    }
+    REQUESTED = {
+        "display_title": f"CI native PR 170 {'c' * 32}-{HEAD}",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-12T02:00:00Z",
+        "html_url": "https://github.com/example/fork/actions/runs/2",
+    }
+    EJECTED = {
+        "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+        "head_sha": MERGE,
+        "created_at": "2026-11-12T03:00:00Z",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/example/fork/actions/runs/3",
+    }
+
+    def enqueue(self, **world: object) -> tuple[str, list[tuple[str, ...]]]:
+        """Run enqueue against `world`: quick, requested, queue (merge-group runs),
+        ejected (the head they tested), behind, retry, entry, armed and recorded
+        (the run a pre-#922 request record names)."""
+        world = {"quick": self.QUICK, "requested": self.REQUESTED, **world}
+        quick, requested = world["quick"], world["requested"]
+        answers = {
+            "pulls/170": PULL,
+            "check-runs?check_name=Quick%20validation": {
+                "check_runs": [quick] if quick else []
+            },
+            "event=workflow_dispatch": {
+                "workflow_runs": [requested] if requested else []
+            },
+            "event=pull_request": {"workflow_runs": world.get("labeled", [])},
+            "actions/runs/4/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "skipped"}]
+            },
+            "actions/runs/5/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "success"}]
+            },
+            "event=merge_group": {
+                "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
+            },
+            f"commits/{MERGE}": {
+                "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
+            },
+            f"compare/rust-migration...{HEAD}": {"behind_by": world.get("behind", 0)},
+            "actions/runs/9": world.get("recorded"),
+        }
+        calls: list[tuple[str, ...]] = []
+        self.calls = calls
+
+        def api(repository: str, path: str) -> dict:
+            (answer,) = [value for key, value in answers.items() if key in path]
+            return cast(dict, answer)
+
+        def gh(*args: str) -> str:
+            calls.append(args)
+            state = {
+                "mergeQueueEntry": world.get("entry"),
+                "autoMergeRequest": world.get("armed"),
+            }
+            return json.dumps({"data": {"repository": {"pullRequest": state}}})
+
+        retry = world.get("retry")
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "require_stamp") as stamp,
+            patch.object(
+                ci.preflight_stamp, "common_local", return_value=Path(directory)
+            ),
+            patch("builtins.print"),
+            patch.object(ci, "REQUESTS", Path(directory)),
+        ):
+            if world.get("recorded"):
+                record = {"pr": 170, "head": HEAD, "run_id": 9}
+                (Path(directory) / "old.json").write_text(json.dumps(record))
+            self.stamp = stamp
+            return ci.enqueue(args), calls
+
+    def test_red_quick_or_requested_run_refuses_before_queueing(self) -> None:
+        red = dict(self.QUICK, conclusion="failure")
+        for label, options, message in (
+            ("red Quick", {"quick": red}, "runs/1"),
+            ("no Quick", {"quick": None}, "no run"),
+            (
+                "pending Quick",
+                {"quick": dict(red, status="in_progress", conclusion=None)},
+                "in_progress",
+            ),
+            (
+                "red request",
+                {"requested": dict(self.REQUESTED, conclusion="failure")},
+                "runs/2",
+            ),
+            (
+                "other head",
+                {
+                    "requested": dict(
+                        self.REQUESTED, display_title=f"CI native PR 170 x-{BASE}"
+                    )
+                },
+                "--profile native",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(**options)
+                self.assertEqual(self.calls, [])
+
+    def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
+        entry = {"state": "AWAITING_CHECKS", "position": 2}
+        reported, calls = self.enqueue(entry=entry)
+        self.assertEqual(reported, "queued awaiting_checks at position 2")
+        merge = calls[0]
+        self.assertEqual(merge[:3], ("pr", "merge", "170"))
+        self.assertEqual(merge[merge.index("--match-head-commit") + 1], HEAD)
+        reported, _ = self.enqueue(entry={"state": "QUEUED", "position": 1})
+        self.assertEqual(reported, "queued at position 1")
+        reported, _ = self.enqueue(armed={"enabledAt": "date"})
+        self.assertTrue(reported.startswith("auto-merge armed"))
+        with self.assertRaisesRegex(ValueError, "neither queued"):
+            self.enqueue()
+
+    def test_request_before_922_is_found_through_its_record(self) -> None:
+        # Its run name has no head; the newest of the record's run and the named
+        # run decides.
+        old = dict(self.REQUESTED, display_title="CI native PR 170 r")
+        red = dict(old, conclusion="failure", created_at="2026-11-12T04:00:00Z")
+        with self.assertRaisesRegex(ValueError, "runs/2"):
+            self.enqueue(recorded=red)
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(requested=old, recorded=self.REQUESTED, entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_only_a_bootstrap_label_run_counts_as_a_request(self) -> None:
+        # Every label starts a ci-request.yml run; one whose plan skipped tested
+        # nothing and must not displace the passing request.
+        later = {
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-12T05:00:00Z",
+        }
+        unrelated = dict(later, id=4, conclusion="skipped", html_url="unrelated label")
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(labeled=[unrelated], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+        bootstrap = dict(later, id=5, conclusion="failure", html_url="bootstrap")
+        with self.assertRaisesRegex(ValueError, "completed/failure: bootstrap"):
+            self.enqueue(labeled=[unrelated, bootstrap])
+
+    def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
+        entry = {"state": "QUEUED", "position": 1}
+        with self.assertRaisesRegex(ValueError, "runs/3.*--retry REASON"):
+            self.enqueue(queue=[self.EJECTED])
+        reported, _ = self.enqueue(
+            queue=[self.EJECTED], retry="lost runner", entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+        twice = [self.EJECTED, dict(self.EJECTED, created_at="2026-11-12T00:00:00Z")]
+        with self.assertRaisesRegex(ValueError, "2 times.*root"):
+            self.enqueue(queue=twice, retry="lost runner", entry=entry)
+        passed = dict(self.EJECTED, conclusion="success")
+        reported, _ = self.enqueue(queue=[passed], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_run_cancelled_by_a_job_timeout_counts_as_a_removal(self) -> None:
+        # #938: a job timeout ends the merge-group run cancelled, not failed.
+        entry = {"state": "QUEUED", "position": 1}
+        cancelled = dict(self.EJECTED, conclusion="cancelled")
+        with self.assertRaisesRegex(ValueError, "runs/3.*--retry REASON"):
+            self.enqueue(queue=[cancelled])
+        reported, _ = self.enqueue(queue=[cancelled], retry="job timeout", entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+        twice = [cancelled, dict(self.EJECTED, created_at="2026-11-12T00:00:00Z")]
+        with self.assertRaisesRegex(ValueError, "2 times.*root"):
+            self.enqueue(queue=twice, retry="job timeout", entry=entry)
+
+    def test_new_head_after_ejection_needs_base_and_a_stamp(self) -> None:
+        entry = {"state": "QUEUED", "position": 1}
+        with self.assertRaisesRegex(ValueError, "3 commits behind"):
+            self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, behind=3)
+        self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, entry=entry)
+        self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
+
+
+def comment(number: int, body: str, at: str) -> review_report.Comment:
+    return {
+        "id": number,
+        "html_url": f"https://github.com/example/fork/pull/170#issuecomment-{number}",
+        "updated_at": at,
+        "body": body,
+    }
+
+
+def review(sha: str, agent: str, closing: str) -> str:
+    attribution = f"Agent: {agent} | Model: m-1 | Reasoning effort: high"
+    return f"Reviewed commit: {sha}\n{attribution}\n{closing}"
+
+
+class ReviewReportTests(unittest.TestCase):
+    def test_agent_and_disposition_come_from_the_report_or_are_unknown(self) -> None:
+        attribution = "Agent: /root/r | Model: m-1 | Reasoning effort: high"
+        fence = '```cleanup-acceptance\n{"accept": ["x"]}\n```'
+        for body, agent, disposition, scope in (
+            (
+                f"x\n{attribution}\nDisposition: accepted, whole PR",
+                "/root/r",
+                "accepted",
+                "whole PR",
+            ),
+            (
+                f"{attribution}\n**Disposition:** findings to remediate, group 2\n",
+                "/root/r",
+                "findings to remediate",
+                "group 2",
+            ),
+            (
+                f"Disposition: accepted\n{fence}\n{attribution}",
+                "/root/r",
+                "accepted",
+                None,
+            ),
+            (f"{attribution}\nAccepted.", "/root/r", "accepted", None),
+            (f"{attribution}\nLooks fine to me", "/root/r", "unknown", None),
+            (
+                "no attribution\nDisposition: accepted",
+                "unknown",
+                "accepted",
+                None,
+            ),
+            ("", "unknown", "unknown", None),
+        ):
+            with self.subTest(body=body):
+                (report,) = ci.review_report.review_reports(
+                    [comment(1, f"Reviewed commit: {HEAD}\n" + body, "t")], [], HEAD
+                )
+                self.assertEqual(
+                    (report.agent, report.disposition, report.scope),
+                    (agent, disposition, scope),
+                )
+
+    def test_quoted_earlier_report_does_not_take_the_disposition(self) -> None:
+        earlier = review(PREVIOUS, "/root/old", "Disposition: findings to remediate")
+        attribution = "Agent: /root/new | Model: m-1 | Reasoning effort: high"
+        quoted = "\n".join("> " + line for line in earlier.splitlines())
+        for body in (
+            f"Reviewed commit: {HEAD}\n{attribution}\n```\n{earlier}\n```\n"
+            "Disposition: accepted, group 1",
+            f"Reviewed commit: {HEAD}\n{attribution}\n{quoted}\n"
+            "Disposition: accepted, group 1",
+            f"**Reviewed commit:** `{HEAD}`\n{attribution}\n~~~\n{earlier}\n~~~\n"
+            "Disposition: accepted, group 1",
+        ):
+            with self.subTest(body=body):
+                reports = ci.review_report.review_reports(
+                    [comment(1, body, "t")], [], HEAD
+                )
+                self.assertEqual(
+                    [(r.sha, r.agent, r.disposition) for r in reports],
+                    [(HEAD, "/root/new", "accepted")],
+                )
+
+    def test_only_a_comment_that_opens_with_the_header_is_a_report(self) -> None:
+        earlier = review(PREVIOUS, "/root/old", "Disposition: findings to remediate")
+        attribution = "Agent: /root/new | Model: m-1 | Reasoning effort: high"
+        for body in (
+            # Prose that quotes a header in inline code, then a disposition.
+            f"{attribution}\nThe earlier report said `Reviewed commit: {PREVIOUS}`.\n"
+            "Disposition: accepted, group 1",
+            # An earlier report in a tilde fence ahead of the real header.
+            f"~~~\n{earlier}\n~~~\nReviewed commit: {HEAD}\n{attribution}\n"
+            "Disposition: accepted, group 1",
+            f"{attribution}\nReviewed commit: {HEAD}\nDisposition: accepted",
+        ):
+            with self.subTest(body=body):
+                reports = ci.review_report.review_reports(
+                    [comment(1, body, "t")], [], HEAD
+                )
+                self.assertEqual(reports, [])
+
+    def test_github_reviews_and_older_heads_are_reported_as_such(self) -> None:
+        reviews: list[review_report.Review] = [
+            {
+                "commit_id": PREVIOUS,
+                "html_url": "r",
+                "submitted_at": "t",
+                "state": "COMMENTED",
+                "body": review(PREVIOUS, "/root/g", "Disposition: accepted"),
+            }
+        ]
+        (report,) = ci.review_report.review_reports([], reviews, HEAD)
+        self.assertEqual(
+            (report.source, report.matches_head, report.agent, report.disposition),
+            ("GitHub review: COMMENTED", False, "/root/g", "accepted"),
+        )
+
+
+class CheckRun(TypedDict):
+    """A Quick validation check run as the check-runs API lists it."""
+
+    status: str
+    conclusion: str | None
+    started_at: str | None
+    html_url: str
+
+
+def quick_run(conclusion: str = "success") -> CheckRun:
+    return {
+        "status": "completed",
+        "conclusion": conclusion,
+        "started_at": "2026-11-12T01:00:00Z",
+        "html_url": "https://github.com/example/fork/runs/1",
+    }
+
+
+def queue_state(
+    state: str = "OPEN", entry: ci.QueueEntry | None = None
+) -> ci.QueueState:
+    """The GraphQL pull request: merged at MERGE, or open with an optional entry."""
+    return {
+        "state": state,
+        "mergeCommit": {"oid": MERGE} if state == "MERGED" else None,
+        "mergeQueueEntry": entry,
+        "autoMergeRequest": None,
+    }
+
+
+@dataclass
+class World:
+    """Recorded answers for one PR: quick (its Quick check run), runs (pages of
+    dispatched runs), queue (the GraphQL pull request), heads (successive reads
+    of the PR's head), comments (pages of comments) and group (merge-group runs)."""
+
+    quick: CheckRun = field(default_factory=quick_run)
+    runs: list[list[ci_log.Run]] = field(default_factory=list)
+    queue: ci.QueueState = field(default_factory=queue_state)
+    heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
+    comments: list[list[review_report.Comment]] = field(default_factory=lambda: [[]])
+    group: list[ci.QueueRun] = field(default_factory=list)
+
+
+class FakeGitHub:
+    """A World as the API and gh answer for it, recording gh's calls."""
+
+    def __init__(self, world: World) -> None:
+        self.world = world
+        self.heads = iter(world.heads)
+        self.calls: list[tuple[str, ...]] = []
+
+    def api(self, _repository: str, path: str) -> object:
+        answers = {
+            "check-runs": {"check_runs": [self.world.quick]},
+            # enqueue's bounded window sees only the first page.
+            "event=workflow_dispatch": {"workflow_runs": self.world.runs[0]},
+            "event=pull_request": {"workflow_runs": []},
+            "event=merge_group": {"workflow_runs": self.world.group},
+            f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": HEAD}]},
+        }
+        if path == "pulls/170":
+            return dict(
+                PULL,
+                title="Port the thing",
+                created_at="2026-11-11T00:00:00Z",
+                mergeable_state="clean",
+                head={"sha": next(self.heads)},
+            )
+        (answer,) = [value for key, value in answers.items() if key in path]
+        return answer
+
+    def gh(self, *args: str) -> str:
+        self.calls.append(args)
+        if args[:2] == ("api", "graphql"):
+            pull = self.world.queue
+            return json.dumps({"data": {"repository": {"pullRequest": pull}}})
+        answers = {
+            "/comments": self.world.comments,
+            "/reviews": [[]],
+            "event=workflow_dispatch": [{"workflow_runs": p} for p in self.world.runs],
+        }
+        (answer,) = [value for key, value in answers.items() if key in args[-1]]
+        return json.dumps(answer)
+
+
+class StateTests(unittest.TestCase):
+    """ci.py state PR against recorded, paginated gh answers (P1)."""
+
+    RUST_RED = requested(
+        "rust",
+        "c" * 32,
+        "2026-11-12T02:00:00Z",
+        conclusion="failure",
+    )
+    NATIVE_GREEN = requested(
+        "native",
+        "e" * 32,
+        "2026-11-12T04:00:00Z",
+        conclusion="success",
+    )
+    NATIVE_OLD = requested(
+        "native",
+        "f" * 32,
+        "2026-11-12T01:00:00Z",
+        conclusion="failure",
+    )
+
+    def world(self) -> World:
+        """Rust red, then on a second page native green over an older red run."""
+        return World(runs=[[self.RUST_RED], [self.NATIVE_GREEN, self.NATIVE_OLD]])
+
+    def state(
+        self, *argv: str, world: World | None = None
+    ) -> tuple[int, str, list[tuple[str, ...]]]:
+        """Run `ci.py state 170` (or `argv`) against a FakeGitHub of `world`."""
+        github = FakeGitHub(world or self.world())
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ci, "REQUESTS", Path(directory)),
+            patch.object(ci, "api", side_effect=github.api),
+            patch.object(ci, "gh", side_effect=github.gh),
+            patch(
+                "sys.argv",
+                ["ci.py", *(argv or ("state", "170")), "--repo", "example/fork"],
+            ),
+            patch("builtins.print") as printed,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return code, output, github.calls
+
+    def test_one_screen_with_mixed_profiles_and_bounded_reports(self) -> None:
+        reports = [
+            comment(
+                1,
+                review(PREVIOUS, "/root/old", "Disposition: accepted, whole PR"),
+                "2026-11-12T01:00:00Z",
+            ),
+            comment(
+                2,
+                "Status: working\nAgent: /root/impl | Model: m | Reasoning effort: high",
+                "2026-11-12T01:30:00Z",
+            ),
+            comment(
+                3,
+                review(
+                    HEAD, "/root/new", "Disposition: findings to remediate, group 1"
+                ),
+                "2026-11-12T05:00:00Z",
+            ),
+            comment(
+                4,
+                f"Reviewed commit: {HEAD}\nno attribution, no disposition",
+                "2026-11-12T06:00:00Z",
+            ),
+        ] + [
+            comment(
+                10 + n,
+                review(HEAD, f"/root/r{n}", "Disposition: accepted"),
+                f"2026-11-12T0{n}:10:00Z",
+            )
+            for n in range(4)
+        ]
+        code, output, calls = self.state(
+            world=replace(self.world(), comments=[reports[:3], reports[3:]])
+        )
+        self.assertEqual(code, 0)
+        lines = output.splitlines()
+        url = "https://github.com/example/fork/pull/170#issuecomment-"
+        self.assertEqual(
+            lines[:6],
+            [
+                "PR #170 open, ready: Port the thing",
+                f"head {HEAD}, mergeable: yes (clean)",
+                "Quick at head: success https://github.com/example/fork/runs/1",
+                "native at head: success https://github.com/example/fork/actions/runs/04",
+                "rust at head: failure https://github.com/example/fork/actions/runs/02",
+                "Queue: not queued",
+            ],
+        )
+        self.assertEqual(lines[6], "Review reports: 7, newest first")
+        self.assertEqual(lines[7], f"  unknown: unknown at head {url}4")
+        self.assertEqual(
+            lines[8], f"  /root/new: findings to remediate (group 1) at head {url}3"
+        )
+        self.assertEqual(lines[12], f"  2 older: {url}1, {url}10")
+        self.assertIn(f"/root/r3: accepted at head {url}13", output)
+        self.assertNotIn("/root/impl", output)
+        self.assertEqual(len(lines), 14)
+        # enqueue's bounded window sees rust's red run as the newest request.
+        self.assertTrue(
+            lines[13].startswith("enqueue checks: blocked: The latest requested run")
+        )
+        # Every listing is paginated.
+        self.assertTrue(
+            all("--paginate" in call for call in calls if call[1] != "graphql")
+        )
+
+    def test_old_acceptance_is_at_its_sha_not_invalid(self) -> None:
+        old = comment(
+            1,
+            review(PREVIOUS[:12], "/root/old", "Disposition: accepted, whole PR"),
+            "t",
+        )
+        _, output, _ = self.state(world=replace(self.world(), comments=[[old]]))
+        self.assertIn(
+            f"  /root/old: accepted (whole PR) at {PREVIOUS[:10]}, not head", output
+        )
+
+    def test_queue_lines(self) -> None:
+        failed: ci.QueueRun = {
+            "id": 7,
+            "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+            "created_at": "2026-11-11T01:00:00Z",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "html_url": "https://github.com/example/fork/actions/runs/7",
+            "head_sha": MERGE,
+        }
+        passed = failed.copy()
+        passed["conclusion"] = "success"
+        queued = queue_state(entry={"state": "QUEUED", "position": 2})
+        green = World(runs=[[self.NATIVE_GREEN]])
+        for world, line in (
+            (replace(green, queue=queued), "Queue: queued at position 2"),
+            (green, "Queue: not queued"),
+            (replace(green, group=[passed]), "Queue: not queued"),
+            (
+                replace(green, group=[failed]),
+                "Queue: not queued; last merge-group run cancelled: "
+                + failed["html_url"],
+            ),
+            (replace(green, queue=queue_state("MERGED")), "Queue: merged"),
+        ):
+            with self.subTest(line):
+                _, output, _ = self.state(world=world)
+                self.assertIn(line + "\n", output)
+
+    def test_green_head_passes_enqueue_checks_only_as_checks(self) -> None:
+        green = World(runs=[[self.NATIVE_GREEN]])
+        code, output, calls = self.state(world=green)
+        self.assertEqual(code, 0)
+        self.assertEqual(output.splitlines()[-1], "enqueue checks: pass")
+        self.assertFalse([call for call in calls if call[0] != "api"])
+        red = replace(green, quick=quick_run("failure"))
+        _, output, _ = self.state(world=red)
+        self.assertIn("enqueue checks: blocked: Quick validation at", output)
+
+    def test_moved_head_prints_no_mixed_view(self) -> None:
+        code, output, _ = self.state(
+            world=replace(self.world(), heads=[HEAD, PREVIOUS])
+        )
+        self.assertEqual(code, 1)
+        (line,) = output.splitlines()
+        self.assertIn(f"head moved from {HEAD} to {PREVIOUS}", line)
+        self.assertTrue(line.endswith("run python3 tools/ci.py state 170 again"))
+
+    def test_json_and_status_alias_show_the_same_facts(self) -> None:
+        _, text, _ = self.state()
+        _, alias, _ = self.state("status", "170")
+        self.assertEqual(alias, text)
+        _, raw, _ = self.state("state", "170", "--json")
+        facts = json.loads(raw)
+        self.assertEqual(facts["head"], HEAD)
+        self.assertEqual(sorted(facts["requests"]), ["native", "rust"])
+        self.assertEqual(facts["queue"], {"queued": False, "text": "not queued"})
+        self.assertEqual(
+            text.splitlines()[-1], "enqueue checks: " + facts["enqueue_checks"]
+        )
+
+
+JOB_URL = "https://github.com/example/fork/actions/runs/7/job/9"
+RAW_LOG = (
+    "﻿2026-11-12T01:00:00.1000000Z ##[group]Run actions/checkout\n"
+    "2026-11-12T01:00:01.0000000Z checked out\n"
+    "2026-11-12T01:00:05.0000000Z ##[group]Run cargo test\n"
+    "2026-11-12T01:00:06.0000000Z \x1b[31merror[E0308]\x1b[0m: mismatched types\n"
+    "  continuation of the error\n"
+    "2026-11-12 not GitHub's envelope\n"
+    "2026-11-12T01:00:06.5000000Z " + "x" * 400 + "\n"
+    "2026-11-12T01:00:07.0000000Z ##[error]Process completed with exit code 101.\n"
+    "2026-11-12T01:00:07.5000000Z Post job cleanup, in the same second\n"
+    "2026-11-12T01:00:09.0000000Z Post job cleanup\n"
+)
+
+
+def log_step(
+    number: int, name: str, conclusion: str, start: int, end: int
+) -> ci_log.Step:
+    """A step of a job of run 7, from second `start` past 01:00 to `end`."""
+    return {
+        "number": number,
+        "name": name,
+        "conclusion": conclusion,
+        "started_at": f"2026-11-12T01:00:{start:02}Z",
+        "completed_at": f"2026-11-12T01:00:{end:02}Z",
+    }
+
+
+def log_job(
+    job_id: int = 9,
+    attempt: int = 1,
+    conclusion: str | None = "failure",
+    steps: list[ci_log.Step] | None = None,
+    name: str = "native / test",
+) -> ci_log.Job:
+    """A job of run 7 as the jobs API lists it, by default failing in step 2;
+    without a conclusion it is still running."""
+    if steps is None:
+        steps = [
+            log_step(1, "Checkout", "success", 0, 2),
+            log_step(2, "Test", "failure", 5, 7),
+            log_step(3, "Post", "success", 9, 10),
+        ]
+    url = JOB_URL if job_id == 9 else JOB_URL.replace("/9", f"/{job_id}")
+    return {
+        "id": job_id,
+        "run_id": 7,
+        "run_attempt": attempt,
+        "name": name,
+        "status": "in_progress" if conclusion is None else "completed",
+        "conclusion": conclusion,
+        "html_url": url,
+        "steps": steps,
+    }
+
+
+def passed(job: ci_log.Job) -> list[ci_log.Step]:
+    """The job's steps, each concluding success."""
+    steps = [step.copy() for step in job.get("steps") or []]
+    for step in steps:
+        step["conclusion"] = "success"
+    return steps
+
+
+def log_run(
+    attempt: int = 1, status: str = "completed", conclusion: str | None = "failure"
+) -> ci_log.Run:
+    """Run 7 as the runs API gives it."""
+    return {
+        "id": 7,
+        "run_attempt": attempt,
+        "status": status,
+        "conclusion": conclusion,
+        "html_url": "https://github.com/example/fork/actions/runs/7",
+    }
+
+
+class LogTests(unittest.TestCase):
+    """ci.py log against recorded jobs and logs, with the cache in a temporary
+    directory (P2)."""
+
+    RUN = log_run()
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.cache = Path(directory.name)
+        patcher = patch.object(ci_log, "LOGS", self.cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def log(
+        self,
+        *argv: str,
+        jobs: list[ci_log.Job],
+        logs: Iterable[str | None] = (RAW_LOG,),
+        run: ci_log.Run | None = None,
+    ) -> tuple[int, str, list[int]]:
+        """Run `ci.py log ARGV`; `logs` are the successive downloads."""
+        answers = iter(logs)
+        downloads: list[int] = []
+
+        def download(_repository: str, job_id: int) -> str | None:
+            downloads.append(job_id)
+            return next(answers)
+
+        def api(_repository: str, path: str) -> object:
+            if path == "actions/runs/7":
+                return run or self.RUN
+            (job,) = [j for j in jobs if path == f"actions/jobs/{j['id']}"]
+            return job
+
+        pages = json.dumps([{"jobs": jobs[:1]}, {"jobs": jobs[1:]}])
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", return_value=pages),
+            patch.object(ci_log, "download", side_effect=download),
+            patch("sys.argv", ["ci.py", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return code, output, downloads
+
+    def test_failing_step_without_colour_or_stamps_and_one_download(self) -> None:
+        jobs = [log_job(8, conclusion="success", steps=[], name="quick")]
+        code, output, downloads = self.log("log", "7", jobs=[*jobs, log_job()])
+        self.assertEqual(code, 0)
+        self.assertNotIn("\x1b", output)
+        self.assertNotIn("01:00:06", output)
+        self.assertIn(f"== native / test (failure): {JOB_URL}", output)
+        self.assertIn("Failing step: 2 Test (failure)", output)
+        self.assertIn("  4: error[E0308]: mismatched types", output)
+        self.assertIn("  8: ##[error]Process completed with exit code 101.", output)
+        # Only stamps in GitHub's envelope are removed; unstamped lines stay in
+        # their step; long lines are cut; other steps' lines are left out.
+        self.assertIn("  6: 2026-11-12 not GitHub's envelope", output)
+        self.assertIn("  5:   continuation of the error", output)
+        self.assertIn("x" * ci_log.WIDTH + " [cut]", output)
+        self.assertNotIn("checked out", output)
+        self.assertNotIn("Post job cleanup", output)
+        self.assertNotIn("still running", output)
+        cached = self.cache / "example/fork/7/attempt-1/9.log"
+        self.assertEqual(cached.read_text(), RAW_LOG)
+        self.assertEqual(downloads, [9])
+        # Later reads, filtered or raw, come from the cache.
+        _, grepped, again = self.log(
+            "logs", "7", "--grep", "mismatch", jobs=[log_job()]
+        )
+        self.assertEqual(
+            grepped.splitlines()[-1], "  4: error[E0308]: mismatched types"
+        )
+        _, full, _ = self.log("log", JOB_URL, "--full", jobs=[log_job()])
+        self.assertIn("\x1b[31merror[E0308]", full)
+        self.assertEqual(again, [])
+
+    def test_unavailable_or_empty_log_is_not_cached(self) -> None:
+        cached = self.cache / "example/fork/7/attempt-1/9.log"
+        _, output, _ = self.log("log", "7", jobs=[log_job()], logs=[None])
+        self.assertIn("No log: GitHub has no log for it yet (404)", output)
+        self.assertIn(f"it was not cached. Job: {JOB_URL}", output)
+        self.assertFalse(cached.exists())
+        _, output, _ = self.log("log", "7", jobs=[log_job()], logs=["\n"])
+        self.assertIn("GitHub served an empty log", output)
+        self.assertFalse(cached.exists())
+        _, output, downloads = self.log("log", "7", jobs=[log_job()])
+        self.assertIn("Failing step: 2 Test", output)
+        self.assertEqual(downloads, [9])
+        self.assertTrue(cached.exists())
+
+    def test_download_tells_a_missing_log_from_an_api_error(self) -> None:
+        def result(code: int, stdout: bytes, stderr: bytes) -> object:
+            return subprocess.CompletedProcess(["gh"], code, stdout, stderr)
+
+        with patch.object(ci_log.subprocess, "run") as run:
+            run.return_value = result(1, b"", b"gh: Not Found (HTTP 404)")
+            self.assertIsNone(ci_log.download("example/fork", 9))
+            run.return_value = result(1, b"partial", b"gh: Server Error (HTTP 502)")
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci_log.download("example/fork", 9)
+            run.return_value = result(0, b"ok \xff", b"")
+            self.assertEqual(ci_log.download("example/fork", 9), "ok �")
+        failed = subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502")
+        with patch.object(ci_log, "download", side_effect=failed):
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci_log.job_log("example/fork", log_job())
+        self.assertEqual(list(self.cache.rglob("*")), [])
+
+    def test_second_attempt_reads_its_own_log(self) -> None:
+        first = self.cache / "example/fork/7/attempt-1/9.log"
+        first.parent.mkdir(parents=True)
+        first.write_text("2026-11-12T01:00:06.0000000Z error: first attempt\n")
+        retried = log_job(19, attempt=2)
+        run = log_run(attempt=2)
+        _, output, downloads = self.log("log", "7", jobs=[retried], run=run)
+        self.assertIn("Run 7 attempt 2 (failure)", output)
+        self.assertIn("mismatched types", output)
+        self.assertNotIn("first attempt", output)
+        self.assertEqual(downloads, [19])
+        self.assertTrue((self.cache / "example/fork/7/attempt-2/19.log").exists())
+
+    def test_two_writers_publish_the_same_log(self) -> None:
+        path = self.cache / "example/fork/7/attempt-1/9.log"
+        both = threading.Barrier(2, timeout=5)
+        replace = os.replace
+        errors: list[BaseException] = []
+
+        def meet_then_replace(source: str, target: Path) -> None:
+            both.wait()
+            replace(source, target)
+
+        def writer() -> None:
+            try:
+                ci_log.store(path, RAW_LOG)
+            except BaseException as error:
+                errors.append(error)
+
+        with patch.object(ci_log.os, "replace", side_effect=meet_then_replace):
+            threads = [threading.Thread(target=writer) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(path.read_text(), RAW_LOG)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_failed_write_leaves_no_temporary_file(self) -> None:
+        path = self.cache / "example/fork/7/attempt-1/9.log"
+        with (
+            patch.object(ci_log.os, "replace", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
+        ):
+            ci_log.store(path, RAW_LOG)
+        self.assertEqual(list(path.parent.iterdir()), [])
+
+    def test_attempt_url_reads_that_attempt_not_the_latest(self) -> None:
+        first = log_job()
+        rerun = log_job(19, attempt=2, conclusion="success", steps=passed(first))
+        runs = {
+            "actions/runs/7": log_run(attempt=2, conclusion="success"),
+            "actions/runs/7/attempts/1": log_run(),
+        }
+
+        def gh(*args: str) -> str:
+            jobs = [first] if "/attempts/1/jobs" in args[-1] else [rerun]
+            return json.dumps([{"jobs": jobs}])
+
+        url = "https://github.com/example/fork/actions/runs/7/attempts/1"
+        with (
+            patch.object(ci, "api", side_effect=lambda _, path: runs[path]),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci_log, "download", return_value=RAW_LOG),
+            patch("sys.argv", ["ci.py", "log", url]),
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(ci.main(), 0)
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        self.assertIn("Run 7 attempt 1 (failure)", output)
+        self.assertIn("Failing step: 2 Test (failure)", output)
+        self.assertTrue((self.cache / "example/fork/7/attempt-1/9.log").exists())
+
+    def test_cancelled_job_without_a_failed_step_shows_its_tail(self) -> None:
+        lost = log_job(conclusion="cancelled", steps=passed(log_job()))
+        _, output, _ = self.log("log", "7", jobs=[lost])
+        self.assertIn("== native / test (cancelled)", output)
+        self.assertIn("No failed step: the job ended cancelled", output)
+        self.assertIn("Post job cleanup", output)
+
+    def test_running_jobs_are_named_and_have_no_log_yet(self) -> None:
+        running = log_job(
+            10,
+            conclusion=None,
+            steps=[],
+            name="native / simulation (1)",
+        )
+        run = log_run(status="in_progress", conclusion=None)
+        _, output, _ = self.log("log", "7", jobs=[log_job(), running], run=run)
+        self.assertIn("Run 7 attempt 1 (in_progress)", output)
+        self.assertIn(
+            "1 jobs still running: the failures shown may not be the last", output
+        )
+        self.assertIn("docs/workflow.md (Removal)", output)
+        self.assertIn("Failing step: 2 Test", output)
+        _, output, downloads = self.log(
+            "log", "7", "--job", "simulation", jobs=[log_job(), running], run=run
+        )
+        self.assertIn(
+            "No log: the job is still running; GitHub serves no log yet", output
+        )
+        self.assertIn(running["html_url"], output)
+        self.assertEqual(downloads, [])
+        _, output, _ = self.log("log", "7", jobs=[running], run=run)
+        self.assertIn("No failed job yet", output)
+
+    def test_targets_name_a_run_a_job_or_a_request(self) -> None:
+        url = "https://github.com/example/fork/actions/runs/7/attempts/2"
+        args = argparse.Namespace(pr=None, target=url, repo=None, profile=None)
+        self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7, 2))
+        args.target = JOB_URL
+        self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7, None, 9))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "request.json"
+            ci.write_request(
+                path, {"schema_version": 1, "repository": "example/fork", "run_id": 7}
+            )
+            args.target = str(path)
+            with patch.object(ci, "api", return_value=self.RUN):
+                self.assertEqual(ci.log_target(args), ci.LogTarget("example/fork", 7))
+        args.target = None
+        with self.assertRaisesRegex(ValueError, "python3 tools/ci.py log --pr N"):
+            ci.log_target(args)
+
+    def test_pr_names_the_run_it_selected(self) -> None:
+        rust = requested("rust", "c" * 32, "2026-11-12T02:00:00Z")
+        group = {
+            "id": 3,
+            "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+            "head_sha": MERGE,
+            "created_at": "2026-11-12T03:00:00Z",
+            "run_attempt": 2,
+            "html_url": "https://github.com/example/fork/actions/runs/3",
+        }
+        answers = {
+            "pulls/170": dict(PULL, created_at="2026-11-11T00:00:00Z"),
+            f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": PREVIOUS}]},
+        }
+        with (
+            patch.object(ci, "api", side_effect=lambda _, path: answers[path]),
+            patch.object(
+                ci,
+                "dispatched_runs",
+                return_value=[ci.DispatchedRun(rust, "rust", f"{'c' * 32}-{HEAD}")],
+            ),
+            patch.object(ci, "queue_runs", return_value=[group]),
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(ci.pr_run("example/fork", 170, None), 3)
+            self.assertEqual(ci.pr_run("example/fork", 170, "rust"), 2)
+        lines = [str(c.args[0]) for c in printed.call_args_list]
+        self.assertEqual(
+            lines[0],
+            "Selected the newest merge-group run for PR #170: run 3 attempt 2, "
+            f"tested head {PREVIOUS} (PR head {HEAD}): "
+            "https://github.com/example/fork/actions/runs/3",
+        )
+        self.assertIn("Also found: requested rust run 2", lines[1])
+        self.assertIn(
+            f"requested rust run for PR #170: run 2 attempt 1, tested head {HEAD}",
+            lines[2],
+        )
+
+    def test_failed_wait_prints_the_summary_and_keeps_its_status(self) -> None:
+        record = {"repository": "example/fork", "profile": "native", "head": HEAD}
+        failing = dict(self.RUN, status="in_progress", failed_jobs=[log_job()])
+        argv = ["ci.py", "wait", "request.json"]
+        for summary, expected in (
+            (["Run 7 attempt 1 (failure)", "Failing step: 2 Test"], "Failing step"),
+            (
+                subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502"),
+                "Could not read",
+            ),
+        ):
+            with (
+                patch.object(ci, "status", return_value=(record, failing)),
+                patch.object(ci, "log_lines", side_effect=[summary]),
+                patch("sys.argv", argv),
+                patch("builtins.print") as printed,
+            ):
+                self.assertEqual(ci.main(), 1)
+            output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+            self.assertIn("Failed child jobs: native / test", output)
+            self.assertIn(expected, output.splitlines()[-1])
+        # A failure that is not the run's (a moved head) prints no summary.
+        with (
+            patch.object(ci, "status", side_effect=ValueError("PR head changed")),
+            patch.object(ci, "log_lines") as lines,
+            patch("sys.argv", argv),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(ci.main(), 1)
+        lines.assert_not_called()
+
+
+ACCOUNT = "fork-bot"
+ISSUES = "https://api.github.com/repos/example/fork/issues/"
+
+
+def attribution(agent: str) -> str:
+    return f"Agent: {agent} | Model: m-1 | Reasoning effort: high"
+
+
+class FakeComments:
+    """Comments on example/fork #170 (a PR) as gh answers for them: listed over
+    two pages, read by ID, patched and posted. `post` may land and then fail."""
+
+    def __init__(self, bodies: list[tuple[str, str]], post: str = "ok") -> None:
+        self.store = [
+            self.comment(1000 + i, body, author)
+            for i, (body, author) in enumerate(bodies)
+        ]
+        self.post = post
+        self.writes: list[tuple[str, str, dict[str, str]]] = []
+        self.reads_by_id: dict[int, status_comment.Comment] = {}
+
+    @staticmethod
+    def comment(
+        number: int,
+        body: str,
+        author: str = ACCOUNT,
+        issue: int = 170,
+        updated: str = "2026-11-12T01:00:00Z",
+    ) -> status_comment.Comment:
+        return {
+            "id": number,
+            "body": body,
+            "user": {"login": author},
+            "issue_url": f"{ISSUES}{issue}",
+            "html_url": f"https://github.com/example/fork/pull/{issue}#issuecomment-{number}",
+            "updated_at": updated,
+        }
+
+    def by_id(self, number: int) -> status_comment.Comment:
+        if number in self.reads_by_id:
+            return self.reads_by_id[number]
+        (found,) = [c for c in self.store if c["id"] == number]
+        return found
+
+    def gh(
+        self, *args: str, payload: str | None = None, timeout: float | None = None
+    ) -> str:
+        path = next(a for a in args if a.startswith("repos/") or a == "user")
+        if path == "user":
+            return ACCOUNT + "\n"
+        if "--method" in args:
+            return self.write(
+                args[args.index("--method") + 1], path, json.loads(payload or "{}")
+            )
+        if path.endswith("/comments?per_page=100"):
+            return json.dumps([self.store[:1], self.store[1:]])
+        if match := re.search(r"/issues/comments/(\d+)$", path):
+            return json.dumps(self.by_id(int(match[1])))
+        if path.endswith("/issues/170"):
+            return json.dumps({"number": 170, "pull_request": {}})
+        if path.endswith("/issues/171"):
+            return json.dumps({"number": 171})
+        raise AssertionError(args)
+
+    def write(self, method: str, path: str, data: dict[str, str]) -> str:
+        self.writes.append((method, path, data))
+        if method == "PATCH":
+            comment = self.by_id(int(path.rsplit("/", 1)[1]))
+            comment["body"] = data["body"]
+            comment["updated_at"] = "2026-11-12T02:00:00Z"
+            return json.dumps(comment)
+        if self.post == "fails":
+            raise subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502")
+        comment = self.comment(2000 + len(self.store), data["body"])
+        self.store.append(comment)
+        if self.post == "times out":
+            raise subprocess.TimeoutExpired(["gh"], 60)
+        return json.dumps(comment)
+
+
+class CommentTests(unittest.TestCase):
+    """ci.py comment against recorded comments (P4)."""
+
+    def run_comment(
+        self, github: FakeComments, *argv: str, body: str | None = None
+    ) -> tuple[int, str, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.md"
+            if body is not None:
+                path.write_text(body)
+                argv = (*argv, "--body-file", str(path))
+            with (
+                patch.object(status_comment, "gh", side_effect=github.gh),
+                patch(
+                    "sys.argv", ["ci.py", "comment", *argv, "--repo", "example/fork"]
+                ),
+                patch("sys.stdout", new_callable=io.StringIO) as out,
+                patch("sys.stderr", new_callable=io.StringIO) as err,
+            ):
+                code = ci.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_lone_review_report_is_neither_chosen_nor_overwritten(self) -> None:
+        report = review(HEAD, "/root/rev", "Disposition: accepted, whole PR")
+        github = FakeComments([(report, ACCOUNT)])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/rev", "--show")
+        self.assertEqual(code, 0)
+        self.assertIn("No status comment for /root/rev on PR #170.", out)
+        self.assertIn("1000 (review report, not adoptable)", out)
+        self.assertNotIn("--comment-id", out)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/rev", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("is a review report or cleanup acceptance", err)
+        code, out, _ = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/rev",
+            "--model",
+            "m-1",
+            "--effort",
+            "high",
+            body="Status: re-check started",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertEqual(github.store[0]["body"], report)
+        self.assertEqual(
+            github.store[1]["body"],
+            "<!-- status comment: /root/rev -->\nStatus: re-check started\n\n"
+            + attribution("/root/rev"),
+        )
+        self.assertIn("Show it again: python3 tools/ci.py comment 170 --repo", out)
+
+    def test_marked_comment_is_replaced_and_found_again(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus: old\n\n" + attribution(
+            "/root/a"
+        )
+        github = FakeComments([("unrelated", "someone"), (marked, ACCOUNT)])
+        new = "Status: new\n\n" + attribution("/root/a")
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", body=new)
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.writes[0][:2], ("PATCH", "repos/example/fork/issues/comments/1001")
+        )
+        self.assertEqual(
+            github.store[1]["body"], "<!-- status comment: /root/a -->\n" + new
+        )
+        self.assertIn("#issuecomment-1001", out)
+        code, out, err = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(out.strip(), new)
+        self.assertIn("Status comment: https://github.com/example/fork/pull/170", err)
+
+    def test_change_since_the_first_read_refuses_the_patch(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus\n\n" + attribution("/root/a")
+        github = FakeComments([(marked, ACCOUNT)])
+        github.reads_by_id[1000] = FakeComments.comment(
+            1000, marked, updated="2026-11-12T03:00:00Z"
+        )
+        code, _, err = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            body="Status: mine\n" + attribution("/root/a"),
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("changed since it was read", err)
+        self.assertEqual(github.writes, [])
+
+    def test_several_marked_comments_are_listed_not_chosen(self) -> None:
+        marked = "<!-- status comment: /root/a -->\nStatus\n\n" + attribution("/root/a")
+        github = FakeComments([(marked, ACCOUNT), (marked, ACCOUNT)])
+        for extra in (("--show",), ("--model", "m-1", "--effort", "high")):
+            code, _, err = self.run_comment(
+                github,
+                "170",
+                "--agent",
+                "/root/a",
+                *extra,
+                body=None if extra[0] == "--show" else "x",
+            )
+            self.assertEqual(code, 1)
+            self.assertIn("2 status comments for /root/a on PR #170: 1000 ", err)
+            self.assertIn("#issuecomment-1001", err)
+        self.assertEqual(github.writes, [])
+
+    def test_agent_paths_match_exactly(self) -> None:
+        marked = "<!-- status comment: /root/ab -->\nStatus\n\n" + attribution(
+            "/root/ab"
+        )
+        github = FakeComments(
+            [(marked, ACCOUNT), ("Old status\n" + attribution("/root/ab"), ACCOUNT)]
+        )
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertIn("No status comment for /root/a", out)
+        self.assertNotIn("1001", out)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1001"
+        )
+        self.assertIn("has attribution for ['/root/ab'], not /root/a", err)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", body="x\n" + attribution("/root/ab")
+        )
+        self.assertIn("attribution names /root/ab, not /root/a", err)
+        code, _, _ = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            "--model",
+            "m-1",
+            "--effort",
+            "high",
+            body="x",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertTrue(
+            github.store[0]["body"].startswith("<!-- status comment: /root/ab -->")
+        )
+
+    def test_forged_or_conflicting_attribution_is_refused(self) -> None:
+        forged = "<!-- status comment: /root/a -->\nForged\n\n" + attribution("/root/a")
+        github = FakeComments([(forged, "someone-else")])
+        refusals = {
+            "x\n"
+            + attribution("/root/a")
+            + "\n"
+            + attribution("/root/a"): "exactly one",
+            "x\nAgent: /root/a | Model: m-1": "exactly one",
+            "<!-- status comment: /root/b -->\nx\n" + attribution("/root/a"): "marker",
+            "x": "pass --model and --effort",
+        }
+        for body, reason in refusals.items():
+            code, _, err = self.run_comment(
+                github, "170", "--agent", "/root/a", body=body
+            )
+            self.assertEqual(code, 1, body)
+            self.assertIn(reason, err)
+        code, _, err = self.run_comment(
+            github,
+            "170",
+            "--agent",
+            "/root/a",
+            "--model",
+            "m-2",
+            body="x\n" + attribution("/root/a"),
+        )
+        self.assertIn("conflicts with the body's line", err)
+        self.assertEqual(github.writes, [])
+        # Another account's marker is not this agent's status comment.
+        code, _, _ = self.run_comment(
+            github, "170", "--agent", "/root/a", body="Mine\n" + attribution("/root/a")
+        )
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        self.assertEqual(github.store[0]["body"], forged)
+
+    def test_adoption_checks_place_author_and_content(self) -> None:
+        legacy = "Status: started\n\n" + attribution("/root/a")
+        github = FakeComments([(legacy, ACCOUNT), (legacy, "someone-else")])
+        github.reads_by_id[1002] = FakeComments.comment(1002, legacy, issue=171)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1002"
+        )
+        self.assertIn(f"is on {ISSUES}171, not PR #170", err)
+        code, _, err = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1001"
+        )
+        self.assertIn(f"was written by someone-else, not {ACCOUNT}", err)
+        self.assertEqual(github.writes, [])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertIn("1000 (comment)", out)
+        self.assertNotIn("1001", out)
+        self.assertIn("--comment-id 1000", out)
+        code, _, _ = self.run_comment(
+            github, "170", "--agent", "/root/a", "--comment-id", "1000"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            github.store[0]["body"], "<!-- status comment: /root/a -->\n" + legacy
+        )
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(out.strip(), legacy)
+
+    def test_create_that_times_out_after_landing_is_found_not_repeated(self) -> None:
+        github = FakeComments([], post="times out")
+        body = "Status\n" + attribution("/root/a")
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", body=body)
+        self.assertEqual(code, 0)
+        self.assertIn("did not answer", out)
+        self.assertIn("#issuecomment-2000", out)
+        self.assertEqual([w[0] for w in github.writes], ["POST"])
+        failing = FakeComments([], post="fails")
+        code, _, err = self.run_comment(failing, "170", "--agent", "/root/a", body=body)
+        self.assertEqual(code, 1)
+        self.assertIn("none is on PR #170; run the same command again", err)
+        self.assertEqual([w[0] for w in failing.writes], ["POST"])
+
+    def test_show_with_nothing_to_show_creates_nothing(self) -> None:
+        github = FakeComments([])
+        code, out, _ = self.run_comment(github, "170", "--agent", "/root/a", "--show")
+        self.assertEqual(code, 0)
+        self.assertIn("No status comment for /root/a on PR #170.", out)
+        self.assertIn("--body-file FILE --model MODEL --effort EFFORT", out)
+        self.assertEqual(github.writes, [])
+        code, _, err = self.run_comment(github, "171", "--agent", "/root/a", "--show")
+        self.assertIn("#171 is an issue; name it with --issue", err)
+        code, out, _ = self.run_comment(
+            github, "--issue", "171", "--agent", "/root/a", "--show"
+        )
+        self.assertIn("on issue #171", out)
+
+
+class FailureCountTests(unittest.TestCase):
+    def test_count_leaves_out_control_branches_unless_asked(self) -> None:
+        runs = [
+            {
+                "html_url": "u1",
+                "name": "Quick validation",
+                "event": "pull_request",
+                "head_branch": "control/900-x",
+            },
+            {
+                "html_url": "u2",
+                "name": "Requested validation",
+                "event": "workflow_dispatch",
+                "head_branch": "rust-migration",
+                "display_title": "CI native PR 901 r " + HEAD,
+            },
+            {
+                "html_url": "u3",
+                "name": "Requested validation",
+                "event": "merge_group",
+                "head_branch": f"gh-readonly-queue/rust-migration/pr-902-{BASE}",
+            },
+            {
+                "html_url": "u4",
+                "name": "Quick validation",
+                "event": "pull_request",
+                "head_branch": "tools/1-x",
+            },
+        ]
+        refs = {"pulls/901": "control/901-y", "pulls/902": "tools/902-z"}
+
+        def gh(*args: str) -> str:
+            return json.dumps(
+                [{"workflow_runs": runs if "status=failure" in args[-1] else []}]
+            )
+
+        for controls, expected in (
+            (False, "2 failed runs since 2026-11-10, leaving out 2 on control/"),
+            (True, "4 failed runs since 2026-11-10"),
+        ):
+            args = argparse.Namespace(
+                repo="example/fork", since="2026-11-10", controls=controls
+            )
+            with (
+                patch.object(ci, "gh", side_effect=gh),
+                patch.object(
+                    ci, "api", side_effect=lambda _, path: {"head": {"ref": refs[path]}}
+                ),
+                patch("builtins.print") as printed,
+            ):
+                ci.failures(args)
+            self.assertEqual(printed.call_args.args[0], expected)
 
 
 if __name__ == "__main__":

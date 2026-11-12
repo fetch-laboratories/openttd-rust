@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""Install isolated Ubuntu build prerequisites without sudo or profile changes."""
+"""Install isolated Ubuntu build prerequisites without sudo or profile changes.
 
+For an Ubuntu 26.04 host without administrator access: it downloads packages
+into .local/deps and the pinned Rust toolchain into .local/cargo. A host that
+has the packages installed system-wide, as docs/rust-migration.md describes,
+must not run it: the driver puts .local/deps ahead of the system on every
+compiler, library and pkg-config path. Nothing is installed without --install.
+"""
+
+import argparse
 import os
 import subprocess
+import sys
 import tomllib
 import urllib.request
 from pathlib import Path
@@ -30,7 +39,7 @@ PACKAGES = (
 )
 
 
-def main() -> None:
+def install() -> None:
     downloads = LOCAL / "downloads"
     deps = LOCAL / "deps"
     downloads.mkdir(parents=True, exist_ok=True)
@@ -97,5 +106,26 @@ def main() -> None:
     print("Local prerequisites ready. Run: python3 tools/migration.py verify")
 
 
+def main(argv: list[str]) -> int:
+    # No abbreviations: a mistyped flag must not install.
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="download and install into .local/deps, .local/cargo and .local/rustup",
+    )
+    args = parser.parse_args(argv)
+    if not args.install:
+        parser.print_help()
+        print("\nNothing installed: pass --install to install.")
+        return 2
+    install()
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/movement.rs | fn track_status | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/movement.rs | fn get_tile_track_status | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/movement.rs | impl Context<'_> > fn track_status | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/movement.rs | impl Context<'_> > fn get_tile_track_status | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/movement.rs | impl MovementServices > fn track_status | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/movement.rs | impl MovementServices > fn get_tile_track_status | allow clippy::inline_always"
+  },
+  {
+    "kind": "carry",
+    "tool": "rust",
+    "from": "rust/openttd-kernels/src/movement.rs | impl MovementServices > fn track_status_in_world | allow clippy::inline_always",
+    "to": "rust/openttd-kernels/src/movement.rs | impl MovementServices > fn get_tile_track_status_in_world | allow clippy::inline_always"
+  }
+]

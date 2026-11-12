@@ -31,7 +31,9 @@ RUN = not GENERATED
 COMPILE_FAILED = 3
 
 
-def compile_only(command: Sequence[Argument]) -> list[str] | None:
+def compile_only(
+    command: Sequence[Argument], generated: str = GENERATED
+) -> list[str] | None:
     """The compile without its output, link inputs or the build's generated ABI.
 
     None for a command that compiles no C or C++ source: a link alone, or a
@@ -54,7 +56,7 @@ def compile_only(command: Sequence[Argument]) -> list[str] | None:
             (".a", ".so", ".o")
         ):
             for path in stale:
-                argument = argument.replace(path, GENERATED)
+                argument = argument.replace(path, generated)
             checked.append(argument)
     return [*checked, "-fsyntax-only"]
 

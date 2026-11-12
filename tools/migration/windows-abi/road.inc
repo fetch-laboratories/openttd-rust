@@ -220,12 +220,14 @@ static void RoadBoundary()
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	static OpenTTDFixtureMap map{6, 4096};
-	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = 9 << 4;
+	/* Movement sees every tile, the bay included, as the tunnel/bridge its tile
+	 * type service reports; VehicleEnterTile reads that type from its own map. */
+	static OpenTTDFixtureMap movement_map{6, 4096};
+	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = movement_map.base[tile].type = 9 << 4;
 	map.base[100].type = 5 << 4; // The bus bay stop above.
 	map.extended[100].m6 = 3 << 3;
 	static OpenTTDSharedServices movement_world{};
-	movement_world.map = &map.statics;
-	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
+	movement_world.map = &movement_map.statics; movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
 	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };

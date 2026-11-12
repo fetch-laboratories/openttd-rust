@@ -2099,6 +2099,23 @@ fn is_enabled(views: u8) -> bool {
 fn enabled(s: &ObjectServices, spec: *const Spec) -> bool {
     is_enabled(unsafe { (resolver_services(s).views)(spec) })
 }
+/// `GetFoundation_Object`.
+pub(crate) fn get_foundation_object(
+    s: &ObjectServices,
+    tile: TileIndex,
+    tileh: crate::slope_type::Slope,
+) -> crate::slope_type::Foundation {
+    // SAFETY: The immutable object table and live object tile serve this synchronous call.
+    let spec = unsafe { (s.spec)((s.object_type)(tile.0)) };
+    if enabled(s, spec)
+        && crate::newgrf_object::ObjectFlags(unsafe { (s.flags)(spec) })
+            .test(crate::newgrf_object::ObjectFlag::HasNoFoundation)
+    {
+        crate::slope_type::Foundation::FOUNDATION_NONE
+    } else {
+        crate::slope_func::flattening_foundation(tileh)
+    }
+}
 fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
     let policy = unsafe { (resolver_services(s).eligibility)(spec) };
     is_enabled(policy.views)

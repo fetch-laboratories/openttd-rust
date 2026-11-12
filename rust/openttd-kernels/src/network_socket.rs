@@ -78,6 +78,8 @@ pub(crate) mod role {
     pub(crate) const CLIENT: u8 = 0;
     /// `ServerNetworkGameSocketHandler`.
     pub(crate) const SERVER: u8 = 1;
+    /// `QueryNetworkGameSocketHandler`.
+    pub(crate) const QUERY: u8 = 2;
 }
 
 /// `_deferred_deletions`: the original's file-static vector of sockets awaiting deletion.
