@@ -15,6 +15,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import ci
+import ci_log
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2446,7 +2447,7 @@ class RequestTests(unittest.TestCase):
                 patch("builtins.print"),
             ):
                 self.assertEqual(ci.main(), 1)
-            ci.verify_children({"failed_jobs": []})
+            ci.verify_children({"repository": "example/fork"}, {"failed_jobs": []})
 
     def test_wait_times_out_with_exit_2_and_names_resume_command(self) -> None:
         running = {"status": "in_progress", "html_url": RUN, "failed_jobs": []}
@@ -2824,8 +2825,12 @@ class QueueWaitTests(unittest.TestCase):
     def test_removed_prints_failed_run_and_jobs(self) -> None:
         code, output, _ = self.run_main([self.QUEUED, self.REMOVED, self.REMOVED])
         self.assertEqual(code, 3)
+        # The recorded answers hold no run or log: the summary says so in one
+        # line and the removal's exit status stands (P2).
+        self.assertIn("Could not read the failed jobs' logs", output.splitlines()[-1])
+        self.assertIn("python3 tools/ci.py log 7 --repo example/fork", output)
         self.assertEqual(
-            output.splitlines()[1:],
+            output.splitlines()[1:-1],
             [
                 "leaving the merge queue",
                 "PR #170 left the merge queue (open); merge-group run "
@@ -3391,6 +3396,313 @@ class StateTests(unittest.TestCase):
         self.assertEqual(
             text.splitlines()[-1], "enqueue checks: " + facts["enqueue_checks"]
         )
+
+
+JOB_URL = "https://github.com/example/fork/actions/runs/7/job/9"
+RAW_LOG = (
+    "﻿2026-11-12T01:00:00.1000000Z ##[group]Run actions/checkout\n"
+    "2026-11-12T01:00:01.0000000Z checked out\n"
+    "2026-11-12T01:00:05.0000000Z ##[group]Run cargo test\n"
+    "2026-11-12T01:00:06.0000000Z \x1b[31merror[E0308]\x1b[0m: mismatched types\n"
+    "  continuation of the error\n"
+    "2026-11-12 not GitHub's envelope\n"
+    "2026-11-12T01:00:06.5000000Z " + "x" * 400 + "\n"
+    "2026-11-12T01:00:07.0000000Z ##[error]Process completed with exit code 101.\n"
+    "2026-11-12T01:00:07.5000000Z Post job cleanup, in the same second\n"
+    "2026-11-12T01:00:09.0000000Z Post job cleanup\n"
+)
+
+
+def log_job(**fields: object) -> dict[str, Any]:
+    """A failed job of run 7 as the jobs API lists it, failing in step 2."""
+    return {
+        "id": 9,
+        "run_id": 7,
+        "run_attempt": 1,
+        "name": "native / test",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": JOB_URL,
+        "steps": [
+            {
+                "number": 1,
+                "name": "Checkout",
+                "conclusion": "success",
+                "started_at": "2026-11-12T01:00:00Z",
+                "completed_at": "2026-11-12T01:00:02Z",
+            },
+            {
+                "number": 2,
+                "name": "Test",
+                "conclusion": "failure",
+                "started_at": "2026-11-12T01:00:05Z",
+                "completed_at": "2026-11-12T01:00:07Z",
+            },
+            {
+                "number": 3,
+                "name": "Post",
+                "conclusion": "success",
+                "started_at": "2026-11-12T01:00:09Z",
+                "completed_at": "2026-11-12T01:00:10Z",
+            },
+        ],
+        **fields,
+    }
+
+
+class LogTests(unittest.TestCase):
+    """ci.py log against recorded jobs and logs, with the cache in a temporary
+    directory (P2)."""
+
+    RUN = {
+        "id": 7,
+        "run_attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/example/fork/actions/runs/7",
+    }
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.cache = Path(directory.name)
+        patcher = patch.object(ci_log, "LOGS", self.cache)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def log(
+        self,
+        *argv: str,
+        jobs: list[dict[str, Any]],
+        logs: Iterable[str | None] = (RAW_LOG,),
+        run: Mapping[str, object] | None = None,
+    ) -> tuple[int, str, list[int]]:
+        """Run `ci.py log ARGV`; `logs` are the successive downloads."""
+        answers = iter(logs)
+        downloads: list[int] = []
+
+        def download(_repository: str, job_id: int) -> str | None:
+            downloads.append(job_id)
+            return next(answers)
+
+        def api(_repository: str, path: str) -> object:
+            if path == "actions/runs/7":
+                return dict(run or self.RUN)
+            (job,) = [j for j in jobs if path == f"actions/jobs/{j['id']}"]
+            return job
+
+        pages = json.dumps([{"jobs": jobs[:1]}, {"jobs": jobs[1:]}])
+        with (
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", return_value=pages),
+            patch.object(ci_log, "download", side_effect=download),
+            patch("sys.argv", ["ci.py", *argv, "--repo", "example/fork"]),
+            patch("builtins.print") as printed,
+        ):
+            code = ci.main()
+        output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        return code, output, downloads
+
+    def test_failing_step_without_colour_or_stamps_and_one_download(self) -> None:
+        jobs = [
+            {"id": 8, "name": "quick", "status": "completed", "conclusion": "success"}
+        ]
+        code, output, downloads = self.log("log", "7", jobs=[*jobs, log_job()])
+        self.assertEqual(code, 0)
+        self.assertNotIn("\x1b", output)
+        self.assertNotIn("01:00:06", output)
+        self.assertIn(f"== native / test (failure): {JOB_URL}", output)
+        self.assertIn("Failing step: 2 Test (failure)", output)
+        self.assertIn("  4: error[E0308]: mismatched types", output)
+        self.assertIn("  8: ##[error]Process completed with exit code 101.", output)
+        # Only stamps in GitHub's envelope are removed; unstamped lines stay in
+        # their step; long lines are cut; other steps' lines are left out.
+        self.assertIn("  6: 2026-11-12 not GitHub's envelope", output)
+        self.assertIn("  5:   continuation of the error", output)
+        self.assertIn("x" * ci_log.WIDTH + " [cut]", output)
+        self.assertNotIn("checked out", output)
+        self.assertNotIn("Post job cleanup", output)
+        self.assertNotIn("still running", output)
+        cached = self.cache / "example/fork/7/attempt-1/9.log"
+        self.assertEqual(cached.read_text(), RAW_LOG)
+        self.assertEqual(downloads, [9])
+        # Later reads, filtered or raw, come from the cache.
+        _, grepped, again = self.log(
+            "logs", "7", "--grep", "mismatch", jobs=[log_job()]
+        )
+        self.assertEqual(
+            grepped.splitlines()[-1], "  4: error[E0308]: mismatched types"
+        )
+        _, full, _ = self.log("log", JOB_URL, "--full", jobs=[log_job()])
+        self.assertIn("\x1b[31merror[E0308]", full)
+        self.assertEqual(again, [])
+
+    def test_unavailable_or_empty_log_is_not_cached(self) -> None:
+        cached = self.cache / "example/fork/7/attempt-1/9.log"
+        _, output, _ = self.log("log", "7", jobs=[log_job()], logs=[None])
+        self.assertIn("No log: GitHub has no log for it yet (404)", output)
+        self.assertIn(f"it was not cached. Job: {JOB_URL}", output)
+        self.assertFalse(cached.exists())
+        _, output, _ = self.log("log", "7", jobs=[log_job()], logs=["\n"])
+        self.assertIn("GitHub served an empty log", output)
+        self.assertFalse(cached.exists())
+        _, output, downloads = self.log("log", "7", jobs=[log_job()])
+        self.assertIn("Failing step: 2 Test", output)
+        self.assertEqual(downloads, [9])
+        self.assertTrue(cached.exists())
+
+    def test_download_tells_a_missing_log_from_an_api_error(self) -> None:
+        def result(code: int, stdout: bytes, stderr: bytes) -> object:
+            return subprocess.CompletedProcess(["gh"], code, stdout, stderr)
+
+        with patch.object(ci_log.subprocess, "run") as run:
+            run.return_value = result(1, b"", b"gh: Not Found (HTTP 404)")
+            self.assertIsNone(ci_log.download("example/fork", 9))
+            run.return_value = result(1, b"partial", b"gh: Server Error (HTTP 502)")
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci_log.download("example/fork", 9)
+            run.return_value = result(0, b"ok \xff", b"")
+            self.assertEqual(ci_log.download("example/fork", 9), "ok �")
+        failed = subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502")
+        with patch.object(ci_log, "download", side_effect=failed):
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci_log.job_log("example/fork", log_job())
+        self.assertEqual(list(self.cache.rglob("*")), [])
+
+    def test_second_attempt_reads_its_own_log(self) -> None:
+        first = self.cache / "example/fork/7/attempt-1/9.log"
+        first.parent.mkdir(parents=True)
+        first.write_text("2026-11-12T01:00:06.0000000Z error: first attempt\n")
+        retried = log_job(id=19, run_attempt=2, html_url=JOB_URL + "0")
+        run = dict(self.RUN, run_attempt=2)
+        _, output, downloads = self.log("log", "7", jobs=[retried], run=run)
+        self.assertIn("Run 7 attempt 2 (failure)", output)
+        self.assertIn("mismatched types", output)
+        self.assertNotIn("first attempt", output)
+        self.assertEqual(downloads, [19])
+        self.assertTrue((self.cache / "example/fork/7/attempt-2/19.log").exists())
+
+    def test_cancelled_job_without_a_failed_step_shows_its_tail(self) -> None:
+        steps = [dict(step, conclusion="success") for step in log_job()["steps"]]
+        lost = log_job(conclusion="cancelled", steps=steps)
+        _, output, _ = self.log("log", "7", jobs=[lost])
+        self.assertIn("== native / test (cancelled)", output)
+        self.assertIn("No failed step: the job ended cancelled", output)
+        self.assertIn("Post job cleanup", output)
+
+    def test_running_jobs_are_named_and_have_no_log_yet(self) -> None:
+        running = {
+            "id": 10,
+            "run_id": 7,
+            "name": "native / simulation (1)",
+            "status": "in_progress",
+            "conclusion": None,
+            "html_url": JOB_URL + "1",
+        }
+        run = dict(self.RUN, status="in_progress", conclusion=None)
+        _, output, _ = self.log("log", "7", jobs=[log_job(), running], run=run)
+        self.assertIn("Run 7 attempt 1 (in_progress)", output)
+        self.assertIn(
+            "1 jobs still running: the failures shown may not be the last", output
+        )
+        self.assertIn("docs/workflow.md (Removal)", output)
+        self.assertIn("Failing step: 2 Test", output)
+        _, output, downloads = self.log(
+            "log", "7", "--job", "simulation", jobs=[log_job(), running], run=run
+        )
+        self.assertIn(
+            "No log: the job is still running; GitHub serves no log yet", output
+        )
+        self.assertIn(JOB_URL + "1", output)
+        self.assertEqual(downloads, [])
+        _, output, _ = self.log("log", "7", jobs=[running], run=run)
+        self.assertIn("No failed job yet", output)
+
+    def test_targets_name_a_run_a_job_or_a_request(self) -> None:
+        url = "https://github.com/example/fork/actions/runs/7/attempts/2"
+        args = argparse.Namespace(pr=None, target=url, repo=None, profile=None)
+        self.assertEqual(ci.log_target(args), ("example/fork", 7, None))
+        args.target = JOB_URL
+        self.assertEqual(ci.log_target(args), ("example/fork", 7, 9))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "request.json"
+            ci.write_request(
+                path, {"schema_version": 1, "repository": "example/fork", "run_id": 7}
+            )
+            args.target = str(path)
+            with patch.object(ci, "api", return_value=self.RUN):
+                self.assertEqual(ci.log_target(args), ("example/fork", 7, None))
+        args.target = None
+        with self.assertRaisesRegex(ValueError, "python3 tools/ci.py log --pr N"):
+            ci.log_target(args)
+
+    def test_pr_names_the_run_it_selected(self) -> None:
+        rust = requested("rust", "c" * 32, "2026-11-12T02:00:00Z", run_attempt=1)
+        group = {
+            "id": 3,
+            "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+            "head_sha": MERGE,
+            "created_at": "2026-11-12T03:00:00Z",
+            "run_attempt": 2,
+            "html_url": "https://github.com/example/fork/actions/runs/3",
+        }
+        answers = {
+            "pulls/170": dict(PULL, created_at="2026-11-11T00:00:00Z"),
+            f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": PREVIOUS}]},
+        }
+        with (
+            patch.object(ci, "api", side_effect=lambda _, path: answers[path]),
+            patch.object(
+                ci, "dispatched_runs", return_value=[dict(rust, profile="rust")]
+            ),
+            patch.object(ci, "queue_runs", return_value=[group]),
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(ci.pr_run("example/fork", 170, None), 3)
+            self.assertEqual(ci.pr_run("example/fork", 170, "rust"), 2)
+        lines = [str(c.args[0]) for c in printed.call_args_list]
+        self.assertEqual(
+            lines[0],
+            "Selected the newest merge-group run for PR #170: run 3 attempt 2, "
+            f"tested head {PREVIOUS} (PR head {HEAD}): "
+            "https://github.com/example/fork/actions/runs/3",
+        )
+        self.assertIn("Also found: requested rust run 2", lines[1])
+        self.assertIn(
+            f"requested rust run for PR #170: run 2 attempt 1, tested head {HEAD}",
+            lines[2],
+        )
+
+    def test_failed_wait_prints_the_summary_and_keeps_its_status(self) -> None:
+        record = {"repository": "example/fork", "profile": "native", "head": HEAD}
+        failing = dict(self.RUN, status="in_progress", failed_jobs=[log_job()])
+        argv = ["ci.py", "wait", "request.json"]
+        for summary, expected in (
+            (["Run 7 attempt 1 (failure)", "Failing step: 2 Test"], "Failing step"),
+            (
+                subprocess.CalledProcessError(1, ["gh"], "", "HTTP 502"),
+                "Could not read",
+            ),
+        ):
+            with (
+                patch.object(ci, "status", return_value=(record, failing)),
+                patch.object(ci, "log_lines", side_effect=[summary]),
+                patch("sys.argv", argv),
+                patch("builtins.print") as printed,
+            ):
+                self.assertEqual(ci.main(), 1)
+            output = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+            self.assertIn("Failed child jobs: native / test", output)
+            self.assertIn(expected, output.splitlines()[-1])
+        # A failure that is not the run's (a moved head) prints no summary.
+        with (
+            patch.object(ci, "status", side_effect=ValueError("PR head changed")),
+            patch.object(ci, "log_lines") as lines,
+            patch("sys.argv", argv),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(ci.main(), 1)
+        lines.assert_not_called()
 
 
 class FailureCountTests(unittest.TestCase):

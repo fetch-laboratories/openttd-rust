@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 from urllib.parse import quote
 
+import ci_log
 import preflight_stamp
 import review_report
 import vcs
@@ -41,6 +43,19 @@ FAILED = ("failure", "timed_out", "startup_failure")
 # group is its own run, so no later run cancels it. Either removes the PR.
 REMOVED = (*FAILED, "cancelled")
 REQUESTS = Path(".local/ci-requests")
+# Job conclusions that fail a run; a cancelled job or lost runner has no failed step.
+JOB_FAILED = (
+    "failure",
+    "timed_out",
+    "cancelled",
+    "action_required",
+    "startup_failure",
+    "stale",
+)
+RUN_URL = re.compile(
+    r"https://github\.com/([^/\s]+/[^/\s]+)/actions/runs/(\d+)"
+    r"(?:/attempts/\d+)?(?:/job/(\d+))?/?(?:[?#]\S*)?"
+)
 
 
 def gh(*args: str) -> str:
@@ -329,29 +344,41 @@ def request(args: argparse.Namespace) -> Path | None:
     return path
 
 
-def status(path: Path) -> tuple[dict, dict | None]:
+def read_request(path: Path) -> dict:
     record = json.loads(path.read_text())
     if record.get("schema_version") != 1:
         raise ValueError("Unsupported CI request record schema")
+    return record
+
+
+def recorded_run(path: Path, record: dict) -> dict | None:
+    """The request's run, found once by its identity and then kept in its file."""
+    repository = record["repository"]
+    if record.get("run_id"):
+        return api(repository, f"actions/runs/{record['run_id']}")
+    runs = api(repository, f"actions/workflows/{WORKFLOW}/runs?per_page=100")[
+        "workflow_runs"
+    ]
+    run = find_run(record, runs)
+    if run:
+        record["run_id"] = run["id"]
+        record["run_url"] = run["html_url"]
+        write_request(path, record)
+    return run
+
+
+def status(path: Path) -> tuple[dict, dict | None]:
+    record = read_request(path)
     repository = record["repository"]
     current_head(api(repository, f"pulls/{record['pr']}"), record["head"])
-    if record.get("run_id"):
-        run = api(repository, f"actions/runs/{record['run_id']}")
-    else:
-        runs = api(repository, f"actions/workflows/{WORKFLOW}/runs?per_page=100")[
-            "workflow_runs"
-        ]
-        run = find_run(record, runs)
-        if run:
-            record["run_id"] = run["id"]
-            record["run_url"] = run["html_url"]
-            write_request(path, record)
+    run = recorded_run(path, record)
     if run and run["status"] != "completed":
         run["failed_jobs"] = failed_jobs(repository, run["id"])
     return record, run
 
 
-def failed_jobs(repository: str, run_id: int) -> list[dict]:
+def run_jobs(repository: str, run_id: int) -> list[dict]:
+    """Every job of the run's latest attempt, through every page."""
     pages = json.loads(
         gh(
             "api",
@@ -360,36 +387,42 @@ def failed_jobs(repository: str, run_id: int) -> list[dict]:
             f"repos/{repository}/actions/runs/{run_id}/jobs?filter=latest&per_page=100",
         )
     )
+    return [job for page in pages for job in page["jobs"]]
+
+
+def failed_jobs(repository: str, run_id: int) -> list[dict]:
     return [
-        job
-        for page in pages
-        for job in page["jobs"]
-        if job["conclusion"]
-        in (
-            "failure",
-            "timed_out",
-            "cancelled",
-            "action_required",
-            "startup_failure",
-            "stale",
-        )
+        job for job in run_jobs(repository, run_id) if job["conclusion"] in JOB_FAILED
     ]
 
 
-def verify_children(run: dict) -> None:
+class RunFailed(ValueError):
+    """A requested run failed; `run_id` names it for the log summary."""
+
+    def __init__(self, message: str, repository: str, run_id: int | None) -> None:
+        super().__init__(message)
+        self.repository = repository
+        self.run_id = run_id
+
+
+def verify_children(record: dict, run: dict) -> None:
     if run.get("failed_jobs"):
         failed = ", ".join(
             f"{job['name']} ({job['html_url']})" for job in run["failed_jobs"]
         )
-        raise ValueError(
-            f"Failed child jobs: {failed}. Other jobs continue; successful jobs remain available for retry."
+        raise RunFailed(
+            f"Failed child jobs: {failed}. Other jobs continue; successful jobs remain available for retry.",
+            record["repository"],
+            run.get("id"),
         )
 
 
 def verify_completion(record: dict, run: dict) -> None:
     if run["conclusion"] != "success":
-        raise ValueError(
-            f"Requested CI concluded {run['conclusion']}: {run['html_url']}"
+        raise RunFailed(
+            f"Requested CI concluded {run['conclusion']}: {run['html_url']}",
+            record["repository"],
+            run.get("id"),
         )
     if record["profile"] != "full":
         return
@@ -421,7 +454,7 @@ def wait(path: Path, timeout: int, interval: int) -> None:
             print(state + (f": {run['html_url']}" if run else ""), flush=True)
             previous = state
         if run:
-            verify_children(run)
+            verify_children(record, run)
         if run and run["status"] == "completed":
             verify_completion(record, run)
             print(f"{record['profile']} CI passed for {record['head']}")
@@ -600,7 +633,13 @@ class QueueRun(TypedDict):
 
 
 class QueueRemoved(Exception):
-    """The PR left the merge queue without merging."""
+    """The PR left the merge queue without merging; `run_id` names its last
+    merge-group run, if any, for the log summary."""
+
+    def __init__(self, message: str, repository: str, run_id: int | None) -> None:
+        super().__init__(message)
+        self.repository = repository
+        self.run_id = run_id
 
 
 def entry_text(entry: QueueEntry) -> str:
@@ -653,10 +692,14 @@ def queue_run(repository: str, pr: int) -> QueueRun | None:
     return next(iter(queue_runs(repository, pr)), None)
 
 
-def removal(repository: str, pr: int, state: str) -> str:
+def removal(repository: str, pr: int, state: str) -> QueueRemoved:
     run = queue_run(repository, pr)
     if run is None:
-        return f"PR #{pr} left the merge queue ({state}); no merge-group run found"
+        return QueueRemoved(
+            f"PR #{pr} left the merge queue ({state}); no merge-group run found",
+            repository,
+            None,
+        )
     lines = [
         f"PR #{pr} left the merge queue ({state}); merge-group run "
         f"{run['status']}/{run['conclusion']}: {run['html_url']}"
@@ -665,7 +708,7 @@ def removal(repository: str, pr: int, state: str) -> str:
         f"failed job: {job['name']} ({job['html_url']})"
         for job in failed_jobs(repository, run["id"])
     ]
-    return "\n".join(lines)
+    return QueueRemoved("\n".join(lines), repository, run["id"])
 
 
 def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
@@ -681,7 +724,7 @@ def queue_wait(repository: str, pr: int, timeout: int, interval: int) -> str:
         # reads as merged, so a removal counts once a second read confirms it.
         state = queue_position(pull)
         if state is None and previous == "leaving the merge queue":
-            raise QueueRemoved(removal(repository, pr, pull["state"].lower()))
+            raise removal(repository, pr, pull["state"].lower())
         state = state or "leaving the merge queue"
         if state != previous:
             print(state, flush=True)
@@ -974,6 +1017,136 @@ def show_state(repository: str, pr: int, as_json: bool) -> None:
     print(json.dumps(facts, indent=2) if as_json else "\n".join(state_lines(facts)))
 
 
+def pr_runs(repository: str, pr: int, profile: str | None) -> tuple[str, list[dict]]:
+    """The PR's head and its candidate runs: requested runs at that head and
+    merge-group runs, each with a `kind`."""
+    pull: dict = {**api(repository, f"pulls/{pr}"), "number": pr}
+    head = pull["head"]["sha"]
+    runs = []
+    if profile != "queue":
+        runs += [
+            dict(run, kind=f"requested {run['profile']}")
+            for run in dispatched_runs(repository, pull, head)
+            if profile in (None, run["profile"])
+        ]
+    if profile in (None, "queue"):
+        runs += [dict(run, kind="merge-group") for run in queue_runs(repository, pr)]
+    return head, runs
+
+
+def pr_run(repository: str, pr: int, profile: str | None) -> int:
+    """The newest of the PR's candidate runs, saying which it chose and why."""
+    head, runs = pr_runs(repository, pr, profile)
+    if not runs:
+        raise ValueError(
+            f"PR #{pr} has no {profile or 'requested'} run at its head {head} and no "
+            "merge-group run; pass the run ID or URL: python3 tools/ci.py log RUN"
+        )
+    runs.sort(key=lambda run: (run["created_at"], run["id"]))
+    chosen = runs[-1]
+    tested = (
+        ejected_head(repository, cast(QueueRun, chosen))
+        if chosen["kind"] == "merge-group"
+        else head
+    )
+    print(
+        f"Selected the newest {chosen['kind']} run for PR #{pr}: run {chosen['id']} "
+        f"attempt {chosen.get('run_attempt', 1)}, tested head {tested} "
+        f"(PR head {head}): {chosen['html_url']}"
+    )
+    others = {run["kind"]: run for run in runs if run["kind"] != chosen["kind"]}
+    if others:
+        listed = ", ".join(f"{kind} run {run['id']}" for kind, run in others.items())
+        print(f"Also found: {listed}; pass --profile or the run ID to read another")
+    return chosen["id"]
+
+
+def request_run(path: Path) -> tuple[str, int]:
+    record = read_request(path)
+    run = recorded_run(path, record)
+    if run is None:
+        raise ValueError(
+            f"The request in {path} has no run yet; wait for it: "
+            f"python3 tools/ci.py wait {path}"
+        )
+    return record["repository"], run["id"]
+
+
+def log_target(args: argparse.Namespace) -> tuple[str, int, int | None]:
+    """The repository, run and job (or None) that `log`'s arguments name."""
+    if (args.pr is None) == (args.target is None):
+        raise ValueError(
+            "name one run: python3 tools/ci.py log RUN_ID|RUN_URL|JOB_URL|"
+            "REQUEST_FILE, or python3 tools/ci.py log --pr N"
+        )
+    if args.pr is not None:
+        repository = repository_of(args.repo)
+        return repository, pr_run(repository, args.pr, args.profile), None
+    if match := RUN_URL.fullmatch(args.target):
+        job = int(match[3]) if match[3] else None
+        return match[1], int(match[2]), job
+    if args.target.isdigit():
+        return repository_of(args.repo), int(args.target), None
+    return (*request_run(Path(args.target)), None)
+
+
+def selected_jobs(
+    repository: str, jobs: list[dict], job_id: int | None, name: str | None
+) -> list[dict]:
+    if job_id is not None:
+        return [api(repository, f"actions/jobs/{job_id}")]
+    if name:
+        return [job for job in jobs if name.lower() in job["name"].lower()]
+    return [job for job in jobs if job["conclusion"] in JOB_FAILED]
+
+
+def no_jobs(run: dict, jobs: list[dict], name: str | None) -> str:
+    if name:
+        names = ", ".join(job["name"] for job in jobs)
+        return f"No job named like {name!r}; the run's jobs: {names}"
+    if ci_log.unfinished(jobs) or run["status"] != "completed":
+        return "No failed job yet"
+    return f"No failed job: the run concluded {run['conclusion']}"
+
+
+def log_lines(
+    repository: str, run_id: int, job_id: int | None, args: argparse.Namespace
+) -> list[str]:
+    """The run's heading, then each selected job's log as `args` asks."""
+    grep: str | None = args.grep
+    pattern = re.compile(grep) if grep else None
+    run = api(repository, f"actions/runs/{run_id}")
+    jobs = run_jobs(repository, run_id)
+    lines = ci_log.run_heading(run, jobs)
+    chosen = selected_jobs(repository, jobs, job_id, args.job)
+    if not chosen:
+        lines.append(no_jobs(run, jobs, args.job))
+    for job in chosen:
+        lines += ci_log.job_report(repository, job, pattern, args.full)
+    return lines
+
+
+def show_log(args: argparse.Namespace) -> None:
+    repository, run_id, job_id = log_target(args)
+    print("\n".join(log_lines(repository, run_id, job_id, args)))
+
+
+def failure_logs(repository: str, run_id: int | None) -> None:
+    """Best effort: the failed jobs' summary after a failed wait. A failure to
+    read them prints one line and changes no exit status."""
+    if run_id is None:
+        return
+    summary = argparse.Namespace(job=None, grep=None, full=False)
+    try:
+        print("\n".join(log_lines(repository, run_id, None, summary)), flush=True)
+    except Exception as error:  # Any failure here must keep the wait's status.
+        print(
+            f"Could not read the failed jobs' logs ({error}); read them with: "
+            f"python3 tools/ci.py log {run_id} --repo {repository}",
+            flush=True,
+        )
+
+
 def control(repository: str, run: dict, branches: dict[int, str]) -> bool:
     """Whether a run tested a negative control: a PR branch under CONTROL."""
     branch = run.get("head_branch") or ""
@@ -1020,7 +1193,7 @@ def report_status(path: Path) -> None:
     record, run = status(path)
     print(json.dumps({"request": record, "run": run}, indent=2))
     if run:
-        verify_children(run)
+        verify_children(record, run)
     if run and run["status"] == "completed":
         verify_completion(record, run)
 
@@ -1059,24 +1232,34 @@ def wait_target(args: argparse.Namespace) -> Path:
     return Path(args.target)
 
 
+def queue_wait_command(args: argparse.Namespace) -> None:
+    merge = queue_wait(repository_of(args.repo), args.pr, args.timeout, args.interval)
+    print(f"PR #{args.pr} merged: {merge}")
+
+
+def request_command(args: argparse.Namespace) -> None:
+    path = request(args)
+    if path and args.wait:
+        wait(path, args.timeout, args.interval)
+
+
+HANDLERS = {
+    "log": show_log,
+    "logs": show_log,
+    "queue-wait": queue_wait_command,
+    "ready": ready,
+    "enqueue": lambda args: print(f"PR #{args.pr}: {enqueue(args)}"),
+    "failures": failures,
+    "request": request_command,
+    "wait": lambda args: wait(wait_target(args), args.timeout, args.interval),
+}
+# The commands whose failure prints the failed jobs' log summary.
+WAITS = ("wait", "request", "queue-wait")
+
+
 def dispatch(args: argparse.Namespace) -> None:
-    if args.command == "queue-wait":
-        merge = queue_wait(
-            repository_of(args.repo), args.pr, args.timeout, args.interval
-        )
-        print(f"PR #{args.pr} merged: {merge}")
-    elif args.command == "ready":
-        ready(args)
-    elif args.command == "enqueue":
-        print(f"PR #{args.pr}: {enqueue(args)}")
-    elif args.command == "failures":
-        failures(args)
-    elif args.command == "request":
-        path = request(args)
-        if path and args.wait:
-            wait(path, args.timeout, args.interval)
-    elif args.command == "wait":
-        wait(wait_target(args), args.timeout, args.interval)
+    if handler := HANDLERS.get(args.command):
+        handler(args)
     elif str(args.target).isdigit():
         show_state(repository_of(args.repo), int(args.target), args.json)
     elif args.repo or args.json:
@@ -1087,9 +1270,36 @@ def dispatch(args: argparse.Namespace) -> None:
         report_status(Path(args.target))
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest="command", required=True)
+def log_parser(commands: argparse._SubParsersAction) -> None:
+    logs = commands.add_parser(
+        "log",
+        aliases=["logs"],
+        help="print each failed job's failing step, error lines and tail, from "
+        "logs cached under .local/ci-logs/; works while other jobs still run",
+    )
+    logs.add_argument(
+        "target",
+        nargs="?",
+        metavar="RUN_ID|RUN_URL|JOB_URL|REQUEST_FILE",
+        help="the run (or one job) to read",
+    )
+    logs.add_argument(
+        "--pr", type=int, help="the PR's newest requested or merge-group run"
+    )
+    logs.add_argument(
+        "--profile",
+        choices=(*PROFILES, "queue"),
+        help="with --pr: that profile's requests, or queue for merge-group runs",
+    )
+    logs.add_argument("--repo", help="with a run ID or --pr")
+    logs.add_argument(
+        "--job", metavar="NAME", help="read the jobs whose name contains NAME"
+    )
+    logs.add_argument("--grep", metavar="RE", help="print the log lines matching RE")
+    logs.add_argument("--full", action="store_true", help="print the raw cached log")
+
+
+def request_parser(commands: argparse._SubParsersAction) -> None:
     submit = commands.add_parser("request", help="request CI (default: Rust checks)")
     submit.add_argument("pr", type=int)
     submit.add_argument(
@@ -1120,6 +1330,9 @@ def main() -> int:
         metavar="REASON",
         help="request a head without a preflight stamp, such as a seeded control; logged",
     )
+
+
+def pr_parsers(commands: argparse._SubParsersAction) -> None:
     marked = commands.add_parser(
         "ready", help="mark a draft PR ready once its head has a preflight stamp"
     )
@@ -1176,6 +1389,14 @@ def main() -> int:
     queued.add_argument("--repo")
     queued.add_argument("--timeout", type=positive, default=QUEUE_TIMEOUT)
     queued.add_argument("--interval", type=positive, default=15)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    log_parser(commands)
+    request_parser(commands)
+    pr_parsers(commands)
     args = parser.parse_args()
     try:
         dispatch(args)
@@ -1185,7 +1406,13 @@ def main() -> int:
         return 2
     except QueueRemoved as removed:
         print(removed)
+        failure_logs(removed.repository, removed.run_id)
         return 3
+    except RunFailed as failed:
+        print(f"ci.py {args.command} failed: {failed}", file=sys.stderr)
+        if args.command in WAITS:
+            failure_logs(failed.repository, failed.run_id)
+        return 1
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"ci.py {args.command} failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError) and error.stderr:
