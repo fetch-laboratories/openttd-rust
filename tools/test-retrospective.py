@@ -2,12 +2,21 @@
 """Exercise read-only evidence binding and overlapping milestone arithmetic."""
 
 import json
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
+from argparse import Namespace
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import base_update
 import retrospective as facts
+
+SCRIPT = Path(__file__).resolve().with_name("retrospective.py")
 
 
 class RetrospectiveTests(unittest.TestCase):
@@ -200,6 +209,247 @@ class RetrospectiveTests(unittest.TestCase):
             self.assertRaises(ValueError),
         ):
             facts.stocktake("start", "end")
+
+
+class BaseUpdateTests(unittest.TestCase):
+    """Fixture histories: `main` is the PR branch, `origin/rust-migration` the base."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temp.name)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.git("config", "user.name", "Fixture")
+        self.write(
+            {
+                "tools/x.py": "a\nb\nc\n",
+                "docs/x.md": "a\nb\nc\n",
+                "tools/old.py": "".join(f"line {n}\n" for n in range(9)),
+            }
+        )
+        self.commit("init")
+        self.git("branch", "base")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def git(self, *arguments: str) -> str:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def write(self, files: dict[str, str]) -> None:
+        for name, text in files.items():
+            (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / name).write_text(text)
+
+    def commit(self, title: str) -> str:
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", title)
+        return self.git("rev-parse", "HEAD")
+
+    def on(self, branch: str, files: dict[str, str], title: str) -> None:
+        self.git("checkout", "-q", branch)
+        self.write(files)
+        self.commit(title)
+        self.git("checkout", "-q", "main")
+
+    def merge(
+        self, branch: str = "base", resolved: dict[str, str] | None = None
+    ) -> str:
+        """Merge `branch` into main, resolving conflicts with `resolved`."""
+        subprocess.run(
+            ["git", "merge", "-q", "--no-ff", "--no-commit", branch],
+            cwd=self.repo,
+            capture_output=True,
+        )
+        self.write(resolved or {})
+        sha = self.commit("Update: merge")
+        self.git("update-ref", "refs/remotes/origin/rust-migration", "base")
+        return sha
+
+    def conflict(self, path: str) -> None:
+        self.on("base", {path: "a\nBASE\nc\n"}, "base side")
+        self.on("main", {path: "a\nMINE\nc\n"}, "branch side")
+
+    def cli(self, *arguments: str) -> tuple[int, str]:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "base-update", *arguments],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull},
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def classify(self, sha: str = "HEAD") -> base_update.Merge:
+        return base_update.classify(self.repo, sha, "origin/rust-migration")
+
+    def test_clean_merge_needs_only_ci(self) -> None:
+        self.on("base", {"tools/x.py": "A\nb\nc\n"}, "base side")
+        self.on("main", {"tools/x.py": "a\nb\nC\n"}, "branch side")
+        sha = self.merge()
+        code, out = self.cli()
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"Base update {sha[:10]}: clean; needs only CI", out)
+        self.assertIn("docs/workflow.md#integration", out)
+
+    def test_conflict_kept_on_both_sides_needs_only_ci(self) -> None:
+        self.conflict("tools/x.py")
+        self.merge(resolved={"tools/x.py": "a\nMINE\nBASE\nc\n"})
+        code, out = self.cli("--json")
+        self.assertEqual(code, 0, out)
+        result = json.loads(out)
+        self.assertEqual(result["merges"][0]["classification"], "both-sides")
+        self.assertIn("both-sides; needs only CI", result["status_line"])
+
+    def test_conflict_resolved_with_an_edit_needs_review(self) -> None:
+        self.conflict("tools/x.py")
+        sha = self.merge(resolved={"tools/x.py": "a\nMERGED\nc\n"})
+        code, out = self.cli(sha)
+        self.assertEqual(code, base_update.EXIT_NEEDS_REVIEW, out)
+        self.assertIn("needs review", out)
+        self.assertIn("tools/x.py: conflict resolved with an edit", out)
+        self.assertIn(
+            "a fresh reviewer checks the conflict resolution in tools/x.py", out
+        )
+        self.assertIn(f"git show --remerge-diff {sha[:10]}", out)
+
+    def test_reordered_sides_and_merge_time_edits_need_review(self) -> None:
+        self.conflict("tools/x.py")
+        self.merge(resolved={"tools/x.py": "a\nBASE\nMINE\nc\n"})
+        self.assertEqual(self.classify().classification, base_update.NEEDS_REVIEW)
+        self.on("base", {"docs/x.md": "a\nb\nc\nd\n"}, "base docs")
+        self.merge(resolved={"tools/old.py": "edited during the merge\n"})
+        merge = self.classify()
+        self.assertEqual(merge.classification, base_update.NEEDS_REVIEW)
+        self.assertEqual(
+            [(f.path, f.reason) for f in merge.findings],
+            [("tools/old.py", "merge-time edit outside any conflict")],
+        )
+
+    def test_conflict_outside_guarded_paths_is_clean(self) -> None:
+        self.conflict("docs/x.md")
+        self.merge(resolved={"docs/x.md": "a\nREWRITTEN\nc\n"})
+        merge = self.classify()
+        self.assertEqual(merge.classification, base_update.CLEAN)
+        self.assertEqual(
+            [(f.path, f.guarded) for f in merge.findings], [("docs/x.md", False)]
+        )
+
+    def test_rename_follows_the_guarded_path(self) -> None:
+        lines = [f"line {n}\n" for n in range(9)]
+        self.on(
+            "base", {"tools/old.py": "".join(lines[:4] + ["BASE\n"] + lines[5:])}, "b"
+        )
+        self.git("mv", "tools/old.py", "tools/new name.py")
+        self.write({"tools/new name.py": "".join(lines[:4] + ["MINE\n"] + lines[5:])})
+        self.commit("rename on the branch")
+        kept = lines[:4] + ["MINE\n", "BASE\n"] + lines[5:]
+        self.merge(resolved={"tools/new name.py": "".join(kept)})
+        merge = self.classify()
+        self.assertEqual(merge.classification, base_update.BOTH_SIDES)
+        self.assertEqual([f.path for f in merge.findings], ["tools/new name.py"])
+        self.git("reset", "-q", "--hard", "HEAD^")
+        edited = lines[:4] + ["EDITED\n"] + lines[5:]
+        self.merge(resolved={"tools/new name.py": "".join(edited)})
+        self.assertEqual(self.classify().classification, base_update.NEEDS_REVIEW)
+
+    def test_merge_of_another_branch_is_not_a_base_update(self) -> None:
+        self.git("branch", "feature")
+        self.on("feature", {"docs/x.md": "a\nfeature\nc\n"}, "feature")
+        sha = self.merge("feature")
+        self.git("update-ref", "refs/remotes/origin/rust-migration", "base")
+        code, out = self.cli(sha)
+        self.assertEqual(code, base_update.EXIT_NOT_BASE, out)
+        self.assertIn("not a base update", out)
+        self.assertIn("is not on origin/rust-migration", out)
+        code, out = self.cli("--base", "feature", sha)
+        self.assertEqual(code, 0, out)
+
+    def test_one_parent_commit_is_not_a_base_update(self) -> None:
+        self.on("main", {"tools/x.py": "one parent\n"}, "ordinary commit")
+        self.git("update-ref", "refs/remotes/origin/rust-migration", "base")
+        code, out = self.cli()
+        self.assertEqual(code, base_update.EXIT_NOT_BASE, out)
+        self.assertIn("it has 1 parent; a base update has two", out)
+        self.assertIn("--since REVIEWED_SHA", out)
+
+    def test_since_classifies_every_merge_after_the_reviewed_head(self) -> None:
+        reviewed = self.git("rev-parse", "HEAD")
+        self.on("base", {"docs/x.md": "a\nb\nc\nbase\n"}, "base docs")
+        first = self.merge()
+        self.conflict("tools/x.py")
+        second = self.merge(resolved={"tools/x.py": "a\nMERGED\nc\n"})
+        self.write({"tools/x.py": "a\nMERGED\nc\nlater\n"})
+        self.commit("a later commit")
+        code, out = self.cli("--since", reviewed)
+        self.assertEqual(code, base_update.EXIT_NEEDS_REVIEW, out)
+        self.assertIn(f"{first[:10]} parents", out)
+        self.assertIn(
+            f"Base updates since {reviewed[:10]}: {first[:10]} clean,"
+            f" {second[:10]} needs review",
+            out,
+        )
+        code, out = self.cli("--since", second)
+        self.assertEqual(code, 0, out)
+        self.assertIn("No merges since", out)
+        code, out = self.cli("--since", reviewed, second)
+        self.assertEqual(code, 2, out)
+        self.assertIn("not both", out)
+        self.git("branch", "elsewhere", reviewed)
+        self.on("elsewhere", {"docs/x.md": "elsewhere\n"}, "not on this branch")
+        code, out = self.cli("--since", "elsewhere")
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass the reviewed head of this branch", out)
+
+    def test_unparseable_or_unsupported_remerge_output_needs_review(self) -> None:
+        self.conflict("tools/x.py")
+        self.merge(resolved={"tools/x.py": "a\nMINE\nBASE\nc\n"})
+        broken = "diff --git a/tools/x.py b/tools/x.py\n@@ -1,3 +1,2 @@\n a\n"
+        for output in (broken, "warning: something new\n"):
+            with mock.patch.object(base_update, "remerge", return_value=output):
+                merge = self.classify()
+            self.assertEqual(merge.label, "needs review: could not classify")
+        failed = subprocess.CompletedProcess([], 128, b"", b"unknown option")
+        real = base_update.git_bytes
+
+        def old_git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
+            return failed if "--remerge-diff" in arguments else real(cwd, *arguments)
+
+        with mock.patch.object(base_update, "git_bytes", side_effect=old_git):
+            merge = self.classify()
+        self.assertTrue(merge.unclassified)
+        self.assertIn("unknown option", merge.detail)
+        args = Namespace(
+            merge="HEAD", since=None, base="origin/rust-migration", json=False
+        )
+        with (
+            mock.patch.object(base_update, "git_bytes", side_effect=old_git),
+            mock.patch("builtins.print") as printed,
+        ):
+            code = base_update.run(args, self.repo)
+        self.assertEqual(code, base_update.EXIT_NEEDS_REVIEW)
+        self.assertIn(
+            "needs review: could not classify", printed.call_args_list[-1].args[0]
+        )
+
+    def test_parser_reads_quoted_paths_and_marker_triples(self) -> None:
+        text = (
+            'diff --git "a/tools/\\303\\244.py" "b/tools/\\303\\244.py"\n'
+            "remerge CONFLICT (modify/delete): gone\n"
+        )
+        [diff] = base_update.parse(text)
+        self.assertEqual(diff.paths, ["tools/\u00e4.py"])
+        self.assertIsNotNone(base_update.reason(diff))
+        lone = base_update.FileDiff(
+            ["x"], ["CONFLICT (content): x"], ["======="], [], 1
+        )
+        self.assertFalse(base_update.markers_only(lone))
 
 
 if __name__ == "__main__":

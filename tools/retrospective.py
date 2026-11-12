@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only PR readiness, milestone latency and same-metric stocktakes."""
+"""Read-only PR readiness, milestone latency, stocktakes and base-update checks."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import base_update
 import ci
 from review_report import ReviewReport, review_reports
 
@@ -296,7 +297,10 @@ def main() -> None:
     command.add_argument("start")
     command.add_argument("end")
     command.add_argument("--json", action="store_true")
+    base_update.add_parser(commands)
     args = parser.parse_args()
+    if args.command == "base-update":
+        sys.exit(base_update.run(args, Path.cwd()))
     result: dict[str, Any]
     if args.command == "stocktake":
         result = stocktake(args.start, args.end)
