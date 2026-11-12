@@ -176,7 +176,7 @@ def execute_script(
     return cast(
         dict[str, Any],
         node(f"""
-const statuses = [], failures = [], outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
+const statuses = [], failures = [], outputs = {{}}, delays = [], cancels = [], trees = {json.dumps(trees or {})};
 const commits = {json.dumps(commits or {})}, progress = {json.dumps(progress or {})};
 let now = 0;
 Date.now = () => (now += {tick});
@@ -184,7 +184,7 @@ const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
 const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root', eventName: {json.dumps(event_name)},
   serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
 const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
-  info: () => {{}}}};
+  info: () => {{}}, notice: () => {{}}}};
 const github = {{paginate: async (method, args) => {{
   if (method === github.rest.pulls.listFiles) {{
     const files = {json.dumps(files)};
@@ -196,7 +196,7 @@ const github = {{paginate: async (method, args) => {{
   return listed[args.ref];
 }}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}}), listFiles: () => {{}}}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
-  actions: {{listWorkflowRuns: {runs},
+  actions: {{listWorkflowRuns: {runs}, cancelWorkflowRun: async args => cancels.push(args.run_id),
     getWorkflowRun: async args => ({{data: progress[args.run_id].shift()}})}},
   repos: {{
   getCommit: async args => ({{data: commits[args.ref] ?? {json.dumps(tested)}}}),
@@ -208,7 +208,7 @@ const github = {{paginate: async (method, args) => {{
   createCommitStatus: async value => statuses.push(value)
 }}}}}};
 Object.assign(process.env, {json.dumps(env or {})});
-(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs, delays}})))
+(async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs, delays, cancels}})))
   .catch(error => console.log(JSON.stringify({{error: error.message, statuses, delays}})));
 """),
     )
@@ -434,6 +434,20 @@ class GateTests(unittest.TestCase):
                     self.assertEqual(result["outputs"]["merge"], MERGE)
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
+
+    def test_superseded_request_ends_cancelled_not_failed(self) -> None:
+        superseded = job("ci-request.yml", "superseded")
+        self.assertIn("github.event_name != 'merge_group'", superseded["if"])
+        self.assertEqual(superseded["permissions"]["actions"], "write")
+        env = {"PR": "170", "HEAD": HEAD}
+        for label, pull, cancelled in (
+            ("current head", PULL, []),
+            ("moved head", dict(PULL, head={"sha": PREVIOUS}), [123]),
+            ("closed", dict(PULL, state="closed"), [123]),
+        ):
+            with self.subTest(label):
+                result = execute_script("ci-request.yml", "superseded", pull, env=env)
+                self.assertEqual(result["cancels"], cancelled)
 
     def test_requested_plan_bases_gates_on_the_merges_first_parent(self) -> None:
         # PULL's base SHA predates what merged into base since its last push; the
@@ -1321,6 +1335,12 @@ class MergeQueueTests(unittest.TestCase):
                 "CI rust PR 170 unique",
             ),
             (
+                # The head ends the request identifier, not the name (#922).
+                {"profile": "rust", "pr": "170", "request": "unique", "head": HEAD},
+                {"event_name": "workflow_dispatch", "run_id": 7, "event": {}},
+                "CI rust PR 170 unique",
+            ),
+            (
                 {},
                 {
                     "event_name": "pull_request",
@@ -2162,7 +2182,8 @@ class RequestTests(unittest.TestCase):
                 record = json.loads(cast(Path, request_path).read_text())
                 self.assertEqual(record["head"], HEAD)
                 self.assertEqual(record["base"], BASE)
-                self.assertEqual(len(record["request"]), 32)
+                request_id, head = record["request"].split("-")
+                self.assertEqual((len(request_id), head), (32, HEAD))
 
     def test_full_request_stops_on_a_head_that_already_passed(self) -> None:
         passed = {
@@ -2619,6 +2640,241 @@ class QueueWaitTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("owner=example", calls[0])
         self.assertIn("name=fork", calls[0])
+
+
+class EnqueueTests(unittest.TestCase):
+    """Recorded gh answers for ci.py enqueue's gates (#922)."""
+
+    QUICK = {
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-12T01:00:00Z",
+        "html_url": "https://github.com/example/fork/runs/1",
+    }
+    REQUESTED = {
+        "display_title": f"CI native PR 170 {'c' * 32}-{HEAD}",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-12T02:00:00Z",
+        "html_url": "https://github.com/example/fork/actions/runs/2",
+    }
+    EJECTED = {
+        "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
+        "head_sha": MERGE,
+        "created_at": "2026-11-12T03:00:00Z",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/example/fork/actions/runs/3",
+    }
+
+    def enqueue(self, **world: object) -> tuple[str, list[tuple[str, ...]]]:
+        """Run enqueue against `world`: quick, requested, queue (merge-group runs),
+        ejected (the head they tested), behind, retry, entry, armed and recorded
+        (the run a pre-#922 request record names)."""
+        world = {"quick": self.QUICK, "requested": self.REQUESTED, **world}
+        quick, requested = world["quick"], world["requested"]
+        answers = {
+            "pulls/170": PULL,
+            "check-runs?check_name=Quick%20validation": {
+                "check_runs": [quick] if quick else []
+            },
+            "event=workflow_dispatch": {
+                "workflow_runs": [requested] if requested else []
+            },
+            "event=pull_request": {"workflow_runs": world.get("labeled", [])},
+            "actions/runs/4/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "skipped"}]
+            },
+            "actions/runs/5/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "success"}]
+            },
+            "event=merge_group": {
+                "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
+            },
+            f"commits/{MERGE}": {
+                "parents": [{"sha": PARENT}, {"sha": world.get("ejected", HEAD)}]
+            },
+            f"compare/rust-migration...{HEAD}": {"behind_by": world.get("behind", 0)},
+            "actions/runs/9": world.get("recorded"),
+        }
+        calls: list[tuple[str, ...]] = []
+        self.calls = calls
+
+        def api(repository: str, path: str) -> dict:
+            (answer,) = [value for key, value in answers.items() if key in path]
+            return cast(dict, answer)
+
+        def gh(*args: str) -> str:
+            calls.append(args)
+            state = {
+                "mergeQueueEntry": world.get("entry"),
+                "autoMergeRequest": world.get("armed"),
+            }
+            return json.dumps({"data": {"repository": {"pullRequest": state}}})
+
+        retry = world.get("retry")
+        args = argparse.Namespace(repo="example/fork", pr=170, retry=retry)
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(ci, "api", side_effect=api),
+            patch.object(ci, "gh", side_effect=gh),
+            patch.object(ci, "require_stamp") as stamp,
+            patch.object(
+                ci.preflight_stamp, "common_local", return_value=Path(directory)
+            ),
+            patch("builtins.print"),
+            patch.object(ci, "REQUESTS", Path(directory)),
+        ):
+            if world.get("recorded"):
+                record = {"pr": 170, "head": HEAD, "run_id": 9}
+                (Path(directory) / "old.json").write_text(json.dumps(record))
+            self.stamp = stamp
+            return ci.enqueue(args), calls
+
+    def test_red_quick_or_requested_run_refuses_before_queueing(self) -> None:
+        red = dict(self.QUICK, conclusion="failure")
+        for label, options, message in (
+            ("red Quick", {"quick": red}, "runs/1"),
+            ("no Quick", {"quick": None}, "no run"),
+            (
+                "pending Quick",
+                {"quick": dict(red, status="in_progress", conclusion=None)},
+                "in_progress",
+            ),
+            (
+                "red request",
+                {"requested": dict(self.REQUESTED, conclusion="failure")},
+                "runs/2",
+            ),
+            (
+                "other head",
+                {
+                    "requested": dict(
+                        self.REQUESTED, display_title=f"CI native PR 170 x-{BASE}"
+                    )
+                },
+                "--profile native",
+            ),
+        ):
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.enqueue(**options)
+                self.assertEqual(self.calls, [])
+
+    def test_green_head_queues_and_reports_entry_or_armed_auto_merge(self) -> None:
+        entry = {"state": "AWAITING_CHECKS", "position": 2}
+        reported, calls = self.enqueue(entry=entry)
+        self.assertEqual(reported, "queued awaiting_checks at position 2")
+        merge = calls[0]
+        self.assertEqual(merge[:3], ("pr", "merge", "170"))
+        self.assertEqual(merge[merge.index("--match-head-commit") + 1], HEAD)
+        reported, _ = self.enqueue(armed={"enabledAt": "date"})
+        self.assertTrue(reported.startswith("auto-merge armed"))
+        with self.assertRaisesRegex(ValueError, "neither queued"):
+            self.enqueue()
+
+    def test_request_before_922_is_found_through_its_record(self) -> None:
+        # Its run name has no head; the newest of the record's run and the named
+        # run decides.
+        old = dict(self.REQUESTED, display_title="CI native PR 170 r")
+        red = dict(old, conclusion="failure", created_at="2026-11-12T04:00:00Z")
+        with self.assertRaisesRegex(ValueError, "runs/2"):
+            self.enqueue(recorded=red)
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(requested=old, recorded=self.REQUESTED, entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_only_a_bootstrap_label_run_counts_as_a_request(self) -> None:
+        # Every label starts a ci-request.yml run; one whose plan skipped tested
+        # nothing and must not displace the passing request.
+        later = {
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-12T05:00:00Z",
+        }
+        unrelated = dict(later, id=4, conclusion="skipped", html_url="unrelated label")
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(labeled=[unrelated], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+        bootstrap = dict(later, id=5, conclusion="failure", html_url="bootstrap")
+        with self.assertRaisesRegex(ValueError, "completed/failure: bootstrap"):
+            self.enqueue(labeled=[unrelated, bootstrap])
+
+    def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
+        entry = {"state": "QUEUED", "position": 1}
+        with self.assertRaisesRegex(ValueError, "runs/3.*--retry REASON"):
+            self.enqueue(queue=[self.EJECTED])
+        reported, _ = self.enqueue(
+            queue=[self.EJECTED], retry="lost runner", entry=entry
+        )
+        self.assertTrue(reported.startswith("queued"))
+        twice = [self.EJECTED, dict(self.EJECTED, created_at="2026-11-12T00:00:00Z")]
+        with self.assertRaisesRegex(ValueError, "2 times.*root"):
+            self.enqueue(queue=twice, retry="lost runner", entry=entry)
+        passed = dict(self.EJECTED, conclusion="success")
+        reported, _ = self.enqueue(queue=[passed], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+
+    def test_new_head_after_ejection_needs_base_and_a_stamp(self) -> None:
+        entry = {"state": "QUEUED", "position": 1}
+        with self.assertRaisesRegex(ValueError, "3 commits behind"):
+            self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, behind=3)
+        self.enqueue(queue=[self.EJECTED], ejected=PREVIOUS, entry=entry)
+        self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
+
+
+class FailureCountTests(unittest.TestCase):
+    def test_count_leaves_out_control_branches_unless_asked(self) -> None:
+        runs = [
+            {
+                "html_url": "u1",
+                "name": "Quick validation",
+                "event": "pull_request",
+                "head_branch": "control/900-x",
+            },
+            {
+                "html_url": "u2",
+                "name": "Requested validation",
+                "event": "workflow_dispatch",
+                "head_branch": "rust-migration",
+                "display_title": "CI native PR 901 r " + HEAD,
+            },
+            {
+                "html_url": "u3",
+                "name": "Requested validation",
+                "event": "merge_group",
+                "head_branch": f"gh-readonly-queue/rust-migration/pr-902-{BASE}",
+            },
+            {
+                "html_url": "u4",
+                "name": "Quick validation",
+                "event": "pull_request",
+                "head_branch": "tools/1-x",
+            },
+        ]
+        refs = {"pulls/901": "control/901-y", "pulls/902": "tools/902-z"}
+
+        def gh(*args: str) -> str:
+            return json.dumps(
+                [{"workflow_runs": runs if "status=failure" in args[-1] else []}]
+            )
+
+        for controls, expected in (
+            (False, "2 failed runs since 2026-11-10, leaving out 2 on control/"),
+            (True, "4 failed runs since 2026-11-10"),
+        ):
+            args = argparse.Namespace(
+                repo="example/fork", since="2026-11-10", controls=controls
+            )
+            with (
+                patch.object(ci, "gh", side_effect=gh),
+                patch.object(
+                    ci, "api", side_effect=lambda _, path: {"head": {"ref": refs[path]}}
+                ),
+                patch("builtins.print") as printed,
+            ):
+                ci.failures(args)
+            self.assertEqual(printed.call_args.args[0], expected)
 
 
 if __name__ == "__main__":
