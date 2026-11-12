@@ -806,10 +806,9 @@ const OpenTTDMovementServices _rust_movement_services{
 	.resolve = RustMovementResolve,
 	.depot_invalidate = RustMovementDepotInvalidate,
 	.native_assert = RustAssertCondition,
-	.object_foundation = RustObjectFoundation,
-	.house_foundation = RustHouseFoundation,
-	.industry_foundation = RustIndustryFoundation,
-	.industry_callback = RustIndustryFoundationCallback,
+	.objects = &GetRustObjectServices(),
+	.town = &GetRustTownServices(),
+	.industry_tiles = &GetIndustryTileServices(),
 };
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {

@@ -342,6 +342,8 @@ const TWO_CC: u16 = 1 << 8;
 const NOT_ON_LAND: u16 = 1 << 9;
 const UNDER_BRIDGE: u16 = 1 << 11;
 const SCALE_WATER: u16 = 1 << 13;
+/// `ObjectFlag::HasNoFoundation`: do not display foundations when on a slope.
+const HAS_NO_FOUNDATION: u16 = 1 << 5;
 
 #[repr(C)]
 pub struct Resolver {
@@ -2098,6 +2100,20 @@ fn is_enabled(views: u8) -> bool {
 }
 fn enabled(s: &ObjectServices, spec: *const Spec) -> bool {
     is_enabled(unsafe { (resolver_services(s).views)(spec) })
+}
+/// `GetFoundation_Object`.
+pub(crate) fn get_foundation_object(
+    s: &ObjectServices,
+    tile: TileIndex,
+    tileh: crate::slope_type::Slope,
+) -> crate::slope_type::Foundation {
+    // SAFETY: The immutable object table and live object tile serve this synchronous call.
+    let spec = unsafe { (s.spec)((s.object_type)(tile.0)) };
+    if enabled(s, spec) && unsafe { (s.flags)(spec) } & HAS_NO_FOUNDATION != 0 {
+        crate::slope_type::Foundation::FOUNDATION_NONE
+    } else {
+        crate::slope_func::flattening_foundation(tileh)
+    }
 }
 fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
     let policy = unsafe { (resolver_services(s).eligibility)(spec) };

@@ -8,7 +8,7 @@
 //! no candidate function or output contributed an expected value. Native ABI
 //! round trips remain in `ground_protocol.hpp` and `landscape_protocol.hpp`.
 
-use super::{CallbackFoundation, MovementServices, MovementVehicle, ObjectFoundation, VehicleRef};
+use super::{MovementServices, MovementVehicle, VehicleRef};
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, fixture};
 use crate::road_type::RoadBits;
 use crate::services::{RoadTramType, RoadType, Services};
@@ -116,15 +116,6 @@ extern "C" fn invalidate(_: VehicleRef) {
 extern "C" fn check(ok: bool) {
     assert!(ok);
 }
-extern "C" fn object(_: u32) -> ObjectFoundation {
-    unreachable!()
-}
-extern "C" fn callback(_: u32) -> CallbackFoundation {
-    unreachable!()
-}
-extern "C" fn industry_callback(_: u32, _: u16) -> u16 {
-    unreachable!()
-}
 
 fn services(shared: &Services) -> MovementServices {
     MovementServices {
@@ -140,10 +131,9 @@ fn services(shared: &Services) -> MovementServices {
         resolve,
         depot_invalidate: invalidate,
         native_assert: check,
-        object_foundation: object,
-        house_foundation: callback,
-        industry_foundation: callback,
-        industry_callback,
+        objects: ptr::null(),
+        town: ptr::null(),
+        industry_tiles: ptr::null(),
     }
 }
 

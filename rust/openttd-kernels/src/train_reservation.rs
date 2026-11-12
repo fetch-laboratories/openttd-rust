@@ -1364,10 +1364,9 @@ pub(crate) mod tests {
             resolve: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
-            object_foundation: unused(),
-            house_foundation: unused(),
-            industry_foundation: unused(),
-            industry_callback: unused(),
+            objects: unused(),
+            town: unused(),
+            industry_tiles: unused(),
         }
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {

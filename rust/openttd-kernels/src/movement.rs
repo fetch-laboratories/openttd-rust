@@ -56,7 +56,6 @@ use crate::vehicle_type::VehicleType;
 use crate::water_map::WaterTileType;
 use crate::witness as w;
 use std::cell::{Cell, OnceCell};
-use std::ffi::c_void;
 
 /// Entry-local lazy registry reuse, with map metadata only for audited entries.
 /// Native `GetRustMovementServices` is static const and never reset, even on load.
@@ -169,18 +168,6 @@ impl Context<'_> {
 pub(crate) mod native_test_support;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CallbackFoundation {
-    pub spec: *const c_void,
-    pub kind: u16,
-    pub callback: bool,
-}
-#[repr(C)]
-pub struct ObjectFoundation {
-    pub enabled: bool,
-    pub no_foundation: bool,
-}
-#[repr(C)]
 pub struct MovementVehicle {
     pub train: crate::train::Handle,
     pub road: *mut crate::road::State,
@@ -201,10 +188,9 @@ pub struct MovementServices {
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
-    pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
-    pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
-    pub industry_foundation: extern "C" fn(u32) -> CallbackFoundation,
-    pub industry_callback: extern "C" fn(u32, u16) -> u16,
+    pub objects: *const crate::objects::ObjectServices,
+    pub town: *const crate::town::Leaves,
+    pub industry_tiles: *const crate::industry::TileServices,
 }
 /// One accessor per nested table pointer, named after its field.
 macro_rules! nested_tables {
@@ -233,6 +219,9 @@ impl MovementServices {
         pub(crate) fn vehicle -> crate::vehicle::VehicleServices;
         pub(crate) fn tunnel_bridge -> crate::tunnelbridge_cmd::TunnelBridgeServices;
         fn road_vehicle -> crate::road::Leaves;
+        fn objects -> crate::objects::ObjectServices;
+        fn town -> crate::town::Leaves;
+        fn industry_tiles -> crate::industry::TileServices;
     }
 }
 impl Context<'_> {
@@ -278,55 +267,17 @@ impl Context<'_> {
                     ))
                 }
             }
-            // `GetFoundation_Town` and `GetFoundation_Industry`.
-            TileType::MP_HOUSE | TileType::MP_INDUSTRY => {
-                let house = kind == TileType::MP_HOUSE;
-                let p = if house {
-                    (self.house_foundation)(tile.0)
-                } else {
-                    (self.industry_foundation)(tile.0)
-                };
-                /* For NewGRF house and industry tiles we might not be drawing a
-                 * foundation. We need to account for this, as other structures
-                 * should draw the wall of the foundation in this case. */
-                if p.callback {
-                    let callback_res = if house {
-                        unsafe { crate::town::resolver::foundation(tile, p.kind) }
-                    } else {
-                        (self.industry_callback)(tile.0, p.kind)
-                    };
-                    if callback_res != crate::newgrf_callbacks::CALLBACK_FAILED
-                        && !(self.shared().grf_boolean_callback)(
-                            if house {
-                                (self.shared().specs().house().file)(p.spec.cast())
-                            } else {
-                                unsafe {
-                                    (*p.spec.cast::<crate::industrytype::IndustryTileSpec>())
-                                        .grf_prop
-                                        .grffile
-                                }
-                            },
-                            if house {
-                                crate::newgrf_callbacks::CBID_HOUSE_DRAW_FOUNDATIONS.0
-                            } else {
-                                crate::newgrf_callbacks::CBID_INDTILE_DRAW_FOUNDATIONS.0
-                            },
-                            callback_res,
-                        )
-                    {
-                        return Foundation::FOUNDATION_NONE;
-                    }
-                }
-                flattening_foundation(tileh)
+            TileType::MP_HOUSE => {
+                crate::town::house::get_foundation_town(self.town(), self.shared(), tile, tileh)
             }
-            // `GetFoundation_Object`.
+            TileType::MP_INDUSTRY => crate::industry::get_foundation_industry(
+                self.shared(),
+                self.industry_tiles(),
+                tile,
+                tileh,
+            ),
             TileType::MP_OBJECT => {
-                let p = (self.object_foundation)(tile.0);
-                if p.enabled && p.no_foundation {
-                    Foundation::FOUNDATION_NONE
-                } else {
-                    flattening_foundation(tileh)
-                }
+                crate::objects::get_foundation_object(self.objects(), tile, tileh)
             }
             // `GetFoundation_Clear`, `_Trees`, `_Water` and `_Void`.
             _ => Foundation::FOUNDATION_NONE,
@@ -1975,15 +1926,6 @@ crate::abi::layouts! {
         ship,
         kind,
     };
-    "OpenTTDMovementObjectFoundation" ["landscape"] => ObjectFoundation {
-        enabled,
-        no_foundation,
-    };
-    "OpenTTDMovementFoundation" ["landscape"] => CallbackFoundation {
-        spec,
-        kind,
-        callback,
-    };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
         shared,
         orders,
@@ -1997,10 +1939,9 @@ crate::abi::layouts! {
         resolve,
         depot_invalidate,
         native_assert,
-        object_foundation,
-        house_foundation,
-        industry_foundation,
-        industry_callback,
+        objects,
+        town,
+        industry_tiles,
     };
 }
 

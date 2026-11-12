@@ -35,8 +35,8 @@ use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
 };
 use crate::settings_type::PlaceHouses;
-use crate::slope_func::{get_slope_max_z, is_steep_slope};
-use crate::slope_type::Slope;
+use crate::slope_func::{flattening_foundation, get_slope_max_z, is_steep_slope};
+use crate::slope_type::{Foundation, Slope};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::{TileIndex, TileType};
@@ -1077,6 +1077,38 @@ impl<'a> House<'a> {
             self.clear_town_house(t, tile, house);
         }
     }
+    /// `GetFoundation_Town`: get the foundation for a house. This is a tile
+    /// callback routine.
+    fn get_foundation_town(&self, tile: TileIndex, tileh: Slope) -> Foundation {
+        let hid = self.get_house_type(tile);
+
+        /* For NewGRF house tiles we might not be drawing a foundation. We need to
+         * account for this, as other structures should
+         * draw the wall of the foundation in this case.
+         */
+        if hid >= NEW_HOUSE_OFFSET
+            && self
+                .callback_mask(hid)
+                .test(HouseCallbackMask::DrawFoundations)
+        {
+            let callback = CallbackID::CBID_HOUSE_DRAW_FOUNDATIONS;
+            let town = (self.h.town)(tile.0);
+            // SAFETY: Live town; no owner borrow spans the callback.
+            let callback_res = unsafe {
+                super::resolver::get_house_callback(callback, 0, 0, hid, town.shell, tile, false)
+            };
+            if callback_res != CALLBACK_FAILED
+                && !(self.s.grf_boolean_callback)(
+                    (self.h.cargo_file)(hid),
+                    callback.0,
+                    callback_res,
+                )
+            {
+                return Foundation::FOUNDATION_NONE;
+            }
+        }
+        flattening_foundation(tileh)
+    }
     /// `TerraformTile_Town`.
     fn terraform_tile_town(
         &self,
@@ -1636,6 +1668,15 @@ pub(crate) unsafe fn openttd_rust_house_clear(
     flags: u16,
 ) {
     house(leaves, services).clear_tile_town(result, TileIndex(tile), DoCommandFlags(flags));
+}
+/// `GetFoundation_Town`, for the movement foundation dispatch.
+pub(crate) fn get_foundation_town(
+    leaves: &Leaves,
+    services: &Services,
+    tile: TileIndex,
+    tileh: Slope,
+) -> Foundation {
+    house(leaves, services).get_foundation_town(tile, tileh)
 }
 /// `TerraformTile_Town` for the landscape terraform dispatch, which passes base
 /// integers until its own pass.
