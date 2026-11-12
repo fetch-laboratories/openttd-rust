@@ -13,16 +13,15 @@
 //! pause entries take the client and pause arguments the session frame derives; the session
 //! frame and the command chain are outside this test.
 use super::*;
+use crate::industrytype::NativeVec;
 use crate::linkgraph::{
     NativeGraph,
     job::{NativeJob, SnapshotSettings},
 };
-use crate::industrytype::NativeVec;
 use crate::linkgraph_type::LinkGraphID;
 use crate::pool::{PoolDescriptor, PoolSlot};
 use crate::timer_game_common::{write_economy_date, write_economy_fraction};
 use crate::timer_game_economy::EconomyDate;
-use std::cell::{Cell, RefCell};
 use std::ptr::null_mut;
 
 /// The fixture's `LinkGraph` shell: its pool index and the tag its trace entries name.
@@ -41,19 +40,40 @@ struct JobShell {
 /// Slots per fixture pool.
 const SLOTS: usize = 4;
 
-thread_local! {
-    static TRACE: RefCell<Vec<[i32; 3]>> = const { RefCell::new(Vec::new()) };
-    static GRAPHS: Cell<*mut PoolDescriptor> = const { Cell::new(null_mut()) };
-    static JOBS: Cell<*mut PoolDescriptor> = const { Cell::new(null_mut()) };
+/// The fixture's globals.
+struct Fixture {
+    trace: Vec<[i32; 3]>,
+    graphs: *mut PoolDescriptor,
+    jobs: *mut PoolDescriptor,
     /// Whether a job's destruction recycles graph ID 1, as the fixture's `Recycle` does.
-    static RECYCLE: Cell<bool> = const { Cell::new(false) };
+    recycle: bool,
     /// The fixture's static `replacement` graph, emplaced by each recycle.
-    static REPLACEMENT: Cell<*mut GraphShell> = const { Cell::new(null_mut()) };
-    static SERVICES: Cell<*const Services> = const { Cell::new(std::ptr::null()) };
+    replacement: *mut GraphShell,
+    services: *const Services,
+}
+/// Process-wide, as the probe's globals were; the test holds `GLOBAL_LOCK`.
+static FIXTURE: GameState<Fixture> = GameState::new(Fixture {
+    trace: Vec::new(),
+    graphs: null_mut(),
+    jobs: null_mut(),
+    recycle: false,
+    replacement: null_mut(),
+    services: std::ptr::null(),
+});
+/// No production entry is called while the fixture is borrowed.
+fn with<R>(f: impl FnOnce(&mut Fixture) -> R) -> R {
+    // SAFETY: Serialized by the test lock; the borrow ends with `f`.
+    f(unsafe { &mut *FIXTURE.get() })
+}
+fn graphs() -> *mut PoolDescriptor {
+    with(|f| f.graphs)
+}
+fn jobs() -> *mut PoolDescriptor {
+    with(|f| f.jobs)
 }
 
 fn observe(entry: [i32; 3]) {
-    TRACE.with_borrow_mut(|t| t.push(entry));
+    with(|f| f.trace.push(entry));
 }
 fn new_pool() -> *mut PoolDescriptor {
     let empty = PoolSlot {
@@ -96,12 +116,12 @@ fn new_graph(index: u16, count: u16, tag: u16) -> *mut GraphShell {
         (*owner).shell = shell.cast::<NativeGraph>();
         (*owner).last_compression = 100;
         live::openttd_rust_live_graph_init(owner, count.into());
-        for node in (*owner).nodes.iter_mut() {
+        for node in &mut *(*owner).nodes {
             node.last_update = 90;
         }
     }
     set_slot(
-        GRAPHS.get(),
+        graphs(),
         index,
         PoolSlot {
             shell: shell.cast(),
@@ -114,9 +134,9 @@ fn new_graph(index: u16, count: u16, tag: u16) -> *mut GraphShell {
 fn delete_graph(shell: *mut GraphShell) {
     // SAFETY: `shell` came from `new_graph` and is deleted once.
     let shell = unsafe { Box::from_raw(shell) };
-    if slot(GRAPHS.get(), shell.index).shell == (&raw const *shell).cast_mut().cast() {
+    if slot(graphs(), shell.index).shell == (&raw const *shell).cast_mut().cast() {
         set_slot(
-            GRAPHS.get(),
+            graphs(),
             shell.index,
             PoolSlot {
                 shell: null_mut(),
@@ -132,7 +152,7 @@ fn new_job(graph: *const GraphShell) -> *mut JobShell {
     // SAFETY: A live fixture graph shell.
     let (graph_index, owner, tag) = unsafe { ((*graph).index, (*graph).owner, (*graph).tag) };
     let mut index = 0;
-    while !slot(JOBS.get(), index).shell.is_null() {
+    while !slot(jobs(), index).shell.is_null() {
         index += 1;
     }
     let settings = SnapshotSettings {
@@ -152,7 +172,7 @@ fn new_job(graph: *const GraphShell) -> *mut JobShell {
         crate::linkgraph::job::openttd_rust_linkgraph_job_new(
             owner,
             LinkGraphID(graph_index),
-            &settings,
+            &raw const settings,
         )
     };
     let shell = Box::into_raw(Box::new(JobShell {
@@ -166,7 +186,7 @@ fn new_job(graph: *const GraphShell) -> *mut JobShell {
         (*record).join_date = i32::MAX;
     }
     set_slot(
-        JOBS.get(),
+        jobs(),
         index,
         PoolSlot {
             shell: shell.cast(),
@@ -182,7 +202,7 @@ fn delete_job(shell: *mut JobShell) {
     let shell = unsafe { Box::from_raw(shell) };
     observe([3, shell.index.into(), shell.graph.into()]);
     set_slot(
-        JOBS.get(),
+        jobs(),
         shell.index,
         PoolSlot {
             shell: null_mut(),
@@ -191,18 +211,18 @@ fn delete_job(shell: *mut JobShell) {
     );
     // SAFETY: The shell's own record, removed from the running queue by its caller.
     unsafe { crate::linkgraph::job::openttd_rust_linkgraph_job_delete(shell.record) };
-    if RECYCLE.get() {
+    if with(|f| f.recycle) {
         recycle();
     }
 }
 /// `Recycle`: emplace a two-node replacement in graph slot 1 and queue it twice.
 fn recycle() {
-    let previous = REPLACEMENT.replace(null_mut());
+    let previous = with(|f| std::mem::replace(&mut f.replacement, null_mut()));
     if !previous.is_null() {
         delete_graph(previous);
     }
     let replacement = new_graph(1, 2, 19);
-    REPLACEMENT.set(replacement);
+    with(|f| f.replacement = replacement);
     queue(replacement);
     queue(replacement);
 }
@@ -212,7 +232,11 @@ fn set_due(job: *mut JobShell, due: bool) {
 }
 fn set_completed(job: *mut JobShell, completed: bool) {
     // SAFETY: A live fixture job and its record.
-    unsafe { (*(*job).record).completed.store(completed, Ordering::Release) };
+    unsafe {
+        (*(*job).record)
+            .completed
+            .store(completed, Ordering::Release);
+    }
 }
 
 extern "C" fn allocation_failure() {
@@ -223,7 +247,7 @@ extern "C" fn assert_graph(graph: *const Graph) {
     let shell = unsafe { (*graph).shell.cast::<GraphShell>() };
     // SAFETY: As above.
     let index = unsafe { (*shell).index };
-    assert_eq!(slot(GRAPHS.get(), index).shell, shell.cast::<c_void>());
+    assert_eq!(slot(graphs(), index).shell, shell.cast::<c_void>());
 }
 extern "C" fn begin_measurement(measurement: *mut c_void, client: bool) {
     if client {
@@ -260,8 +284,8 @@ fn observe_pause(paused: bool) {
 }
 
 fn services() -> &'static Services {
-    // SAFETY: Set by the test for its whole run.
-    unsafe { &*SERVICES.get() }
+    // SAFETY: Installed by the test for its whole run.
+    unsafe { &*with(|f| f.services) }
 }
 fn import(schedule: &[*mut GraphShell], running: &[*mut JobShell]) {
     // SAFETY: Live fixture shells.
@@ -293,10 +317,15 @@ fn capture() {
             std::slice::from_raw_parts(queues.running, queues.running_len).to_vec(),
         )
     };
-    observe([20, schedule.len() as i32, running.len() as i32]);
+    let length = |len: usize| i32::try_from(len).expect("fixture queue length");
+    observe([20, length(schedule.len()), length(running.len())]);
     for graph in schedule {
         // SAFETY: Queued records of live fixture graphs.
-        observe([21, unsafe { (*(*graph).shell.cast::<GraphShell>()).tag }.into(), 0]);
+        observe([
+            21,
+            unsafe { (*(*graph).shell.cast::<GraphShell>()).tag }.into(),
+            0,
+        ]);
     }
     for job in running {
         // SAFETY: Running records of live fixture jobs.
@@ -340,16 +369,8 @@ fn pause(bits: u8, load: bool) {
     }
 }
 
-#[test]
-fn schedule_trace_matches_original() {
-    let _lock = crate::town::tests::GLOBAL_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let saved = (
-        crate::timer_game_common::economy_date(),
-        crate::timer_game_common::economy_fraction(),
-        crate::session::pause(),
-    );
+/// Install the fixture's pools and services, with a two-day `recalc_interval`.
+fn install() -> &'static Services {
     // `_settings_game.linkgraph.recalc_interval`: two days.
     let settings: &'static _ = Box::leak(Box::new(crate::settings_type::SettingAddresses {
         recalc_interval: &4,
@@ -359,28 +380,62 @@ fn schedule_trace_matches_original() {
         settings,
         ..crate::test_tables::SHARED
     }));
-    GRAPHS.set(new_pool());
-    JOBS.set(new_pool());
-    let graph_pool: &'static *const PoolDescriptor = Box::leak(Box::new(GRAPHS.get().cast_const()));
-    let job_pool: &'static *const PoolDescriptor = Box::leak(Box::new(JOBS.get().cast_const()));
+    let (graph_pool, job_pool) = (new_pool(), new_pool());
     let schedule: &'static Services = Box::leak(Box::new(Services {
         allocation_failure,
         assert_graph,
         begin_measurement,
         can_allocate,
         destroy_job,
-        graph_pool,
-        job_pool,
+        graph_pool: Box::leak(Box::new(graph_pool.cast_const())),
+        job_pool: Box::leak(Box::new(job_pool.cast_const())),
         new_job: new_job_record,
         shared,
         start_thread,
         vehicle: std::ptr::null(),
     }));
-    SERVICES.set(schedule);
-    // SAFETY: Serialized by the game-state test lock; cleared below.
+    with(|f| {
+        f.trace.clear();
+        f.graphs = graph_pool;
+        f.jobs = job_pool;
+        f.services = schedule;
+    });
+    // SAFETY: Serialized by the game-state test lock; cleared by `run`.
     unsafe { *PAUSE_OBSERVER.get() = Some(observe_pause) };
-
-    // The fixture's `Run`, step for step.
+    schedule
+}
+/// After the fixture's `ShiftDates` and `Clear`: each pooled graph's compression and first
+/// node dates, then each pooled job's join date and abort flag.
+fn observe_dates() {
+    for graph in shells::<GraphShell>(graphs()) {
+        // SAFETY: Live fixture graphs and their records; copied before recording.
+        let (tag, compressed, updated) = unsafe {
+            let owner = (*graph).owner;
+            (
+                (*graph).tag,
+                (*owner).last_compression,
+                (*owner).nodes.as_slice()[0].last_update,
+            )
+        };
+        observe([30, tag.into(), compressed]);
+        observe([31, tag.into(), updated]);
+    }
+    for job in shells::<JobShell>(jobs()) {
+        // SAFETY: Live fixture jobs and their records; copied before recording.
+        let (index, join_date, aborted) = unsafe {
+            let record = (*job).record;
+            (
+                (*job).index,
+                (*record).join_date,
+                (*record).aborted.load(Ordering::Acquire),
+            )
+        };
+        observe([32, index.into(), join_date]);
+        observe([33, index.into(), aborted.into()]);
+    }
+}
+/// The fixture's `Run`, step for step; returns its trace and the shells to delete.
+fn run(schedule: &'static Services) -> (Vec<[i32; 3]>, [*mut GraphShell; 3]) {
     import(&[], &[]);
     pause(0, false);
     pause(1, false);
@@ -405,7 +460,7 @@ fn schedule_trace_matches_original() {
     // The synchronous spawn completes before the job joins the running queue.
     tick(0, 21, false);
     capture();
-    let first = slot(JOBS.get(), 0).shell.cast::<JobShell>();
+    let first = slot(jobs(), 0).shell.cast::<JobShell>();
     let second = new_job(large);
     set_due(second, true);
     import(&[small], &[first, second]);
@@ -428,9 +483,9 @@ fn schedule_trace_matches_original() {
     capture();
     // Destruction recycles graph ID 1 and queues it twice.
     import(&[small], &[second]);
-    RECYCLE.set(true);
+    with(|f| f.recycle = true);
     tick(1, 21, false);
-    RECYCLE.set(false);
+    with(|f| f.recycle = false);
     capture();
     let listed = new_job(small);
     let unlisted = new_job(unqueued);
@@ -438,35 +493,45 @@ fn schedule_trace_matches_original() {
     openttd_rust_schedule_spawn_all(schedule);
     openttd_rust_schedule_shift(schedule, -17);
     openttd_rust_schedule_clear();
-    for graph in shells::<GraphShell>(GRAPHS.get()) {
-        // SAFETY: Live fixture graphs and their records.
-        let (tag, owner) = unsafe { ((*graph).tag, &*(*graph).owner) };
-        observe([30, tag.into(), owner.last_compression]);
-        observe([31, tag.into(), owner.nodes[0].last_update]);
-    }
-    for job in shells::<JobShell>(JOBS.get()) {
-        // SAFETY: Live fixture jobs and their records.
-        let (index, record_ref) = unsafe { ((*job).index, &*(*job).record) };
-        let (join_date, aborted) = (record_ref.join_date, record_ref.aborted.load(Ordering::Acquire));
-        observe([32, index.into(), join_date]);
-        observe([33, index.into(), aborted.into()]);
-    }
+    observe_dates();
     capture();
     // Clear must not delete the jobs.
-    assert_eq!(slot(JOBS.get(), unsafe { (*listed).index }).shell, listed.cast::<c_void>());
-    assert_eq!(slot(JOBS.get(), unsafe { (*unlisted).index }).shell, unlisted.cast::<c_void>());
-    let trace = TRACE.take();
+    for job in [listed, unlisted] {
+        // SAFETY: A live fixture job.
+        assert_eq!(
+            slot(jobs(), unsafe { (*job).index }).shell,
+            job.cast::<c_void>()
+        );
+    }
+    (
+        with(|f| std::mem::take(&mut f.trace)),
+        [small, large, unqueued],
+    )
+}
 
-    for job in shells::<JobShell>(JOBS.get()) {
+#[test]
+fn schedule_trace_matches_original() {
+    let _lock = crate::town::tests::GLOBAL_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let saved = (
+        crate::timer_game_common::economy_date(),
+        crate::timer_game_common::economy_fraction(),
+        crate::session::pause(),
+    );
+    let schedule = install();
+    let (trace, graphs) = run(schedule);
+    for job in shells::<JobShell>(jobs()) {
         delete_job(job);
     }
     import(&[], &[]);
-    for graph in [small, large, unqueued, REPLACEMENT.replace(null_mut())] {
+    let replacement = with(|f| std::mem::replace(&mut f.replacement, null_mut()));
+    for graph in [graphs[0], graphs[1], graphs[2], replacement] {
         delete_graph(graph);
     }
-    // SAFETY: As above.
+    // SAFETY: As in `install`.
     unsafe { *PAUSE_OBSERVER.get() = None };
-    TRACE.take();
+    with(|f| f.trace.clear());
     write_economy_date(saved.0);
     write_economy_fraction(saved.1);
     crate::session::set_pause(saved.2);
@@ -475,9 +540,10 @@ fn schedule_trace_matches_original() {
     let compared = crate::oracle::check(
         &oracle,
         "trace",
-        trace.iter().enumerate().map(|(index, [kind, a, b])| {
-            (format!("entry {index}"), format!("{kind} {a} {b}"))
-        }),
+        trace
+            .iter()
+            .enumerate()
+            .map(|(index, [kind, a, b])| (format!("entry {index}"), format!("{kind} {a} {b}"))),
     );
     assert_eq!(compared, 47);
 }
