@@ -76,7 +76,6 @@ static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
 static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
 static OpenTTDMovementServices movement;
 static OpenTTDVehicleServices vehicle;
-static uint32_t entered_tile;
 static const OpenTTDSettingAddresses _settings_catalog{.train_acceleration_model = &_settings_game.vehicle.train_acceleration_model};
 static OpenTTDTrainServices Leaves()
 {
@@ -103,20 +102,21 @@ static void RustReverse(int left, int right)
 	movement.shared = &shared;
 	shared.movement = &movement;
 	shared.settings = &_settings_catalog;
-	// Plain rail on every tile of the 256 by 256 map: depot entry reads the map in place.
-	static OpenTTDFixtureMap map{8, 256 * 256};
-	for (uint32_t t = 0; t < map.size; ++t) map.base[t].type = 1 << 4; // MP_RAILWAY
-	shared.map = &map.statics;
+	// Plain rail on the trains' own tiles of the 256 by 256 map, clear elsewhere:
+	// depot entry reads the map in place, and VehicleEnterTile reads the tile type
+	// there, so only an entry on the vehicle's own tile reaches the vehicle callback.
 	// The copied world has no depot/tunnel tiles. Observe the real owner's
 	// admission call through typed map/vehicle services, retaining event order.
-	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };
+	static OpenTTDFixtureMap map{8, 256 * 256};
+	for (Train &v : trains) map.base[v.tile].type = 1 << 4; // MP_RAILWAY
+	shared.map = &map.statics;
 	movement.resolve = [](OpenTTDVehicle *shell) noexcept {
 		auto *v = reinterpret_cast<Train *>(shell->shell);
-		assert(entered_tile == v->record.tile);
 		events.push_back(0x300 + v->id);
 		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
 	};
 	openttd_rust_train_reverse_swap(Handle(trains), left, right, &leaves, &shared);
+	for (Train &v : trains) map.base[v.tile].type = 0; // MP_CLEAR
 }
 static uint32_t random_state = 130;
 static uint32_t Draw() { random_state = random_state * 1664525U + 1013904223U; return random_state; }
