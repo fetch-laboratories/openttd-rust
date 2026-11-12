@@ -1379,7 +1379,7 @@ impl Game<'_> {
         }
         let leave = (dep).next();
         if leave != Handle::NONE {
-            let d = crate::movement::depot_ticks(self.services, dep);
+            let d = crate::movement::ticks_to_leave_depot(self.services, dep);
             if d <= 0 {
                 Self::write_status(leave, 1, false);
                 leave.set_track(
@@ -2929,8 +2929,12 @@ pub unsafe extern "C" fn openttd_rust_train_train_on_tile(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = entry_game!(leaves, services);
-    u8::from(g.train_on_tile(tile))
+    // SAFETY: The entry's contract keeps both immutable tables live until it returns.
+    u8::from(train_on_crossing(
+        unsafe { &*leaves },
+        unsafe { &*services },
+        TileIndex(tile),
+    ))
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -3179,19 +3183,30 @@ pub(crate) const FLAG_REVERSING: u64 = 1 << 0;
 /// `VehicleRailFlag::Stuck`, from `train.h`.
 pub(crate) const FLAG_STUCK: u64 = 1 << 8;
 
-/// Same owned stop-location callee for tile admission and train speed control.
-pub(crate) fn stop_location(
+/// `GetTrainStopLocation`: the same owned stop-location callee for tile admission
+/// and train speed control. Returns the stop location, the station ahead and the
+/// station length.
+pub(crate) fn get_train_stop_location(
     leaves: &Leaves,
     services: &Services,
     id: Handle,
-    station: u16,
-    tile: u32,
+    station_id: StationID,
+    tile: TileIndex,
 ) -> (i32, i32, i32) {
-    Game::new(leaves, services).get_train_stop_location(id, StationID(station), TileIndex(tile))
+    Game::new(leaves, services).get_train_stop_location(id, station_id, tile)
 }
 /// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
-pub(crate) fn next_offset(id: Handle) -> i32 {
+pub(crate) fn calc_next_vehicle_offset(id: Handle) -> i32 {
     Game::next_offset(id)
+}
+/// `TrainOnCrossing`: check if a level crossing tile has a train on it.
+pub(crate) fn train_on_crossing(leaves: &Leaves, services: &Services, tile: TileIndex) -> bool {
+    crate::movement::native_assert(
+        services,
+        crate::map_func::World::new(services).level_crossing_tile(tile.0),
+    );
+
+    Game::new(leaves, services).train_on_tile(tile.0)
 }
 
 impl Game<'_> {

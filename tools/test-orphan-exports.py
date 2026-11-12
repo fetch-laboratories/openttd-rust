@@ -216,6 +216,42 @@ class OrphanTests(unittest.TestCase):
             )
             self.assertEqual(check(), 1)  # A new row is growth against the base.
 
+    def test_help_and_unknown_options_run_no_check(self) -> None:
+        for argv, code in ((["--help"], 0), (["-h"], 0), (["--bsae-ref", "X"], 2)):
+            output = io.StringIO()
+            with (
+                patch.object(sys, "argv", ["orphan-exports.py", *argv]),
+                patch.object(ORPHANS, "check_uncalled") as check,
+                patch.object(ORPHANS, "report_uncalled") as report,
+                patch.object(ORPHANS.baseline_ratchet, "main") as ratchet,
+                contextlib.redirect_stdout(output),
+                contextlib.redirect_stderr(output),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                ORPHANS.main()
+            self.assertEqual(raised.exception.code, code, argv)
+            for checker in (check, report, ratchet):
+                checker.assert_not_called()
+        self.assertIn("--report-uncalled", output.getvalue())
+
+    def test_options_reach_their_checks(self) -> None:
+        with (
+            patch.object(sys, "argv", ["orphan-exports.py", "--report-uncalled"]),
+            patch.object(ORPHANS, "check_uncalled") as check,
+            patch.object(ORPHANS, "report_uncalled", return_value=0) as report,
+        ):
+            self.assertEqual(ORPHANS.main(), 0)
+        report.assert_called_once_with()
+        check.assert_not_called()
+        with (
+            patch.object(sys, "argv", ["orphan-exports.py", "--base-ref", "base"]),
+            patch.object(ORPHANS, "check_uncalled", return_value=0) as check,
+            patch.object(ORPHANS.baseline_ratchet, "main", return_value=1) as ratchet,
+        ):
+            self.assertEqual(ORPHANS.main(), 1)
+        check.assert_called_once_with("base")
+        ratchet.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

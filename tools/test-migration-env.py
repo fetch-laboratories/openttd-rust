@@ -174,5 +174,131 @@ class MigrationEnvTests(unittest.TestCase):
         self.assertIn("--disable-new-dtags", options["CMAKE_EXE_LINKER_FLAGS"])
 
 
+class Replaced(Exception):
+    """Raised by a stubbed os.execvpe in place of replacing the test process."""
+
+
+class MigrationExecTests(unittest.TestCase):
+    """`exec` runs one command under the variables `env` exports."""
+
+    def setUp(self) -> None:
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.scratch = Path(scratch.name).resolve()
+        self.record = self.scratch / "record.json"
+        bin_directory = self.scratch / "bin"
+        bin_directory.mkdir()
+        # A fake command that records what it was given and exits with $STATUS.
+        recorder = bin_directory / "fake-recorder"
+        recorder.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys\n"
+            "names = ('CARGO_TARGET_DIR', 'CLIPPY_CONF_DIR', 'CPATH', 'PATH')\n"
+            "record = {'argv': sys.argv[1:], 'cwd': os.getcwd(), 'pid': os.getpid(),\n"
+            "          'env': {name: os.environ.get(name) for name in names}}\n"
+            "open(os.environ['RECORD'], 'w').write(json.dumps(record))\n"
+            "sys.exit(int(os.environ.get('STATUS', '0')))\n"
+        )
+        recorder.chmod(0o755)
+        self.env = os.environ | {
+            "PATH": f"{bin_directory}{os.pathsep}{os.environ.get('PATH', '')}",
+            "RECORD": str(self.record),
+        }
+
+    def run_exec(
+        self, *argv: str, cwd: Path, status: int = 0
+    ) -> tuple[subprocess.Popen[str], str]:
+        process = subprocess.Popen(
+            [sys.executable, str(migration.ROOT / "tools/migration.py"), *argv],
+            cwd=cwd,
+            env=self.env | {"STATUS": str(status)},
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        _, stderr = process.communicate(timeout=60)
+        return process, stderr
+
+    def test_runs_argv_unchanged_in_cwd_with_driver_environment(self) -> None:
+        argv = ["a b", "$HOME", "*", "--flag", ""]
+        cwd = migration.ROOT / "tools"
+        process, stderr = self.run_exec(
+            "exec", "--", "fake-recorder", *argv, cwd=cwd, status=7
+        )
+        self.assertEqual(process.returncode, 7, stderr)
+        record = json.loads(self.record.read_text())
+        self.assertEqual(record["argv"], argv)
+        self.assertEqual(Path(record["cwd"]).resolve(), cwd)
+        # The command replaced migration.py rather than running as its child.
+        self.assertEqual(record["pid"], process.pid)
+        self.assertEqual(
+            record["env"]["CARGO_TARGET_DIR"], str(migration.ROOT / "build-rust/cargo")
+        )
+        self.assertEqual(
+            record["env"]["CLIPPY_CONF_DIR"],
+            str(migration.ROOT / migration.CLIPPY_CONFIGURATION),
+        )
+        self.assertIn(
+            str(migration.CANDIDATE_BUILD / "generated-abi"), record["env"]["CPATH"]
+        )
+
+    def test_runs_outside_any_checkout(self) -> None:
+        process, stderr = self.run_exec("exec", "fake-recorder", cwd=self.scratch)
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertEqual(Path(json.loads(self.record.read_text())["cwd"]), self.scratch)
+
+    def test_refuses_another_checkout(self) -> None:
+        other = self.scratch / "other"
+        subprocess.run(["git", "init", "-q", str(other)], check=True)
+        process, stderr = self.run_exec("exec", "--", "fake-recorder", cwd=other)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn(f"{other} is in the checkout", stderr)
+        self.assertIn(f"cd into {migration.ROOT}", stderr)
+        self.assertFalse(self.record.exists())
+
+    def test_missing_command_names_the_driver_path(self) -> None:
+        process, stderr = self.run_exec("exec", "--", "no-such-tool", cwd=self.scratch)
+        self.assertEqual(process.returncode, 127)
+        self.assertIn("cannot run no-such-tool", stderr)
+
+    def test_usage_errors_run_nothing(self) -> None:
+        for argv in (["exec"], ["exec", "--"], ["exec", "-x", "fake-recorder"]):
+            process, stderr = self.run_exec(*argv, cwd=self.scratch)
+            self.assertEqual(process.returncode, 2, argv)
+            self.assertIn("exec -- CMD", stderr)
+        process, stderr = self.run_exec("--jobs", "2", "exec", "true", cwd=self.scratch)
+        self.assertEqual(process.returncode, 2)
+        self.assertIn("put exec first", stderr)
+        self.assertFalse(self.record.exists())
+
+    def test_help_runs_nothing(self) -> None:
+        output = io.StringIO()
+        with (
+            mock.patch.object(migration.os, "execvpe") as execvpe,
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(migration.run_agent_command(["exec", "--help"]), 0)
+        execvpe.assert_not_called()
+        self.assertIn("exec -- CMD", output.getvalue())
+
+    def test_exec_and_env_share_one_environment(self) -> None:
+        with (
+            mock.patch.object(migration.os, "execvpe", side_effect=Replaced) as execvpe,
+            mock.patch.object(migration, "other_checkout", return_value=None),
+            self.assertRaises(Replaced),
+        ):
+            migration.run_agent_command(["exec", "--", "cargo", "fmt"])
+        name, argv, env = execvpe.call_args.args
+        self.assertEqual((name, argv), ("cargo", ["cargo", "fmt"]))
+        self.assertEqual(env, migration.driver_environment())
+        for line in migration.shell_exports().splitlines():
+            variable, value = shlex.split(line)[1].split("=", 1)
+            self.assertEqual(env[variable], value, variable)
+
+    def test_driver_modes_are_left_to_main(self) -> None:
+        self.assertIsNone(migration.run_agent_command([]))
+        self.assertIsNone(migration.run_agent_command(["env"]))
+        self.assertIsNone(migration.run_agent_command(["--jobs", "2", "exec"]))
+
+
 if __name__ == "__main__":
     unittest.main()

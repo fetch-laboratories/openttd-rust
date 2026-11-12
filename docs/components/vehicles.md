@@ -20,7 +20,7 @@
 ## Road vehicle control and private state
 
 - Rust owns: tick/day control, movement, blocking/overtaking, reversal, station/depot transitions, crash expiry, servicing, cache, seven scalars and path per shell; road YAPF (#124) writes that path. The seven scalars form the canonical generated shared prefix and both languages access them directly.
-- C++ keeps: shells/pool identity, modern, split-vector and TTD/TTO save staging, shared visual-effect gate and tail, tick entry and counters.
+- C++ keeps: shells/pool identity, modern, split-vector and TTD/TTO save staging, tick entry and counters.
 - Checks: default `roads-` simulation, original movement-table observations in Rust, and native shared-field layout/default/maximum-value checks.
 - Limits: Gaps remain in legacy saves, custom NewGRFs, articulated/tram turns, sounds, and viewport pixels (#156).
 - PRs: #128, #215, #319, #332; direct fields #744/#755.
@@ -52,7 +52,7 @@
 ## Vehicle scheduling and base maintenance (#213)
 
 - Rust owns: calendar/economy-day scheduling, `CallVehicleTicks` traversal, survival, cargo aging, motion/sound, loading/fleet sequencing, renewal, service/depot resets, reliability, breakdowns, age and value.
-- C++ keeps: `Vehicle` shells/pools, type-specific controllers/day procedures, NewGRF callbacks, commands and presentation.
+- C++ keeps: `Vehicle` shells/pools, type-specific tick/day facades, NewGRF callbacks, commands and presentation.
 - Checks: default vehicle, fleet and aircraft simulations.
 - Limits: Gaps remain in replacement and old-news branches, NewGRF and reentrant sound, custom/articulated combinations, and legacy saves (#156).
 - PRs: #257.
@@ -76,7 +76,7 @@
 ## Rail construction and depot consist transactions (#315)
 
 - Rust owns: `train_cmd.cpp` from `GetFreeWagonsInDepot` through `CmdSellRailWagon`: construction, joining/normalization, backup/restore, arrangement, dual-head/subtype normalization, validation, head promotion/demotion and rail sale.
-- C++ keeps: shell allocation/field stores, attach callback, unit-ID pools, chain links and presentation. A validation error leaves the chain split until the caller restores it.
+- C++ keeps: shell allocation/field stores, unit-ID pools and presentation. A validation error leaves the chain split until the caller restores it.
 - Checks: `python3 tools/migration.py simulate fleet-transaction-rail --jobs 2`.
 - Limits: Gaps remain in NewGRF attach-callback results, GRF-version branches, and order-pool exhaustion (#156).
 - PRs: #360.
@@ -84,7 +84,7 @@
 ## Engine lifecycle and availability (#220)
 
 - Rust owns: engine lifecycle scalars/names, aging-stop state, startup/reliability, daily/monthly preview and availability, variant synchronization and control/name/visibility commands.
-- C++ keeps: engine shells, pool/spec loading, company masks, presentation and save/load errors.
+- C++ keeps: engine shells, pools, company masks, presentation and save/load errors.
 - Checks: `python3 tools/migration.py simulate engines- --jobs 2`; identical adapter supplies variant and cutoff spec inputs to unchanged reference bodies.
 - Limits: Gaps remain in external NewGRF programs/`retire_early`, ENGS and TTO/TTD fixtures, legacy preview conversion, and threaded GUI/presentation (#156).
 - PRs: #248.
@@ -161,7 +161,7 @@
 ## Vehicle station/depot visits and route-link prediction (#349)
 
 - Rust owns: `BeginLoading`, `HandleLoading`, `LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`, `VehicleEnterDepot`, `LinkRefresher` and both `IncreaseStats` overloads.
-- C++ keeps: link-graph pools, allocation and updates, station/vehicle shells, NewGRF triggers, window/news/sound and depot refit costs.
+- C++ keeps: link-graph pools and allocation, station/vehicle shells, NewGRF triggers, window/news/sound and depot refit costs.
 - Checks: `orders-visits` (padhattan-ridge-2000, cargodist) and station scenarios.
 - Limits: The checks do not cover link-graph pool exhaustion (#156).
 - PRs: #359; visits dispatch #555.
@@ -177,7 +177,7 @@
 ## Vehicle tile occupancy and live spatial queries (#377)
 
 - Rust owns: tile buckets, on-tile/near cursors, hash update/reset and ground/track/tunnel occupancy checks.
-- C++ keeps: pools, IDs, coordinates, shell link records, viewport indexing and command costs. Lifetime rules: [world state](../design/world-state.md).
+- C++ keeps: pools, IDs, shell link records, viewport indexing and command costs. Lifetime rules: [world state](../design/world-state.md).
 - Checks: default road/crash/flood/reload, train collision, road-stop and fleet scenarios; fleet console against unchanged public iterator bodies.
 - Limits: Gaps remain in GUI and external articulated GRFs (#156).
 - PRs: #384, integrated in #391.

@@ -80,7 +80,7 @@ fn place(s: &Services, out: Cost<'_>, flags: u16, tile: u32, text: ByteSpan) -> 
             .tile_y(TileIndex(tile))
             .wrapping_mul(TILE_SIZE)
             .cast_signed();
-        let z = crate::movement::pixel_z(s.shared, x, y, false);
+        let z = crate::movement::get_slope_pixel_z(s.shared, x, y, false);
         return (s.place)(owner, x, y, z, text);
     }
     SignID::INVALID
@@ -121,7 +121,7 @@ fn relocate(s: &Services, out: Cost<'_>, flags: u16, id: SignID, tile: u32) {
             .tile_y(TileIndex(tile))
             .wrapping_mul(TILE_SIZE)
             .cast_signed();
-        let z = crate::movement::pixel_z(s.shared, x, y, false);
+        let z = crate::movement::get_slope_pixel_z(s.shared, x, y, false);
         unsafe { (s.relocate)(si, new_owner(s, si), x, y, z) };
     }
 }

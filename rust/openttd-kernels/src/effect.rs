@@ -642,7 +642,7 @@ pub extern "C" fn openttd_rust_effect_create_above(
     openttd_rust_effect_create(
         x,
         y,
-        crate::movement::pixel_z(s.shared, safe_x, safe_y, false).wrapping_add(z),
+        crate::movement::get_slope_pixel_z(s.shared, safe_x, safe_y, false).wrapping_add(z),
         kind,
     )
 }

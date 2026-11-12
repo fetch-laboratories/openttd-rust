@@ -585,7 +585,7 @@ pub unsafe extern "C" fn openttd_rust_command_posted(
         && crate::session::mode() != GameMode::EDITOR
     {
         /* The cost animation shows only for an executed local command outside the editor. */
-        let height = crate::movement::pixel_z(s.shared, x, y, false);
+        let height = crate::movement::get_slope_pixel_z(s.shared, x, y, false);
         (s.shared.cost_animation)(x, y, height, (c.money)(result));
     }
     u8::from(!estimate_only && !only_sending && has_callback)

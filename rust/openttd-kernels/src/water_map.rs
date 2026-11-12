@@ -11,12 +11,28 @@ use crate::map_func::{TileFields, TileTypeAccess};
 use crate::tile_type::TileIndex;
 use crate::tile_type::TileType;
 
-/// `WaterTileType::Lock`.
-pub(crate) const WATER_TILE_LOCK: u8 = 2;
-/// `WaterTileType::Depot`.
-pub(crate) const WATER_TILE_DEPOT: u8 = 3;
+/// Native `WaterTileType`: available water tile types, retaining every
+/// underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WaterTileType(pub u8);
+#[allow(non_upper_case_globals, reason = "WaterTileType enumerator spelling")]
+impl WaterTileType {
+    /// Plain water.
+    pub const Clear: Self = Self(0);
+    /// Coast.
+    pub const Coast: Self = Self(1);
+    /// Water lock.
+    pub const Lock: Self = Self(2);
+    /// Water Depot.
+    pub const Depot: Self = Self(3);
+}
+/// Raw adapter: `WaterTileType::Lock`, until `water_map.rs`'s pass.
+pub(crate) const WATER_TILE_LOCK: u8 = WaterTileType::Lock.0;
+/// Raw adapter: `WaterTileType::Depot`, until `water_map.rs`'s pass.
+pub(crate) const WATER_TILE_DEPOT: u8 = WaterTileType::Depot.0;
 /// `WaterTileType::Coast`.
-const COAST: u8 = 1;
+const COAST: u8 = WaterTileType::Coast.0;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {

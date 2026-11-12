@@ -604,7 +604,7 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
 fn update_z_inclination(movement: &crate::movement::CachedTable<'_>, v: VehicleRef, o: Owner) {
     let x = v.x();
     let y = v.y();
-    let z = movement.get().pixel_z_at(x, y, true);
+    let z = movement.get().get_slope_pixel_z(x, y, true);
     (v).write_z(z);
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
@@ -612,7 +612,7 @@ fn update_z_inclination(movement: &crate::movement::CachedTable<'_>, v: VehicleR
     if sloped_track_owned(movement, v, o) {
         let x = v.x();
         let y = v.y();
-        let middle = movement.get().pixel_z_at(
+        let middle = movement.get().get_slope_pixel_z(
             (x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             (y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             true,
@@ -635,7 +635,7 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         if !o.rail() && reversing(s, v) {
             let x = v.x();
             let y = v.y();
-            let z = movement.get().pixel_z_at(x, y, true);
+            let z = movement.get().get_slope_pixel_z(x, y, true);
             (v).write_z(z);
             return;
         }
@@ -673,7 +673,7 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         let z = (v).z();
         let x = v.x();
         let y = v.y();
-        assert_eq!(z, movement.get().pixel_z_at(x, y, true));
+        assert_eq!(z, movement.get().get_slope_pixel_z(x, y, true));
     }
 }
 pub(crate) fn inclination(

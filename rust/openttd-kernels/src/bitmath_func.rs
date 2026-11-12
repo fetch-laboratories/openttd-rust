@@ -163,6 +163,13 @@ pub fn clr_bit8(value: &mut u8, bit: u8) -> u8 {
     *value
 }
 
+/// `ClrBit` for 16-bit flag words such as `GroundVehicle::gv_flags`, preserving
+/// the original return value.
+pub fn clr_bit16(value: &mut u16, bit: u8) -> u16 {
+    *value &= !1_u16.wrapping_shl(u32::from(bit));
+    *value
+}
+
 /// `ClrBit` for native `size_t` words such as `Pool::BitmapStorage`, preserving the
 /// original return value.
 pub fn clr_bit_size(value: &mut usize, bit: u8) -> usize {

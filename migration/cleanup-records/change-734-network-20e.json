@@ -1,0 +1,8 @@
+[
+  {
+    "from": "rust/openttd-kernels/src/network_dispatch.rs | fn handle | allow clippy::too_many_lines",
+    "kind": "carry",
+    "to": "rust/openttd-kernels/src/network_dispatch.rs | fn handle_packet | allow clippy::too_many_lines",
+    "tool": "rust"
+  }
+]
