@@ -1,7 +1,5 @@
 # OpenTTD-Rust near-term roadmap
 
-Readers: root at every start and when selecting work; planners, and the steering, navigation and wind-down skills.
-
 Root selects here; `AGENTS.md` and the docs in its routing table define process. Follow
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place ([records](workflow.md#records)); `/steer` prunes it. Evidence stays in PRs.
@@ -92,7 +90,7 @@ No policy projection rose 3% or entered its band: generation rose 1.04% and stay
 
 - Execution order: the cleanup stage, then phase 3 readers, then phase 2 storage with each pool's save/load, then phases 4, 5 and 6 ([goal and phases](planning.md#goal-and-phases), [ADR 0003](adr/0003-work-order-cleanup-readers-storage.md)).
 - Yardstick: net fork C++ removed, counting C++ under `tools/` and `src/tests` ([cost decisions](planning.md#cost-decisions), [ADR 0022](adr/0022-progress-is-net-cpp-removed.md)).
-- Limits: [implementer slots](team.md#slots) and the [stocktake cadence](root-workflow.md#cadences). Size work in counts, never durations ([sizing](planning.md#sizing)).
+- Limits: [implementer slots](team.md#slots) and the [stocktake cadence](root-workflow.md#cadences).
 
 ## Phases
 
@@ -133,17 +131,11 @@ Slots: while ready worksets remain, one [implementer slot](team.md#slots) runs #
    - **#736's end-state inventory,** the stream's last PR, confirming the classification.
 
    The Catch2 files that delete whole, `src/tests/train.cpp` and the ScriptList persistence section fail that rule and stay native: the Catch2 files retire with the C++ they exercise, `train.cpp`'s PBS and reservation cases with #725 and its speed case with #656. The console fixtures and Catch2 files that reach live pools (65 files, 14,273 counted lines) retire inside the ports that retire their pools or readers. The 33 files and 3,909 lines of retained boundary evidence leave with their boundaries.
-5. **#738**, delivered; the stream is closed at its end state. Keep the rule corpus measured, and consolidate later necessary process changes without reopening completed scope merely to fill a slot.
+5. **#738**, delivered; the stream is closed at its end state.
 6. **#734 closure**, after the last workset pass: private wrapper fields, generator support, and removal of the raw adapters and aliases. Seventeen Rust files (2,944 lines; `test_tables.rs` is 1,735 of them) are in no workset. Each joins one before closure, the type files with F ([#734](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6767381933)). The end state and later stocktakes and steering measure with `tools/code-standards-inventory.py`. The closure residue sweep takes [the recorded residue list](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6789587702) unless a later pass touches the file; its macro sites are #892's. #892 rides remaining file passes, then that sweep and closure; no unrecorded production assertion macro site remains at closure, measured as #892 specifies.
 
    #734 also owns the `unwrap`/`expect` and release-overflow fidelity gaps recorded in #156: remaining file passes handle their selected files, and closure handles recorded residue in already-finished files. Compare each with the original's preconditions and observable failure behaviour; an occurrence alone is not a defect. This ownership does not expand #892's macro scope or add a census, lint rule or gate.
 7. **#893 cleanup-exit evidence**, after closure and before the first phase-3 reader dispatch: run the coverage measurement, seeded-fault pilot and all-member deep check. Pause implementers for the two host measurements. Read the report and handle findings under [deep checks](deep-checks.md#policy) before dispatch. Phase-3 planning follows its normal trigger and does not wait for these results.
-
-### Rules with no other home yet
-
-Each is listed for a rule doc to take or a ruling to settle; until then it applies here.
-- Remove unnecessary existing cast suppressions on later base updates.
-- 0.1% to 0.3% speed candidates get no attribution research. [Speed passes](speed.md#speed-passes) states a different threshold for candidates kept as notes; a ruling settles which holds.
 
 ## After cleanup
 
@@ -173,7 +165,7 @@ Excluded, with issue placement and return conditions last rechecked at merge 20;
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
-## Latest steering review
+## Latest steering actions
 
 Steering 34 is the latest; its findings, standing corrections and actions are in commits `3a2d52b870` and `5600800c76`. Its actions are now rules in the [PR lifecycle](workflow.md#pr-lifecycle), [team](team.md), the [implementer brief](implementer-brief.md#finishing-a-file-pass) and [porting](porting.md#tests-in-rust-and-c). Steering 35 judges the provisional items: the planner refresh trigger ([ready queue](team.md#ready-queue-and-pipelining)), #901's false-failure threshold, and whether defects escaped once the acceptance review stage was dropped.
 
@@ -234,9 +226,6 @@ Verified CI state at the pause: `CI_ON_DEMAND`, `CI_MERGE_QUEUE` and `MIGRATION_
 Flakes and limits carried forward:
 
 - #693: this session saw three network-timing failures with no code cause, each cleared by one unchanged retry: a `network-protocol-loopback` hang on #916, the `network-protocol` hang that removed #932 (run 43147704245) and the reference-side `content-protocol` miss that removed #935 (run 43150720812). Earlier windows recorded 2 such failures in 42 simulation-tier runs, then none among 63 native and queue requests at the merge-20 stocktake; the windows are not combined into a rate. No source or oracle change and no new local network diagnosis is authorized by this checkpoint. Keep `.local/retained-network-693` and the linked artifacts; no candidate or base regression is inferred from a timeout.
-- A flaky shard can be rerun with `gh run rerun RUN --failed`; a removed PR is requeued with `python3 tools/ci.py enqueue PR --retry REASON`, once, and a second failure of the same job goes to root.
-- A workflow-changing PR needs root's reviewed bootstrap Full before queueing. The routine agent then reruns any "Invalidate previous validation" run skipped for a PR push inside the variable window; a push in that window otherwise has no `Full validation` status (#928, once).
-- A push to a ready PR, `ci.py ready` and `ci.py request` need a preflight stamp; a checkpoint push to a draft takes `PREFLIGHT_CHECKPOINT`. Carries and proposals live in `migration/cleanup-records/<branch>.json` (#930).
 - Metric scope completeness stays with #736's end-state inventory. No later phase is selected. #898 is a partial evidence transfer; native ownership, loader and error observations, pool and ABI identity and retained fixture consumers remain as its accepted report states.
 
 Retained state for housekeeping:
@@ -252,4 +241,4 @@ Retained state for housekeeping:
 - Keep main `.local/integration-records/`, `.local/speed-pass/` anchors, frozen runtimes and the retained simulation evidence.
 - Keep `t3-f4cf7a0b` (one unique unpushed commit, `125ea2440a`). Leave the staged 11-08 trees `t3-03c1e2da`, `t3-1ddaadfd`, `t3-5575ebe4`, `t3-83082b90`, `t3-c68d914a` and `t3-e0361d8c` untouched.
 - Leave dirty or staged trees untouched: `t3-3b491ddb` (five files), locked #565 WIP `t3-431c84b4`, locked native evidence `t3-d78d5f8b`, `t3-32cf4edc` (`tools/simulation/roads.py` staged) and `t3-e130d5a3` (`migration/saves/README.md` staged).
-- Keep protected `.local/worktrees/root-docs-72` and locked `.local/worktrees/profile-after*`. Never push stale root-docs guidance over current main. Keep the pinned original unchanged.
+- Keep protected `.local/worktrees/root-docs-72` and locked `.local/worktrees/profile-after*`. Do not push stale root-docs guidance over current main. Keep the pinned original unchanged.
