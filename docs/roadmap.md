@@ -155,7 +155,7 @@ What set the rate:
 | ---: | --- | --- | --- | --- |
 | 1 | Cleanup | #734: 227 of 319 entries and 127,567 of 187,833 raw lines unfinished (merge 20). #735: 121 long functions, 48 debt keys and 11 allows. #736: 15,439 counted tools C++ lines and 4,786 fork test lines, plus separately inventoried embedded C++. #737: I and O's 18 evidence-held chains remain; W/V and the three scanner classifications are delivered, with five network exports retained for #730. #738 is delivered | #734: all 319 files finished and closure (work order item 6) done; #735 closes with it. #736: no file the [classification](https://github.com/fetch-laboratories/openttd-rust/issues/736#issuecomment-6804817013) calls movable remains; each remaining C++ file under `tools/` and `src/tests`, and any embedded C++, either checks the calling boundary itself or reaches a live native pool, reader or production caller, and names the owner or boundary whose retirement removes it ([evidence](porting.md#evidence); root, 2026-11-11: the earlier wording required 65 pool and reader fixtures to check the boundary, which steering 34 keeps native until their owners retire them). #737: batches W, V, I and O delivered and its three withheld scanner rows classified (I and O added by root on 2026-11-10, from #839's review and #856's scanner rule). O is delivered when `--report-uncalled` is enforced against a baseline that only shrinks, each row naming the owner that retires its evidence caller (root, 2026-11-11). #738: its last item applied. Lint ratchets shrink per PR but set no exit, and the structural Clippy rows are outside it. Read each end state from the code and inventories, not from issue state | Current. #736 and #737 were reopened at this navigation: #810's "Closes #736 batch U" and #814's "It does not close #737" closed them on merge |
 | 2 | Phase 3: readers (script API, NewGRF, network, content, admin, save/load outside pool chunks) | About 37,800 compiled lines: script API 13,252, network 10,628, NewGRF 5,184, and save/load 13,023 less the pool and map chunks. The [queued owners](#after-cleanup), planned at integration 67, estimate 4,600 to 7,000 net C++ removed | Readers run in Rust with evidence for their observable outputs. Every remaining body in these buckets has a named later owner: VM and binding shims phase 6, script and network GUI phase 5, pool chunks phase 2 | Next. Plan it in full before cleanup's last items are dispatched ([goal and phases](planning.md#goal-and-phases)) |
-| 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,899 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 16,759-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in [accepted placement](#accepted-reader-and-pool-placement-2026-11-03-after-integration-67) |
+| 3 | Phase 2: storage, each pool with its save/load chunks, then the map | 11,899 compiled lines in storage, about 4,300 save/load chunk lines, the logic residue assigned to pool owners, and record field routes in the 16,759-line boundary layer | Rust owns every pool's records, slots, allocation, iteration, lifetime and save/load, then map allocation and remaining map bodies; no Rust-used field behind a native service | Queued; placement in the [reader and pool placement](design/reader-pool-placement.md) design |
 | 4 | Support | About 32,200: support 21,191 and graphics and viewport 10,982, plus their data tables and startup | As in [planning](planning.md#goal-and-phases) | #3; plan deferred until adjacent (user, 2026-10-28) |
 | 5 | GUI, drawing and platform | About 64,200: GUI 52,227 and platform 11,943, plus simulation and data-table drawing | As in [planning](planning.md#goal-and-phases) | As phase 4 |
 | 6 | Vendored and final retirement | Vendored 52,831, plus whatever boundary, test and evidence C++ remains | Every original and fork-written C++ line retired and candidate native targets removed ([goal and phases](planning.md#goal-and-phases)) | As phase 4 |
@@ -256,52 +256,6 @@ Closed 2026-11-06 with branches kept; heads and states are also on each PR and i
 | #714 vehicle | #656 | `20c5f1bb99` | Cargo passed; native/runtime pending; engine field route open; conflicts with 102 |
 | #723 small pools/ObjectSpec | #638 | `2ec78fb676` | Four checkpoints pushed at close, unvalidated; next was adopting `Shared.grf_price_shift` |
 | #731 network | #730 | `655d8f8990` | Saved unfinished lifetime work, unvalidated; prior `595232f50c` passed Cargo and native |
-
-## Accepted reader and pool placement (2026-11-03, after integration 67)
-
-Agent: /root/place-after67-reader-plan | Model: gpt-6.1-sol | Reasoning effort: high
-
-Root accepted these ownership boundaries. The current reader envelope is in
-[Phases](#phases); #669 holds the remaining owners and their selection events,
-not an additive retirement promise. #653's industry definitions are integrated;
-specification files classified under simulation storage/logic add work outside
-the NewGRF bucket. Retain the VM, registration glue, stack conversions and
-exception/suspension shims until their phase-6 owner. Executable API header
-methods belong to their API owners; whole headers and new forwarding methods
-are not savings.
-
-Pool briefs include allocation bookkeeping (`data`, `used_bitmap`, `first_free`,
-`first_unused`, `items`, assertion credit `checked`, `cleaning` and applicable
-allocation-cache state), allocation/indexed allocation, reuse, iteration,
-reset/cleanup and construction publication/destruction hooks. The generic
-native pool template earns no repeated deletion credit while any C++ pool
-instantiates it. Every Rust-used name/container/cache field moves in phase 2;
-only exact original-C++-only fields may await a named later owner. Record lookup,
-coupled save descriptors and generated declarations follow integrated #570.
-
-Exact remaining shell dispositions constrain briefs:
-
-| Boundary | Phase-2 ownership and exact later-owned remainder |
-| --- | --- |
-| Vehicle/type shells | Combined #656/#598/#599 takes maintenance, cargo/identity/loading, resolver fields, names and Rust-used sprite/cache fields; existing controller/cargo/order/visual/occupancy owners stay canonical. `coord`, `bounds`, viewport hash links and `fill_percent_te_id` belong to phase-5 drawing/viewport; `old_orders` belongs to #669 legacy conversion. Identity/vtable/owner-pointer scaffolding retires with final callers. |
-| Stations/road stops/cargo | #634 takes names and Rust-used caches, spec-reference vectors, custom road-stop data, catchment/loading/nearby-list facades, GoodsEntry cargo/flow attachments and CargoPacket/CargoPayment pool completion. Link-graph owner takes flow/completed-job publication. `sign` belongs to phase 5; spec definitions belong to #669. |
-| Town/industry/subsidy | #635 takes town `psa_list`, Rust-used `cached_name`/caches, industry `psa`, town/station links and subsidy flags; existing Rust name/cargo/count/nearby owners stay canonical. Town `cache.sign`/`show_zone` belong to phase 5. Industry `cached_name` may await phase-4 formatting only without a Rust field route; presentation facade storage retires with phase-4 string callers. Persistent-storage payload/pool is #638; industry definitions #653 and HouseSpec #669 after #628. |
-| Engine | #637/#497 takes info, vehicle-specific info, original image/type/list position, GRF/override/badge payloads, lifecycle and name access after adopting #655. Only `display_flags`/`display_last_variant` await phase-5 build-list GUI. |
-| Orders/lists/backups | All current fields and pool state move in phase 2; `old_order_index` and `OldOrderSaveLoadItem::{index,next,order}` belong to #669 legacy conversion. |
-| Company/group | Phase 2 takes settings, finance/statistics aliases, identity, names/livery and free-unit/free-group state used by Rust. AI instance/info/config payload belongs to #669 script orchestration; authorization-list payload to #669 network remainder. Rust-used links move with the record. Only `Group::folded` awaits phase-5 GUI. |
-| LinkGraph/LinkGraphJob | Graph/settings snapshots, join/abort state, annotations, flows and publication move in phase 2, including #168/#199/#500 completed-job publication. A native thread handle may remain behind a named join/start operation until platform threading moves; no field-callback exception follows. |
-| Small pools | #638 includes objects, depots, signs, goals, story pages/elements, league tables/elements and persistent storage, plus #498 payloads and Rust-used strings. Only `Sign::sign` awaits phase-5 drawing/viewport. |
-
-All issue estimates are net compiled C++ removed, including retained/generated
-declarations, facades and fixtures. Rewritten consumers receive no reduction
-credit. #658's **+445 code-line .inc re-baseline** is reported separately from
-its small cleanup savings and #657's deletion savings. Reader evidence compares
-API return values/errors/command results/enumeration and protocol packets,
-ordering, timeout/error/connection decisions; world-state equality alone misses
-these observations. Reader owners use integrated interfaces only. Root supplies
-a shared service once under [integration](workflow.md#integration); a service
-need does not park the whole owner behind an unrelated draft. Real state and
-lifetime dependencies retain their selection events.
 
 ## Thirty-fourth steering review (2026-11-11)
 
