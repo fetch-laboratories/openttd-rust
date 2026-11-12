@@ -12,12 +12,14 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from unittest.mock import patch
 
 import ci
 import ci_log
+import review_report
 import status_comment
 import yaml
 
@@ -2511,16 +2513,21 @@ class RequestTests(unittest.TestCase):
                     ci.verify_completion(record, run)
 
 
-def requested(profile: str, request: str, created: str, **fields: object) -> dict:
-    """A dispatched ci-request.yml run as GitHub lists it."""
+def requested(
+    profile: str, request: str, created: str, conclusion: str | None = None
+) -> ci_log.Run:
+    """A dispatched ci-request.yml run as GitHub lists it, still queued without a
+    conclusion; its ID is the hour it was created."""
     return {
         "id": int(created[11:13]),
+        "run_attempt": 1,
+        "status": "queued" if conclusion is None else "completed",
+        "conclusion": conclusion,
         "display_title": f"CI {profile} PR 170 {request}-{HEAD}",
         "event": "workflow_dispatch",
         "head_branch": "rust-migration",
         "created_at": created,
         "html_url": f"https://github.com/example/fork/actions/runs/{created[11:13]}",
-        **fields,
     }
 
 
@@ -2637,7 +2644,7 @@ class RequestPathTests(unittest.TestCase):
         return path
 
     def wait_pr(
-        self, *extra: str, runs: list[list[dict]] | None = None
+        self, *extra: str, runs: list[list[ci_log.Run]] | None = None
     ) -> tuple[int, Path | None, str, list[tuple[str, ...]]]:
         """Run `ci.py wait 170 ...`, recording the request file wait was given."""
         calls: list[tuple[str, ...]] = []
@@ -2676,11 +2683,10 @@ class RequestPathTests(unittest.TestCase):
     def test_wait_on_a_pr_finds_a_remote_request_through_every_page(self) -> None:
         older = requested("native", "c" * 32, "2026-11-12T01:00:00Z")
         newer = requested("native", "e" * 32, "2026-11-12T03:00:00Z")
-        foreign = [
-            dict(newer, display_title=f"CI native PR 171 x-{HEAD}"),
-            dict(newer, display_title=f"CI native PR 170 x-{PREVIOUS}"),
-            dict(newer, head_branch="untrusted"),
-        ]
+        foreign = [newer.copy() for _ in range(3)]
+        foreign[0]["display_title"] = f"CI native PR 171 x-{HEAD}"
+        foreign[1]["display_title"] = f"CI native PR 170 x-{PREVIOUS}"
+        foreign[2]["head_branch"] = "untrusted"
         code, path, output, calls = self.wait_pr(runs=[[older, *foreign], [newer]])
         self.assertEqual(code, 0)
         self.assertEqual(path, ci.REQUESTS / f"{'e' * 32}-{HEAD}.json")
@@ -3111,8 +3117,9 @@ class EnqueueTests(unittest.TestCase):
         self.assertEqual(self.stamp.call_args.args, (170, HEAD, None))
 
 
-def comment(number: int, body: str, at: str) -> dict[str, str]:
+def comment(number: int, body: str, at: str) -> review_report.Comment:
     return {
+        "id": number,
         "html_url": f"https://github.com/example/fork/pull/170#issuecomment-{number}",
         "updated_at": at,
         "body": body,
@@ -3188,7 +3195,7 @@ class ReviewReportTests(unittest.TestCase):
                 )
 
     def test_github_reviews_and_older_heads_are_reported_as_such(self) -> None:
-        reviews = [
+        reviews: list[review_report.Review] = [
             {
                 "commit_id": PREVIOUS,
                 "html_url": "r",
@@ -3204,24 +3211,65 @@ class ReviewReportTests(unittest.TestCase):
         )
 
 
-class FakeGitHub:
-    """Recorded answers for one PR: heads (successive reads of the PR), quick,
-    runs (pages of dispatched runs), comments (pages of comments), queue (the
-    GraphQL pull request) and group (merge-group runs)."""
+class CheckRun(TypedDict):
+    """A Quick validation check run as the check-runs API lists it."""
 
-    def __init__(self, world: dict[str, object]) -> None:
+    status: str
+    conclusion: str | None
+    started_at: str | None
+    html_url: str
+
+
+def quick_run(conclusion: str = "success") -> CheckRun:
+    return {
+        "status": "completed",
+        "conclusion": conclusion,
+        "started_at": "2026-11-12T01:00:00Z",
+        "html_url": "https://github.com/example/fork/runs/1",
+    }
+
+
+def queue_state(
+    state: str = "OPEN", entry: ci.QueueEntry | None = None
+) -> ci.QueueState:
+    """The GraphQL pull request: merged at MERGE, or open with an optional entry."""
+    return {
+        "state": state,
+        "mergeCommit": {"oid": MERGE} if state == "MERGED" else None,
+        "mergeQueueEntry": entry,
+        "autoMergeRequest": None,
+    }
+
+
+@dataclass
+class World:
+    """Recorded answers for one PR: quick (its Quick check run), runs (pages of
+    dispatched runs), queue (the GraphQL pull request), heads (successive reads
+    of the PR's head), comments (pages of comments) and group (merge-group runs)."""
+
+    quick: CheckRun = field(default_factory=quick_run)
+    runs: list[list[ci_log.Run]] = field(default_factory=list)
+    queue: ci.QueueState = field(default_factory=queue_state)
+    heads: list[str] = field(default_factory=lambda: [HEAD, HEAD])
+    comments: list[list[review_report.Comment]] = field(default_factory=lambda: [[]])
+    group: list[ci.QueueRun] = field(default_factory=list)
+
+
+class FakeGitHub:
+    """A World as the API and gh answer for it, recording gh's calls."""
+
+    def __init__(self, world: World) -> None:
         self.world = world
-        self.heads = iter(cast(list[str], world.get("heads", [HEAD, HEAD])))
-        self.runs = cast(list[list[dict]], world["runs"])
+        self.heads = iter(world.heads)
         self.calls: list[tuple[str, ...]] = []
 
     def api(self, _repository: str, path: str) -> object:
         answers = {
-            "check-runs": {"check_runs": [self.world["quick"]]},
+            "check-runs": {"check_runs": [self.world.quick]},
             # enqueue's bounded window sees only the first page.
-            "event=workflow_dispatch": {"workflow_runs": self.runs[0]},
+            "event=workflow_dispatch": {"workflow_runs": self.world.runs[0]},
             "event=pull_request": {"workflow_runs": []},
-            "event=merge_group": {"workflow_runs": self.world.get("group", [])},
+            "event=merge_group": {"workflow_runs": self.world.group},
             f"commits/{MERGE}": {"parents": [{"sha": PARENT}, {"sha": HEAD}]},
         }
         if path == "pulls/170":
@@ -3238,12 +3286,12 @@ class FakeGitHub:
     def gh(self, *args: str) -> str:
         self.calls.append(args)
         if args[:2] == ("api", "graphql"):
-            pull = self.world["queue"]
+            pull = self.world.queue
             return json.dumps({"data": {"repository": {"pullRequest": pull}}})
         answers = {
-            "/comments": self.world.get("comments", [[]]),
+            "/comments": self.world.comments,
             "/reviews": [[]],
-            "event=workflow_dispatch": [{"workflow_runs": p} for p in self.runs],
+            "event=workflow_dispatch": [{"workflow_runs": p} for p in self.world.runs],
         }
         (answer,) = [value for key, value in answers.items() if key in args[-1]]
         return json.dumps(answer)
@@ -3252,51 +3300,34 @@ class FakeGitHub:
 class StateTests(unittest.TestCase):
     """ci.py state PR against recorded, paginated gh answers (P1)."""
 
-    QUICK = {
-        "status": "completed",
-        "conclusion": "success",
-        "started_at": "2026-11-12T01:00:00Z",
-        "html_url": "https://github.com/example/fork/runs/1",
-    }
     RUST_RED = requested(
         "rust",
         "c" * 32,
         "2026-11-12T02:00:00Z",
-        status="completed",
         conclusion="failure",
     )
     NATIVE_GREEN = requested(
         "native",
         "e" * 32,
         "2026-11-12T04:00:00Z",
-        status="completed",
         conclusion="success",
     )
     NATIVE_OLD = requested(
         "native",
         "f" * 32,
         "2026-11-12T01:00:00Z",
-        status="completed",
         conclusion="failure",
     )
-    QUEUED = {
-        "state": "OPEN",
-        "mergeCommit": None,
-        "mergeQueueEntry": {"state": "QUEUED", "position": 2},
-        "autoMergeRequest": None,
-    }
-    OUT = dict(QUEUED, mergeQueueEntry=None)
+
+    def world(self) -> World:
+        """Rust red, then on a second page native green over an older red run."""
+        return World(runs=[[self.RUST_RED], [self.NATIVE_GREEN, self.NATIVE_OLD]])
 
     def state(
-        self, *argv: str, **world: object
+        self, *argv: str, world: World | None = None
     ) -> tuple[int, str, list[tuple[str, ...]]]:
         """Run `ci.py state 170` (or `argv`) against a FakeGitHub of `world`."""
-        defaults = {
-            "quick": self.QUICK,
-            "runs": [[self.RUST_RED], [self.NATIVE_GREEN, self.NATIVE_OLD]],
-            "queue": self.OUT,
-        }
-        github = FakeGitHub({**defaults, **world})
+        github = FakeGitHub(world or self.world())
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(ci, "REQUESTS", Path(directory)),
@@ -3344,7 +3375,9 @@ class StateTests(unittest.TestCase):
             )
             for n in range(4)
         ]
-        code, output, calls = self.state(comments=[reports[:3], reports[3:]])
+        code, output, calls = self.state(
+            world=replace(self.world(), comments=[reports[:3], reports[3:]])
+        )
         self.assertEqual(code, 0)
         lines = output.splitlines()
         url = "https://github.com/example/fork/pull/170#issuecomment-"
@@ -3383,13 +3416,13 @@ class StateTests(unittest.TestCase):
             review(PREVIOUS[:12], "/root/old", "Disposition: accepted, whole PR"),
             "t",
         )
-        _, output, _ = self.state(comments=[[old]])
+        _, output, _ = self.state(world=replace(self.world(), comments=[[old]]))
         self.assertIn(
             f"  /root/old: accepted (whole PR) at {PREVIOUS[:10]}, not head", output
         )
 
     def test_queue_lines(self) -> None:
-        failed = {
+        failed: ci.QueueRun = {
             "id": 7,
             "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
             "created_at": "2026-11-11T01:00:00Z",
@@ -3398,33 +3431,39 @@ class StateTests(unittest.TestCase):
             "html_url": "https://github.com/example/fork/actions/runs/7",
             "head_sha": MERGE,
         }
-        merged = dict(self.OUT, state="MERGED", mergeCommit={"oid": MERGE})
+        passed = failed.copy()
+        passed["conclusion"] = "success"
+        queued = queue_state(entry={"state": "QUEUED", "position": 2})
+        green = World(runs=[[self.NATIVE_GREEN]])
         for world, line in (
-            ({"queue": self.QUEUED}, "Queue: queued at position 2"),
-            ({}, "Queue: not queued"),
-            ({"group": [dict(failed, conclusion="success")]}, "Queue: not queued"),
+            (replace(green, queue=queued), "Queue: queued at position 2"),
+            (green, "Queue: not queued"),
+            (replace(green, group=[passed]), "Queue: not queued"),
             (
-                {"group": [failed]},
+                replace(green, group=[failed]),
                 "Queue: not queued; last merge-group run cancelled: "
                 + failed["html_url"],
             ),
-            ({"queue": merged}, "Queue: merged"),
+            (replace(green, queue=queue_state("MERGED")), "Queue: merged"),
         ):
             with self.subTest(line):
-                _, output, _ = self.state(runs=[[self.NATIVE_GREEN]], **world)
+                _, output, _ = self.state(world=world)
                 self.assertIn(line + "\n", output)
 
     def test_green_head_passes_enqueue_checks_only_as_checks(self) -> None:
-        code, output, calls = self.state(runs=[[self.NATIVE_GREEN]])
+        green = World(runs=[[self.NATIVE_GREEN]])
+        code, output, calls = self.state(world=green)
         self.assertEqual(code, 0)
         self.assertEqual(output.splitlines()[-1], "enqueue checks: pass")
         self.assertFalse([call for call in calls if call[0] != "api"])
-        red = dict(self.QUICK, conclusion="failure")
-        _, output, _ = self.state(runs=[[self.NATIVE_GREEN]], quick=red)
+        red = replace(green, quick=quick_run("failure"))
+        _, output, _ = self.state(world=red)
         self.assertIn("enqueue checks: blocked: Quick validation at", output)
 
     def test_moved_head_prints_no_mixed_view(self) -> None:
-        code, output, _ = self.state(heads=[HEAD, PREVIOUS])
+        code, output, _ = self.state(
+            world=replace(self.world(), heads=[HEAD, PREVIOUS])
+        )
         self.assertEqual(code, 1)
         (line,) = output.splitlines()
         self.assertIn(f"head moved from {HEAD} to {PREVIOUS}", line)
@@ -3758,7 +3797,7 @@ class LogTests(unittest.TestCase):
             ci.log_target(args)
 
     def test_pr_names_the_run_it_selected(self) -> None:
-        rust = requested("rust", "c" * 32, "2026-11-12T02:00:00Z", run_attempt=1)
+        rust = requested("rust", "c" * 32, "2026-11-12T02:00:00Z")
         group = {
             "id": 3,
             "head_branch": f"gh-readonly-queue/rust-migration/pr-170-{BASE}",
@@ -3774,7 +3813,9 @@ class LogTests(unittest.TestCase):
         with (
             patch.object(ci, "api", side_effect=lambda _, path: answers[path]),
             patch.object(
-                ci, "dispatched_runs", return_value=[dict(rust, profile="rust")]
+                ci,
+                "dispatched_runs",
+                return_value=[ci.DispatchedRun(rust, "rust", f"{'c' * 32}-{HEAD}")],
             ),
             patch.object(ci, "queue_runs", return_value=[group]),
             patch("builtins.print") as printed,

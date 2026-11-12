@@ -10,12 +10,12 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import base_update
 import ci
-from review_report import ReviewReport, review_reports
+from review_report import Comment, Review, ReviewReport, review_reports
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -119,7 +119,9 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         and base_tip == current_tip,
         full_fact,
         passing_full_url,
-        review_reports(comments, reviews, head),
+        review_reports(
+            cast(list[Comment], comments), cast(list[Review], reviews), head
+        ),
         files,
         milestones,
     )

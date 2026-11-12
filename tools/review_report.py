@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, NotRequired, TypedDict
+from typing import NotRequired, TypedDict
 
 from cleanup_contract import ATTRIBUTION
 
@@ -36,6 +36,16 @@ class Comment(TypedDict):
     body: str
     user: NotRequired[User | None]
     issue_url: NotRequired[str]
+
+
+class Review(TypedDict):
+    """A submitted PR review as the API lists it, with the fields read here."""
+
+    html_url: str
+    state: str
+    body: str | None
+    commit_id: NotRequired[str | None]
+    submitted_at: NotRequired[str | None]
 
 
 @dataclass
@@ -96,7 +106,7 @@ def parsed(found: ReviewReport, body: str) -> ReviewReport:
 
 
 def review_reports(
-    comments: list[dict[str, Any]], reviews: list[dict[str, Any]], head: str
+    comments: list[Comment], reviews: list[Review], head: str
 ) -> list[ReviewReport]:
     """Reports in PR comments, then submitted GitHub reviews, against `head`."""
     reports = [
@@ -116,15 +126,15 @@ def review_reports(
     reports.extend(
         parsed(
             ReviewReport(
-                item["commit_id"],
+                sha,
                 item["html_url"],
-                item["submitted_at"],
+                at,
                 "GitHub review: " + item["state"],
-                item["commit_id"] == head,
+                sha == head,
             ),
             item.get("body") or "",
         )
         for item in reviews
-        if item.get("commit_id") and item.get("submitted_at")
+        if (sha := item.get("commit_id")) and (at := item.get("submitted_at"))
     )
     return reports

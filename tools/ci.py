@@ -10,10 +10,11 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 from urllib.parse import quote
 
 import ci_log
@@ -223,7 +224,7 @@ def find_run(record: dict, runs: list[dict]) -> dict | None:
     return matches[0] if matches else None
 
 
-def write_request(path: Path, record: dict) -> None:
+def write_request(path: Path, record: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record, indent=2) + "\n")
 
@@ -471,7 +472,38 @@ def wait(path: Path, timeout: int, interval: int) -> None:
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
 
-Candidate = tuple[dict, Path]
+class RequestRecord(TypedDict):
+    """A request file (schema 1); `run_id` and `run_url` once its run is found."""
+
+    schema_version: int
+    repository: str
+    pr: int
+    head: str
+    base: str | None
+    profile: str
+    request: str
+    bootstrap: bool
+    created_at: str
+    run_id: NotRequired[int]
+    run_url: NotRequired[str]
+
+
+@dataclass
+class Candidate:
+    """A request `wait PR` may choose: its record, its file and where it was found."""
+
+    record: RequestRecord
+    path: Path
+    source: str  # "local record" or "GitHub"
+
+
+@dataclass
+class DispatchedRun:
+    """A requested run, with the profile and request identifier its name gives."""
+
+    run: ci_log.Run
+    profile: str
+    request: str
 
 
 def local_requests(repository: str, pr: int, head: str) -> list[Candidate]:
@@ -489,16 +521,17 @@ def local_requests(repository: str, pr: int, head: str) -> list[Candidate]:
             and record.get("head") == head
             and not record.get("bootstrap")
         ):
-            found.append((record, path))
+            found.append(Candidate(record, path, "local record"))
     return found
 
 
-def dispatched_runs(repository: str, pull: dict, head: str) -> list[dict]:
+def dispatched_runs(
+    repository: str, pr: int, opened: str, head: str
+) -> list[DispatchedRun]:
     """Requested runs for the PR head, found on GitHub by their identifier, which
-    ends with the head (#922): every dispatched run since the PR opened, paginated.
-    Each run gains `profile` and `request` from its name."""
-    pr = pull["number"]
-    since = quote(">=" + pull["created_at"])
+    ends with the head (#922): every dispatched run since the PR opened at
+    `opened`, paginated."""
+    since = quote(">=" + opened)
     pages = json.loads(
         gh(
             "api",
@@ -519,28 +552,32 @@ def dispatched_runs(repository: str, pull: dict, head: str) -> list[dict]:
             and title[4].endswith(f"-{head}")
             and run.get("head_branch") == PROTECTED_REF
         ):
-            found.append(dict(run, profile=title[1], request=title[4]))
+            found.append(DispatchedRun(run, title[1], title[4]))
     return found
 
 
-def remote_requests(repository: str, pull: dict, head: str) -> list[Candidate]:
+def remote_requests(
+    repository: str, pr: int, opened: str, head: str
+) -> list[Candidate]:
     """Request records rebuilt from the PR head's requested runs on GitHub."""
     found = []
-    for run in dispatched_runs(repository, pull, head):
-        record = {
+    for dispatched in dispatched_runs(repository, pr, opened, head):
+        run = dispatched.run
+        record: RequestRecord = {
             "schema_version": 1,
             "repository": repository,
-            "pr": pull["number"],
+            "pr": pr,
             "head": head,
             "base": None,
-            "profile": run["profile"],
-            "request": run["request"],
+            "profile": dispatched.profile,
+            "request": dispatched.request,
             "bootstrap": False,
             "created_at": run["created_at"],
             "run_id": run["id"],
             "run_url": run["html_url"],
         }
-        found.append((record, REQUESTS / f"{run['request']}.json"))
+        path = REQUESTS / f"{dispatched.request}.json"
+        found.append(Candidate(record, path, "GitHub"))
     return found
 
 
@@ -550,9 +587,9 @@ def newest_request(
     """The newest candidate, refusing a choice between profiles nobody named."""
     newest: dict[str, Candidate] = {}
     for candidate in sorted(
-        candidates, key=lambda c: (c[0]["created_at"], c[0]["request"])
+        candidates, key=lambda c: (c.record["created_at"], c.record["request"])
     ):
-        newest[candidate[0]["profile"]] = candidate
+        newest[candidate.record["profile"]] = candidate
     if not newest:
         named = f"{profile} " if profile else ""
         raise ValueError(
@@ -575,24 +612,27 @@ def resolve_request(repository: str, pr: int, profile: str | None) -> Path:
     pull = api(repository, f"pulls/{pr}")
     head = current_head(pull)
     local = local_requests(repository, pr, head)
-    known = {record["request"] for record, _ in local}
+    known = {candidate.record["request"] for candidate in local}
     remote = [
         candidate
-        for candidate in remote_requests(repository, dict(pull, number=pr), head)
-        if candidate[0]["request"] not in known
+        for candidate in remote_requests(repository, pr, pull["created_at"], head)
+        if candidate.record["request"] not in known
     ]
-    candidates = [c for c in local + remote if profile in (None, c[0]["profile"])]
-    chosen = newest_request(candidates, pr, head, profile)
-    record, path = chosen
-    source = "GitHub" if chosen in remote else "local record"
-    if chosen in remote:
-        write_request(path, record)
+    chosen = newest_request(
+        [c for c in local + remote if profile in (None, c.record["profile"])],
+        pr,
+        head,
+        profile,
+    )
+    record = chosen.record
+    if chosen.source == "GitHub":
+        write_request(chosen.path, record)
     print(
         f"Waiting on the newest {record['profile']} request for PR #{pr} at {head} "
-        f"(from {source}): {record.get('run_url') or 'run not listed yet'}",
+        f"(from {chosen.source}): {record.get('run_url') or 'run not listed yet'}",
         flush=True,
     )
-    return path
+    return chosen.path
 
 
 QUEUE_STATE = """
@@ -637,6 +677,7 @@ class QueueRun(TypedDict):
     status: str
     conclusion: str | None
     html_url: str
+    run_attempt: NotRequired[int]
 
 
 class QueueRemoved(Exception):
@@ -753,7 +794,7 @@ def latest_quick(repository: str, head: str) -> dict | None:
     return runs[-1] if runs else None
 
 
-def bootstrap_runs(repository: str, head: str) -> list[dict]:
+def bootstrap_runs(repository: str, head: str) -> list[ci_log.Run]:
     """The head's ci:full bootstrap label runs of ci-request.yml."""
     path = f"actions/workflows/{WORKFLOW}/runs?per_page=100&event="
     # Every label starts a run; only a ci:full bootstrap runs its plan.
@@ -895,48 +936,80 @@ def enqueue_assessment(repository: str, pr: int, pull: dict) -> str:
     return "pass"
 
 
-def listing(repository: str, path: str) -> list[dict]:
-    """A paginated REST array."""
+def listing(repository: str, path: str) -> list:
+    """A paginated REST array, its items as the API gives them."""
     pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repository}/{path}"))
     return [item for page in pages for item in page]
 
 
-def run_fact(run: dict | None) -> dict | None:
-    if run is None:
-        return None
-    return {
-        "status": run["status"],
-        "conclusion": run["conclusion"],
-        "url": run["html_url"],
-        "created_at": run.get("created_at") or run.get("started_at"),
-    }
+@dataclass
+class RunFact:
+    """What `state` shows of a run or check run."""
+
+    status: str
+    conclusion: str | None
+    url: str
+    created_at: str | None
 
 
-def requests_at_head(repository: str, pull: dict, head: str) -> dict[str, dict]:
+@dataclass
+class QueueFact:
+    queued: bool
+    text: str
+
+
+@dataclass
+class PullState:
+    """One PR's state as `state` shows it, all read at one head."""
+
+    repository: str
+    number: int
+    title: str
+    state: str
+    draft: bool
+    head: str
+    mergeable: str
+    quick: RunFact | None
+    requests: dict[str, RunFact]
+    queue: QueueFact
+    reports: list[review_report.ReviewReport]
+    enqueue_checks: str
+
+
+def run_fact(run: Mapping[str, Any]) -> RunFact:
+    return RunFact(
+        run["status"],
+        run["conclusion"],
+        run["html_url"],
+        run.get("created_at") or run.get("started_at"),
+    )
+
+
+def requests_at_head(
+    repository: str, pr: int, opened: str, head: str
+) -> dict[str, RunFact]:
     """The newest requested run at the head for each profile, bootstrap apart."""
-    runs = dispatched_runs(repository, pull, head)
-    runs += [
-        dict(run, profile="full bootstrap") for run in bootstrap_runs(repository, head)
-    ]
-    newest: dict[str, dict] = {}
-    for run in sorted(runs, key=lambda run: (run["created_at"], run["id"])):
-        newest[run["profile"]] = run
-    return {
-        profile: cast(dict, run_fact(run)) for profile, run in sorted(newest.items())
-    }
+    runs = [(d.profile, d.run) for d in dispatched_runs(repository, pr, opened, head)]
+    runs += [("full bootstrap", run) for run in bootstrap_runs(repository, head)]
+    newest: dict[str, ci_log.Run] = {}
+    for profile, run in sorted(
+        runs, key=lambda item: (item[1]["created_at"], item[1]["id"])
+    ):
+        newest[profile] = run
+    return {profile: run_fact(run) for profile, run in sorted(newest.items())}
 
 
-def queue_fact(repository: str, pr: int) -> dict:
+def queue_fact(repository: str, pr: int) -> QueueFact:
     pull = queue_state(repository, pr)
     if pull["state"] == "MERGED":
-        return {"queued": False, "text": "merged"}
+        return QueueFact(False, "merged")
     if position := queue_position(pull):
-        return {"queued": True, "text": position}
+        return QueueFact(True, position)
     last = queue_run(repository, pr)
     text = "not queued"
     if last and last["conclusion"] in REMOVED:
         text += f"; last merge-group run {last['conclusion']}: {last['html_url']}"
-    return {"queued": False, "text": text}
+    return QueueFact(False, text)
 
 
 def mergeable_word(pull: dict) -> str:
@@ -944,29 +1017,30 @@ def mergeable_word(pull: dict) -> str:
     return f"{words[pull.get('mergeable')]} ({pull.get('mergeable_state', 'unknown')})"
 
 
-def pull_state(repository: str, pr: int) -> dict:
+def pull_state(repository: str, pr: int) -> PullState:
     """One PR's state as the tools read it, from one head; refuse a view read
     across a push."""
-    pull: dict = {**api(repository, f"pulls/{pr}"), "number": pr}
+    pull = api(repository, f"pulls/{pr}")
     head = pull["head"]["sha"]
     comments = listing(repository, f"issues/{pr}/comments?per_page=100")
     reviews = listing(repository, f"pulls/{pr}/reviews?per_page=100")
     reports = review_report.review_reports(comments, reviews, head)
     reports.sort(key=lambda report: report.reported_at, reverse=True)
-    facts = {
-        "repository": repository,
-        "number": pr,
-        "title": pull["title"],
-        "state": "merged" if pull.get("merged_at") else pull["state"],
-        "draft": bool(pull.get("draft")),
-        "head": head,
-        "mergeable": mergeable_word(pull),
-        "quick": run_fact(latest_quick(repository, head)),
-        "requests": requests_at_head(repository, pull, head),
-        "queue": queue_fact(repository, pr),
-        "reports": [asdict(report) for report in reports],
-        "enqueue_checks": enqueue_assessment(repository, pr, pull),
-    }
+    quick = latest_quick(repository, head)
+    facts = PullState(
+        repository=repository,
+        number=pr,
+        title=pull["title"],
+        state="merged" if pull.get("merged_at") else pull["state"],
+        draft=bool(pull.get("draft")),
+        head=head,
+        mergeable=mergeable_word(pull),
+        quick=run_fact(quick) if quick else None,
+        requests=requests_at_head(repository, pr, pull["created_at"], head),
+        queue=queue_fact(repository, pr),
+        reports=reports,
+        enqueue_checks=enqueue_assessment(repository, pr, pull),
+    )
     end = api(repository, f"pulls/{pr}")["head"]["sha"]
     if end != head:
         raise ValueError(
@@ -976,68 +1050,100 @@ def pull_state(repository: str, pr: int) -> dict:
     return facts
 
 
-def run_line(label: str, fact: dict | None) -> str:
+def run_line(label: str, fact: RunFact | None) -> str:
     if fact is None:
         return f"{label}: none"
-    return f"{label}: {fact['conclusion'] or fact['status']} {fact['url']}"
+    return f"{label}: {fact.conclusion or fact.status} {fact.url}"
 
 
-def report_line(report: dict) -> str:
-    verdict = report["disposition"]
-    if report["scope"]:
-        verdict += f" ({report['scope']})"
-    where = (
-        "at head" if report["matches_head"] else f"at {report['sha'][:10]}, not head"
-    )
-    return f"  {report['agent']}: {verdict} {where} {report['url']}"
+def report_line(report: review_report.ReviewReport) -> str:
+    verdict = report.disposition
+    if report.scope:
+        verdict += f" ({report.scope})"
+    where = "at head" if report.matches_head else f"at {report.sha[:10]}, not head"
+    return f"  {report.agent}: {verdict} {where} {report.url}"
 
 
 SHOWN_REPORTS = 5
 
 
-def state_lines(facts: dict) -> list[str]:
-    ready = "draft" if facts["draft"] else "ready"
+def state_lines(facts: PullState) -> list[str]:
+    ready = "draft" if facts.draft else "ready"
     lines = [
-        f"PR #{facts['number']} {facts['state']}, {ready}: {facts['title']}",
-        f"head {facts['head']}, mergeable: {facts['mergeable']}",
-        run_line("Quick at head", facts["quick"]),
+        f"PR #{facts.number} {facts.state}, {ready}: {facts.title}",
+        f"head {facts.head}, mergeable: {facts.mergeable}",
+        run_line("Quick at head", facts.quick),
     ]
-    requests = facts["requests"]
+    requests = facts.requests
     lines += [run_line(f"{p} at head", fact) for p, fact in requests.items()]
     if not requests:
         lines.append("Requested runs at head: none")
-    lines.append(f"Queue: {facts['queue']['text']}")
-    reports = facts["reports"]
+    lines.append(f"Queue: {facts.queue.text}")
+    reports = facts.reports
     lines.append(
         f"Review reports: {len(reports)}" + (", newest first" if reports else "")
     )
     lines += [report_line(report) for report in reports[:SHOWN_REPORTS]]
     if older := reports[SHOWN_REPORTS:]:
-        links = ", ".join(report["url"] for report in older)
+        links = ", ".join(report.url for report in older)
         lines.append(f"  {len(older)} older: {links}")
-    lines.append(f"enqueue checks: {facts['enqueue_checks']}")
+    lines.append(f"enqueue checks: {facts.enqueue_checks}")
     return lines
 
 
 def show_state(repository: str, pr: int, as_json: bool) -> None:
     facts = pull_state(repository, pr)
-    print(json.dumps(facts, indent=2) if as_json else "\n".join(state_lines(facts)))
+    text = (
+        json.dumps(asdict(facts), indent=2)
+        if as_json
+        else "\n".join(state_lines(facts))
+    )
+    print(text)
 
 
-def pr_runs(repository: str, pr: int, profile: str | None) -> tuple[str, list[dict]]:
+@dataclass
+class PrRun:
+    """A run `log --pr` may read: a requested run, or a merge-group run whose
+    group commit names the head it tested."""
+
+    kind: str
+    run_id: int
+    attempt: int
+    created_at: str
+    url: str
+    group: QueueRun | None = None
+
+
+def pr_runs(repository: str, pr: int, profile: str | None) -> tuple[str, list[PrRun]]:
     """The PR's head and its candidate runs: requested runs at that head and
-    merge-group runs, each with a `kind`."""
-    pull: dict = {**api(repository, f"pulls/{pr}"), "number": pr}
+    merge-group runs."""
+    pull = api(repository, f"pulls/{pr}")
     head = pull["head"]["sha"]
     runs = []
     if profile != "queue":
         runs += [
-            dict(run, kind=f"requested {run['profile']}")
-            for run in dispatched_runs(repository, pull, head)
-            if profile in (None, run["profile"])
+            PrRun(
+                f"requested {d.profile}",
+                d.run["id"],
+                d.run.get("run_attempt", 1),
+                d.run["created_at"],
+                d.run["html_url"],
+            )
+            for d in dispatched_runs(repository, pr, pull["created_at"], head)
+            if profile in (None, d.profile)
         ]
     if profile in (None, "queue"):
-        runs += [dict(run, kind="merge-group") for run in queue_runs(repository, pr)]
+        runs += [
+            PrRun(
+                "merge-group",
+                run["id"],
+                run.get("run_attempt", 1),
+                run["created_at"],
+                run["html_url"],
+                run,
+            )
+            for run in queue_runs(repository, pr)
+        ]
     return head, runs
 
 
@@ -1049,23 +1155,20 @@ def pr_run(repository: str, pr: int, profile: str | None) -> int:
             f"PR #{pr} has no {profile or 'requested'} run at its head {head} and no "
             "merge-group run; pass the run ID or URL: python3 tools/ci.py log RUN"
         )
-    runs.sort(key=lambda run: (run["created_at"], run["id"]))
+    runs.sort(key=lambda run: (run.created_at, run.run_id))
     chosen = runs[-1]
-    tested = (
-        ejected_head(repository, cast(QueueRun, chosen))
-        if chosen["kind"] == "merge-group"
-        else head
-    )
+    group = chosen.group
+    tested = head if group is None else ejected_head(repository, group)
     print(
-        f"Selected the newest {chosen['kind']} run for PR #{pr}: run {chosen['id']} "
-        f"attempt {chosen.get('run_attempt', 1)}, tested head {tested} "
-        f"(PR head {head}): {chosen['html_url']}"
+        f"Selected the newest {chosen.kind} run for PR #{pr}: run {chosen.run_id} "
+        f"attempt {chosen.attempt}, tested head {tested} "
+        f"(PR head {head}): {chosen.url}"
     )
-    others = {run["kind"]: run for run in runs if run["kind"] != chosen["kind"]}
+    others = {run.kind: run for run in runs if run.kind != chosen.kind}
     if others:
-        listed = ", ".join(f"{kind} run {run['id']}" for kind, run in others.items())
+        listed = ", ".join(f"{kind} run {run.run_id}" for kind, run in others.items())
         print(f"Also found: {listed}; pass --profile or the run ID to read another")
-    return chosen["id"]
+    return chosen.run_id
 
 
 def request_run(path: Path) -> tuple[str, int]:
