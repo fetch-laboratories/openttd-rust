@@ -2,6 +2,7 @@
 # finishes; the list merges mechanically. Quick's residue gate
 # (tools/code-standards-inventory.py --gate) fails a PR that adds residue to one.
 # Reconstructed at a30091d652 from the merged pass PRs; 92 at merge 20, as root counted.
+rust/openttd-kernels/src/admin_conversion.rs
 rust/openttd-kernels/src/alternating.rs
 rust/openttd-kernels/src/auth.rs
 rust/openttd-kernels/src/base_station_base.rs
@@ -37,6 +38,7 @@ rust/openttd-kernels/src/industry/tile.rs
 rust/openttd-kernels/src/industry/transaction.rs
 rust/openttd-kernels/src/industrytype.rs
 rust/openttd-kernels/src/integer.rs
+rust/openttd-kernels/src/json.rs
 rust/openttd-kernels/src/kdtree.rs
 rust/openttd-kernels/src/map_func.rs
 rust/openttd-kernels/src/math.rs
@@ -51,8 +53,10 @@ rust/openttd-kernels/src/network_config.rs
 rust/openttd-kernels/src/network_connection.rs
 rust/openttd-kernels/src/network_content.rs
 rust/openttd-kernels/src/network_crypto.rs
+rust/openttd-kernels/src/network_dispatch.rs
 rust/openttd-kernels/src/network_frame.rs
 rust/openttd-kernels/src/network_internal.rs
+rust/openttd-kernels/src/network_lifecycle.rs
 rust/openttd-kernels/src/network_socket.rs
 rust/openttd-kernels/src/network_tcp.rs
 rust/openttd-kernels/src/packet.rs
@@ -66,6 +70,7 @@ rust/openttd-kernels/src/signal_func.rs
 rust/openttd-kernels/src/slope_func.rs
 rust/openttd-kernels/src/spiral.rs
 rust/openttd-kernels/src/sprites.rs
+rust/openttd-kernels/src/squirrel.rs
 rust/openttd-kernels/src/station_association.rs
 rust/openttd-kernels/src/station_base.rs
 rust/openttd-kernels/src/station_cargo.rs
