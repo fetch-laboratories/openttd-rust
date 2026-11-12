@@ -11,6 +11,8 @@ rendering or complete GUI equivalence.
 import re
 import shlex
 import subprocess
+from collections.abc import Mapping
+from pathlib import Path
 from typing import TypedDict
 
 import probe
@@ -33,6 +35,33 @@ SIGNATURES = (
 class NullRecord(TypedDict):
     exit: int
     stdout: str
+
+
+def null_records(binary: Path, env: Mapping[str, str]) -> list[NullRecord]:
+    """Each null-generator version's exit and stdout."""
+    records: list[NullRecord] = []
+    for version in ("original", "candidate"):
+        result = subprocess.run(
+            [str(binary), "--null", version],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        records.append({"exit": result.returncode, "stdout": result.stdout.decode()})
+    return records
+
+
+def null_disposition_changed(mode: str, records: list[NullRecord]) -> bool:
+    """Release must succeed alike; the assertion modes must abort alike."""
+    if mode == "release":
+        return records[0] != records[1] or records[0]["exit"] != 0
+    return (
+        any(
+            record["exit"] == 0 or "null-callback" not in record["stdout"]
+            for record in records
+        )
+        or records[0]["exit"] != records[1]["exit"]
+    )
 
 
 def main() -> None:
@@ -159,28 +188,9 @@ def main() -> None:
         binary = out / mode
         command([compiler, *objects, *inputs, "-o", str(binary)], f"{mode}-link")
         probe.execute([binary], out / mode)
-        null_records: list[NullRecord] = []
-        for version in ("original", "candidate"):
-            result = subprocess.run(
-                [str(binary), "--null", version],
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            null_records.append(
-                {"exit": result.returncode, "stdout": result.stdout.decode()}
-            )
-        if mode == "release":
-            if null_records[0] != null_records[1] or null_records[0]["exit"] != 0:
-                failures.append({"mode": mode, "null_records": null_records})
-        elif (
-            any(
-                record["exit"] == 0 or "null-callback" not in record["stdout"]
-                for record in null_records
-            )
-            or null_records[0]["exit"] != null_records[1]["exit"]
-        ):
-            failures.append({"mode": mode, "null_records": null_records})
+        records = null_records(binary, env)
+        if null_disposition_changed(mode, records):
+            failures.append({"mode": mode, "null_records": records})
     if not probe.RUN:
         return probe.passed("Widget parser comparison")
     if failures:
