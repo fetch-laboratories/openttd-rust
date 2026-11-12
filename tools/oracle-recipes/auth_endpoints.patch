@@ -1,0 +1,33 @@
+--- a/capture.in
++++ b/capture.in
+@@ -5,7 +5,7 @@
+  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+  */
+
+-/** @file auth-comparison.cpp Prescribed-entropy public authentication endpoints. */
++/** @file auth-comparison.cpp Original-only capture of auth/endpoints-oracle.txt (#736): prescribed-entropy public authentication endpoints. */
+ #include "stdafx.h"
+ #include "debug.h"
+ #include "core/random_func.hpp"
+@@ -27,21 +27,6 @@
+ }
+ void DebugPrint(std::string_view category, int level, std::string &&message) { ++logs; last_log = fmt::format("{}:{}:{}", category, level, message); }
+ [[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
+-#if __has_include("rust/debug_ffi.h")
+-#include "rust/debug_ffi.h"
+-/* The candidate's Rust Debug reads this harness's net level and prints through its DebugPrint; this standalone entry also binds native assertions. */
+-static const int _debug_other_level = 0;
+-/* The harness loads no NewGRF, so no GRF message can reach this. */
+-[[noreturn]] static void UnreachableGrfMsg(int, const char *, size_t) noexcept { std::abort(); }
+-static const OpenTTDDebugServices _debug_services{
+-	.console = &_debug_other_level, .desync = &_debug_other_level, .driver = &_debug_other_level, .fontcache = &_debug_other_level,
+-	.gamelog = &_debug_other_level, .grf = &_debug_other_level, .grf_msg = &UnreachableGrfMsg,
+-	.map = &_debug_other_level, .misc = &_debug_other_level, .net = &_debug_net_level, .oldloader = &_debug_other_level,
+-	.print = [](const char *category, size_t category_size, int level, const char *message, size_t size) noexcept { DebugPrint({category, category_size}, level, std::string(message, size)); },
+-	.script = &_debug_other_level, .sl = &_debug_other_level, .sprite = &_debug_other_level, .yapf = &_debug_other_level,
+-};
+-[[maybe_unused]] static const bool _rust_bound = (openttd_rust_assert_bind(RustAssertCondition, nullptr), openttd_rust_debug_bind(&_debug_services), true);
+-#endif
+ [[noreturn]] void AssertFailedError(std::string_view, const std::source_location) { std::abort(); }
+
+ static unsigned Number(std::string_view input, int base = 10)
