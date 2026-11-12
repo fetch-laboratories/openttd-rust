@@ -18,6 +18,7 @@
 use super::*;
 use crate::network_config::COMPAT_MTU;
 use std::cell::Cell;
+use std::fmt::Write as _;
 use std::ptr::{NonNull, null, null_mut};
 
 /// The probe's `SECRET_CLIENT`: bytes 32 to 63.
@@ -25,7 +26,7 @@ const SECRET_CLIENT: [u8; X25519_KEY_SIZE] = {
     let mut secret = [0; X25519_KEY_SIZE];
     let mut i = 0;
     while i < X25519_KEY_SIZE {
-        secret[i] = 32 + i as u8;
+        secret[i] = 32 + i.to_le_bytes()[0];
         i += 1;
     }
     secret
@@ -40,6 +41,15 @@ enum Keys {
     Invalid,
 }
 
+/// The driver's `low_order` and `damage`: a request with a zero server key, or one response
+/// byte flipped.
+#[derive(Clone, Copy)]
+enum Fault {
+    None,
+    LowOrder,
+    Damage(usize),
+}
+
 /// One driver case, with the driver's defaults.
 struct Case {
     name: &'static str,
@@ -51,8 +61,7 @@ struct Case {
     mask: u16,
     failures: bool,
     reentry: bool,
-    low_order: bool,
-    damage: Option<usize>,
+    fault: Fault,
 }
 
 const DEFAULT: Case = Case {
@@ -65,8 +74,7 @@ const DEFAULT: Case = Case {
     mask: 7,
     failures: false,
     reentry: false,
-    low_order: false,
-    damage: None,
+    fault: Fault::None,
 };
 
 const CASES: [Case; 18] = [
@@ -183,19 +191,19 @@ const CASES: [Case; 18] = [
     },
     Case {
         name: "low-order-server",
-        low_order: true,
+        fault: Fault::LowOrder,
         success: false,
         ..DEFAULT
     },
     Case {
         name: "damaged-response-key",
-        damage: Some(3),
+        fault: Fault::Damage(3),
         success: false,
         ..DEFAULT
     },
     Case {
         name: "damaged-response-mac",
-        damage: Some(35),
+        fault: Fault::Damage(35),
         success: false,
         ..DEFAULT
     },
@@ -206,7 +214,10 @@ fn hex(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         return "-".into();
     }
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut text, byte| {
+        let _ = write!(text, "{byte:02x}");
+        text
+    })
 }
 /// The probe's `Unhex`.
 fn unhex(text: &str) -> Vec<u8> {
@@ -269,11 +280,9 @@ extern "C" fn random_bytes(data: *mut u8, size: usize) {
     let endpoint = ACTIVE.get();
     unsafe {
         for i in 0..size {
-            #[allow(clippy::cast_possible_truncation)]
-            data.add(i).write(
-                (usize::from((*endpoint).random_seed) + i + (*endpoint).random_sizes.len() * 31)
-                    as u8,
-            );
+            let value =
+                usize::from((*endpoint).random_seed) + i + (*endpoint).random_sizes.len() * 31;
+            data.add(i).write(value.to_le_bytes()[0]);
         }
         (*endpoint).random_sizes.push(size);
     }
@@ -448,57 +457,91 @@ impl Endpoint {
         ACTIVE.set(null_mut());
         result.trim_end().to_owned()
     }
+    /// The probe's `server` and `client` commands: reset, then create the handler.
+    /// # Safety
+    /// As `run`.
+    unsafe fn start(this: *mut Self, server: bool, [a, b, c, d]: [&str; 4]) -> String {
+        let number = |text: &str| text.parse::<u16>().expect("number");
+        unsafe {
+            (*this).reset();
+            (*this).random_sizes.clear();
+            (*this).logs = 0;
+            (*this).asks = 0;
+            (*this).replies = 0;
+            (*this).password_reads = 0;
+            (*this).authorized_checks = 0;
+            (*this).allowed_checks = 0;
+            (*this).last_log.clear();
+            (*this).reentrant_response.clear();
+            let services = &raw const (*this).services;
+            if server {
+                (*this).server_password = if a == "none" { Vec::new() } else { unhex(a) };
+                (*this).authorized_key = if b == "none" || b == "-" {
+                    Vec::new()
+                } else {
+                    b.as_bytes().to_vec()
+                };
+                (*this).random_seed = u8::try_from(number(d)).unwrap();
+                let provider = if a == "none" {
+                    null()
+                } else {
+                    this.cast_const().cast()
+                };
+                let authorized = if b == "none" {
+                    null()
+                } else {
+                    this.cast_const().cast()
+                };
+                (*this).server =
+                    openttd_rust_auth_server_new(services, provider, authorized, number(c));
+            } else {
+                (*this).random_seed = u8::try_from(number(c)).unwrap();
+                (*this).reenter = d == "1";
+                (*this).reply = unhex(b);
+                let secret: X25519SecretKey = unhex(a).try_into().unwrap();
+                (*this).client =
+                    openttd_rust_auth_client_new(services, secret.as_ptr(), this.cast());
+            }
+        }
+        "ok".into()
+    }
+    /// The probe's `encrypt` and `decrypt` commands on the current stream.
+    /// # Safety
+    /// As `run`.
+    unsafe fn crypt(this: *mut Self, encrypt: bool, a: &str, b: &str) -> String {
+        unsafe {
+            let mut message = unhex(a);
+            let mut mac = [0; X25519_MAC_SIZE];
+            let mut ok = 1;
+            if encrypt {
+                openttd_rust_auth_stream_encrypt(
+                    (*this).stream,
+                    mac.as_mut_ptr(),
+                    message.as_mut_ptr(),
+                    message.len(),
+                );
+            } else {
+                let tag = unhex(b);
+                mac[..tag.len()].copy_from_slice(&tag);
+                ok = openttd_rust_auth_stream_decrypt(
+                    (*this).stream,
+                    mac.as_ptr(),
+                    message.as_mut_ptr(),
+                    message.len(),
+                );
+            }
+            format!("{ok} {} {}", hex(&mac), hex(&message))
+        }
+    }
     /// # Safety
     /// `this` is the active endpoint; no reference into it is held across a production call.
     unsafe fn run(this: *mut Self, line: &str) -> String {
         let mut words = line.split(' ');
         let command = words.next().unwrap();
         let [a, b, c, d] = std::array::from_fn(|_| words.next().unwrap_or(""));
-        let number = |text: &str| text.parse::<u16>().expect("number");
         unsafe {
             match command {
-                "server" | "client" => {
-                    (*this).reset();
-                    (*this).random_sizes.clear();
-                    (*this).logs = 0;
-                    (*this).asks = 0;
-                    (*this).replies = 0;
-                    (*this).password_reads = 0;
-                    (*this).authorized_checks = 0;
-                    (*this).allowed_checks = 0;
-                    (*this).last_log.clear();
-                    (*this).reentrant_response.clear();
-                    let services = &raw const (*this).services;
-                    if command == "server" {
-                        (*this).server_password = if a == "none" { Vec::new() } else { unhex(a) };
-                        (*this).authorized_key = if b == "none" || b == "-" {
-                            Vec::new()
-                        } else {
-                            b.as_bytes().to_vec()
-                        };
-                        (*this).random_seed = u8::try_from(number(d)).unwrap();
-                        let provider = if a == "none" {
-                            null()
-                        } else {
-                            this.cast_const().cast()
-                        };
-                        let authorized = if b == "none" {
-                            null()
-                        } else {
-                            this.cast_const().cast()
-                        };
-                        (*this).server =
-                            openttd_rust_auth_server_new(services, provider, authorized, number(c));
-                    } else {
-                        (*this).random_seed = u8::try_from(number(c)).unwrap();
-                        (*this).reenter = d == "1";
-                        (*this).reply = unhex(b);
-                        let secret: X25519SecretKey = unhex(a).try_into().unwrap();
-                        (*this).client =
-                            openttd_rust_auth_client_new(services, secret.as_ptr(), this.cast());
-                    }
-                    "ok".into()
-                }
+                "server" | "client" => Self::start(this, command == "server", [a, b, c, d]),
                 "public" => {
                     let secret: X25519SecretKey = unhex(a).try_into().unwrap();
                     format_hex(&crypto::public_key(&secret))
@@ -546,11 +589,14 @@ impl Endpoint {
                     let handler = (*this).handler();
                     let mut size = 0;
                     let name = bytes(openttd_rust_auth_handler_name(handler, &raw mut size), size);
-                    let sizes: String = (*this)
-                        .random_sizes
-                        .iter()
-                        .map(|size| format!("{size},"))
-                        .collect();
+                    let sizes: String =
+                        (*this)
+                            .random_sizes
+                            .iter()
+                            .fold(String::new(), |mut text, size| {
+                                let _ = write!(text, "{size},");
+                                text
+                            });
                     format!(
                         "{} {} {} {} {} {} {} {} {} {sizes}",
                         std::str::from_utf8(name).unwrap(),
@@ -570,10 +616,11 @@ impl Endpoint {
                     X25519_KEY_SIZE,
                 )),
                 "reentrant" => {
-                    if (&(*this).reentrant_response).is_empty() {
+                    let response = &(*this).reentrant_response;
+                    if response.is_empty() {
                         "-".into()
                     } else {
-                        (*this).reentrant_response.clone()
+                        response.clone()
                     }
                 }
                 "init-stream" => {
@@ -586,29 +633,7 @@ impl Endpoint {
                     (*this).stream = stream;
                     X25519_MAC_SIZE.to_string()
                 }
-                "encrypt" | "decrypt" => {
-                    let mut message = unhex(a);
-                    let mut mac = [0; X25519_MAC_SIZE];
-                    let mut ok = 1;
-                    if command == "encrypt" {
-                        openttd_rust_auth_stream_encrypt(
-                            (*this).stream,
-                            mac.as_mut_ptr(),
-                            message.as_mut_ptr(),
-                            message.len(),
-                        );
-                    } else {
-                        let raw = unhex(b);
-                        mac[..raw.len()].copy_from_slice(&raw);
-                        ok = openttd_rust_auth_stream_decrypt(
-                            (*this).stream,
-                            mac.as_ptr(),
-                            message.as_mut_ptr(),
-                            message.len(),
-                        );
-                    }
-                    format!("{ok} {} {}", hex(&mac), hex(&message))
-                }
+                "encrypt" | "decrypt" => Self::crypt(this, command == "encrypt", a, b),
                 _ => panic!("unknown command {command}"),
             }
         }
@@ -684,7 +709,6 @@ impl Run<'_> {
 }
 
 /// The driver's `scenario`, with its assertions on the original's results.
-#[allow(clippy::too_many_lines)]
 fn scenario(run: &mut Run<'_>, case: &Case) {
     let secret = hex(&SECRET_CLIENT);
     let public = run.client(&format!("public {secret}"));
@@ -729,12 +753,12 @@ fn scenario(run: &mut Run<'_>, case: &Case) {
                 run.client("state");
             }
         }
-        if case.low_order {
+        if matches!(case.fault, Fault::LowOrder) {
             let mut changed = unhex(&request);
             changed[4..36].fill(0);
             request = hex(&changed);
         }
-        let ready = if method == 1 { 0 } else { 1 };
+        let ready = u8::from(method != 1);
         assert_eq!(
             run.client(&format!("recv-request {request}")),
             format!("{ready} 0")
@@ -748,14 +772,14 @@ fn scenario(run: &mut Run<'_>, case: &Case) {
             let result = run.client("response");
             let (ok, sent) = result.split_once(' ').unwrap();
             response = sent.to_owned();
-            if case.low_order {
+            if matches!(case.fault, Fault::LowOrder) {
                 assert_eq!(ok, "0");
                 run.client("state");
                 return;
             }
             assert_eq!(ok, "1");
         }
-        if let Some(damage) = case.damage {
+        if let Fault::Damage(damage) = case.fault {
             let mut changed = unhex(&response);
             changed[damage] ^= 1;
             response = hex(&changed);
@@ -772,43 +796,49 @@ fn scenario(run: &mut Run<'_>, case: &Case) {
         run.server("state");
     }
     if case.success {
-        assert_eq!(run.server("peer"), public);
-        let nonce = run.server("nonce").split(' ').nth(1).unwrap().to_owned();
-        assert_eq!(run.client(&format!("recv-nonce {}", wire(b""))), "0 0");
-        assert_eq!(run.client(&format!("recv-nonce {nonce}")), "1 0");
-        if case.failures {
-            let extended = [&unhex(&nonce)[3..], b"xyz"].concat();
-            assert_eq!(
-                run.client(&format!("recv-nonce {}", wire(&extended))),
-                "1 3"
-            );
-        }
-        for side in [false, true] {
-            // Side 0 sends client to server; side 1 server to client.
-            let command = format!("init-stream {}", u8::from(side));
-            assert_eq!(run.call(side, &command), "16");
-            assert_eq!(run.call(!side, &command), "16");
-            for length in [0usize, 1, 8, 15, 16, 17, 63, 64, 65, 127, 256] {
-                #[allow(clippy::cast_possible_truncation)]
-                let plaintext: Vec<u8> = (0..length).map(|i| (i * 17 + length) as u8).collect();
-                let encrypted = run.call(side, &format!("encrypt {}", hex(&plaintext)));
-                let [_, mac, ciphertext] =
-                    <[&str; 3]>::try_from(encrypted.split(' ').collect::<Vec<_>>()).unwrap();
-                if case.failures {
-                    let mut tampered = unhex(mac);
-                    tampered[0] ^= 128;
-                    let failed =
-                        run.call(!side, &format!("decrypt {ciphertext} {}", hex(&tampered)));
-                    let failed: Vec<_> = failed.split(' ').collect();
-                    assert!(failed[0] == "0" && failed[2] == ciphertext);
-                }
-                let decrypted = run.call(!side, &format!("decrypt {ciphertext} {mac}"));
-                let decrypted: Vec<_> = decrypted.split(' ').collect();
-                assert!(decrypted[0] == "1" && decrypted[2] == hex(&plaintext));
-                if case.failures {
-                    let again = run.call(!side, &format!("decrypt {ciphertext} {mac}"));
-                    assert!(again.starts_with("0 "));
-                }
+        encrypted(run, case, &public);
+    }
+}
+
+/// The driver's `scenario` after a successful authentication: the peer key, the
+/// enable-encryption nonce and both streams.
+fn encrypted(run: &mut Run<'_>, case: &Case, public: &str) {
+    assert_eq!(run.server("peer"), public);
+    let nonce = run.server("nonce").split(' ').nth(1).unwrap().to_owned();
+    assert_eq!(run.client(&format!("recv-nonce {}", wire(b""))), "0 0");
+    assert_eq!(run.client(&format!("recv-nonce {nonce}")), "1 0");
+    if case.failures {
+        let extended = [&unhex(&nonce)[3..], b"xyz"].concat();
+        assert_eq!(
+            run.client(&format!("recv-nonce {}", wire(&extended))),
+            "1 3"
+        );
+    }
+    for side in [false, true] {
+        // Side 0 sends client to server; side 1 server to client.
+        let command = format!("init-stream {}", u8::from(side));
+        assert_eq!(run.call(side, &command), "16");
+        assert_eq!(run.call(!side, &command), "16");
+        for length in [0usize, 1, 8, 15, 16, 17, 63, 64, 65, 127, 256] {
+            let plaintext: Vec<u8> = (0..length)
+                .map(|i| (i * 17 + length).to_le_bytes()[0])
+                .collect();
+            let encrypted = run.call(side, &format!("encrypt {}", hex(&plaintext)));
+            let [_, mac, ciphertext] =
+                <[&str; 3]>::try_from(encrypted.split(' ').collect::<Vec<_>>()).unwrap();
+            if case.failures {
+                let mut tampered = unhex(mac);
+                tampered[0] ^= 128;
+                let failed = run.call(!side, &format!("decrypt {ciphertext} {}", hex(&tampered)));
+                let failed: Vec<_> = failed.split(' ').collect();
+                assert!(failed[0] == "0" && failed[2] == ciphertext);
+            }
+            let decrypted = run.call(!side, &format!("decrypt {ciphertext} {mac}"));
+            let decrypted: Vec<_> = decrypted.split(' ').collect();
+            assert!(decrypted[0] == "1" && decrypted[2] == hex(&plaintext));
+            if case.failures {
+                let again = run.call(!side, &format!("decrypt {ciphertext} {mac}"));
+                assert!(again.starts_with("0 "));
             }
         }
     }
