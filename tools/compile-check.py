@@ -68,6 +68,8 @@ NO_FIXTURE = {"generator-comparison"}
 # repository and build (git show, nm of built objects, ninja -t commands).
 ALLOWED = re.compile(r"^((c|g|clang)\+\+|gcc|cc|clang|git|nm|ninja)(-[0-9.]+)?$")
 RAN = 4
+# A comparison stopped at a generated input no compile-only step writes (#933).
+MISSING = 5
 
 
 def comparisons() -> list[Path]:
@@ -116,6 +118,9 @@ def child(comparison: str | None, adapter: str | None) -> int:
     except subprocess.CalledProcessError as error:
         print(f"compile-only: {error}", file=sys.stderr)
         return FAILED
+    except FileNotFoundError as error:
+        print(f"compile-only: stopped at {error.filename}", file=sys.stderr)
+        return MISSING
     return 0
 
 
@@ -174,7 +179,14 @@ def check(base: str) -> int:
     with ThreadPoolExecutor(workers) as pool:
         results = list(pool.map(lambda job: run(*job, env), listed))
     labels = {FAILED: "compile failed", RAN: "tried to run a program"}
-    failed = [(name, code, log) for name, code, log in results if code]
+    for name, _code, log in (result for result in results if result[1] == MISSING):
+        print(
+            f"SKIP {name}: needs an input only a full run generates, so its later "
+            f"compiles were not checked; see {log}"
+        )
+    failed = [
+        (name, code, log) for name, code, log in results if code not in (0, MISSING)
+    ]
     for name, code, log in failed:
         print(f"FAIL {labels.get(code, 'error')}: {name}; see {log}")
     elapsed = time.monotonic() - started

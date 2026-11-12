@@ -534,6 +534,29 @@ class CompileCheckTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, code, result.stderr)
 
+    def test_a_missing_generated_input_is_a_named_skip_not_a_failure(self) -> None:
+        # #933: script-list-comparison read bindings its skipped cmake -P writes.
+        check = tool("compile-check")
+        with tempfile.TemporaryDirectory() as directory:
+            seeded = Path(directory) / "seeded-comparison.py"
+            seeded.write_text(f"open({str(Path(directory) / 'gen.hpp')!r})\n")
+            with patch("sys.stderr"), patch.object(sys, "addaudithook"):
+                self.assertEqual(check.child(str(seeded), None), check.MISSING)
+            done = [("seeded", check.MISSING, Path(directory) / "log")]
+            with (
+                patch.object(check, "BUILD", Path(directory)),
+                patch.object(check, "OUT", Path(directory) / "out"),
+                patch.object(check, "generated_abi_changed", return_value=True),
+                patch.object(check, "jobs", return_value=[("seeded", [])]),
+                patch.object(check, "run", return_value=done[0]),
+                patch("builtins.print") as printed,
+            ):
+                for name in ("CMakeCache.txt", "compile_commands.json"):
+                    (Path(directory) / name).write_text("")
+                self.assertEqual(check.check("base"), 0)
+            lines = [call.args[0] for call in printed.call_args_list]
+            self.assertTrue(any(line.startswith("SKIP seeded") for line in lines))
+
     def test_comparisons_guard_their_runs_and_abi_is_always_regenerated(self) -> None:
         check = tool("compile-check")
         for path in check.comparisons():
