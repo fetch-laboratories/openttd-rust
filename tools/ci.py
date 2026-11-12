@@ -514,7 +514,17 @@ def latest_request(repository: str, pr: int, head: str) -> dict | None:
         if (title := (run.get("display_title") or "").split())[2:4] == ["PR", str(pr)]
         and title[-1] == head
     ]
-    labeled = api(repository, path + f"pull_request&head_sha={head}")["workflow_runs"]
+    # Every label starts a run; only a ci:full bootstrap runs its plan.
+    labeled = [
+        run
+        for run in api(repository, path + f"pull_request&head_sha={head}")[
+            "workflow_runs"
+        ]
+        if any(
+            job["name"] == "plan" and job["conclusion"] != "skipped"
+            for job in api(repository, f"actions/runs/{run['id']}/jobs")["jobs"]
+        )
+    ]
     # Requests made before #922 carry no head in their title; their records do.
     for record_path in REQUESTS.glob("*.json"):
         record = json.loads(record_path.read_text())

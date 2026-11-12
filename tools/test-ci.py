@@ -2682,7 +2682,13 @@ class EnqueueTests(unittest.TestCase):
             "event=workflow_dispatch": {
                 "workflow_runs": [requested] if requested else []
             },
-            "event=pull_request": {"workflow_runs": []},
+            "event=pull_request": {"workflow_runs": world.get("labeled", [])},
+            "actions/runs/4/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "skipped"}]
+            },
+            "actions/runs/5/jobs": {
+                "jobs": [{"name": "plan", "conclusion": "success"}]
+            },
             "event=merge_group": {
                 "workflow_runs": list(cast(Iterable[object], world.get("queue", ())))
             },
@@ -2778,6 +2784,22 @@ class EnqueueTests(unittest.TestCase):
         entry = {"state": "QUEUED", "position": 1}
         reported, _ = self.enqueue(requested=old, recorded=self.REQUESTED, entry=entry)
         self.assertTrue(reported.startswith("queued"))
+
+    def test_only_a_bootstrap_label_run_counts_as_a_request(self) -> None:
+        # Every label starts a ci-request.yml run; one whose plan skipped tested
+        # nothing and must not displace the passing request.
+        later = {
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-12T05:00:00Z",
+        }
+        unrelated = dict(later, id=4, conclusion="skipped", html_url="unrelated label")
+        entry = {"state": "QUEUED", "position": 1}
+        reported, _ = self.enqueue(labeled=[unrelated], entry=entry)
+        self.assertTrue(reported.startswith("queued"))
+        bootstrap = dict(later, id=5, conclusion="failure", html_url="bootstrap")
+        with self.assertRaisesRegex(ValueError, "completed/failure: bootstrap"):
+            self.enqueue(labeled=[unrelated, bootstrap])
 
     def test_ejected_head_queues_again_once_only_with_retry(self) -> None:
         entry = {"state": "QUEUED", "position": 1}
