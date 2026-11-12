@@ -1,6 +1,6 @@
 # Implementer brief
 
-Read this brief, your work order (issue and spawn brief) and the original bodies it names, then:
+Read this brief, your work order (the ready-queue entry and issue your spawn message names) and the original bodies it names, then:
 
 - [porting](porting.md) for the code, fidelity and evidence standards your change meets;
 - [workflow](workflow.md) for commits, pushes, checks, review and the merge queue;
@@ -16,7 +16,7 @@ A pass is ready for review when a reviewer would have nothing left on the [every
 
 ## Messaging root
 
-Message root only when the queue merges or removes the PR (one line: PR, head, outcome), for a question only root can answer, or for a stop you cannot work past. When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
+Message root, at the thread your spawn message names, only when the queue merges or removes the PR (one line: PR, head, outcome), for a question only root can answer, or for a stop you cannot work past. When you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 
 ## Starting reviewers
 

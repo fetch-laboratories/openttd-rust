@@ -19,8 +19,8 @@ At most two implementers work at once ([ADR 0010](adr/0010-two-implementers.md))
 
 ## Spawning
 
-- Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order.
-- Root's spawn brief to an implementer contains the phrase "complete the whole task", so that the implementer works through to the end instead of stopping for approval.
+- Root starts each implementer with this fixed message, and adds only facts the entry and the docs do not hold, such as a base change since the entry was written:
+  > Implement the roadmap's ready-queue entry <entry name> (<issue URL>) under `docs/implementer-brief.md`. You are <name>. Complete the whole task. Root's thread is <thread ID>.
 - Spawn a fresh agent named for each task; its name is its attribution.
 - Root writes no summary of a child's waiting notice.
 - An agent's own thread ID is `$T3CODE_THREAD_ID`, or in its thread metadata when that is unset. Children send mid-task messages to the `parentThreadId` in their thread metadata.
@@ -49,7 +49,7 @@ The review loop is in [review](workflow.md#review). Root reads dispositions, not
 
 - The roadmap's [ready queue](roadmap.md#ready-queue) holds two or three undispatched work orders, each ready once the next merge lands. Each gives its scope, its size, its file set checked against open PRs' actual edits, what it waits on, and the constraints its implementer needs. Fan-in and held-caller analysis go on the stream issue; PR state stays on the PR.
 - A planner refreshes the queue when no entry is ready for the next slot to free, and writes up to three entries at once (provisional). It edits only that roadmap section, in docs-only commits.
-- Root dispatches the top ready entry as the planner wrote it. It re-derives an entry only when a merge or open PR has changed the entry's files since, or the implementer disputes it.
+- Root dispatches the top ready entry as the planner wrote it, with the [fixed message](#spawning). It re-derives an entry only when a merge or open PR has changed the entry's files since, or the implementer disputes it.
 - **File sets.** Before starting, the implementer checks its file set against open PRs' actual edits with `python3 tools/retrospective.py readiness <PR> <open PRs>` and records the result in its status comment; root brokers no file reservation.
   - A #734/#735 pass owns the files it finishes whole. Another stream's PR may add separate test modules or one-line hooks to those files; it names the hook, and a conflict is resolved by base update.
   - Files whose edits merge mechanically are exempt, including `lib.rs` module lists, `migration/*-debt.json`, `migration/harness-inventory.json` and generated registries.
