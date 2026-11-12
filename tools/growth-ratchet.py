@@ -7,6 +7,11 @@ void it (#904). It names the reviewed head, and also holds at a later head while
 the source of every added key is byte-identical, so a base update or an
 unrelated push keeps it. Identity counters (exports, callback slots) stay
 exact-head.
+
+A proposal lives in the change's tracked cleanup records; the acceptance is a
+reviewer's attributed PR comment. Growth whose proposal awaits that acceptance
+is pending review: it passes on pull-request events and fails in the merge
+group. Growth with no proposal always fails.
 """
 
 import argparse
@@ -20,7 +25,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import context, reviewed
+from cleanup_contract import context, reviewed, run
 
 importlib.import_module("rust_syntax")
 
@@ -83,6 +88,13 @@ def same_source(growth: dict[str, Any], current: str, accepted_at: str) -> bool:
     return False
 
 
+def proposed(growth: dict[str, Any], proposal: dict[str, Any]) -> bool:
+    # "old" and "new" are the counter's totals, which other merges move.
+    return proposal["kind"] == "growth" and all(
+        proposal.get(key) == growth[key] for key in BOUND
+    )
+
+
 def accepted(
     growth: dict[str, Any],
     contract: tuple[str, list[dict[str, Any]], list[str], str],
@@ -91,20 +103,7 @@ def accepted(
     """`contract` is `cleanup_contract.context()`: author, proposals, comments, head."""
     author, proposals, comments, head = contract
     for proposal in proposals:
-        # "old" and "new" are the counter's totals, which other merges move.
-        if proposal.get("kind") != "growth" or any(
-            proposal.get(key) != growth[key] for key in BOUND
-        ):
-            continue
-        if not all(
-            isinstance(proposal.get(key), str) and proposal[key].strip()
-            for key in (
-                "reason",
-                "existing_alternatives",
-                "retiring_owner",
-                "retirement_condition",
-            )
-        ):
+        if not proposed(growth, proposal):
             continue
         unchanged = partial(same_source, growth, current)
         if reviewed(proposal, comments, author, head, unchanged):
@@ -112,10 +111,45 @@ def accepted(
     return False
 
 
+def unaccepted(
+    growth: list[dict[str, Any]],
+    contract: tuple[str, list[dict[str, Any]], list[str], str],
+    current: str,
+    event: str,
+) -> bool:
+    """Report each delta; whether any fails on this event."""
+    failed = False
+    for delta in growth:
+        counter = delta["counter"]
+        if accepted(delta, contract, current):
+            accepted_at = contract[3]
+            print(
+                json.dumps(
+                    {"accepted_at": accepted_at, "growth": delta}, sort_keys=True
+                )
+            )
+        elif not any(proposed(delta, proposal) for proposal in contract[1]):
+            print(
+                f"unreviewed growth: {counter} has no proposal in the cleanup records"
+            )
+            failed = True
+        elif event == "merge_group":
+            print(f"unreviewed growth: {counter} lacks its reviewer's acceptance")
+            failed = True
+        else:
+            print(f"pending review: {counter} awaits its reviewer's acceptance")
+    return failed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", default="origin/rust-migration")
     parser.add_argument("--head", default="HEAD")
+    parser.add_argument(
+        "--event",
+        default="pull_request",
+        help="the CI event; growth pending review fails only in merge_group",
+    )
     args = parser.parse_args()
     METRICS.keep_code_lines()
     before = METRICS.growth_inventory(args.base_ref)
@@ -140,18 +174,8 @@ def main() -> int:
     )
     if not growth:
         return 0
-    contract = context()
-    head = contract[3]
-    errors = []
-    for delta in growth:
-        if accepted(delta, contract, args.head):
-            print(json.dumps({"accepted_at": head, "growth": delta}, sort_keys=True))
-        else:
-            errors.append(delta["counter"])
-    for counter in errors:
-        print(f"unreviewed growth: {counter}")
-    return int(bool(errors))
+    return int(unaccepted(growth, context(args.base_ref), args.head, args.event))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run(main)

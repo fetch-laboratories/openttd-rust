@@ -15,7 +15,15 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
+from cleanup_contract import (
+    Ledger,
+    carry_hints,
+    checked_carries,
+    context,
+    reviewed,
+    run,
+    write,
+)
 from code_lines import without_comments
 from rust_syntax import Node, item_source, nodes, syntax_trees
 from vcs import git
@@ -337,37 +345,28 @@ def accepted_suppression(
         "before": before,
         "after": after,
     }
-    required = (
-        "operation",
-        "source_contract",
-        "reason",
-        "retiring_owner",
-        "retirement_condition",
-    )
     for proposal in proposals:
-        if any(type(proposal.get(key)) is not int for key in ("before", "after")):
-            continue
         if any(proposal.get(key) != value for key, value in expected.items()):
             continue
-        if all(
-            isinstance(proposal.get(key), str) and proposal[key].strip()
-            for key in required
-        ) and reviewed(
-            proposal, comments, author, head, partial(unchanged_scope, site)
-        ):
+        if reviewed(proposal, comments, author, head, partial(unchanged_scope, site)):
             print(f"reviewed suppression at {head}: {site} ({before} -> {after})")
             return True
     return False
 
 
 def suppression_errors(
-    before: Counter[str], after: Counter[str], reasoned: Container[str] = frozenset()
-) -> list[str]:
+    before: Counter[str],
+    after: Counter[str],
+    reasoned: Container[str] = frozenset(),
+    base_ref: str = "origin/rust-migration",
+) -> tuple[list[str], list[dict[str, str]]]:
+    """New suppressions no record explains, and the ready carries for them."""
     added = {site: n for site, n in (after - before).items() if site not in reasoned}
     if not added:
-        return []
-    contract = context()
+        return [], []
+    contract = context(base_ref)
     errors = []
+    ready = []
     for tool, suffix in (("rust", ".rs"), ("python", ".py")):
         old, new = (
             {
@@ -389,17 +388,22 @@ def suppression_errors(
         errors.extend(
             f"new suppression: {site} ({added[site]})" for site in unexplained
         )
-        carry_hints(
+        ready += carry_hints(
             ledger,
             old.keys() - new.keys() - set(valid.values()),
             [site for site in unexplained if site not in old],
         )
-    return errors
+    return errors, ready
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", default="origin/rust-migration")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="record each ready carry in this branch's cleanup records file",
+    )
     args = parser.parse_args()
     errors = []
     old_paths = set(git("ls-tree", "-r", "--name-only", args.base_ref).splitlines())
@@ -424,13 +428,20 @@ def main() -> int:
         else:
             errors.extend(config_errors(before, after, path))
     head = inventory(None)
-    errors.extend(
-        suppression_errors(
-            suppressions(inventory(args.base_ref)),
-            suppressions(head),
-            fidelity_sites(head),
-        )
+    check = partial(
+        suppression_errors,
+        suppressions(inventory(args.base_ref)),
+        suppressions(head),
+        fidelity_sites(head),
+        args.base_ref,
     )
+    found, ready = check()
+    if args.write and ready:
+        write(args.base_ref, ready)
+        found, _ = check()
+    elif ready:
+        print("record the ready carries: python3 tools/lint-policy.py --write")
+    errors.extend(found)
     for error in errors:
         print(error)
     print(f"lint policy: {len(errors)} errors")
@@ -438,4 +449,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run(main)
