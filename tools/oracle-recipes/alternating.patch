@@ -1,0 +1,99 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,96 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file capture.cpp Original-only capture of alternating/iterator-oracle.txt (#736). */
++#include "stdafx.h"
++#include "misc/alternating_iterator.hpp"
++#include <cstdio>
++#include <list>
++#include <string>
++#include <vector>
++
++/* Each observation is one `<case> <value>` row, in the retired Catch2 check order. */
++static const char *_case;
++static void Row(const std::string &value) { std::printf("%s %s\n", _case, value.c_str()); }
++static void Flag(bool value) { Row(value ? "1" : "0"); }
++static void Value(int value) { Row(std::to_string(value)); }
++/* A Base() iterator as its distance from the range's first element. */
++template <typename Range, typename Iter> static void Base(Range &range, Iter base) { Value(static_cast<int>(std::distance(range.begin(), base))); }
++
++int main()
++{
++	{
++		_case = "singleton";
++		std::vector<int> empty;
++		AlternatingView empty_view(empty, empty.begin());
++		Flag(empty_view.begin() == empty_view.end());
++		Base(empty, empty_view.begin().Base());
++		Base(empty, empty_view.end().Base());
++
++		std::vector<int> singleton = {7};
++		AlternatingView singleton_view(singleton, singleton.begin());
++		auto iterator = singleton_view.begin();
++		Value(*iterator);
++		Flag(iterator != singleton_view.end());
++		++iterator;
++		Flag(iterator == singleton_view.end());
++		Base(singleton, iterator.Base());
++	}
++	{
++		_case = "copies";
++		std::vector<int> values = {0, 1, 2, 3, 4};
++		AlternatingView view(values, values.begin() + 2);
++		auto first = view.begin();
++		auto copy = first;
++		auto old = copy++;
++		Flag(first == old);
++		Value(*first);
++		Value(*old);
++		Value(*copy);
++		Flag(first < copy);
++		Flag(copy > first);
++		Flag(&++first == &first);
++		Flag(first == copy);
++		++copy;
++		Value(*first);
++		Value(*copy);
++		Flag(first < copy);
++	}
++	{
++		_case = "end";
++		std::vector<int> values = {0, 1, 2, 3, 4};
++		auto middle = values.begin() + 2;
++		AlternatingView view(values, middle);
++		auto constructed_end = view.end();
++		auto iterated_end = view.begin();
++		while (iterated_end != constructed_end) ++iterated_end;
++		Flag(iterated_end == constructed_end);
++		Flag((iterated_end <=> constructed_end) == std::strong_ordering::equal);
++		Base(values, constructed_end.Base());
++		Base(values, iterated_end.Base());
++	}
++	{
++		_case = "insertion";
++		std::list<int> values = {0, 1, 2, 3, 4};
++		auto middle = std::next(values.begin(), 2);
++		AlternatingView view(values, middle);
++		auto iterator = view.begin();
++		std::string sequence = std::to_string(*iterator);
++		++iterator;
++		sequence += "," + std::to_string(*iterator);
++		/* Existing iterators stay valid; both traversal and range length stay live. */
++		values.insert(std::next(middle), 25);
++		++iterator;
++		while (iterator != view.end()) {
++			sequence += "," + std::to_string(*iterator);
++			++iterator;
++		}
++		Row(sequence);
++		Base(values, iterator.Base());
++	}
++	return 0;
++}

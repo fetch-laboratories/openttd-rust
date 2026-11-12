@@ -178,6 +178,13 @@ def industry_lifecycle(lines: Sequence[str]) -> list[str]:
     ]
 
 
+def cases(*names: str) -> Callable[[Sequence[str]], list[str]]:
+    """One section per retired Catch2 case, from its `<case> <value>` rows."""
+    return lambda lines: [
+        line for name in names for line in section(name, streams(lines)[name])
+    ]
+
+
 def policy(lines: Sequence[str]) -> list[str]:
     s = streams(lines)
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
@@ -194,6 +201,8 @@ class Recipe:
     extract: tuple[tuple[str, str, str, str], ...] = ()
     sources: tuple[str, ...] = ()
     flags: tuple[str, ...] = field(default=("-DUNIX",))
+    # Whether the program includes the reference build's generated table/strings.h.
+    generated: bool = False
 
 
 RECIPE: dict[str, Recipe] = {
@@ -365,6 +374,54 @@ RECIPE: dict[str, Recipe] = {
         sources=("src/core/pool_func.cpp",),
         flags=("-DUNIX", "-DFMT_HEADER_ONLY"),
     ),
+    "string_consumer": Recipe(
+        oracle="consumer/cursor-oracle.txt",
+        fixture=None,
+        convert=cases("prefix", "binary", "separator", "byteset"),
+        sources=("src/core/string_consumer.cpp", "src/core/utf8.cpp"),
+        flags=("-DUNIX", "-DFMT_HEADER_ONLY"),
+    ),
+    "spiral": Recipe(
+        oracle="spiral/iterator-oracle.txt",
+        fixture=None,
+        convert=cases("edges", "live", "copies", "wrapping"),
+        extract=(
+            (
+                "map-allocate.inc",
+                "src/map.cpp",
+                "/* static */ uint Map::log_x;",
+                "\n\n\n/**\n * (Re)allocates",
+            ),
+            ("map-allocate.inc", "src/map.cpp", "/* static */ void Map::Allocate(", ""),
+            (
+                "map-allocate.inc",
+                "src/map.cpp",
+                "/** 'Lookup table' for tile offsets given a DiagDirection */",
+                "\n\n/**\n * Gets the Manhattan",
+            ),
+        ),
+        sources=("src/tilearea.cpp",),
+        flags=("-DUNIX", "-DFMT_HEADER_ONLY"),
+    ),
+    "alternating": Recipe(
+        oracle="alternating/iterator-oracle.txt",
+        fixture=None,
+        convert=cases("singleton", "copies", "end", "insertion"),
+    ),
+    "cargo_registry": Recipe(
+        oracle="cargo_registry/climate-oracle.txt",
+        fixture=None,
+        convert=cases("spec", "lookup", "table", "mask"),
+        extract=(
+            (
+                "cargo-registry-reference.inc",
+                "src/cargotype.cpp",
+                "CargoSpec CargoSpec::array[NUM_CARGO];",
+                "/**\n * Get dimensions of largest cargo icon.",
+            ),
+        ),
+        generated=True,
+    ),
     "income": Recipe(
         oracle="cargo_payment/income-oracle.txt",
         fixture="1b8b85c524:tools/migration/cargo-income-gap.cpp",
@@ -436,6 +493,11 @@ def capture(name: str) -> bool:
             str(probe.REFERENCE / "src"),
             "-I",
             str(out),
+            *(
+                ["-I", str(migration.REFERENCE_BUILD / "generated")]
+                if recipe.generated
+                else []
+            ),
             str(source),
         ]
         command += [str(probe.REFERENCE / s) for s in recipe.sources]

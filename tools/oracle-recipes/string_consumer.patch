@@ -1,0 +1,135 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,132 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file capture.cpp Original-only capture of consumer/cursor-oracle.txt (#736). */
++#include "stdafx.h"
++#include "core/string_consumer.hpp"
++#include <cstdio>
++#include <optional>
++#include <string>
++
++/* The logger the capture's short reads reach; the cases observe no message. */
++void DebugPrint(std::string_view, int, std::string &&) {}
++
++using Consumer = StringConsumer;
++
++/* Each observation is one `<case> <value>` row, in the retired Catch2 check order. */
++static const char *_case;
++static void Row(const std::string &value) { std::printf("%s %s\n", _case, value.c_str()); }
++static void Flag(bool value) { Row(value ? "1" : "0"); }
++static void Count(size_t value) { Row(value == Consumer::npos ? "npos" : std::to_string(value)); }
++/* A borrowed view as its offset in `base` and its length; `null` for a null view. */
++static void View(std::string_view base, std::string_view view)
++{
++	if (view.data() == nullptr) return Row("null " + std::to_string(view.size()));
++	Row(std::to_string(view.data() - base.data()) + " " + std::to_string(view.size()));
++}
++template <typename T> static void Value(std::optional<T> value)
++{
++	Row(value.has_value() ? std::to_string(static_cast<int64_t>(*value)) : "-");
++}
++
++int main()
++{
++	{
++		_case = "prefix";
++		std::string_view data = "X\xFF\0Z"sv;
++		Consumer consumer(data);
++		consumer.Skip(1);
++		View(data, consumer.Peek(0));
++		View(data, consumer.Read(0));
++		Flag(consumer.PeekIf(""));
++		Flag(consumer.ReadIf(""));
++		consumer.SkipIf("");
++		Count(consumer.GetBytesRead());
++		View(data, consumer.Peek(SIZE_MAX - 1));
++		consumer.SkipAll();
++		Flag(consumer.PeekIf(""));
++		Flag(consumer.ReadIf(""));
++		Flag(consumer.ReadIf("Z"));
++		Count(consumer.GetBytesRead());
++		View(data, consumer.Peek(0));
++		View(data, consumer.Read(Consumer::npos));
++		Consumer empty(std::string_view{});
++		Flag(empty.ReadIf(""));
++		View(data, empty.Peek(0));
++		View(data, empty.Read(0));
++	}
++	{
++		_case = "binary";
++		std::string_view data = "X\1\2\3"sv;
++		Consumer consumer(data);
++		consumer.Skip(1);
++		Value(consumer.TryReadUint32LE());
++		Value(consumer.TryReadSint32LE());
++		Value(consumer.TryReadUint64LE());
++		Value(consumer.TryReadSint64LE());
++		Count(consumer.GetBytesRead());
++		Value(consumer.TryReadUint16LE());
++		Count(consumer.GetBytesRead());
++		Value(consumer.TryReadUint16LE());
++		Value(consumer.TryReadSint16LE());
++		Count(consumer.GetBytesRead());
++		Row(std::to_string(consumer.ReadUint16LE(42)));
++		Count(consumer.GetBytesRead());
++		Value(consumer.TryReadUint8());
++		Value(consumer.TryReadSint8());
++		Value(consumer.TryReadChar());
++		Count(consumer.GetBytesRead());
++	}
++	{
++		_case = "separator";
++		std::string_view data = "xxabc<><>tail"sv;
++		/* Every value of the enum's representable range, named or not. */
++		for (int policy = 0; policy < 8; ++policy) {
++			auto sep = static_cast<Consumer::SeparatorUsage>(policy);
++			Consumer read(data), skip(data);
++			read.Skip(2);
++			skip.Skip(2);
++			View(data, read.PeekUntil("<>", sep));
++			Count(read.GetBytesRead());
++			View(data, read.ReadUntil("<>", sep));
++			Count(read.GetBytesRead());
++			skip.SkipUntil("<>", sep);
++			Count(skip.GetBytesRead());
++		}
++		std::string_view overlapping_data = "abababaZ"sv;
++		Consumer overlapping(overlapping_data);
++		View(overlapping_data, overlapping.ReadUntil("aba", Consumer::READ_ALL_SEPARATORS));
++		View(overlapping_data, overlapping.GetLeftData());
++		Consumer missing(data);
++		missing.Skip(2);
++		View(data, missing.ReadUntil("missing", Consumer::SKIP_ALL_SEPARATORS));
++		Count(missing.GetBytesRead());
++		View(data, missing.ReadUntil("<>", Consumer::READ_ALL_SEPARATORS));
++	}
++	{
++		_case = "byteset";
++		std::string_view data = "X\xFF\0ab"sv;
++		Consumer consumer(data);
++		consumer.Skip(1);
++		Count(consumer.Find(data.substr(1, 2))); // Pattern overlaps the read-only input.
++		Flag(consumer.ReadIf(data.substr(1, 1)));
++		Count(consumer.GetBytesRead());
++		Value(consumer.PeekCharIfNotIn("\0"sv));
++		Value(consumer.ReadCharIfNotIn("\0"sv));
++		consumer.SkipCharIfNotIn("\0"sv);
++		Count(consumer.GetBytesRead());
++		Value(consumer.ReadCharIfIn("\0"sv));
++		Value(consumer.PeekCharIfNotIn("x"));
++		Value(consumer.ReadCharIfNotIn("x"));
++		consumer.SkipCharIfNotIn("x");
++		Count(consumer.GetBytesRead());
++		Value(consumer.ReadCharIfNotIn("x"));
++		Value(consumer.ReadCharIfIn("x"));
++		Count(consumer.GetBytesRead());
++	}
++	return 0;
++}

@@ -1,0 +1,103 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,100 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file capture.cpp Original-only capture of spiral/iterator-oracle.txt (#736). */
++#include "stdafx.h"
++#include "tilearea_type.h"
++#include "map_func.h"
++#include "debug.h"
++#include "error_func.h"
++#include "pathfinder/water_regions.h"
++#include <cstdio>
++#include <string>
++
++/* The leaves the extracted Map::Allocate reaches. */
++void DebugPrint(std::string_view, int, std::string &&) {}
++[[noreturn]] void FatalErrorI(const std::string &) { std::abort(); }
++void AllocateWaterRegions() {}
++int _debug_map_level;
++
++/* Each observation is one `<case> <value>` row, in the retired Catch2 check order. */
++static const char *_case;
++static void Row(const std::string &value) { std::printf("%s %s\n", _case, value.c_str()); }
++static void Flag(bool value) { Row(value ? "1" : "0"); }
++static void Tile(TileIndex tile) { Row(std::to_string(tile.base())); }
++/* A whole traversal as its ordered tiles. */
++static void Sequence(SpiralTileSequence sequence)
++{
++	std::string tiles;
++	for (auto tile : sequence) tiles += (tiles.empty() ? "" : ",") + std::to_string(tile.base());
++	Row(tiles);
++}
++
++/* The extracted map.cpp statics, Map::Allocate and tile offset tables. */
++#include "map-allocate.inc"
++
++int main()
++{
++	_case = "edges";
++	Map::Allocate(128, 64);
++	Sequence(SpiralTileSequence(TileXY(126, 1), 5));
++	Sequence(SpiralTileSequence(TileXY(126, 62), 2, 1, 0));
++	Map::Allocate(64, 128);
++	Sequence(SpiralTileSequence(TileXY(1, 126), 4));
++
++	_case = "live";
++	Map::Allocate(64, 64);
++	auto live = SpiralTileSequence(TileXY(63, 1), 3).begin();
++	Map::Allocate(128, 64);
++	++live;
++	Tile(*live);
++	Map::Allocate(64, 64);
++	++live;
++	Tile(*live);
++
++	_case = "copies";
++	Map::Allocate(64, 128);
++	const auto sequence = SpiralTileSequence(TileXY(4, 70), 3);
++	auto first = sequence.begin();
++	auto copy = first;
++	Flag(first == copy);
++	/* Radius limits differ, but the public comparison is coordinates only. */
++	Flag(first == SpiralTileSequence(TileXY(4, 70), 5).begin());
++	Flag(first == SpiralTileSequence(TileXY(4, 70), 1).begin());
++	auto previous = first++;
++	Flag(previous == copy);
++	Flag(previous != first);
++	Tile(*previous);
++	Tile(*first);
++	Flag(&++copy == &copy);
++	Flag(copy == first);
++	Tile(*previous);
++	auto ended = sequence.begin();
++	uint count = 0;
++	while (ended != sequence.end()) {
++		++count;
++		++ended;
++	}
++	Row(std::to_string(count));
++	Flag(ended == std::default_sentinel);
++	auto end_copy = ended;
++	Flag(end_copy == ended);
++	Flag(end_copy == std::default_sentinel);
++	/* The terminal coordinate is (6,68), distinct from end-state. */
++	auto same_coordinate = SpiralTileSequence(TileXY(6, 68), 1).begin();
++	Flag(ended == same_coordinate);
++	Flag(same_coordinate == std::default_sentinel);
++
++	_case = "wrapping";
++	Map::Allocate(64, 64);
++	/* x + UINT32_MAX + 1 and the initial movement count wrap. */
++	auto wrapped = SpiralTileSequence(TileXY(0, 0), 1, UINT32_MAX, 0).begin();
++	Tile(*wrapped);
++	Flag(wrapped == std::default_sentinel);
++	Flag(wrapped == SpiralTileSequence(TileXY(0, 0), 1).begin());
++	return 0;
++}

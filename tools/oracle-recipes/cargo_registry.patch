@@ -1,0 +1,72 @@
+--- /dev/null
++++ b/capture.in
+@@ -0,0 +1,69 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file capture.cpp Original-only capture of cargo_registry/climate-oracle.txt (#736). */
++#include "stdafx.h"
++#include "cargotype.h"
++#include "newgrf_cargo.h"
++#include "table/sprites.h"
++#include "table/strings.h"
++#include "table/cargo_const.h"
++#include <cstdio>
++#include <string>
++#include <thread>
++#include <vector>
++
++[[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
++
++/* The extracted cargotype.cpp registry: its tables, SetupCargoForClimate, the translation tables, BuildCargoLabelMap and IsDefaultCargo. */
++#include "cargo-registry-reference.inc"
++
++static std::string Label(CargoLabel label)
++{
++	char text[9];
++	std::snprintf(text, sizeof(text), "%08X", label.base());
++	return text;
++}
++
++int main()
++{
++	/* The lookup domain: every label the four climates' specifications hold, in first-appearance order. */
++	std::vector<CargoLabel> labels;
++	for (uint8_t climate = 0; climate < NUM_LANDSCAPE; ++climate) {
++		SetupCargoForClimate(static_cast<LandscapeType>(climate));
++		for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
++			CargoLabel label = CargoSpec::Get(cargo)->label;
++			if (std::ranges::find(labels, label) == labels.end()) labels.push_back(label);
++		}
++	}
++	/* Every climate after every climate; each setup runs on its own thread and is read from this one. */
++	for (uint8_t previous = 0; previous < NUM_LANDSCAPE; ++previous) {
++		for (uint8_t climate = 0; climate < NUM_LANDSCAPE; ++climate) {
++			std::thread([previous] { SetupCargoForClimate(static_cast<LandscapeType>(previous)); }).join();
++			std::thread([climate] { SetupCargoForClimate(static_cast<LandscapeType>(climate)); }).join();
++			/* The copied specifications the registry reads: label and bit number per slot. */
++			std::string specs;
++			for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
++				const CargoSpec *cs = CargoSpec::Get(cargo);
++				specs += (specs.empty() ? "" : " ") + Label(cs->label) + ":" + std::to_string(cs->bitnum);
++			}
++			std::printf("spec %s\n", specs.c_str());
++			std::string lookups;
++			for (CargoLabel label : labels) lookups += (lookups.empty() ? "" : " ") + std::to_string(GetCargoTypeByLabel(label));
++			std::printf("lookup %s\n", lookups.c_str());
++			std::string tables;
++			for (CargoLabel label : GetClimateDependentCargoTranslationTable()) tables += Label(label) + " ";
++			tables += "|";
++			for (CargoLabel label : GetClimateIndependentCargoTranslationTable()) tables += " " + Label(label);
++			std::printf("table %s\n", tables.c_str());
++			std::string defaults;
++			for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) defaults += IsDefaultCargo(cargo) ? "1" : "0";
++			std::printf("mask %016llX %s\n", static_cast<unsigned long long>(_cargo_mask), defaults.c_str());
++		}
++	}
++	return 0;
++}
