@@ -1379,7 +1379,7 @@ impl MovementServices {
         mut y: i32,
     ) -> VehicleEnterTileStates {
         if h.kind == VehicleType::VEH_TRAIN {
-            let station_id = StationID((self.shared().station_index)(tile.0));
+            let station_id = World::new(self.shared()).get_station_index(tile);
             if !should_stop_at_station(self.shared(), v, station_id) {
                 return VehicleEnterTileStates(0);
             }
@@ -1708,7 +1708,7 @@ impl MovementServices {
         x: i32,
         y: i32,
     ) -> VehicleEnterTileStates {
-        let kind = TileType((self.shared().tile_type)(tile.0));
+        let kind = World::new(self.shared()).kind(tile);
         if !matches!(
             kind,
             TileType::MP_RAILWAY

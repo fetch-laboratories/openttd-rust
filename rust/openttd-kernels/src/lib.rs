@@ -120,6 +120,7 @@ pub use newgrf_station::{
 mod newgrf_storage;
 /// Canonical persistent-storage pool identity.
 pub use newgrf_storage::PersistentStorageID;
+pub mod newgrf_object;
 mod newgrf_text;
 mod newgrf_townname;
 mod node_hash;

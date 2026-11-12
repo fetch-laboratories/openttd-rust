@@ -342,8 +342,6 @@ const TWO_CC: u16 = 1 << 8;
 const NOT_ON_LAND: u16 = 1 << 9;
 const UNDER_BRIDGE: u16 = 1 << 11;
 const SCALE_WATER: u16 = 1 << 13;
-/// `ObjectFlag::HasNoFoundation`: do not display foundations when on a slope.
-const HAS_NO_FOUNDATION: u16 = 1 << 5;
 
 #[repr(C)]
 pub struct Resolver {
@@ -2109,7 +2107,10 @@ pub(crate) fn get_foundation_object(
 ) -> crate::slope_type::Foundation {
     // SAFETY: The immutable object table and live object tile serve this synchronous call.
     let spec = unsafe { (s.spec)((s.object_type)(tile.0)) };
-    if enabled(s, spec) && unsafe { (s.flags)(spec) } & HAS_NO_FOUNDATION != 0 {
+    if enabled(s, spec)
+        && crate::newgrf_object::ObjectFlags(unsafe { (s.flags)(spec) })
+            .test(crate::newgrf_object::ObjectFlag::HasNoFoundation)
+    {
         crate::slope_type::Foundation::FOUNDATION_NONE
     } else {
         crate::slope_func::flattening_foundation(tileh)
