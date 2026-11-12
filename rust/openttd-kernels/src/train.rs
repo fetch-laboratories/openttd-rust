@@ -2785,18 +2785,6 @@ pub unsafe extern "C" fn openttd_rust_train_consist_changed(
     let g = entry_game!(leaves, services);
     g.consist_changed(id, allowed);
 }
-/// Invoke synchronous train policy with live serialized services.
-/// # Safety
-/// The descriptors and shell must remain live until the call returns; callbacks may reenter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_curve_limit(
-    id: Handle,
-    leaves: *const Leaves,
-    services: *const Services,
-) -> u16 {
-    // SAFETY: The entry's contract keeps both immutable tables live until it returns.
-    get_curve_speed_limit(id, unsafe { &*leaves }, unsafe { &*services })
-}
 /// `Train::GetCurveSpeedLimit`: the train speed limit caused by curves.
 pub(crate) fn get_curve_speed_limit(id: Handle, leaves: &Leaves, services: &Services) -> u16 {
     Game::new(leaves, services).get_curve_speed_limit(id)

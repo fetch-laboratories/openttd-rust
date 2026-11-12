@@ -10,7 +10,7 @@
 //! the 16 vehicle records the probe linked, and calls:
 //!
 //! - `get_curve_speed_limit`, the crate function `settings_table.rs` calls, for the curve
-//!   limit. The probe called the export it replaced; no C++ caller of either remains.
+//!   limit. The probe called the export it replaced, which had no other caller.
 //! - The export `openttd_rust_train_reverse_swap`, as the probe did, for the reversal.
 //!
 //! The live services are the probe's and no more: the curve advantage, the viewport, the

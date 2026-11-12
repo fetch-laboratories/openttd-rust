@@ -19,7 +19,6 @@ openttd_rust_packet_packet_type | #730 network: tests/network_connection.cpp cal
 openttd_rust_roadstop_town | #634 station pools: station-resolver-console.hpp and animation-console.hpp call RoadStopResolverObject::GetTown
 openttd_rust_schedule_queue | #634 station pools: station-lifecycle-console.hpp calls LinkGraphSchedule::Queue
 openttd_rust_station_town_scope | #634 station pools: station-resolver-console.hpp calls StationResolverObject::GetTown
-openttd_rust_train_curve_limit | #736 train edge probe: train-edge-comparison.cpp calls Train::GetCurveSpeedLimit
 openttd_rust_train_update_speed | #656 vehicle pool: fleet-console.cpp calls Train::UpdateSpeed
 openttd_rust_vehicle_scope_set | #656 vehicle pool: fleet-console.cpp calls VehicleScopeResolver::SetVehicle
 openttd_rust_visual_update | #656 vehicle pool: fleet-console.cpp calls Vehicle::UpdateVisualEffect
