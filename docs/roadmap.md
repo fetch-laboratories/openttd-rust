@@ -514,7 +514,7 @@ Flakes and limits carried forward:
 - A flaky shard can be rerun with `gh run rerun RUN --failed` on a branch containing `db62aad692` (#881); a branch on older tools needs a fresh `native` request. This is a resume rule, not permission for another wind-down retry.
 - A workflow-changing PR needs root's reviewed bootstrap Full before queueing. Existing exact-head acceptances retain their evidence limits; later combined trees are validated by queue Full. #900's pending Full status is not a running requested Full or runtime evidence.
 - Metric scope completeness stays with #736's end-state inventory. No later phase is selected. #898 is a partial evidence transfer; native ownership, loader/error observations, pool/ABI identity and retained fixture consumers remain as its accepted report states.
-- Pass briefs retain `cargo check -p openttd-kernels --features native-test-support --all-targets --locked`; ordinary Rust checks omit that feature. Root attribution stays `Agent: /root | Model: ... | Reasoning effort: ...`. #710's missed-resume lesson still applies on resume; no background result reopens this wind-down.
+- Pass briefs no longer need a manual `cargo check --features native-test-support`: the Clippy gate compiles that feature (#891). Root attribution stays `Agent: /root | Model: ... | Reasoning effort: ...`. #710's missed-resume lesson still applies on resume; no background result reopens this wind-down.
 
 Retained state for housekeeping:
 
