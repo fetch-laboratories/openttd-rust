@@ -798,32 +798,32 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation(
     unsafe { &*s }.with_context(|c| c.get_foundation(TileIndex(tile), tileh))
 }
 
-/// `_road_trackbits`: `TrackBits` of each `RoadBits` combination.
+/// `_road_trackbits`: converts `RoadBits` to `TrackBits`.
 const ROAD_TRACKBITS: [TrackBits; 16] = [
-    TrackBits::TRACK_BIT_NONE,
-    TrackBits::TRACK_BIT_NONE,
-    TrackBits::TRACK_BIT_NONE,
-    TrackBits::TRACK_BIT_LEFT,
-    TrackBits::TRACK_BIT_NONE,
-    TrackBits::TRACK_BIT_Y,
-    TrackBits::TRACK_BIT_LOWER,
+    TrackBits::TRACK_BIT_NONE,  // ROAD_NONE
+    TrackBits::TRACK_BIT_NONE,  // ROAD_NW
+    TrackBits::TRACK_BIT_NONE,  // ROAD_SW
+    TrackBits::TRACK_BIT_LEFT,  // ROAD_W
+    TrackBits::TRACK_BIT_NONE,  // ROAD_SE
+    TrackBits::TRACK_BIT_Y,     // ROAD_Y
+    TrackBits::TRACK_BIT_LOWER, // ROAD_S
     TrackBits(
         TrackBits::TRACK_BIT_LEFT.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_Y.0,
-    ),
-    TrackBits::TRACK_BIT_NONE,
-    TrackBits::TRACK_BIT_UPPER,
-    TrackBits::TRACK_BIT_X,
+    ), // ROAD_Y | ROAD_SW
+    TrackBits::TRACK_BIT_NONE,  // ROAD_NE
+    TrackBits::TRACK_BIT_UPPER, // ROAD_N
+    TrackBits::TRACK_BIT_X,     // ROAD_X
     TrackBits(
         TrackBits::TRACK_BIT_LEFT.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_X.0,
-    ),
-    TrackBits::TRACK_BIT_RIGHT,
+    ), // ROAD_X | ROAD_NW
+    TrackBits::TRACK_BIT_RIGHT, // ROAD_E
     TrackBits(
         TrackBits::TRACK_BIT_RIGHT.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_Y.0,
-    ),
+    ), // ROAD_Y | ROAD_NE
     TrackBits(
         TrackBits::TRACK_BIT_RIGHT.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_X.0,
-    ),
-    TrackBits::TRACK_BIT_ALL,
+    ), // ROAD_X | ROAD_SE
+    TrackBits::TRACK_BIT_ALL,   // ROAD_ALL
 ];
 /// `CombineTrackStatus(TrackBitsToTrackdirBits(bits), red_signals)`.
 #[inline]
@@ -978,7 +978,8 @@ impl Context<'_> {
                 }
                 match self.world.road_tile_type(tile.0) {
                     RoadTileType::Normal => {
-                        const DRD_TO_MULTIPLIER: [u16; 4] = [0x101, 0x100, 0x1, 0x0];
+                        const DRD_TO_MULTIPLIER: [u16; DisallowedRoadDirections::DRD_END.0
+                            as usize] = [0x101, 0x100, 0x1, 0x0];
                         let bits = RoadBits(self.world.road_bits(tile.0, rtt.0));
 
                         /* no roadbit at this side of tile, return 0 */
