@@ -1320,7 +1320,7 @@ pub(crate) fn close_connection(
 
         check_next_client_to_send_map(s, f, socket, socket, work);
         if work.pending() {
-            work.push(Resume::CloseTail(socket, status.0));
+            work.push(Resume::CloseTail(socket, status));
             return status;
         }
     }

@@ -648,7 +648,7 @@ pub(crate) fn receive_server(
     p: *mut crate::packet::State,
 ) -> NetworkRecvStatus {
     use crate::network_client::ServerStatus;
-    if ServerStatus(socket::status(game)) != ServerStatus::STATUS_ACTIVE {
+    if crate::network_client::status(game) != ServerStatus::STATUS_ACTIVE {
         return NetworkRecvStatus::NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
 
