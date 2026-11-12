@@ -20,7 +20,7 @@
 ## Station construction, joining and removal (#267)
 
 - Rust owns: rail platform/waypoint, road stop, airport, dock and oil-rig commands; sign/name/owner, terrain, clearance, joining, deletion/reuse and docking-neighbour decisions, including `water_cmd.cpp` docking eligibility/registration.
-- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, viewport sign indices, rendering/description and vehicle-entry/track/slope services.
+- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, viewport sign indices and rendering/description.
 - Checks: `python3 tools/migration.py simulate stations-commands aircraft-controller-removal water-structures-mutate --jobs 2`; default #320 cases, builtin tram, airport noise and reload cases are required.
 - Limits: Gaps remain in external NewGRF programs, legacy cases and unusual occupied or reservation branches (#156).
 - PRs: #303, #323.
