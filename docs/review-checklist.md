@@ -22,7 +22,7 @@ Readers: reviewers. Reviewers enforce the standards implementers no longer read 
 
 - Each claim traces to production code and an expectation taken from the original.
 - Each new scenario, fixture, test or checker names behaviour existing checks cannot distinguish ([cost decisions](planning.md#cost-decisions)); one that names none, or compares an operation with itself, is a finding, and the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
-- Changed fixtures and expectations are explained. Each growth or lint exception names the original behaviour that requires it and what retires it; each declared carry pairs the same item before and after a rename or move; each fidelity suppression's reason names the original definition or cast it preserves. The [cleanup checks](rust-migration.md#quick-cleanup-checks) enforce these records' form, not their truth.
+- Changed fixtures and expectations are explained. Each growth or lint exception names the original behaviour that requires it and what retires it; each declared carry pairs the same item before and after a rename or move; each fidelity suppression's reason names the original definition or cast it preserves. These records sit in the PR's cleanup records file; accept a growth, lint or suppression proposal by repeating it in an attributed report under the tested head. The [cleanup checks](rust-migration.md#quick-cleanup-checks) enforce these records' form, not their truth.
 
 ## Cleanup PRs
 
