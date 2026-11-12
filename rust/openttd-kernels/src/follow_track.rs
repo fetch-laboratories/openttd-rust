@@ -153,12 +153,13 @@ impl State {
         self.new_td_bits = if self.mode == RAIL && w.plain_rail(self.new_tile.0) {
             u16::from(w.tracks(self.new_tile.0)) * 0x101
         } else if self.mode == ROAD {
-            crate::pathfinder_func::road_trackdirs_in_world(
+            crate::pathfinder_func::get_trackdir_bits_for_road_in_world(
                 crate::movement::table(w.shared),
                 w,
-                self.new_tile.0,
-                self.tram(w, road),
+                self.new_tile,
+                crate::road_type::RoadTramType(self.tram(w, road)),
             )
+            .0
         } else {
             track_status_to_trackdir_bits(crate::movement::table(w.shared).track_status_in_world(
                 w,
