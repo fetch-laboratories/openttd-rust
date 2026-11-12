@@ -76,7 +76,8 @@ pub struct Services {
     layouts_resize: unsafe extern "C" fn(*mut AirportSpec, usize) -> (),
     layout_assign:
         unsafe extern "C" fn(*mut AirportSpec, usize, u8, *const AirportTileTable, usize) -> (),
-    dimensions: unsafe extern "C" fn(*mut AirportSpec, u8, u8) -> (),
+    airport_size_x: unsafe extern "C" fn(*mut AirportSpec, u8) -> (),
+    airport_size_y: unsafe extern "C" fn(*mut AirportSpec, u8) -> (),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -87,7 +88,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "AirportTileTable" ["probe"] => AirportTileTable { ti, gfx };
-    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, dimensions };
+    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, airport_size_x, airport_size_y };
 }
 
 /// `AirportChangeInfo`: define properties for airports.
@@ -258,7 +259,8 @@ unsafe fn airport_change_info(
                             layout.tiles.len(),
                         );
                     }
-                    (s.dimensions)(r#as, size_x, size_y);
+                    (s.airport_size_x)(r#as, size_x);
+                    (s.airport_size_y)(r#as, size_y);
                 }
 
                 0x0C => {

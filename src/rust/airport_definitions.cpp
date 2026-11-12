@@ -46,7 +46,8 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 		.tile_callbacks = [](AirportTileSpec *spec, uint8_t value) noexcept -> void { spec->callback_mask = static_cast<AirportTileCallbackMasks>(value); },
 		.layouts_resize = [](AirportSpec *spec, size_t count) noexcept -> void { spec->layouts.clear(); spec->layouts.resize(count); },
 		.layout_assign = [](AirportSpec *spec, size_t index, uint8_t rotation, const AirportTileTable *tiles, size_t count) noexcept -> void { auto &layout = spec->layouts[index]; layout.rotation = static_cast<Direction>(rotation); layout.tiles.assign(tiles, tiles + count); },
-		.dimensions = [](AirportSpec *spec, uint8_t x, uint8_t y) noexcept -> void { spec->size_x = x; spec->size_y = y; },
+		.airport_size_x = [](AirportSpec *spec, uint8_t value) noexcept -> void { spec->size_x = value; },
+		.airport_size_y = [](AirportSpec *spec, uint8_t value) noexcept -> void { spec->size_y = value; },
 	};
 	return services;
 }
