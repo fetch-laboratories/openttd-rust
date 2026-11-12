@@ -8,13 +8,16 @@
 //! graph and job shells, their pools and the schedule services around the production entries,
 //! and records the same trace entries, whose kinds the oracle header lists.
 //!
-//! As in the fixture, a worker is synchronous: `start_thread` marks its job completed. The
-//! tick and pause entries take the client and pause arguments the session frame derives; the
-//! session frame is outside this test. The scheduler's pause post runs the production command
+//! As in the fixture, a worker is synchronous: `start_thread` marks its job completed. Pause
+//! control runs through the production session state loop in a modal editor frame, which
+//! derives its predicates from the session pause; the tick enters `tick` directly, which makes
+//! the network client decision, and the editor frame's other phases are outside this test.
+//! The scheduler's pause post runs the production command
 //! chain (`command_post::pause`, `command::post` and the session's `CmdPause`) over test-side
 //! command, cost, finance and session leaves; its trace entry is recorded where the executed
 //! command reports the pause change, as the session pause state it leaves.
 use super::*;
+use crate::company_type::CompanyID;
 use crate::industrytype::NativeVec;
 use crate::linkgraph::{
     NativeGraph,
@@ -55,14 +58,13 @@ struct Fixture {
     /// The fixture's static `replacement` graph, emplaced by each recycle.
     replacement: *mut GraphShell,
     services: *const Services,
-    /// The command chain's tables and `_current_company`.
+    /// The session's and the command chain's tables, `_current_company` and `_networking`.
     post: *const crate::command_post::Services,
     command: *const CommandServices,
     session: *const crate::session::Services,
-    current_company: u8,
-    /// `_networking`, and the company services `tick` reads it through.
+    world: *const crate::genworld::WorldServices,
+    current_company: CompanyID,
     networking: bool,
-    company: *const crate::company::Services,
 }
 /// Process-wide, as the probe's globals were; the test holds `GLOBAL_LOCK`.
 static FIXTURE: GameState<Fixture> = GameState::new(Fixture {
@@ -75,9 +77,9 @@ static FIXTURE: GameState<Fixture> = GameState::new(Fixture {
     post: std::ptr::null(),
     command: std::ptr::null(),
     session: std::ptr::null(),
-    current_company: 0,
+    world: std::ptr::null(),
+    current_company: CompanyID::BEGIN,
     networking: false,
-    company: std::ptr::null(),
 });
 /// No production entry is called while the fixture is borrowed.
 fn with<R>(f: impl FnOnce(&mut Fixture) -> R) -> R {
@@ -345,13 +347,27 @@ extern "C" fn condition(holds: bool) {
     assert!(holds, "command chain assertion");
 }
 extern "C" fn current_company() -> u8 {
-    with(|f| f.current_company)
+    with(|f| f.current_company).0
 }
 extern "C" fn set_current_company(company: u8) {
-    with(|f| f.current_company = company);
+    with(|f| f.current_company = CompanyID(company));
 }
 extern "C" fn networking() -> bool {
     with(|f| f.networking)
+}
+extern "C" fn yes() -> bool {
+    true
+}
+extern "C" fn world() -> *const crate::genworld::WorldServices {
+    with(|f| f.world)
+}
+extern "C" fn frame_begin(
+    storage: *mut crate::session::FrameStorage,
+) -> *mut crate::session::Frame {
+    storage.cast()
+}
+extern "C" fn frame_end(_: *mut crate::session::Frame, _: *mut crate::session::Frame) -> bool {
+    true
 }
 extern "C" fn no() -> bool {
     false
@@ -449,12 +465,13 @@ fn tick(date: i32, fract: u16, client: bool) {
     write_economy_fraction(fract);
     with(|f| f.networking = client);
     // SAFETY: Installed by the test for its whole run.
-    let company = unsafe { &*with(|f| f.company) };
+    let company = unsafe { &*session().company };
     super::tick(services(), services().shared, company);
     with(|f| f.networking = false);
 }
-/// The session's pause control on day 1, fraction 19, under pause `bits` (1 link graph,
-/// 2 normal); `load` runs the after-load control on an unpaused game instead.
+/// The session's state loop on day 1, fraction 19, in a modal editor frame under pause
+/// `bits` (1 link graph, 2 normal): the frame runs the scheduler's pause control and returns
+/// for the modal window. `load` runs the after-load control on an unpaused game instead.
 fn pause(bits: u8, load: bool) {
     write_economy_date(EconomyDate(1));
     write_economy_fraction(19);
@@ -473,7 +490,10 @@ fn pause(bits: u8, load: bool) {
             observe([8, 1, 0]);
         }
     } else {
-        super::pause(services(), services().shared, bits & 1 != 0, bits == 0);
+        // SAFETY: The test's session table and its leaves outlive the frame.
+        let completed =
+            unsafe { crate::session::openttd_rust_session_state_loop_abi(session(), null_mut()) };
+        assert_eq!(completed, 1, "the modal frame completes");
     }
 }
 
@@ -490,7 +510,6 @@ fn install() -> &'static Services {
         map: crate::map_func::fixture::statics(),
         ..crate::test_tables::SHARED
     }));
-    install_command_chain(shared);
     let (graph_pool, job_pool) = (new_pool(), new_pool());
     let schedule: &'static Services = Box::leak(Box::new(Services {
         allocation_failure,
@@ -512,12 +531,13 @@ fn install() -> &'static Services {
         f.jobs = job_pool;
         f.services = schedule;
     });
+    install_session(shared, schedule);
     schedule
 }
-/// The command chain's leaves: a spectator-capable current company without finances, no
-/// network, no shift press and no desync log, a success cost, and a session whose pause
-/// change is observed.
-fn install_command_chain(shared: &'static crate::services::Services) {
+/// The session's and the command chain's leaves: a current company without finances, the
+/// fixture's network flag with no server, a modal window, no scripts, no shift press and no
+/// desync log, a success cost, and a pause change that is observed.
+fn install_session(shared: &'static crate::services::Services, schedule: &'static Services) {
     let finance: &'static _ = Box::leak(Box::new(crate::company::FinanceServices {
         current_company,
         set_current_company,
@@ -559,7 +579,19 @@ fn install_command_chain(shared: &'static crate::services::Services) {
         network_server: no,
         ..crate::test_tables::COMPANY
     }));
+    let worlds: &'static _ = Box::leak(Box::new(crate::genworld::WorldServices {
+        modal: yes,
+        ..crate::test_tables::WORLD
+    }));
     let sessions: &'static _ = Box::leak(Box::new(crate::session::Services {
+        company,
+        shared,
+        schedule,
+        world,
+        state_frame_begin: frame_begin,
+        state_frame_end: frame_end,
+        paused_measurements: nothing,
+        scripts_enabled: no,
         pause_change,
         pause_dirty: nothing,
         ..crate::test_tables::SESSION
@@ -568,7 +600,7 @@ fn install_command_chain(shared: &'static crate::services::Services) {
         f.post = post;
         f.command = commands;
         f.session = sessions;
-        f.company = company;
+        f.world = worlds;
     });
 }
 /// After the fixture's `ShiftDates` and `Clear`: each pooled graph's compression and first
