@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Packet serialization helpers of `network/core/network_game_info.h`.
-#![allow(unsafe_code)]
 
 use crate::newgrf_config::GRFIdentifier;
 use crate::packet::State as Packet;
@@ -21,6 +20,7 @@ pub(crate) fn serialize_grf_identifier(
 ///
 /// # Safety
 /// `p` is a live packet whose services are `services`.
+#[allow(unsafe_code)] // The packet's receive operations take its raw native record.
 pub(crate) unsafe fn deserialize_grf_identifier(
     p: *mut Packet,
     services: &crate::packet::Services,
