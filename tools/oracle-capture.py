@@ -178,6 +178,10 @@ def industry_lifecycle(lines: Sequence[str]) -> list[str]:
     ]
 
 
+def linkgraph_schedule(lines: Sequence[str]) -> list[str]:
+    return section("trace", streams(lines)["trace"])
+
+
 def policy(lines: Sequence[str]) -> list[str]:
     s = streams(lines)
     return [line for kind in "HRZAP" for line in section(kind, s[kind])]
@@ -325,6 +329,39 @@ RECIPE: dict[str, Recipe] = {
             ),
         ),
         flags=("-DUNIX", "-fno-strict-overflow"),
+    ),
+    "linkgraph_schedule": Recipe(
+        oracle="linkgraph_schedule/schedule-oracle.txt",
+        fixture="f0f67cf819:tools/simulation/linkgraph-schedule-reference.cpp",
+        convert=linkgraph_schedule,
+        extract=tuple(
+            (
+                "scheduler-original.inc",
+                "src/linkgraph/linkgraphschedule.cpp",
+                signature,
+                "",
+            )
+            for signature in (
+                "void LinkGraphSchedule::SpawnNext()",
+                "bool LinkGraphSchedule::IsJoinWithUnfinishedJobDue() const",
+                "void LinkGraphSchedule::JoinNext()",
+                "void LinkGraphSchedule::SpawnAll()",
+                "void LinkGraphSchedule::Clear()",
+                "void LinkGraphSchedule::ShiftDates(",
+                "void StateGameLoop_LinkGraphPauseControl()",
+                "void AfterLoad_LinkGraphPauseControl()",
+                "void OnTick_LinkGraph()",
+            )
+        )
+        + tuple(
+            (
+                "scheduler-queue-original.inc",
+                "src/linkgraph/linkgraphschedule.h",
+                signature,
+                "",
+            )
+            for signature in ("void Queue(", "void Dequeue(")
+        ),
     ),
     "tunnel": Recipe(
         oracle="town/tunnel-oracle.txt",
