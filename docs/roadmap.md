@@ -193,15 +193,15 @@ Provisional, for steering 36 to judge:
 
 ## Ready queue
 
-Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. The open component PRs are #936 (in the merge queue), #937 and #951, within the [branch limit](root-workflow.md#integration).
+Undispatched work orders ([team](team.md#ready-queue-and-pipelining)). Each has its own issue, whose body holds its plan once a planner has written it. The open component PRs are #936 (in the merge queue), #937 and #951, with #948 and #946 dispatched and their PRs to come, within the [branch limit](root-workflow.md#integration).
 
-1. #948: 9s, the single-file pass for `signal.rs`. Planned; waits on nothing.
-2. #946: the train edge probe, the first half of #736's last transfer. Planned; waits on nothing.
+1. #953: 13r, the file pass for `tile_loop.rs` and `tilearea.rs`, what is left of workset 13 apart from `trees.rs`. Waits on nothing.
+2. #954: 13t, the single-file pass for `trees.rs`. Waits on nothing; its planner places it against #953.
 3. #949: 9w, the pass for `water_regions.rs`, which #947's plan split off at the file boundary. Waits on #951, which is #947's PR.
 
-**Later.** #952, the speed fix, waits on #951 and takes a slot as soon as its plan is settled. 9p (`pbs.rs`), the pass for `ship_yapf.rs` and `road_yapf.rs`, and the single-file pass for `rail_yapf.rs` wait on #951, the last on 9p too and the `ship_yapf.rs` pass on #949 too ([order](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6811109267)). Workset 08's ten remaining files follow workset 09, the four over 1,500 lines (`train.rs`, `road.rs`, `aircraft.rs` and `train_reservation.rs`) as single-file passes. A second slot with no workset-09 entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. #945 follows #946. #950, the aircraft range probe, waits on #946 and follows #945.
+**Later.** #952, the speed fix, waits on #951 and takes a slot as soon as its plan is settled. 9p (`pbs.rs`), the pass for `ship_yapf.rs` and `road_yapf.rs`, and the single-file pass for `rail_yapf.rs` wait on #951, the last on 9p too and the `ship_yapf.rs` pass on #949 too ([order](https://github.com/fetch-laboratories/openttd-rust/issues/734#issuecomment-6811109267)). Workset 08's ten remaining files follow workset 09, the four over 1,500 lines (`train.rs`, `road.rs`, `aircraft.rs` and `train_reservation.rs`) as single-file passes. A second slot with no workset-09 entry ready takes the next workset in the [work order](#cleanup-work-order)'s fan-in order whose files no open pass finishes. Workset 23's `native_test_support.rs` and `native_test_support/movement.rs` join #953 if its plan shows them clear of the open passes, and otherwise get their own entry. #945 follows #946. #950, the aircraft range probe, waits on #946 and follows #945.
 
-Full phase-3 planning remains untriggered: 193 of #734's 319 files, in 19 worksets, are in no entry.
+Full phase-3 planning remains untriggered: 190 of #734's 319 files, in 19 worksets, are in no entry.
 
 ## Resume checkpoint
 
