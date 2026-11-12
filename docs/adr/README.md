@@ -69,6 +69,7 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0045](0045-one-github-account.md) | All agents share one GitHub account, so a review is an attributed comment and not a GitHub approval |
 | [0046](0046-no-upstream-contact.md) | Agents do not contact OpenTTD's upstream maintainers or submit changes upstream |
 | [0047](0047-output-on-the-hard-disk.md) | This machine's build and test output lives on the hard disk behind symlinks |
+| [0048](0048-agents-md-and-routing-table.md) | `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table |
 
 ### The agents'
 
@@ -95,4 +96,3 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0041](0041-globals-are-process-wide-statics.md) | A C++ global or static becomes a process-wide Rust static, not thread-local storage |
 | [0042](0042-ids-cross-as-plain-integers.md) | Typed C++ IDs cross the calling layer as their plain integer types |
 | [0043](0043-docs-only-changes-need-no-pr.md) | Docs-only changes are committed straight to the main branch without a PR |
-| [0048](0048-agents-md-and-routing-table.md) | `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table |

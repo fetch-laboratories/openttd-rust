@@ -1,6 +1,6 @@
 ---
 status: accepted
-may change: agents
+may change: user
 ---
 # `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table
 
