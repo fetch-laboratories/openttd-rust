@@ -280,9 +280,6 @@
       1,
       1
     ],
-    "rust/openttd-kernels/src/network_frame.rs | fn server_tick_clients | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
     "rust/openttd-kernels/src/network_lifecycle.rs | fn connect_game | too_many_arguments | 4a33eacd5fa65f2b2e28": [
       8
     ],
