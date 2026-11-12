@@ -1595,12 +1595,8 @@ class OrdinaryRustTests(unittest.TestCase):
 
 
 class TrackedRecordTests(unittest.TestCase):
-    MERGED = {
-        "kind": "carry",
-        "tool": "rust",
-        "from": "rust/z.rs | fn z | x",
-        "to": "y",
-    }
+    # The usual archive claim, which successive cleanup PRs repeat exactly.
+    MERGED = {"kind": "refactor-proof", "method": "archive", "renames": {}}
 
     @contextlib.contextmanager
     def branch(self, files: Mapping[str, str]) -> Generator[tuple[Path, str]]:
@@ -1621,10 +1617,19 @@ class TrackedRecordTests(unittest.TestCase):
                 yield root, base
 
     def test_only_records_the_change_adds_count(self) -> None:
-        carry = dict(self.MERGED, to="z")
+        carry = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}
         own = "migration/cleanup-records/tools-921-x.json"
+        merged = "migration/cleanup-records/merged.json"
         with self.branch({own: json.dumps([self.MERGED, carry])}) as (root, base):
-            self.assertEqual(cleanup_contract.tracked(base), [carry])
+            # The merged file is inert; this branch's identical claim counts.
+            self.assertEqual(cleanup_contract.tracked(base), [self.MERGED, carry])
+            # A changed file counts only the records it lacked at base.
+            (root / merged).write_text(json.dumps([self.MERGED, dict(carry, to="c")]))
+            self.assertEqual(
+                cleanup_contract.tracked(base),
+                [dict(carry, to="c"), self.MERGED, carry],
+            )
+            (root / merged).write_text(json.dumps([self.MERGED]))
             # Writing keeps this branch's records, adds new ones once and deletes
             # the merged PR's unchanged file.
             other = dict(carry, to="w")
@@ -1636,7 +1641,27 @@ class TrackedRecordTests(unittest.TestCase):
             )
             written = json.loads((root / own).read_text())
             self.assertEqual(written, [self.MERGED, carry, other])
-            self.assertEqual(cleanup_contract.tracked(base), [carry, other])
+            self.assertEqual(
+                cleanup_contract.tracked(base), [self.MERGED, carry, other]
+            )
+
+    def test_lint_policy_rejects_a_malformed_file_with_no_delta(self) -> None:
+        path = "migration/cleanup-records/tools-921-x.json"
+        with self.branch({path: "[[]]"}) as (root, base):
+            output = io.StringIO()
+            with (
+                patch.object(POLICY, "ROOT", root),
+                patch.object(POLICY, "git", partial(git, cwd=root)),
+                patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
+                contextlib.redirect_stdout(output),
+                self.assertRaises(SystemExit) as stop,
+            ):
+                cleanup_contract.run(POLICY.main)
+            self.assertEqual(stop.exception.code, 1)
+            self.assertEqual(
+                output.getvalue(),
+                f"cleanup records: {path} record 1: a record must be a JSON object\n",
+            )
 
     def test_malformed_records_fail_in_one_line_naming_record_and_field(self) -> None:
         path = "migration/cleanup-records/tools-921-x.json"

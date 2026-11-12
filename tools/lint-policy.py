@@ -22,6 +22,7 @@ from cleanup_contract import (
     context,
     reviewed,
     run,
+    tracked,
     write,
 )
 from code_lines import without_comments
@@ -405,6 +406,9 @@ def main() -> int:
         help="record each ready carry in this branch's cleanup records file",
     )
     args = parser.parse_args()
+    # Quick runs lint policy on every change, so every record file is validated
+    # here even when no gate needs its records.
+    tracked(args.base_ref)
     errors = []
     old_paths = set(git("ls-tree", "-r", "--name-only", args.base_ref).splitlines())
     paths = set(git("ls-files").splitlines()) | old_paths

@@ -99,48 +99,53 @@ def merge_base(base_ref: str) -> str:
         return base_ref
 
 
-def base_records(base: str) -> list[dict[str, Any]]:
-    """Records already at the merge base; ignore malformed ones there."""
-    found = []
-    for path in git("ls-tree", "-r", "--name-only", base, "--", RECORDS).split():
-        try:
-            found += file_records(git("show", f"{base}:{path}"), path)
-        except ContractError:
-            continue
-    return found
+def at_base(base: str, path: str) -> str | None:
+    """A record file's text at the merge base, or None where it is absent."""
+    if not git("ls-tree", "--name-only", base, "--", path).strip():
+        return None
+    return git("show", f"{base}:{path}")
 
 
 def tracked(base_ref: str) -> list[dict[str, Any]]:
-    """The records this change adds, from the working tree."""
-    head = [
-        record
-        for path in sorted((ROOT / RECORDS).glob("*.json"))
-        for record in file_records(path.read_text(), str(path.relative_to(ROOT)))
-    ]
-    old = base_records(merge_base(base_ref))
-    return [record for record in head if record not in old]
+    """The records this change adds, from the working tree.
+
+    A file unchanged since the merge base is a merged PR's and inert. A new or
+    changed file counts each record that file lacked at the merge base, so a
+    later branch may repeat a merged record, such as an archive-proof claim.
+    """
+    base = merge_base(base_ref)
+    found = []
+    for path in sorted((ROOT / RECORDS).glob("*.json")):
+        relative, text = str(path.relative_to(ROOT)), path.read_text()
+        old = at_base(base, relative)
+        if text == old:
+            continue
+        try:
+            before = file_records(old, relative) if old is not None else []
+        except ContractError:
+            before = []
+        found += [r for r in file_records(text, relative) if r not in before]
+    return found
 
 
 def write(base_ref: str, added: Iterable[dict[str, Any]]) -> None:
-    """Add records to this branch's file and delete files the base already has."""
+    """Add records to this branch's file and delete files unchanged since base."""
     base = merge_base(base_ref)
-    at_base = set(git("ls-tree", "-r", "--name-only", base, "--", RECORDS).split())
     branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
     if branch == "HEAD":
         raise ContractError("check out the change's branch to write cleanup records")
     own = ROOT / RECORDS / (branch.replace("/", "-") + ".json")
     for path in sorted((ROOT / RECORDS).glob("*.json")):
         relative = str(path.relative_to(ROOT))
-        if relative in at_base and path.read_text() == git(
-            "show", f"{base}:{relative}"
-        ):
+        if path.read_text() == at_base(base, relative):
             path.unlink()
             print(f"deleted the merged records in {relative}")
-    records = file_records(own.read_text(), RECORDS) if own.is_file() else []
+    name = str(own.relative_to(ROOT))
+    records = file_records(own.read_text(), name) if own.is_file() else []
     records += [record for record in added if record not in records]
     own.parent.mkdir(parents=True, exist_ok=True)
     own.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
-    print(f"recorded {len(records)} records in {own.relative_to(ROOT)}")
+    print(f"recorded {len(records)} records in {name}")
 
 
 def acceptances(body: str, where: str) -> list[dict[str, Any]]:
