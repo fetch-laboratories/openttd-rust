@@ -812,12 +812,94 @@ def command_exec(argv: list[str]) -> int:
     return 0  # os.execvpe does not return.
 
 
+FMT_USAGE = "python3 tools/migration.py fmt [--check | --fix]"
+
+
+def ruff_command(lines: list[str], subcommand: str) -> list[str]:
+    """The argv of Quick's pinned `ruff SUBCOMMAND` line."""
+    for line in lines:
+        words = shlex.split(line)
+        if "ruff" in words and words[words.index("ruff") + 1 :][:1] == [subcommand]:
+            return words
+    raise RuntimeError(
+        f"Quick runs no `ruff {subcommand}` line; see the Ruff lines in "
+        ".github/workflows/ci-quick.yml"
+    )
+
+
+def format_steps(check: bool, fix: bool) -> list[tuple[list[str], dict[str, str]]]:
+    """cargo fmt, then Quick's pinned Ruff over Quick's scope: its lint line
+    with --fix when asked, and its format line, without --check unless asked."""
+    # Imported here: git_hooks and preflight import this module.
+    import git_hooks
+    import preflight
+
+    lines = git_hooks.ruff_lines()
+    formatting = ruff_command(lines, "format")
+    if not check:
+        formatting = [word for word in formatting if word != "--check"]
+    lint = [*ruff_command(lines, "check"), "--fix"] if fix else []
+    cargo = ["cargo", "fmt", "--all", *(["--", "--check"] if check else [])]
+    ruff_environment = preflight.environment()
+    steps = [(cargo, driver_environment()), (lint, ruff_environment)]
+    return [step for step in steps if step[0]] + [(formatting, ruff_environment)]
+
+
+def run_format_step(command: list[str], env: dict[str, str]) -> bool:
+    print(f"--> {shlex.join(command)}", flush=True)
+    try:
+        return subprocess.run(command, cwd=ROOT, env=env, check=False).returncode == 0
+    except OSError as error:
+        print(f"cannot run {command[0]}: {error.strerror}", file=sys.stderr)
+        return False
+
+
+def command_fmt(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="migration.py fmt",
+        usage=FMT_USAGE,
+        description=(
+            "Format the whole Rust workspace with cargo fmt in the driver "
+            "environment, and the whole Python scope Quick checks with Quick's "
+            "pinned Ruff formatter. Only files that were unformatted change, "
+            "including unrelated unformatted files in the working tree; nothing "
+            "is staged."
+        ),
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="report what would change without writing; exit 1 if anything would",
+    )
+    mode.add_argument(
+        "--fix",
+        action="store_true",
+        help="also apply Ruff's lint fixes (Quick's `ruff check` line with --fix)",
+    )
+    args = parser.parse_args(argv)
+    failed = [
+        shlex.join(command)
+        for command, env in format_steps(args.check, args.fix)
+        if not run_format_step(command, env)
+    ]
+    if failed:
+        remedy = "; run python3 tools/migration.py fmt" if args.check else ""
+        print(f"fmt: failed: {', '.join(failed)}{remedy}", file=sys.stderr)
+    return 1 if failed else 0
+
+
 # Commands that parse their own arguments and need no build lock or evidence.
-AGENT_COMMANDS: dict[str, Callable[[list[str]], int]] = {"exec": command_exec}
+AGENT_COMMANDS: dict[str, Callable[[list[str]], int]] = {
+    "exec": command_exec,
+    "fmt": command_fmt,
+}
 AGENT_EPILOG = f"""\
 These take their own arguments, come first and take none of the options above:
   {EXEC_USAGE}
       run one command (cargo, rustc, a built binary) in the driver environment
+  {FMT_USAGE}
+      format the Rust workspace and Quick's Python scope at the pinned versions
 """
 
 
