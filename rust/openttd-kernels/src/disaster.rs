@@ -253,7 +253,7 @@ impl<'a> World<'a> {
         tick
     }
     fn slope(&self, x: i32, y: i32) -> i32 {
-        crate::movement::pixel_z(self.shared, x, y, false)
+        crate::movement::get_slope_pixel_z(self.shared, x, y, false)
     }
     fn flight_vehicle(v: Vehicle) -> crate::aircraft::Vehicle {
         crate::aircraft::Vehicle {

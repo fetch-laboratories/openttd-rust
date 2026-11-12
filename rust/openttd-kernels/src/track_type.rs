@@ -260,5 +260,9 @@ impl TrackdirBits {
     pub const INVALID_TRACKDIR_BIT: Self = Self(65535);
 }
 
+/// `TrackStatus`: the status of a tile for a transport type, with the available
+/// trackdirs in the low 16 bits and the red signals in the high 16 bits.
+pub type TrackStatus = u32;
+
 crate::base_bitset_type::impl_bitset_ops!(TrackBits);
 crate::base_bitset_type::impl_bitset_ops!(TrackdirBits);

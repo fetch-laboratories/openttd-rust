@@ -38,11 +38,8 @@ impl VehicleEnterTileStates {
         Self(1 << element.0)
     }
 }
-/// Raw adapter: `VehicleEnterTileState::EnteredStation` in `VehicleEnterTileStates`, read by
-/// `movement.rs`, `road.rs` and `town/house.rs` until their passes.
-pub const ENTERED_STATION: u8 =
-    VehicleEnterTileStates::from_element(VehicleEnterTileState::EnteredStation).0;
-/// Raw adapter: `VehicleEnterTileState::EnteredWormhole` in `VehicleEnterTileStates`.
+/// Raw adapter: `VehicleEnterTileState::EnteredWormhole` in `VehicleEnterTileStates`, read by
+/// `road.rs` until its pass.
 pub const ENTERED_WORMHOLE: u8 =
     VehicleEnterTileStates::from_element(VehicleEnterTileState::EnteredWormhole).0;
 /// Raw adapter: `VehicleEnterTileState::CannotEnter` in `VehicleEnterTileStates`.

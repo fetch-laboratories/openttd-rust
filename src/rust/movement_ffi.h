@@ -16,9 +16,10 @@
 #include "vehicle_ffi.h"
 #include "../bridge_type.h"
 #include "orders_ffi.h"
-struct OpenTTDMovementFoundation { const void *spec; uint16_t kind; bool callback; };
-struct OpenTTDMovementObjectFoundation { bool enabled; bool no_foundation; };
 enum class WaterTileType : uint8_t;
+struct OpenTTDIndustryTileServices;
+struct OpenTTDObjectServices;
+struct OpenTTDTownLeaves;
 struct OpenTTDTrainServices;
 struct OpenTTDTunnelBridgeServices;
 /* Only consumed entry-local owner identities/scalars; never a Vehicle/map view.
@@ -34,14 +35,12 @@ struct OpenTTDMovementServices {
 	uint64_t (*road_compatible)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_compatible);
 	uint16_t (*road_type_speed)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_type_speed);
 	RoadTramType (*road_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
-	const OpenTTDRoadLeaves *road_vehicle;
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
-	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
-	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);
-	OpenTTDMovementFoundation (*industry_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_foundation);
-	uint16_t (*industry_callback)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_callback);
+	const OpenTTDObjectServices *objects;
+	const OpenTTDTownLeaves *town;
+	const OpenTTDIndustryTileServices *industry_tiles;
 };
 extern const OpenTTDMovementServices _rust_movement_services;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;

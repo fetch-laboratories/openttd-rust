@@ -19,7 +19,7 @@ use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
-use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
+use crate::newgrf_callbacks::CBID_HOUSE_ALLOW_CONSTRUCTION;
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -901,13 +901,6 @@ pub(super) unsafe fn allow_construction(
     let result = unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) };
     result == crate::newgrf_callbacks::CALLBACK_FAILED
         || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
-}
-/// `CBID_HOUSE_DRAW_FOUNDATIONS` for the house on `tile`, in the tile's town.
-pub(crate) unsafe fn foundation(tile: TileIndex, house: HouseID) -> u16 {
-    let s = services();
-    let town =
-        (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile.0)));
-    unsafe { get_house_callback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, house, town, tile, false) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {

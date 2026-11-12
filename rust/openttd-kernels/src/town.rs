@@ -1590,7 +1590,7 @@ impl Engine<'_> {
             }
         }
         let cur_slope = if (self.services.build_on_slopes)() {
-            crate::movement::foundation_slope(self.services, tile.0).slope
+            crate::movement::get_foundation_slope(self.services, tile).0
         } else {
             self.get_tile_slope(tile)
         };

@@ -264,26 +264,9 @@ pub const fn is_valid_corner_raw(c: u8) -> bool {
 pub fn steep_slope_raw(c: u8, check: impl Fn(bool)) -> u8 {
     steep_slope(Corner(c), check).0
 }
-/// Raw adapter: `OppositeCorner`.
-#[must_use]
-pub const fn opposite_corner_raw(c: u8) -> u8 {
-    opposite_corner(Corner(c)).0
-}
 /// Raw adapter: `SlopeWithOneCornerRaised`.
 pub fn slope_with_one_corner_raised_raw(c: u8, check: impl Fn(bool)) -> u8 {
     slope_with_one_corner_raised(Corner(c), check).0
-}
-/// Raw adapter: `SlopeWithThreeCornersRaised`.
-pub fn slope_with_three_corners_raised_raw(c: u8, check: impl Fn(bool)) -> u8 {
-    slope_with_three_corners_raised(Corner(c), check).0
-}
-/// Raw adapter: `HalftileFoundation`.
-pub fn halftile_foundation_raw(c: u8, check: impl Fn(bool)) -> u8 {
-    halftile_foundation(Corner(c), check).0
-}
-/// Raw adapter: `SpecialRailFoundation`.
-pub fn special_rail_foundation_raw(c: u8, check: impl Fn(bool)) -> u8 {
-    special_rail_foundation(Corner(c), check).0
 }
 
 #[cfg(test)]

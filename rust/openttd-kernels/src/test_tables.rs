@@ -892,14 +892,12 @@ pub(crate) const MOVEMENT: crate::movement::MovementServices = crate::movement::
     road_compatible: unreachable1,
     road_type_speed: unreachable1,
     road_kind: unreachable1,
-    road_vehicle: ptr::null(),
     resolve: unreachable1,
     depot_invalidate: unreachable1,
     native_assert: unreachable1,
-    object_foundation: unreachable1,
-    house_foundation: unreachable1,
-    industry_foundation: unreachable1,
-    industry_callback: unreachable2,
+    objects: ptr::null(),
+    town: ptr::null(),
+    industry_tiles: ptr::null(),
 };
 
 /// `crate::animated_tile::Services` with every entry unreachable.
