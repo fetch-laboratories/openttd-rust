@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import transcripts
+from transcripts import CallRow, SessionRow
+
+# Raw transcript records are JSON objects of many shapes; the fixtures build
+# them as dictionaries, as the hosts write them.
+Raw = dict[str, Any]
 
 MATCH = "sample-repo"
 CWD = f"/work/{MATCH}/worktrees/one"
@@ -29,31 +34,29 @@ def ms(day: str, clock: str) -> int:
     return int(transcripts.epoch_ms(ts(day, clock)))
 
 
-def write_lines(path: Path, records: list[Any], extra: str = "") -> None:
+def write_lines(path: Path, records: list[Raw], extra: str = "") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = "".join(json.dumps(r) + "\n" for r in records)
     path.write_text(text + extra)
 
 
-def claude_user(
-    day: str, clock: str, content: object, **more: object
-) -> dict[str, Any]:
+def claude_user(day: str, clock: str, content: object, **more: object) -> Raw:
     record = {"type": "user", "timestamp": ts(day, clock), "cwd": CWD}
     record.update(message={"role": "user", "content": content}, **more)
     return record
 
 
-def claude_assistant(day: str, clock: str, *blocks: object) -> dict[str, Any]:
+def claude_assistant(day: str, clock: str, *blocks: object) -> Raw:
     message = {"model": "model-a", "content": list(blocks)}
     return {"type": "assistant", "timestamp": ts(day, clock), "message": message}
 
 
-def tool_use(call_id: str, command: str, background: bool = False) -> dict[str, Any]:
+def tool_use(call_id: str, command: str, background: bool = False) -> Raw:
     args = {"command": command, "run_in_background": background}
     return {"type": "tool_use", "id": call_id, "name": "Bash", "input": args}
 
 
-def tool_result(call_id: str, text: str, error: bool = False) -> dict[str, Any]:
+def tool_result(call_id: str, text: str, error: bool = False) -> Raw:
     return {
         "type": "tool_result",
         "tool_use_id": call_id,
@@ -108,7 +111,7 @@ def claude_store(root: Path) -> None:
     write_lines(other / "x.jsonl", [claude_user(DAY1, "10:00:00", "Not ours")])
 
 
-def codex_meta(sid: str, cwd: str, source: object = "vscode") -> dict[str, Any]:
+def codex_meta(sid: str, cwd: str, source: object = "vscode") -> Raw:
     payload = {"id": sid, "cwd": cwd, "source": source}
     return {
         "type": "session_meta",
@@ -117,14 +120,12 @@ def codex_meta(sid: str, cwd: str, source: object = "vscode") -> dict[str, Any]:
     }
 
 
-def codex_item(
-    day: str, clock: str, item: dict[str, Any], start: int
-) -> dict[str, Any]:
+def codex_item(day: str, clock: str, item: Raw, start: int) -> Raw:
     payload = {"type": "item_completed", "item": item, "started_at_ms": start}
     return {"type": "event_msg", "timestamp": ts(day, clock), "payload": payload}
 
 
-def command(cid: str, cmd: str, exit_code: int, output: str) -> dict[str, Any]:
+def command(cid: str, cmd: str, exit_code: int, output: str) -> Raw:
     return {
         "type": "CommandExecution",
         "id": cid,
@@ -135,14 +136,14 @@ def command(cid: str, cmd: str, exit_code: int, output: str) -> dict[str, Any]:
     }
 
 
-def codex_call(day: str, clock: str, call_id: str, name: str, text: str) -> dict:
+def codex_call(day: str, clock: str, call_id: str, name: str, text: str) -> Raw:
     kind = "custom_tool_call" if name == "exec" else "function_call"
     field = "input" if name == "exec" else "arguments"
     payload = {"type": kind, "name": name, "call_id": call_id, field: text}
     return {"type": "response_item", "timestamp": ts(day, clock), "payload": payload}
 
 
-def codex_output(day: str, clock: str, call_id: str, head: str) -> dict:
+def codex_output(day: str, clock: str, call_id: str, head: str) -> Raw:
     output = [
         {"type": "input_text", "text": f"{head}\nWall time 0.1 seconds\nOutput:\n"}
     ]
@@ -150,13 +151,13 @@ def codex_output(day: str, clock: str, call_id: str, head: str) -> dict:
     return {"type": "response_item", "timestamp": ts(day, clock), "payload": payload}
 
 
-def codex_user(day: str, clock: str, text: str) -> dict[str, Any]:
+def codex_user(day: str, clock: str, text: str) -> Raw:
     item = {"type": "UserMessage", "content": [{"type": "text", "text": text}]}
     payload = {"type": "item_completed", "item": item}
     return {"type": "event_msg", "timestamp": ts(day, clock), "payload": payload}
 
 
-def codex_records() -> list[Any]:
+def codex_records() -> list[Raw]:
     two = (
         'text(await tools.exec_command({cmd:"git status"}));\n'
         'text(await tools.exec_command({cmd:"ls missing"}));'
@@ -266,11 +267,14 @@ class TranscriptTests(unittest.TestCase):
     def query(self, *argv: str) -> str:
         return self.run_tool(*argv, "--digest", str(self.out), "--limit", "0")
 
-    def table(self, name: str) -> list[dict[str, Any]]:
+    def table(self, name: str) -> list[Any]:
         text = (self.out / f"{name}.jsonl").read_text()
         return [json.loads(line) for line in text.splitlines()]
 
-    def calls(self, session: str) -> list[dict[str, Any]]:
+    def sessions(self) -> dict[str, SessionRow]:
+        return {s["s"]: s for s in self.table("sessions")}
+
+    def calls(self, session: str) -> list[CallRow]:
         return [r for r in self.table("calls") if r["s"] == session]
 
     def test_claude_calls_pair_results_and_error_flags(self) -> None:
@@ -286,7 +290,7 @@ class TranscriptTests(unittest.TestCase):
         self.assertEqual(background["done"], ts(DAY2, "09:05:00"))
 
     def test_claude_subagent_file_names_its_parent(self) -> None:
-        sessions = {s["s"]: s for s in self.table("sessions")}
+        sessions = self.sessions()
         self.assertTrue(sessions["agent-a1"]["sub"])
         self.assertEqual(sessions["agent-a1"]["parent"], CLAUDE_MAIN)
         self.assertEqual(self.calls("agent-a1")[0]["c"], "rg docs")
@@ -318,12 +322,12 @@ class TranscriptTests(unittest.TestCase):
     def test_archived_copy_is_read_once(self) -> None:
         sessions = [s for s in self.table("sessions") if s["s"] == CODEX_MAIN]
         self.assertEqual(len(sessions), 1)
-        self.assertIn("/sessions/", sessions[0]["path"])
+        self.assertIn("/sessions/", self.sessions()[CODEX_MAIN]["path"])
         self.assertIn("1 duplicate Codex copies skipped", self.built)
-        self.assertNotIn("4444", {s["s"] for s in self.table("sessions")})
+        self.assertNotIn("4444", self.sessions())
 
     def test_codex_subagent_names_parent(self) -> None:
-        child = next(s for s in self.table("sessions") if s["s"] == CODEX_OTHER)
+        child = self.sessions()[CODEX_OTHER]
         self.assertEqual((child["sub"], child["parent"]), (True, CODEX_MAIN))
         self.assertEqual(child["agent"], "/root/r")
 
@@ -408,8 +412,8 @@ class OneSessionTests(unittest.TestCase):
 
     def build(
         self,
-        claude: list[Any],
-        codex: list[Any],
+        claude: list[Raw],
+        codex: list[Raw],
         since: str = "2026-11-01",
         until: str = "",
     ) -> None:

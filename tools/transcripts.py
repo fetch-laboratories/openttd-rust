@@ -28,7 +28,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, NotRequired, TypedDict
 
 SCHEMA = 2
 ROOT = Path(__file__).absolute().parents[1]
@@ -133,13 +133,116 @@ class Window:
         )
 
 
+class SessionRow(TypedDict):
+    """A line of sessions.jsonl."""
+
+    h: str
+    s: str
+    parent: str
+    sub: bool
+    agent: str
+    path: str
+    proj: str
+    cwd: str
+    start: str
+    end: str
+    model: str
+    effort: str
+    title: str
+    first: str
+    calls: int
+    cmds: int
+    failed: int
+    cost: float | None
+    invalid: int
+
+
+class RecordRow(TypedDict):
+    """The fields every call and message row carries."""
+
+    h: str
+    s: str
+    parent: str
+    path: str
+    ln: int
+    t: str
+    model: str
+    effort: NotRequired[str]
+
+
+class CallRow(RecordRow):
+    """A line of calls.jsonl."""
+
+    id: str
+    kind: str
+    n: str
+    c: str
+    e: bool
+    x: NotRequired[int | None]
+    r: NotRequired[str]
+    rl: NotRequired[int]
+    bg: NotRequired[bool]
+    done: NotRequired[str]
+    status: NotRequired[str]
+    owner: NotRequired[str]
+    nested: NotRequired[int]
+
+
+class MessageRow(RecordRow):
+    """A line of users.jsonl or finals.jsonl."""
+
+    m: str
+    sub: NotRequired[bool]
+
+
+class DigestMeta(TypedDict):
+    """meta.json, written last, so its presence marks a complete digest."""
+
+    schema: int
+    since: str
+    until: str
+    match: str
+    built: str
+    files: int
+    codex_copies_dropped: int
+    totals: dict[str, int]
+    invalid_lines: dict[str, int]
+
+
 @dataclass
 class Parsed:
-    session: dict[str, Any]
-    calls: list[dict[str, Any]] = field(default_factory=list)
-    users: list[dict[str, Any]] = field(default_factory=list)
-    finals: list[dict[str, Any]] = field(default_factory=list)
+    session: SessionRow
+    calls: list[CallRow] = field(default_factory=list)
+    users: list[MessageRow] = field(default_factory=list)
+    finals: list[MessageRow] = field(default_factory=list)
     invalid: int = 0
+
+
+@dataclass
+class Timed:
+    """A Codex call and when it ran, in epoch milliseconds."""
+
+    record: CallRow
+    start: float
+    end: float | None = None
+
+
+@dataclass(frozen=True)
+class Tool:
+    """Which call a record is: its call ID, record kind and tool name."""
+
+    id: str
+    kind: str
+    name: str
+
+
+@dataclass
+class Text:
+    """An assistant text block that becomes a final message if nothing follows."""
+
+    ts: str
+    ln: int
+    text: str
 
 
 class JsonLines:
@@ -202,74 +305,95 @@ def iso_ms(ms: float) -> str:
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def new_session(host: str, sid: str, path: Path, sub: bool) -> dict[str, Any]:
-    return {
-        "h": host,
-        "s": sid,
-        "parent": "",
-        "sub": sub,
-        "agent": "",
-        "path": str(path),
-        "proj": "",
-        "cwd": "",
-        "start": "",
-        "end": "",
-        "model": "",
-        "effort": "",
-        "title": "",
-        "first": "",
-        "calls": 0,
-        "cmds": 0,
-        "failed": 0,
-        "cost": None,
-        "invalid": 0,
-    }
+def new_session(host: str, sid: str, path: Path, sub: bool) -> SessionRow:
+    return SessionRow(
+        h=host,
+        s=sid,
+        parent="",
+        sub=sub,
+        agent="",
+        path=str(path),
+        proj="",
+        cwd="",
+        start="",
+        end="",
+        model="",
+        effort="",
+        title="",
+        first="",
+        calls=0,
+        cmds=0,
+        failed=0,
+        cost=None,
+        invalid=0,
+    )
 
 
 class Reader:
     """State shared by both hosts' session readers."""
 
-    def __init__(self, session: dict[str, Any], window: Window) -> None:
+    def __init__(self, session: SessionRow, window: Window) -> None:
         self.out = Parsed(session)
         self.window = window
         self.model = ""
         self.effort = ""
-        self.last_text: tuple[str, int, str] | None = None
+        self.last_text: Text | None = None
 
     @property
-    def meta(self) -> dict[str, Any]:
+    def meta(self) -> SessionRow:
         return self.out.session
 
-    def base(self, ts: str, ln: int) -> dict[str, Any]:
+    def message(self, ts: str, ln: int, text: str) -> MessageRow:
         meta = self.meta
-        record = {"h": meta["h"], "s": meta["s"], "parent": meta["parent"]}
-        record.update(path=meta["path"], ln=ln, t=ts, model=self.model)
+        record = MessageRow(
+            h=meta["h"],
+            s=meta["s"],
+            parent=meta["parent"],
+            path=meta["path"],
+            ln=ln,
+            t=ts,
+            model=self.model,
+            m=text,
+        )
         if self.effort:
             record["effort"] = self.effort
         return record
 
     def user(self, ts: str, ln: int, text: str) -> None:
         self.flush_final()
-        record = self.base(ts, ln)
-        record.update(sub=self.meta["sub"], m=text)
+        record = self.message(ts, ln, text)
+        record["sub"] = self.meta["sub"]
         self.out.users.append(record)
         if not self.meta["first"]:
             self.meta["first"] = text
 
     def final(self, ts: str, ln: int, text: str) -> None:
-        record = self.base(ts, ln)
-        record.update(m=text)
-        self.out.finals.append(record)
+        self.out.finals.append(self.message(ts, ln, text))
 
     def flush_final(self) -> None:
         if self.last_text:
-            self.final(*self.last_text)
+            last = self.last_text
+            self.final(last.ts, last.ln, last.text)
             self.last_text = None
 
-    def call(self, ts: str, ln: int, **fields: object) -> dict[str, Any]:
-        record = self.base(ts, ln)
-        record.update(fields)
-        record["e"] = False
+    def call(self, ts: str, ln: int, tool: Tool, text: str) -> CallRow:
+        meta = self.meta
+        record = CallRow(
+            h=meta["h"],
+            s=meta["s"],
+            parent=meta["parent"],
+            path=meta["path"],
+            ln=ln,
+            t=ts,
+            model=self.model,
+            id=tool.id,
+            kind=tool.kind,
+            n=tool.name,
+            c=text,
+            e=False,
+        )
+        if self.effort:
+            record["effort"] = self.effort
         self.out.calls.append(record)
         return record
 
@@ -285,15 +409,17 @@ class Reader:
         out.calls = [r for r in out.calls if has(r["t"])]
         out.users = [r for r in out.users if has(r["t"])]
         out.finals = [r for r in out.finals if has(r["t"])]
-        meta.update(start=stamps[0], end=stamps[-1], model=meta["model"] or self.model)
+        meta["start"], meta["end"] = stamps[0], stamps[-1]
+        meta["model"] = meta["model"] or self.model
         meta["calls"] = sum(r["kind"] in ("call", "wait") for r in out.calls)
         meta["cmds"] = sum(r["kind"] in ("shell", "background") for r in out.calls)
         meta["failed"] = sum(bool(r.get("e")) for r in out.calls)
         return out
 
 
-def set_result(record: dict[str, Any], text: str) -> None:
-    record.update(r=clip(text, CLIP_RESULT, CLIP_RESULT), rl=len(text))
+def set_result(record: CallRow, text: str) -> None:
+    record["r"] = clip(text, CLIP_RESULT, CLIP_RESULT)
+    record["rl"] = len(text)
 
 
 class ClaudeReader(Reader):
@@ -303,7 +429,7 @@ class ClaudeReader(Reader):
         session["proj"] = (path.parents[2] if sub else path.parent).name
         super().__init__(session, window)
         self.path = path
-        self.pending: dict[str, dict[str, Any]] = {}
+        self.pending: dict[str, CallRow] = {}
 
     def read(self) -> Parsed | None:
         lines = JsonLines(self.path)
@@ -339,14 +465,14 @@ class ClaudeReader(Reader):
             if block.get("type") == "tool_use":
                 self.tool_use(ts, ln, block)
             elif block.get("type") == "text" and block.get("text", "").strip():
-                self.last_text = (ts, ln, block["text"])
+                self.last_text = Text(ts, ln, block["text"])
 
     def tool_use(self, ts: str, ln: int, block: dict[str, Any]) -> None:
         name = block.get("name") or ""
         args = block.get("input") or {}
         command = args.get("command") if name == "Bash" else None
         text = command if isinstance(command, str) else json.dumps(args)
-        record = self.call(ts, ln, id=block.get("id", ""), kind="call", n=name, c=text)
+        record = self.call(ts, ln, Tool(block.get("id", ""), "call", name), text)
         record["bg"] = bool(args.get("run_in_background"))
         self.pending[record["id"]] = record
 
@@ -389,15 +515,16 @@ class ClaudeReader(Reader):
         record = self.pending.get(call_id.group(1)) if call_id else None
         if record is None or record.get("done"):
             return
-        status = NOTICE_STATUS.search(text)
+        found = NOTICE_STATUS.search(text)
+        status = found.group(1) if found else ""
         summary = NOTICE_SUMMARY.search(text)
         record["done"] = ts
-        record["status"] = status.group(1) if status else ""
-        record["e"] = record["status"] == "failed"
+        record["status"] = status
+        record["e"] = status == "failed"
         exit_code = NOTICE_EXIT.search(summary.group(1)) if summary else None
         if exit_code:
             record["x"] = int(exit_code.group(1))
-        elif record["status"] == "completed":
+        elif status == "completed":
             record["x"] = 0
 
 
@@ -429,7 +556,7 @@ class CodexReader(Reader):
         sub = isinstance(source, dict)
         sid = meta.get("id") or path.stem[-36:]
         session = new_session("codex", sid, path, sub)
-        session.update(cwd=meta.get("cwd", ""), proj=meta.get("cwd", ""))
+        session["cwd"] = session["proj"] = meta.get("cwd", "")
         spawn = (source or {}).get("subagent", {}) if sub else {}
         spawn = spawn.get("thread_spawn", {}) if isinstance(spawn, dict) else {}
         if isinstance(spawn, dict):
@@ -437,8 +564,8 @@ class CodexReader(Reader):
             session["agent"] = spawn.get("agent_path") or ""
         super().__init__(session, window)
         self.path = path
-        self.pending: dict[str, dict[str, Any]] = {}
-        self.nested: list[dict[str, Any]] = []
+        self.pending: dict[str, Timed] = {}
+        self.nested: list[Timed] = []
 
     def read(self) -> Parsed | None:
         lines = JsonLines(self.path)
@@ -480,16 +607,15 @@ class CodexReader(Reader):
                 text = json.dumps(text, ensure_ascii=False)
             role = "wait" if name in CODEX_WAITS else "call"
             call_id = payload.get("call_id") or ""
-            record = self.call(ts, ln, id=call_id, kind=role, n=name, c=text)
-            record["_start"] = epoch_ms(ts)
-            self.pending[call_id] = record
+            record = self.call(ts, ln, Tool(call_id, role, name), text)
+            self.pending[call_id] = Timed(record, epoch_ms(ts))
         elif kind in CODEX_OUTPUTS:
-            record = self.pending.get(payload.get("call_id") or "")
-            if record is not None:
-                text = as_text(payload.get("output"))
+            timed = self.pending.get(payload.get("call_id") or "")
+            if timed is not None:
+                timed.end = epoch_ms(ts)
+                record, text = timed.record, as_text(payload.get("output"))
                 set_result(record, text)
                 record["done"] = ts
-                record["_end"] = epoch_ms(ts)
                 head = text[:200]
                 record["e"] = head.startswith("Script failed") or "Script error" in head
 
@@ -504,22 +630,20 @@ class CodexReader(Reader):
             self.mcp(ts, ln, payload, item)
 
     def nested_record(
-        self, ts: str, ln: int, payload: dict[str, Any], **fields: object
-    ) -> dict[str, Any]:
+        self, ts: str, ln: int, payload: dict[str, Any], tool: Tool, text: str
+    ) -> CallRow:
         start = payload.get("started_at_ms") or epoch_ms(ts)
-        record = self.call(iso_ms(start), ln, **fields)
-        record.update(done=ts, _start=start, _end=epoch_ms(ts))
-        self.nested.append(record)
+        record = self.call(iso_ms(start), ln, tool, text)
+        record["done"] = ts
+        self.nested.append(Timed(record, start, epoch_ms(ts)))
         return record
 
     def shell(
         self, ts: str, ln: int, payload: dict[str, Any], item: dict[str, Any]
     ) -> None:
         text = shell_text(item.get("command"))
-        name = "exec_command"
-        record = self.nested_record(
-            ts, ln, payload, id=item.get("id", ""), kind="shell", n=name, c=text
-        )
+        tool = Tool(item.get("id", ""), "shell", "exec_command")
+        record = self.nested_record(ts, ln, payload, tool, text)
         exit_code = item.get("exit_code")
         record["x"] = exit_code
         record["e"] = item.get("status") == "failed" or exit_code not in (None, 0)
@@ -530,9 +654,8 @@ class CodexReader(Reader):
     ) -> None:
         name = f"mcp__{item.get('server', '')}__{item.get('tool', '')}"
         text = json.dumps(item.get("arguments"), ensure_ascii=False)
-        record = self.nested_record(
-            ts, ln, payload, id=item.get("id", ""), kind="mcp", n=name, c=text
-        )
+        tool = Tool(item.get("id", ""), "mcp", name)
+        record = self.nested_record(ts, ln, payload, tool, text)
         result = item.get("result") or {}
         failed = "error" in item or bool(result.get("isError"))
         record["e"] = failed or item.get("status") == "failed"
@@ -540,16 +663,20 @@ class CodexReader(Reader):
 
     def assign_owners(self) -> None:
         """Attach each nested record to the outer call that started it."""
-        outer = sorted(self.pending.values(), key=lambda r: r["_start"])
-        starts = [call["_start"] for call in outer]
-        for record in self.nested:
-            index = bisect_right(starts, record["_start"]) - 1
+        outer = sorted(self.pending.values(), key=lambda call: call.start)
+        starts = [call.start for call in outer]
+        for inner in self.nested:
+            index = bisect_right(starts, inner.start) - 1
             if index < 0:
                 continue
-            owner = outer[index]
-            record["owner"] = owner["id"]
-            owner["nested"] = owner.get("nested", 0) + 1
-            if "_end" in owner and record["_end"] > owner["_end"]:
+            owner, record = outer[index], inner.record
+            record["owner"] = owner.record["id"]
+            owner.record["nested"] = owner.record.get("nested", 0) + 1
+            if (
+                owner.end is not None
+                and inner.end is not None
+                and inner.end > owner.end
+            ):
                 record["kind"] = "background"
 
 
@@ -638,35 +765,46 @@ def run_jobs(
         yield from pool.map(parse, jobs, chunksize=4)
 
 
-def strip_private(record: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in record.items() if not key.startswith("_")}
+@dataclass
+class Written:
+    """What write_digest wrote: per-host totals and invalid lines per file."""
+
+    totals: Counter[str] = field(default_factory=Counter)
+    invalid: dict[str, int] = field(default_factory=dict)
 
 
-def write_digest(out: Path, results: Iterable[Parsed | None]) -> dict[str, Any]:
-    totals: Counter[str] = Counter()
-    invalid: dict[str, int] = {}
-    files = {name: (out / f"{name}.jsonl").open("w") for name in TABLES}
+def write_digest(out: Path, results: Iterable[Parsed | None]) -> Written:
+    written = Written()
+    files: dict[str, IO[str]] = {
+        name: (out / f"{name}.jsonl").open("w") for name in TABLES
+    }
     try:
         for parsed in results:
             if parsed is None:
                 continue
             if parsed.invalid:
-                invalid[parsed.session["path"]] = parsed.invalid
-            write_parsed(files, parsed, totals)
+                written.invalid[parsed.session["path"]] = parsed.invalid
+            write_parsed(files, parsed, written.totals)
     finally:
         for handle in files.values():
             handle.close()
-    return {"totals": dict(totals), "invalid_lines": invalid}
+    return written
 
 
-def write_parsed(files: dict[str, Any], parsed: Parsed, totals: Counter[str]) -> None:
+def write_rows(handle: IO[str], records: Iterable[object]) -> None:
+    for record in records:
+        handle.write(json.dumps(record, ensure_ascii=False))
+        handle.write("\n")
+
+
+def write_parsed(
+    files: dict[str, IO[str]], parsed: Parsed, totals: Counter[str]
+) -> None:
     host = parsed.session["h"]
-    rows = {"sessions": [parsed.session], "calls": parsed.calls}
-    rows.update(users=parsed.users, finals=parsed.finals)
-    for name, records in rows.items():
-        for record in records:
-            files[name].write(json.dumps(strip_private(record), ensure_ascii=False))
-            files[name].write("\n")
+    write_rows(files["sessions"], [parsed.session])
+    write_rows(files["calls"], parsed.calls)
+    write_rows(files["users"], parsed.users)
+    write_rows(files["finals"], parsed.finals)
     totals[f"{host} sessions"] += 1
     totals[f"{host} calls"] += parsed.session["calls"]
     totals[f"{host} commands"] += parsed.session["cmds"]
@@ -685,10 +823,18 @@ def build(args: argparse.Namespace) -> int:
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
     (out / "meta.json").unlink(missing_ok=True)
-    summary = write_digest(out, run_jobs(jobs, args.jobs))
-    meta = {"schema": SCHEMA, "since": since.isoformat(), "match": match}
-    meta.update(until=args.until.isoformat() if args.until else "", built=now_iso())
-    meta.update(files=len(jobs), codex_copies_dropped=dropped, **summary)
+    written = write_digest(out, run_jobs(jobs, args.jobs))
+    meta = DigestMeta(
+        schema=SCHEMA,
+        since=since.isoformat(),
+        until=args.until.isoformat() if args.until else "",
+        match=match,
+        built=now_iso(),
+        files=len(jobs),
+        codex_copies_dropped=dropped,
+        totals=dict(written.totals),
+        invalid_lines=written.invalid,
+    )
     (out / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
     report_build(out, meta)
     return 0
@@ -698,7 +844,7 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def report_build(out: Path, meta: dict[str, Any]) -> None:
+def report_build(out: Path, meta: DigestMeta) -> None:
     window = f"{meta['since']} .. {meta['until'] or 'now'}"
     print(f"digest {out} (schema {SCHEMA}, {window}, match {meta['match']!r})")
     print(
@@ -726,7 +872,7 @@ class DigestError(Exception):
     pass
 
 
-def load_meta(folder: Path) -> dict[str, Any]:
+def load_meta(folder: Path) -> DigestMeta:
     rebuild = f"python3 tools/transcripts.py digest --since YYYY-MM-DD --out {folder}"
     meta_path = folder / "meta.json"
     if not meta_path.is_file():
@@ -742,23 +888,33 @@ def load_meta(folder: Path) -> dict[str, Any]:
     return meta
 
 
-def rows(folder: Path, table: str) -> Iterator[dict[str, Any]]:
+def rows(folder: Path, table: str) -> Iterator[Any]:
     with (folder / f"{table}.jsonl").open() as lines:
         for line in lines:
             yield json.loads(line)
 
 
-def in_scope(record: dict[str, Any], args: argparse.Namespace, window: Window) -> bool:
-    return window.has(record.get("t", "")) and (
-        not args.host or record["h"] == args.host
-    )
+def session_rows(folder: Path) -> Iterator[SessionRow]:
+    return rows(folder, "sessions")
 
 
-def is_leaf(record: dict[str, Any]) -> bool:
+def call_rows(folder: Path) -> Iterator[CallRow]:
+    return rows(folder, "calls")
+
+
+def message_rows(folder: Path, table: str) -> Iterator[MessageRow]:
+    return rows(folder, table)
+
+
+def in_scope(record: RecordRow, args: argparse.Namespace, window: Window) -> bool:
+    return window.has(record["t"]) and (not args.host or record["h"] == args.host)
+
+
+def is_leaf(record: CallRow) -> bool:
     return record["kind"] != "call" or not record.get("nested")
 
 
-def kind_matches(record: dict[str, Any], kind: str) -> bool:
+def kind_matches(record: CallRow, kind: str) -> bool:
     if kind == "all":
         return True
     if kind == "leaf":
@@ -770,11 +926,11 @@ def kind_matches(record: dict[str, Any], kind: str) -> bool:
 
 def select_calls(
     folder: Path, args: argparse.Namespace, window: Window
-) -> list[dict[str, Any]]:
+) -> list[CallRow]:
     pattern = re.compile(args.regex, re.S)
     return [
         record
-        for record in rows(folder, "calls")
+        for record in call_rows(folder)
         if in_scope(record, args, window)
         and kind_matches(record, args.kind)
         and (not args.tool or record["n"] == args.tool)
@@ -787,7 +943,7 @@ def shown(count: int, limit: int) -> int:
     return count if limit <= 0 else min(count, limit)
 
 
-def call_heading(record: dict[str, Any]) -> str:
+def call_heading(record: CallRow) -> str:
     flags = f"failed={bool(record.get('e'))} exit={record.get('x')}"
     owner = f" in {record['owner']}" if record.get("owner") else ""
     return (
@@ -802,7 +958,7 @@ def query_calls(folder: Path, args: argparse.Namespace, window: Window) -> None:
         print(call_heading(record))
         print(record["c"] if args.full else record["c"][:400])
         if args.full and "r" in record:
-            print(f"=> ({record['rl']} chars) {record['r']}")
+            print(f"=> ({record.get('rl')} chars) {record['r']}")
     print(f"[{len(hits)} hits, showed {shown(len(hits), args.limit)}]")
 
 
@@ -821,9 +977,7 @@ def is_machine(text: str) -> bool:
 
 def delegated_sessions(folder: Path) -> set[str]:
     """Sessions an agent started: subagents, and those a machine message opened."""
-    return {
-        s["s"] for s in rows(folder, "sessions") if s["sub"] or is_machine(s["first"])
-    }
+    return {s["s"] for s in session_rows(folder) if s["sub"] or is_machine(s["first"])}
 
 
 def print_messages(
@@ -831,11 +985,11 @@ def print_messages(
     table: str,
     args: argparse.Namespace,
     window: Window,
-    keep: Callable[[dict[str, Any]], bool],
+    keep: Callable[[MessageRow], bool],
 ) -> None:
     pattern = re.compile(args.regex or "", re.S)
     count = 0
-    for record in rows(folder, table):
+    for record in message_rows(folder, table):
         if (
             in_scope(record, args, window)
             and keep(record)
@@ -875,8 +1029,8 @@ def query_humans(folder: Path, args: argparse.Namespace, window: Window) -> None
     )
 
 
-def matching_sessions(folder: Path, prefix: str) -> list[dict[str, Any]]:
-    return [s for s in rows(folder, "sessions") if s["s"].startswith(prefix)]
+def matching_sessions(folder: Path, prefix: str) -> list[SessionRow]:
+    return [s for s in session_rows(folder) if s["s"].startswith(prefix)]
 
 
 def query_session(folder: Path, args: argparse.Namespace, window: Window) -> None:
@@ -889,21 +1043,30 @@ def query_session(folder: Path, args: argparse.Namespace, window: Window) -> Non
         )
     session = found[0]
     print(session_line(session) + f" [{session['path']}]")
-    items = []
-    for table, tag in (("calls", "CALL"), ("users", "USER"), ("finals", "FINAL")):
-        for record in rows(folder, table):
-            if record["s"] == session["s"] and window.has(record["t"]):
-                items.append((record["t"], tag, record))
+    sid, full = session["s"], args.full
+    items = [
+        (record["t"], call_item(record, full))
+        for record in call_rows(folder)
+        if record["s"] == sid and window.has(record["t"])
+    ]
+    for table, tag in (("users", "USER"), ("finals", "FINAL")):
+        items += [
+            (record["t"], message_item(tag, record, full))
+            for record in message_rows(folder, table)
+            if record["s"] == sid and window.has(record["t"])
+        ]
     items.sort(key=lambda item: item[0])
-    for _, tag, record in items[: shown(len(items), args.limit)]:
-        print(session_item(tag, record, args.full))
+    for _, text in items[: shown(len(items), args.limit)]:
+        print(text)
     print(f"[{len(items)} rows, showed {shown(len(items), args.limit)}]")
 
 
-def session_item(tag: str, record: dict[str, Any], full: bool) -> str:
-    if tag != "CALL":
-        body = record["m"] if full else record["m"][:500]
-        return f"--- {record['t'][:19]} {tag}\n{body}"
+def message_item(tag: str, record: MessageRow, full: bool) -> str:
+    body = record["m"] if full else record["m"][:500]
+    return f"--- {record['t'][:19]} {tag}\n{body}"
+
+
+def call_item(record: CallRow, full: bool) -> str:
     body = record["c"] if full else record["c"][:500]
     if full and "r" in record:
         body += f"\n=> {record['r']}"
@@ -911,10 +1074,8 @@ def session_item(tag: str, record: dict[str, Any], full: bool) -> str:
     return f"--- {record['t'][:19]} {record['kind']} {record['n']}{flags}\n{body}"
 
 
-def session_line(session: dict[str, Any]) -> str:
-    model = session["model"] + (
-        f"/{session['effort']}" if session.get("effort") else ""
-    )
+def session_line(session: SessionRow) -> str:
+    model = session["model"] + (f"/{session['effort']}" if session["effort"] else "")
     sub = f" sub of {session['parent'] or '?'}" if session["sub"] else ""
     return (
         f"{session['start'][:16]} {session['h']} {session['s']} {model} "
@@ -926,7 +1087,7 @@ def session_line(session: dict[str, Any]) -> str:
 def query_sessions(folder: Path, args: argparse.Namespace, window: Window) -> None:
     found = [
         s
-        for s in rows(folder, "sessions")
+        for s in session_rows(folder)
         if (not args.host or s["h"] == args.host)
         and (not window.since or s["end"] >= window.since)
         and (not window.until or s["start"] < window.until)
