@@ -465,14 +465,8 @@ impl crate::map_func::World<'_> {
     pub(crate) fn rail_station(&self, t: u32) -> bool {
         self.is_rail_station_tile(TileIndex(t))
     }
-    pub(crate) fn is_rail_station_raw(&self, t: u32) -> bool {
-        self.is_rail_station(TileIndex(t))
-    }
     pub(crate) fn station_has_rail(&self, t: u32) -> bool {
         self.has_station_rail(TileIndex(t))
-    }
-    pub(crate) fn buoy(&self, t: u32) -> bool {
-        self.is_buoy(TileIndex(t))
     }
     pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
         self.is_any_road_stop_tile(TileIndex(t))

@@ -172,10 +172,6 @@ pub fn dir_to_diag_dir_raw(direction: u8, check: impl Fn(bool)) -> u8 {
 pub fn reverse_diag_dir_raw(direction: u8, check: impl Fn(bool)) -> u8 {
     reverse_diag_dir(DiagDirection(direction), check).0
 }
-/// Raw adapter: `DiagDirToDir` over base values.
-pub fn diag_dir_to_dir_raw(d: u8, check: impl Fn(bool)) -> u8 {
-    diag_dir_to_dir(DiagDirection(d), check).0
-}
 /// Raw adapter: `ReverseDir` over base values.
 pub fn reverse_dir_raw(d: u8, check: impl Fn(bool)) -> u8 {
     reverse_dir(Direction(d), check).0

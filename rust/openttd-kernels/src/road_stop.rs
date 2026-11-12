@@ -791,17 +791,6 @@ pub(crate) unsafe fn enter_by_tile(
         enter(s, at(s, tile), tile, v, road)
     }
 }
-/// Temporary raw adapter for `movement.rs`.
-/// # Safety
-/// As [`enter_by_tile`].
-pub(crate) unsafe fn enter_by_tile_raw(
-    s: *const Services,
-    tile: u32,
-    v: VehicleRef,
-    road: *mut RoadState,
-) -> bool {
-    unsafe { enter_by_tile(s, TileIndex(tile), v, road) }
-}
 /// `RoadStop::GetByTile(v->tile, GetRoadStopType(v->tile))->Leave(v)`.
 /// # Safety
 /// Live serialized shared table, front road vehicle and its owner.
