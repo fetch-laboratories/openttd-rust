@@ -42,10 +42,15 @@ rust/openttd-kernels/src/map_func.rs
 rust/openttd-kernels/src/math.rs
 rust/openttd-kernels/src/md5.rs
 rust/openttd-kernels/src/network_action.rs
+rust/openttd-kernels/src/network_auth.rs
 rust/openttd-kernels/src/network_client.rs
+rust/openttd-kernels/src/network_command.rs
 rust/openttd-kernels/src/network_config.rs
+rust/openttd-kernels/src/network_connection.rs
 rust/openttd-kernels/src/network_content.rs
 rust/openttd-kernels/src/network_crypto.rs
+rust/openttd-kernels/src/network_frame.rs
+rust/openttd-kernels/src/network_internal.rs
 rust/openttd-kernels/src/network_socket.rs
 rust/openttd-kernels/src/network_tcp.rs
 rust/openttd-kernels/src/packet.rs
@@ -74,7 +79,9 @@ rust/openttd-kernels/src/string_services.rs
 rust/openttd-kernels/src/string_validation.rs
 rust/openttd-kernels/src/subsidy_base.rs
 rust/openttd-kernels/src/subsidy.rs
+rust/openttd-kernels/src/tcp_game.rs
 rust/openttd-kernels/src/tile_cmd.rs
+rust/openttd-kernels/src/tile_map.rs
 rust/openttd-kernels/src/tile_owner.rs
 rust/openttd-kernels/src/town/commands.rs
 rust/openttd-kernels/src/town/founding.rs
