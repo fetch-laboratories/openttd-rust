@@ -3,15 +3,6 @@
   "version": "ruff 0.16.8",
   "inventory_head": "9efb4368136f6c6cc2c8a333b185f8aa49c634e0",
   "sites": {
-    "tools/auth-comparison.py | scenario | C901": [
-      15
-    ],
-    "tools/auth-comparison.py | scenario | PLR0912": [
-      16
-    ],
-    "tools/auth-comparison.py | scenario | PLR0915": [
-      67
-    ],
     "tools/baseline_ratchet.py | main | PLR0913": [
       8
     ],
