@@ -543,6 +543,7 @@ class HousekeepingTests(unittest.TestCase):
             local / "deep/20260102T000000Z-bbbb",
             runtime,
             write(local / "compiler-cache/entry").parent,
+            write(local / "ci-logs/owner/repo/1/1/2.log").parents[4],
             write(local / "build-reference/openttd").parent,
             write(local / "cargo/env").parent,
             write(local / "rustup/settings.toml").parent,
@@ -551,6 +552,14 @@ class HousekeepingTests(unittest.TestCase):
             write(local / "deep.lock", ""),
             write(local / "mystery/output").parent,
         }
+
+    def test_ci_log_cache_is_known_and_kept(self) -> None:
+        local = self.top / "local"
+        cache = write(local / "ci-logs/owner/repo/1/1/2.log").parents[4]
+        [item] = housekeeping.plan_local(local, time.time())
+        self.assertEqual(item.path, cache)
+        self.assertFalse(item.remove, item.reason)
+        self.assertIn("tools/ci.py log", item.reason)
 
     def test_explicit_older_profile_references_survive_symlinked_output(self) -> None:
         local = self.main / ".local"

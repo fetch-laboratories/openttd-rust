@@ -49,6 +49,7 @@ KEPT = {
     "speed-reference-profiles": "retained speed reference profiles",
     "worktrees": "worktree root",
     "ci-requests": "CI request records read by tools/ci.py wait",
+    "ci-logs": "cache of finished CI job logs; tools/ci.py log downloads them again",
 }
 # A run without report.json touched this recently may still be running.
 RUNNING_SECONDS = 12 * 3600
