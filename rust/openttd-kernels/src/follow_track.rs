@@ -18,12 +18,12 @@ use crate::road_type::{RoadBits, RoadTramType, RoadType, RoadTypes};
 use crate::services::Services;
 use crate::tile_type::{TileIndex, TileType};
 use crate::track_func::{
-    diagdir_reaches_trackdirs, reverse_trackdir, track_bits_to_trackdir_bits,
-    track_status_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
-    trackdir_bits_to_track_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
-    trackdir_to_trackdir_bits, tracks_overlap,
+    diagdir_reaches_trackdirs, reverse_trackdir, set_track_bit_iterator,
+    track_bits_to_trackdir_bits, track_status_to_trackdir_bits, track_to_track_bits,
+    track_to_trackdir_bits, trackdir_bits_to_track_bits, trackdir_crosses_trackdirs,
+    trackdir_to_exitdir, trackdir_to_trackdir_bits, tracks_overlap,
 };
-use crate::track_type::{Track, TrackBits, Trackdir, TrackdirBits};
+use crate::track_type::{TrackBits, Trackdir, TrackdirBits};
 use crate::transport_type::TransportType;
 use crate::vehicle::VehicleRef;
 
@@ -390,10 +390,8 @@ impl CFollowTrackT {
         /* Mask already reserved trackdirs. */
         self.new_td_bits &= !TrackdirBits(track_bits_to_trackdir_bits(reserved.0));
         /* Mask out all trackdirs that conflict with the reservation. */
-        let mut tracks = TrackBits(trackdir_bits_to_track_bits(self.new_td_bits.0));
-        while tracks != TrackBits::TRACK_BIT_NONE {
-            let t = Track(tracks.0.trailing_zeros() as u8);
-            tracks.0 &= tracks.0.wrapping_sub(1);
+        for t in set_track_bit_iterator(TrackBits(trackdir_bits_to_track_bits(self.new_td_bits.0)))
+        {
             if tracks_overlap(
                 reserved.0
                     | track_to_track_bits(t.0, |ok| {

@@ -1330,10 +1330,12 @@ pub(crate) fn get_platform_length(
     if w.types.assertions() {
         // SAFETY: The immutable table and resolved station outlive this scan.
         let stations = unsafe { &*(w.shared.station_catchment)() };
-        // `TileBelongsToRailStation`.
-        w.check(
-            w.is_rail_station_tile(tile) && w.get_station_index(tile) == (stations.id)(station),
-        );
+        w.check(crate::station_base::tile_belongs_to_rail_station(
+            w.shared,
+            false,
+            (stations.id)(station),
+            tile,
+        ));
     }
 
     let delta = w
