@@ -3,16 +3,6 @@
   "version": "rustc 1.99.0 (b940084d7 2026-09-28)",
   "inventory_head": "0f727600fbd9474a6f7251cec98804a318b7ee0c",
   "sites": {
-    "rust/openttd-kernels/src/admin_conversion.rs | impl Engine::fn complete | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/admin_conversion.rs | impl Engine::fn new | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1
-    ],
-    "rust/openttd-kernels/src/admin_conversion.rs | impl Engine::fn traverse | disallowed_macros | 4a33eacd5fa65f2b2e28": [
-      1,
-      1
-    ],
     "rust/openttd-kernels/src/auth.rs | fn can_be_used | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1
@@ -279,9 +269,6 @@
     "rust/openttd-kernels/src/network_action.rs | module | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1,
       1
-    ],
-    "rust/openttd-kernels/src/network_lifecycle.rs | fn connect_game | too_many_arguments | 4a33eacd5fa65f2b2e28": [
-      8
     ],
     "rust/openttd-kernels/src/newgrf.rs | fn get_active_cargo_label | disallowed_macros | 4a33eacd5fa65f2b2e28": [
       1
