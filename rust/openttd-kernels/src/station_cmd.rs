@@ -2365,8 +2365,11 @@ impl Ctx<'_> {
                 };
                 tile = TileIndex(tile.0.wrapping_add(tile_delta));
             }
-            self.signals()
-                .add_track(tile_track.0, track.0, (self.shared.current_company)());
+            self.signals().add_track_to_signal_buffer(
+                tile_track,
+                track,
+                CompanyID((self.shared.current_company)()),
+            );
             (self.rail().layout_changed)(tile_track.0, track.0);
             tile_track = TileIndex(tile_track.0.wrapping_add(track_delta));
         }
@@ -2445,7 +2448,6 @@ impl Ctx<'_> {
             shared: self.s.shared,
             rail: self.rail().rail,
             native: self.rail().signal,
-            log_x: self.map().log_x,
         }
     }
     /// A nested `Command<...>::Do(flags, tile, ...)` running `body` with the
@@ -2537,7 +2539,8 @@ impl Ctx<'_> {
         };
         (self.command.infrastructure_dirty)(owner.0);
         self.after_remove_tile(st, tile);
-        self.signals().add_track(tile.0, track.0, owner.0);
+        self.signals()
+            .add_track_to_signal_buffer(tile, track, owner);
         (self.rail().layout_changed)(tile.0, track.0);
         crate::station_association::deallocate(self.s.rail_association, st, specindex as u8);
         v

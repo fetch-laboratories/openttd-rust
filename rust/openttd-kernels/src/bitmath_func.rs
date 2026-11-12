@@ -128,6 +128,12 @@ pub const fn kill_first_bit_u32(value: u32) -> u32 {
     value & value.wrapping_sub(1)
 }
 
+/// `HasAtMostOneBit`: test whether `value` has at most 1 bit set. The original's
+/// `value - 1` promotes byte-sized values to `int`, so zero has no bits set here too.
+pub const fn has_at_most_one_bit(value: u64) -> bool {
+    (value & value.wrapping_sub(1)) == 0
+}
+
 /// `FindFirstBit`: search the first set bit in a value. When no bit is set, it returns 0.
 /// For a cargo bitmask.
 #[allow(
@@ -225,5 +231,16 @@ impl Iterator for SetBitIterator {
         let bitpos = find_first_bit(self.bitset);
         self.bitset = kill_first_bit_u64(self.bitset);
         Some(bitpos)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// `HasAtMostOneBit` is `(value & (value - 1)) == 0`: zero and one bit pass, two fail.
+    #[test]
+    fn has_at_most_one_bit_matches_original() {
+        assert!(super::has_at_most_one_bit(0));
+        assert!(super::has_at_most_one_bit(0b100));
+        assert!(!super::has_at_most_one_bit(0b1100));
     }
 }

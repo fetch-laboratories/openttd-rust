@@ -409,7 +409,6 @@ impl<'a> Ctx<'a> {
             shared: self.s.shared,
             rail: self.s.rail,
             native: self.s.signal,
-            log_x: self.map.log_x,
         }
     }
     fn add_track(&self, tile: u32, track: u8, owner: u8) {

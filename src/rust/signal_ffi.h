@@ -19,9 +19,7 @@ struct OpenTTDVehicleServices;
 struct OpenTTDSignalServices {
 	bool assertions;
 	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
-	void (*assert_wormhole_start)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_wormhole_start);
 	const OpenTTDVehicleServices *vehicles;
-	void (*assert_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_company);
 };
 
 struct OpenTTDSignalItem { uint32_t tile; uint8_t dir; };
@@ -36,7 +34,6 @@ struct OpenTTDSignalContext {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRailMapServices *rail;
 	const OpenTTDSignalServices *native;
-	unsigned int log_x;
 };
 OpenTTDSignalContext GetRustSignalContext() noexcept;
 const OpenTTDSignalServices &GetRustSignalServices() noexcept;
@@ -55,10 +52,10 @@ struct OpenTTDSignalSetTrace {
 extern "C" {
 void openttd_rust_signal_workset_probe(OpenTTDSignalSetTrace *);
 void openttd_rust_signal_inspect(OpenTTDSignalSnapshot *);
-void openttd_rust_signal_flush(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int);
-void openttd_rust_signal_add_track(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int, uint32_t, uint8_t, uint8_t);
-void openttd_rust_signal_add_side(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int, uint32_t, uint8_t, uint8_t);
-uint8_t openttd_rust_signal_segment(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int, uint32_t, uint8_t, uint8_t);
-void openttd_rust_signal_both(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int, uint32_t, uint8_t, uint8_t);
+void openttd_rust_signal_flush(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *);
+void openttd_rust_signal_add_track(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, uint32_t, uint8_t, uint8_t);
+void openttd_rust_signal_add_side(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, uint32_t, uint8_t, uint8_t);
+uint8_t openttd_rust_signal_segment(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, uint32_t, uint8_t, uint8_t);
+void openttd_rust_signal_both(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, uint32_t, uint8_t, uint8_t);
 }
 #endif /* RUST_SIGNAL_FFI_H */

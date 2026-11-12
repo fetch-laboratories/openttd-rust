@@ -454,6 +454,33 @@ pub(crate) unsafe fn wormhole_blocker(
 }
 /// `EnsureNoTrainOnTrackBits`: test if a vehicle interacts with the specified track bits.
 /// All track bits interact except parallel `TRACK_BIT_HORZ` or `TRACK_BIT_VERT`.
+/// Returns the type of the vehicle in the way, whose `STR_ERROR_TRAIN_IN_THE_WAY + type`
+/// error fails the command, or `None` when no train interacts.
+pub(crate) fn ensure_no_train_on_track_bits(
+    s: &VehicleServices,
+    tile: TileIndex,
+    track_bits: TrackBits,
+) -> Option<VehicleType> {
+    // Value v is not safe in MP games, however, it is used to generate a local
+    // error message only (which may be different for different machines).
+    // Such a message does not affect MP synchronisation.
+    // SAFETY: The native iterator's current-shell contract; no owner borrow spans the walk.
+    unsafe {
+        let mut it = OnTile::new(s, tile.0);
+        while let Some(v) = it.get() {
+            if VehicleType(v.vehicle_type()) == VehicleType::TRAIN {
+                let track = TrackBits((s.train_handle)(v.0.as_ptr()).track());
+                if track == track_bits || crate::track_func::tracks_overlap(track.0 | track_bits.0)
+                {
+                    return Some(VehicleType(v.vehicle_type()));
+                }
+            }
+            it.advance(s);
+        }
+    }
+    None
+}
+/// Export shim of [`ensure_no_train_on_track_bits`] for the native facade.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_train(
     c: &Commands,
@@ -461,26 +488,8 @@ pub unsafe extern "C" fn openttd_rust_occupancy_train(
     tile: u32,
     bits: u8,
 ) {
-    let s = c.vehicles;
-    let tile = TileIndex(tile);
-    let track_bits = TrackBits(bits);
-    let mut it = unsafe { OnTile::new(s, tile.0) };
-    // Value v is not safe in MP games, however, it is used to generate a local
-    // error message only (which may be different for different machines).
-    // Such a message does not affect MP synchronisation.
-    while let Some(v) = it.get() {
-        if VehicleType(v.vehicle_type()) == VehicleType::TRAIN {
-            let track = TrackBits((s.train_handle)(v.0.as_ptr()).track());
-            if track == track_bits || crate::track_func::tracks_overlap(track.0 | track_bits.0) {
-                c.result(out, Some(VehicleType::TRAIN.0));
-                return;
-            }
-        }
-        unsafe {
-            it.advance(s);
-        }
-    }
-    c.result(out, None);
+    let blocker = ensure_no_train_on_track_bits(c.vehicles, TileIndex(tile), TrackBits(bits));
+    c.result(out, blocker.map(|vehicle_type| vehicle_type.0));
 }
 
 impl crate::services::CommandServices {

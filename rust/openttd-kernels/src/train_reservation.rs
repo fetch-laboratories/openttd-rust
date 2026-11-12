@@ -1628,9 +1628,6 @@ pub(crate) mod tests {
     fn rail_map() -> RailMapServices {
         RailMapServices {
             ground: std::ptr::null(),
-            traversal: unused(),
-            station_admission: unused(),
-            wormhole_admission: unused(),
             set_signal_state: unused(),
             other_tunnel_bridge_end: unused(),
             invalid_rail_type: unused(),
