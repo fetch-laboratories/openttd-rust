@@ -1,0 +1,12 @@
+# TSan suppressions for threaded harness games (#925), passed by thread_sanitizer.py.
+# Each entry names a race inside a host library, not in OpenTTD, and is preceded by
+# its reason. A called_from_lib suppression of these libraries makes TSan abort at
+# exit when they unload, so these are race suppressions.
+#
+# Mesa 25.2.8's libgallium, which the SDL offscreen video driver loads through EGL,
+# races between its own uninstrumented threads (a free against an earlier malloc),
+# reached from VideoDriver_SDL_Base::ClientSizeChanged (sdl2_v.cpp:126). Every game
+# reports it in both roles; the earlier stack is all <null> frames.
+race:libgallium
+# The same Mesa race, reported through Mesa's EGL driver library.
+race:libEGL_mesa.so.0

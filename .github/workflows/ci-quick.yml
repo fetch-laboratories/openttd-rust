@@ -137,11 +137,13 @@ jobs:
       run: |
         python3 tools/lint-ratchet.py ruff --base-ref "$BASE_REF"
         python3 tools/lint-policy.py --base-ref "$BASE_REF"
+    # Growth whose proposal awaits its reviewer's acceptance passes as pending review
+    # and fails only in the merge group (#921). Called from Full, the event is the caller's.
     - name: Reject independent native and boundary growth
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
         GH_TOKEN: ${{ github.token }}
-      run: python3 tools/growth-ratchet.py --base-ref "$BASE_REF"
+      run: python3 tools/growth-ratchet.py --base-ref "$BASE_REF" --event "${GITHUB_EVENT_NAME:-pull_request}"
     - name: Prove claimed release Rust refactors
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}

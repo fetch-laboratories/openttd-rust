@@ -50,7 +50,6 @@ struct OpenTTDSessionFrame {
 	std::optional<OpenTTDWorldSetupFrame> setup;
 	std::optional<RustRoadCommandContext> road;
 	std::optional<PerformanceAccumulator> landscape;
-	std::optional<PerformanceMeasurer> schedule;
 	void Rethrow() { RustNetworkCompleteActions(this); if (this->exception) std::rethrow_exception(this->exception); }
 };
 static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));

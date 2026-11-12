@@ -40,12 +40,6 @@ public:
 	 * @param lg Link graph to be queued.
 	 */
 	void Queue(LinkGraph *lg);
-
-	/**
-	 * Remove a link graph from the execution queue.
-	 * @param lg Link graph to be removed.
-	 */
-	void Dequeue(LinkGraph *lg);
 };
 
 void AfterLoad_LinkGraphPauseControl();
