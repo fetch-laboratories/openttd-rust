@@ -5,7 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Fixed, unseeded hasher for lookup-only YAPF node maps.
+//! Fixed, unseeded hasher for lookup-only YAPF node maps. The maps stand in for
+//! the original's open and closed `HashTable`s (`misc/hashtable.hpp`) in YAPF's
+//! `NodeList` (`pathfinder/yapf/nodelist.hpp`); this module has no original
+//! file of its own.
 //! Only use it for maps whose iteration order never affects results.
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
