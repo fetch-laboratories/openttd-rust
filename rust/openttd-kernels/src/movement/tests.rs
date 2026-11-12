@@ -10,8 +10,10 @@
 
 use super::{CallbackFoundation, MovementServices, MovementVehicle, ObjectFoundation, VehicleRef};
 use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, fixture};
+use crate::road_type::RoadBits;
 use crate::services::{RoadTramType, RoadType, Services};
-use crate::slope_func::{SLOPE_E, SLOPE_N, SLOPE_S, SLOPE_W};
+use crate::slope_type::Slope;
+use crate::track_type::TrackBits;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr;
@@ -59,12 +61,16 @@ fn foundations_match_original() {
         for bits in u8::MIN..=u8::MAX {
             let index = 1 + usize::from(bits) * 2;
             assert_eq!(
-                i32::from(super::rail_foundation(slope, bits, |ok| assert!(ok))),
+                i32::from(
+                    super::get_rail_foundation(Slope(slope), TrackBits(bits), |ok| assert!(ok)).0
+                ),
                 expected[index],
                 "rail slope {slope}, mask {bits}"
             );
             assert_eq!(
-                i32::from(super::road_foundation(slope, bits, |ok| assert!(ok))),
+                i32::from(
+                    super::get_road_foundation(Slope(slope), RoadBits(bits), |ok| assert!(ok)).0
+                ),
                 expected[index + 1],
                 "road slope {slope}, mask {bits}"
             );
@@ -75,7 +81,6 @@ fn foundations_match_original() {
     assert_eq!(cases, 9728);
 }
 
-#[cfg(test)]
 thread_local! {
     static DIMENSIONS: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
 }
@@ -97,7 +102,6 @@ extern "C" fn compatible(_: VehicleRef) -> u64 {
 extern "C" fn speed(_: RoadType) -> u16 {
     unreachable!()
 }
-#[cfg(test)]
 extern "C" fn kind(_: VehicleRef) -> RoadTramType {
     unreachable!()
 }
@@ -195,20 +199,20 @@ fn extreme_coordinates_match_original() {
                         i32::from(slope)
                     ]
                 );
-                tiles[0].height = 3 + u8::from(slope & SLOPE_N != 0);
-                tiles[1].height = 3 + u8::from(slope & SLOPE_W != 0);
-                tiles[1 << log_x].height = 3 + u8::from(slope & SLOPE_E != 0);
-                tiles[(1 << log_x) + 1].height = 3 + u8::from(slope & SLOPE_S != 0);
+                let corner =
+                    |raised: Slope| 3 + u8::from(Slope(slope) & raised != Slope::SLOPE_FLAT);
+                tiles[0].height = corner(Slope::SLOPE_N);
+                tiles[1].height = corner(Slope::SLOPE_W);
+                tiles[1 << log_x].height = corner(Slope::SLOPE_E);
+                tiles[(1 << log_x) + 1].height = corner(Slope::SLOPE_S);
                 for (index, (x, y)) in X_COORDS
                     .into_iter()
                     .flat_map(|x| Y_COORDS.map(|y| (x, y)))
                     .enumerate()
                 {
-                    // SAFETY: Initialized tables and allocation remain live for
-                    // this entry; callbacks neither reset nor yield the map.
-                    let actual = unsafe {
-                        super::openttd_rust_movement_outside_z(&raw const movement, x, y)
-                    };
+                    // Initialized tables and allocation remain live for this
+                    // entry; callbacks neither reset nor yield the map.
+                    let actual = movement.get_slope_pixel_z_outside_map(x, y);
                     assert_eq!(
                         actual,
                         expected[3 + index],

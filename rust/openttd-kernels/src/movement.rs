@@ -5,47 +5,52 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Tile movement policy. Map fields are loaded in place through the canonical
-//! descriptor; pool fields remain typed services. No map reference spans a callback.
+//! Tile movement policy: the `get_slope_z_proc`, `get_foundation_proc`,
+//! `get_tile_track_status_proc` and `vehicle_enter_tile_proc` bodies of the rail,
+//! road, station, water and tunnel/bridge tile types, with `GetRailFoundation`,
+//! `GetRoadFoundation` and `TicksToLeaveDepot`. Map fields are loaded in place
+//! through the canonical descriptor; pool fields remain typed services. No map
+//! reference spans a callback.
 #![allow(
     unsafe_code,
     missing_docs,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
-    clippy::many_single_char_names,
-    clippy::if_not_else,
-    clippy::items_after_statements,
     clippy::too_many_lines,
-    clippy::collapsible_match,
-    clippy::verbose_bit_mask,
-    clippy::decimal_bitwise_operands,
     clippy::cast_sign_loss
 )]
-use crate::direction_func::diag_dir_to_axis_raw;
-use crate::direction_type::DiagDirection;
+use crate::direction_func::{
+    axis_to_diag_dir, diag_dir_to_axis, diag_dir_to_dir, dir_to_diag_dir, reverse_diag_dir,
+    reverse_dir,
+};
+use crate::direction_type::{Axis, DiagDirection, Direction};
 use crate::map_func::World;
-use crate::rail_map::{
-    RAIL_GROUND_HALF_TILE_WATER, RAIL_TILE_DEPOT, RAIL_TILE_NORMAL, RAIL_TILE_SIGNALS,
-};
-use crate::road_map::{ROAD_TILE_CROSSING, ROAD_TILE_DEPOT, ROAD_TILE_NORMAL};
-use crate::services::{Foundation, FoundationSlope, RoadBits, Services, Slope, TrackBits};
+use crate::rail_map::{RailGroundType, RailTileType};
+use crate::road_map::RoadTileType;
+use crate::road_type::{DisallowedRoadDirections, RoadBits, RoadTramType};
+use crate::roadveh::{RVC_DEPOT_STOP_FRAME, RVSB_IN_DEPOT, RVSB_IN_ROAD_STOP, RVSB_WORMHOLE};
+use crate::services::{FoundationSlope, Services};
 use crate::slope_func::{
-    FOUNDATION_INCLINED_X, FOUNDATION_INCLINED_Y, FOUNDATION_INVALID, FOUNDATION_LEVELED,
-    FOUNDATION_NONE, FOUNDATION_STEEP_BOTH, FOUNDATION_STEEP_LOWER, SLOPE_E, SLOPE_FLAT, SLOPE_N,
-    SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE, SLOPE_SW, SLOPE_W, flattening_foundation_raw,
-    get_highest_slope_corner_raw, halftile_foundation_raw, is_slope_with_one_corner_raised_raw,
-    is_slope_with_three_corners_raised_raw, is_steep_slope_raw, opposite_corner_raw,
-    slope_with_one_corner_raised_raw, slope_with_three_corners_raised_raw,
-    special_rail_foundation_raw,
+    flattening_foundation, get_highest_slope_corner, halftile_foundation,
+    is_slope_with_one_corner_raised, is_slope_with_three_corners_raised, is_steep_slope,
+    opposite_corner, slope_with_one_corner_raised, slope_with_three_corners_raised,
+    special_rail_foundation,
 };
-use crate::tile_cmd::{CANNOT_ENTER, ENTERED_STATION, ENTERED_WORMHOLE};
-use crate::tile_type::TileIndex;
-use crate::tile_type::TileType;
-use crate::tile_type::{
-    INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
-    MP_TUNNELBRIDGE, MP_VOID,
+use crate::slope_type::{Corner, Foundation, Slope};
+use crate::station_type::StationID;
+use crate::tile_cmd::{VehicleEnterTileState, VehicleEnterTileStates};
+use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TILE_UNIT_MASK, TileIndex, TileType};
+use crate::track_func::{
+    axis_to_track_bits, combine_track_status, diag_dir_to_diag_track_bits,
+    diag_dir_to_diag_trackdir, is_reversing_road_trackdir, track_bits_to_trackdir_bits,
 };
-use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+use crate::track_type::{Track, TrackBits, TrackStatus, TrackdirBits};
+use crate::transport_type::TransportType;
+use crate::tunnelbridge::{TUNNEL_SOUND_FRAME, TUNNEL_VISIBILITY};
+use crate::vehicle::VehicleRef;
+use crate::vehicle_base::{VehState, VehStates};
+use crate::vehicle_type::VehicleType;
+use crate::water_map::WaterTileType;
 use crate::witness as w;
 use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
@@ -94,16 +99,36 @@ impl<'a> CachedTable<'a> {
         let world = self.world.get_or_init(|| World::new(s.shared()));
         Context { s, world }
     }
-    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
+    /// `GetTileTrackStatus(tile, TRANSPORT_ROAD, GetRoadTramType(v->roadtype))`.
+    pub(crate) fn get_road_vehicle_track_status(
+        &self,
+        v: VehicleRef,
+        tile: TileIndex,
+    ) -> TrackStatus {
         if self.audited {
             let s = self.observed();
-            let kind = (s.road_kind)(v);
-            s.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
+            let rtt = (s.road_kind)(v);
+            s.get_tile_track_status(
+                tile,
+                TransportType::TRANSPORT_ROAD,
+                u32::from(rtt.0),
+                DiagDirection::INVALID_DIAGDIR,
+            )
         } else {
             let s = self.get();
-            let kind = (s.road_kind)(v);
-            s.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
+            let rtt = (s.road_kind)(v);
+            s.get_tile_track_status(
+                tile,
+                TransportType::TRANSPORT_ROAD,
+                u32::from(rtt.0),
+                DiagDirection::INVALID_DIAGDIR,
+            )
         }
+    }
+    /// Temporary raw adapter of [`Self::get_road_vehicle_track_status`] for
+    /// `road.rs` and `ground_vehicle.rs` until their passes.
+    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
+        self.get_road_vehicle_track_status(v, TileIndex(tile))
     }
     pub(crate) fn get(&self) -> &'a MovementServices {
         // Copy before the getter: no Cell borrow spans a callback/reentry.
@@ -130,9 +155,9 @@ impl std::ops::Deref for Context<'_> {
 }
 impl Context<'_> {
     #[inline]
-    fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
+    fn has_tile_road_type(&self, tile: TileIndex, rtt: RoadTramType) -> bool {
         self.world
-            .asserted(|m| crate::road_map::has_tile_road_type(m, tile, kind))
+            .asserted(|m| crate::road_map::has_tile_road_type(m, tile.0, rtt))
     }
 }
 
@@ -193,6 +218,11 @@ impl MovementServices {
             (self.native_assert)(ok);
         }
     }
+    /// The native `assert` policy as a header helper's precondition check.
+    #[inline]
+    fn check(&self) -> impl Fn(bool) + Copy + '_ {
+        move |ok| (self.native_assert)(ok)
+    }
 
     nested_tables! {
         pub(crate) fn shared -> Services;
@@ -203,55 +233,66 @@ impl MovementServices {
     }
 }
 impl Context<'_> {
-    fn foundation(&self, tile: u32, slope: u8) -> u8 {
+    /// `_tile_type_procs[GetTileType(tile)]->get_foundation_proc(tile, tileh)`.
+    fn get_foundation(&self, tile: TileIndex, tileh: Slope) -> Foundation {
         w::hit(w::MOVE_FOUNDATION);
-        let kind = self.world.kind(TileIndex(tile));
+        let kind = self.world.kind(tile);
         match kind {
+            // `GetFoundation_Track`.
             TileType::MP_RAILWAY => {
-                if self.world.is_plain_rail(tile) {
-                    rail_foundation(slope, self.world.tracks(tile), |ok| {
-                        (self.native_assert)(ok);
-                    })
+                if self.world.is_plain_rail(tile.0) {
+                    get_rail_foundation(tileh, TrackBits(self.world.tracks(tile.0)), self.check())
                 } else {
-                    flattening_foundation_raw(slope)
+                    flattening_foundation(tileh)
                 }
             }
+            // `GetFoundation_Road`.
             TileType::MP_ROAD => {
-                if self.world.is_normal_road(tile) {
-                    road_foundation(slope, self.world.all_road_bits(tile), |ok| {
-                        (self.native_assert)(ok);
-                    })
-                } else {
-                    flattening_foundation_raw(slope)
-                }
-            }
-            TileType::MP_STATION => flattening_foundation_raw(slope),
-            TileType::MP_TUNNELBRIDGE => {
-                if self.world.tunnel(tile) {
-                    FOUNDATION_NONE
-                } else {
-                    crate::bridge::get_bridge_foundation(
-                        slope,
-                        diag_dir_to_axis_raw(self.world.tunnel_bridge_dir(tile), |ok| {
-                            (self.native_assert)(ok);
-                        }),
+                if self.world.is_normal_road(tile.0) {
+                    get_road_foundation(
+                        tileh,
+                        RoadBits(self.world.all_road_bits(tile.0)),
+                        self.check(),
                     )
+                } else {
+                    flattening_foundation(tileh)
                 }
             }
+            // `GetFoundation_Station`.
+            TileType::MP_STATION => flattening_foundation(tileh),
+            // `GetFoundation_TunnelBridge`.
+            TileType::MP_TUNNELBRIDGE => {
+                if self.world.tunnel(tile.0) {
+                    Foundation::FOUNDATION_NONE
+                } else {
+                    Foundation(crate::bridge::get_bridge_foundation(
+                        tileh.0,
+                        diag_dir_to_axis(
+                            DiagDirection(self.world.tunnel_bridge_dir(tile.0)),
+                            self.check(),
+                        )
+                        .0,
+                    ))
+                }
+            }
+            // `GetFoundation_Town` and `GetFoundation_Industry`.
             TileType::MP_HOUSE | TileType::MP_INDUSTRY => {
                 let house = kind == TileType::MP_HOUSE;
                 let p = if house {
-                    (self.house_foundation)(tile)
+                    (self.house_foundation)(tile.0)
                 } else {
-                    (self.industry_foundation)(tile)
+                    (self.industry_foundation)(tile.0)
                 };
+                /* For NewGRF house and industry tiles we might not be drawing a
+                 * foundation. We need to account for this, as other structures
+                 * should draw the wall of the foundation in this case. */
                 if p.callback {
-                    let result = if house {
-                        unsafe { crate::town::resolver::foundation(TileIndex(tile), p.kind) }
+                    let callback_res = if house {
+                        unsafe { crate::town::resolver::foundation(tile, p.kind) }
                     } else {
-                        (self.industry_callback)(tile, p.kind)
+                        (self.industry_callback)(tile.0, p.kind)
                     };
-                    if result != crate::newgrf_callbacks::CALLBACK_FAILED
+                    if callback_res != crate::newgrf_callbacks::CALLBACK_FAILED
                         && !(self.shared().grf_boolean_callback)(
                             if house {
                                 (self.shared().specs().house().file)(p.spec.cast())
@@ -267,113 +308,132 @@ impl Context<'_> {
                             } else {
                                 crate::newgrf_callbacks::CBID_INDTILE_DRAW_FOUNDATIONS.0
                             },
-                            result,
+                            callback_res,
                         )
                     {
-                        return FOUNDATION_NONE;
+                        return Foundation::FOUNDATION_NONE;
                     }
                 }
-                flattening_foundation_raw(slope)
+                flattening_foundation(tileh)
             }
+            // `GetFoundation_Object`.
             TileType::MP_OBJECT => {
-                let p = (self.object_foundation)(tile);
+                let p = (self.object_foundation)(tile.0);
                 if p.enabled && p.no_foundation {
-                    FOUNDATION_NONE
+                    Foundation::FOUNDATION_NONE
                 } else {
-                    flattening_foundation_raw(slope)
+                    flattening_foundation(tileh)
                 }
             }
-            _ => FOUNDATION_NONE,
+            // `GetFoundation_Clear`, `_Trees`, `_Water` and `_Void`.
+            _ => Foundation::FOUNDATION_NONE,
         }
     }
+    /// `GetSlopePixelZ`: the `get_slope_z_proc` of the tile at `TileVirtXY(x, y)`.
     #[inline]
-    pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
+    pub(crate) fn get_slope_pixel_z(&self, x: i32, y: i32, ground_vehicle: bool) -> i32 {
         let tile = self
             .world
             .dimensions
-            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned())
-            .0;
-        let kind = self.world.kind(TileIndex(tile));
+            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned());
+        let kind = self.world.kind(tile);
         // One named body for constant Rust callers and the dynamic native entry.
         // Observe the live tile type before selecting the ground specialization.
-        if ground {
-            self.pixel_z::<true>(tile, x as u32, y as u32, kind.0)
+        if ground_vehicle {
+            self.get_slope_pixel_z_proc::<true>(tile, x as u32, y as u32, kind)
         } else {
-            self.pixel_z::<false>(tile, x as u32, y as u32, kind.0)
+            self.get_slope_pixel_z_proc::<false>(tile, x as u32, y as u32, kind)
         }
     }
+    /// `_tile_type_procs[kind]->get_slope_z_proc(tile, x, y, ground_vehicle)`.
     #[inline]
-    fn pixel_z<const GROUND_VEHICLE: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
+    fn get_slope_pixel_z_proc<const GROUND_VEHICLE: bool>(
+        &self,
+        tile: TileIndex,
+        x: u32,
+        y: u32,
+        kind: TileType,
+    ) -> i32 {
         w::hit(w::MOVE_PIXEL_Z);
-        if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
-            || (kind == MP_RAILWAY && !self.world.is_plain_rail(tile))
-            || (kind == MP_ROAD && !self.world.is_normal_road(tile))
-            || (kind == MP_OBJECT
+        // `GetSlopePixelZ_Town`, `_Industry`, `_Station`, and the non-plain rail,
+        // non-normal road and non-owned-land object branches.
+        if matches!(
+            kind,
+            TileType::MP_HOUSE | TileType::MP_INDUSTRY | TileType::MP_STATION
+        ) || (kind == TileType::MP_RAILWAY && !self.world.is_plain_rail(tile.0))
+            || (kind == TileType::MP_ROAD && !self.world.is_normal_road(tile.0))
+            || (kind == TileType::MP_OBJECT
                 && !unsafe {
                     ((*(*(*(self.shared().station_commands)()).command)
                         .rail_map
                         .ground)
-                        .owned_land)(tile)
+                        .owned_land)(tile.0)
                 })
         {
-            return self.world.tile_max_pixel_z(TileIndex(tile));
+            return self.world.tile_max_pixel_z(tile);
         }
-        let (slope, z) = if kind == MP_VOID {
+        let (mut tileh, mut z) = if kind == TileType::MP_VOID {
+            /* This function may be called on tiles outside the map, don't assume
+             * that 'tile' is a valid tile index. See GetSlopePixelZOutsideMap. */
             self.world
                 .tile_pixel_slope_outside_map((x >> 4).cast_signed(), (y >> 4).cast_signed())
         } else {
-            self.world.tile_pixel_slope(TileIndex(tile))
+            self.world.tile_pixel_slope(tile)
         };
-        let mut p = FoundationSlope {
-            z,
-            slope: Slope(slope.0),
-        };
-        if matches!(kind, MP_RAILWAY | MP_ROAD) {
-            if p.slope.0 == SLOPE_FLAT {
-                return p.z;
+        if matches!(kind, TileType::MP_RAILWAY | TileType::MP_ROAD) {
+            if tileh == Slope::SLOPE_FLAT {
+                return z;
             }
-            let f = if kind == MP_RAILWAY {
-                rail_foundation(p.slope.0, self.world.tracks(tile), |ok| {
-                    (self.native_assert)(ok);
-                })
+            let f = if kind == TileType::MP_RAILWAY {
+                get_rail_foundation(tileh, TrackBits(self.world.tracks(tile.0)), self.check())
             } else {
-                road_foundation(p.slope.0, self.world.all_road_bits(tile), |ok| {
-                    (self.native_assert)(ok);
-                })
+                get_road_foundation(
+                    tileh,
+                    RoadBits(self.world.all_road_bits(tile.0)),
+                    self.check(),
+                )
             };
-            let z = crate::landscape::apply_pixel_foundation_to_slope(
-                self.shared(),
-                Foundation(f),
-                &mut p.slope,
+            z = z.wrapping_add(
+                crate::landscape::apply_pixel_foundation_to_slope(self.shared(), f, &mut tileh)
+                    .cast_signed(),
             );
-            p.z = p.z.wrapping_add(z.cast_signed());
-        } else if kind == MP_TUNNELBRIDGE {
-            if self.world.tunnel(tile) {
+        } else if kind == TileType::MP_TUNNELBRIDGE {
+            if self.world.tunnel(tile.0) {
+                /* In the tunnel entrance? */
                 if GROUND_VEHICLE {
-                    return p.z;
+                    return z;
                 }
             } else {
-                let dir = self.world.tunnel_bridge_dir(tile);
-                let z = crate::landscape::apply_pixel_foundation_to_slope(
-                    self.shared(),
-                    Foundation(crate::bridge::get_bridge_foundation(
-                        p.slope.0,
-                        diag_dir_to_axis_raw(dir, |ok| (self.native_assert)(ok)),
-                    )),
-                    &mut p.slope,
+                // IsBridge(tile)
+                let dir = DiagDirection(self.world.tunnel_bridge_dir(tile.0));
+                let f = Foundation(crate::bridge::get_bridge_foundation(
+                    tileh.0,
+                    diag_dir_to_axis(dir, self.check()).0,
+                ));
+                z = z.wrapping_add(
+                    crate::landscape::apply_pixel_foundation_to_slope(self.shared(), f, &mut tileh)
+                        .cast_signed(),
                 );
-                p.z = p.z.wrapping_add(z.cast_signed());
+
+                /* On the bridge ramp? */
                 if GROUND_VEHICLE {
-                    if p.slope.0 != SLOPE_FLAT {
-                        return p.z.wrapping_add(TILE_HEIGHT.cast_signed());
+                    if tileh != Slope::SLOPE_FLAT {
+                        return z.wrapping_add(TILE_HEIGHT.cast_signed());
                     }
-                    p.slope.0 = [SLOPE_NE, SLOPE_SE, SLOPE_SW, SLOPE_NW][usize::from(dir)];
+
+                    tileh = match dir {
+                        DiagDirection::DIAGDIR_NE => Slope::SLOPE_NE,
+                        DiagDirection::DIAGDIR_SE => Slope::SLOPE_SE,
+                        DiagDirection::DIAGDIR_SW => Slope::SLOPE_SW,
+                        DiagDirection::DIAGDIR_NW => Slope::SLOPE_NW,
+                        _ => crate::services_assert::not_reached(),
+                    };
                 }
             }
         }
-        p.z.wrapping_add(
-            crate::landscape::partial_pixel_z((x & 15) as i32, (y & 15) as i32, p.slope.0)
-                .expect("native slope")
+        z.wrapping_add(
+            crate::landscape::partial_pixel_z((x & 0xF) as i32, (y & 0xF) as i32, tileh.0)
+                .unwrap_or_else(|| crate::services_assert::not_reached())
                 .cast_signed(),
         )
     }
@@ -388,24 +448,80 @@ impl MovementServices {
             world: &world,
         })
     }
+    /// `GetSlopePixelZ`.
     #[inline]
-    pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
-        self.with_context(|c| c.pixel_z_at(x, y, ground))
+    pub(crate) fn get_slope_pixel_z(&self, x: i32, y: i32, ground_vehicle: bool) -> i32 {
+        self.with_context(|c| c.get_slope_pixel_z(x, y, ground_vehicle))
     }
-    #[inline]
-    fn pixel_z<const GROUND: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
-        self.with_context(|c| c.pixel_z::<GROUND>(tile, x, y, kind))
+    /// `GetSlopePixelZOutsideMap`: return the world Z coordinate at a point,
+    /// which may lie outside the map.
+    pub(crate) fn get_slope_pixel_z_outside_map(&self, x: i32, y: i32) -> i32 {
+        w::hit(w::MOVE_OUTSIDE_Z);
+        if (x as u32) < ((self.shared().map_max_x)() + 1) * TILE_SIZE
+            && (y as u32) < ((self.shared().map_max_y)() + 1) * TILE_SIZE
+        {
+            self.get_slope_pixel_z(x, y, false)
+        } else {
+            self.with_context(|c| {
+                c.get_slope_pixel_z_proc::<false>(
+                    TileIndex::INVALID,
+                    x as u32,
+                    y as u32,
+                    TileType::MP_VOID,
+                )
+            })
+        }
     }
-    #[inline]
-    fn foundation(&self, tile: u32, slope: u8) -> u8 {
-        self.with_context(|c| c.foundation(tile, slope))
+    /// `GetFoundationSlope`: the slope on top of the foundation and the z of the
+    /// foundation slope.
+    pub(crate) fn get_foundation_slope(&self, tile: TileIndex) -> (Slope, i32) {
+        let (tileh, z, f) = self.with_context(|c| {
+            let (tileh, z) = c.world.tile_slope_z(tile);
+            (tileh, z, c.get_foundation(tile, tileh))
+        });
+        let applied = (self.shared().apply_foundation)(f, tileh);
+        (applied.slope, z.wrapping_add(applied.z))
     }
+    /// `GetTileTrackStatus`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_tile_track_status(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        self.with_context(|c| c.get_tile_track_status(tile, mode, sub_mode, side))
+    }
+    /// `GetTileTrackStatus` within an enclosing synchronous entry's descriptor,
+    /// loading fields at each query.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn get_tile_track_status_in_world(
+        &self,
+        world: &World<'_>,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        Context { s: self, world }.get_tile_track_status(tile, mode, sub_mode, side)
+    }
+    /// Temporary raw adapter of [`Self::get_tile_track_status`] for `road_yapf.rs`
+    /// and `train.rs` until their passes.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
-        self.with_context(|c| c.track_status(tile, mode, sub, side))
+        self.get_tile_track_status(
+            TileIndex(tile),
+            TransportType(mode),
+            sub,
+            DiagDirection(side),
+        )
     }
-    /// Use an enclosing synchronous entry's descriptor, loading fields at each query.
+    /// Temporary raw adapter of [`Self::get_tile_track_status_in_world`] for
+    /// `follow_track.rs` and `pathfinder_func.rs` until their passes.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn track_status_in_world(
@@ -416,7 +532,13 @@ impl MovementServices {
         sub: u32,
         side: u8,
     ) -> u32 {
-        Context { s: self, world }.track_status(tile, mode, sub, side)
+        self.get_tile_track_status_in_world(
+            world,
+            TileIndex(tile),
+            TransportType(mode),
+            sub,
+            DiagDirection(side),
+        )
     }
 }
 
@@ -429,7 +551,7 @@ pub unsafe extern "C" fn openttd_rust_movement_pixel_z(
     y: i32,
     ground_vehicle: bool,
 ) -> i32 {
-    unsafe { &*s }.pixel_z_at(x, y, ground_vehicle)
+    unsafe { &*s }.get_slope_pixel_z(x, y, ground_vehicle)
 }
 /// # Safety
 /// Same as the in-map entry; outside coordinates never access an invalid tile.
@@ -439,15 +561,7 @@ pub unsafe extern "C" fn openttd_rust_movement_outside_z(
     x: i32,
     y: i32,
 ) -> i32 {
-    w::hit(w::MOVE_OUTSIDE_Z);
-    let s = unsafe { &*s };
-    if (x as u32) < ((s.shared().map_max_x)() + 1) * TILE_SIZE
-        && (y as u32) < ((s.shared().map_max_y)() + 1) * TILE_SIZE
-    {
-        s.pixel_z_at(x, y, false)
-    } else {
-        s.pixel_z::<false>(INVALID_TILE, x as u32, y as u32, MP_VOID)
-    }
+    unsafe { &*s }.get_slope_pixel_z_outside_map(x, y)
 }
 /// # Safety
 /// Immutable table, live tile; callbacks may reenter without a world borrow.
@@ -456,160 +570,220 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
     s: *const MovementServices,
     tile: u32,
 ) -> FoundationSlope {
-    let s = unsafe { &*s };
-    let (slope, z, foundation) = s.with_context(|c| {
-        let (slope, z) = c.world.tile_slope_z(TileIndex(tile));
-        (slope, z, c.foundation(tile, slope.0))
-    });
-    let a = (s.shared().apply_foundation)(Foundation(foundation), Slope(slope.0));
-    FoundationSlope {
-        z: z.wrapping_add(a.z),
-        slope: a.slope,
-    }
+    let (slope, z) = unsafe { &*s }.get_foundation_slope(TileIndex(tile));
+    FoundationSlope { z, slope }
 }
-pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if b == TRACK_BIT_NONE {
-        return FOUNDATION_NONE;
+
+/// `_valid_tracks_without_foundation`: valid `TrackBits` on a specific (non-steep)
+/// slope without foundation.
+const VALID_TRACKS_WITHOUT_FOUNDATION: [TrackBits; 15] = [
+    TrackBits::TRACK_BIT_ALL,
+    TrackBits::TRACK_BIT_RIGHT,
+    TrackBits::TRACK_BIT_UPPER,
+    TrackBits::TRACK_BIT_X,
+    TrackBits::TRACK_BIT_LEFT,
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_Y,
+    TrackBits::TRACK_BIT_LOWER,
+    TrackBits::TRACK_BIT_LOWER,
+    TrackBits::TRACK_BIT_Y,
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_LEFT,
+    TrackBits::TRACK_BIT_X,
+    TrackBits::TRACK_BIT_UPPER,
+    TrackBits::TRACK_BIT_RIGHT,
+];
+
+/// `GetRailFoundation`: checks if a track combination is valid on a specific slope
+/// and returns the needed foundation.
+pub(crate) fn get_rail_foundation(
+    tileh: Slope,
+    bits: TrackBits,
+    check: impl Fn(bool) + Copy,
+) -> Foundation {
+    if bits == TrackBits::TRACK_BIT_NONE {
+        return Foundation::FOUNDATION_NONE;
     }
-    if is_steep_slope_raw(s) {
-        if b == TRACK_BIT_X {
-            return FOUNDATION_INCLINED_X;
+
+    if is_steep_slope(tileh) {
+        /* Test for inclined foundations */
+        if bits == TrackBits::TRACK_BIT_X {
+            return Foundation::FOUNDATION_INCLINED_X;
         }
-        if b == TRACK_BIT_Y {
-            return FOUNDATION_INCLINED_Y;
+        if bits == TrackBits::TRACK_BIT_Y {
+            return Foundation::FOUNDATION_INCLINED_Y;
         }
-        let corner =
-            get_highest_slope_corner_raw(s, || unreachable!("native highest slope corner"));
-        let higher = crate::track_func::corner_to_track_bits(corner, check);
-        if b == higher {
-            return halftile_foundation_raw(corner, check);
+
+        /* Get higher track */
+        let highest_corner =
+            get_highest_slope_corner(tileh, || crate::services_assert::not_reached());
+        let higher_track = TrackBits(crate::track_func::corner_to_track_bits(
+            highest_corner.0,
+            check,
+        ));
+
+        /* Only higher track? */
+        if bits == higher_track {
+            return halftile_foundation(highest_corner, check);
         }
-        if crate::track_func::tracks_overlap(b | higher) {
-            return FOUNDATION_INVALID;
+
+        /* Overlap with higher track? */
+        if crate::track_func::tracks_overlap((bits | higher_track).0) {
+            return Foundation::FOUNDATION_INVALID;
         }
-        return if b & higher != 0 {
-            FOUNDATION_STEEP_BOTH
+
+        /* either lower track or both higher and lower track */
+        if bits & higher_track != TrackBits::TRACK_BIT_NONE {
+            Foundation::FOUNDATION_STEEP_BOTH
         } else {
-            FOUNDATION_STEEP_LOWER
-        };
-    }
-    const WITHOUT: [u8; 15] = [
-        TRACK_BIT_ALL,
-        TRACK_BIT_RIGHT,
-        TRACK_BIT_UPPER,
-        TRACK_BIT_X,
-        TRACK_BIT_LEFT,
-        TRACK_BIT_NONE,
-        TRACK_BIT_Y,
-        TRACK_BIT_LOWER,
-        TRACK_BIT_LOWER,
-        TRACK_BIT_Y,
-        TRACK_BIT_NONE,
-        TRACK_BIT_LEFT,
-        TRACK_BIT_X,
-        TRACK_BIT_UPPER,
-        TRACK_BIT_RIGHT,
-    ];
-    if !WITHOUT[usize::from(s)] & b == TRACK_BIT_NONE {
-        return FOUNDATION_NONE;
-    }
-    let valid = !crate::rail_cmd::LEVELED_TRACKS[usize::from(s)] & b == 0;
-    let leveled = if valid {
-        FOUNDATION_LEVELED
+            Foundation::FOUNDATION_STEEP_LOWER
+        }
     } else {
-        FOUNDATION_INVALID
-    };
-    let corner = match b {
-        TRACK_BIT_LEFT => CORNER_W,
-        TRACK_BIT_LOWER => CORNER_S,
-        TRACK_BIT_RIGHT => CORNER_E,
-        TRACK_BIT_UPPER => CORNER_N,
-        TRACK_BIT_HORZ => {
-            if s == SLOPE_N {
-                return halftile_foundation_raw(CORNER_N, check);
-            }
-            if s == SLOPE_S {
-                return halftile_foundation_raw(CORNER_S, check);
-            }
-            return leveled;
+        if !VALID_TRACKS_WITHOUT_FOUNDATION[usize::from(tileh.0)] & bits
+            == TrackBits::TRACK_BIT_NONE
+        {
+            return Foundation::FOUNDATION_NONE;
         }
-        TRACK_BIT_VERT => {
-            if s == SLOPE_W {
-                return halftile_foundation_raw(CORNER_W, check);
+
+        let valid_on_leveled = !TrackBits(crate::rail_cmd::LEVELED_TRACKS[usize::from(tileh.0)])
+            & bits
+            == TrackBits::TRACK_BIT_NONE;
+        let leveled = if valid_on_leveled {
+            Foundation::FOUNDATION_LEVELED
+        } else {
+            Foundation::FOUNDATION_INVALID
+        };
+
+        let track_corner = match bits {
+            TrackBits::TRACK_BIT_LEFT => Corner::CORNER_W,
+            TrackBits::TRACK_BIT_LOWER => Corner::CORNER_S,
+            TrackBits::TRACK_BIT_RIGHT => Corner::CORNER_E,
+            TrackBits::TRACK_BIT_UPPER => Corner::CORNER_N,
+
+            TrackBits::TRACK_BIT_HORZ => {
+                if tileh == Slope::SLOPE_N {
+                    return halftile_foundation(Corner::CORNER_N, check);
+                }
+                if tileh == Slope::SLOPE_S {
+                    return halftile_foundation(Corner::CORNER_S, check);
+                }
+                return leveled;
             }
-            if s == SLOPE_E {
-                return halftile_foundation_raw(CORNER_E, check);
+
+            TrackBits::TRACK_BIT_VERT => {
+                if tileh == Slope::SLOPE_W {
+                    return halftile_foundation(Corner::CORNER_W, check);
+                }
+                if tileh == Slope::SLOPE_E {
+                    return halftile_foundation(Corner::CORNER_E, check);
+                }
+                return leveled;
             }
-            return leveled;
+
+            TrackBits::TRACK_BIT_X => {
+                if is_slope_with_one_corner_raised(tileh) {
+                    return Foundation::FOUNDATION_INCLINED_X;
+                }
+                return leveled;
+            }
+
+            TrackBits::TRACK_BIT_Y => {
+                if is_slope_with_one_corner_raised(tileh) {
+                    return Foundation::FOUNDATION_INCLINED_Y;
+                }
+                return leveled;
+            }
+
+            _ => return leveled,
+        };
+        /* Single diagonal track */
+
+        /* Track must be at least valid on leveled foundation */
+        if !valid_on_leveled {
+            return Foundation::FOUNDATION_INVALID;
         }
-        TRACK_BIT_X => {
-            return if is_slope_with_one_corner_raised_raw(s) {
-                FOUNDATION_INCLINED_X
-            } else {
-                leveled
-            };
+
+        /* If slope has three raised corners, build leveled foundation */
+        if is_slope_with_three_corners_raised(tileh) {
+            return Foundation::FOUNDATION_LEVELED;
         }
-        TRACK_BIT_Y => {
-            return if is_slope_with_one_corner_raised_raw(s) {
-                FOUNDATION_INCLINED_Y
-            } else {
-                leveled
-            };
+
+        /* If neighboured corners of track_corner are lowered, build halftile foundation */
+        if tileh & slope_with_three_corners_raised(opposite_corner(track_corner), check)
+            == slope_with_one_corner_raised(track_corner, check)
+        {
+            return halftile_foundation(track_corner, check);
         }
-        _ => return leveled,
-    };
-    if !valid {
-        return FOUNDATION_INVALID;
+
+        /* else special anti-zig-zag foundation */
+        special_rail_foundation(track_corner, check)
     }
-    if is_slope_with_three_corners_raised_raw(s) {
-        return FOUNDATION_LEVELED;
-    }
-    if s & slope_with_three_corners_raised_raw(opposite_corner_raw(corner), check)
-        == slope_with_one_corner_raised_raw(corner, check)
-    {
-        return halftile_foundation_raw(corner, check);
-    }
-    special_rail_foundation_raw(corner, check)
 }
-pub(crate) fn road_foundation(mut s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if s == SLOPE_FLAT || b == 0 {
-        return FOUNDATION_NONE;
+/// `GetRoadFoundation`: get the foundation type of a `RoadBits` slope combination.
+pub(crate) fn get_road_foundation(
+    mut tileh: Slope,
+    bits: RoadBits,
+    check: impl Fn(bool) + Copy,
+) -> Foundation {
+    /* Flat land and land without a road doesn't require a foundation */
+    if tileh == Slope::SLOPE_FLAT || bits == RoadBits::ROAD_NONE {
+        return Foundation::FOUNDATION_NONE;
     }
-    if is_steep_slope_raw(s) {
-        s = slope_with_one_corner_raised_raw(
-            get_highest_slope_corner_raw(s, || unreachable!("native highest slope corner")),
+
+    /* Steep slopes behave the same as slopes with one corner raised. */
+    if is_steep_slope(tileh) {
+        tileh = slope_with_one_corner_raised(
+            get_highest_slope_corner(tileh, || crate::services_assert::not_reached()),
             check,
         );
     }
-    if crate::road_cmd::INVALID_SLOPES[0][usize::from(s)] & b == 0 {
-        return FOUNDATION_LEVELED;
-    }
-    if !is_slope_with_one_corner_raised_raw(s)
-        && crate::road_cmd::INVALID_SLOPES[1][usize::from(s)] & b == 0
+
+    /* Leveled RoadBits on a slope */
+    if RoadBits(crate::road_cmd::INVALID_SLOPES[0][usize::from(tileh.0)]) & bits
+        == RoadBits::ROAD_NONE
     {
-        return FOUNDATION_NONE;
+        return Foundation::FOUNDATION_LEVELED;
     }
-    if b == crate::road_type::ROAD_X {
-        FOUNDATION_INCLINED_X
+
+    /* Straight roads without foundation on a slope */
+    if !is_slope_with_one_corner_raised(tileh)
+        && RoadBits(crate::road_cmd::INVALID_SLOPES[1][usize::from(tileh.0)]) & bits
+            == RoadBits::ROAD_NONE
+    {
+        return Foundation::FOUNDATION_NONE;
+    }
+
+    /* Roads on steep Slopes or on Slopes with one corner raised */
+    if bits == RoadBits::ROAD_X {
+        Foundation::FOUNDATION_INCLINED_X
     } else {
-        FOUNDATION_INCLINED_Y
+        Foundation::FOUNDATION_INCLINED_Y
     }
+}
+/// Temporary raw adapter of [`get_rail_foundation`] for `rail_cmd.rs`, `water.rs`
+/// and `ground.rs` until their passes.
+pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
+    get_rail_foundation(Slope(s), TrackBits(b), check).0
+}
+/// Temporary raw adapter of [`get_road_foundation`] for `road_cmd.rs` until its pass.
+pub(crate) fn road_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
+    get_road_foundation(Slope(s), RoadBits(b), check).0
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_rail_foundation(
-    s: Slope,
-    b: TrackBits,
+    tileh: Slope,
+    bits: TrackBits,
     check: extern "C" fn(bool),
 ) -> Foundation {
-    Foundation(rail_foundation(s.0, b.0, |ok| check(ok)))
+    get_rail_foundation(tileh, bits, |ok| check(ok))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_foundation(
-    s: Slope,
-    b: RoadBits,
+    tileh: Slope,
+    bits: RoadBits,
     check: extern "C" fn(bool),
 ) -> Foundation {
-    Foundation(road_foundation(s.0, b.0, |ok| check(ok)))
+    get_road_foundation(tileh, bits, |ok| check(ok))
 }
 
 /// # Safety
@@ -618,360 +792,477 @@ pub extern "C" fn openttd_rust_road_foundation(
 pub unsafe extern "C" fn openttd_rust_movement_foundation(
     s: *const MovementServices,
     tile: u32,
-    slope: Slope,
+    tileh: Slope,
 ) -> Foundation {
-    Foundation(unsafe { &*s }.foundation(tile, slope.0))
+    unsafe { &*s }.with_context(|c| c.get_foundation(TileIndex(tile), tileh))
 }
 
-use crate::direction_func::{axis_to_diag_dir_raw, reverse_diag_dir_raw};
-use crate::direction_type::{
-    AXIS_X, DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR,
-};
-use crate::slope_func::{CORNER_E, CORNER_N, CORNER_S, CORNER_W};
-use crate::tile_type::{TILE_HEIGHT, TILE_SIZE, TILE_UNIT_MASK};
-use crate::track_func::{
-    axis_to_track_bits, combine_track_status, diag_dir_to_diag_track_bits,
-    diag_dir_to_diag_trackdir, is_reversing_road_trackdir, track_bits_to_trackdir_bits,
-};
-use crate::track_type::{
-    TRACK_BIT_ALL, TRACK_BIT_DEPOT, TRACK_BIT_HORZ, TRACK_BIT_LEFT, TRACK_BIT_LOWER,
-    TRACK_BIT_NONE, TRACK_BIT_RIGHT, TRACK_BIT_UPPER, TRACK_BIT_VERT, TRACK_BIT_WORMHOLE,
-    TRACK_BIT_X, TRACK_BIT_Y, TRACK_LOWER, TRACK_UPPER, TRACKDIR_BIT_LEFT_N, TRACKDIR_BIT_LEFT_S,
-    TRACKDIR_BIT_LOWER_E, TRACKDIR_BIT_LOWER_W, TRACKDIR_BIT_RIGHT_N, TRACKDIR_BIT_RIGHT_S,
-    TRACKDIR_BIT_UPPER_E, TRACKDIR_BIT_UPPER_W, TRACKDIR_BIT_X_NE, TRACKDIR_BIT_X_SW,
-    TRACKDIR_BIT_Y_NW, TRACKDIR_BIT_Y_SE,
-};
-use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
+/// `_road_trackbits`: `TrackBits` of each `RoadBits` combination.
+const ROAD_TRACKBITS: [TrackBits; 16] = [
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_LEFT,
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_Y,
+    TrackBits::TRACK_BIT_LOWER,
+    TrackBits(
+        TrackBits::TRACK_BIT_LEFT.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_Y.0,
+    ),
+    TrackBits::TRACK_BIT_NONE,
+    TrackBits::TRACK_BIT_UPPER,
+    TrackBits::TRACK_BIT_X,
+    TrackBits(
+        TrackBits::TRACK_BIT_LEFT.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_X.0,
+    ),
+    TrackBits::TRACK_BIT_RIGHT,
+    TrackBits(
+        TrackBits::TRACK_BIT_RIGHT.0 | TrackBits::TRACK_BIT_UPPER.0 | TrackBits::TRACK_BIT_Y.0,
+    ),
+    TrackBits(
+        TrackBits::TRACK_BIT_RIGHT.0 | TrackBits::TRACK_BIT_LOWER.0 | TrackBits::TRACK_BIT_X.0,
+    ),
+    TrackBits::TRACK_BIT_ALL,
+];
+/// `CombineTrackStatus(TrackBitsToTrackdirBits(bits), red_signals)`.
+#[inline]
+const fn track_bits_status(bits: TrackBits, red_signals: TrackdirBits) -> TrackStatus {
+    combine_track_status(track_bits_to_trackdir_bits(bits.0), red_signals.0)
+}
 impl Context<'_> {
-    fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
-        let map = self.world.dimensions;
-        if map.tile_x(TileIndex(tile)) == 0 {
-            w::hit(w::MOVE_WATER_EDGE);
-            bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
-        }
-        if map.tile_y(TileIndex(tile)) == 0 {
-            w::hit(w::MOVE_WATER_EDGE);
-            bits &= !(TRACK_BIT_Y | TRACK_BIT_LEFT | TRACK_BIT_UPPER);
-        }
-        bits
-    }
+    /// `_tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile,
+    /// mode, sub_mode, side)`.
     // Keep one policy body visible to constant propagation at literal Rust callers.
     // The native facade below still supplies dynamic transport/subtype/side values.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
-        let mut bits = TRACK_BIT_NONE;
-        let mut red = 0;
-        match self.world.kind(TileIndex(tile)) {
-            TileType::MP_RAILWAY => {
-                w::hit(w::MOVE_TRACK_RAIL);
-                if mode == TRANSPORT_WATER
-                    && self.world.is_plain_rail(tile)
-                    && self.world.rail_ground(tile) == RAIL_GROUND_HALF_TILE_WATER
-                    && is_slope_with_one_corner_raised_raw(self.world.tile_slope(TileIndex(tile)).0)
-                {
-                    w::hit(w::MOVE_HALF_WATER);
-                    bits = match self.world.tracks(tile) {
-                        TRACK_BIT_UPPER => TRACK_BIT_LOWER,
-                        TRACK_BIT_LOWER => TRACK_BIT_UPPER,
-                        TRACK_BIT_LEFT => TRACK_BIT_RIGHT,
-                        TRACK_BIT_RIGHT => TRACK_BIT_LEFT,
-                        _ => unreachable!("native half-tile track"),
-                    };
-                    return combine_track_status(track_bits_to_trackdir_bits(bits), 0);
+    pub(crate) fn get_tile_track_status(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        match self.world.kind(tile) {
+            TileType::MP_RAILWAY => self.get_tile_track_status_track(tile, mode, side),
+            TileType::MP_ROAD => self.get_tile_track_status_road(tile, mode, sub_mode, side),
+            TileType::MP_STATION => self.get_tile_track_status_station(tile, mode, sub_mode, side),
+            TileType::MP_WATER => self.get_tile_track_status_water(tile, mode),
+            TileType::MP_TUNNELBRIDGE => {
+                self.get_tile_track_status_tunnel_bridge(tile, mode, sub_mode, side)
+            }
+            // `GetTileTrackStatus_Clear`, `_Town`, `_Trees`, `_Industry`, `_Object`
+            // and `_Void`.
+            _ => 0,
+        }
+    }
+    /// `GetTileTrackStatus_Track`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn get_tile_track_status_track(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        w::hit(w::MOVE_TRACK_RAIL);
+        /* Case of half tile slope with water. */
+        if mode == TransportType::TRANSPORT_WATER
+            && self.world.is_plain_rail(tile.0)
+            && RailGroundType(self.world.rail_ground(tile.0)) == RailGroundType::HalfTileWater
+            && is_slope_with_one_corner_raised(self.world.tile_slope(tile))
+        {
+            w::hit(w::MOVE_HALF_WATER);
+            let tb = match TrackBits(self.world.tracks(tile.0)) {
+                TrackBits::TRACK_BIT_UPPER => TrackBits::TRACK_BIT_LOWER,
+                TrackBits::TRACK_BIT_LOWER => TrackBits::TRACK_BIT_UPPER,
+                TrackBits::TRACK_BIT_LEFT => TrackBits::TRACK_BIT_RIGHT,
+                TrackBits::TRACK_BIT_RIGHT => TrackBits::TRACK_BIT_LEFT,
+                _ => crate::services_assert::not_reached(),
+            };
+            return track_bits_status(tb, TrackdirBits::TRACKDIR_BIT_NONE);
+        }
+
+        if mode != TransportType::TRANSPORT_RAIL {
+            return 0;
+        }
+
+        let mut trackbits = TrackBits::TRACK_BIT_NONE;
+        let mut red_signals = TrackdirBits::TRACKDIR_BIT_NONE;
+
+        match RailTileType(self.world.rail_tile_type(tile.0)) {
+            RailTileType::Normal => trackbits = TrackBits(self.world.tracks(tile.0)),
+
+            RailTileType::Signals => {
+                trackbits = TrackBits(self.world.tracks(tile.0));
+                w::hit(w::MOVE_SIGNAL_DIRECTIONS);
+                let a = self.world.present_signals(tile.0);
+                let mut b = u32::from(self.world.signal_states(tile.0));
+
+                b &= u32::from(a);
+
+                /* When signals are not present (in neither direction),
+                 * we pretend them to be green. Otherwise, it depends on
+                 * the signal type. For signals that are only active from
+                 * one side, we set the missing signals explicitly to
+                 * `green'. Otherwise, they implicitly become `red'. */
+                let upper = crate::signal_func::signal_on_track(Track::TRACK_UPPER);
+                if !self.world.oneway_signal(tile.0, Track::TRACK_UPPER.0) || a & upper == 0 {
+                    b |= u32::from(!a & upper);
                 }
-                if mode != TRANSPORT_RAIL {
+                let lower = crate::signal_func::signal_on_track(Track::TRACK_LOWER);
+                if !self.world.oneway_signal(tile.0, Track::TRACK_LOWER.0) || a & lower == 0 {
+                    b |= u32::from(!a & lower);
+                }
+
+                if b & 0x8 == 0 {
+                    red_signals |= TrackdirBits::TRACKDIR_BIT_LEFT_N
+                        | TrackdirBits::TRACKDIR_BIT_X_NE
+                        | TrackdirBits::TRACKDIR_BIT_Y_SE
+                        | TrackdirBits::TRACKDIR_BIT_UPPER_E;
+                }
+                if b & 0x4 == 0 {
+                    red_signals |= TrackdirBits::TRACKDIR_BIT_LEFT_S
+                        | TrackdirBits::TRACKDIR_BIT_X_SW
+                        | TrackdirBits::TRACKDIR_BIT_Y_NW
+                        | TrackdirBits::TRACKDIR_BIT_UPPER_W;
+                }
+                if b & 0x2 == 0 {
+                    red_signals |=
+                        TrackdirBits::TRACKDIR_BIT_RIGHT_N | TrackdirBits::TRACKDIR_BIT_LOWER_E;
+                }
+                if b & 0x1 == 0 {
+                    red_signals |=
+                        TrackdirBits::TRACKDIR_BIT_RIGHT_S | TrackdirBits::TRACKDIR_BIT_LOWER_W;
+                }
+            }
+
+            RailTileType::Depot => {
+                let dir = DiagDirection(self.world.rail_depot_dir(tile.0));
+
+                if side == DiagDirection::INVALID_DIAGDIR || side == dir {
+                    trackbits = TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check()));
+                }
+            }
+
+            _ => crate::services_assert::not_reached(),
+        }
+
+        track_bits_status(trackbits, red_signals)
+    }
+    /// `GetTileTrackStatus_Road`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn get_tile_track_status_road(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        w::hit(w::MOVE_TRACK_ROAD);
+        let mut trackdirbits = TrackdirBits::TRACKDIR_BIT_NONE;
+        let mut red_signals = TrackdirBits::TRACKDIR_BIT_NONE; // crossing barred
+        match mode {
+            TransportType::TRANSPORT_RAIL => {
+                if self.world.level_crossing(tile.0) {
+                    trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
+                        self.world.crossing_rail_bits(tile.0),
+                    ));
+                }
+            }
+
+            TransportType::TRANSPORT_ROAD => {
+                let rtt = RoadTramType(sub_mode != 0);
+                if !self.has_tile_road_type(tile, rtt) {
                     return 0;
                 }
-                match self.world.rail_tile_type(tile) {
-                    RAIL_TILE_NORMAL => bits = self.world.tracks(tile),
-                    RAIL_TILE_SIGNALS => {
-                        bits = self.world.tracks(tile);
-                        w::hit(w::MOVE_SIGNAL_DIRECTIONS);
-                        let a = self.world.present_signals(tile);
-                        let mut b = u32::from(self.world.signal_states(tile) & a);
-                        if !self.world.oneway_signal(tile, TRACK_UPPER)
-                            || a & crate::signal_func::signal_on_track(TRACK_UPPER) == 0
+                match self.world.road_tile_type(tile.0) {
+                    RoadTileType::Normal => {
+                        const DRD_TO_MULTIPLIER: [u16; 4] = [0x101, 0x100, 0x1, 0x0];
+                        let bits = RoadBits(self.world.road_bits(tile.0, rtt.0));
+
+                        /* no roadbit at this side of tile, return 0 */
+                        if side != DiagDirection::INVALID_DIAGDIR
+                            && crate::road_func::diag_dir_to_road_bits(side, self.check()) & bits
+                                == RoadBits::ROAD_NONE
                         {
-                            b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_UPPER));
-                        }
-                        if !self.world.oneway_signal(tile, TRACK_LOWER)
-                            || a & crate::signal_func::signal_on_track(TRACK_LOWER) == 0
-                        {
-                            b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_LOWER));
-                        }
-                        if b & 8 == 0 {
-                            red |= TRACKDIR_BIT_LEFT_N
-                                | TRACKDIR_BIT_X_NE
-                                | TRACKDIR_BIT_Y_SE
-                                | TRACKDIR_BIT_UPPER_E;
-                        }
-                        if b & 4 == 0 {
-                            red |= TRACKDIR_BIT_LEFT_S
-                                | TRACKDIR_BIT_X_SW
-                                | TRACKDIR_BIT_Y_NW
-                                | TRACKDIR_BIT_UPPER_W;
-                        }
-                        if b & 2 == 0 {
-                            red |= TRACKDIR_BIT_RIGHT_N | TRACKDIR_BIT_LOWER_E;
-                        }
-                        if b & 1 == 0 {
-                            red |= TRACKDIR_BIT_RIGHT_S | TRACKDIR_BIT_LOWER_W;
-                        }
-                    }
-                    RAIL_TILE_DEPOT => {
-                        let dir = self.world.rail_depot_dir(tile);
-                        if side == INVALID_DIAGDIR || side == dir {
-                            bits = diag_dir_to_diag_track_bits(dir, |ok| (self.native_assert)(ok));
-                        }
-                    }
-                    _ => unreachable!("native rail tile type"),
-                }
-            }
-            TileType::MP_ROAD => {
-                w::hit(w::MOVE_TRACK_ROAD);
-                match mode {
-                    TRANSPORT_RAIL => {
-                        if self.world.level_crossing(tile) {
-                            bits = self.world.crossing_rail_bits(tile);
-                        }
-                    }
-                    TRANSPORT_ROAD => {
-                        let tram = sub != 0;
-                        if !self.has_tile_road_type(tile, crate::services::RoadTramType(tram)) {
                             return 0;
                         }
-                        match self.world.road_tile_type(tile).0 {
-                            ROAD_TILE_NORMAL => {
-                                let road = self.world.road_bits(tile, tram);
-                                if side != INVALID_DIAGDIR
-                                    && crate::road_func::diag_dir_to_road_bits_raw(side, |ok| {
-                                        (self.native_assert)(ok);
-                                    }) & road
-                                        == 0
-                                {
-                                    return 0;
-                                }
-                                let (disallowed, road_works) = if tram {
-                                    (0, self.world.has_road_works(tile))
-                                } else {
-                                    (
-                                        self.world.disallowed_road_directions(tile),
-                                        self.world.has_road_works(tile),
-                                    )
-                                };
-                                let multiplier = [0x101, 0x100, 1, 0][usize::from(disallowed)];
-                                const ROAD_TRACKS: [u8; 16] = [
-                                    TRACK_BIT_NONE,
-                                    TRACK_BIT_NONE,
-                                    TRACK_BIT_NONE,
-                                    TRACK_BIT_LEFT,
-                                    TRACK_BIT_NONE,
-                                    TRACK_BIT_Y,
-                                    TRACK_BIT_LOWER,
-                                    TRACK_BIT_LEFT | TRACK_BIT_LOWER | TRACK_BIT_Y,
-                                    TRACK_BIT_NONE,
-                                    TRACK_BIT_UPPER,
-                                    TRACK_BIT_X,
-                                    TRACK_BIT_LEFT | TRACK_BIT_UPPER | TRACK_BIT_X,
-                                    TRACK_BIT_RIGHT,
-                                    TRACK_BIT_RIGHT | TRACK_BIT_UPPER | TRACK_BIT_Y,
-                                    TRACK_BIT_RIGHT | TRACK_BIT_LOWER | TRACK_BIT_X,
-                                    TRACK_BIT_ALL,
-                                ];
-                                let dirs = if road_works {
-                                    w::hit(w::MOVE_ROAD_WORKS);
-                                    0
-                                } else {
-                                    u16::from(ROAD_TRACKS[usize::from(road)]) * multiplier
-                                };
-                                return combine_track_status(dirs, 0);
-                            }
-                            ROAD_TILE_CROSSING => {
-                                let axis = self.world.crossing_road_axis(tile);
-                                if side != INVALID_DIAGDIR
-                                    && axis
-                                        != diag_dir_to_axis_raw(side, |ok| (self.native_assert)(ok))
-                                {
-                                    return 0;
-                                }
-                                bits = axis_to_track_bits(axis, |ok| (self.native_assert)(ok));
-                                if self.world.crossing_barred(tile) {
-                                    w::hit(w::MOVE_CROSSING_BARRED);
-                                    red = track_bits_to_trackdir_bits(bits);
-                                    // Already-owned train query executes directly in Rust.
-                                    if unsafe {
-                                        crate::train::openttd_rust_train_train_on_tile(
-                                            tile,
-                                            self.train(),
-                                            self.shared(),
-                                        )
-                                    } == 0
-                                    {
-                                        for (dir, mask) in [
-                                            (
-                                                axis_to_diag_dir_raw(axis, |ok| {
-                                                    (self.native_assert)(ok);
-                                                }),
-                                                TRACKDIR_BIT_X_SW | TRACKDIR_BIT_Y_SE,
-                                            ),
-                                            (
-                                                reverse_diag_dir_raw(
-                                                    axis_to_diag_dir_raw(axis, |ok| {
-                                                        (self.native_assert)(ok);
-                                                    }),
-                                                    |ok| (self.native_assert)(ok),
-                                                ),
-                                                TRACKDIR_BIT_X_NE | TRACKDIR_BIT_Y_NW,
-                                            ),
-                                        ] {
-                                            let t = self
-                                                .world
-                                                .dimensions
-                                                .tile_add_by_diag_dir(
-                                                    TileIndex(tile),
-                                                    DiagDirection(dir),
-                                                    crate::map_func::native_check,
-                                                )
-                                                .0;
-                                            if self.world.level_crossing_tile(t)
-                                                && self.world.crossing_barred(t)
-                                            {
-                                                w::hit(w::MOVE_CROSSING_ESCAPE);
-                                                red &= mask;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                let dir = self.world.road_depot_dir(tile);
-                                if side == INVALID_DIAGDIR || side == dir {
-                                    bits = diag_dir_to_diag_track_bits(dir, |ok| {
-                                        (self.native_assert)(ok);
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            TileType::MP_STATION => {
-                w::hit(w::MOVE_TRACK_STATION);
-                match mode {
-                    TRANSPORT_RAIL => {
-                        if self.world.station_rail_raw(tile) && !self.world.station_blocked(tile) {
-                            bits = crate::track_func::track_to_track_bits(
-                                self.world.station_track(tile),
-                                |ok| (self.native_assert)(ok),
+
+                        let drd = if rtt == RoadTramType::RTT_TRAM {
+                            DisallowedRoadDirections::DRD_NONE
+                        } else {
+                            DisallowedRoadDirections(self.world.disallowed_road_directions(tile.0))
+                        };
+                        let multiplier = DRD_TO_MULTIPLIER[usize::from(drd.0)];
+                        if self.world.has_road_works(tile.0) {
+                            w::hit(w::MOVE_ROAD_WORKS);
+                        } else {
+                            trackdirbits = TrackdirBits(
+                                u16::from(ROAD_TRACKBITS[usize::from(bits.0)].0) * multiplier,
                             );
                         }
                     }
-                    TRANSPORT_WATER => {
-                        if self.world.buoy(tile) {
-                            bits = self.water_edges(tile, TRACK_BIT_ALL);
+
+                    RoadTileType::Crossing => {
+                        let axis = Axis(self.world.crossing_road_axis(tile.0));
+
+                        if side != DiagDirection::INVALID_DIAGDIR
+                            && axis != diag_dir_to_axis(side, self.check())
+                        {
+                            return 0;
                         }
-                    }
-                    TRANSPORT_ROAD => {
-                        if self.world.any_road_stop_tile(tile) {
-                            if !self
-                                .has_tile_road_type(tile, crate::services::RoadTramType(sub != 0))
-                            {
-                                return 0;
+
+                        trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
+                            axis_to_track_bits(axis.0, self.check()),
+                        ));
+                        if self.world.crossing_barred(tile.0) {
+                            w::hit(w::MOVE_CROSSING_BARRED);
+                            red_signals = trackdirbits;
+                            if crate::train::train_on_crossing(self.train(), self.shared(), tile) {
+                                return combine_trackdir_status(trackdirbits, red_signals);
                             }
-                            if self.world.bay_stop(tile) {
-                                let dir = self.world.bay_dir(tile);
-                                if side == INVALID_DIAGDIR || side == dir {
-                                    bits = diag_dir_to_diag_track_bits(dir, |ok| {
-                                        (self.native_assert)(ok);
-                                    });
-                                }
-                            } else {
-                                let axis = self.world.drive_through_axis(tile);
-                                if side == INVALID_DIAGDIR
-                                    || axis
-                                        == diag_dir_to_axis_raw(side, |ok| (self.native_assert)(ok))
-                                {
-                                    bits = axis_to_track_bits(axis, |ok| (self.native_assert)(ok));
-                                }
-                            }
+
+                            let mask_red_signal_bits_if_crossing_barred =
+                                |t: TileIndex,
+                                 mask: TrackdirBits,
+                                 red_signals: &mut TrackdirBits| {
+                                    if self.world.level_crossing_tile(t.0)
+                                        && self.world.crossing_barred(t.0)
+                                    {
+                                        w::hit(w::MOVE_CROSSING_ESCAPE);
+                                        *red_signals &= mask;
+                                    }
+                                };
+                            let map = self.world.dimensions;
+                            let south = axis_to_diag_dir(axis, self.check());
+                            /* Check for blocked adjacent crossing to south, keep only southbound red signal trackdirs, allow northbound traffic */
+                            mask_red_signal_bits_if_crossing_barred(
+                                map.tile_add_by_diag_dir(
+                                    tile,
+                                    south,
+                                    crate::map_func::native_check,
+                                ),
+                                TrackdirBits::TRACKDIR_BIT_X_SW | TrackdirBits::TRACKDIR_BIT_Y_SE,
+                                &mut red_signals,
+                            );
+                            /* Check for blocked adjacent crossing to north, keep only northbound red signal trackdirs, allow southbound traffic */
+                            mask_red_signal_bits_if_crossing_barred(
+                                map.tile_add_by_diag_dir(
+                                    tile,
+                                    reverse_diag_dir(
+                                        axis_to_diag_dir(axis, self.check()),
+                                        self.check(),
+                                    ),
+                                    crate::map_func::native_check,
+                                ),
+                                TrackdirBits::TRACKDIR_BIT_X_NE | TrackdirBits::TRACKDIR_BIT_Y_NW,
+                                &mut red_signals,
+                            );
                         }
                     }
-                    _ => {}
-                }
-            }
-            TileType::MP_WATER => {
-                w::hit(w::MOVE_TRACK_WATER);
-                if mode != TRANSPORT_WATER {
-                    return 0;
-                }
-                bits = match self.world.water_tile_type(tile) {
-                    0 => {
-                        if self.world.tile_flat(TileIndex(tile)) {
-                            TRACK_BIT_ALL
-                        } else {
-                            TRACK_BIT_NONE
+
+                    _ => {
+                        // RoadTileType::Depot
+                        let dir = DiagDirection(self.world.road_depot_dir(tile.0));
+
+                        if side == DiagDirection::INVALID_DIAGDIR || side == dir {
+                            trackdirbits = TrackdirBits(track_bits_to_trackdir_bits(
+                                diag_dir_to_diag_track_bits(dir.0, self.check()),
+                            ));
                         }
                     }
-                    1 => {
-                        w::hit(w::MOVE_COAST);
-                        [
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_RIGHT,
-                            TRACK_BIT_UPPER,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_LEFT,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_LOWER,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                            TRACK_BIT_NONE,
-                        ][usize::from(self.world.tile_slope(TileIndex(tile)).0 & 15)]
-                    }
-                    2 => {
-                        w::hit(w::MOVE_LOCK);
-                        diag_dir_to_diag_track_bits(self.world.lock_direction(tile), |ok| {
-                            (self.native_assert)(ok);
-                        })
-                    }
-                    3 => {
-                        w::hit(w::MOVE_SHIP_DEPOT);
-                        axis_to_track_bits(self.world.ship_depot_axis(tile), |ok| {
-                            (self.native_assert)(ok);
-                        })
-                    }
-                    _ => return 0,
-                };
-                bits = self.water_edges(tile, bits);
-            }
-            TileType::MP_TUNNELBRIDGE => {
-                w::hit(w::MOVE_TRACK_WORMHOLE);
-                let transport = self.world.tunnel_bridge_transport(tile);
-                if transport != mode
-                    || (transport == TRANSPORT_ROAD
-                        && !self.has_tile_road_type(tile, crate::services::RoadTramType(sub != 0)))
-                {
-                    return 0;
                 }
-                let dir = self.world.tunnel_bridge_dir(tile);
-                if side != INVALID_DIAGDIR
-                    && side != reverse_diag_dir_raw(dir, |ok| (self.native_assert)(ok))
-                {
-                    return 0;
-                }
-                bits = diag_dir_to_diag_track_bits(dir, |ok| (self.native_assert)(ok));
             }
+
             _ => {}
         }
-        combine_track_status(track_bits_to_trackdir_bits(bits), red)
+        combine_trackdir_status(trackdirbits, red_signals)
     }
+    /// `GetTileTrackStatus_Station`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn get_tile_track_status_station(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        w::hit(w::MOVE_TRACK_STATION);
+        let mut trackbits = TrackBits::TRACK_BIT_NONE;
+
+        match mode {
+            TransportType::TRANSPORT_RAIL => {
+                if self.world.has_station_rail(tile) && !self.world.is_station_tile_blocked(tile) {
+                    trackbits = TrackBits(crate::track_func::track_to_track_bits(
+                        self.world.get_rail_station_track(tile).0,
+                        self.check(),
+                    ));
+                }
+            }
+
+            TransportType::TRANSPORT_WATER => {
+                /* buoy is coded as a station, it is always on open water */
+                if self.world.is_buoy(tile) {
+                    trackbits = TrackBits::TRACK_BIT_ALL;
+                    let map = self.world.dimensions;
+                    /* remove tracks that connect NE map edge */
+                    if map.tile_x(tile) == 0 {
+                        w::hit(w::MOVE_WATER_EDGE);
+                        trackbits &= !(TrackBits::TRACK_BIT_X
+                            | TrackBits::TRACK_BIT_UPPER
+                            | TrackBits::TRACK_BIT_RIGHT);
+                    }
+                    /* remove tracks that connect NW map edge */
+                    if map.tile_y(tile) == 0 {
+                        w::hit(w::MOVE_WATER_EDGE);
+                        trackbits &= !(TrackBits::TRACK_BIT_Y
+                            | TrackBits::TRACK_BIT_LEFT
+                            | TrackBits::TRACK_BIT_UPPER);
+                    }
+                }
+            }
+
+            TransportType::TRANSPORT_ROAD => {
+                if self
+                    .world
+                    .asserted(|m| crate::station_map::is_any_road_stop(m, tile))
+                {
+                    let rtt = RoadTramType(sub_mode != 0);
+                    if !self.has_tile_road_type(tile, rtt) {
+                        return 0;
+                    }
+
+                    if self.world.is_bay_road_stop_tile(tile) {
+                        let dir = self.world.get_bay_road_stop_dir(tile);
+                        if side == DiagDirection::INVALID_DIAGDIR || dir == side {
+                            trackbits = TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check()));
+                        }
+                    } else {
+                        let axis = self.world.get_drive_through_stop_axis(tile);
+                        if side == DiagDirection::INVALID_DIAGDIR
+                            || axis == diag_dir_to_axis(side, self.check())
+                        {
+                            trackbits = TrackBits(axis_to_track_bits(axis.0, self.check()));
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        track_bits_status(trackbits, TrackdirBits::TRACKDIR_BIT_NONE)
+    }
+    /// `GetTileTrackStatus_Water`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn get_tile_track_status_water(&self, tile: TileIndex, mode: TransportType) -> TrackStatus {
+        const COAST_TRACKS: [TrackBits; 16] = [
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_RIGHT,
+            TrackBits::TRACK_BIT_UPPER,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_LEFT,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_LOWER,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+            TrackBits::TRACK_BIT_NONE,
+        ];
+
+        w::hit(w::MOVE_TRACK_WATER);
+        if mode != TransportType::TRANSPORT_WATER {
+            return 0;
+        }
+
+        let mut ts = match WaterTileType(self.world.water_tile_type(tile.0)) {
+            WaterTileType::Clear => {
+                if self.world.tile_flat(tile) {
+                    TrackBits::TRACK_BIT_ALL
+                } else {
+                    TrackBits::TRACK_BIT_NONE
+                }
+            }
+            WaterTileType::Coast => {
+                w::hit(w::MOVE_COAST);
+                COAST_TRACKS[usize::from(self.world.tile_slope(tile).0 & 0xF)]
+            }
+            WaterTileType::Lock => {
+                w::hit(w::MOVE_LOCK);
+                TrackBits(diag_dir_to_diag_track_bits(
+                    self.world.lock_direction(tile.0),
+                    self.check(),
+                ))
+            }
+            WaterTileType::Depot => {
+                w::hit(w::MOVE_SHIP_DEPOT);
+                TrackBits(axis_to_track_bits(
+                    self.world.ship_depot_axis(tile.0),
+                    self.check(),
+                ))
+            }
+            _ => return 0,
+        };
+        let map = self.world.dimensions;
+        if map.tile_x(tile) == 0 {
+            w::hit(w::MOVE_WATER_EDGE);
+            /* NE border: remove tracks that connects NE tile edge */
+            ts &=
+                !(TrackBits::TRACK_BIT_X | TrackBits::TRACK_BIT_UPPER | TrackBits::TRACK_BIT_RIGHT);
+        }
+        if map.tile_y(tile) == 0 {
+            w::hit(w::MOVE_WATER_EDGE);
+            /* NW border: remove tracks that connects NW tile edge */
+            ts &=
+                !(TrackBits::TRACK_BIT_Y | TrackBits::TRACK_BIT_LEFT | TrackBits::TRACK_BIT_UPPER);
+        }
+        track_bits_status(ts, TrackdirBits::TRACKDIR_BIT_NONE)
+    }
+    /// `GetTileTrackStatus_TunnelBridge`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn get_tile_track_status_tunnel_bridge(
+        &self,
+        tile: TileIndex,
+        mode: TransportType,
+        sub_mode: u32,
+        side: DiagDirection,
+    ) -> TrackStatus {
+        w::hit(w::MOVE_TRACK_WORMHOLE);
+        let transport_type = TransportType(self.world.tunnel_bridge_transport(tile.0));
+        if transport_type != mode
+            || (transport_type == TransportType::TRANSPORT_ROAD
+                && !self.has_tile_road_type(tile, RoadTramType(sub_mode != 0)))
+        {
+            return 0;
+        }
+
+        let dir = DiagDirection(self.world.tunnel_bridge_dir(tile.0));
+        if side != DiagDirection::INVALID_DIAGDIR && side != reverse_diag_dir(dir, self.check()) {
+            return 0;
+        }
+        track_bits_status(
+            TrackBits(diag_dir_to_diag_track_bits(dir.0, self.check())),
+            TrackdirBits::TRACKDIR_BIT_NONE,
+        )
+    }
+}
+/// `CombineTrackStatus`.
+#[inline]
+const fn combine_trackdir_status(
+    trackdirbits: TrackdirBits,
+    red_signals: TrackdirBits,
+) -> TrackStatus {
+    combine_track_status(trackdirbits.0, red_signals.0)
 }
 /// # Safety
 /// Native tables and map stay live and serialized for the call. No map reference
@@ -980,420 +1271,538 @@ impl Context<'_> {
 pub unsafe extern "C" fn openttd_rust_movement_track_status(
     s: *const MovementServices,
     tile: u32,
-    mode: crate::services::TransportType,
-    sub: u32,
-    side: crate::services::DiagDirection,
+    mode: TransportType,
+    sub_mode: u32,
+    side: DiagDirection,
 ) -> u32 {
-    unsafe { &*s }.track_status(tile, mode.0, sub, side.0)
+    unsafe { &*s }.get_tile_track_status(TileIndex(tile), mode, sub_mode, side)
 }
 
-use crate::direction_func::{diag_dir_to_dir_raw, dir_to_diag_dir_raw, reverse_dir_raw};
-use crate::roadveh::{RVC_DEPOT_STOP_FRAME, RVSB_IN_DEPOT, RVSB_IN_ROAD_STOP, RVSB_WORMHOLE};
-use crate::vehicle::VehicleRef;
-const FRACT_BEHIND: [u8; 4] = [0x8f, 0x08, 0x80, 0xf8];
-const FRACT_ENTER: [u8; 4] = [0x8a, 0x48, 0x84, 0xa8];
-const LEAVE_OFFSET: [i32; 8] = [-1, 0, 1, 0, 0, 1, 0, -1];
-const ROAD_ENTER_DEPOT: [u8; 4] = [
-    crate::track_type::TRACKDIR_X_SW,
-    crate::track_type::TRACKDIR_Y_NW,
-    crate::track_type::TRACKDIR_X_NE,
-    crate::track_type::TRACKDIR_Y_SE,
+/// `_fractcoords_behind`.
+const FRACTCOORDS_BEHIND: [u8; 4] = [0x8F, 0x8, 0x80, 0xF8];
+/// `_fractcoords_enter`.
+const FRACTCOORDS_ENTER: [u8; 4] = [0x8A, 0x48, 0x84, 0xA8];
+/// `_deltacoord_leaveoffset`.
+const DELTACOORD_LEAVEOFFSET: [i8; 8] = [-1, 0, 1, 0 /* x */, 0, 1, 0, -1 /* y */];
+/// `_roadveh_enter_depot_dir`: given the direction the road depot is pointing,
+/// this is the direction the vehicle should be travelling in in order to enter
+/// the depot.
+const ROADVEH_ENTER_DEPOT_DIR: [u8; 4] = [
+    crate::track_type::Trackdir::TRACKDIR_X_SW.0,
+    crate::track_type::Trackdir::TRACKDIR_Y_NW.0,
+    crate::track_type::Trackdir::TRACKDIR_X_NE.0,
+    crate::track_type::Trackdir::TRACKDIR_Y_SE.0,
 ];
-use crate::tunnelbridge::{TUNNEL_SOUND_FRAME, TUNNEL_VISIBILITY};
 impl MovementServices {
-    fn hidden(v: VehicleRef, hidden: bool) {
-        let status = (v).status();
-        (v).write_status(if hidden {
-            status | crate::vehicle_base::VS_HIDDEN
+    /// `v->vehstatus.Set(VehState::Hidden)` or `.Reset(VehState::Hidden)`.
+    fn set_hidden(v: VehicleRef, hidden: bool) {
+        let mask = VehStates::from_element(VehState::Hidden).0;
+        let status = v.status();
+        v.write_status(if hidden {
+            status | mask
         } else {
-            status & !crate::vehicle_base::VS_HIDDEN
+            status & !mask
         });
     }
+    /// `VehicleEnter_Track`: tile callback routine when vehicle enters tile.
     // All owner accesses are scalar loads/stores and end before calling native.
     // Depot entry queues autoreplace later in the tick; it preserves this shell
     // and every chain shell used by the original subsequent tile/window stores.
-    unsafe fn enter_rail(
+    unsafe fn vehicle_enter_track(
         &self,
         h: &MovementVehicle,
-        v: VehicleRef,
-        tile: u32,
+        u: VehicleRef,
+        tile: TileIndex,
         x: i32,
         y: i32,
-    ) -> u8 {
+    ) -> VehicleEnterTileStates {
         let world = World::new(self.shared());
-        if h.kind.0 != VEH_TRAIN || !world.rail_depot(tile) {
-            return 0;
+        /* This routine applies only to trains in depot tiles. */
+        if h.kind != VehicleType::VEH_TRAIN || !world.rail_depot(tile.0) {
+            return VehicleEnterTileStates(0);
         }
-        let dir = world.rail_depot_dir(tile);
-        let fract = ((x & 15) + ((y & 15) << 4)) as u8;
-        if FRACT_BEHIND[usize::from(dir)] == fract {
-            return CANNOT_ENTER;
+
+        /* Depot direction. */
+        let dir = DiagDirection(world.rail_depot_dir(tile.0));
+
+        let fract_coord = ((x & 0xF) + ((y & 0xF) << 4)) as u8;
+
+        /* Make sure a train is not entering the tile from behind. */
+        if FRACTCOORDS_BEHIND[usize::from(dir.0)] == fract_coord {
+            return VehicleEnterTileStates::from_element(VehicleEnterTileState::CannotEnter);
         }
-        let direction = (v).direction();
-        if direction == diag_dir_to_dir_raw(dir, |ok| (self.native_assert)(ok)) {
-            let length = crate::train::next_offset(h.train);
-            let enter = FRACT_ENTER[usize::from(dir)];
-            let point = (i32::from(enter & 15) + (length + 1) * LEAVE_OFFSET[usize::from(dir)])
-                .wrapping_add(
-                    (i32::from(enter >> 4) + (length + 1) * LEAVE_OFFSET[usize::from(dir) + 4])
-                        .wrapping_shl(4),
-                ) as u8;
-            if point == fract {
-                w::hit(w::MOVE_TRAIN_DEPOT_LEAVE_0 + usize::from(dir));
-                let next = (v).next();
-                if let Some(next) = next {
-                    Self::hidden(next, false);
-                    let n = (self.resolve)(next);
-                    n.train
-                        .set_track(u64::from(diag_dir_to_diag_track_bits(dir, |ok| {
-                            (self.native_assert)(ok);
-                        })));
+
+        let v = u;
+        let direction = Direction(v.direction());
+
+        /* Leaving depot? */
+        if direction == diag_dir_to_dir(dir, self.check()) {
+            /* Calculate the point where the following wagon should be activated. */
+            let length = crate::train::calc_next_vehicle_offset(h.train);
+
+            let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];
+            let fract_coord_leave = (i32::from(enter & 0x0F) // x
+                + (length + 1) * i32::from(DELTACOORD_LEAVEOFFSET[usize::from(dir.0)]))
+            .wrapping_add(
+                (i32::from(enter >> 4) // y
+                    + (length + 1) * i32::from(DELTACOORD_LEAVEOFFSET[usize::from(dir.0) + 4]))
+                .wrapping_shl(4),
+            ) as u8;
+
+            if fract_coord_leave == fract_coord {
+                /* Leave the depot. */
+                w::hit(w::MOVE_TRAIN_DEPOT_LEAVE_0 + usize::from(dir.0));
+                if let Some(next) = v.next() {
+                    Self::set_hidden(next, false);
+                    let track = if diag_dir_to_axis(dir, self.check()) == Axis::AXIS_X {
+                        TrackBits::TRACK_BIT_X
+                    } else {
+                        TrackBits::TRACK_BIT_Y
+                    };
+                    (self.resolve)(next).train.set_track(u64::from(track.0));
                 }
             }
-        } else if FRACT_ENTER[usize::from(dir)] == fract {
-            w::hit(w::MOVE_TRAIN_DEPOT_ENTER_0 + usize::from(dir));
-            (self.native_assert)(
-                diag_dir_to_dir_raw(
-                    reverse_diag_dir_raw(dir, |ok| (self.native_assert)(ok)),
-                    |ok| {
-                        (self.native_assert)(ok);
-                    },
-                ) == direction,
+        } else if FRACTCOORDS_ENTER[usize::from(dir.0)] == fract_coord {
+            /* Entering depot. */
+            w::hit(w::MOVE_TRAIN_DEPOT_ENTER_0 + usize::from(dir.0));
+            self.native_assert_call(
+                diag_dir_to_dir(reverse_diag_dir(dir, self.check()), self.check()) == direction,
             );
-            h.train.set_track(u64::from(TRACK_BIT_DEPOT));
-            Self::hidden(v, true);
-            (v).write_direction(reverse_dir_raw(direction, |ok| (self.native_assert)(ok)));
-            if (v).next().is_none() {
+            h.train.set_track(u64::from(TrackBits::TRACK_BIT_DEPOT.0));
+            Self::set_hidden(v, true);
+            v.write_direction(reverse_dir(direction, self.check()).0);
+            if v.next().is_none() {
                 self.vehicle().enter_depot(v.first());
             }
-            (v).write_tile(tile);
+            v.write_tile(tile.0);
+
             (self.depot_invalidate)(v);
-            return ENTERED_WORMHOLE;
+            return VehicleEnterTileStates::from_element(VehicleEnterTileState::EnteredWormhole);
         }
-        0
+
+        VehicleEnterTileStates(0)
     }
-    unsafe fn enter_road(&self, h: &MovementVehicle, v: VehicleRef, tile: u32) -> u8 {
-        let world = World::new(self.shared());
-        if world.road_tile_type(tile).0 != ROAD_TILE_DEPOT || h.kind.0 != VEH_ROAD {
-            return 0;
-        }
-        if unsafe { crate::road::get_frame(h.road) } == RVC_DEPOT_STOP_FRAME {
-            let dir = world.road_depot_dir(tile);
-            if ROAD_ENTER_DEPOT[usize::from(dir)] == unsafe { crate::road::get_state(h.road) } {
-                unsafe {
-                    w::hit(w::MOVE_ROAD_DEPOT_ENTER_0 + usize::from(dir));
-                    crate::road::set_state(h.road, RVSB_IN_DEPOT);
-                }
-                Self::hidden(v, true);
-                (v).write_direction(reverse_dir_raw((v).direction(), |ok| {
-                    (self.native_assert)(ok);
-                }));
-                if (v).next().is_none() {
-                    self.vehicle().enter_depot(v.first());
-                }
-                (v).write_tile(tile);
-                (self.depot_invalidate)(v);
-                return ENTERED_WORMHOLE;
-            }
-        }
-        0
-    }
-    unsafe fn enter_station(
+    /// `VehicleEnter_Road`.
+    unsafe fn vehicle_enter_road(
         &self,
         h: &MovementVehicle,
         v: VehicleRef,
-        tile: u32,
+        tile: TileIndex,
+    ) -> VehicleEnterTileStates {
+        let world = World::new(self.shared());
+        if world.road_tile_type(tile.0) == RoadTileType::Depot {
+            if h.kind != VehicleType::VEH_ROAD {
+                return VehicleEnterTileStates(0);
+            }
+
+            let rv = h.road;
+            if unsafe { crate::road::get_frame(rv) } == RVC_DEPOT_STOP_FRAME {
+                let dir = world.road_depot_dir(tile.0);
+                if ROADVEH_ENTER_DEPOT_DIR[usize::from(dir)]
+                    == unsafe { crate::road::get_state(rv) }
+                {
+                    w::hit(w::MOVE_ROAD_DEPOT_ENTER_0 + usize::from(dir));
+                    unsafe {
+                        crate::road::set_state(rv, RVSB_IN_DEPOT);
+                    }
+                    Self::set_hidden(v, true);
+                    v.write_direction(reverse_dir(Direction(v.direction()), self.check()).0);
+                    if v.next().is_none() {
+                        self.vehicle().enter_depot(v.first());
+                    }
+                    v.write_tile(tile.0);
+
+                    (self.depot_invalidate)(v);
+                    return VehicleEnterTileStates::from_element(
+                        VehicleEnterTileState::EnteredWormhole,
+                    );
+                }
+            }
+        }
+        VehicleEnterTileStates(0)
+    }
+    /// `VehicleEnter_Station`.
+    unsafe fn vehicle_enter_station(
+        &self,
+        h: &MovementVehicle,
+        v: VehicleRef,
+        tile: TileIndex,
         mut x: i32,
         mut y: i32,
-    ) -> u8 {
-        if h.kind.0 == VEH_TRAIN {
-            let station = (self.shared().station_index)(tile);
-            if !should_stop(self.shared(), v, station) {
-                return 0;
+    ) -> VehicleEnterTileStates {
+        if h.kind == VehicleType::VEH_TRAIN {
+            let station_id = StationID((self.shared().station_index)(tile.0));
+            if !should_stop_at_station(self.shared(), v, station_id) {
+                return VehicleEnterTileStates(0);
             }
-            if !World::new(self.shared()).is_rail_station_raw(tile)
-                || !crate::vehicle_base::is_front_engine(
-                    crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                    v.subtype(),
-                )
-            {
-                return 0;
+            if !World::new(self.shared()).is_rail_station(tile) || !v.is_front_engine() {
+                return VehicleEnterTileStates(0);
             }
-            let (mut stop, ahead, length) =
-                crate::train::stop_location(self.train(), self.shared(), h.train, station, tile);
+
+            let (mut stop, station_ahead, station_length) = crate::train::get_train_stop_location(
+                self.train(),
+                self.shared(),
+                h.train,
+                station_id,
+                tile,
+            );
+
+            /* Stop whenever that amount of station ahead + the distance from the
+             * begin of the platform to the stop location is longer than the length
+             * of the platform. Station ahead 'includes' the current tile where the
+             * vehicle is on, so we need to subtract that. */
             if stop
-                .wrapping_add(ahead)
+                .wrapping_add(station_ahead)
                 .wrapping_sub(TILE_SIZE.cast_signed())
-                >= length
+                >= station_length
             {
-                return 0;
+                return VehicleEnterTileStates(0);
             }
-            let dir = dir_to_diag_dir_raw((v).direction(), |ok| (self.native_assert)(ok));
-            x &= 15;
-            y &= 15;
-            if diag_dir_to_axis_raw(dir, |ok| (self.native_assert)(ok)) != AXIS_X {
+
+            let dir = dir_to_diag_dir(Direction(v.direction()), self.check());
+
+            x &= 0xF;
+            y &= 0xF;
+
+            if diag_dir_to_axis(dir, self.check()) != Axis::AXIS_X {
                 std::mem::swap(&mut x, &mut y);
             }
             if y == TILE_SIZE.cast_signed() / 2 {
-                if dir != DIAGDIR_SE && dir != DIAGDIR_SW {
+                if dir != DiagDirection::DIAGDIR_SE && dir != DiagDirection::DIAGDIR_SW {
                     x = TILE_SIZE.cast_signed() - 1 - x;
                 }
                 stop &= TILE_SIZE.cast_signed() - 1;
+
                 if x == stop {
                     w::hit(w::MOVE_STATION_STOP);
-                    return ENTERED_STATION;
-                }
-                if x < stop {
+                    return VehicleEnterTileStates::from_element(
+                        VehicleEnterTileState::EnteredStation,
+                    ); // enter station
+                } else if x < stop {
                     w::hit(w::MOVE_STATION_SLOW);
-                    (v).write_status((v).status() | crate::vehicle_base::VS_TRAIN_SLOWING);
-                    let speed = ((stop - x) * 20 - 15).max(0) as u16;
-                    if speed < (v).speed() {
-                        (v).write_speed(speed);
+                    v.write_status(v.status() | VehStates::from_element(VehState::TrainSlowing).0);
+                    let spd = ((stop - x) * 20 - 15).max(0) as u16;
+                    if spd < v.speed() {
+                        v.write_speed(spd);
                     }
                 }
             }
-        } else if h.kind.0 == VEH_ROAD {
-            let state = unsafe { crate::road::get_state(h.road) };
+        } else if h.kind == VehicleType::VEH_ROAD {
+            let rv = h.road;
+            let state = unsafe { crate::road::get_state(rv) };
             if state < RVSB_IN_ROAD_STOP
-                && !is_reversing_road_trackdir(state, |ok| (self.native_assert)(ok))
-                && unsafe { crate::road::get_frame(h.road) } == 0
-                && (self.road_vehicle().is_station_road_stop)(tile)
-                && crate::vehicle_base::is_front_engine(
-                    crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                    v.subtype(),
-                )
+                && !is_reversing_road_trackdir(state, self.check())
+                && unsafe { crate::road::get_frame(rv) } == 0
+                && (self.road_vehicle().is_station_road_stop)(tile.0)
+                && v.is_front_engine()
             {
-                if unsafe { crate::road_stop::enter_by_tile_raw(self.shared(), tile, v, h.road) } {
+                /* Attempt to allocate a parking bay in a road stop */
+                if unsafe { crate::road_stop::enter_by_tile(self.shared(), tile, v, rv) } {
                     w::hit(w::MOVE_ROAD_STOP_ADMIT);
-                    return 0;
+                    return VehicleEnterTileStates(0);
                 }
                 w::hit(w::MOVE_ROAD_STOP_REFUSE);
-                return CANNOT_ENTER;
+                return VehicleEnterTileStates::from_element(VehicleEnterTileState::CannotEnter);
             }
         }
-        0
+
+        VehicleEnterTileStates(0)
     }
-    fn prepare_bridge(v: VehicleRef) {
-        let z = v.z();
-        let ground = v.ground();
-        let flags = crate::raw_field::read_field!(ground, flags);
-        if flags & (1 << crate::ground_vehicle::GVF_GOINGUP_BIT) != 0 {
+    /// `PrepareToEnterBridge`: clears the ground vehicle's slope flags and, when
+    /// it was going up, updates the z coordinate that `UpdateInclination` will not.
+    fn prepare_to_enter_bridge(gv: VehicleRef) {
+        let ground = gv.ground();
+        let mut flags: u16 = crate::raw_field::read_field!(ground, flags);
+        if crate::bitmath_func::has_bit(flags, crate::ground_vehicle::GVF_GOINGUP_BIT) {
             w::hit(w::MOVE_BRIDGE_UP);
-            (v).write_z(z.wrapping_add(1));
-            crate::raw_field::write_field!(
-                ground,
-                flags,
-                flags & !(1 << crate::ground_vehicle::GVF_GOINGUP_BIT)
-            );
+            gv.write_z(gv.z().wrapping_add(1));
+            crate::bitmath_func::clr_bit16(&mut flags, crate::ground_vehicle::GVF_GOINGUP_BIT);
         } else {
             w::hit(w::MOVE_BRIDGE_DOWN);
-            crate::raw_field::write_field!(
-                ground,
-                flags,
-                flags & !(1 << crate::ground_vehicle::GVF_GOINGDOWN_BIT)
-            );
+            crate::bitmath_func::clr_bit16(&mut flags, crate::ground_vehicle::GVF_GOINGDOWN_BIT);
         }
+        crate::raw_field::write_field!(ground, flags, flags);
     }
-    unsafe fn enter_wormhole(
+    /// `VehicleEnter_TunnelBridge`.
+    unsafe fn vehicle_enter_tunnel_bridge(
         &self,
         h: &MovementVehicle,
         v: VehicleRef,
-        tile: u32,
+        tile: TileIndex,
         x: i32,
         y: i32,
-    ) -> u8 {
-        let slope = unsafe { openttd_rust_movement_pixel_z(self, x, y, true) };
-        let vehicle_z = v.z();
-        let direction = v.direction();
-        let z = slope.wrapping_sub(vehicle_z);
+    ) -> VehicleEnterTileStates {
+        let z = self.get_slope_pixel_z(x, y, true).wrapping_sub(v.z());
+
         if z.wrapping_abs() > 2 {
-            return CANNOT_ENTER;
+            return VehicleEnterTileStates::from_element(VehicleEnterTileState::CannotEnter);
         }
         let world = World::new(self.shared());
-        let dir = world.tunnel_bridge_dir(tile);
-        let vdir = dir_to_diag_dir_raw(direction, |ok| (self.native_assert)(ok));
-        let pos = (if diag_dir_to_axis_raw(vdir, |ok| (self.native_assert)(ok)) == AXIS_X {
+        /* Direction into the wormhole */
+        let dir = DiagDirection(world.tunnel_bridge_dir(tile.0));
+        /* Direction of the vehicle */
+        let vdir = dir_to_diag_dir(Direction(v.direction()), self.check());
+        /* New position of the vehicle on the tile */
+        let pos = (if diag_dir_to_axis(vdir, self.check()) == Axis::AXIS_X {
             x
         } else {
             y
         }) as u8
             & TILE_UNIT_MASK as u8;
-        let frame = if vdir == DIAGDIR_NE || vdir == DIAGDIR_NW {
+        /* Number of units moved by the vehicle since entering the tile */
+        let frame = if vdir == DiagDirection::DIAGDIR_NE || vdir == DiagDirection::DIAGDIR_NW {
             TILE_SIZE as u8 - 1 - pos
         } else {
             pos
         };
-        if world.tunnel(tile) {
-            if h.kind.0 == VEH_TRAIN {
-                let track = h.train.track();
-                if track != TRACK_BIT_WORMHOLE && dir == vdir {
-                    if crate::vehicle_base::is_front_engine(
-                        crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                        v.subtype(),
-                    ) && frame == TUNNEL_SOUND_FRAME
-                    {
+        let visibility_frame = TUNNEL_VISIBILITY[usize::from(dir.0)];
+
+        if world.tunnel(tile.0) {
+            if h.kind == VehicleType::VEH_TRAIN {
+                let t = h.train;
+
+                if TrackBits(t.track()) != TrackBits::TRACK_BIT_WORMHOLE && dir == vdir {
+                    if v.is_front_engine() && frame == TUNNEL_SOUND_FRAME {
                         w::hit(w::MOVE_TRAIN_TUNNEL_SOUND);
                         if !(self.vehicle().play_vehicle_sound)(v, crate::newgrf_sound::VSE_TUNNEL)
-                            && (self.vehicle().engine)(v).train_class() == 0
+                            && crate::engine_type::EngineClass(
+                                (self.vehicle().engine)(v).train_class(),
+                            ) == crate::engine_type::EngineClass::EC_STEAM
                         {
                             (self.vehicle().play_sound)(
                                 v,
                                 crate::sound_type::SND_05_TRAIN_THROUGH_TUNNEL,
                             );
                         }
-                        return 0;
+                        return VehicleEnterTileStates(0);
                     }
-                    if frame == TUNNEL_VISIBILITY[usize::from(dir)] {
+                    if frame == visibility_frame {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
-                        w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir));
-                        (v).write_tile(tile);
-                        h.train.set_track(u64::from(TRACK_BIT_WORMHOLE));
-                        Self::hidden(v, true);
-                        return ENTERED_WORMHOLE;
+                        w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir.0));
+                        v.write_tile(tile.0);
+                        t.set_track(u64::from(TrackBits::TRACK_BIT_WORMHOLE.0));
+                        Self::set_hidden(v, true);
+                        return VehicleEnterTileStates::from_element(
+                            VehicleEnterTileState::EnteredWormhole,
+                        );
                     }
                 }
-                if dir == reverse_diag_dir_raw(vdir, |ok| (self.native_assert)(ok))
-                    && frame == TILE_SIZE as u8 - TUNNEL_VISIBILITY[usize::from(dir)]
+
+                if dir == reverse_diag_dir(vdir, self.check())
+                    && frame == TILE_SIZE as u8 - visibility_frame
                     && z == 0
                 {
-                    (v).write_tile(tile);
-                    let track = diag_dir_to_diag_track_bits(vdir, |ok| (self.native_assert)(ok));
-                    h.train.set_track(u64::from(track));
-                    (self.native_assert)(track != 0);
+                    /* We're at the tunnel exit ?? */
+                    v.write_tile(tile.0);
+                    t.set_track(u64::from(diag_dir_to_diag_track_bits(vdir.0, self.check())));
+                    self.native_assert_call(TrackBits(t.track()) != TrackBits::TRACK_BIT_NONE);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
-                    w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir));
-                    Self::hidden(v, false);
-                    return ENTERED_WORMHOLE;
+                    w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir.0));
+                    Self::set_hidden(v, false);
+                    return VehicleEnterTileStates::from_element(
+                        VehicleEnterTileState::EnteredWormhole,
+                    );
                 }
-            } else if h.kind.0 == VEH_ROAD {
-                if unsafe { crate::road::get_state(h.road) } != RVSB_WORMHOLE && dir == vdir {
-                    if frame == TUNNEL_VISIBILITY[usize::from(dir)] {
+            } else if h.kind == VehicleType::VEH_ROAD {
+                let rv = h.road;
+
+                /* Enter tunnel? */
+                if unsafe { crate::road::get_state(rv) } != RVSB_WORMHOLE && dir == vdir {
+                    if frame == visibility_frame {
                         w::hit(w::MOVE_ROAD_TUNNEL_ENTER);
-                        (self.native_assert)(
-                            u32::from(frame)
-                                == u32::from(unsafe { crate::road::get_frame(h.road) }) + 1,
+                        /* Frame should be equal to the next frame number in the RV's movement */
+                        self.native_assert_call(
+                            i32::from(frame)
+                                == i32::from(unsafe { crate::road::get_frame(rv) }) + 1,
                         );
-                        (v).write_tile(tile);
+                        v.write_tile(tile.0);
                         unsafe {
-                            crate::road::set_state(h.road, RVSB_WORMHOLE);
+                            crate::road::set_state(rv, RVSB_WORMHOLE);
                         }
-                        Self::hidden(v, true);
-                        return ENTERED_WORMHOLE;
+                        Self::set_hidden(v, true);
+                        return VehicleEnterTileStates::from_element(
+                            VehicleEnterTileState::EnteredWormhole,
+                        );
                     }
-                    return 0;
+                    return VehicleEnterTileStates(0);
                 }
-                if dir == reverse_diag_dir_raw(vdir, |ok| (self.native_assert)(ok))
-                    && frame == TILE_SIZE as u8 - TUNNEL_VISIBILITY[usize::from(dir)]
+
+                /* We're at the tunnel exit ?? */
+                if dir == reverse_diag_dir(vdir, self.check())
+                    && frame == TILE_SIZE as u8 - visibility_frame
                     && z == 0
                 {
-                    (v).write_tile(tile);
+                    v.write_tile(tile.0);
                     unsafe {
-                        crate::road::set_state(
-                            h.road,
-                            diag_dir_to_diag_trackdir(vdir, |ok| (self.native_assert)(ok)),
-                        );
-                        crate::road::set_frame(h.road, frame);
+                        crate::road::set_state(rv, diag_dir_to_diag_trackdir(vdir.0, self.check()));
+                        crate::road::set_frame(rv, frame);
                     }
                     w::hit(w::MOVE_ROAD_TUNNEL_EXIT);
-                    Self::hidden(v, false);
-                    return ENTERED_WORMHOLE;
+                    Self::set_hidden(v, false);
+                    return VehicleEnterTileStates::from_element(
+                        VehicleEnterTileState::EnteredWormhole,
+                    );
                 }
             }
         } else {
-            if h.kind.0 != VEH_SHIP {
-                let mut speed = (self.shared().bridge_speed)(tile);
-                if h.kind.0 == VEH_ROAD {
-                    if speed > u16::MAX / 2 {
+            // IsBridge(tile)
+            if h.kind != VehicleType::VEH_SHIP {
+                /* modify speed of vehicle */
+                let mut spd = (self.shared().bridge_speed)(tile.0);
+
+                if h.kind == VehicleType::VEH_ROAD {
+                    if spd > u16::MAX / 2 {
                         w::hit(w::MOVE_BRIDGE_SPEED_NARROW);
                     }
-                    speed = speed.wrapping_mul(2);
+                    spd = spd.wrapping_mul(2);
                 }
                 let first = v.first();
-                let first_speed = first.speed();
-                first.write_speed(first_speed.min(speed));
+                first.write_speed(first.speed().min(spd));
             }
+
             if vdir == dir {
+                /* Vehicle enters bridge at the last frame inside this tile. */
                 if frame != TILE_SIZE as u8 - 1 {
-                    return 0;
+                    return VehicleEnterTileStates(0);
                 }
-                w::hit(match h.kind.0 {
-                    VEH_TRAIN => w::MOVE_TRAIN_BRIDGE_ENTER,
-                    VEH_ROAD => w::MOVE_ROAD_BRIDGE_ENTER,
-                    VEH_SHIP => w::MOVE_SHIP_BRIDGE_ENTER,
-                    _ => unreachable!("native bridge vehicle"),
-                });
-                match h.kind.0 {
-                    VEH_TRAIN => {
-                        h.train.set_track(u64::from(TRACK_BIT_WORMHOLE));
-                        Self::prepare_bridge(v);
+                match h.kind {
+                    VehicleType::VEH_TRAIN => {
+                        w::hit(w::MOVE_TRAIN_BRIDGE_ENTER);
+                        h.train
+                            .set_track(u64::from(TrackBits::TRACK_BIT_WORMHOLE.0));
+                        Self::prepare_to_enter_bridge(v);
                     }
-                    VEH_ROAD => {
+
+                    VehicleType::VEH_ROAD => {
+                        w::hit(w::MOVE_ROAD_BRIDGE_ENTER);
                         unsafe {
                             crate::road::set_state(h.road, RVSB_WORMHOLE);
                         }
-                        Self::prepare_bridge(v);
+                        Self::prepare_to_enter_bridge(v);
                     }
-                    VEH_SHIP => unsafe {
-                        crate::ship_control::openttd_rust_ship_set_state(
-                            h.ship,
-                            TRACK_BIT_WORMHOLE,
-                        );
+
+                    VehicleType::VEH_SHIP => unsafe {
+                        w::hit(w::MOVE_SHIP_BRIDGE_ENTER);
+                        crate::ship_control::set_state(h.ship, TrackBits::TRACK_BIT_WORMHOLE);
                     },
-                    _ => unreachable!("native bridge vehicle type"),
+
+                    _ => crate::services_assert::not_reached(),
                 }
-                return ENTERED_WORMHOLE;
-            } else if vdir == reverse_diag_dir_raw(dir, |ok| (self.native_assert)(ok)) {
-                (v).write_tile(tile);
-                match h.kind.0 {
-                    VEH_TRAIN => {
-                        if h.train.track() == TRACK_BIT_WORMHOLE {
-                            h.train
-                                .set_track(u64::from(diag_dir_to_diag_track_bits(vdir, |ok| {
-                                    (self.native_assert)(ok);
-                                })));
+                return VehicleEnterTileStates::from_element(
+                    VehicleEnterTileState::EnteredWormhole,
+                );
+            } else if vdir == reverse_diag_dir(dir, self.check()) {
+                v.write_tile(tile.0);
+                match h.kind {
+                    VehicleType::VEH_TRAIN => {
+                        if TrackBits(h.train.track()) == TrackBits::TRACK_BIT_WORMHOLE {
+                            h.train.set_track(u64::from(diag_dir_to_diag_track_bits(
+                                vdir.0,
+                                self.check(),
+                            )));
                             w::hit(w::MOVE_TRAIN_BRIDGE_EXIT);
-                            return ENTERED_WORMHOLE;
+                            return VehicleEnterTileStates::from_element(
+                                VehicleEnterTileState::EnteredWormhole,
+                            );
                         }
                     }
-                    VEH_ROAD => {
+
+                    VehicleType::VEH_ROAD => {
                         if unsafe { crate::road::get_state(h.road) } == RVSB_WORMHOLE {
                             unsafe {
                                 crate::road::set_state(
                                     h.road,
-                                    diag_dir_to_diag_trackdir(vdir, |ok| (self.native_assert)(ok)),
+                                    diag_dir_to_diag_trackdir(vdir.0, self.check()),
                                 );
                                 crate::road::set_frame(h.road, 0);
                             }
                             w::hit(w::MOVE_ROAD_BRIDGE_EXIT);
-                            return ENTERED_WORMHOLE;
+                            return VehicleEnterTileStates::from_element(
+                                VehicleEnterTileState::EnteredWormhole,
+                            );
                         }
                     }
-                    VEH_SHIP => {
-                        if unsafe { crate::ship_control::openttd_rust_ship_get_state(h.ship) }
-                            == TRACK_BIT_WORMHOLE
+
+                    VehicleType::VEH_SHIP => {
+                        if unsafe { crate::ship_control::get_state(h.ship) }
+                            == TrackBits::TRACK_BIT_WORMHOLE
                         {
                             unsafe {
-                                crate::ship_control::openttd_rust_ship_set_state(
+                                crate::ship_control::set_state(
                                     h.ship,
-                                    diag_dir_to_diag_track_bits(vdir, |ok| {
-                                        (self.native_assert)(ok);
-                                    }),
+                                    TrackBits(diag_dir_to_diag_track_bits(vdir.0, self.check())),
                                 );
                             }
                             w::hit(w::MOVE_SHIP_BRIDGE_EXIT);
-                            return ENTERED_WORMHOLE;
+                            return VehicleEnterTileStates::from_element(
+                                VehicleEnterTileState::EnteredWormhole,
+                            );
                         }
                     }
-                    _ => unreachable!("native bridge vehicle type"),
+
+                    _ => crate::services_assert::not_reached(),
                 }
             }
         }
-        0
+        VehicleEnterTileStates(0)
+    }
+    /// `VehicleEnterTile`: call the tile callback function for a vehicle entering
+    /// a tile. Only the rail, road, station and tunnel/bridge procedures act; the
+    /// others return no state.
+    ///
+    /// # Safety
+    /// Tables/vehicle/map stay live and serialized. Selected callbacks preserve the
+    /// current shell; all scalar owner accesses end before every callback/reentry.
+    pub(crate) unsafe fn vehicle_enter_tile(
+        &self,
+        v: VehicleRef,
+        tile: TileIndex,
+        x: i32,
+        y: i32,
+    ) -> VehicleEnterTileStates {
+        let kind = TileType((self.shared().tile_type)(tile.0));
+        if !matches!(
+            kind,
+            TileType::MP_RAILWAY
+                | TileType::MP_ROAD
+                | TileType::MP_STATION
+                | TileType::MP_TUNNELBRIDGE
+        ) {
+            return VehicleEnterTileStates(0);
+        }
+        let h = (self.resolve)(v);
+        unsafe {
+            match kind {
+                TileType::MP_RAILWAY => self.vehicle_enter_track(&h, v, tile, x, y),
+                TileType::MP_ROAD => self.vehicle_enter_road(&h, v, tile),
+                TileType::MP_STATION => self.vehicle_enter_station(&h, v, tile, x, y),
+                _ => self.vehicle_enter_tunnel_bridge(&h, v, tile, x, y),
+            }
+        }
+    }
+    /// `TicksToLeaveDepot`: compute number of ticks when next wagon will leave a
+    /// depot. Negative means next wagon should have left depot n ticks before.
+    pub(crate) fn ticks_to_leave_depot(&self, v: crate::train::Handle) -> i32 {
+        w::hit(w::MOVE_DEPOT_TICKS);
+        let dir = DiagDirection(World::new(self.shared()).rail_depot_dir(v.vehicle().tile()));
+        let length = crate::train::calc_next_vehicle_offset(v);
+        let enter = FRACTCOORDS_ENTER[usize::from(dir.0)];
+        let x_pos = v.vehicle().x();
+        let y_pos = v.vehicle().y();
+
+        match dir {
+            DiagDirection::DIAGDIR_NE => (x_pos & 0x0F) - (i32::from(enter & 0x0F) - (length + 1)),
+            DiagDirection::DIAGDIR_SE => -((y_pos & 0x0F) - (i32::from(enter >> 4) + (length + 1))),
+            DiagDirection::DIAGDIR_SW => {
+                -((x_pos & 0x0F) - (i32::from(enter & 0x0F) + (length + 1)))
+            }
+            DiagDirection::DIAGDIR_NW => (y_pos & 0x0F) - (i32::from(enter >> 4) - (length + 1)),
+            _ => crate::services_assert::not_reached(),
+        }
     }
 }
 /// # Safety
-/// Tables/vehicle/map stay live and serialized. Selected callbacks preserve the
-/// current shell; all scalar owner accesses end before every callback/reentry.
+/// As [`MovementServices::vehicle_enter_tile`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_movement_enter(
     s: *const MovementServices,
@@ -1402,21 +1811,7 @@ pub unsafe extern "C" fn openttd_rust_movement_enter(
     x: i32,
     y: i32,
 ) -> u8 {
-    let s = unsafe { &*s };
-    let kind = (s.shared().tile_type)(tile);
-    if !matches!(kind, MP_RAILWAY | MP_ROAD | MP_STATION | MP_TUNNELBRIDGE) {
-        return 0;
-    }
-    let h = (s.resolve)(v);
-    unsafe {
-        match kind {
-            MP_RAILWAY => s.enter_rail(&h, v, tile, x, y),
-            MP_ROAD => s.enter_road(&h, v, tile),
-            MP_STATION => s.enter_station(&h, v, tile, x, y),
-            MP_TUNNELBRIDGE => s.enter_wormhole(&h, v, tile, x, y),
-            _ => 0,
-        }
-    }
+    unsafe { (*s).vehicle_enter_tile(v, TileIndex(tile), x, y) }.0
 }
 /// # Safety
 /// Live serialized train and immutable native tables throughout this call.
@@ -1425,21 +1820,7 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
     s: *const MovementServices,
     v: crate::train::Handle,
 ) -> i32 {
-    let s = unsafe { &*s };
-    w::hit(w::MOVE_DEPOT_TICKS);
-    let tile = v.vehicle().tile();
-    let x = v.vehicle().x();
-    let y = v.vehicle().y();
-    let dir = World::new(s.shared()).rail_depot_dir(tile);
-    let length = crate::train::next_offset(v);
-    let enter = FRACT_ENTER[usize::from(dir)];
-    match dir {
-        0 => (x & 15) - (i32::from(enter & 15) - (length + 1)),
-        1 => -((y & 15) - (i32::from(enter >> 4) + (length + 1))),
-        2 => -((x & 15) - (i32::from(enter & 15) + (length + 1))),
-        3 => (y & 15) - (i32::from(enter >> 4) - (length + 1)),
-        _ => unreachable!("native depot direction"),
-    }
+    unsafe { &*s }.ticks_to_leave_depot(v)
 }
 
 /// Resolve the native immutable movement registry. Production callers hold the
@@ -1449,39 +1830,91 @@ pub(crate) fn table(shared: &Services) -> &MovementServices {
     // SAFETY: The shared table holds the immutable process-lifetime movement table.
     unsafe { &*shared.movement }
 }
+/// `GetTileTrackStatus`, through the registry.
 // Forward literal transport/side arguments through this registry facade too.
 #[allow(clippy::inline_always)]
 #[inline(always)]
+pub(crate) fn get_tile_track_status(
+    shared: &Services,
+    tile: TileIndex,
+    mode: TransportType,
+    sub_mode: u32,
+    side: DiagDirection,
+) -> TrackStatus {
+    table(shared).get_tile_track_status(tile, mode, sub_mode, side)
+}
+/// Temporary raw adapter of [`get_tile_track_status`] for the files no pass has
+/// finished yet.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
-    table(shared).track_status(tile, mode, sub, side)
+    get_tile_track_status(
+        shared,
+        TileIndex(tile),
+        TransportType(mode),
+        sub,
+        DiagDirection(side),
+    )
 }
-pub(crate) fn pixel_z(shared: &Services, x: i32, y: i32, ground: bool) -> i32 {
-    table(shared).pixel_z_at(x, y, ground)
+/// `GetSlopePixelZ`, through the registry.
+pub(crate) fn get_slope_pixel_z(shared: &Services, x: i32, y: i32, ground_vehicle: bool) -> i32 {
+    table(shared).get_slope_pixel_z(x, y, ground_vehicle)
 }
+/// `GetFoundationSlope`, through the registry.
+pub(crate) fn get_foundation_slope(shared: &Services, tile: TileIndex) -> (Slope, i32) {
+    table(shared).get_foundation_slope(tile)
+}
+/// Temporary raw adapter of [`get_foundation_slope`] for `water.rs`, `ground.rs`
+/// and `road_cleanup.rs` until their passes.
 pub(crate) fn foundation_slope(shared: &Services, tile: u32) -> FoundationSlope {
-    // SAFETY: Callers supply the serialized live native map and registry.
-    unsafe { openttd_rust_movement_foundation_slope(table(shared), tile) }
+    let (slope, z) = get_foundation_slope(shared, TileIndex(tile));
+    FoundationSlope { z, slope }
 }
+/// `VehicleEnterTile`, through the registry.
+///
 /// # Safety
 /// The vehicle/map stay live through the synchronous entry and its source callbacks.
+pub(crate) unsafe fn vehicle_enter_tile(
+    shared: &Services,
+    v: VehicleRef,
+    tile: TileIndex,
+    x: i32,
+    y: i32,
+) -> VehicleEnterTileStates {
+    unsafe { table(shared).vehicle_enter_tile(v, tile, x, y) }
+}
+/// Temporary raw adapter of [`vehicle_enter_tile`] for `ship_control.rs` until
+/// its pass.
+///
+/// # Safety
+/// As [`vehicle_enter_tile`].
 pub(crate) unsafe fn enter(shared: &Services, v: VehicleRef, tile: u32, x: i32, y: i32) -> u8 {
-    unsafe { openttd_rust_movement_enter(table(shared), v, tile, x, y) }
+    unsafe { vehicle_enter_tile(shared, v, TileIndex(tile), x, y) }.0
 }
 
+/// Temporary raw adapter for `ship_control.rs`, `disaster.rs` and
+/// `water_regions.rs` until their passes:
+/// `TrackStatusToTrackBits(GetTileTrackStatus(tile, TRANSPORT_WATER, 0, side))`.
 pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
     table(shared).water_tracks(tile, side)
 }
 impl MovementServices {
+    /// Temporary raw adapter: see [`water_tracks`].
     pub(crate) fn water_tracks(&self, tile: u32, side: u8) -> u32 {
         u32::from(crate::track_func::track_status_to_track_bits(
-            self.track_status(tile, TRANSPORT_WATER, 0, side),
+            self.get_tile_track_status(
+                TileIndex(tile),
+                TransportType::TRANSPORT_WATER,
+                0,
+                DiagDirection(side),
+            ),
         ))
     }
 }
 
-pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
-    // SAFETY: Same serialized train as the original synchronous controller call.
-    unsafe { openttd_rust_movement_depot_ticks(table(shared), v) }
+/// `TicksToLeaveDepot`, through the registry.
+pub(crate) fn ticks_to_leave_depot(shared: &Services, v: crate::train::Handle) -> i32 {
+    table(shared).ticks_to_leave_depot(v)
 }
 
 /// Native afterload uses the same portal table as movement.
@@ -1490,21 +1923,27 @@ pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
     TUNNEL_VISIBILITY[usize::from(direction)]
 }
 
-/// Call the existing order owner directly; acquire only its live raw alias and
-/// the source last-station scalar. No owner reference spans either native leaf.
-pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
+/// `v->current_order.ShouldStopAtStation(v, station)`. Acquires only the order
+/// owner's live alias and the source last-station scalar; no owner reference spans
+/// either native leaf.
+pub(crate) fn should_stop_at_station(shared: &Services, v: VehicleRef, station: StationID) -> bool {
     let s = table(shared);
-    let last = (v).last_station();
+    let last_station_visited = StationID(v.last_station());
     // SAFETY: Both native leaves resolve the same serialized surviving shell.
     // The Order is owned by Rust and its facade aliases this stable allocation.
     unsafe {
         let owner = ((*s.orders).vehicle)(v.shell().cast());
-        crate::orders::openttd_rust_order_should_stop(
-            std::ptr::addr_of_mut!((*owner).current).cast(),
-            last,
+        crate::orders::should_stop_at_station(
+            std::ptr::addr_of!((*owner).current).cast(),
+            last_station_visited,
             station,
-        ) != 0
+        )
     }
+}
+/// Temporary raw adapter of [`should_stop_at_station`] for `train.rs`,
+/// `train_reservation.rs` and `vehicle_effect.rs` until their passes.
+pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
+    should_stop_at_station(shared, v, StationID(station))
 }
 
 /// Lazy handler for header preconditions. Valid inline helpers never resolve the

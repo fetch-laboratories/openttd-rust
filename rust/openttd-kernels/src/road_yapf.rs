@@ -443,7 +443,7 @@ impl Search<'_> {
             let movement = self.movement.get();
             let map = crate::services::Map::from_log_x(self.input.map_x.trailing_zeros());
             let center_z = |tile| {
-                movement.pixel_z_at(
+                movement.get_slope_pixel_z(
                     (map.tile_x(TileIndex(tile)) * crate::tile_type::TILE_SIZE
                         + crate::tile_type::TILE_SIZE / 2)
                         .cast_signed(),

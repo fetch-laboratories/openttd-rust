@@ -35,6 +35,7 @@ use crate::order_type::{
     OUFB_TRANSFER, OUFB_UNLOAD, OrderType, VehicleOrderID,
 };
 use crate::raw_field::{read_field, write_field};
+use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
@@ -2171,26 +2172,37 @@ pub unsafe extern "C" fn openttd_rust_order_convert(p: *mut Order) -> u32 {
     }
 }
 
+/// `Order::ShouldStopAtStation`: check whether the given vehicle should stop at
+/// the given station based on this order and the non-stop settings.
+/// `last_station_visited` is the vehicle's `last_station_visited`.
+pub(crate) fn should_stop_at_station(
+    p: *const Order,
+    last_station_visited: StationID,
+    station: StationID,
+) -> bool {
+    let order = load(p);
+    let (last_station, station) = (last_station_visited.0, station.0);
+    (order.kind() != OT_GOTO_DEPOT || order.depot_type() & 2 != 0)
+        && last_station != station
+        && order.non_stop()
+            & (if order.kind() == OT_GOTO_STATION && order.destination == station {
+                2
+            } else {
+                1
+            })
+            == 0
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_should_stop(
     p: *mut Order,
     last_station: u16,
     station: u16,
 ) -> u32 {
-    let order = load(p);
-    {
-        u32::from(
-            (order.kind() != OT_GOTO_DEPOT || order.depot_type() & 2 != 0)
-                && last_station != station
-                && order.non_stop()
-                    & (if order.kind() == OT_GOTO_STATION && order.destination == station {
-                        2
-                    } else {
-                        1
-                    })
-                    == 0,
-        )
-    }
+    u32::from(should_stop_at_station(
+        p,
+        StationID(last_station),
+        StationID(station),
+    ))
 }
 
 struct Control {

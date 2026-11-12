@@ -4832,8 +4832,15 @@ impl Ctx<'_> {
             TileType::MP_RAILWAY | TileType::MP_STATION | TileType::MP_TUNNELBRIDGE => (),
             _ => return false,
         }
-        crate::movement::water_tracks(self.shared, t.0, DiagDirection::INVALID_DIAGDIR.0)
-            != u32::from(TrackBits::TRACK_BIT_NONE.0)
+        TrackBits(crate::track_func::track_status_to_track_bits(
+            crate::movement::get_tile_track_status(
+                self.shared,
+                t,
+                crate::transport_type::TransportType::TRANSPORT_WATER,
+                0,
+                DiagDirection::INVALID_DIAGDIR,
+            ),
+        )) != TrackBits::TRACK_BIT_NONE
     }
     /// `CheckForDockingTile`.
     fn check_for_docking_tile(&self, t: TileIndex) {

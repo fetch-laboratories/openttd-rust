@@ -248,14 +248,14 @@ fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailS
     if r.signals {
         r.track = crate::track_func::track_bits_to_track(masked_tracks, |ok| view.check(ok));
         let present = view.present_signals(tile);
-        r.on_track = present & crate::signal_func::signal_on_track(r.track) != 0;
+        r.on_track = present & crate::signal_func::signal_on_track_raw(r.track) != 0;
         if r.on_track {
             r.kind = SignalType(view.signal_type(tile, r.track));
-            r.forward = present & crate::signal_func::signal_along_trackdir(td) != 0;
+            r.forward = present & crate::signal_func::signal_along_trackdir_raw(td) != 0;
             r.reverse = present
-                & crate::signal_func::signal_along_trackdir(crate::track_func::reverse_trackdir(
-                    td,
-                ))
+                & crate::signal_func::signal_along_trackdir_raw(
+                    crate::track_func::reverse_trackdir(td),
+                )
                 != 0;
         }
     }

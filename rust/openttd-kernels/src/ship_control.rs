@@ -27,6 +27,7 @@ use crate::order_type::{
 };
 use crate::services::Services;
 use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
+use crate::track_type::TrackBits;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VS_STOPPED;
 use crate::water_regions::Patch;
@@ -69,17 +70,29 @@ pub unsafe extern "C" fn openttd_rust_ship_state_destroy(state: *mut State) {
         drop(Box::from_raw(state));
     }
 }
+/// `Ship::state`: the ship's current track bits.
+/// # Safety
+/// `state` is the live shell allocation of a ship.
+pub(crate) unsafe fn get_state(state: *const State) -> TrackBits {
+    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
+    TrackBits(unsafe { (*state).track })
+}
+/// Store `Ship::state`.
+/// # Safety
+/// `state` is the live, serialized shell allocation of a ship.
+pub(crate) unsafe fn set_state(state: *mut State, value: TrackBits) {
+    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
+    unsafe {
+        (*state).track = value.0;
+    }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_state(state: *const State) -> u8 {
-    // SAFETY: Live shell allocation; field-sized read retains no owner reference.
-    unsafe { (*state).track }
+    unsafe { get_state(state) }.0
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_set_state(state: *mut State, value: u8) {
-    // SAFETY: Serialized game-thread write; no borrow survives a service callback.
-    unsafe {
-        (*state).track = value;
-    }
+    unsafe { set_state(state, TrackBits(value)) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_get_rotation(state: *const State) -> u8 {
