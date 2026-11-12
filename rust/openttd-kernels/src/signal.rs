@@ -1503,17 +1503,17 @@ mod tests {
                     .add(TileIndex(t as u32), DiagDirection::DIAGDIR_NE);
             }
         });
-        assert!(!add(
+        assert!(!add_to_set(
             |s| &mut s.tbuset,
             TileIndex(0),
             Trackdir::TRACKDIR_X_NE
         ));
-        assert!(!add(
+        assert!(!add_to_set(
             |s| &mut s.tbdset,
             TileIndex(0),
             DiagDirection::DIAGDIR_NE
         ));
-        assert!(!add(
+        assert!(!add_to_set(
             |s| &mut s.globset,
             TileIndex(0),
             DiagDirection::DIAGDIR_NE
