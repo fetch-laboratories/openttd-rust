@@ -10,7 +10,7 @@ The original and the Rust game run without a screen on identical scenarios and w
 
 Agents made this decision. Comparing game state rather than screenshots or bytes was in the founding rules of 2026-10-02. A steering session on 2026-10-03 made the harness the required evidence (commit `923f697159`, #72); its log no longer exists, and no words of the user on the choice were found. On 2026-10-04 the user approved one part of the design, scenarios built by a committed setup AI (#111).
 
-Reversing it would be very costly: all game-logic evidence since 2026-10-03 is harness scenarios, and they take most CI time.
+Reversing it would be very costly: all game-logic evidence since 2026-10-03 is harness scenarios.
 
 ## History
 
