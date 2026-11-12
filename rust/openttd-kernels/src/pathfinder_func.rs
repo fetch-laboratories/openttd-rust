@@ -18,7 +18,7 @@ use crate::transport_type::TransportType;
 /// `GetTrackdirBitsForRoad`: wrapper around `GetTileTrackStatus()` and
 /// `TrackStatusToTrackdirBits()`, as for single tram bits `GetTileTrackStatus()`
 /// returns 0. The reason for this is that there are no half-tile `TrackBits` in
-/// OpenTTD. This tile, however, is a valid tile for trams, one on which they can
+/// `OpenTTD`. This tile, however, is a valid tile for trams, one on which they can
 /// reverse safely. To "fix" this, pretend that if we are on a half-tile, we are
 /// in fact on a straight tram track tile. `CFollowTrackT` will make sure the
 /// pathfinders cannot exit on the wrong side and allows reversing on such tiles.

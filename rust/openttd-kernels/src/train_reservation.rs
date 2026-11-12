@@ -32,7 +32,7 @@ use crate::track_func::{
 };
 use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 
-use crate::follow_track::State as Follower;
+use crate::follow_track::CFollowTrackT as Follower;
 use crate::train::Handle;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -242,7 +242,7 @@ impl Game<'_> {
     }
 
     fn follower(&self, id: Handle, types: u64) -> Follower {
-        Follower::rail(self.shared(), id, 0, types)
+        Follower::rail_raw(self.shared(), id, 0, types)
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
         self.pbs().follow_train(id, other, Handle::NONE)
@@ -388,9 +388,9 @@ fn free(g: &Game, id: Handle) {
     }
     let types = (g.shared().all_compatible_railtypes)(id.get_railtypes());
     let mut ft = g.follower(id, types);
-    while ft.follow(g.shared(), tile, td) {
+    while ft.follow_raw(g.shared(), tile, td) {
         tile = ft.new_tile.0;
-        let bits = ft.new_td_bits & dirs(g.reserved(tile));
+        let bits = ft.new_td_bits.0 & dirs(g.reserved(tile));
         td = first(bits);
         crate::movement::native_assert(g.shared(), single(bits));
         if td == 0xff {
@@ -447,15 +447,15 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
     let mut red = Vec::new();
     let mut tile = origin.tile;
     let mut td = origin.td;
-    while ft.follow(g.shared(), tile, td) {
-        if single(ft.new_td_bits)
-            && ((g.leaves.blocking)(g.context, id, ft.new_tile.0, first(ft.new_td_bits)) != 0)
+    while ft.follow_raw(g.shared(), tile, td) {
+        if single(ft.new_td_bits.0)
+            && ((g.leaves.blocking)(g.context, id, ft.new_tile.0, first(ft.new_td_bits.0)) != 0)
         {
             break;
         }
         if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            ft.new_td_bits &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
-            if ft.new_td_bits == 0 {
+            ft.new_td_bits.0 &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td.0) as u16);
+            if ft.new_td_bits.0 == 0 {
                 break;
             }
         }
@@ -465,31 +465,31 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
                 TileIndex(ft.new_tile.0),
                 crate::tile_type::TileType::MP_RAILWAY,
             )) && ((g.leaves.is_plain)(g.context, id, ft.new_tile.0) == 0));
-        if target || !single(ft.new_td_bits) {
+        if target || !single(ft.new_td_bits.0) {
             if g.has_reserved(
                 ft.new_tile.0,
-                tracks((g.leaves.reach_dirs)(g.context, id, ft.old_td) as u16),
+                tracks((g.leaves.reach_dirs)(g.context, id, ft.old_td.0) as u16),
             ) {
                 break;
             }
             if ft.tiles_skipped != 0 {
-                let off = (g.leaves.tile_offset)(g.context, id, ft.exitdir) as i32;
+                let off = (g.leaves.tile_offset)(g.context, id, ft.exitdir.0) as i32;
                 ft.new_tile.0 = ft
                     .new_tile
                     .0
                     .wrapping_sub(off.wrapping_mul(ft.tiles_skipped) as u32);
             }
-            *new_tracks = tracks(ft.new_td_bits);
-            *enterdir = ft.exitdir;
+            *new_tracks = tracks(ft.new_td_bits.0);
+            *enterdir = ft.exitdir.0;
             return Pbs {
                 tile: ft.new_tile.0,
-                td: ft.old_td,
+                td: ft.old_td.0,
                 okay: 0,
                 other: Handle::NONE,
             };
         }
         tile = ft.new_tile.0;
-        td = first(ft.new_td_bits);
+        td = first(ft.new_td_bits.0);
         let rev = td ^ 8;
         // SAFETY: The entry keeps the native train live; no owner borrow spans the callback.
         if g.safe(id, tile, td) {
@@ -523,10 +523,10 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
             (g.shared().mark_dirty)(tile);
         }
     }
-    if ft.err == 1 || ft.err == 4 {
+    if ft.err.0 == 1 || ft.err.0 == 4 {
         return Pbs {
             tile: ft.old_tile.0,
-            td: ft.old_td,
+            td: ft.old_td.0,
             okay: 1,
             other: Handle::NONE,
         };
@@ -535,18 +535,18 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
     tile = origin.tile;
     td = origin.td;
     let stopped = ft.old_tile.0;
-    let stopped_td = ft.old_td;
+    let stopped_td = ft.old_td.0;
     while tile != stopped || td != stopped_td {
-        if !ft.follow(g.shared(), tile, td) {
+        if !ft.follow_raw(g.shared(), tile, td) {
             break;
         }
         if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            ft.new_td_bits &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
-            crate::movement::native_assert(g.shared(), ft.new_td_bits != 0);
+            ft.new_td_bits.0 &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td.0) as u16);
+            crate::movement::native_assert(g.shared(), ft.new_td_bits.0 != 0);
         }
-        crate::movement::native_assert(g.shared(), single(ft.new_td_bits));
+        crate::movement::native_assert(g.shared(), single(ft.new_td_bits.0));
         tile = ft.new_tile.0;
-        td = first(ft.new_td_bits);
+        td = first(ft.new_td_bits.0);
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_ROLLBACK);
         g.unreserve(tile, td);
     }
@@ -988,18 +988,18 @@ fn check_next(g: &Game, id: Handle) {
         return;
     }
     let mut ft = g.follower(id, id.get_compatible_railtypes());
-    if !ft.follow(g.shared(), tile, td) {
+    if !ft.follow_raw(g.shared(), tile, td) {
         return;
     }
-    if !g.has_reserved(ft.new_tile.0, tracks(ft.new_td_bits))
-        && single(ft.new_td_bits)
-        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile.0, first(ft.new_td_bits)) != 0)
+    if !g.has_reserved(ft.new_tile.0, tracks(ft.new_td_bits.0))
+        && single(ft.new_td_bits.0)
+        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile.0, first(ft.new_td_bits.0)) != 0)
     {
-        let mut available = tracks(ft.new_td_bits);
+        let mut available = tracks(ft.new_td_bits.0);
         if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
-            available &= !((g.leaves.cross_tracks)(g.context, id, ft.old_td & 7) as u8);
+            available &= !((g.leaves.cross_tracks)(g.context, id, ft.old_td.0 & 7) as u8);
         }
-        choose(g, id, ft.new_tile.0, ft.exitdir, available, false, false);
+        choose(g, id, ft.new_tile.0, ft.exitdir.0, available, false, false);
     }
 }
 

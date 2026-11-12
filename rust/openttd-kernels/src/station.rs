@@ -1274,6 +1274,134 @@ crate::abi::layouts! {
     };
 }
 
+/// Virtual `BaseStation::GetPlatformLength(TileIndex, DiagDirection)` on
+/// `BaseStation::GetByTile(tile)`: a `Station` scans its platform and a
+/// `Waypoint` returns 1 (`waypoint_base.h`).
+pub(crate) fn get_platform_length_by_tile(
+    w: &crate::map_func::World<'_>,
+    tile: TileIndex,
+    dir: crate::direction_type::DiagDirection,
+) -> u32 {
+    // The native leaves resolve `BaseStation::GetByTile` and the virtual
+    // station/waypoint dispatch, preserving native pool identity.
+    let station = (crate::pbs::Pbs::acquire(w.shared).0.station)(tile.0);
+    // SAFETY: These immutable process-lifetime tables contain only operations.
+    let catchment = unsafe { &*(w.shared.station_catchment)() };
+    // SAFETY: As above.
+    let stations = unsafe { &*catchment.station };
+    if !(stations.is_station)(station) {
+        return 1;
+    }
+    get_platform_length_in_direction(w, tile, dir)
+}
+
+/// `Station::GetPlatformLength(TileIndex, DiagDirection)`: determines the
+/// REMAINING length of a platform, starting at (and including) the given tile,
+/// which must be a rail station tile.
+pub(crate) fn get_platform_length_in_direction(
+    w: &crate::map_func::World<'_>,
+    mut tile: TileIndex,
+    dir: crate::direction_type::DiagDirection,
+) -> u32 {
+    let start_tile = tile;
+    let mut length: u32 = 0;
+    w.check(w.is_rail_station_tile(tile));
+    w.check(dir < crate::direction_type::DiagDirection::DIAGDIR_END);
+
+    loop {
+        length = length.wrapping_add(1);
+        tile += w
+            .dimensions
+            .tile_offs_by_diag_dir(dir, crate::map_func::native_check);
+        if !w.is_compatible_train_station_tile(tile, start_tile) {
+            return length;
+        }
+    }
+}
+
+/// `Station::GetPlatformLength(TileIndex)`: obtains the length of the platform
+/// containing `tile`, which must be a rail station tile of the resolved native
+/// station.
+pub(crate) fn get_platform_length(
+    w: &crate::map_func::World<'_>,
+    station: *mut BaseStation,
+    tile: TileIndex,
+) -> u32 {
+    if w.types.assertions() {
+        // SAFETY: The immutable table and resolved station outlive this scan.
+        let stations = unsafe { &*(w.shared.station_catchment)() };
+        // `TileBelongsToRailStation`.
+        w.check(
+            w.is_rail_station_tile(tile) && w.get_station_index(tile) == (stations.id)(station),
+        );
+    }
+
+    let delta = w
+        .dimensions
+        .offs_by_axis(w.get_rail_station_axis(tile), |ok| {
+            crate::services_assert::check(ok);
+        });
+
+    let mut t = tile;
+    let mut len: u32 = 0;
+    loop {
+        t = t - delta;
+        len = len.wrapping_add(1);
+        if !w.is_compatible_train_station_tile(t, tile) {
+            break;
+        }
+    }
+
+    t = tile;
+    loop {
+        t += delta;
+        len = len.wrapping_add(1);
+        if !w.is_compatible_train_station_tile(t, tile) {
+            break;
+        }
+    }
+
+    len.wrapping_sub(1)
+}
+
+/// Temporary raw adapter of [`get_platform_length_by_tile`] for `rail_yapf.rs`
+/// until its pass.
+pub(crate) fn get_platform_length_by_tile_raw(
+    w: &crate::map_func::World<'_>,
+    tile: u32,
+    dir: u8,
+) -> u32 {
+    get_platform_length_by_tile(
+        w,
+        TileIndex(tile),
+        crate::direction_type::DiagDirection(dir),
+    )
+}
+
+/// Temporary raw adapter of [`get_platform_length_in_direction`] for `train.rs`
+/// and `native_test_support.rs` until their passes.
+pub(crate) fn get_platform_length_in_direction_raw(
+    w: &crate::map_func::World<'_>,
+    tile: u32,
+    dir: u8,
+) -> u32 {
+    get_platform_length_in_direction(
+        w,
+        TileIndex(tile),
+        crate::direction_type::DiagDirection(dir),
+    )
+}
+
+/// Temporary raw adapter of [`get_platform_length`] for `train.rs` and
+/// `native_test_support.rs` until their passes.
+pub(crate) fn get_platform_length_raw(
+    w: &crate::map_func::World<'_>,
+    station: *mut BaseStation,
+    tile: u32,
+) -> u32 {
+    get_platform_length(w, station, TileIndex(tile))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
