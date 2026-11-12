@@ -48,7 +48,7 @@
  const Train *Train::First() const { return trains; }
  static void VehicleEnterTile(Train *v, TileIndex tile, int x, int y)
  {
-@@ -72,89 +63,31 @@
+@@ -72,89 +63,36 @@
  static bool IsBridgeTile(TileIndex) { return false; }
  #include "train-reference.inc"
 
@@ -135,7 +135,13 @@
 -	for (Train &v : trains) {
 -		result.insert(result.end(), {uint64_t(v.track), uint64_t(v.direction), uint64_t(uint32_t(v.x_pos)), uint64_t(uint32_t(v.y_pos)), uint64_t(uint32_t(v.z_pos)), v.tile, v.gv_flags, v.vehstatus.bits});
 +	std::printf("swap ");
-+	for (uint64_t e : events) std::printf("%u%u", unsigned(e >> 8), unsigned(e & 0xFF) == unsigned(l) ? 0U : 1U);
++	for (uint64_t e : events) {
++		/* Each callback goes to the vehicle at l or r; the side names which. */
++		unsigned vehicle = unsigned(e & 0xFF);
++		if (vehicle != unsigned(l) && vehicle != unsigned(r)) std::abort();
++		std::printf("%u%u", unsigned(e >> 8), vehicle == unsigned(l) ? 0U : 1U);
+ 	}
+-	return result;
 +	unsigned others = 0;
 +	for (int i = 0; i < 16; ++i) if (i != l && i != r && Fields(trains[i]) != Fields(before[i])) ++others;
 +	std::printf(" %u", others);
@@ -143,8 +149,7 @@
 +		auto now = Fields(trains[side]), own = Fields(before[side]), other = Fields(before[side == l ? r : l]);
 +		for (size_t f = 0; f < 8; ++f) std::printf(" %u", now[f] ^ (f < 6 ? other[f] : own[f]));
 +		if (l == r) break;
- 	}
--	return result;
++	}
 +	std::printf("\n");
  }
  int main()
@@ -154,7 +159,7 @@
  	for (uint32_t trial = 0; trial < 20000; ++trial) {
  		uint32_t count = 1 + Draw() % 16;
  		_settings_game.vehicle.train_acceleration_model = trial % 2;
-@@ -167,20 +100,10 @@
+@@ -167,20 +105,10 @@
  			v.track = uint8_t(1 << (Draw() % 8)); v.gv_flags = uint16_t(Draw()); v.vehstatus.bits = uint8_t(Draw());
  			v.x_pos = int(Draw() % 4000); v.y_pos = int(Draw() % 4000); v.z_pos = int(Draw() % 256); v.tile = Draw() % 65536;
  		}

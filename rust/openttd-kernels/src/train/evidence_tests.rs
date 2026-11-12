@@ -404,7 +404,15 @@ fn expected_entries(line: &str, t: &Trial) -> Vec<TileIndex> {
 fn swap_line(events: &[(u8, usize)], after: &[Fields; VEHICLES], t: &Trial) -> String {
     let mut line = String::new();
     for &(kind, i) in events {
-        let _ = write!(line, "{kind}{}", u8::from(i != t.l));
+        // The original sent each callback to the vehicle at `l` (side 0) or `r` (side 1);
+        // a callback to any other vehicle is written with its index, which no stored line holds.
+        if i == t.l {
+            let _ = write!(line, "{kind}0");
+        } else if i == t.r {
+            let _ = write!(line, "{kind}1");
+        } else {
+            let _ = write!(line, "{kind}v{i}");
+        }
     }
     let others = (0..VEHICLES)
         .filter(|&i| i != t.l && i != t.r && after[i] != t.before[i])
