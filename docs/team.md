@@ -24,6 +24,7 @@ Under a Claude Code root, Opus handles all code-touching work; Sonnet handles on
 - Every message root sends an implementer, the spawn brief included, contains the phrase "complete the whole task" (user, 2026-11-11).
 - Children send mid-task messages to their own `parentThreadId`, read from their thread metadata; never find root by searching thread titles. A reviewer and its PR's implementer message each other directly, by the thread IDs their briefs give ([review loop](#review-loop)).
 - Every agent-to-agent `t3_thread_send`, root's included, uses `mode: "queue"` unless the sender means to interrupt: the default steers a running turn, and a steer arriving during a Claude Code agent's tool call cancels the call with a notice to stop and wait for the user. On 2026-11-10 three reviewer messages within five seconds stopped an implementer mid-fix that way until root restarted it (#860). An agent whose call is cancelled as a message arrives reads the message, reruns the call and carries on unless the message says to stop.
+- The host wakes root with a child's last message each time that child ends a turn, and nothing switches that off. Briefs therefore ask for one line from a turn that only waits ([AGENTS.md](../AGENTS.md#every-agent)) and a full report only at a merge, a removal, a question or a final stop. Root takes no action on a waiting notice and writes no summary of it (user, 2026-11-12: a bootstrap agent's 300-word "run still in progress" report and root's reply to it bought nothing).
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work.
 - Each review gets a fresh reviewer who reads the PR's earlier attributed review reports. A PR's review stages are in the [review loop](#review-loop).
 - For an isolated code-changing task, use T3 `delegate_task` with `isolation: "worktree"`; T3 creates and binds the checkout. Follow the host's base-selection rules. The implementer names its branch and opens its PR there. Root makes worktrees by hand under `.local/worktrees` only for its own small PRs and reviews.
@@ -72,7 +73,7 @@ Root hands fixed procedures that need no judgment to a routine agent with the ro
 - a workflow-changing PR's bootstrap Full steps under [CI administration](root-workflow.md#ci-administration), after root has reviewed the workflow. Root decides whether the result lets the PR queue;
 - the missed-resume check in [spawning](#spawning).
 
-The agent changes nothing beyond its steps and reports each outcome in its last line.
+The agent changes nothing beyond its steps. A turn that ends to wait on a job ends with one line; the last turn reports each outcome.
 
 ## Provider handoff
 
