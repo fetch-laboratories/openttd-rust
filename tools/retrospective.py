@@ -1,32 +1,23 @@
 #!/usr/bin/env python3
-"""Read-only PR readiness, milestone latency and same-metric stocktakes."""
+"""Read-only PR readiness, milestone latency, stocktakes and base-update checks."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
+import base_update
 import ci
+from review_report import Comment, Review, ReviewReport, review_reports
 
 ROOT = Path(__file__).resolve().parents[1]
-REVIEWED = re.compile(r"\bReviewed\s+(?:commit|head):\s*`?([0-9a-f]{7,40})\b", re.I)
-
-
-@dataclass
-class ReviewReport:
-    sha: str
-    url: str
-    reported_at: str
-    source: str
-    matches_head: bool
 
 
 @dataclass
@@ -57,34 +48,6 @@ def pages(repository: str, path: str) -> list[dict[str, Any]]:
         )
         for item in page
     ]
-
-
-def review_reports(
-    comments: list[dict[str, Any]], reviews: list[dict[str, Any]], head: str
-) -> list[ReviewReport]:
-    reports = [
-        ReviewReport(
-            match[1],
-            item["html_url"],
-            item["updated_at"],
-            "report text",
-            head.startswith(match[1]),
-        )
-        for item in comments
-        for match in REVIEWED.finditer(item.get("body") or "")
-    ]
-    reports.extend(
-        ReviewReport(
-            item["commit_id"],
-            item["html_url"],
-            item["submitted_at"],
-            "GitHub review: " + item["state"],
-            item["commit_id"] == head,
-        )
-        for item in reviews
-        if item.get("commit_id") and item.get("submitted_at")
-    )
-    return reports
 
 
 def collect_pull(repository: str, number: int, *, latency: bool = False) -> PullFacts:
@@ -156,7 +119,9 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         and base_tip == current_tip,
         full_fact,
         passing_full_url,
-        review_reports(comments, reviews, head),
+        review_reports(
+            cast(list[Comment], comments), cast(list[Review], reviews), head
+        ),
         files,
         milestones,
     )
@@ -334,7 +299,10 @@ def main() -> None:
     command.add_argument("start")
     command.add_argument("end")
     command.add_argument("--json", action="store_true")
+    base_update.add_parser(commands)
     args = parser.parse_args()
+    if args.command == "base-update":
+        sys.exit(base_update.run(args, Path.cwd()))
     result: dict[str, Any]
     if args.command == "stocktake":
         result = stocktake(args.start, args.end)

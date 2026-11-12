@@ -10,7 +10,7 @@
 - PRs record changes, checks and remaining limits; migration documentation records design decisions and open limits, not evidence or review history.
 - A PR body follows the [PR template](../.github/PULL_REQUEST_TEMPLATE.md) and keeps the review groups, the residue with reasons, and the checks. Lint carries and growth or suppression proposals go in the branch's [cleanup records](rust-migration.md#quick-cleanup-checks) file, not the body.
 - Evidence is exact-head CI runs and commands recorded in the PR. Do not put receipt bundles, executable hashes or `.local/` paths in comments or docs.
-- Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop. A milestone is a pushed checkpoint whose checks pass, a blocking failure or a handoff, not each push or job start. A tracker issue body is its current list, edited as items open or close.
+- Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop, with `python3 tools/ci.py comment PR --agent PATH --body-file FILE` (`--show` reads it, `--issue N` for an issue). A milestone is a pushed checkpoint whose checks pass, a blocking failure or a handoff, not each push or job start. A tracker issue body is its current list, edited as items open or close.
 - Root commits the roadmap only at a stocktake, a change of course or wind-down ([ADR 0026](adr/0026-roadmap-commit-timing.md)); the one exception is the planner's [ready-queue](team.md#ready-queue-and-pipelining) refresh.
 - Keep the roadmap forward-looking and update it in place: a completed item becomes one row with issue, PR, commit and metrics. CI run IDs, executable hashes, probe values and per-PR plans go in the PR or issue.
 - Put rules every agent needs in [AGENTS.md](../AGENTS.md) and other rules in the doc its routing table names, each in one place.
@@ -31,7 +31,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 
 ### Checks
 
-- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, request `python3 tools/ci.py request PR --profile native`, wait on it in the background, and record the passing run at the reviewed head in the status comment.
+- Scenario comparisons run on CI, not on this host ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)); run one locally, by name, only to diagnose a failure. Once the local build and Cargo checks pass, start `python3 tools/ci.py request PR --profile native --wait` with your host's [background-job](team.md#background-jobs) mechanics (exit 2 means still running, not failed: resume with `python3 tools/ci.py wait PR`), and record the passing run at the reviewed head in the status comment.
 - Request `--profile platform` only for a suspected macOS build failure, or once before queueing a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/`: Full does not build macOS, and the [platform cadence](root-workflow.md#cadences) would find the break after it merges.
 
 ### Review
@@ -49,7 +49,7 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 Every merge goes through GitHub's merge queue ([ADR 0019](adr/0019-merge-queue.md)): queue with `python3 tools/ci.py enqueue PR`, not `gh pr merge`, `--admin` or a hand merge. What may queue is in [root's integration rules](root-workflow.md#integration). While root has [stopped merges](root-workflow.md#merge-stops), queue nothing.
 
 1. **Base update.** Update from base only for a conflict or a change the PR needs from base. Merge `origin/rust-migration` in a commit titled `Update: Merge rust-migration into BRANCH`; `gh pr update-branch` writes a title the commit checker rejects.
-2. **Review after a base update.** A reviewed PR's base update needs only CI if it has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or resolves every conflict by keeping both sides' lines unchanged (`git show --remerge-diff` removes only conflict markers); record which on the PR. Otherwise a fresh reviewer checks only the conflict resolution.
+2. **Review after a base update.** A reviewed PR's base update needs only CI if it has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or resolves every conflict there by keeping both sides' lines unchanged. Apply this test with `python3 tools/retrospective.py base-update [MERGE_SHA | --since REVIEWED_SHA]` and record its last line on the PR. Otherwise a fresh reviewer checks only the conflict resolution, in the files it lists.
 3. **Workflow changes.** A PR that changes `.github/workflows/` queues only after root's reviewed bootstrap Full on its head ([CI administration](root-workflow.md#ci-administration)).
 4. **Queue.** When every reviewer accepts and any re-check due has accepted, run `enqueue` at that head. Queue each PR alone and request no Full for it.
 5. **Wait.** Start `python3 tools/ci.py queue-wait PR` as a background job and take your next work. When the queue merges or removes the PR, tell root in one line with the PR, its head and the outcome.
