@@ -156,10 +156,10 @@ impl Handle {
     }
 
     pub(crate) fn get_flags(self) -> u64 {
-        u64::from(read_field!(self.owner, flags))
+        u64::from(read_field!(self.owner, flags).0)
     }
     pub(crate) fn set_flags(self, value: u64) {
-        write_field!(self.owner, flags, value as u16);
+        write_field!(self.owner, flags, VehicleRailFlags(value as u16));
     }
     pub(crate) fn get_crash_anim_pos(self) -> u64 {
         u64::from(read_field!(self.owner, crash_anim_pos))
@@ -196,10 +196,10 @@ impl Handle {
         write_field!(self.owner, track, crate::track_type::TrackBits(value as u8));
     }
     pub(crate) fn get_force_proceed(self) -> u64 {
-        u64::from(read_field!(self.owner, force_proceed))
+        u64::from(read_field!(self.owner, force_proceed).0)
     }
     pub(crate) fn set_force_proceed(self, value: u64) {
-        write_field!(self.owner, force_proceed, value as u8);
+        write_field!(self.owner, force_proceed, TrainForceProceeding(value as u8));
     }
     pub(crate) fn get_cached_tilt(self) -> u64 {
         u64::from(read_field!(self.owner, cached_tilt))
@@ -231,6 +231,26 @@ impl Handle {
         self.set_flags(if value { old | mask } else { old & !mask });
     }
 }
+/// Native `VehicleRailFlags`: the `VehicleRailFlag` bit set, stored as `uint16_t`.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VehicleRailFlags(pub u16);
+
+/// Native `TrainForceProceeding`: Modes for ignoring signals.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TrainForceProceeding(pub u8);
+
+impl TrainForceProceeding {
+    /// `TFP_NONE`: Normal operation.
+    pub const TFP_NONE: Self = Self(0);
+    /// `TFP_STUCK`: Proceed till next signal, but ignore being stuck till then. This includes
+    /// force leaving depots.
+    pub const TFP_STUCK: Self = Self(1);
+    /// `TFP_SIGNAL`: Ignore next signal, after the signal ignore being stuck.
+    pub const TFP_SIGNAL: Self = Self(2);
+}
+
 /// Native `VehicleRailFlag::Flipped`.
 pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.

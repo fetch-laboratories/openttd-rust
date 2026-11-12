@@ -11,6 +11,7 @@
 
 use crate::rail_type::RailTypes;
 use crate::track_type::TrackBits;
+use crate::train::{TrainForceProceeding, VehicleRailFlags};
 use crate::vehicle_base::VehicleRecord;
 
 crate::abi::shared_records! {
@@ -18,8 +19,8 @@ crate::abi::shared_records! {
     /// Train-private fields with the original widths and zero defaults.
     #[derive(Default)]
     "OpenTTDTrainState" ["train_state"] => pub struct TrainState {
-        /// `Train::flags`, a `VehicleRailFlags` set.
-        pub flags: u16,
+        /// `Train::flags`.
+        pub flags: VehicleRailFlags,
         /// Crash animation counter.
         pub crash_anim_pos: u16,
         /// Ticks waiting in front of a signal, ticks being stuck or a counter for forced
@@ -31,8 +32,8 @@ crate::abi::shared_records! {
         pub railtypes: RailTypes,
         /// `Train::track`.
         pub track: TrackBits,
-        /// `Train::force_proceed`, a `TrainForceProceeding` mode.
-        pub force_proceed: u8,
+        /// `Train::force_proceed`.
+        pub force_proceed: TrainForceProceeding,
         /// `TrainCache::cached_tilt`: train can tilt; feature provides a bonus in curves
         pub cached_tilt: bool,
         /// `TrainCache::user_def_data`: Cached property 0x25. Can be set by Callback 0x36.
