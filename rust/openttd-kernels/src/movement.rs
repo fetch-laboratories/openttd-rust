@@ -475,25 +475,6 @@ impl MovementServices {
             DiagDirection(side),
         )
     }
-    /// Temporary raw adapter of [`Self::get_tile_track_status_in_world`] for
-    /// `follow_track.rs` and `pathfinder_func.rs` until their passes.
-    #[inline]
-    pub(crate) fn track_status_in_world(
-        &self,
-        world: &World<'_>,
-        tile: u32,
-        mode: u8,
-        sub: u32,
-        side: u8,
-    ) -> u32 {
-        self.get_tile_track_status_in_world(
-            world,
-            TileIndex(tile),
-            TransportType(mode),
-            sub,
-            DiagDirection(side),
-        )
-    }
 }
 
 /// # Safety

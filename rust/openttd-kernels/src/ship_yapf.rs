@@ -453,7 +453,7 @@ fn low_search(
         let f = Follow {
             tile: ft.new_tile.0,
             skipped: ft.tiles_skipped,
-            dirs: ft.new_td_bits,
+            dirs: ft.new_td_bits.0,
             followed: u8::from(ok),
         };
         if f.followed != 0
@@ -564,7 +564,7 @@ fn random_path(
         let f = Follow {
             tile: ft.new_tile.0,
             skipped: ft.tiles_skipped,
-            dirs: ft.new_td_bits,
+            dirs: ft.new_td_bits.0,
             followed: u8::from(ok),
         };
         tile = f.tile;

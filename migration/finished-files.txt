@@ -21,6 +21,7 @@ rust/openttd-kernels/src/crypto/tests.rs
 rust/openttd-kernels/src/debug.rs
 rust/openttd-kernels/src/direction_func.rs
 rust/openttd-kernels/src/encoded.rs
+rust/openttd-kernels/src/follow_track.rs
 rust/openttd-kernels/src/game_state.rs
 rust/openttd-kernels/src/house_definition.rs
 rust/openttd-kernels/src/house.rs
@@ -59,7 +60,9 @@ rust/openttd-kernels/src/network_internal.rs
 rust/openttd-kernels/src/network_lifecycle.rs
 rust/openttd-kernels/src/network_socket.rs
 rust/openttd-kernels/src/network_tcp.rs
+rust/openttd-kernels/src/node_hash.rs
 rust/openttd-kernels/src/packet.rs
+rust/openttd-kernels/src/pathfinder_func.rs
 rust/openttd-kernels/src/pool.rs
 rust/openttd-kernels/src/pool/tests.rs
 rust/openttd-kernels/src/random_func.rs
@@ -118,3 +121,4 @@ rust/openttd-kernels/src/viewport_func.rs
 rust/openttd-kernels/src/void_map.rs
 rust/openttd-kernels/src/widget_parser.rs
 rust/openttd-kernels/src/witness.rs
+rust/openttd-kernels/src/yapf_node.rs

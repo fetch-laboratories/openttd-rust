@@ -791,10 +791,10 @@ impl Game<'_> {
         let dir = crate::direction_func::dir_to_diag_dir_raw((id).vehicle().direction(), |ok| {
             world.check(ok);
         });
-        let station_ahead = (crate::follow_track::platform_length_station(&world, tile.0, dir)
-            as i32)
-            .wrapping_mul(TILE_SIZE as i32);
-        let station_length = (crate::follow_track::platform_length_full(&world, st.base, tile.0)
+        let station_ahead =
+            (crate::station::get_platform_length_in_direction_raw(&world, tile.0, dir) as i32)
+                .wrapping_mul(TILE_SIZE as i32);
+        let station_length = (crate::station::get_platform_length_raw(&world, st.base, tile.0)
             as i32)
             .wrapping_mul(TILE_SIZE as i32);
         let v_length: u16 = u16::from(read_field!(id.vehicle().ground_cache(), cached_veh_length));

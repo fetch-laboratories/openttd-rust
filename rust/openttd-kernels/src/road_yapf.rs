@@ -144,7 +144,7 @@ static SCRATCH: GameState<Option<Scratch>> = GameState::new(None);
 struct Search<'a> {
     movement: crate::movement::CachedTable<'a>,
     tram: OnceCell<bool>,
-    follower: OnceCell<crate::follow_track::State>,
+    follower: OnceCell<crate::follow_track::CFollowTrackT>,
     road: OnceCell<crate::follow_track::RoadContext>,
     speeds: OnceCell<(i32, u16)>,
     input: Input,
@@ -272,7 +272,7 @@ impl Search<'_> {
         let s = unsafe { &*self.leaves.shared };
         let v = std::ptr::NonNull::new(self.context.cast_mut()).map(crate::vehicle::VehicleRef);
         let mut state = *self.follower.get_or_init(|| {
-            crate::follow_track::State::vehicle(
+            crate::follow_track::CFollowTrackT::vehicle_raw(
                 s,
                 crate::transport_type::TRANSPORT_ROAD,
                 v,
@@ -282,13 +282,15 @@ impl Search<'_> {
         });
         let road = self.road.get_or_init(|| crate::follow_track::RoadContext {
             tram: self.tram(),
-            compatible: (self.movement.get().road_compatible)(v.expect("road vehicle")),
+            compatible: crate::road_type::RoadTypes((self.movement.get().road_compatible)(
+                v.expect("road vehicle"),
+            )),
         });
-        let followed = state.follow_with_road(s, tile, td, Some(road));
+        let followed = state.follow_with_road_raw(s, tile, td, Some(road));
         Follow {
             tile: state.new_tile.0,
             skipped: state.tiles_skipped,
-            dirs: state.new_td_bits,
+            dirs: state.new_td_bits.0,
             followed: u8::from(followed),
         }
     }
@@ -469,7 +471,7 @@ impl Search<'_> {
                         .speed
                 })
             });
-            let max_speed = crate::follow_track::speed_limit_with_road(
+            let max_speed = crate::follow_track::get_speed_limit_with_road_raw(
                 shared,
                 crate::transport_type::TRANSPORT_ROAD,
                 Some(vehicle),
