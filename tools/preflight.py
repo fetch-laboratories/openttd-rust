@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import preflight_stamp
-import vcs
 import yaml
 from validation_execution import file_lock
 
@@ -71,7 +70,10 @@ class Step:
 
 
 def git(repo: Path, *arguments: str) -> str:
-    return vcs.git(*arguments, cwd=repo).strip()
+    """Git on the repository at repo, which cwd alone names."""
+    return subprocess.check_output(
+        ["git", *arguments], cwd=repo, env=other_repository(), text=True
+    ).strip()
 
 
 def other_repository() -> dict[str, str]:
@@ -83,25 +85,18 @@ def hooks_checkout(supplied: Path | None = None) -> Path:
     destination = supplied or (
         migration.COMMON_LOCAL / "tooling/OpenTTD-git-hooks" / HOOKS_REVISION
     )
-    env = other_repository()
-
-    def checker(*arguments: str) -> str:
-        return subprocess.check_output(
-            ["git", *arguments], cwd=destination, env=env, text=True
-        ).strip()
-
     with file_lock(
         migration.COMMON_LOCAL / "tooling/hooks.lock", label="commit-checker checkout"
     ):
         if not destination.exists() and supplied is None:
             destination.mkdir(parents=True)
-            checker("init", "--quiet")
+            git(destination, "init", "--quiet")
         if supplied is None and not (destination / "hooks/check-commits.sh").exists():
-            checker("fetch", "--quiet", "--depth=1", HOOKS_URL, HOOKS_REVISION)
-            checker("checkout", "--quiet", "--detach", HOOKS_REVISION)
-        if checker("rev-parse", "HEAD") != HOOKS_REVISION:
+            git(destination, "fetch", "--quiet", "--depth=1", HOOKS_URL, HOOKS_REVISION)
+            git(destination, "checkout", "--quiet", "--detach", HOOKS_REVISION)
+        if git(destination, "rev-parse", "HEAD") != HOOKS_REVISION:
             raise ValueError("commit checker is not at the pinned revision")
-        if checker("status", "--porcelain", "--untracked-files=all"):
+        if git(destination, "status", "--porcelain", "--untracked-files=all"):
             raise ValueError("commit checker checkout is dirty")
     return destination
 
