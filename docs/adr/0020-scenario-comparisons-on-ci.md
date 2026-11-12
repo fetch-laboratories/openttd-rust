@@ -4,7 +4,7 @@ may change: agents; a change that raises paid CI cost needs the user's approval 
 ---
 # Scenario comparisons run on CI, not on this machine
 
-A scenario comparison runs a piece of gameplay in the original game and in the Rust game and checks that they match. There are hundreds of scenarios. On 2026-11-10 an agent ran the default set of 485 on this machine with nothing else running. It had not finished after 25 minutes, had written 55 GB to the hard disk, and spent 34% to 52% of its CPU time waiting on that disk. One CI machine ran 186 scenarios in about 3 minutes. The night before, scenarios had taken 303 of the 751 minutes of implementers' background jobs ([#860](https://github.com/fetch-laboratories/openttd-rust/issues/860)).
+A scenario comparison runs a piece of gameplay in the original game and in the Rust game and checks that they match. There are hundreds of scenarios. On 2026-11-10 an agent ran the default set of 485 on this machine with nothing else running. It had not finished after 25 minutes, had written 55 GB to the hard disk, and spent 34% to 52% of its CPU time waiting on that disk ([ADR 0047](0047-output-on-the-hard-disk.md)). One CI machine ran 186 scenarios in about 3 minutes ([#860](https://github.com/fetch-laboratories/openttd-rust/issues/860)).
 
 Comparisons of game scenarios run on CI, not on this machine. An implementer runs a scenario locally only by name, to diagnose a failure.
 

@@ -60,6 +60,15 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0015](0015-third-party-test-content.md) | Other people's test content is not committed or uploaded |
 | [0016](0016-automatic-rollback.md) | Root rolls back a merge that breaks the main branch without asking |
 | [0017](0017-deep-checks-on-request.md) | Deep checks run only on the user's request, plus at the end of cleanup and of the reader phase |
+| [0028](0028-rust-not-go.md) | The game is ported to Rust, not Go |
+| [0029](0029-replace-in-place.md) | The port replaces the original game's parts in place, one at a time, inside the working game |
+| [0030](0030-pinned-to-openttd-15-3.md) | The fork stays on OpenTTD 15.3 and does not follow upstream |
+| [0031](0031-agents-run-the-project.md) | Agents run the project; the user sets the goal and is asked for decisions only rarely |
+| [0032](0032-issue-branch-pr-review-merge.md) | Every change goes through an issue, a branch, a PR, a separate reviewer and a merge, with each agent's model named |
+| [0044](0044-four-build-targets-no-releases.md) | The fork builds for four targets only and publishes no releases |
+| [0045](0045-one-github-account.md) | All agents share one GitHub account, so a review is an attributed comment and not a GitHub approval |
+| [0046](0046-no-upstream-contact.md) | Agents do not contact OpenTTD's upstream maintainers or submit changes upstream |
+| [0047](0047-output-on-the-hard-disk.md) | This machine's build and test output lives on the hard disk behind symlinks |
 
 ### The agents'
 
@@ -75,3 +84,15 @@ By number and header, with a link to the file, for example [ADR 0010](0010-two-i
 | [0025](0025-two-review-stages.md) | A pull request gets at most two review stages |
 | [0026](0026-roadmap-commit-timing.md) | Root commits the roadmap only at a stocktake, a change of course or wind-down |
 | [0027](0027-speed-measured-on-merged-branch.md) | Speed is measured on the merged branch, not on each pull request |
+| [0033](0033-correctness-is-compared-game-state.md) | Correctness is judged by running both games on the same scenarios and comparing their saved game state |
+| [0034](0034-one-copy-of-game-data.md) | Every piece of game data has one copy, read in place from either language |
+| [0035](0035-direct-synchronous-calls.md) | Rust calls C++ directly and waits for the answer |
+| [0036](0036-whole-components.md) | Rust takes over whole components, state and control flow together |
+| [0037](0037-tools-in-python.md) | The fork's tools and harness are written in Python and checked with pinned lint and type checkers |
+| [0038](0038-pools-keep-original-behaviour.md) | Game object pools and IDs keep the original's behaviour |
+| [0039](0039-overflow-checks-and-abort-on-panic.md) | Release builds keep Rust's integer overflow checks on and abort on panic |
+| [0040](0040-speed-by-instruction-counts.md) | Speed is measured by counting executed instructions, with occasional timed passes |
+| [0041](0041-globals-are-process-wide-statics.md) | A C++ global or static becomes a process-wide Rust static, not thread-local storage |
+| [0042](0042-ids-cross-as-plain-integers.md) | Typed C++ IDs cross the calling layer as their plain integer types |
+| [0043](0043-docs-only-changes-need-no-pr.md) | Docs-only changes are committed straight to the main branch without a PR |
+| [0048](0048-agents-md-and-routing-table.md) | `AGENTS.md` holds only what every agent needs; everything else is reached through a routing table |

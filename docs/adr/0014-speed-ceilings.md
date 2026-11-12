@@ -8,10 +8,10 @@ While the Rust game still crosses into C++ for much of its work, it runs slower 
 
 The Rust game may cost at most 1.6 times what the original costs to run a saved game, and at most 1.3 times to generate a new map.
 
-The user raised the play ceiling. On 2026-10-28 they wrote: "okay, raise the threshold from 1.5x to 1.6x." At the time the slowest saved game stood at about 1.485 times the original, close to the old 1.5 ceiling (commit `432ab228fc`). The 1.3 ceiling for map generation comes from [#282](https://github.com/fetch-laboratories/openttd-rust/issues/282) (2026-10-18), an agent-written issue that says the user decided it. How speed is measured, and when a speed pass runs, is in [ADR 0027](0027-speed-measured-on-merged-branch.md) and [docs/speed.md](../speed.md).
+The user raised the play ceiling. On 2026-10-28 they wrote: "okay, raise the threshold from 1.5x to 1.6x." The slowest saved game then stood at about 1.485 times the original (commit `432ab228fc`). The 1.3 ceiling for map generation was an agent's proposal: on 2026-10-18 the user asked "what would be a reasonable bound for generation" and then replied "proceed" ([#282](https://github.com/fetch-laboratories/openttd-rust/issues/282)). How speed is measured is in [ADR 0040](0040-speed-by-instruction-counts.md) and [ADR 0027](0027-speed-measured-on-merged-branch.md).
 
 A lower ceiling would cost agent-hours spent on speed work in place of porting.
 
 ## History
 
-The play ceiling was 1.5 until 2026-10-28.
+The play ceiling was 1.5 until 2026-10-28. That day the user asked whether 1.3 should rise too, and it was kept.

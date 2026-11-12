@@ -8,6 +8,6 @@ The cleanup moves tests off C++ where that removes more C++ than it adds ([ADR 0
 
 A C++ test that checks code still written in C++ stays in C++ until that code is ported. It is not converted to Rust early.
 
-Agents made this decision: the 34th steering review on 2026-11-11, and root after #931's measurement on 2026-11-12. New tests are still written in Rust ([ADR 0001](0001-full-rust-rewrite.md)). The C++ test is deleted when the code it checks moves to Rust.
+Agents made this decision: the 34th steering review on 2026-11-11, and root after #931's measurement on 2026-11-12. The user agreed: "the C++ tests of C++ code should not be converted to Rust that would be fucking stupid." New tests are still written in Rust ([ADR 0001](0001-full-rust-rewrite.md)). The C++ test is deleted when the code it checks moves to Rust.
 
 Reversing it would cost agent-hours on moves that add C++ and lose observations.

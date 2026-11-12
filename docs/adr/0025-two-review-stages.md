@@ -4,7 +4,7 @@ may change: agents
 ---
 # A pull request gets at most two review stages
 
-A pull request is a proposed change. Each one is reviewed by a separate agent before it merges, and every review stage costs a full agent session. On 2026-11-10 root added a third stage, an acceptance review after the re-check. In the ten hours that followed, 11 acceptance sessions found no defect, while 16 re-checks found one.
+A pull request is a proposed change. Each one is reviewed by a separate agent before it merges ([ADR 0032](0032-issue-branch-pr-review-merge.md)), and every review stage costs a full agent session. On 2026-11-10 root added a third stage, an acceptance review after the re-check. In the ten hours that followed, 11 acceptance sessions found no defect, while 16 re-checks found one.
 
 A pull request gets at most two review stages: a review, then one re-check only if the fix changed behaviour, test evidence or what a function does.
 

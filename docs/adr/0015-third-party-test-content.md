@@ -8,6 +8,6 @@ The fork tests the game with content written by other people: AIs from OpenTTD's
 
 Test inputs made by other people, such as AIs and NewGRF mod sets, are not committed to the repo or uploaded from CI. They are downloaded by pinned version and checksum into an ignored folder.
 
-Agents made the rule. Commit `a25223ec22` (2026-11-02) generalised it from one comment on [#507](https://github.com/fetch-laboratories/openttd-rust/issues/507) to all third-party inputs, after the user chose a new set of NewGRF test content (#654). The record holds no words of the user on the rule itself. It is the user's to change because it is a legal matter.
+The rule began with the user. On 2026-10-28, three minutes after picking an agent's recommended NewGRF sets for #525 to commit, the user asked: "why are you bringing them into the repo?" and "why not just keep a local copy uncommitted?" Commit `a25223ec22` (2026-11-02) extended it to all third-party inputs; the licence reasoning is the agents'.
 
 Reversing it would bring back the source-supply work that #526 was opened for and then closed, and the licence exposure that work was meant to cover.

@@ -8,7 +8,7 @@ Root is the top agent. It runs at the highest effort level, so each of its turns
 
 Root spends its turns choosing work and settling questions. It does not watch pull requests, check other agents' jobs or pass messages between agents. Each implementer starts its own reviewer, talks to that reviewer directly, puts its own reviewed change into the merge queue ([ADR 0019](0019-merge-queue.md)) and waits for it to merge. A cheaper agent does the routine chores, such as disk cleanup and the periodic platform CI run.
 
-The user wrote on 2026-11-11: "root should absolutely not be watching PR's. that's such a waste of time and tokens. why can't the implementer watch its own PR?"; "root runs on the highest effort level of any agent… should be solving problems and making decisions"; and "implementers should start their own reviewers." Direct messages between reviewer and implementer were in the list of changes the user approved on 2026-11-10.
+The user wrote on 2026-11-11: "root should absolutely not be watching PR's. that's such a waste of time and tokens. why can't the implementer watch its own PR?"; and "implementers should start their own reviewers." Direct messages between reviewer and implementer were in the list of changes the user approved on 2026-11-10.
 
 Reversing this would cost root's tokens and slow everything root decides. [docs/team.md](../team.md) holds the working rules.
 

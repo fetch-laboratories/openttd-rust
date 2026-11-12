@@ -8,6 +8,6 @@ The original game names its values with C++ enums, flag sets and ID types. The R
 
 Rust represents each of the original's enums, flag sets and IDs as a thin wrapper around the same integer, not as a Rust enum.
 
-The overhaul agent made this rule on 2026-11-06, in the cleanup plan the user approved. It is recorded so that a later agent does not reopen the obvious alternative. [docs/porting.md](../porting.md) holds the detailed rules.
+The overhaul agent made this rule on 2026-11-06, in the cleanup plan the user approved. [docs/porting.md](../porting.md) holds the detailed rules.
 
 Changing it would mean rewriting every wrapper: 309 wrapper types and 3,662 named constants existed by merge 32.
