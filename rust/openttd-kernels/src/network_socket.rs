@@ -105,6 +105,13 @@ pub(crate) fn process_deferred(s: &Services) {
     delete_deferred(s.socket_delete);
 }
 
+/// The destruction of `_deferred_deletions` at exit: delete the remaining sockets, then release
+/// the vector's capacity.
+fn deferred_shutdown(delete: extern "C" fn(*mut c_void)) {
+    delete_deferred(delete);
+    unsafe { *DEFERRED.get() = Vec::new() };
+}
+
 /// The virtual `NetworkGameSocketHandler::CloseConnection(NetworkRecvStatus)`, dispatched on
 /// the socket's role; the query socket's override stays native.
 pub(crate) fn specialized_close(
@@ -206,8 +213,7 @@ pub extern "C" fn openttd_rust_network_process_deferred(s: &Services) {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_deferred_shutdown(delete: extern "C" fn(*mut c_void)) {
-    delete_deferred(delete);
-    unsafe { *DEFERRED.get() = Vec::new() };
+    deferred_shutdown(delete);
 }
 
 /// `NetworkSend`: admin protocol first, then game sockets and deferred destruction.

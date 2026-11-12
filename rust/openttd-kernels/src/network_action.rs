@@ -77,6 +77,31 @@ impl Actions {
     pub(crate) unsafe fn from_storage(storage: *mut Storage) -> Self {
         Self(storage.cast())
     }
+    /// Initializes an empty owner, with no services bound, in unused native storage.
+    unsafe fn init(storage: *mut Storage) {
+        unsafe {
+            storage.cast::<Owner>().write(Owner {
+                network: std::ptr::null(),
+                session: std::ptr::null(),
+                frame: std::ptr::null_mut(),
+                save: std::ptr::null_mut(),
+                packet: std::ptr::null_mut(),
+                result: 0,
+                queue: [Resume::None; 16],
+                len: 0,
+                insert: 0,
+            });
+        }
+    }
+    /// The native server shell whose map save is pending, or null when none is.
+    fn save_shell(self) -> *mut c_void {
+        let socket = unsafe { (*self.0).save };
+        if socket.is_null() {
+            std::ptr::null_mut()
+        } else {
+            crate::network_socket::server(socket)
+        }
+    }
     /// Stores the `NetworkRecvStatus` the native caller returns.
     pub(crate) fn set_status(self, status: NetworkRecvStatus) {
         unsafe {
@@ -327,30 +352,13 @@ impl Actions {
 /// `storage` is aligned native stack capacity, unused until this initialization completes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_init(storage: *mut Storage) {
-    unsafe {
-        storage.cast::<Owner>().write(Owner {
-            network: std::ptr::null(),
-            session: std::ptr::null(),
-            frame: std::ptr::null_mut(),
-            save: std::ptr::null_mut(),
-            packet: std::ptr::null_mut(),
-            result: 0,
-            queue: [Resume::None; 16],
-            len: 0,
-            insert: 0,
-        });
-    }
+    unsafe { Actions::init(storage) };
 }
 /// # Safety
 /// `storage` is a live initialized native frame's action owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_save(storage: *mut Storage) -> *mut c_void {
-    let socket = unsafe { (*storage.cast::<Owner>()).save };
-    if socket.is_null() {
-        std::ptr::null_mut()
-    } else {
-        crate::network_socket::server(socket)
-    }
+    unsafe { Actions::from_storage(storage) }.save_shell()
 }
 /// # Safety
 /// The requested native save completed and all entry arguments and services remain live.
@@ -373,5 +381,8 @@ pub unsafe extern "C" fn openttd_rust_network_actions_drop(storage: *mut Storage
 /// `storage` is a live native frame's initialized action owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_result(storage: *const Storage) -> u8 {
-    unsafe { (*storage.cast::<Owner>()).result }
+    // The result byte is the ABI form of both result kinds.
+    unsafe { Actions::from_storage(storage.cast_mut()) }
+        .status()
+        .0
 }
