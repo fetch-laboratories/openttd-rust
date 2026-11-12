@@ -2,7 +2,6 @@
 # Each row names the owner issue that retires the evidence fixture calling those
 # members, from the #736 classification; that owner removes the row.
 openttd_rust_airport_town | #634 station pools: airport-resolver-console.hpp calls AirportResolverObject::GetTown
-openttd_rust_auth_handler_method | #730 network: network_crypto.cpp's adapter classes override the original's GetAuthenticationMethod, which nothing calls
 openttd_rust_auth_handler_receive_enable | #730 network: tests/network_connection.cpp calls ReceiveEnableEncryption
 openttd_rust_auth_handler_receive_request | #730 network: tests/network_connection.cpp calls ReceiveRequest
 openttd_rust_backup_clear_user | #906 order pools: orders-console.cpp calls OrderBackup::ResetOfUser

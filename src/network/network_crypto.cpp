@@ -70,12 +70,10 @@ bool RustAuthenticationServerHandler::CanBeUsed() const { return openttd_rust_au
 std::string RustAuthenticationServerHandler::GetPeerPublicKey() const { return FormatNetworkPublicKey(openttd_rust_auth_handler_peer(this->handler.get())); }
 
 std::string_view RustAuthenticationClientHandler::GetName() const { size_t size; auto name = openttd_rust_auth_handler_name(this->handler.get(), &size); return {reinterpret_cast<const char *>(name), size}; }
-NetworkAuthenticationMethod RustAuthenticationClientHandler::GetAuthenticationMethod() const { return static_cast<NetworkAuthenticationMethod>(openttd_rust_auth_handler_method(this->handler.get())); }
 std::unique_ptr<NetworkEncryptionHandler> RustAuthenticationClientHandler::CreateClientToServerEncryptionHandler() const { return std::make_unique<X25519EncryptionHandler>(this->handler.get(), 0); }
 std::unique_ptr<NetworkEncryptionHandler> RustAuthenticationClientHandler::CreateServerToClientEncryptionHandler() const { return std::make_unique<X25519EncryptionHandler>(this->handler.get(), 1); }
 
 std::string_view RustAuthenticationServerHandler::GetName() const { size_t size; auto name = openttd_rust_auth_handler_name(this->handler.get(), &size); return {reinterpret_cast<const char *>(name), size}; }
-NetworkAuthenticationMethod RustAuthenticationServerHandler::GetAuthenticationMethod() const { return static_cast<NetworkAuthenticationMethod>(openttd_rust_auth_handler_method(this->handler.get())); }
 std::unique_ptr<NetworkEncryptionHandler> RustAuthenticationServerHandler::CreateClientToServerEncryptionHandler() const { return std::make_unique<X25519EncryptionHandler>(this->handler.get(), 0); }
 std::unique_ptr<NetworkEncryptionHandler> RustAuthenticationServerHandler::CreateServerToClientEncryptionHandler() const { return std::make_unique<X25519EncryptionHandler>(this->handler.get(), 1); }
 

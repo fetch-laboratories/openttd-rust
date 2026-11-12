@@ -599,7 +599,7 @@ impl Endpoint {
                     format!(
                         "{} {} {} {} {} {} {} {} {} {sizes}",
                         std::str::from_utf8(name).unwrap(),
-                        openttd_rust_auth_handler_method(handler),
+                        (*handler).method().0,
                         (*this).logs,
                         (*this).asks,
                         (*this).replies,
