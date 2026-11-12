@@ -158,6 +158,7 @@ Then storage, each pool with its save/load chunks, redone from current base with
 - #500 is delivered by #734; #168 and #199 attach to #737 and the owners that touch those records. #737 has closed and #500 is still open, so these three await root's placement ruling.
 - #693 keeps the cancelled reconnect failure and two completed original/original runs that did not reproduce it; the cause is unresolved and its two-run authorization is exhausted. Diagnosis returns with #730's network owner after cleanup, or sooner if hangs exceed one rerun in ten Full requests at a stocktake (provisional).
 - #503's coverage continuation runs last.
+- #939 lists 35 rules that a script, hook or lint could hold instead of a doc, each with the doc lines it retires. Root takes them as tools PRs, best first.
 - #860 lists the development-process changes the user approved: the merge queue ([ADR 0019](adr/0019-merge-queue.md)), the per-merge builds ([ADR 0018](adr/0018-builds-before-every-merge.md)), CI scenario comparison ([ADR 0020](adr/0020-scenario-comparisons-on-ci.md)), direct reviewer and implementer messages, and the wind-down-only checkpoint ([ADR 0026](adr/0026-roadmap-commit-timing.md)).
 - #896 (paid CI minutes) stays with its author for the one-day weighted-minutes and network-failure follow-up. The simulation shards are back on Blacksmith; which jobs run on paid runners is the user's decision ([ADR 0009](adr/0009-paid-runner-assignment.md)).
 
