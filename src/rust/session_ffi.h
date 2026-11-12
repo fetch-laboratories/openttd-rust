@@ -121,8 +121,6 @@ struct OpenTTDSessionServices {
 	void (*road_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_end);
 	void (*landscape_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_begin);
 	void (*landscape_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_end);
-	void *(*schedule_measurement)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(schedule_measurement);
-	void (*schedule_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(schedule_end);
 
 };
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;
