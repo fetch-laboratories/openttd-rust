@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import unittest
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 from functools import partial
 from pathlib import Path
 from types import ModuleType
@@ -281,38 +281,6 @@ class PolicyTests(unittest.TestCase):
                     [dict(proposal, after=2)],
                     1,
                 ),
-                (
-                    [acceptance(payload=dict(proposal, source_contract=""))],
-                    [dict(proposal, source_contract="")],
-                    1,
-                ),
-                *(
-                    (
-                        [acceptance(payload=dict(proposal, **{key: value}))],
-                        [dict(proposal, **{key: value})],
-                        1,
-                    )
-                    for key, value in (
-                        ("before", False),
-                        ("before", 0.0),
-                        ("after", True),
-                        ("after", 1.0),
-                    )
-                ),
-                *(
-                    (
-                        [acceptance(payload=dict(proposal, **{key: " "}))],
-                        [dict(proposal, **{key: " "})],
-                        1,
-                    )
-                    for key in (
-                        "operation",
-                        "source_contract",
-                        "reason",
-                        "retiring_owner",
-                        "retirement_condition",
-                    )
-                ),
             ):
                 with (
                     patch.object(POLICY, "ROOT", root),
@@ -325,6 +293,18 @@ class PolicyTests(unittest.TestCase):
                     patch("sys.argv", ["lint-policy.py", "--base-ref", "HEAD"]),
                 ):
                     self.assertEqual(POLICY.main(), expected)
+        # An incomplete or mistyped proposal is a malformed record.
+        for key, value in (
+            ("before", False),
+            ("before", 0.0),
+            ("after", True),
+            ("after", 1.0),
+            *((key, " ") for key in cleanup_contract.CONTRACT),
+        ):
+            with self.assertRaisesRegex(
+                cleanup_contract.ContractError, f"^r: field {key} must be "
+            ):
+                cleanup_contract.proposal(dict(proposal, **{key: value}), "r")
         for forbidden in (
             "rust/x.rs | module | allow non_upper_case_globals",
             "rust/x.rs | mod nested | allow non_upper_case_globals",
@@ -598,7 +578,8 @@ class GrowthTests(unittest.TestCase):
                 for pull in found
                 if pull["number"] == number
             )
-            return json.dumps({"head": head, "body": f"PR {number}"})
+            body = f"Agent: PR{number} | Model: m | Reasoning effort: e"
+            return json.dumps({"head": head, "body": body})
 
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -606,15 +587,14 @@ class GrowthTests(unittest.TestCase):
             patch.object(cleanup_contract, "git", fake_git),
             patch.object(cleanup_contract, "gh", fake_gh),
             patch.object(cleanup_contract, "discussion", return_value=[]),
-            patch.object(cleanup_contract, "records", side_effect=lambda body: [body]),
         ):
             environment.pop("GITHUB_EVENT_PATH", None)
             if event is not None:
                 path = Path(directory) / "event.json"
                 path.write_text(json.dumps(event))
                 environment["GITHUB_EVENT_PATH"] = str(path)
-            _, bodies, _, head = cleanup_contract.context()
-        return f"{bodies[0] if bodies else None} at {head}"
+            author, _, head = cleanup_contract.pull_discussion("merge")
+        return f"{'PR ' + author[2:] if author else None} at {head}"
 
     def test_local_merge_head_reads_its_own_pr(self) -> None:
         # A local `Update: Merge integration N` merge is the PR head; its second
@@ -1211,7 +1191,8 @@ class CarryTests(unittest.TestCase):
                 ),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
-                self.assertEqual(POLICY.suppression_errors(before, grown), expected)
+                errors, _ = POLICY.suppression_errors(before, grown)
+                self.assertEqual(errors, expected)
         reason = 'reason = "original GroupFlag::ReplaceProtection enumerator"'
         source = (
             "pub struct GroupFlag;\n"
@@ -1233,7 +1214,7 @@ class CarryTests(unittest.TestCase):
                 POLICY.suppression_errors(
                     Counter(), POLICY.suppressions({"rust/x.rs": source}), reasoned
                 ),
-                [],
+                ([], []),
             )
         for rejected in (
             source.replace(f", {reason}", ""),
@@ -1611,6 +1592,197 @@ class OrdinaryRustTests(unittest.TestCase):
             )
             raw, _ = LINT.collect("ruff", root)
             self.assertIn("C901", raw)
+
+
+class TrackedRecordTests(unittest.TestCase):
+    # The usual archive claim, which successive cleanup PRs repeat exactly.
+    MERGED = {"kind": "refactor-proof", "method": "archive", "renames": {}}
+
+    @contextlib.contextmanager
+    def branch(self, files: Mapping[str, str]) -> Generator[tuple[Path, str]]:
+        """A base commit holding a merged PR's records, then a branch with `files`."""
+        merged = json.dumps([self.MERGED])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, {"migration/cleanup-records/merged.json": merged})
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            git("checkout", "-qb", "tools/921-x", cwd=root)
+            for path, text in files.items():
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_text(text)
+            with (
+                patch.object(cleanup_contract, "ROOT", root),
+                patch.object(cleanup_contract, "git", partial(git, cwd=root)),
+            ):
+                yield root, base
+
+    def test_only_records_the_change_adds_count(self) -> None:
+        carry = {"kind": "carry", "tool": "rust", "from": "a", "to": "b"}
+        own = "migration/cleanup-records/tools-921-x.json"
+        merged = "migration/cleanup-records/merged.json"
+        with self.branch({own: json.dumps([self.MERGED, carry])}) as (root, base):
+            # The merged file is inert; this branch's identical claim counts.
+            self.assertEqual(cleanup_contract.tracked(base), [self.MERGED, carry])
+            # A changed file counts only the records it lacked at base.
+            (root / merged).write_text(json.dumps([self.MERGED, dict(carry, to="c")]))
+            self.assertEqual(
+                cleanup_contract.tracked(base),
+                [dict(carry, to="c"), self.MERGED, carry],
+            )
+            (root / merged).write_text(json.dumps([self.MERGED]))
+            # Writing keeps this branch's records, adds new ones once and deletes
+            # the merged PR's unchanged file.
+            other = dict(carry, to="w")
+            with contextlib.redirect_stdout(io.StringIO()):
+                cleanup_contract.write(base, [carry, other])
+            self.assertEqual(
+                sorted(p.name for p in (root / "migration/cleanup-records").iterdir()),
+                ["tools-921-x.json"],
+            )
+            written = json.loads((root / own).read_text())
+            self.assertEqual(written, [self.MERGED, carry, other])
+            self.assertEqual(
+                cleanup_contract.tracked(base), [self.MERGED, carry, other]
+            )
+
+    def test_lint_policy_rejects_a_malformed_file_with_no_delta(self) -> None:
+        path = "migration/cleanup-records/tools-921-x.json"
+        with self.branch({path: "[[]]"}) as (root, base):
+            output = io.StringIO()
+            with (
+                patch.object(POLICY, "ROOT", root),
+                patch.object(POLICY, "git", partial(git, cwd=root)),
+                patch("sys.argv", ["lint-policy.py", "--base-ref", base]),
+                contextlib.redirect_stdout(output),
+                self.assertRaises(SystemExit) as stop,
+            ):
+                cleanup_contract.run(POLICY.main)
+            self.assertEqual(stop.exception.code, 1)
+            self.assertEqual(
+                output.getvalue(),
+                f"cleanup records: {path} record 1: a record must be a JSON object\n",
+            )
+
+    def test_malformed_records_fail_in_one_line_naming_record_and_field(self) -> None:
+        path = "migration/cleanup-records/tools-921-x.json"
+        growth = {"kind": "growth", "counter": "tools_cpp", "added": {"t.cpp": 1}}
+        for text, message in (
+            ("[] []", f"{path}: invalid JSON at line 1: Extra data"),
+            ("{}", f"{path}: the file must hold a JSON list of records"),
+            ("[[]]", f"{path} record 1: a record must be a JSON object"),
+            ('[{"kind": "carry"}]', f"{path} record 1: field tool must be text"),
+            (
+                json.dumps([self.MERGED, {"kind": "contract"}]),
+                f"{path} record 2: field kind must be one of",
+            ),
+            (
+                json.dumps([dict(growth, added={"t.cpp": "1"})]),
+                f"{path} record 1: field added must be counts",
+            ),
+            (
+                json.dumps([dict(growth, reason="r", retiring_owner="o")]),
+                f"{path} record 1: field existing_alternatives must be text",
+            ),
+        ):
+            with self.subTest(text=text), self.branch({path: text}) as (_, base):
+                output = io.StringIO()
+                with (
+                    contextlib.redirect_stdout(output),
+                    self.assertRaises(SystemExit) as stop,
+                ):
+                    cleanup_contract.run(lambda: len(cleanup_contract.tracked(base)))
+                self.assertEqual(stop.exception.code, 1)
+                self.assertEqual(len(output.getvalue().splitlines()), 1)
+                self.assertTrue(
+                    output.getvalue().startswith(f"cleanup records: {message}")
+                )
+
+    def test_malformed_acceptance_comment_names_its_block(self) -> None:
+        proposal = {"kind": "carry"}
+        signed = "Agent: /review | Model: test | Reasoning effort: high\n"
+        for block, message in (
+            ('{"head": "h"} {}', "comment 1 by /review block 1: invalid JSON"),
+            ('{"head": "h", "accept": {}}', "comment 1 by /review block 1: field"),
+            ('{"head": 1, "accept": []}', "comment 1 by /review block 1: field"),
+        ):
+            comment = signed + "```cleanup-acceptance\n" + block + "\n```"
+            with (
+                self.subTest(block=block),
+                self.assertRaisesRegex(cleanup_contract.ContractError, message),
+            ):
+                reviewed(proposal, [comment], "/impl", "h")
+        # A block that accepts nothing, such as a quoted proposal, is no acceptance.
+        quoted = signed + "```cleanup-acceptance\n{}\n```"
+        self.assertFalse(reviewed(proposal, [quoted], "/impl", "h"))
+
+    def test_moved_suppression_passes_after_one_write(self) -> None:
+        source = "#[allow(clippy::inline_always)]\n#[inline(always)]\nfn f() {}\n"
+        with self.branch({}) as (root, _):
+            (root / "rust").mkdir()
+            (root / "rust/a.rs").write_text(source)
+            git("add", "-A", cwd=root)
+            commit(root)
+            base = git("rev-parse", "HEAD", cwd=root).strip()
+            (root / "rust/a.rs").rename(root / "rust/b.rs")
+            git("add", "-A", cwd=root)
+
+            def policy(*flags: str) -> tuple[int, str]:
+                output = io.StringIO()
+                with (
+                    patch.object(POLICY, "ROOT", root),
+                    patch.object(POLICY, "git", partial(git, cwd=root)),
+                    patch("sys.argv", ["lint-policy.py", "--base-ref", base, *flags]),
+                    contextlib.redirect_stdout(output),
+                ):
+                    return POLICY.main(), output.getvalue()
+
+            status, shown = policy()
+            self.assertEqual(status, 1)
+            self.assertIn("ready carry: ", shown)
+            self.assertEqual(policy("--write")[0], 0)
+            self.assertEqual(policy()[0], 0)
+            records = json.loads(
+                (root / "migration/cleanup-records/tools-921-x.json").read_text()
+            )
+            self.assertEqual(
+                [(r["from"], r["to"]) for r in records],
+                [
+                    (
+                        "rust/a.rs | fn f | allow clippy::inline_always",
+                        "rust/b.rs | fn f | allow clippy::inline_always",
+                    )
+                ],
+            )
+
+    def test_growth_awaiting_acceptance_fails_only_in_the_merge_group(self) -> None:
+        delta = {"counter": "tools_cpp", "old": 1, "new": 2, "added": {"t.cpp": 1}}
+        proposal = dict(
+            delta,
+            kind="growth",
+            reason="r",
+            existing_alternatives="none",
+            retiring_owner="o",
+            retirement_condition="c",
+        )
+        for proposals, comments, event, failed, shown in (
+            ([proposal], [], "pull_request", False, "pending review: tools_cpp"),
+            ([proposal], [], "merge_group", True, "lacks its reviewer's acceptance"),
+            ([], [], "pull_request", True, "has no proposal in the cleanup records"),
+            (
+                [proposal],
+                [acceptance_comment("h", proposal)],
+                "merge_group",
+                False,
+                '"accepted_at": "h"',
+            ),
+        ):
+            output = io.StringIO()
+            with self.subTest(event=event), contextlib.redirect_stdout(output):
+                contract = ("/impl", proposals, comments, "h")
+                self.assertEqual(
+                    GROWTH.unaccepted([delta], contract, "HEAD", event), failed
+                )
+                self.assertIn(shown, output.getvalue())
 
 
 if __name__ == "__main__":

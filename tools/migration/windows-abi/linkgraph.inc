@@ -28,6 +28,7 @@ static void LinkGraphJob()
 		.begin_measurement = nullptr,
 		.can_allocate = nullptr,
 		.destroy_job = nullptr,
+		.end_measurement = nullptr,
 		.graph_pool = nullptr,
 		.job_pool = nullptr,
 		.new_job = nullptr,

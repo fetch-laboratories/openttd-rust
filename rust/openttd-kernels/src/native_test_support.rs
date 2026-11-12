@@ -653,13 +653,6 @@ pub extern "C" fn openttd_test_network_wait_queue_clear() {
     crate::network_command::clear_wait_queue();
 }
 
-/// Install, or with null clear, the scheduler fixture's stand-in for its pause post.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_test_schedule_pause_observer(observer: Option<extern "C" fn(bool)>) {
-    // SAFETY: Serialized like every game-state slot; no borrow outlives the write.
-    unsafe { *crate::linkgraph_schedule::PAUSE_OBSERVER.get() = observer };
-}
-
 /// Deep snapshot for the existing native engine fixtures; it has no shell/pool owner.
 /// # Safety
 /// Source is a live serialized binding record; the result is uniquely owned by the fixture.

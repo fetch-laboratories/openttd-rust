@@ -1,0 +1,13 @@
+[
+  {
+    "retires": [
+      "source:tools/simulation/linkgraph-schedule-reference.cpp"
+    ],
+    "oracle": "Frozen linkgraph_schedule/schedule-oracle.txt: the probe's reference half, with its candidate half removed and no Rust archive or candidate header linked, built against the unchanged original 14ec60f248547d4d062a1160f0fc26d742319888 bodies the driver extracted (linkgraphschedule.cpp's SpawnNext, IsJoinWithUnfinishedJobDue, JoinNext, SpawnAll, Clear, ShiftDates, StateGameLoop_LinkGraphPauseControl, AfterLoad_LinkGraphPauseControl and OnTick_LinkGraph, and linkgraphschedule.h's Queue and Dequeue). GCC 13.3.0 Linux x86_64, C++20 at -O0 and -O2 -DNDEBUG; both streams identical. Recipe: tools/oracle-recipes/linkgraph_schedule.patch over the fixture at f0f67cf819, `python3 tools/oracle-capture.py linkgraph_schedule`. Each distinct trace entry is stored once. 1,542 raw bytes.",
+    "observations": {
+      "47 trace entries of the fixture's scheduler run, in call order: rotation of undersized graphs ending at a duplicate front, spawn with a synchronously completing worker before insertion into the running queue, dequeue, join of a due job with requeue, join whose job destruction recycles the graph ID and queues it twice, pause posts and the after-load pause for a due unfinished front job, the inactive and client measurements around a join, SpawnAll over the running queue only, ShiftDates over every pooled graph, node and job, and Clear aborting running jobs without deleting them; production linkgraph_schedule.rs entries with the fixture's shells, pools and leaves; each pause post runs the production command chain (command_post::pause, command::post and the session's CmdPause) over test-side command, cost, finance and session leaves and is recorded as the link graph pause state its executed command leaves; pause control runs through the production session state loop (openttd_rust_session_state_loop_abi) in a modal editor frame under the fixture's pause modes, so the session's network gate and pause predicates are observed; the tick enters linkgraph_schedule::tick (OnTick_LinkGraph), whose client decision and measurement begin and end are observed through its network and measurement leaves. The test does not run the game loop's call into tick; that call is carried by the default scenarios play-opus-55-167-002-cargodist-symmetric-reload and play-opus-55-167-002-cargodist-asymmetric-reload, whose candidate run must hit the schedule.spawn and schedule.join witnesses (tools/simulation/play_saves.py check), reached only through tick": [
+        "rust:lib:linkgraph_schedule::evidence_tests::schedule_trace_matches_original"
+      ]
+    }
+  }
+]

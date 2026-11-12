@@ -18,7 +18,14 @@ from functools import lru_cache, partial
 from pathlib import Path
 
 from baseline_ratchet import debt_errors, exceeds
-from cleanup_contract import Ledger, carry_hints, checked_carries, context, reviewed
+from cleanup_contract import (
+    Ledger,
+    carry_hints,
+    checked_carries,
+    context,
+    reviewed,
+    run,
+)
 from code_lines import without_comments
 from rust_syntax import item_source, nodes, syntax_trees
 from vcs import git
@@ -377,7 +384,7 @@ def reviewed_debt(
     if not grown(previous):
         return previous
     ledger = Ledger(kind, previous, measured, lint_of, fits)
-    author, proposals, comments, head = context()
+    author, proposals, comments, head = context(base or "HEAD")
     carried = checked_carries(proposals, ledger)
     renamed = paired_renames(kind, ledger, carried, base)
     allowed = dict(previous)
@@ -397,17 +404,7 @@ def reviewed_debt(
             }
             if any(proposal.get(key) != value for key, value in expected.items()):
                 continue
-            required = (
-                "operation",
-                "source_contract",
-                "reason",
-                "retiring_owner",
-                "retirement_condition",
-            )
-            if all(
-                isinstance(proposal.get(key), str) and proposal[key].strip()
-                for key in required
-            ) and reviewed(
+            if reviewed(
                 proposal, comments, author, head, partial(unchanged_item, kind, site)
             ):
                 allowed[site] = values
@@ -564,4 +561,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run(main)

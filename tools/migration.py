@@ -52,6 +52,8 @@ REFERENCE = COMMON_LOCAL / "reference/openttd"
 SANITIZE_VARIABLE = "OPENTTD_SANITIZE"
 SANITIZE = os.environ.get(SANITIZE_VARIABLE) == "1"
 TSAN_VARIABLE = "OPENTTD_TSAN"
+# personality(2) flag that `setarch -R` sets.
+ADDR_NO_RANDOMIZE = 0x0040000
 TSAN = os.environ.get(TSAN_VARIABLE) == "1"
 SANITIZED = "-sanitized" if SANITIZE else "-tsan" if TSAN else ""
 REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
@@ -841,6 +843,27 @@ def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]
     return parser, args, simulate_args
 
 
+def sanitizer_exec(args: argparse.Namespace) -> None:
+    """Restart under the requested sanitizer's environment when it is not set.
+
+    GCC 13's TSan cannot map its shadow under Linux 6.8's mmap randomization, so
+    TSan-built tools such as settingsgen crash in the build too (#678, #925). A
+    TSan run restarts under `setarch -R`; build tools and games inherit it.
+    """
+    randomized = (
+        args.tsan
+        and not int(Path("/proc/self/personality").read_text(), 16) & ADDR_NO_RANDOMIZE
+    )
+    if (args.sanitize and not SANITIZE) or (args.tsan and not TSAN) or randomized:
+        exported = os.environ | {
+            SANITIZE_VARIABLE if args.sanitize else TSAN_VARIABLE: "1"
+        }
+        argv = [sys.executable, *sys.argv]
+        if randomized:
+            argv = ["setarch", "-R", *argv]
+        os.execvpe(argv[0], argv, exported)
+
+
 def main() -> None:
     parser, args, simulate_args = arguments()
     if args.action == "env":
@@ -866,11 +889,7 @@ def main() -> None:
         parser.error("sanitizer/threaded options apply to build and simulate")
     if args.action == "simulate" and args.tsan and not args.threaded:
         parser.error("--tsan simulation requires --threaded")
-    if (args.sanitize and not SANITIZE) or (args.tsan and not TSAN):
-        exported = os.environ | {
-            SANITIZE_VARIABLE if args.sanitize else TSAN_VARIABLE: "1"
-        }
-        os.execve(sys.executable, [sys.executable, *sys.argv], exported)
+    sanitizer_exec(args)
     if args.action == "deep":
         command_deep(args, simulate_args, parser)
     started = time.monotonic()
