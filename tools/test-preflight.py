@@ -615,6 +615,27 @@ class CompileCheckTests(unittest.TestCase):
             self.assertEqual(check.check("base"), 0)
             abi.assert_called_once()
 
+    def test_a_fork_test_source_alone_runs_only_the_clang_pass(self) -> None:
+        # #933: c11ad644db's warning was in src/tests/station_service.cpp alone.
+        check = tool("compile-check")
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(check, "BUILD", Path(directory)),
+            patch.object(check, "OUT", Path(directory) / "out"),
+            patch.object(check, "changed", return_value=["src/tests/station.cpp"]),
+            patch.object(check, "generated_abi_changed", return_value=[]),
+            patch.object(check.shutil, "which", return_value="clang++"),
+            patch.object(check, "jobs") as jobs,
+            patch.object(
+                check, "clang_pass", return_value=(["x:1:1: warning: w"], 1, 1)
+            ),
+            patch("builtins.print"),
+        ):
+            for name in ("CMakeCache.txt", "compile_commands.json"):
+                (Path(directory) / name).write_text("")
+            self.assertEqual(check.check("base"), 1)
+            jobs.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

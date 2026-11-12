@@ -216,10 +216,12 @@ def check(base: str) -> int:
     # Always regenerate: a selected run must compile against this tree's ABI.
     abi = generated_abi_changed(fresh)
     paths = changed(base)
-    if not abi and not any(INPUTS.match(path) for path in paths):
+    probes = bool(abi) or any(INPUTS.match(path) for path in paths)
+    # A fork test source alone selects only the Clang pass (#933).
+    if not probes and not any(path.startswith("src/tests/") for path in paths):
         print(
-            "skipped: the change touches no shared header, generated ABI, probe "
-            "or runtime adapter"
+            "skipped: the change touches no shared header, generated ABI, probe, "
+            "runtime adapter or fork test source"
         )
         return 0
     stale = str(BUILD / "generated-abi")
@@ -230,7 +232,7 @@ def check(base: str) -> int:
         shutil.rmtree(OUT / folder, ignore_errors=True)
         (OUT / folder).mkdir()
     started = time.monotonic()
-    listed = jobs()
+    listed = jobs() if probes else []
     with ThreadPoolExecutor(workers()) as pool:
         results = list(pool.map(lambda job: run(*job, env), listed))
     labels = {FAILED: "compile failed", RAN: "tried to run a program"}
