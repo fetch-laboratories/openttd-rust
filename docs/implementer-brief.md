@@ -42,7 +42,7 @@ List anything you leave in the PR body with its reason. Residue not listed there
 - Run long jobs in the background as `exec python3 tools/signal-witness.py -- <command>`, name the job ID and end your turn ([AGENTS.md](../AGENTS.md#every-agent)).
 - The pre-push hook refuses a non-Markdown push without a preflight stamp for its tree. Push a draft checkpoint with `PREFLIGHT_CHECKPOINT='what is incomplete' git push`; mark the PR ready with `python3 tools/ci.py ready PR` ([commits](workflow.md#commits-and-pushes)).
 - Commit coherent steps under titles the preflight commit checker accepts ([commits](workflow.md#commits-and-pushes)). Push at each passing milestone, keep the PR in draft until done and edit one status comment at milestones.
-- A turn that ends only to wait on a job, a review or the queue ends with one line: the job ID and what it waits on ([AGENTS.md](../AGENTS.md#every-agent)). Root is woken by every turn you end and needs nothing from those. Keep state in the status comment.
+- A turn that ends only to wait on a job, a review or the queue writes its last line and nothing else: `PR <url>, head <SHA>, checks and reviews <state>` with the job ID ([AGENTS.md](../AGENTS.md#every-agent)). Root receives the whole message at every turn end and acts only on that line. Keep state in the status comment.
 - Root needs a message in three cases: the PR merged or the queue removed it (one line: PR, head, outcome), a question only root can answer, or a stop you cannot work past. Only when you stop for good, finish with what you delivered, what stays in C++, exact commands, limits and the next action.
 
 ## Review
