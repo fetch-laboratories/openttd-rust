@@ -19,7 +19,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from cleanup_contract import context, reviewed
+from cleanup_contract import ContractError, context, reviewed, run
 from vcs import git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -231,25 +231,26 @@ def main() -> int:
     ):
         print("refactor proof: no Rust source changes")
         return 0
+    claim: dict[str, Any] = {
+        "kind": "refactor-proof",
+        "method": "archive",
+        "renames": {},
+    }
     author, proposals, comments, head = (
-        ("", [{"kind": "refactor-proof", "method": "archive", "renames": {}}], [], "")
-        if args.build
-        else context()
+        ("", [claim], [], "") if args.build else context(args.base_ref)
     )
-    claims = [p for p in proposals if p.get("kind") == "refactor-proof"]
+    claims = [p for p in proposals if p["kind"] == "refactor-proof"]
     if not claims:
         print(
-            "refactor proof: no archive-equivalence claim in PR; behavior validation remains required"
+            "refactor proof: no archive-equivalence claim recorded; behavior validation remains required"
         )
         return 0
-    if len(claims) != 1 or claims[0].get("method") != "archive":
-        raise ValueError("require one archive proof contract")
+    if len(claims) != 1 or claims[0]["method"] != "archive":
+        raise ContractError("require one archive proof contract")
     claim = claims[0]
-    renames = claim.get("renames", {})
-    if not isinstance(renames, dict):
-        raise ValueError("renames must map raw symbols to raw symbols")
+    renames = claim["renames"]
     if renames and not reviewed(claim, comments, author, head):
-        raise ValueError(
+        raise ContractError(
             "symbol renames need independent attributed acceptance at this head"
         )
     output = ROOT / ".local/refactor-proof"
@@ -262,4 +263,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run(main)

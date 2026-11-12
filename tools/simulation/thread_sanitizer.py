@@ -17,6 +17,7 @@ CYCLE = re.compile(
 )
 FRAME = re.compile(r"^\s+#\d+ (?:0x[0-9a-f]+ (?:in )?)?(.+?) (\S+) \(([^)]+)\)")
 FATAL = re.compile(r"^.*FATAL: ThreadSanitizer.*$", re.M)
+SUPPRESSIONS = Path(__file__).with_name("tsan-suppressions.txt")
 
 
 def command(argv: Sequence[str]) -> list[str]:
@@ -35,7 +36,8 @@ def check_started(output: str) -> None:
 def environment(run: Path) -> dict[str, str]:
     folder = run / sanitizers.REPORTS
     folder.mkdir()
-    return {"TSAN_OPTIONS": f"halt_on_error=0:exitcode=0:log_path={folder / 'report'}"}
+    options = f"halt_on_error=0:exitcode=0:log_path={folder / 'report'}"
+    return {"TSAN_OPTIONS": f"{options}:suppressions={SUPPRESSIONS}"}
 
 
 def frame_key(line: str, roots: Sequence[Path], builds: Sequence[Path]) -> str:
