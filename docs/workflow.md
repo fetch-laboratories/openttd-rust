@@ -13,7 +13,6 @@
 - Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop. A milestone is a pushed checkpoint whose checks pass, a blocking failure or a handoff, not each push or job start. A tracker issue body is its current list, edited as items open or close.
 - Root commits the roadmap only at a stocktake, a change of course or wind-down ([ADR 0026](adr/0026-roadmap-commit-timing.md)); the one exception is the planner's [ready-queue](team.md#ready-queue-and-pipelining) refresh.
 - Keep the roadmap forward-looking and update it in place: a completed item becomes one row with issue, PR, commit and metrics. CI run IDs, executable hashes, probe values and per-PR plans go in the PR or issue.
-- Docs use headings, tables and bullets; issues, comments and commit messages use full sentences.
 - Put rules every agent needs in [AGENTS.md](../AGENTS.md) and other rules in the doc its routing table names, each in one place.
 
 ## Branches and worktrees
@@ -38,8 +37,10 @@ The implementer takes its own PR through review and the merge queue ([ADR 0012](
 ### Review
 
 - The implementer starts its reviewers with T3 `delegate_task`, using the [role table](team.md#roles-and-models)'s review model and the [review brief](review-brief.md)'s spawn message. Root starts no reviewers.
+- Start one reviewer for the whole PR. Above about 1,000 changed lines, list review groups in the PR body and start one reviewer per group, in parallel.
+- Fix each finding in its own commit, or one per coherent group, ending `Found-by: review`.
 - A PR has at most two review stages ([ADR 0025](adr/0025-two-review-stages.md)): the source review, and one re-check of the fixing commits only when a fix changed behaviour, test evidence or a body's operations. Fixes limited to names, comments, types or argument structs with unchanged operations need none; the implementer says so in the status comment.
-- A simulation behaviour fix that CI found, arithmetic and assertion fixes included, gets a fresh reviewer scoped to it.
+- A substantive rewrite, or a simulation behaviour fix that CI found (arithmetic and assertion fixes included), gets a fresh reviewer scoped to it.
 - The implementer or root may commit fixes for CI warnings or platform errors, or record speed medians, without a new review.
 - A review that stops before recording findings and disposition counts as no review.
 
@@ -52,4 +53,4 @@ Every merge goes through GitHub's merge queue ([ADR 0019](adr/0019-merge-queue.m
 3. **Workflow changes.** A PR that changes `.github/workflows/` queues only after root's reviewed bootstrap Full on its head ([CI administration](root-workflow.md#ci-administration)).
 4. **Queue.** When every reviewer accepts and any re-check due has accepted, run `enqueue` at that head. Queue each PR alone and request no Full for it.
 5. **Wait.** Start `python3 tools/ci.py queue-wait PR` as a background job and take your next work. When the queue merges or removes the PR, tell root in one line with the PR, its head and the outcome.
-6. **Removal.** Read the failed run to its last job before recording a cause, then fix the cause under [review](#review). After a runner or network failure, a step before any build or test or a lost runner with no test output, queue it again once with `enqueue --retry REASON`; a network-protocol scenario hang counts too, and its evidence goes on #693.
+6. **Removal.** Read the failed run to its last job before recording a cause, then fix the cause under [review](#review) and merge base before queueing again. After a runner or network failure, a step before any build or test or a lost runner with no test output, queue it again once with `enqueue --retry REASON`; a network-protocol scenario hang counts too, and its evidence goes on #693.

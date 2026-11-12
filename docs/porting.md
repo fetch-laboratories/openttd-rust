@@ -39,7 +39,7 @@
 - Use an action protocol to return control to C++ only where an exception can unwind through the call in ordinary play (script VMs, save/load errors). Reentry alone is not a reason: end every Rust borrow before the callback, then call directly.
 - Entries are synchronous calls, without async, futures, tasks or mailboxes, and allocate nothing per call.
 - Give each service its own typed `noexcept` function with real types on both sides. Use designated initializers for service tables.
-- Access map and shared-layout record fields by field-sized raw load or store at the original observation point. For a record still stored in C++, resolve its owner once per entry.
+- Access map and shared-layout record fields by field-sized raw load or store at the original observation point. For a record still stored in C++, resolve its owner once per entry and use its shared typed field accessors.
 - Internal signatures use the original's wrapper types. FFI exports, `repr(C)` records, service tables and generated declarations pass C++ class types such as `PoolID` and `StrongType` as their base integers, because MSVC returns class types through a hidden pointer.
 - A Rust-defined `extern "C"` function or callback returns a 0-or-1 `u8`, not `bool`, and C++ compares it `!= 0`.
 
@@ -60,14 +60,14 @@ Fix these before integration; root grants no exceptions. A file pass fixes every
 - Port each helper or constant once into the shared Rust module named after its original file, header or `.cpp`, and import it from there. A pass adds a missing port there; that does not make the pass own that file.
 - Before adding a binding, search `src/` for its callee, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`.
 - Each shared accessor (vehicle field, map predicate, setting or constant) has one typed definition; command ports share one set of command-check services. A PR adding one deletes the integrated copies.
-- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields.
-- A typed accessor replaces its raw form. A raw `_raw` adapter delegates to the typed definition and serves only callers in files no pass has finished, until its last caller goes or #734 closes. A pass converts callers in already-finished files itself. Rust code calls the typed form, not a raw adapter or an `openttd_rust_*` export.
+- Delete the C++ a change replaces in the same change, with its exports, declarations and service fields. An orphan export, declaration or callback field in the lines a PR has in scope is a finding, baselined or not.
+- A typed accessor replaces its raw form. A raw `_raw` adapter delegates to the typed definition and serves only callers in files no pass has finished, until its last caller goes or #734 closes. A pass converts callers in already-finished files itself. Rust code calls the typed form, not a raw adapter or an `openttd_rust_*` export, where a typed form exists.
 
 ## Map access
 
 - Simulation Rust reads and writes map arrays in place through the [shared map descriptor](design/world-state.md); `map_func::World` is its single type.
 - Prove the descriptor's interval once, not per entry: `Map::Allocate` in new games and loaders, and game-state mutex yields for generation progress and GRF scanning, run outside the game loop and command execution. Re-prove it if a change adds a reset or yield there. Raw field loads use no Rust references and end before a callback that can load, reset or yield.
-- Shared header helpers preserve native assertions: on a failed precondition call the native assertion as the original accessor does. Retire existing typed map services hottest first (#565), otherwise when a port touches them.
+- Shared header helpers preserve native assertions: on a failed precondition call the native assertion as the original accessor does, not the C++ accessor. Retire existing typed map services hottest first (#565), otherwise when a port touches them.
 
 ## Evidence
 

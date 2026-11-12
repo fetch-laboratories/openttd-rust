@@ -4,7 +4,7 @@ Implementers take their PRs through review and the merge queue under the [PR lif
 
 ## Integration
 
-A merge is one merged PR, counted from the first-parent history of `origin/rust-migration` since the switch to the merge queue; earlier merges were integrations, numbered separately up to 147.
+A merge is one merged PR, counted from the first-parent history of `origin/rust-migration` since the switch to the merge queue.
 
 - Queue an owner's checkpoint only once it meets all of the following, then continue in a fresh PR on the same issue:
   - It removes at least 100 fork C++ lines net, counting C++ under `tools/` and `src/tests` (provisional).
@@ -86,7 +86,7 @@ Read the failing result and identify its code cause; a red check does not justif
 
 1. Fetch the current remote tip; identify the breaking merge and its first parent, and check that later changes are docs-only. Preserve the old tip on an origin recovery branch and record the component PR's head on its issue. Do not discard dirty work in any checkout.
 2. Prepare the replacement from that first parent in a clean checkout. Reapply later docs with completion claims corrected for removed work.
-3. Push with an explicit lease: `git push --force-with-lease=refs/heads/rust-migration:OLD_REMOTE_SHA origin REPLACEMENT_SHA:refs/heads/rust-migration`. If it fails, fetch and reassess; do not use bare `--force`. If protection requires it, enable force pushes temporarily, then restore the prior setting even on failure and read it back.
+3. Push with an explicit lease: `git push --force-with-lease=refs/heads/rust-migration:OLD_REMOTE_SHA origin REPLACEMENT_SHA:refs/heads/rust-migration`. If it fails, fetch and reassess; do not use bare `--force`. If protection requires it, enable force pushes temporarily and preserve every other protection setting: the update replaces the whole configuration. Restore the prior setting even on failure, then read back the force-push setting and the required checks.
 4. Reopen the tracking issue if closed; record the recovery branch, head and next repair step. Resume through a replacement PR linked to the old one, which GitHub keeps marked merged. Keep the recovery ref until replacement work is safely retained.
 
 Report a failed recovery as failed, not as a reset.

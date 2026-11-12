@@ -22,6 +22,7 @@ At most two implementers work at once ([ADR 0010](adr/0010-two-implementers.md))
 - Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order.
 - Root's spawn brief to an implementer contains the phrase "complete the whole task", so that the implementer works through to the end instead of stopping for approval.
 - Spawn a fresh agent named for each task; its name is its attribution.
+- Root writes no summary of a child's waiting notice.
 - Children send mid-task messages to their own `parentThreadId`, read from their thread metadata.
 - Every agent-to-agent `t3_thread_send` uses `mode: "queue"` unless the sender means to interrupt: a steer arriving during a Claude Code agent's tool call cancels the call. An agent whose call is cancelled as a message arrives reads the message, reruns the call and carries on unless the message says to stop.
 
