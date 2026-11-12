@@ -16,6 +16,7 @@ These are the accepted ownership boundaries between the reader phase (phase 3), 
 - Pool briefs include allocation bookkeeping (`data`, `used_bitmap`, `first_free`, `first_unused`, `items`, the assertion credit `checked`, `cleaning` and any applicable allocation-cache state), allocation and indexed allocation, reuse, iteration, reset and cleanup, and the construction publication and destruction hooks.
 - The generic native pool template earns no repeated deletion credit while any C++ pool instantiates it.
 - Every Rust-used name, container or cache field moves in phase 2. Only fields used by original C++ alone may await a named later owner.
+- #627's per-container typed leaves for STL containers are a phase-3 necessity; they do not justify per-field leaves in phase-2 records.
 - Record lookup, coupled save descriptors and generated declarations follow integrated #570.
 
 ## Shell dispositions

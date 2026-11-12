@@ -43,7 +43,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/git_hooks.py install` | Install the pre-push and pre-commit hooks. |
 
 - Run the candidate with `./build-rust/openttd-rust -X`, which avoids the global game folders.
-- Supported targets: native GNU/Linux x86-64, macOS arm64, Emscripten and the scoped [Windows MSVC mode](#windows-msvc). Unsupported: 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)), other platforms, cross compilation, macOS universal or Intel.
+- Supported targets: native GNU/Linux x86-64 (aarch64 builds but no CI job tests it), macOS arm64, Emscripten and the scoped [Windows MSVC mode](#windows-msvc). Unsupported: 32-bit Windows ([ADR 0007](adr/0007-no-32-bit-windows.md)), other platforms, cross compilation, macOS universal or Intel.
 
 ### Quick cleanup checks
 
@@ -58,7 +58,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 | `python3 tools/refactor-proof.py --base-ref origin/rust-migration` | A claimed release-archive equivalence that does not hold. |
 | `python3 tools/code-standards-inventory.py --gate origin/rust-migration` | A file in `migration/finished-files.txt` gaining a raw adapter or export call, an internal `execute: bool` parameter, a `GameState<Vec<...>>` scratch pool or a command over seven parameters. Each file pass adds its files to the list. |
 
-- Function length, nesting and cognitive complexity are not measured, because a faithful port keeps the original's function structure ([ADR 0024](adr/0024-lint-ratchet-scope.md)).
+- Function length, nesting and cognitive complexity are not measured ([ADR 0024](adr/0024-lint-ratchet-scope.md)).
 - When a ratchet reports `rename not recorded`, or lint policy prints a ready carry, run the same command with `--write`.
 
 #### Cleanup records
@@ -66,11 +66,11 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
 A change's carries and exception proposals go in `migration/cleanup-records/<branch with / as ->.json`, a JSON list of records, not in the PR body. The checks name any malformed field.
 
 - **Carry**: a rename or move that keeps a lint row or suppression site. `{"kind":"carry","tool":"clippy"|"ruff"|"rust"|"python","from":"<base key>","to":"<head key>"}`; it needs no review. The tools print ready carries.
-- **Lint exception** (`kind: lint`) or **suppression** (`kind: suppression`): add only the exact item or site row, and give `site`, `operation`, `source_contract`, `reason`, `retiring_owner` and `retirement_condition`. Module-wide attributes, lint groups, new `noqa` and weaker configuration are not accepted.
+- **Lint exception** (`kind: lint`) or **suppression** (`kind: suppression`): add only the exact item or site row, and give `tool`, `site`, `operation`, `source_contract`, `reason`, `retiring_owner`, `retirement_condition`, and `before` and `after` (lint: the item's magnitude lists; suppression: occurrence counts). Module-wide attributes, lint groups, new `noqa` and weaker configuration are not accepted.
 - **Cast reason**: an item-scoped `allow` or `expect` of `non_upper_case_globals` or the Clippy `cast_possible_truncation`, `cast_possible_wrap` or `cast_sign_loss` lints needs no record when its `reason = "..."` names the original definition or cast it preserves.
 - **Growth exception** (`kind: growth`): the `counter` and `added` mapping the check prints, plus `reason`, `existing_alternatives`, `retiring_owner` and `retirement_condition`.
 - **Archive proof**: `{"kind":"refactor-proof","method":"archive","renames":{}}`. A proof is not behavioural coverage of unexercised branches.
-- **Acceptance**: the independent reviewer's attributed report repeats each proposal exactly as `{"head":"<tested PR SHA>","accept":[<proposal>]}` in a `cleanup-acceptance` fence. Growth awaiting acceptance reports `pending review`; it passes on PR runs and fails in the merge group.
+- **Acceptance**: the independent reviewer's attributed report repeats each proposal exactly as `{"head":"<tested PR SHA>","accept":[<proposal>]}` in a `cleanup-acceptance` fence. Growth awaiting acceptance reports `pending review`; it passes on PR runs and fails in the merge group. An acceptance survives base updates while the accepted item text or added source is unchanged, except export and callback-slot growth, which needs re-acceptance at each new head.
 
 ### Generated ABI probes and fixture defaults
 
@@ -95,7 +95,7 @@ Write-once output lives on the HDD at `/mnt/storage` behind symlinks; caches, to
 | Each other worktree's `.local` | `/mnt/storage/openttd-rust/worktree-local/<worktree>-<id>/local` |
 
 - `.git/hooks/post-checkout` links each new worktree's `.local` through `.git/hooks/offload-local`; both are untracked. Worktrees inside the main `.local` keep a real `.local`.
-- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. `offload-local sweep` lists output of removed worktrees; `--apply` deletes it.
+- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. `offload-local sweep` lists output of removed worktrees; `--apply` deletes it. The hook also deletes output of worktrees removed more than 24 hours ago.
 - If the HDD is unmounted, the links dangle and runs fail. Mount it and rerun.
 - In tool code, `.resolve()` can take a `.local` path off the checkout's tree, so compute `relative_to(ROOT)` from the unresolved path. `Path.rglob` follows a symlinked starting folder but not symlinked subfolders.
 
@@ -129,7 +129,7 @@ See [speed](speed.md) for benchmarks and [deep checks](deep-checks.md) for soak,
 
 ## Shared-code checks and port metrics
 
-Quick runs these against `--base-ref origin/rust-migration` where they take one. Each baseline file only shrinks.
+Quick runs all but `port-metrics.py`, against `--base-ref origin/rust-migration` where they take one. Each baseline file only shrinks.
 
 | Command | Checks |
 | --- | --- |
@@ -141,4 +141,4 @@ Quick runs these against `--base-ref origin/rust-migration` where they take one.
 | `python3 tools/port-metrics.py` | Code-line counts and original retirement; `--whole-fork` adds source areas, C++ evidence and exports; `--functions [AREA ...]` adds remaining original lines per file and function. |
 
 - No checker detects Rust copies of original header helpers and constants ([porting](porting.md#callees-and-shared-accessors)).
-- Metric scope: version 2 does not count extracted-original comparison fragments or C++ embedded in Python strings, so `fork_cpp` and `candidate_cpp_upper_bound` cover only the listed inventory. Report a later coverage correction separately from deletion. No line metric claims behavioural completion.
+- Metric scope: version 2 does not count extracted-original comparison fragments or C++ embedded in Python strings, so `fork_cpp` and `candidate_cpp_upper_bound` cover only the listed inventory. Report a later coverage correction separately from deletion. Raw `rust` totals include oracle text under `rust/`; report implementation and oracle data separately. No line metric claims behavioural completion.

@@ -105,4 +105,4 @@ Who decides which jobs run on paid Blacksmith runners is in [ADR 0009](adr/0009-
 
 ## Platform comparison
 
-The cadence dispatch compares Windows x64 and macOS arm64 Release against Linux for a subset of saves (`tools/simulate.py platform`). It remains #509 acceptance work until root runs the changed workflow.
+The cadence dispatch compares Windows x64 and macOS arm64 Release against Linux for a subset of saves (`tools/simulate.py platform`).

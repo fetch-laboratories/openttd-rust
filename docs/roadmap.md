@@ -94,7 +94,7 @@ No policy projection rose 3% or entered its band: generation rose 1.04% and stay
 
 ## Phases
 
-Phase numbers name content; the execution order sets the sequence. Phase 1 (simulation logic) exited at integration 63. The last navigation's position table, by source area and the phase that removes it, is in this file at `89b6807754`.
+Phase numbers name content; the execution order sets the sequence. Phase 1 (simulation logic) exited at integration 63. The last navigation's position table, by source area and the phase that removes it, is in this file at `78553df0a1`.
 
 | Order | Stage | Size now | Exit (end state) | Status |
 | ---: | --- | --- | --- | --- |

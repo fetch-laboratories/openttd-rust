@@ -86,7 +86,7 @@ Edit `docs/skills/start-development/SKILL.md` only for an early stop, a misreadi
 
 1. Report root's track, audit findings with numbers, changes with issue, ADR and commit links, any user ADR returned, and anything only the user can supply.
 2. If the focus asks for a restart, wait until `origin/rust-migration` has the commit, then launch one thread with `t3_thread_launch`:
-   - `modelSelection`: the previous development root's provider, exact model and options ([team](../../team.md#roles-and-models)), read from that root's thread, not this one, with the user's overrides;
+   - `modelSelection`: the previous development root's provider, exact model, options and other launch settings ([team](../../team.md#roles-and-models)), read from that root's thread, not this one, with the user's overrides;
    - `workspaceStrategy: {type: "root"}`, a title and a stable `clientRequestId`;
    - the prompt `/start-development` (Codex: `$start-development`) plus any scope from the focus.
 
